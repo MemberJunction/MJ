@@ -4,7 +4,7 @@ import { ContentSourceParams } from "../../Engine";
 import { UserInfo } from "@memberjunction/core";
 import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-entities";
 import dotenv from 'dotenv';
-dotenv.config()
+dotenv.config({ quiet: true })
 
 export abstract class CloudStorageBase extends AutotagBase {
     protected contextUser: UserInfo;

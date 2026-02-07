@@ -1,65 +1,70 @@
 <!-- Backdrop -->
-<div class="command-palette-backdrop"
-     *ngIf="IsOpen"
-     (click)="Close()"
-     role="presentation"
-     aria-hidden="true">
-</div>
+@if (IsOpen) {
+  <div class="command-palette-backdrop"
+    (click)="Close()"
+    role="presentation"
+    aria-hidden="true">
+  </div>
+}
 
 <!-- Modal -->
-<div class="command-palette-modal"
-     *ngIf="IsOpen"
-     role="dialog"
-     aria-label="Search applications"
-     aria-modal="true">
-
-  <!-- Search Input -->
-  <div class="search-container">
-    <i class="fa-solid fa-search search-icon" aria-hidden="true"></i>
-    <input
-      #searchInput
-      type="text"
-      [(ngModel)]="SearchQuery"
-      (input)="OnSearchChange()"
-      placeholder="Search applications..."
-      class="search-input"
-      autocomplete="off"
-      spellcheck="false"
-      aria-label="Search applications">
-  </div>
-
-  <!-- Results List -->
-  <div class="results-list" role="listbox" aria-label="Application results">
-    <!-- All Apps -->
-    <div *ngFor="let app of FilteredApps; let i = index"
-         class="result-item"
-         [class.selected]="i === SelectedIndex"
-         (click)="SelectApp(app)"
-         role="option"
-         [attr.aria-selected]="i === SelectedIndex">
-      <i [class]="app.Icon"
-         [style.color]="app.GetColor()"
-         class="result-icon"
-         aria-hidden="true"></i>
-      <div class="result-info">
-        <div class="result-name">{{ app.Name }}</div>
-        <div class="result-description" *ngIf="app.Description">{{ app.Description }}</div>
+@if (IsOpen) {
+  <div class="command-palette-modal"
+    role="dialog"
+    aria-label="Search applications"
+    aria-modal="true">
+    <!-- Search Input -->
+    <div class="search-container">
+      <i class="fa-solid fa-search search-icon" aria-hidden="true"></i>
+      <input
+        #searchInput
+        type="text"
+        [(ngModel)]="SearchQuery"
+        (input)="OnSearchChange()"
+        placeholder="Search applications..."
+        class="search-input"
+        autocomplete="off"
+        spellcheck="false"
+        aria-label="Search applications">
+    </div>
+    <!-- Results List -->
+    <div class="results-list" role="listbox" aria-label="Application results">
+      <!-- All Apps -->
+      @for (app of FilteredApps; track app; let i = $index) {
+        <div
+          class="result-item"
+          [class.selected]="i === SelectedIndex"
+          (click)="SelectApp(app)"
+          role="option"
+          [attr.aria-selected]="i === SelectedIndex">
+          <i [class]="app.Icon"
+            [style.color]="app.GetColor()"
+            class="result-icon"
+          aria-hidden="true"></i>
+          <div class="result-info">
+            <div class="result-name">{{ app.Name }}</div>
+            @if (app.Description) {
+              <div class="result-description">{{ app.Description }}</div>
+            }
+          </div>
+        </div>
+      }
+      <!-- Empty State -->
+      @if (FilteredApps.length === 0 && SearchQuery) {
+        <div class="empty-state"
+          role="status"
+          aria-live="polite">
+          <i class="fa-solid fa-search empty-icon" aria-hidden="true"></i>
+          <div class="empty-text">No applications found</div>
+          <div class="empty-subtext">Try a different search term</div>
+        </div>
+      }
+    </div>
+    <!-- Loading State Overlay -->
+    @if (IsNavigating) {
+      <div class="loading-overlay" role="status" aria-live="assertive" aria-label="Navigating to application">
+        <mj-loading size="small" [showText]="false"></mj-loading>
       </div>
-    </div>
-
-    <!-- Empty State -->
-    <div class="empty-state"
-         *ngIf="FilteredApps.length === 0 && SearchQuery"
-         role="status"
-         aria-live="polite">
-      <i class="fa-solid fa-search empty-icon" aria-hidden="true"></i>
-      <div class="empty-text">No applications found</div>
-      <div class="empty-subtext">Try a different search term</div>
-    </div>
+    }
   </div>
-
-  <!-- Loading State Overlay -->
-  <div class="loading-overlay" *ngIf="IsNavigating" role="status" aria-live="assertive" aria-label="Navigating to application">
-    <mj-loading size="small" [showText]="false"></mj-loading>
-  </div>
-</div>
+}

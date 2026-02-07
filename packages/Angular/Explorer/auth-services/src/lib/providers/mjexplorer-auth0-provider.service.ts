@@ -12,11 +12,6 @@ import {
   AuthErrorType,
   TokenRefreshResult
 } from '../auth-types';
-
-// Prevent tree-shaking by explicitly referencing the class
-export function LoadMJAuth0Provider() {
-}
-
 /**
  * Auth0 authentication provider implementation - v3.0.0
  *

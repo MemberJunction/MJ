@@ -36,6 +36,7 @@ export interface OpenQueryRecordEvent {
  * - Open button to navigate to full record
  */
 @Component({
+  standalone: false,
     selector: 'mj-query-info-panel',
     templateUrl: './query-info-panel.component.html',
     styleUrls: ['./query-info-panel.component.css'],

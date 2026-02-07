@@ -11,6 +11,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { MCPDashboardFilters, MCPDashboardTab } from './mcp-dashboard.component';
 
 @Component({
+  standalone: false,
   selector: 'mj-mcp-filter-panel',
   templateUrl: './mcp-filter-panel.component.html',
   styleUrls: ['./mcp-filter-panel.component.css']
@@ -170,11 +171,4 @@ export class MCPFilterPanelComponent {
         return 'Item';
     }
   }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPFilterPanel(): void {
-  // Prevents tree-shaking by referencing the component
 }

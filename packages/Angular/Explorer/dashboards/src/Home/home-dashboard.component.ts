@@ -17,6 +17,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  * in nav items, allowing users to return to the Home dashboard after viewing orphan resources.
  */
 @Component({
+  standalone: false,
   selector: 'mj-home-dashboard',
   templateUrl: './home-dashboard.component.html',
   styleUrls: ['./home-dashboard.component.css']
@@ -82,7 +83,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   ) {
     super();
   }
-
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return 'Home';
@@ -357,12 +357,4 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (days < 7) return `${days} days ago`;
     return new Date(date).toLocaleDateString();
   }
-}
-
-/**
- * Tree-shaking prevention
- */
-export function LoadHomeDashboard() {
-  // Reference the component to prevent tree-shaking
-  console.log('HomeDashboardComponent registered:', HomeDashboardComponent.name);
 }

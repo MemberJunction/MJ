@@ -3,11 +3,10 @@ import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
-
-const pdfParse = require('pdf-parse');
-const mammoth = require('mammoth');
-const xml2js = require('xml2js');
-const Papa = require('papaparse');
+import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
+import xml2js from 'xml2js';
+import Papa from 'papaparse';
 
 /**
  * Action that retrieves and processes web content in various formats
@@ -411,7 +410,7 @@ export class WebPageContentAction extends BaseAction {
         if (outputType === 'json') {
             result.content = parsed.data;
         } else if (outputType === 'markdown') {
-            result.content = this.csvToMarkdownTable(parsed.data, parsed.meta.fields || []);
+            result.content = this.csvToMarkdownTable(parsed.data as Array<Record<string, string | number | boolean>>, parsed.meta.fields || []);
         } else {
             result.content = text;
         }
@@ -804,11 +803,4 @@ export class WebPageContentAction extends BaseAction {
     private delay(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
-}
-
-/**
- * Loader function to ensure the WebPageContentAction class is included in the bundle.
- */
-export function LoadWebPageContentAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
 }

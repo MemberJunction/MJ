@@ -23,6 +23,7 @@ const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suites')
 @Component({
+  standalone: false,
   selector: 'mj-test-suite-form',
   templateUrl: './test-suite-form.component.html',
   styleUrls: ['./test-suite-form.component.css'],
@@ -1949,6 +1950,3 @@ interface TestResultCell {
   humanComments: string | null;
   sequence: number;
 }
-
-export function LoadTestSuiteFormComponentExtended() {}
-LoadTestSuiteFormComponentExtended();

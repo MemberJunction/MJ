@@ -17,6 +17,7 @@ import { CommandPaletteService } from './command-palette.service';
  * - Empty state with helpful message
  */
 @Component({
+  standalone: false,
   selector: 'mj-command-palette',
   templateUrl: './command-palette.component.html',
   styleUrls: ['./command-palette.component.css']

@@ -306,10 +306,3 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadGetJotFormStatisticsAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

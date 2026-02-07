@@ -31,5 +31,3 @@ export class ComponentEntityExtended_Server extends ComponentEntityExtended  {
         return EmbedTextLocalHelper(this, textToEmbed);
     }
 }
-
-export function LoadComponentEntityServerSubClass() {}

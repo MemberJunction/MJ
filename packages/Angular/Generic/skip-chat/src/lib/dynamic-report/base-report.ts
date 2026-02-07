@@ -132,9 +132,9 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
   public CreateAnalysisHtml(): string {
       const analysis = this.SkipData?.analysis;
       if (analysis && analysis.length > 0) {
-          return ConvertMarkdownStringToHtmlList('Unordered', analysis);
-      } 
-      else 
+          return ConvertMarkdownStringToHtmlList('Unordered', analysis) ?? '<h2>No Analysis Provided</h2>';
+      }
+      else
           return '<h2>No Analysis Provided</h2>';
   }    
 

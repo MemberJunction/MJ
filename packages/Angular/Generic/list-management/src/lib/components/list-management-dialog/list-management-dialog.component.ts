@@ -34,6 +34,7 @@ import {
  * - Batch operations with progress feedback
  */
 @Component({
+  standalone: false,
   selector: 'mj-list-management-dialog',
   templateUrl: './list-management-dialog.component.html',
   styleUrls: ['./list-management-dialog.component.css']

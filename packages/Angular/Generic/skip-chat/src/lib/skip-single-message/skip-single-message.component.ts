@@ -13,6 +13,7 @@ import { DrillDownInfo } from '../drill-down-info';
  
 
 @Component({
+  standalone: false,
   selector: 'mj-skip-single-message',
   templateUrl: './skip-single-message.component.html',
   styleUrls: ['./skip-single-message.component.css']

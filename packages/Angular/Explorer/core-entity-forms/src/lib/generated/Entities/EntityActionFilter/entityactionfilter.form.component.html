@@ -56,6 +56,16 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Action Mapping Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="actionMapping"
+        sectionName="Action Mapping"
+        icon="fa fa-link"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"

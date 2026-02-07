@@ -43,6 +43,7 @@ export interface MessageAttachment {
  * This component is created dynamically via ViewContainerRef.createComponent()
  */
 @Component({
+  standalone: false,
   selector: 'mj-conversation-message-item',
   templateUrl: './message-item.component.html',
   styleUrls: [

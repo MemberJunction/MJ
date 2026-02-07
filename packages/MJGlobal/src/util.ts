@@ -1,33 +1,42 @@
 import { MJGlobal } from ".";
-import { MJEventType } from "./interface";
+import { IMJComponent, MJEventType } from "./interface";
 import { v4 } from 'uuid';
-import * as _ from 'lodash';
+import _ from 'lodash';
+
+/**
+ * Type definition for the global object store that allows arbitrary string indexing.
+ * Uses 'any' intentionally as this is a dynamic storage mechanism for cross-module state.
+ */
+export interface GlobalObjectStore {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+}
 
 /**
  * The Global Object Store is a place to store global objects that need to be shared across the application. Depending on the execution environment, this could be the window object in a browser, or the global object in a node environment, or something else in other contexts. The key here is that in some cases static variables are not truly shared
      * because it is possible that a given class might have copies of its code in multiple paths in a deployed application. This approach ensures that no matter how many code copies might exist, there is only one instance of the object in question by using the Global Object Store.
- * @returns 
+ * @returns
  */
-export function GetGlobalObjectStore() {
+export function GetGlobalObjectStore(): GlobalObjectStore | null {
     try    {
         // we might be running in a browser, in that case, we use the window object for our global stuff
-        if (window) 
-            return window;
+        if (window)
+            return window as unknown as GlobalObjectStore;
         else {
-            // if we get here, we don't have a window object, so try the global object (node environment) 
+            // if we get here, we don't have a window object, so try the global object (node environment)
             // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-            if (global) 
-                return global;
-            else 
+            if (global)
+                return global as unknown as GlobalObjectStore;
+            else
                 return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
         }
     }
     catch (e) {
         try {
             // if we get here, we don't have a window object, so try the global object (node environment)
-            if (global) 
-                return global;
-            else 
+            if (global)
+                return global as unknown as GlobalObjectStore;
+            else
                 return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
         }
         catch (e) {
@@ -178,11 +187,16 @@ export function CopyScalarsAndArrays<T extends object>(
  * const response = CleanAndParseJSON<AIResponse>(aiOutput, true);
  * // Returns typed object or null
  */
-export function CleanAndParseJSON<T = any>(inputString: string | null, logErrors: boolean = false): T {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function CleanAndParseJSON<T = any>(inputString: string | null, logErrors: boolean = false): T | null {
     if (!inputString) {
         return null;
     }
-    return SafeJSONParse<T>(CleanJSON(inputString), logErrors);
+    const cleaned = CleanJSON(inputString);
+    if (!cleaned) {
+        return null;
+    }
+    return SafeJSONParse<T>(cleaned, logErrors);
 }
 
 /**
@@ -223,7 +237,7 @@ export function CleanJSON(inputString: string | null): string | null {
         return null;
 
     let processedString = inputString.trim();
-    let originalException = null;
+    let originalException: Error | null = null;
     
     // First, try to parse the string as-is
     // This preserves any embedded JSON or markdown blocks within string values
@@ -233,7 +247,7 @@ export function CleanJSON(inputString: string | null): string | null {
         return JSON.stringify(parsed, null, 2);
     } catch (e) {
         // save the original exception to throw later if we can't find a path to valid JSON
-        originalException = e;
+        originalException = e instanceof Error ? e : new Error(String(e));
 
         // common JSON patterns from LLM often have extra } or missing final
         // } so let's test those two patterns quickly here and if they fail
@@ -379,13 +393,14 @@ export function CleanJavaScript(javaScriptCode: string): string {
  * // Invalid JSON returns null
  * const result = SafeJSONParse('invalid json', true); // logs error, returns null
  */
-export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = false): T {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = false): T | null {
     if (!jsonString) {
         return null;
     }
 
     try {
-        return <T>JSON.parse(jsonString);
+        return JSON.parse(jsonString) as T;
     } catch (e) {
         if (logErrors)
             console.error("Error parsing JSON string:", e);
@@ -399,19 +414,19 @@ export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = 
  * @param text 
  * @returns 
  */
-export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unordered', text: string): string {
+export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unordered', text: string): string | null {
     try {
         const listTag = htmlListType === 'Unordered' ? 'ul' : 'ol';
         if (!text.includes('\n')) {
             return text;
         }
         const listItems = text.split('\n').map(line => `<li>${line.trim().replace(/^-\s*/, '')}</li>`).join('');
-        return `<${listTag}>${listItems}</${listTag}>`;    
+        return `<${listTag}>${listItems}</${listTag}>`;
     }
     catch (e) {
         console.error("Error converting markdown string to HTML list:", e);
         return null;
-    }   
+    }
 }
 
 
@@ -750,13 +765,13 @@ export function replaceAllSpaces(s: string): string {
  * @param delay 
  * @param component 
  */
-export function InvokeManualResize(delay: number = 50, component: any = null) {
+export function InvokeManualResize(delay: number = 50, component: IMJComponent | null = null) {
     setTimeout(() => {
       MJGlobal.Instance.RaiseEvent({
         event: MJEventType.ManualResizeRequest,
         eventCode: '',
         args: null,
-        component: component || this
+        component: component!
       })
     }, delay ); // give the tabstrip time to render
 }

@@ -1,23 +1,25 @@
 <!-- Input Port -->
-<div *ngIf="inputPort"
-     class="mj-flow-node-port mj-flow-node-port--input"
-     [class]="'mj-flow-node-port--' + inputPort.Side"
-     fNodeInput
-     [fInputId]="inputPort.ID"
-     [fInputDisabled]="inputPort.Disabled"
-     [fInputMultiple]="inputPort.Multiple">
-</div>
+@if (inputPort) {
+  <div
+    class="mj-flow-node-port mj-flow-node-port--input"
+    [class]="'mj-flow-node-port--' + inputPort.Side"
+    fNodeInput
+    [fInputId]="inputPort.ID"
+    [fInputDisabled]="inputPort.Disabled"
+    [fInputMultiple]="inputPort.Multiple">
+  </div>
+}
 
 <!-- Node Body -->
 <div class="mj-flow-node-body"
-     [class.mj-flow-node-body--start]="Node.IsStartNode"
-     [class.mj-flow-node-body--loop]="isLoopNode"
-     [class.mj-flow-node-body--disabled]="Node.Status === 'disabled'"
-     [class.mj-flow-node-body--pending]="Node.Status === 'pending'"
-     [class.mj-flow-node-body--running]="Node.Status === 'running'"
-     [class.mj-flow-node-body--warning]="Node.Status === 'warning'"
-     [class.mj-flow-node-body--error]="Node.Status === 'error'"
-     [class.mj-flow-node-body--success]="Node.Status === 'success'">
+  [class.mj-flow-node-body--start]="Node.IsStartNode"
+  [class.mj-flow-node-body--loop]="isLoopNode"
+  [class.mj-flow-node-body--disabled]="Node.Status === 'disabled'"
+  [class.mj-flow-node-body--pending]="Node.Status === 'pending'"
+  [class.mj-flow-node-body--running]="Node.Status === 'running'"
+  [class.mj-flow-node-body--warning]="Node.Status === 'warning'"
+  [class.mj-flow-node-body--error]="Node.Status === 'error'"
+  [class.mj-flow-node-body--success]="Node.Status === 'success'">
 
   <!-- Color accent bar -->
   <div class="mj-flow-node-accent" [style.backgroundColor]="headerColor"></div>
@@ -25,24 +27,34 @@
   <!-- Header -->
   <div class="mj-flow-node-header">
     <div class="mj-flow-node-header-left">
-      <img *ngIf="logoURL" class="mj-flow-node-logo" [src]="logoURL" [alt]="Node.Label" />
-      <i *ngIf="!logoURL" class="fa-solid mj-flow-node-icon" [ngClass]="nodeIcon" [style.color]="headerColor"></i>
+      @if (logoURL) {
+        <img class="mj-flow-node-logo" [src]="logoURL" [alt]="Node.Label" />
+      }
+      @if (!logoURL) {
+        <i class="fa-solid mj-flow-node-icon" [ngClass]="nodeIcon" [style.color]="headerColor"></i>
+      }
       <span class="mj-flow-node-label">{{ Node.Label }}</span>
     </div>
     <div class="mj-flow-node-header-right">
-      <span *ngIf="Node.IsStartNode" class="mj-flow-node-start-badge">START</span>
-      <i *ngIf="hasStatus"
-         class="fa-solid mj-flow-node-status"
-         [ngClass]="statusIcon"
-         [class]="'mj-flow-node-status--' + statusClass"
-         [title]="Node.StatusMessage || ''"></i>
+      @if (Node.IsStartNode) {
+        <span class="mj-flow-node-start-badge">START</span>
+      }
+      @if (hasStatus) {
+        <i
+          class="fa-solid mj-flow-node-status"
+          [ngClass]="statusIcon"
+          [class]="'mj-flow-node-status--' + statusClass"
+        [title]="Node.StatusMessage || ''"></i>
+      }
     </div>
   </div>
 
   <!-- Subtitle / Configured Item (hidden for loop nodes — they use the body card instead) -->
-  <div *ngIf="Node.Subtitle && !isLoopNode" class="mj-flow-node-subtitle">
-    {{ Node.Subtitle }}
-  </div>
+  @if (Node.Subtitle && !isLoopNode) {
+    <div class="mj-flow-node-subtitle">
+      {{ Node.Subtitle }}
+    </div>
+  }
 
   <!-- Type badge -->
   <div class="mj-flow-node-type-badge" [style.color]="headerColor">
@@ -50,69 +62,93 @@
   </div>
 
   <!-- ═══ Loop Body Card — shown only for ForEach/While nodes ═══ -->
-  <div *ngIf="isLoopNode" class="mj-flow-loop-section">
-    <!-- Iteration summary line -->
-    <div *ngIf="loopIterationSummary" class="mj-flow-loop-iteration">
-      <i class="fa-solid fa-repeat mj-flow-loop-iteration-icon"></i>
-      <span>{{ loopIterationSummary }}</span>
-      <span *ngIf="loopMaxIterations != null" class="mj-flow-loop-max">(max {{ loopMaxIterations }})</span>
-    </div>
-
-    <!-- Body type inner card -->
-    <div class="mj-flow-loop-body"
-         [class.mj-flow-loop-body--empty]="!loopBodyType">
-      <div *ngIf="loopBodyType" class="mj-flow-loop-body-inner">
-        <div class="mj-flow-loop-body-header">
-          <i class="fa-solid" [ngClass]="loopBodyIcon" [style.color]="loopBodyColor"></i>
-          <span class="mj-flow-loop-body-type" [style.color]="loopBodyColor">{{ loopBodyType }}</span>
+  @if (isLoopNode) {
+    <div class="mj-flow-loop-section">
+      <!-- Iteration summary line -->
+      @if (loopIterationSummary) {
+        <div class="mj-flow-loop-iteration">
+          <i class="fa-solid fa-repeat mj-flow-loop-iteration-icon"></i>
+          <span>{{ loopIterationSummary }}</span>
+          @if (loopMaxIterations != null) {
+            <span class="mj-flow-loop-max">(max {{ loopMaxIterations }})</span>
+          }
         </div>
-        <div *ngIf="loopBodyName" class="mj-flow-loop-body-name" [title]="loopBodyName">
-          {{ loopBodyName }}
-        </div>
-        <div *ngIf="!loopBodyName" class="mj-flow-loop-body-name mj-flow-loop-body-name--empty">
-          Not configured
-        </div>
+      }
+      <!-- Body type inner card -->
+      <div class="mj-flow-loop-body"
+        [class.mj-flow-loop-body--empty]="!loopBodyType">
+        @if (loopBodyType) {
+          <div class="mj-flow-loop-body-inner">
+            <div class="mj-flow-loop-body-header">
+              <i class="fa-solid" [ngClass]="loopBodyIcon" [style.color]="loopBodyColor"></i>
+              <span class="mj-flow-loop-body-type" [style.color]="loopBodyColor">{{ loopBodyType }}</span>
+            </div>
+            @if (loopBodyName) {
+              <div class="mj-flow-loop-body-name" [title]="loopBodyName">
+                {{ loopBodyName }}
+              </div>
+            }
+            @if (!loopBodyName) {
+              <div class="mj-flow-loop-body-name mj-flow-loop-body-name--empty">
+                Not configured
+              </div>
+            }
+          </div>
+        }
+        @if (!loopBodyType) {
+          <div class="mj-flow-loop-body-empty">
+            <i class="fa-solid fa-circle-question"></i>
+            <span>No body type selected</span>
+          </div>
+        }
       </div>
-      <div *ngIf="!loopBodyType" class="mj-flow-loop-body-empty">
-        <i class="fa-solid fa-circle-question"></i>
-        <span>No body type selected</span>
-      </div>
+      <!-- Item variable badge -->
+      @if (loopItemVariable) {
+        <div class="mj-flow-loop-variable">
+          <i class="fa-solid fa-tag"></i>
+          <span>{{ loopItemVariable }}</span>
+        </div>
+      }
     </div>
-
-    <!-- Item variable badge -->
-    <div *ngIf="loopItemVariable" class="mj-flow-loop-variable">
-      <i class="fa-solid fa-tag"></i>
-      <span>{{ loopItemVariable }}</span>
-    </div>
-  </div>
+  }
 
   <!-- Warning banner (shown inline when step is misconfigured) -->
-  <div *ngIf="Node.Status === 'warning' && Node.StatusMessage"
-       class="mj-flow-node-warning-banner"
-       [title]="Node.StatusMessage">
-    <i class="fa-solid fa-triangle-exclamation"></i>
-    <span>{{ Node.StatusMessage }}</span>
-  </div>
+  @if (Node.Status === 'warning' && Node.StatusMessage) {
+    <div
+      class="mj-flow-node-warning-banner"
+      [title]="Node.StatusMessage">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span>{{ Node.StatusMessage }}</span>
+    </div>
+  }
 
   <!-- Badges row -->
-  <div *ngIf="Node.Badges && Node.Badges.length > 0" class="mj-flow-node-badges">
-    <span *ngFor="let badge of Node.Badges"
+  @if (Node.Badges && Node.Badges.length > 0) {
+    <div class="mj-flow-node-badges">
+      @for (badge of Node.Badges; track badge) {
+        <span
           class="mj-flow-node-badge"
           [style.borderColor]="badge.Color || headerColor"
           [title]="badge.Label">
-      <i *ngIf="badge.Icon" class="fa-solid" [ngClass]="badge.Icon"></i>
-      {{ badge.Value }}
-    </span>
-  </div>
+          @if (badge.Icon) {
+            <i class="fa-solid" [ngClass]="badge.Icon"></i>
+          }
+          {{ badge.Value }}
+        </span>
+      }
+    </div>
+  }
 </div>
 
 <!-- Output Port -->
-<div *ngIf="outputPort"
-     class="mj-flow-node-port mj-flow-node-port--output"
-     [class]="'mj-flow-node-port--' + outputPort.Side"
-     fNodeOutput
-     [fOutputId]="outputPort.ID"
-     [fOutputDisabled]="outputPort.Disabled"
-     [fOutputMultiple]="outputPort.Multiple"
-     [isSelfConnectable]="false">
-</div>
+@if (outputPort) {
+  <div
+    class="mj-flow-node-port mj-flow-node-port--output"
+    [class]="'mj-flow-node-port--' + outputPort.Side"
+    fNodeOutput
+    [fOutputId]="outputPort.ID"
+    [fOutputDisabled]="outputPort.Disabled"
+    [fOutputMultiple]="outputPort.Multiple"
+    [isSelfConnectable]="false">
+  </div>
+}

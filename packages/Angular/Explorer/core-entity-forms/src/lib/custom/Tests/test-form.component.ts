@@ -54,6 +54,7 @@ interface ParsedJSON {
 
 @RegisterClass(BaseFormComponent, 'MJ: Tests')
 @Component({
+  standalone: false,
   selector: 'mj-test-form',
   templateUrl: './test-form.component.html',
   styleUrls: ['./test-form.component.css'],
@@ -844,9 +845,3 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     }
   }
 }
-
-export function LoadTestFormComponentExtended() {
-  // Prevents tree-shaking
-}
-
-LoadTestFormComponentExtended();

@@ -165,10 +165,3 @@ export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadExportGoogleFormsCSVAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

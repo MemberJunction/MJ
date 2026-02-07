@@ -8,6 +8,7 @@ import { TestRubricFormComponent } from '../../generated/Entities/TestRubric/tes
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Rubrics')
 @Component({
+  standalone: false,
   selector: 'mj-test-rubric-form',
   template: `
     <div class="rubric-form">
@@ -71,6 +72,3 @@ export class TestRubricFormComponentExtended extends TestRubricFormComponent {
     super(elementRef, sharedService, router, route, cdr);
   }
 }
-
-export function LoadTestRubricFormComponentExtended() {}
-LoadTestRubricFormComponentExtended();

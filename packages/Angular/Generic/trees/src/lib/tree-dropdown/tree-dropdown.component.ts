@@ -61,6 +61,7 @@ interface DropdownPosition {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-tree-dropdown',
     templateUrl: './tree-dropdown.component.html',
     styleUrls: ['./tree-dropdown.component.css']

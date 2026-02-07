@@ -50,7 +50,7 @@
  * ```
  */
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 
 /**
  * Types of changes that can occur in a deep diff operation

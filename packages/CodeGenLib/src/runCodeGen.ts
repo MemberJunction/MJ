@@ -24,10 +24,10 @@ import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
-import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 import { AIEngine } from '@memberjunction/aiengine';
 
-LoadCoreEntitiesServerSubClasses(); // Load the core entities server subclasses to ensure they are registered and not tree shaken
+// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
+import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 
 /** Extract core schema name from configuration */
 const { mjCoreSchema } = configInfo;

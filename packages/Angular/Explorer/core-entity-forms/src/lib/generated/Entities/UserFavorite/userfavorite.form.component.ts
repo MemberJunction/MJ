@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'User Favorites') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-userfavorite-form',
     templateUrl: './userfavorite.form.component.html'
 })

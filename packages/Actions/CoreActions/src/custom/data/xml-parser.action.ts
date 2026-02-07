@@ -309,10 +309,3 @@ export class XMLParserAction extends BaseFileHandlerAction {
         });
     }
 }
-
-/**
- * Loader function to ensure the XMLParserAction class is included in the bundle
- */
-export function LoadXMLParserAction() {
-    // Stub function to prevent tree shaking
-}

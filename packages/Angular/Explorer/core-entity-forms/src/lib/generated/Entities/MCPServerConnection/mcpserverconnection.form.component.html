@@ -230,7 +230,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJMCPServerConnectionTools')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connection Tools','MCPServerConnectionID')"
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Tools')"
@@ -240,6 +241,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: MCP Tool Execution Logs Section -->
@@ -252,7 +254,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJMCPToolExecutionLogs')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Tool Execution Logs','MCPServerConnectionID')"
                 [NewRecordValues]="NewRecordValues('MJ: MCP Tool Execution Logs')"
@@ -262,6 +265,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: O Auth Authorization States Section -->
@@ -274,7 +278,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJOAuthAuthorizationStates')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Authorization States','MCPServerConnectionID')"
                 [NewRecordValues]="NewRecordValues('MJ: O Auth Authorization States')"
@@ -284,6 +289,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: O Auth Client Registrations Section -->
@@ -296,7 +302,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJOAuthClientRegistrations')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Client Registrations','MCPServerConnectionID')"
                 [NewRecordValues]="NewRecordValues('MJ: O Auth Client Registrations')"
@@ -306,6 +313,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: O Auth Tokens Section -->
@@ -318,7 +326,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJOAuthTokens')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Tokens','MCPServerConnectionID')"
                 [NewRecordValues]="NewRecordValues('MJ: O Auth Tokens')"
@@ -328,6 +337,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: MCP Server Connection Permissions Section -->
@@ -340,7 +350,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJMCPServerConnectionPermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connection Permissions','MCPServerConnectionID')"
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Permissions')"
@@ -350,6 +361,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

@@ -32,6 +32,7 @@ import { FlowLayoutService } from '../services/flow-layout.service';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-flow-editor',
   templateUrl: './flow-editor.component.html',
   styleUrls: ['./flow-editor.component.css'],

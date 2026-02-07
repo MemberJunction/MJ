@@ -8,11 +8,6 @@ import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 interface VersionGraphPreferences {
     SchemaFilter: string;
 }
-
-export function LoadVersionHistoryGraphResource() {
-    // Prevents tree-shaking
-}
-
 interface EntityNode {
     Name: string;
     ID: string;
@@ -31,6 +26,7 @@ interface RelationshipEdge {
 
 @RegisterClass(BaseResourceComponent, 'VersionHistoryGraphResource')
 @Component({
+  standalone: false,
     selector: 'mj-version-history-graph-resource',
     templateUrl: './graph-resource.component.html',
     styleUrls: ['./graph-resource.component.css'],

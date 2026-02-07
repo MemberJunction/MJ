@@ -84,7 +84,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('authorizationRoles')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','RoleName')"
                 [NewRecordValues]="NewRecordValues('Authorization Roles')"
@@ -94,6 +95,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Employee Roles Section -->
@@ -106,7 +108,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('employeeRoles')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles','RoleID')"
                 [NewRecordValues]="NewRecordValues('Employee Roles')"
@@ -116,6 +119,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Permissions Section -->
@@ -128,7 +132,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityPermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','RoleName')"
                 [NewRecordValues]="NewRecordValues('Entity Permissions')"
@@ -138,6 +143,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Query Permissions Section -->
@@ -150,7 +156,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('queryPermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','RoleName')"
                 [NewRecordValues]="NewRecordValues('Query Permissions')"
@@ -160,6 +167,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User Roles Section -->
@@ -172,7 +180,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userRoles')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Roles','RoleName')"
                 [NewRecordValues]="NewRecordValues('User Roles')"
@@ -182,6 +191,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: MCP Server Connection Permissions Section -->
@@ -194,7 +204,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJMCPServerConnectionPermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connection Permissions','RoleID')"
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Permissions')"
@@ -204,6 +215,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Resource Permissions Section -->
@@ -216,7 +228,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('resourcePermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','RoleID')"
                 [NewRecordValues]="NewRecordValues('Resource Permissions')"
@@ -226,6 +239,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Permissions Section -->
@@ -238,7 +252,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentPermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','RoleID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
@@ -248,6 +263,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

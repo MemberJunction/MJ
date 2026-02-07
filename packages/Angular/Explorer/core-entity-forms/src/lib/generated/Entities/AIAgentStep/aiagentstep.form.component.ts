@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Steps') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aiagentstep-form',
     templateUrl: './aiagentstep.form.component.html'
 })

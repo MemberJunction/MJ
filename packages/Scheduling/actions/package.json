@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/scheduling-actions",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: Scheduling Actions - agentic tools for managing scheduled jobs",
   "main": "dist/index.js",
@@ -8,7 +9,7 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch"
   },
   "author": "MemberJunction.com",
@@ -23,8 +24,8 @@
     "cron-parser": "^4.9.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
-    "typescript": "^5.4.5"
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

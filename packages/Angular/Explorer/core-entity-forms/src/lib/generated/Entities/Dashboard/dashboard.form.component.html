@@ -208,7 +208,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJDashboardCategoryLinks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Links','DashboardID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Links')"
@@ -218,6 +219,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Dashboard User States Section -->
@@ -230,7 +232,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJDashboardUserStates')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User States','DashboardID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard User States')"
@@ -240,6 +243,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Dashboard Permissions Section -->
@@ -252,7 +256,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJDashboardPermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Permissions','DashboardID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard Permissions')"
@@ -262,6 +267,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Dashboard User Preferences Section -->
@@ -274,7 +280,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJDashboardUserPreferences')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User Preferences','DashboardID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
@@ -284,6 +291,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

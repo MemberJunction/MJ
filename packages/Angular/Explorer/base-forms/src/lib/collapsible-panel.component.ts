@@ -24,6 +24,7 @@ export interface PanelDropEvent {
  * - Passes sectionFilter down to child mj-form-field components for their own label highlighting
  */
 @Component({
+  standalone: false,
     selector: 'mj-collapsible-panel',
     template: `
         <div

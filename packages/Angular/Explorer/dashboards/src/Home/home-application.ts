@@ -145,13 +145,3 @@ export class HomeApplication extends BaseApplication {
     };
   }
 }
-
-/**
- * Tree-shaking prevention function.
- * Call this to ensure the HomeApplication class is not removed during build.
- */
-export function LoadHomeApplication(): void {
-  // This function exists solely to prevent tree-shaking
-  // The @RegisterClass decorator handles actual registration
-  const x = 1;
-}

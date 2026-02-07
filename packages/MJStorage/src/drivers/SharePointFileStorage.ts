@@ -1215,7 +1215,7 @@ export class SharePointFileStorage extends FileStorageBase {
               'Content-Length': chunk.length.toString(),
               'Content-Range': contentRange,
             },
-            body: chunk,
+            body: chunk as BodyInit,
           });
         }
       }

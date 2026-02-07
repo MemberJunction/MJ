@@ -25,25 +25,25 @@
       <div class="toolbar-right">
         @if (selectedKeys.length > 0) {
           <button kendoButton
-                  (click)="openRemoveDialog()"
-                  fillMode="flat"
-                  themeColor="error"
-                  class="toolbar-button remove-btn">
+            (click)="openRemoveDialog()"
+            fillMode="flat"
+            themeColor="error"
+            class="toolbar-button remove-btn">
             <span class="fa-solid fa-trash"></span>
             Remove from List
           </button>
         }
         <button kendoButton
-                (click)="onRefreshClick()"
-                fillMode="flat"
-                class="toolbar-button">
+          (click)="onRefreshClick()"
+          fillMode="flat"
+          class="toolbar-button">
           <span class="fa-solid fa-rotate"></span>
           Refresh
         </button>
         <button kendoButton
-                (click)="onExportClick()"
-                fillMode="flat"
-                class="toolbar-button">
+          (click)="onExportClick()"
+          fillMode="flat"
+          class="toolbar-button">
           <span class="fa-solid fa-file-export"></span>
           Export
         </button>
@@ -80,222 +80,222 @@
 </div>
 
 <!-- Remove from List Confirmation Dialog -->
-<kendo-dialog
-  *ngIf="showRemoveDialog"
-  title="Remove from List"
-  (close)="closeRemoveDialog()"
-  [minWidth]="350"
-  [width]="450">
-  <div class="dialog-content">
-    @if (isRemoving) {
-      <div class="dialog-loading">
-        <mj-loading text="Removing records..." size="small"></mj-loading>
-        @if (removeTotal > 0) {
-          <kendo-progressbar
-            [min]="0"
-            [max]="removeTotal"
-            [value]="removeProgress"
-            [label]="false"
-            class="progress-bar">
-          </kendo-progressbar>
-        }
-      </div>
-    } @else {
-      <div class="dialog-message">
-        <span class="fa-solid fa-triangle-exclamation warning-icon"></span>
-        <p>Are you sure you want to remove <strong>{{ selectedKeys.length }}</strong> record{{ selectedKeys.length !== 1 ? 's' : '' }} from this list?</p>
-        <p class="dialog-note">This will not delete the records, only remove them from this list.</p>
-      </div>
-    }
-  </div>
-  <kendo-dialog-actions>
-    <button kendoButton
-            (click)="confirmRemoveFromList()"
-            [disabled]="isRemoving"
-            themeColor="error">
-      Remove
-    </button>
-    <button kendoButton
-            (click)="closeRemoveDialog()"
-            [disabled]="isRemoving"
-            fillMode="outline">
-      Cancel
-    </button>
-  </kendo-dialog-actions>
-</kendo-dialog>
+@if (showRemoveDialog) {
+  <kendo-dialog
+    title="Remove from List"
+    (close)="closeRemoveDialog()"
+    [minWidth]="350"
+    [width]="450">
+    <div class="dialog-content">
+      @if (isRemoving) {
+        <div class="dialog-loading">
+          <mj-loading text="Removing records..." size="small"></mj-loading>
+          @if (removeTotal > 0) {
+            <kendo-progressbar
+              [min]="0"
+              [max]="removeTotal"
+              [value]="removeProgress"
+              [label]="false"
+              class="progress-bar">
+            </kendo-progressbar>
+          }
+        </div>
+      } @else {
+        <div class="dialog-message">
+          <span class="fa-solid fa-triangle-exclamation warning-icon"></span>
+          <p>Are you sure you want to remove <strong>{{ selectedKeys.length }}</strong> record{{ selectedKeys.length !== 1 ? 's' : '' }} from this list?</p>
+          <p class="dialog-note">This will not delete the records, only remove them from this list.</p>
+        </div>
+      }
+    </div>
+    <kendo-dialog-actions>
+      <button kendoButton
+        (click)="confirmRemoveFromList()"
+        [disabled]="isRemoving"
+        themeColor="error">
+        Remove
+      </button>
+      <button kendoButton
+        (click)="closeRemoveDialog()"
+        [disabled]="isRemoving"
+        fillMode="outline">
+        Cancel
+      </button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+}
 
 <!-- Add Records Dialog -->
-<kendo-dialog
-  *ngIf="showAddRecordsDialog"
-  [title]="'Add ' + (listRecord?.Entity || 'Records') + ' to List'"
-  (close)="closeAddRecordsDialog()"
-  [minWidth]="500"
-  [width]="700"
-  [height]="650">
-  <div class="dialog-content add-records-dialog">
-    @if (addDialogSaving) {
-      <div class="dialog-loading">
-        <mj-loading text="Adding records to list..." size="small"></mj-loading>
-        @if (addTotal > 0) {
+@if (showAddRecordsDialog) {
+  <kendo-dialog
+    [title]="'Add ' + (listRecord?.Entity || 'Records') + ' to List'"
+    (close)="closeAddRecordsDialog()"
+    [minWidth]="500"
+    [width]="700"
+    [height]="650">
+    <div class="dialog-content add-records-dialog">
+      @if (addDialogSaving) {
+        <div class="dialog-loading">
+          <mj-loading text="Adding records to list..." size="small"></mj-loading>
+          @if (addTotal > 0) {
+            <kendo-progressbar
+              [min]="0"
+              [max]="addTotal"
+              [value]="addProgress"
+              [label]="false"
+              class="progress-bar">
+            </kendo-progressbar>
+          }
+        </div>
+      } @else {
+        <!-- Search Input -->
+        <div class="search-section">
+          <kendo-textbox
+            [placeholder]="'Search ' + (listRecord?.Entity || 'records') + '...'"
+            [clearButton]="true"
+            (valueChange)="onAddRecordsSearchChange($event)"
+            [value]="addRecordsSearchFilter"
+            class="search-input">
+            <ng-template kendoTextBoxPrefixTemplate>
+              <span class="fa-solid fa-search search-icon"></span>
+            </ng-template>
+          </kendo-textbox>
+          <span class="search-hint">Type at least 2 characters to search</span>
+        </div>
+        <!-- Records List -->
+        <div class="records-list">
+          @if (addDialogLoading) {
+            <div class="list-loading">
+              <mj-loading [showText]="false" size="small"></mj-loading>
+            </div>
+          } @else if (addableRecords.length === 0 && addRecordsSearchFilter.length >= 2) {
+            <div class="empty-results">
+              <span class="fa-solid fa-search empty-icon"></span>
+              <p>No records found matching "{{ addRecordsSearchFilter }}"</p>
+            </div>
+          } @else if (addableRecords.length === 0) {
+            <div class="empty-results">
+              <span class="fa-solid fa-list empty-icon"></span>
+              <p>Search for records to add to this list</p>
+            </div>
+          } @else {
+            <!-- Selection controls -->
+            <div class="selection-controls">
+              <button kendoButton fillMode="flat" size="small" (click)="selectAllAddable()">Select All</button>
+              <button kendoButton fillMode="flat" size="small" (click)="deselectAllAddable()">Deselect All</button>
+              <span class="selection-info">{{ selectedAddableRecords.length }} selected</span>
+            </div>
+            <!-- Records -->
+            <div class="records-scroll">
+              @for (record of addableRecords; track record.ID) {
+                <div class="record-item"
+                  [class.in-list]="record.isInList"
+                  [class.selected]="record.isSelected"
+                  (click)="toggleRecordSelection(record)">
+                  <div class="record-checkbox">
+                    @if (record.isInList) {
+                      <span class="fa-solid fa-check in-list-icon" title="Already in list"></span>
+                    } @else {
+                      <input type="checkbox"
+                        [checked]="record.isSelected"
+                        (click)="$event.stopPropagation()"
+                        (change)="toggleRecordSelection(record)">
+                    }
+                  </div>
+                  <div class="record-name">{{ record.Name }}</div>
+                  @if (record.isInList) {
+                    <span class="in-list-badge">In List</span>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+    <kendo-dialog-actions>
+      <button kendoButton
+        (click)="confirmAddRecords()"
+        [disabled]="addDialogSaving || selectedAddableRecords.length === 0"
+        themeColor="info">
+        Add {{ selectedAddableRecords.length > 0 ? selectedAddableRecords.length : '' }} Record{{ selectedAddableRecords.length !== 1 ? 's' : '' }}
+      </button>
+      <button kendoButton
+        (click)="closeAddRecordsDialog()"
+        [disabled]="addDialogSaving"
+        fillMode="outline">
+        Cancel
+      </button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+}
+
+<!-- Add From View Dialog -->
+@if (showAddFromViewDialog) {
+  <kendo-dialog
+    title="Add Records from Views"
+    (close)="closeAddFromViewDialog()"
+    [minWidth]="400"
+    [width]="600"
+    [height]="500">
+    <div class="dialog-content">
+      @if (showAddFromViewLoader && fetchingRecordsToSave) {
+        <div class="dialog-loading">
+          <mj-loading text="Loading records from views..." size="small"></mj-loading>
+        </div>
+      } @else if (showAddFromViewLoader && addFromViewTotal > 0) {
+        <div class="dialog-loading">
+          <mj-loading text="Adding records to list..." size="small"></mj-loading>
           <kendo-progressbar
             [min]="0"
-            [max]="addTotal"
-            [value]="addProgress"
+            [max]="addFromViewTotal"
+            [value]="addFromViewProgress"
             [label]="false"
             class="progress-bar">
           </kendo-progressbar>
-        }
-      </div>
-    } @else {
-      <!-- Search Input -->
-      <div class="search-section">
-        <kendo-textbox
-          [placeholder]="'Search ' + (listRecord?.Entity || 'records') + '...'"
-          [clearButton]="true"
-          (valueChange)="onAddRecordsSearchChange($event)"
-          [value]="addRecordsSearchFilter"
-          class="search-input">
-          <ng-template kendoTextBoxPrefixTemplate>
-            <span class="fa-solid fa-search search-icon"></span>
-          </ng-template>
-        </kendo-textbox>
-        <span class="search-hint">Type at least 2 characters to search</span>
-      </div>
-
-      <!-- Records List -->
-      <div class="records-list">
-        @if (addDialogLoading) {
-          <div class="list-loading">
-            <mj-loading [showText]="false" size="small"></mj-loading>
-          </div>
-        } @else if (addableRecords.length === 0 && addRecordsSearchFilter.length >= 2) {
-          <div class="empty-results">
-            <span class="fa-solid fa-search empty-icon"></span>
-            <p>No records found matching "{{ addRecordsSearchFilter }}"</p>
-          </div>
-        } @else if (addableRecords.length === 0) {
-          <div class="empty-results">
-            <span class="fa-solid fa-list empty-icon"></span>
-            <p>Search for records to add to this list</p>
-          </div>
-        } @else {
-          <!-- Selection controls -->
-          <div class="selection-controls">
-            <button kendoButton fillMode="flat" size="small" (click)="selectAllAddable()">Select All</button>
-            <button kendoButton fillMode="flat" size="small" (click)="deselectAllAddable()">Deselect All</button>
-            <span class="selection-info">{{ selectedAddableRecords.length }} selected</span>
-          </div>
-
-          <!-- Records -->
-          <div class="records-scroll">
-            @for (record of addableRecords; track record.ID) {
-              <div class="record-item"
-                   [class.in-list]="record.isInList"
-                   [class.selected]="record.isSelected"
-                   (click)="toggleRecordSelection(record)">
-                <div class="record-checkbox">
-                  @if (record.isInList) {
-                    <span class="fa-solid fa-check in-list-icon" title="Already in list"></span>
-                  } @else {
-                    <input type="checkbox"
-                           [checked]="record.isSelected"
-                           (click)="$event.stopPropagation()"
-                           (change)="toggleRecordSelection(record)">
-                  }
-                </div>
-                <div class="record-name">{{ record.Name }}</div>
-                @if (record.isInList) {
-                  <span class="in-list-badge">In List</span>
-                }
+        </div>
+      } @else if (showAddFromViewLoader) {
+        <div class="dialog-loading">
+          <mj-loading text="Loading views..." size="small"></mj-loading>
+        </div>
+      } @else {
+        <p class="dialog-instruction">Select views to add their records to this list:</p>
+        <div class="views-list">
+          @if (!userViews || userViews.length === 0) {
+            <div class="empty-results">
+              <span class="fa-solid fa-folder-open empty-icon"></span>
+              <p>No saved views found for this entity</p>
+            </div>
+          } @else {
+            @for (view of userViews; track view.ID) {
+              <div class="view-item"
+                [class.selected]="isViewSelected(view)"
+                (click)="toggleViewSelection(view)">
+                <input type="checkbox"
+                  [checked]="isViewSelected(view)"
+                  (click)="$event.stopPropagation()"
+                  (change)="toggleViewSelection(view)">
+                <span class="fa-solid fa-table-list view-icon"></span>
+                <span class="view-name">{{ view.Name }}</span>
               </div>
             }
-          </div>
-        }
-      </div>
-    }
-  </div>
-  <kendo-dialog-actions>
-    <button kendoButton
-            (click)="confirmAddRecords()"
-            [disabled]="addDialogSaving || selectedAddableRecords.length === 0"
-            themeColor="info">
-      Add {{ selectedAddableRecords.length > 0 ? selectedAddableRecords.length : '' }} Record{{ selectedAddableRecords.length !== 1 ? 's' : '' }}
-    </button>
-    <button kendoButton
-            (click)="closeAddRecordsDialog()"
-            [disabled]="addDialogSaving"
-            fillMode="outline">
-      Cancel
-    </button>
-  </kendo-dialog-actions>
-</kendo-dialog>
-
-<!-- Add From View Dialog -->
-<kendo-dialog
-  *ngIf="showAddFromViewDialog"
-  title="Add Records from Views"
-  (close)="closeAddFromViewDialog()"
-  [minWidth]="400"
-  [width]="600"
-  [height]="500">
-  <div class="dialog-content">
-    @if (showAddFromViewLoader && fetchingRecordsToSave) {
-      <div class="dialog-loading">
-        <mj-loading text="Loading records from views..." size="small"></mj-loading>
-      </div>
-    } @else if (showAddFromViewLoader && addFromViewTotal > 0) {
-      <div class="dialog-loading">
-        <mj-loading text="Adding records to list..." size="small"></mj-loading>
-        <kendo-progressbar
-          [min]="0"
-          [max]="addFromViewTotal"
-          [value]="addFromViewProgress"
-          [label]="false"
-          class="progress-bar">
-        </kendo-progressbar>
-      </div>
-    } @else if (showAddFromViewLoader) {
-      <div class="dialog-loading">
-        <mj-loading text="Loading views..." size="small"></mj-loading>
-      </div>
-    } @else {
-      <p class="dialog-instruction">Select views to add their records to this list:</p>
-
-      <div class="views-list">
-        @if (!userViews || userViews.length === 0) {
-          <div class="empty-results">
-            <span class="fa-solid fa-folder-open empty-icon"></span>
-            <p>No saved views found for this entity</p>
-          </div>
-        } @else {
-          @for (view of userViews; track view.ID) {
-            <div class="view-item"
-                 [class.selected]="isViewSelected(view)"
-                 (click)="toggleViewSelection(view)">
-              <input type="checkbox"
-                     [checked]="isViewSelected(view)"
-                     (click)="$event.stopPropagation()"
-                     (change)="toggleViewSelection(view)">
-              <span class="fa-solid fa-table-list view-icon"></span>
-              <span class="view-name">{{ view.Name }}</span>
-            </div>
           }
-        }
-      </div>
-    }
-  </div>
-  <kendo-dialog-actions>
-    <button kendoButton
-            (click)="confirmAddFromView()"
-            [disabled]="showAddFromViewLoader || userViewsToAdd.length === 0"
-            themeColor="info">
-      Add from {{ userViewsToAdd.length }} View{{ userViewsToAdd.length !== 1 ? 's' : '' }}
-    </button>
-    <button kendoButton
-            (click)="closeAddFromViewDialog()"
-            [disabled]="showAddFromViewLoader"
-            fillMode="outline">
-      Cancel
-    </button>
-  </kendo-dialog-actions>
-</kendo-dialog>
+        </div>
+      }
+    </div>
+    <kendo-dialog-actions>
+      <button kendoButton
+        (click)="confirmAddFromView()"
+        [disabled]="showAddFromViewLoader || userViewsToAdd.length === 0"
+        themeColor="info">
+        Add from {{ userViewsToAdd.length }} View{{ userViewsToAdd.length !== 1 ? 's' : '' }}
+      </button>
+      <button kendoButton
+        (click)="closeAddFromViewDialog()"
+        [disabled]="showAddFromViewLoader"
+        fillMode="outline">
+        Cancel
+      </button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+}

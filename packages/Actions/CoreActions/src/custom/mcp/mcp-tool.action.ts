@@ -254,10 +254,3 @@ export class MCPToolAction extends BaseAction {
         });
     }
 }
-
-/**
- * Loader function to prevent tree-shaking
- */
-export function LoadMCPToolAction(): void {
-    // Intentionally empty - ensures decorator executes
-}

@@ -293,7 +293,3 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
         return result.Output;
     }
 }
-
-export function LoadTemplateEmbedExtension() {
-    // This function ensures the extension class isn't tree-shaken
-}

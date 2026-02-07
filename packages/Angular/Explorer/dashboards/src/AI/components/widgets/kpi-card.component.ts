@@ -15,6 +15,7 @@ export interface KPICardData {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-kpi-card',
   template: `
     <div class="kpi-card" [class]="'kpi-card--' + data.color">
@@ -24,29 +25,37 @@ export interface KPICardData {
         </div>
         <div class="kpi-card__title">{{ data.title }}</div>
       </div>
-      
+    
       <div class="kpi-card__content">
-        <div class="kpi-card__value" *ngIf="!data.loading">
-          {{ formatValue(data.value) }}
-        </div>
-        <div class="kpi-card__loading" *ngIf="data.loading">
-          <mj-loading [showText]="false" size="small"></mj-loading>
-        </div>
-        
-        <div class="kpi-card__subtitle" *ngIf="data.subtitle && !data.loading">
-          {{ data.subtitle }}
-        </div>
-        
-        <div class="kpi-card__trend" *ngIf="data.trend && !data.loading">
-          <i [class]="getTrendIcon()" [style.color]="getTrendColor()"></i>
-          <span class="trend-percentage" [style.color]="getTrendColor()">
-            {{ data.trend.percentage }}%
-          </span>
-          <span class="trend-period">{{ data.trend.period }}</span>
-        </div>
+        @if (!data.loading) {
+          <div class="kpi-card__value">
+            {{ formatValue(data.value) }}
+          </div>
+        }
+        @if (data.loading) {
+          <div class="kpi-card__loading">
+            <mj-loading [showText]="false" size="small"></mj-loading>
+          </div>
+        }
+    
+        @if (data.subtitle && !data.loading) {
+          <div class="kpi-card__subtitle">
+            {{ data.subtitle }}
+          </div>
+        }
+    
+        @if (data.trend && !data.loading) {
+          <div class="kpi-card__trend">
+            <i [class]="getTrendIcon()" [style.color]="getTrendColor()"></i>
+            <span class="trend-percentage" [style.color]="getTrendColor()">
+              {{ data.trend.percentage }}%
+            </span>
+            <span class="trend-period">{{ data.trend.period }}</span>
+          </div>
+        }
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .kpi-card {
       background: white;

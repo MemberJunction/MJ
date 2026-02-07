@@ -8,7 +8,7 @@
  */
 
 import { ProviderConfigDataBase, UserInfo } from '@memberjunction/core';
-import * as sql from 'mssql';
+import sql from 'mssql';
 
 /**
  * Configuration options for SQL execution with logging support

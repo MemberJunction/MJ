@@ -111,6 +111,7 @@ export interface OpenEntityRecordEvent {
  * @see ERDDiagramComponent for the underlying generic component
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-erd',
   template: `
     <mj-erd-diagram

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Access Control Rules') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-accesscontrolrule-form',
     templateUrl: './accesscontrolrule.form.component.html'
 })

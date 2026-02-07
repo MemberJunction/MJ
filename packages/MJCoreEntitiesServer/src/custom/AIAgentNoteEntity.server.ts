@@ -44,10 +44,3 @@ export class AIAgentNoteEntityExtended extends AIAgentNoteEntity {
         }
     }
 }
-
-/**
- * Required export for MJ class factory registration
- */
-export function LoadAIAgentNoteEntityServerSubClass() {
-    // Registration happens via @RegisterClass decorator
-}

@@ -15,18 +15,18 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.2.14",
-    "@angular/compiler-cli": "18.2.14"
+    "@angular/compiler": "21.1.3",
+    "@angular/compiler-cli": "21.1.3"
   },
   "peerDependencies": {
-    "@angular/common": "18.2.14",
-    "@angular/core": "18.2.14",
-    "@angular/forms": "18.2.14",
-    "@angular/router": "18.2.14",
-    "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-angular-dialog": "16.2.0",
-    "@progress/kendo-angular-listbox": "16.2.0",
-    "@progress/kendo-angular-indicators": "16.2.0"
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3",
+    "@angular/forms": "21.1.3",
+    "@angular/router": "21.1.3",
+    "@progress/kendo-angular-buttons": "22.0.1",
+    "@progress/kendo-angular-dialog": "22.0.1",
+    "@progress/kendo-angular-listbox": "22.0.1",
+    "@progress/kendo-angular-indicators": "22.0.1"
   },
   "dependencies": {
     "@memberjunction/communication-types": "3.4.0",
@@ -39,7 +39,7 @@
     "@memberjunction/ng-shared": "3.4.0",
     "@memberjunction/ng-shared-generic": "3.4.0",
     "@memberjunction/templates-base-types": "3.4.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

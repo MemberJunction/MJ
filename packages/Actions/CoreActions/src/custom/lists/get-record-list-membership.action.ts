@@ -197,7 +197,3 @@ export class GetRecordListMembershipAction extends BaseAction {
     });
   }
 }
-
-export function LoadGetRecordListMembershipAction(): void {
-  // Prevents tree-shaking
-}

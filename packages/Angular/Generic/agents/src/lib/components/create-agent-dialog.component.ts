@@ -16,39 +16,42 @@ import { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.compo
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-create-agent-dialog',
     template: `
         <!-- Backdrop -->
         <div class="cad-backdrop" [class.cad-visible]="IsVisible" (click)="OnClose()"></div>
-
+        
         <!-- Dialog -->
         <div class="cad-dialog" [class.cad-visible]="IsVisible">
-            <!-- Header -->
-            <div class="cad-header">
-                <div class="cad-title-group">
-                    <i class="fa-solid fa-robot cad-title-icon"></i>
-                    <div>
-                        <h2 class="cad-title">{{ DialogTitle }}</h2>
-                        <p class="cad-subtitle" *ngIf="Config?.ParentAgentName">
-                            Sub-agent of {{ Config.ParentAgentName }}
-                        </p>
-                    </div>
-                </div>
-                <button class="cad-close-btn" (click)="OnClose()">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
+          <!-- Header -->
+          <div class="cad-header">
+            <div class="cad-title-group">
+              <i class="fa-solid fa-robot cad-title-icon"></i>
+              <div>
+                <h2 class="cad-title">{{ DialogTitle }}</h2>
+                @if (Config.ParentAgentName) {
+                  <p class="cad-subtitle">
+                    Sub-agent of {{ Config.ParentAgentName }}
+                  </p>
+                }
+              </div>
             </div>
-
-            <!-- Content -->
-            <div class="cad-body">
-                <mj-create-agent-panel
-                    [Config]="Config"
-                    (Created)="OnCreated($event)"
-                    (Cancelled)="OnClose()">
-                </mj-create-agent-panel>
-            </div>
+            <button class="cad-close-btn" (click)="OnClose()">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        
+          <!-- Content -->
+          <div class="cad-body">
+            <mj-create-agent-panel
+              [Config]="Config"
+              (Created)="OnCreated($event)"
+              (Cancelled)="OnClose()">
+            </mj-create-agent-panel>
+          </div>
         </div>
-    `,
+        `,
     styles: [`
         .cad-backdrop {
             position: fixed;

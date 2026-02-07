@@ -20,6 +20,7 @@ export interface ActionResultCodeDialogResult {
  * </mj-action-result-code-dialog>
  */
 @Component({
+  standalone: false,
     selector: 'mj-action-result-code-dialog',
     templateUrl: './action-result-code-dialog.component.html',
     styleUrls: ['./action-result-code-dialog.component.css']
@@ -116,9 +117,4 @@ export class ActionResultCodeDialogComponent implements OnInit {
     public get CanSave(): boolean {
         return !!this.Code && this.Code.trim().length > 0;
     }
-}
-
-// Tree-shaking prevention function
-export function LoadActionResultCodeDialogComponent(): void {
-    // This function ensures the component is included in the bundle
 }

@@ -1,637 +1,693 @@
 <!-- World-Class List Form -->
 <div class="list-form-explorer">
-    <!-- Header -->
-    <header class="list-header">
-        <div class="header-content">
-            <div class="header-icon" [style.background-color]="'#2196F3'">
-                <i [class]="entityIcon"></i>
-            </div>
-            <div class="header-info">
-                <div class="name-row">
-                    <ng-container *ngIf="!isEditingName">
-                        <h1 class="list-name">{{record.Name || 'Untitled List'}}</h1>
-                        <button
-                            class="edit-btn"
-                            (click)="startEditingName()"
-                            title="Edit name"
-                            *ngIf="isCurrentUserOwner()">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                    </ng-container>
-                    <ng-container *ngIf="isEditingName">
-                        <input
-                            type="text"
-                            class="inline-edit-input name-input"
-                            [(ngModel)]="editingName"
-                            (keydown.enter)="saveNameEdit()"
-                            (keydown.escape)="cancelNameEdit()"
-                            #nameInput />
-                        <button class="save-btn" (click)="saveNameEdit()">
-                            <i class="fa-solid fa-check"></i>
-                        </button>
-                        <button class="cancel-btn" (click)="cancelNameEdit()">
-                            <i class="fa-solid fa-times"></i>
-                        </button>
-                    </ng-container>
-                </div>
-                <div class="entity-badge">
-                    <i [class]="entityIcon"></i>
-                    <span>{{entityDisplayName}}</span>
-                </div>
-            </div>
+  <!-- Header -->
+  <header class="list-header">
+    <div class="header-content">
+      <div class="header-icon" [style.background-color]="'#2196F3'">
+        <i [class]="entityIcon"></i>
+      </div>
+      <div class="header-info">
+        <div class="name-row">
+          @if (!isEditingName) {
+            <h1 class="list-name">{{record.Name || 'Untitled List'}}</h1>
+            @if (isCurrentUserOwner()) {
+              <button
+                class="edit-btn"
+                (click)="startEditingName()"
+                title="Edit name"
+                >
+                <i class="fa-solid fa-pen"></i>
+              </button>
+            }
+          }
+          @if (isEditingName) {
+            <input
+              type="text"
+              class="inline-edit-input name-input"
+              [(ngModel)]="editingName"
+              (keydown.enter)="saveNameEdit()"
+              (keydown.escape)="cancelNameEdit()"
+              #nameInput />
+            <button class="save-btn" (click)="saveNameEdit()">
+              <i class="fa-solid fa-check"></i>
+            </button>
+            <button class="cancel-btn" (click)="cancelNameEdit()">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          }
         </div>
-        <div class="header-stats">
-            <div class="stat-item">
-                <span class="stat-value">{{formattedItemCount}}</span>
-                <span class="stat-label">Items</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">{{stats.shareCount}}</span>
-                <span class="stat-label">Shares</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">{{formattedLastUpdated}}</span>
-                <span class="stat-label">Updated</span>
-            </div>
+        <div class="entity-badge">
+          <i [class]="entityIcon"></i>
+          <span>{{entityDisplayName}}</span>
         </div>
-    </header>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="stat-item">
+        <span class="stat-value">{{formattedItemCount}}</span>
+        <span class="stat-label">Items</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{stats.shareCount}}</span>
+        <span class="stat-label">Shares</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{formattedLastUpdated}}</span>
+        <span class="stat-label">Updated</span>
+      </div>
+    </div>
+  </header>
 
-    <!-- Navigation Rail -->
-    <nav class="nav-rail">
-        <button
-            *ngFor="let nav of navItems"
-            class="nav-item"
-            [class.active]="activeSection === nav.id"
-            [class.disabled]="nav.disabled"
-            (click)="setActiveSection(nav.id)"
-            [title]="nav.label">
-            <i [class]="nav.icon"></i>
-            <span class="nav-label">{{nav.label}}</span>
-            <span class="nav-badge" *ngIf="nav.badge && nav.badge > 0">{{nav.badge}}</span>
-        </button>
-    </nav>
+  <!-- Navigation Rail -->
+  <nav class="nav-rail">
+    @for (nav of navItems; track nav) {
+      <button
+        class="nav-item"
+        [class.active]="activeSection === nav.id"
+        [class.disabled]="nav.disabled"
+        (click)="setActiveSection(nav.id)"
+        [title]="nav.label">
+        <i [class]="nav.icon"></i>
+        <span class="nav-label">{{nav.label}}</span>
+        @if (nav.badge && nav.badge > 0) {
+          <span class="nav-badge">{{nav.badge}}</span>
+        }
+      </button>
+    }
+  </nav>
 
-    <!-- Main Content -->
-    <main class="main-content">
-        <!-- Overview Section -->
-        <section class="section overview-section" *ngIf="activeSection === 'overview'">
-            <div class="overview-grid">
-                <!-- Description Card -->
-                <div class="overview-card description-card">
-                    <div class="card-header">
-                        <h3><i class="fa-solid fa-align-left"></i> Description</h3>
-                        <button
-                            class="edit-btn"
-                            (click)="startEditingDescription()"
-                            *ngIf="isCurrentUserOwner() && !isEditingDescription">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <ng-container *ngIf="!isEditingDescription">
-                            <p *ngIf="record.Description" class="description-text">{{record.Description}}</p>
-                            <p *ngIf="!record.Description" class="description-empty">No description provided</p>
-                        </ng-container>
-                        <ng-container *ngIf="isEditingDescription">
-                            <textarea
-                                class="inline-edit-input description-input"
-                                [(ngModel)]="editingDescription"
-                                placeholder="Add a description..."
-                                rows="3"
-                                (keydown.escape)="cancelDescriptionEdit()"></textarea>
-                            <div class="edit-actions">
-                                <button class="btn-primary" (click)="saveDescriptionEdit()">Save</button>
-                                <button class="btn-secondary" (click)="cancelDescriptionEdit()">Cancel</button>
-                            </div>
-                        </ng-container>
-                    </div>
-                </div>
-
-                <!-- Details Card -->
-                <div class="overview-card details-card">
-                    <div class="card-header">
-                        <h3><i class="fa-solid fa-info-circle"></i> Details</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="detail-row">
-                            <span class="detail-label">Entity</span>
-                            <span class="detail-value">
-                                <i [class]="entityIcon" class="detail-icon"></i>
-                                {{entityDisplayName}}
-                            </span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Category</span>
-                            <span class="detail-value" *ngIf="!isCurrentUserOwner()">
-                                <i class="fa-solid fa-folder detail-icon"></i>
-                                {{categoryName}}
-                            </span>
-                            <select
-                                *ngIf="isCurrentUserOwner()"
-                                class="category-select"
-                                [ngModel]="record.CategoryID"
-                                (ngModelChange)="onCategoryChange($event)">
-                                <option [ngValue]="null">Uncategorized</option>
-                                <option *ngFor="let cat of categories" [ngValue]="cat.ID">{{cat.Name}}</option>
-                            </select>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Owner</span>
-                            <span class="detail-value">
-                                <i class="fa-solid fa-user detail-icon"></i>
-                                {{getOwnerName()}}
-                                <span class="owner-badge" *ngIf="isCurrentUserOwner()">You</span>
-                            </span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Created</span>
-                            <span class="detail-value">
-                                <i class="fa-solid fa-calendar detail-icon"></i>
-                                {{record.__mj_CreatedAt | date:'mediumDate'}}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions Card -->
-                <div class="overview-card actions-card">
-                    <div class="card-header">
-                        <h3><i class="fa-solid fa-bolt"></i> Quick Actions</h3>
-                    </div>
-                    <div class="card-body">
-                        <button class="action-btn" (click)="setActiveSection('items')">
-                            <i class="fa-solid fa-list"></i>
-                            <span>View Items</span>
-                            <span class="action-count">{{stats.itemCount}}</span>
-                        </button>
-                        <button class="action-btn" (click)="openShareDialog()" *ngIf="isCurrentUserOwner()">
-                            <i class="fa-solid fa-share-nodes"></i>
-                            <span>Share List</span>
-                            <span class="action-count" *ngIf="stats.shareCount > 0">{{stats.shareCount}}</span>
-                        </button>
-                        <button class="action-btn" (click)="setActiveSection('sharing')" *ngIf="!isCurrentUserOwner()">
-                            <i class="fa-solid fa-share-nodes"></i>
-                            <span>View Sharing</span>
-                        </button>
-                        <button class="action-btn" [disabled]="true" title="Coming soon">
-                            <i class="fa-solid fa-file-export"></i>
-                            <span>Export Data</span>
-                            <span class="coming-soon">Soon</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Items Section -->
-        <section class="section items-section" *ngIf="activeSection === 'items'">
-            <div class="section-header">
-                <h2>List Items</h2>
-                <div class="section-actions">
-                    <div class="search-box">
-                        <i class="fa-solid fa-search"></i>
-                        <input
-                            type="text"
-                            placeholder="Search items..."
-                            [(ngModel)]="itemSearchTerm" />
-                    </div>
-                    <div class="add-buttons" *ngIf="isCurrentUserOwner()">
-                        <button class="btn-secondary" (click)="openAddRecordsDialog()" title="Add individual records">
-                            <i class="fa-solid fa-plus"></i> Add Records
-                        </button>
-                        <button class="btn-secondary" (click)="openAddFromViewDialog()" title="Add records from a saved view">
-                            <i class="fa-solid fa-table-list"></i> Add From View
-                        </button>
-                    </div>
-                    <button class="btn-icon" (click)="refreshItems()" title="Refresh">
-                        <i class="fa-solid fa-refresh"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Loading State -->
-            <div class="loading-state" *ngIf="isLoadingItems">
-                <mj-loading text="Loading items..." size="medium"></mj-loading>
-            </div>
-
-            <!-- Empty State -->
-            <div class="empty-state" *ngIf="!isLoadingItems && listItems.length === 0">
-                <div class="empty-icon">
-                    <i class="fa-solid fa-inbox"></i>
-                </div>
-                <h3>No Items Yet</h3>
-                <p>This list doesn't have any items. Add records from the {{entityDisplayName}} entity.</p>
-            </div>
-
-            <!-- Items Table -->
-            <div class="items-table-container" *ngIf="!isLoadingItems && listItems.length > 0">
-                <div class="items-toolbar" *ngIf="selectedItems.size > 0">
-                    <span class="selection-count">{{selectedItems.size}} selected</span>
-                    <button class="btn-danger" (click)="removeSelectedItems()">
-                        <i class="fa-solid fa-trash"></i>
-                        Remove from List
-                    </button>
-                </div>
-
-                <table class="items-table">
-                    <thead>
-                        <tr>
-                            <th class="col-checkbox">
-                                <input
-                                    type="checkbox"
-                                    [checked]="isSelectAllChecked"
-                                    (change)="toggleSelectAll()" />
-                            </th>
-                            <th class="col-name">Name</th>
-                            <th class="col-id">Record ID</th>
-                            <th class="col-added">Added</th>
-                            <th class="col-actions"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            *ngFor="let item of filteredItems"
-                            [class.selected]="selectedItems.has(item.detail.ID)">
-                            <td class="col-checkbox">
-                                <input
-                                    type="checkbox"
-                                    [checked]="selectedItems.has(item.detail.ID)"
-                                    (change)="toggleItemSelection(item)" />
-                            </td>
-                            <td class="col-name">
-                                <div class="item-name" [class.loading]="item.isLoading">
-                                    <i [class]="entityIcon" class="item-icon"></i>
-                                    <span>{{item.recordName}}</span>
-                                    <i *ngIf="item.isLoading" class="fa-solid fa-spinner fa-spin"></i>
-                                </div>
-                            </td>
-                            <td class="col-id">
-                                <code class="record-id">{{item.detail.RecordID}}</code>
-                            </td>
-                            <td class="col-added">
-                                {{item.detail.__mj_CreatedAt | date:'shortDate'}}
-                            </td>
-                            <td class="col-actions">
-                                <button
-                                    class="btn-icon"
-                                    (click)="openRecord(item)"
-                                    title="Open record">
-                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <div class="items-footer">
-                    <span class="items-count">
-                        Showing {{filteredItems.length}} of {{listItems.length}} items
-                    </span>
-                </div>
-            </div>
-        </section>
-
-        <!-- Sharing Section -->
-        <section class="section sharing-section" *ngIf="activeSection === 'sharing'">
-            <div class="section-header">
-                <h2>Sharing</h2>
-                <div class="section-actions" *ngIf="isCurrentUserOwner()">
-                    <button class="btn-primary" (click)="openShareDialog()">
-                        <i class="fa-solid fa-user-plus"></i> Manage Sharing
-                    </button>
-                </div>
-            </div>
-
-            <!-- Sharing summary -->
-            <div class="sharing-summary" *ngIf="stats.shareCount > 0 || stats.invitationCount > 0">
-                <div class="summary-card">
-                    <div class="summary-icon">
-                        <i class="fa-solid fa-users"></i>
-                    </div>
-                    <div class="summary-content">
-                        <span class="summary-value">{{stats.shareCount}}</span>
-                        <span class="summary-label">Active Share{{stats.shareCount !== 1 ? 's' : ''}}</span>
-                    </div>
-                </div>
-                <div class="summary-card" *ngIf="stats.invitationCount > 0">
-                    <div class="summary-icon pending">
-                        <i class="fa-solid fa-envelope"></i>
-                    </div>
-                    <div class="summary-content">
-                        <span class="summary-value">{{stats.invitationCount}}</span>
-                        <span class="summary-label">Pending Invitation{{stats.invitationCount !== 1 ? 's' : ''}}</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Empty state for no shares -->
-            <div class="empty-state" *ngIf="stats.shareCount === 0 && stats.invitationCount === 0">
-                <div class="empty-icon">
-                    <i class="fa-solid fa-share-nodes"></i>
-                </div>
-                <h3>Not Shared Yet</h3>
-                <p *ngIf="isCurrentUserOwner()">This list is private. Click "Manage Sharing" to share it with other users or roles.</p>
-                <p *ngIf="!isCurrentUserOwner()">This list hasn't been shared with anyone else.</p>
-                <button class="btn-primary" (click)="openShareDialog()" *ngIf="isCurrentUserOwner()">
-                    <i class="fa-solid fa-user-plus"></i> Share This List
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Overview Section -->
+    @if (activeSection === 'overview') {
+      <section class="section overview-section">
+        <div class="overview-grid">
+          <!-- Description Card -->
+          <div class="overview-card description-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-align-left"></i> Description</h3>
+              @if (isCurrentUserOwner() && !isEditingDescription) {
+                <button
+                  class="edit-btn"
+                  (click)="startEditingDescription()"
+                  >
+                  <i class="fa-solid fa-pen"></i>
                 </button>
+              }
             </div>
-
-            <!-- Read-only notice for non-owners -->
-            <div class="readonly-notice" *ngIf="!isCurrentUserOwner() && (stats.shareCount > 0 || stats.invitationCount > 0)">
-                <i class="fa-solid fa-info-circle"></i>
-                <span>Only the list owner can manage sharing settings.</span>
-            </div>
-        </section>
-
-        <!-- Activity Section -->
-        <section class="section activity-section" *ngIf="activeSection === 'activity'">
-            <div class="section-header">
-                <h2>Activity</h2>
-            </div>
-
-            <div class="activity-timeline">
-                <div class="timeline-item">
-                    <div class="timeline-icon">
-                        <i class="fa-solid fa-edit"></i>
-                    </div>
-                    <div class="timeline-content">
-                        <p class="timeline-text">List updated</p>
-                        <span class="timeline-date">{{record.__mj_UpdatedAt | date:'medium'}}</span>
-                    </div>
+            <div class="card-body">
+              @if (!isEditingDescription) {
+                @if (record.Description) {
+                  <p class="description-text">{{record.Description}}</p>
+                }
+                @if (!record.Description) {
+                  <p class="description-empty">No description provided</p>
+                }
+              }
+              @if (isEditingDescription) {
+                <textarea
+                  class="inline-edit-input description-input"
+                  [(ngModel)]="editingDescription"
+                  placeholder="Add a description..."
+                  rows="3"
+                (keydown.escape)="cancelDescriptionEdit()"></textarea>
+                <div class="edit-actions">
+                  <button class="btn-primary" (click)="saveDescriptionEdit()">Save</button>
+                  <button class="btn-secondary" (click)="cancelDescriptionEdit()">Cancel</button>
                 </div>
-                <div class="timeline-item">
-                    <div class="timeline-icon create">
-                        <i class="fa-solid fa-plus"></i>
-                    </div>
-                    <div class="timeline-content">
-                        <p class="timeline-text">List created</p>
-                        <span class="timeline-date">{{record.__mj_CreatedAt | date:'medium'}}</span>
-                    </div>
+              }
+            </div>
+          </div>
+          <!-- Details Card -->
+          <div class="overview-card details-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-info-circle"></i> Details</h3>
+            </div>
+            <div class="card-body">
+              <div class="detail-row">
+                <span class="detail-label">Entity</span>
+                <span class="detail-value">
+                  <i [class]="entityIcon" class="detail-icon"></i>
+                  {{entityDisplayName}}
+                </span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Category</span>
+                @if (!isCurrentUserOwner()) {
+                  <span class="detail-value">
+                    <i class="fa-solid fa-folder detail-icon"></i>
+                    {{categoryName}}
+                  </span>
+                }
+                @if (isCurrentUserOwner()) {
+                  <select
+                    class="category-select"
+                    [ngModel]="record.CategoryID"
+                    (ngModelChange)="onCategoryChange($event)">
+                    <option [ngValue]="null">Uncategorized</option>
+                    @for (cat of categories; track cat) {
+                      <option [ngValue]="cat.ID">{{cat.Name}}</option>
+                    }
+                  </select>
+                }
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Owner</span>
+                <span class="detail-value">
+                  <i class="fa-solid fa-user detail-icon"></i>
+                  {{getOwnerName()}}
+                  @if (isCurrentUserOwner()) {
+                    <span class="owner-badge">You</span>
+                  }
+                </span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Created</span>
+                <span class="detail-value">
+                  <i class="fa-solid fa-calendar detail-icon"></i>
+                  {{record.__mj_CreatedAt | date:'mediumDate'}}
+                </span>
+              </div>
+            </div>
+          </div>
+          <!-- Quick Actions Card -->
+          <div class="overview-card actions-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-bolt"></i> Quick Actions</h3>
+            </div>
+            <div class="card-body">
+              <button class="action-btn" (click)="setActiveSection('items')">
+                <i class="fa-solid fa-list"></i>
+                <span>View Items</span>
+                <span class="action-count">{{stats.itemCount}}</span>
+              </button>
+              @if (isCurrentUserOwner()) {
+                <button class="action-btn" (click)="openShareDialog()">
+                  <i class="fa-solid fa-share-nodes"></i>
+                  <span>Share List</span>
+                  @if (stats.shareCount > 0) {
+                    <span class="action-count">{{stats.shareCount}}</span>
+                  }
+                </button>
+              }
+              @if (!isCurrentUserOwner()) {
+                <button class="action-btn" (click)="setActiveSection('sharing')">
+                  <i class="fa-solid fa-share-nodes"></i>
+                  <span>View Sharing</span>
+                </button>
+              }
+              <button class="action-btn" [disabled]="true" title="Coming soon">
+                <i class="fa-solid fa-file-export"></i>
+                <span>Export Data</span>
+                <span class="coming-soon">Soon</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- Items Section -->
+    @if (activeSection === 'items') {
+      <section class="section items-section">
+        <div class="section-header">
+          <h2>List Items</h2>
+          <div class="section-actions">
+            <div class="search-box">
+              <i class="fa-solid fa-search"></i>
+              <input
+                type="text"
+                placeholder="Search items..."
+                [(ngModel)]="itemSearchTerm" />
+            </div>
+            @if (isCurrentUserOwner()) {
+              <div class="add-buttons">
+                <button class="btn-secondary" (click)="openAddRecordsDialog()" title="Add individual records">
+                  <i class="fa-solid fa-plus"></i> Add Records
+                </button>
+                <button class="btn-secondary" (click)="openAddFromViewDialog()" title="Add records from a saved view">
+                  <i class="fa-solid fa-table-list"></i> Add From View
+                </button>
+              </div>
+            }
+            <button class="btn-icon" (click)="refreshItems()" title="Refresh">
+              <i class="fa-solid fa-refresh"></i>
+            </button>
+          </div>
+        </div>
+        <!-- Loading State -->
+        @if (isLoadingItems) {
+          <div class="loading-state">
+            <mj-loading text="Loading items..." size="medium"></mj-loading>
+          </div>
+        }
+        <!-- Empty State -->
+        @if (!isLoadingItems && listItems.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fa-solid fa-inbox"></i>
+            </div>
+            <h3>No Items Yet</h3>
+            <p>This list doesn't have any items. Add records from the {{entityDisplayName}} entity.</p>
+          </div>
+        }
+        <!-- Items Table -->
+        @if (!isLoadingItems && listItems.length > 0) {
+          <div class="items-table-container">
+            @if (selectedItems.size > 0) {
+              <div class="items-toolbar">
+                <span class="selection-count">{{selectedItems.size}} selected</span>
+                <button class="btn-danger" (click)="removeSelectedItems()">
+                  <i class="fa-solid fa-trash"></i>
+                  Remove from List
+                </button>
+              </div>
+            }
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th class="col-checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="isSelectAllChecked"
+                      (change)="toggleSelectAll()" />
+                  </th>
+                  <th class="col-name">Name</th>
+                  <th class="col-id">Record ID</th>
+                  <th class="col-added">Added</th>
+                  <th class="col-actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of filteredItems; track item) {
+                  <tr
+                    [class.selected]="selectedItems.has(item.detail.ID)">
+                    <td class="col-checkbox">
+                      <input
+                        type="checkbox"
+                        [checked]="selectedItems.has(item.detail.ID)"
+                        (change)="toggleItemSelection(item)" />
+                    </td>
+                    <td class="col-name">
+                      <div class="item-name" [class.loading]="item.isLoading">
+                        <i [class]="entityIcon" class="item-icon"></i>
+                        <span>{{item.recordName}}</span>
+                        @if (item.isLoading) {
+                          <i class="fa-solid fa-spinner fa-spin"></i>
+                        }
+                      </div>
+                    </td>
+                    <td class="col-id">
+                      <code class="record-id">{{item.detail.RecordID}}</code>
+                    </td>
+                    <td class="col-added">
+                      {{item.detail.__mj_CreatedAt | date:'shortDate'}}
+                    </td>
+                    <td class="col-actions">
+                      <button
+                        class="btn-icon"
+                        (click)="openRecord(item)"
+                        title="Open record">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <div class="items-footer">
+              <span class="items-count">
+                Showing {{filteredItems.length}} of {{listItems.length}} items
+              </span>
+            </div>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- Sharing Section -->
+    @if (activeSection === 'sharing') {
+      <section class="section sharing-section">
+        <div class="section-header">
+          <h2>Sharing</h2>
+          @if (isCurrentUserOwner()) {
+            <div class="section-actions">
+              <button class="btn-primary" (click)="openShareDialog()">
+                <i class="fa-solid fa-user-plus"></i> Manage Sharing
+              </button>
+            </div>
+          }
+        </div>
+        <!-- Sharing summary -->
+        @if (stats.shareCount > 0 || stats.invitationCount > 0) {
+          <div class="sharing-summary">
+            <div class="summary-card">
+              <div class="summary-icon">
+                <i class="fa-solid fa-users"></i>
+              </div>
+              <div class="summary-content">
+                <span class="summary-value">{{stats.shareCount}}</span>
+                <span class="summary-label">Active Share{{stats.shareCount !== 1 ? 's' : ''}}</span>
+              </div>
+            </div>
+            @if (stats.invitationCount > 0) {
+              <div class="summary-card">
+                <div class="summary-icon pending">
+                  <i class="fa-solid fa-envelope"></i>
                 </div>
+                <div class="summary-content">
+                  <span class="summary-value">{{stats.invitationCount}}</span>
+                  <span class="summary-label">Pending Invitation{{stats.invitationCount !== 1 ? 's' : ''}}</span>
+                </div>
+              </div>
+            }
+          </div>
+        }
+        <!-- Empty state for no shares -->
+        @if (stats.shareCount === 0 && stats.invitationCount === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fa-solid fa-share-nodes"></i>
             </div>
+            <h3>Not Shared Yet</h3>
+            @if (isCurrentUserOwner()) {
+              <p>This list is private. Click "Manage Sharing" to share it with other users or roles.</p>
+            }
+            @if (!isCurrentUserOwner()) {
+              <p>This list hasn't been shared with anyone else.</p>
+            }
+            @if (isCurrentUserOwner()) {
+              <button class="btn-primary" (click)="openShareDialog()">
+                <i class="fa-solid fa-user-plus"></i> Share This List
+              </button>
+            }
+          </div>
+        }
+        <!-- Read-only notice for non-owners -->
+        @if (!isCurrentUserOwner() && (stats.shareCount > 0 || stats.invitationCount > 0)) {
+          <div class="readonly-notice">
+            <i class="fa-solid fa-info-circle"></i>
+            <span>Only the list owner can manage sharing settings.</span>
+          </div>
+        }
+      </section>
+    }
 
-            <div class="activity-info">
-                <p>Detailed activity tracking coming soon. You'll be able to see who added items, when shares were created, and more.</p>
+    <!-- Activity Section -->
+    @if (activeSection === 'activity') {
+      <section class="section activity-section">
+        <div class="section-header">
+          <h2>Activity</h2>
+        </div>
+        <div class="activity-timeline">
+          <div class="timeline-item">
+            <div class="timeline-icon">
+              <i class="fa-solid fa-edit"></i>
             </div>
-        </section>
-
-        <!-- Settings Section -->
-        <section class="section settings-section" *ngIf="activeSection === 'settings'">
-            <div class="section-header">
-                <h2>Settings</h2>
+            <div class="timeline-content">
+              <p class="timeline-text">List updated</p>
+              <span class="timeline-date">{{record.__mj_UpdatedAt | date:'medium'}}</span>
             </div>
-
-            <div class="settings-form">
-                <mj-collapsible-panel
-                    sectionKey="listSettings"
-                    sectionName="List Settings"
-                    icon="fa fa-cog"
-                    [form]="this"
-                    [formContext]="formContext">
-                    <div class="form-body">
-                        <mj-form-field
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="Name"
-                            Type="textbox"
-                            [EditMode]="EditMode"
-                            [formContext]="formContext">
-                        </mj-form-field>
-                        <mj-form-field
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="Description"
-                            Type="textarea"
-                            [EditMode]="EditMode"
-                            [formContext]="formContext">
-                        </mj-form-field>
-                        <mj-form-field
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="CategoryID"
-                            Type="textbox"
-                            [EditMode]="EditMode"
-                            [formContext]="formContext"
-                            LinkType="Record"
-                            LinkComponentType="Search">
-                        </mj-form-field>
-                    </div>
-                </mj-collapsible-panel>
-
-                <mj-collapsible-panel
-                    sectionKey="systemInfo"
-                    sectionName="System Information"
-                    icon="fa fa-info-circle"
-                    [form]="this"
-                    [formContext]="formContext">
-                    <div class="form-body">
-                        <mj-form-field
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="EntityID"
-                            Type="textbox"
-                            [EditMode]="false"
-                            [formContext]="formContext">
-                        </mj-form-field>
-                        <mj-form-field
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="UserID"
-                            Type="textbox"
-                            [EditMode]="false"
-                            [formContext]="formContext">
-                        </mj-form-field>
-                        <mj-form-field
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="__mj_CreatedAt"
-                            Type="textbox"
-                            [EditMode]="false"
-                            [formContext]="formContext">
-                        </mj-form-field>
-                        <mj-form-field
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="__mj_UpdatedAt"
-                            Type="textbox"
-                            [EditMode]="false"
-                            [formContext]="formContext">
-                        </mj-form-field>
-                    </div>
-                </mj-collapsible-panel>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-icon create">
+              <i class="fa-solid fa-plus"></i>
             </div>
-        </section>
-    </main>
+            <div class="timeline-content">
+              <p class="timeline-text">List created</p>
+              <span class="timeline-date">{{record.__mj_CreatedAt | date:'medium'}}</span>
+            </div>
+          </div>
+        </div>
+        <div class="activity-info">
+          <p>Detailed activity tracking coming soon. You'll be able to see who added items, when shares were created, and more.</p>
+        </div>
+      </section>
+    }
+
+    <!-- Settings Section -->
+    @if (activeSection === 'settings') {
+      <section class="section settings-section">
+        <div class="section-header">
+          <h2>Settings</h2>
+        </div>
+        <div class="settings-form">
+          <mj-collapsible-panel
+            sectionKey="listSettings"
+            sectionName="List Settings"
+            icon="fa fa-cog"
+            [form]="this"
+            [formContext]="formContext">
+            <div class="form-body">
+              <mj-form-field
+                [record]="record"
+                [ShowLabel]="true"
+                FieldName="Name"
+                Type="textbox"
+                [EditMode]="EditMode"
+                [formContext]="formContext">
+              </mj-form-field>
+              <mj-form-field
+                [record]="record"
+                [ShowLabel]="true"
+                FieldName="Description"
+                Type="textarea"
+                [EditMode]="EditMode"
+                [formContext]="formContext">
+              </mj-form-field>
+              <mj-form-field
+                [record]="record"
+                [ShowLabel]="true"
+                FieldName="CategoryID"
+                Type="textbox"
+                [EditMode]="EditMode"
+                [formContext]="formContext"
+                LinkType="Record"
+                LinkComponentType="Search">
+              </mj-form-field>
+            </div>
+          </mj-collapsible-panel>
+          <mj-collapsible-panel
+            sectionKey="systemInfo"
+            sectionName="System Information"
+            icon="fa fa-info-circle"
+            [form]="this"
+            [formContext]="formContext">
+            <div class="form-body">
+              <mj-form-field
+                [record]="record"
+                [ShowLabel]="true"
+                FieldName="EntityID"
+                Type="textbox"
+                [EditMode]="false"
+                [formContext]="formContext">
+              </mj-form-field>
+              <mj-form-field
+                [record]="record"
+                [ShowLabel]="true"
+                FieldName="UserID"
+                Type="textbox"
+                [EditMode]="false"
+                [formContext]="formContext">
+              </mj-form-field>
+              <mj-form-field
+                [record]="record"
+                [ShowLabel]="true"
+                FieldName="__mj_CreatedAt"
+                Type="textbox"
+                [EditMode]="false"
+                [formContext]="formContext">
+              </mj-form-field>
+              <mj-form-field
+                [record]="record"
+                [ShowLabel]="true"
+                FieldName="__mj_UpdatedAt"
+                Type="textbox"
+                [EditMode]="false"
+                [formContext]="formContext">
+              </mj-form-field>
+            </div>
+          </mj-collapsible-panel>
+        </div>
+      </section>
+    }
+  </main>
 </div>
 
 <!-- Add Records Dialog -->
-<kendo-dialog
-    *ngIf="showAddRecordsDialog"
+@if (showAddRecordsDialog) {
+  <kendo-dialog
     [title]="'Add ' + entityDisplayName + ' to List'"
     (close)="closeAddRecordsDialog()"
     [minWidth]="400"
     [width]="600"
     [height]="550">
     <div class="dialog-content add-records-dialog">
-        <ng-container *ngIf="addDialogSaving">
-            <div class="dialog-loading">
-                <mj-loading [text]="'Adding ' + addTotal + ' records to list...'" size="small"></mj-loading>
+      @if (addDialogSaving) {
+        <div class="dialog-loading">
+          <mj-loading [text]="'Adding ' + addTotal + ' records to list...'" size="small"></mj-loading>
+        </div>
+      }
+      @if (!addDialogSaving) {
+        <!-- Search Input -->
+        <div class="search-section">
+          <kendo-textbox
+            [placeholder]="'Search ' + entityDisplayName + '...'"
+            [clearButton]="true"
+            (valueChange)="onAddRecordsSearchChange($event)"
+            [value]="addRecordsSearchFilter"
+            class="search-input">
+            <ng-template kendoTextBoxPrefixTemplate>
+              <span class="fa-solid fa-search search-icon"></span>
+            </ng-template>
+          </kendo-textbox>
+          <span class="search-hint">Type at least 2 characters to search</span>
+        </div>
+        <!-- Records List -->
+        <div class="records-list">
+          @if (addDialogLoading) {
+            <div class="list-loading">
+              <mj-loading [showText]="false" size="small"></mj-loading>
             </div>
-        </ng-container>
-        <ng-container *ngIf="!addDialogSaving">
-            <!-- Search Input -->
-            <div class="search-section">
-                <kendo-textbox
-                    [placeholder]="'Search ' + entityDisplayName + '...'"
-                    [clearButton]="true"
-                    (valueChange)="onAddRecordsSearchChange($event)"
-                    [value]="addRecordsSearchFilter"
-                    class="search-input">
-                    <ng-template kendoTextBoxPrefixTemplate>
-                        <span class="fa-solid fa-search search-icon"></span>
-                    </ng-template>
-                </kendo-textbox>
-                <span class="search-hint">Type at least 2 characters to search</span>
+          }
+          @if (!addDialogLoading && addableRecords.length === 0 && addRecordsSearchFilter.length >= 2) {
+            <div class="empty-results">
+              <span class="fa-solid fa-search empty-icon"></span>
+              <p>No records found matching "{{ addRecordsSearchFilter }}"</p>
             </div>
-
-            <!-- Records List -->
-            <div class="records-list">
-                <ng-container *ngIf="addDialogLoading">
-                    <div class="list-loading">
-                        <mj-loading [showText]="false" size="small"></mj-loading>
-                    </div>
-                </ng-container>
-                <ng-container *ngIf="!addDialogLoading && addableRecords.length === 0 && addRecordsSearchFilter.length >= 2">
-                    <div class="empty-results">
-                        <span class="fa-solid fa-search empty-icon"></span>
-                        <p>No records found matching "{{ addRecordsSearchFilter }}"</p>
-                    </div>
-                </ng-container>
-                <ng-container *ngIf="!addDialogLoading && addableRecords.length === 0 && addRecordsSearchFilter.length < 2">
-                    <div class="empty-results">
-                        <span class="fa-solid fa-list empty-icon"></span>
-                        <p>Search for records to add to this list</p>
-                    </div>
-                </ng-container>
-                <ng-container *ngIf="!addDialogLoading && addableRecords.length > 0">
-                    <!-- Selection controls -->
-                    <div class="selection-controls">
-                        <button kendoButton fillMode="flat" size="small" (click)="selectAllAddable()">Select All</button>
-                        <button kendoButton fillMode="flat" size="small" (click)="deselectAllAddable()">Deselect All</button>
-                        <span class="selection-info">{{ selectedAddableRecords.length }} selected</span>
-                    </div>
-
-                    <!-- Records -->
-                    <div class="records-scroll">
-                        <div class="record-item"
-                             *ngFor="let record of addableRecords"
-                             [class.in-list]="record.isInList"
-                             [class.selected]="record.isSelected"
-                             (click)="toggleRecordSelection(record)">
-                            <div class="record-checkbox">
-                                <span class="fa-solid fa-check in-list-icon" *ngIf="record.isInList" title="Already in list"></span>
-                                <input type="checkbox"
-                                       *ngIf="!record.isInList"
-                                       [checked]="record.isSelected"
-                                       (click)="$event.stopPropagation()"
-                                       (change)="toggleRecordSelection(record)">
-                            </div>
-                            <div class="record-name">{{ record.Name }}</div>
-                            <span class="in-list-badge" *ngIf="record.isInList">In List</span>
-                        </div>
-                    </div>
-                </ng-container>
+          }
+          @if (!addDialogLoading && addableRecords.length === 0 && addRecordsSearchFilter.length < 2) {
+            <div class="empty-results">
+              <span class="fa-solid fa-list empty-icon"></span>
+              <p>Search for records to add to this list</p>
             </div>
-        </ng-container>
+          }
+          @if (!addDialogLoading && addableRecords.length > 0) {
+            <!-- Selection controls -->
+            <div class="selection-controls">
+              <button kendoButton fillMode="flat" size="small" (click)="selectAllAddable()">Select All</button>
+              <button kendoButton fillMode="flat" size="small" (click)="deselectAllAddable()">Deselect All</button>
+              <span class="selection-info">{{ selectedAddableRecords.length }} selected</span>
+            </div>
+            <!-- Records -->
+            <div class="records-scroll">
+              @for (record of addableRecords; track record) {
+                <div class="record-item"
+                  [class.in-list]="record.isInList"
+                  [class.selected]="record.isSelected"
+                  (click)="toggleRecordSelection(record)">
+                  <div class="record-checkbox">
+                    @if (record.isInList) {
+                      <span class="fa-solid fa-check in-list-icon" title="Already in list"></span>
+                    }
+                    @if (!record.isInList) {
+                      <input type="checkbox"
+                        [checked]="record.isSelected"
+                        (click)="$event.stopPropagation()"
+                        (change)="toggleRecordSelection(record)">
+                    }
+                  </div>
+                  <div class="record-name">{{ record.Name }}</div>
+                  @if (record.isInList) {
+                    <span class="in-list-badge">In List</span>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
     </div>
     <kendo-dialog-actions>
-        <button kendoButton
-                (click)="confirmAddRecords()"
-                [disabled]="addDialogSaving || selectedAddableRecords.length === 0"
-                themeColor="primary">
-            Add {{ selectedAddableRecords.length > 0 ? selectedAddableRecords.length : '' }} Record{{ selectedAddableRecords.length !== 1 ? 's' : '' }}
-        </button>
-        <button kendoButton
-                (click)="closeAddRecordsDialog()"
-                [disabled]="addDialogSaving"
-                fillMode="outline">
-            Cancel
-        </button>
+      <button kendoButton
+        (click)="confirmAddRecords()"
+        [disabled]="addDialogSaving || selectedAddableRecords.length === 0"
+        themeColor="primary">
+        Add {{ selectedAddableRecords.length > 0 ? selectedAddableRecords.length : '' }} Record{{ selectedAddableRecords.length !== 1 ? 's' : '' }}
+      </button>
+      <button kendoButton
+        (click)="closeAddRecordsDialog()"
+        [disabled]="addDialogSaving"
+        fillMode="outline">
+        Cancel
+      </button>
     </kendo-dialog-actions>
-</kendo-dialog>
+  </kendo-dialog>
+}
 
 <!-- Add From View Dialog -->
-<kendo-dialog
-    *ngIf="showAddFromViewDialog"
+@if (showAddFromViewDialog) {
+  <kendo-dialog
     title="Add Records from Views"
     (close)="closeAddFromViewDialog()"
     [minWidth]="400"
     [width]="600"
     [height]="500">
     <div class="dialog-content">
-        <ng-container *ngIf="showAddFromViewLoader && fetchingRecordsToSave">
-            <div class="dialog-loading">
-                <mj-loading text="Loading records from views..." size="small"></mj-loading>
+      @if (showAddFromViewLoader && fetchingRecordsToSave) {
+        <div class="dialog-loading">
+          <mj-loading text="Loading records from views..." size="small"></mj-loading>
+        </div>
+      }
+      @if (showAddFromViewLoader && addFromViewTotal > 0 && !fetchingRecordsToSave) {
+        <div class="dialog-loading">
+          <mj-loading [text]="'Adding ' + addFromViewTotal + ' records to list...'" size="small"></mj-loading>
+        </div>
+      }
+      @if (showAddFromViewLoader && !fetchingRecordsToSave && addFromViewTotal === 0) {
+        <div class="dialog-loading">
+          <mj-loading text="Loading views..." size="small"></mj-loading>
+        </div>
+      }
+      @if (!showAddFromViewLoader) {
+        <p class="dialog-instruction">Select views to add their records to this list:</p>
+        <div class="views-list">
+          @if (!userViews || userViews.length === 0) {
+            <div class="empty-results">
+              <span class="fa-solid fa-folder-open empty-icon"></span>
+              <p>No saved views found for this entity</p>
             </div>
-        </ng-container>
-        <ng-container *ngIf="showAddFromViewLoader && addFromViewTotal > 0 && !fetchingRecordsToSave">
-            <div class="dialog-loading">
-                <mj-loading [text]="'Adding ' + addFromViewTotal + ' records to list...'" size="small"></mj-loading>
-            </div>
-        </ng-container>
-        <ng-container *ngIf="showAddFromViewLoader && !fetchingRecordsToSave && addFromViewTotal === 0">
-            <div class="dialog-loading">
-                <mj-loading text="Loading views..." size="small"></mj-loading>
-            </div>
-        </ng-container>
-        <ng-container *ngIf="!showAddFromViewLoader">
-            <p class="dialog-instruction">Select views to add their records to this list:</p>
-
-            <div class="views-list">
-                <ng-container *ngIf="!userViews || userViews.length === 0">
-                    <div class="empty-results">
-                        <span class="fa-solid fa-folder-open empty-icon"></span>
-                        <p>No saved views found for this entity</p>
-                    </div>
-                </ng-container>
-                <ng-container *ngIf="userViews && userViews.length > 0">
-                    <div class="view-item"
-                         *ngFor="let view of userViews"
-                         [class.selected]="isViewSelected(view)"
-                         (click)="toggleViewSelection(view)">
-                        <input type="checkbox"
-                               [checked]="isViewSelected(view)"
-                               (click)="$event.stopPropagation()"
-                               (change)="toggleViewSelection(view)">
-                        <span class="fa-solid fa-table-list view-icon"></span>
-                        <span class="view-name">{{ view.Name }}</span>
-                    </div>
-                </ng-container>
-            </div>
-        </ng-container>
+          }
+          @if (userViews && userViews.length > 0) {
+            @for (view of userViews; track view) {
+              <div class="view-item"
+                [class.selected]="isViewSelected(view)"
+                (click)="toggleViewSelection(view)">
+                <input type="checkbox"
+                  [checked]="isViewSelected(view)"
+                  (click)="$event.stopPropagation()"
+                  (change)="toggleViewSelection(view)">
+                <span class="fa-solid fa-table-list view-icon"></span>
+                <span class="view-name">{{ view.Name }}</span>
+              </div>
+            }
+          }
+        </div>
+      }
     </div>
     <kendo-dialog-actions>
-        <button kendoButton
-                (click)="confirmAddFromView()"
-                [disabled]="showAddFromViewLoader || userViewsToAdd.length === 0"
-                themeColor="primary">
-            Add from {{ userViewsToAdd.length }} View{{ userViewsToAdd.length !== 1 ? 's' : '' }}
-        </button>
-        <button kendoButton
-                (click)="closeAddFromViewDialog()"
-                [disabled]="showAddFromViewLoader"
-                fillMode="outline">
-            Cancel
-        </button>
+      <button kendoButton
+        (click)="confirmAddFromView()"
+        [disabled]="showAddFromViewLoader || userViewsToAdd.length === 0"
+        themeColor="primary">
+        Add from {{ userViewsToAdd.length }} View{{ userViewsToAdd.length !== 1 ? 's' : '' }}
+      </button>
+      <button kendoButton
+        (click)="closeAddFromViewDialog()"
+        [disabled]="showAddFromViewLoader"
+        fillMode="outline">
+        Cancel
+      </button>
     </kendo-dialog-actions>
-</kendo-dialog>
+  </kendo-dialog>
+}
 
 <!-- Share Dialog -->
-<mj-list-share-dialog
-    *ngIf="showShareDialog && shareDialogConfig"
+@if (showShareDialog && shareDialogConfig) {
+  <mj-list-share-dialog
     [config]="shareDialogConfig"
     [visible]="showShareDialog"
     (complete)="onShareDialogComplete($event)"
     (cancel)="onShareDialogCancel()">
-</mj-list-share-dialog>
+  </mj-list-share-dialog>
+}

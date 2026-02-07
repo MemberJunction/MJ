@@ -3,6 +3,7 @@ import { ComponentStudioStateService } from '../../services/component-studio-sta
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 @Component({
+  standalone: false,
   selector: 'mj-data-requirements-editor',
   template: `
     <div class="data-requirements-editor">

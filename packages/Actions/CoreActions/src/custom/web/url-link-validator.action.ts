@@ -289,10 +289,3 @@ export class URLLinkValidatorAction extends BaseAction {
         }
     }
 }
-
-/**
- * Loader function to ensure the URLLinkValidatorAction class is included in the bundle.
- */
-export function LoadURLLinkValidatorAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

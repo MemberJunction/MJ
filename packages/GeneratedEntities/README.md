@@ -12,7 +12,7 @@ Key features:
 - **Schema validation**: Uses Zod for runtime validation of entity data
 - **Extensible**: Base classes for extending with custom business logic
 - **MemberJunction integration**: Works seamlessly with MemberJunction's data context and API
-- **Webpack tree-shaking support**: Includes `LoadGeneratedEntities()` function to ensure proper bundling
+- **ESBuild tree-shaking support**: Includes `LoadGeneratedEntities()` function to ensure proper bundling
 
 ## Installation
 
@@ -64,9 +64,9 @@ const md = new Metadata();
 const entity = await md.GetEntityObject<UserEntity>('Users');
 ```
 
-### Loading Generated Entities for Webpack
+### Loading Generated Entities for ESBuild
 
-To ensure generated entities are included in webpack builds (avoiding tree-shaking issues):
+To ensure generated entities are included in ESBuild builds (avoiding tree-shaking issues):
 
 ```typescript
 import { LoadGeneratedEntities } from 'mj_generatedentities';

@@ -54,7 +54,6 @@ export {
 export {
     AgentToolAdapter,
     createAgentToolAdapter,
-    LoadAgentToolAdapter,
     type OpenAIFunctionDefinition,
     type AnthropicToolDefinition,
     type AgentToolDefinition,
@@ -128,9 +127,6 @@ export {
     OAuthAuthorizationRequiredError,
     OAuthReauthorizationRequiredError,
 
-    // Tree-shaking prevention
-    LoadOAuthModule,
-
     // Type re-exports
     type AuthServerMetadata,
     type CachedAuthServerMetadata,
@@ -162,11 +158,3 @@ export {
     type CredentialsRevokedDetails
 } from './oauth/index.js';
 
-/**
- * Tree-shaking prevention function.
- * Call this from application initialization to ensure the package is loaded.
- */
-export function LoadMCPClient(): void {
-    // This function exists to prevent tree-shaking
-    // and ensure the MCPClientManager singleton is available
-}

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'AI Result Cache') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-airesultcache-form',
     templateUrl: './airesultcache.form.component.html'
 })

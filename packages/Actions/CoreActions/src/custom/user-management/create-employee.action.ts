@@ -134,7 +134,3 @@ export class CreateEmployeeAction extends CreateRecordAction {
         }
     }
 }
-
-export function LoadCreateEmployeeAction() {
-    // Prevent tree shaking
-}

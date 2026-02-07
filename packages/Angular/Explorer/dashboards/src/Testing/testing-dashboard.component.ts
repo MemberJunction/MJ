@@ -14,6 +14,7 @@ interface TestingDashboardState {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-testing-dashboard',
   templateUrl: './testing-dashboard.component.html',
   styleUrls: ['./testing-dashboard.component.css'],
@@ -172,8 +173,4 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       item.selected = this.navigationItems[index] === this.activeTab;
     });
   }
-}
-
-export function LoadTestingDashboard() {
-  // Prevents tree-shaking
 }

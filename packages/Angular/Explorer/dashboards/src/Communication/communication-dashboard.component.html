@@ -1,80 +1,102 @@
 <div class="communication-dashboard-container">
-    <!-- TOOLBAR -->
-    <div class="studio-toolbar">
-        <div class="toolbar-brand">
-            <div class="brand-icon"><i class="fa-solid fa-satellite-dish"></i></div>
-            <span class="brand-label">Communications</span>
+  <!-- TOOLBAR -->
+  <div class="studio-toolbar">
+    <div class="toolbar-brand">
+      <div class="brand-icon"><i class="fa-solid fa-satellite-dish"></i></div>
+      <span class="brand-label">Communications</span>
+    </div>
+    <div class="toolbar-divider"></div>
+    <div class="toolbar-spacer"></div>
+    <button class="tb-btn" (click)="onRefresh()">
+      <i class="fa-solid fa-rotate" [class.spinning]="isRefreshing"></i> Refresh
+    </button>
+  </div>
+
+  <!-- BODY -->
+  <div class="dashboard-body">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-section-label">Dashboard</div>
+      <div class="nav-item" [class.selected]="activeTab === 'monitor'"
+        (click)="onTabChange('monitor')">
+        <i class="fa-solid fa-chart-line"></i>
+        <span>Monitor</span>
+      </div>
+      <div class="nav-item" [class.selected]="activeTab === 'logs'"
+        (click)="onTabChange('logs')">
+        <i class="fa-solid fa-list-ul"></i>
+        <span>Message Logs</span>
+      </div>
+
+      <div class="sidebar-section-label">Configuration</div>
+      <div class="nav-item" [class.selected]="activeTab === 'providers'"
+        (click)="onTabChange('providers')">
+        <i class="fa-solid fa-server"></i>
+        <span>Providers</span>
+      </div>
+      <div class="nav-item" [class.selected]="activeTab === 'templates'"
+        (click)="onTabChange('templates')">
+        <i class="fa-solid fa-file-lines"></i>
+        <span>Templates</span>
+      </div>
+
+      <div class="sidebar-section-label">Operations</div>
+      <div class="nav-item" [class.selected]="activeTab === 'runs'"
+        (click)="onTabChange('runs')">
+        <i class="fa-solid fa-play-circle"></i>
+        <span>Bulk Runs</span>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="nav-item" [class.selected]="activeTab === 'settings'"
+          (click)="onTabChange('settings')">
+          <i class="fa-solid fa-gear"></i>
+          <span>Settings</span>
         </div>
-        <div class="toolbar-divider"></div>
-        <div class="toolbar-spacer"></div>
-        <button class="tb-btn" (click)="onRefresh()">
-            <i class="fa-solid fa-rotate" [class.spinning]="isRefreshing"></i> Refresh
-        </button>
+      </div>
     </div>
 
-    <!-- BODY -->
-    <div class="dashboard-body">
-        <!-- SIDEBAR -->
-        <div class="sidebar">
-            <div class="sidebar-section-label">Dashboard</div>
-            <div class="nav-item" [class.selected]="activeTab === 'monitor'"
-                (click)="onTabChange('monitor')">
-                <i class="fa-solid fa-chart-line"></i>
-                <span>Monitor</span>
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="tab-container">
+        @switch (activeTab) {
+          @case ('monitor') {
+            <div class="tab-content">
+              @if (hasVisited('monitor')) {
+                <mj-communication-monitor-resource></mj-communication-monitor-resource>
+              }
             </div>
-            <div class="nav-item" [class.selected]="activeTab === 'logs'"
-                (click)="onTabChange('logs')">
-                <i class="fa-solid fa-list-ul"></i>
-                <span>Message Logs</span>
+          }
+          @case ('logs') {
+            <div class="tab-content">
+              @if (hasVisited('logs')) {
+                <mj-communication-logs-resource></mj-communication-logs-resource>
+              }
             </div>
-
-            <div class="sidebar-section-label">Configuration</div>
-            <div class="nav-item" [class.selected]="activeTab === 'providers'"
-                (click)="onTabChange('providers')">
-                <i class="fa-solid fa-server"></i>
-                <span>Providers</span>
+          }
+          @case ('providers') {
+            <div class="tab-content">
+              @if (hasVisited('providers')) {
+                <mj-communication-providers-resource></mj-communication-providers-resource>
+              }
             </div>
-            <div class="nav-item" [class.selected]="activeTab === 'templates'"
-                (click)="onTabChange('templates')">
-                <i class="fa-solid fa-file-lines"></i>
-                <span>Templates</span>
+          }
+          @case ('templates') {
+            <div class="tab-content">
+              @if (hasVisited('templates')) {
+                <mj-communication-templates-resource></mj-communication-templates-resource>
+              }
             </div>
-
-            <div class="sidebar-section-label">Operations</div>
-            <div class="nav-item" [class.selected]="activeTab === 'runs'"
-                (click)="onTabChange('runs')">
-                <i class="fa-solid fa-play-circle"></i>
-                <span>Bulk Runs</span>
+          }
+          @case ('runs') {
+            <div class="tab-content">
+              @if (hasVisited('runs')) {
+                <mj-communication-runs-resource></mj-communication-runs-resource>
+              }
             </div>
-
-            <div class="sidebar-footer">
-                <div class="nav-item" [class.selected]="activeTab === 'settings'"
-                    (click)="onTabChange('settings')">
-                    <i class="fa-solid fa-gear"></i>
-                    <span>Settings</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- MAIN CONTENT -->
-        <div class="main-content">
-            <div [ngSwitch]="activeTab" class="tab-container">
-                <div *ngSwitchCase="'monitor'" class="tab-content">
-                    <mj-communication-monitor-resource *ngIf="hasVisited('monitor')"></mj-communication-monitor-resource>
-                </div>
-                <div *ngSwitchCase="'logs'" class="tab-content">
-                    <mj-communication-logs-resource *ngIf="hasVisited('logs')"></mj-communication-logs-resource>
-                </div>
-                <div *ngSwitchCase="'providers'" class="tab-content">
-                    <mj-communication-providers-resource *ngIf="hasVisited('providers')"></mj-communication-providers-resource>
-                </div>
-                <div *ngSwitchCase="'templates'" class="tab-content">
-                    <mj-communication-templates-resource *ngIf="hasVisited('templates')"></mj-communication-templates-resource>
-                </div>
-                <div *ngSwitchCase="'runs'" class="tab-content">
-                    <mj-communication-runs-resource *ngIf="hasVisited('runs')"></mj-communication-runs-resource>
-                </div>
-            </div>
-        </div>
+          }
+        }
+      </div>
     </div>
+  </div>
 </div>

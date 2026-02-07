@@ -16,6 +16,7 @@ import { ActionCategoryEntity } from '@memberjunction/core-entities';
 import { ActionExplorerStateService } from '../../services/action-explorer-state.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-new-category-panel',
   templateUrl: './new-category-panel.component.html',
   styleUrls: ['./new-category-panel.component.css'],

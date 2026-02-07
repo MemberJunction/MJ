@@ -91,6 +91,7 @@ export interface GroupedIncomingRelationship {
  */
 @RegisterClass(BaseFormComponent, 'Entities')
 @Component({
+  standalone: false,
     selector: 'mj-entity-form',
     templateUrl: './entity-form.component.html',
     styleUrls: ['./entity-form.component.css', '../../../shared/form-styles.css'],
@@ -128,7 +129,6 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         { id: 'history', icon: 'fa-solid fa-clock-rotate-left', label: 'History' },
         { id: 'settings', icon: 'fa-solid fa-sliders', label: 'Settings' }
     ];
-
 
     /** Computed statistics for the entity */
     public stats: EntityStats = {
@@ -809,8 +809,4 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
             return value;
         }
     }
-}
-
-export function LoadEntityFormComponentExtended() {
-    // Prevents tree-shaking
 }

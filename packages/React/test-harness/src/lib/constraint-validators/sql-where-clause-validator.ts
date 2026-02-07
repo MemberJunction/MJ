@@ -44,7 +44,8 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseConstraintValidator } from './base-constraint-validator';
 import { ValidationContext } from './validation-context';
 import { PropValueExtractor } from '../prop-value-extractor';
-import { Parser } from 'node-sql-parser';
+import NodeSqlParser from 'node-sql-parser';
+const { Parser } = NodeSqlParser;
 
 /**
  * Validates SQL WHERE clauses for syntax and field references

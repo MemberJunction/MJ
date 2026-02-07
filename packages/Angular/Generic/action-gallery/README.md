@@ -218,7 +218,7 @@ onTestRequested(action: ActionEntity) {
 
 ## Dependencies
 
-- Angular 18.0.2+
+- Angular 21+
 - @memberjunction/core
 - @memberjunction/core-entities
 - @memberjunction/ng-ai-test-harness

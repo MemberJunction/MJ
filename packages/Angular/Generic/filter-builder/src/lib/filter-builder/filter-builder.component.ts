@@ -38,6 +38,7 @@ const DEFAULT_CONFIG: FilterBuilderConfig = {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-filter-builder',
   templateUrl: './filter-builder.component.html',
   styleUrls: ['./filter-builder.component.css']

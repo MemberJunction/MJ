@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/entity-communications-server",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: Library that connects the MJ entities framework to the communication framework",
   "main": "dist/index.js",
@@ -9,14 +10,14 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/communication-engine": "3.4.0",

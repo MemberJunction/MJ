@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: API Key Scopes') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-apikeyscope-form',
     templateUrl: './apikeyscope.form.component.html'
 })

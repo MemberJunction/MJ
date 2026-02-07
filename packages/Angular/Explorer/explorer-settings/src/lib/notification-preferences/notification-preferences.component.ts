@@ -43,6 +43,7 @@ interface NotificationPreferenceViewModel {
  * - Saves preferences using transaction groups for batch updates
  */
 @Component({
+  standalone: false,
   selector: 'mj-notification-preferences',
   templateUrl: './notification-preferences.component.html',
   styleUrls: ['./notification-preferences.component.css'],

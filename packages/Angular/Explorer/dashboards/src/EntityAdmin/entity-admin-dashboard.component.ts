@@ -12,6 +12,7 @@ import { ResourceData, UserSettingEntity, UserInfoEngine } from '@memberjunction
 const ERD_SETTINGS_KEY = 'MJ.Admin.Entity.ERD';
 
 @Component({
+  standalone: false,
   selector: 'mj-entity-admin-dashboard',
   templateUrl: './entity-admin-dashboard.component.html',
   styleUrls: ['./entity-admin-dashboard.component.css']
@@ -173,8 +174,4 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       console.warn('Failed to save ERD state to User Settings:', error);
     }
   }
-}
-
-export function LoadEntityAdminDashboard() {
-  // Prevents tree-shaking
 }

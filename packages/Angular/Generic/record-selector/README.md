@@ -24,7 +24,7 @@ The `@memberjunction/ng-record-selector` package provides Angular components tha
 npm install @memberjunction/ng-record-selector
 ```
 
-Note: This package has peer dependencies on Angular 18.0.2 and Kendo UI Angular components. Ensure these are installed in your project.
+Note: This package has peer dependencies on Angular 21 and Kendo UI Angular components. Ensure these are installed in your project.
 
 ## Usage
 

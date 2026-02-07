@@ -256,7 +256,3 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 }
-
-export function LoadPineconeVectorDB() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

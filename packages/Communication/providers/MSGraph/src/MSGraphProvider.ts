@@ -1306,7 +1306,3 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         return mapping[displayName.toLowerCase()] || 'other';
     }
 }
-
-export function LoadMSGraphProvider() {
-    // do nothing, this prevents tree shaking from removing this class
-}

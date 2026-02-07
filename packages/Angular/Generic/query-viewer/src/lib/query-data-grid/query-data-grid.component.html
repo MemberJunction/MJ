@@ -1,96 +1,107 @@
 <!-- Query Data Grid Component -->
 <div class="query-data-grid-container" [ngClass]="GetContainerClasses()" [style.height]="Height">
-    <!-- Toolbar -->
-    <div class="grid-toolbar" *ngIf="ShowToolbar">
-        <div class="toolbar-left">
-            <!-- Row count -->
-            <span class="row-count" *ngIf="ShowRowCount">
-                <i class="fa-solid fa-table-list"></i>
-                {{ RowCount | number }} {{ RowCount === 1 ? 'row' : 'rows' }}
-            </span>
-
-            <!-- Selection count -->
-            <span class="selection-count" *ngIf="ShowSelectionCount && SelectionCount > 0">
-                <i class="fa-solid fa-check-square"></i>
-                {{ SelectionCount }} selected
-                <button class="clear-selection-btn" (click)="ClearSelection()" title="Clear selection">
-                    <i class="fa-solid fa-times"></i>
-                </button>
-            </span>
-        </div>
-
-        <div class="toolbar-right">
-            <!-- Refresh button -->
-            <button *ngIf="ShowRefresh"
-                    (click)="Refresh()"
-                    [disabled]="IsLoading"
-                    title="Refresh data"
-                    class="toolbar-btn icon-only">
-                <i class="fa-solid fa-sync-alt" [class.fa-spin]="IsLoading"></i>
+  <!-- Toolbar -->
+  @if (ShowToolbar) {
+    <div class="grid-toolbar">
+      <div class="toolbar-left">
+        <!-- Row count -->
+        @if (ShowRowCount) {
+          <span class="row-count">
+            <i class="fa-solid fa-table-list"></i>
+            {{ RowCount | number }} {{ RowCount === 1 ? 'row' : 'rows' }}
+          </span>
+        }
+        <!-- Selection count -->
+        @if (ShowSelectionCount && SelectionCount > 0) {
+          <span class="selection-count">
+            <i class="fa-solid fa-check-square"></i>
+            {{ SelectionCount }} selected
+            <button class="clear-selection-btn" (click)="ClearSelection()" title="Clear selection">
+              <i class="fa-solid fa-times"></i>
             </button>
-
-            <!-- Export button -->
-            <button *ngIf="ShowExport"
-                    [disabled]="RowCount === 0"
-                    title="Export data"
-                    class="toolbar-btn"
-                    (click)="OpenExportDialog()">
-                <i class="fa-solid fa-file-export"></i>
-                <span class="button-text">Export</span>
-            </button>
-        </div>
+          </span>
+        }
+      </div>
+      <div class="toolbar-right">
+        <!-- Refresh button -->
+        @if (ShowRefresh) {
+          <button
+            (click)="Refresh()"
+            [disabled]="IsLoading"
+            title="Refresh data"
+            class="toolbar-btn icon-only">
+            <i class="fa-solid fa-sync-alt" [class.fa-spin]="IsLoading"></i>
+          </button>
+        }
+        <!-- Export button -->
+        @if (ShowExport) {
+          <button
+            [disabled]="RowCount === 0"
+            title="Export data"
+            class="toolbar-btn"
+            (click)="OpenExportDialog()">
+            <i class="fa-solid fa-file-export"></i>
+            <span class="button-text">Export</span>
+          </button>
+        }
+      </div>
     </div>
+  }
 
-    <!-- Loading overlay -->
-    <div class="loading-overlay" *ngIf="IsLoading" @fadeIn>
-        <mj-loading text="Loading query results..."></mj-loading>
+  <!-- Loading overlay -->
+  @if (IsLoading) {
+    <div class="loading-overlay" @fadeIn>
+      <mj-loading text="Loading query results..."></mj-loading>
     </div>
+  }
 
-    <!-- AG Grid -->
-    <div class="grid-wrapper" [class.loading]="IsLoading">
-        <ag-grid-angular
-            class="query-grid"
-            [theme]="Theme"
-            [rowData]="Data"
-            [columnDefs]="ColumnDefs"
-            [defaultColDef]="DefaultColDef"
-            [gridOptions]="GridOptions"
-            [rowSelection]="GetRowSelectionConfig()"
-            [getRowId]="GetRowId"
-            (gridReady)="OnGridReady($event)"
-            (rowClicked)="OnRowClicked($event)"
-            (rowDoubleClicked)="OnRowDoubleClicked($event)"
-            (selectionChanged)="OnSelectionChanged($event)"
-            (sortChanged)="OnSortChanged($event)"
-            (columnResized)="OnColumnResized($event)"
-            (columnMoved)="OnColumnMoved($event)">
-        </ag-grid-angular>
-    </div>
+  <!-- AG Grid -->
+  <div class="grid-wrapper" [class.loading]="IsLoading">
+    <ag-grid-angular
+      class="query-grid"
+      [theme]="Theme"
+      [rowData]="Data"
+      [columnDefs]="ColumnDefs"
+      [defaultColDef]="DefaultColDef"
+      [gridOptions]="GridOptions"
+      [rowSelection]="GetRowSelectionConfig()"
+      [getRowId]="GetRowId"
+      (gridReady)="OnGridReady($event)"
+      (rowClicked)="OnRowClicked($event)"
+      (rowDoubleClicked)="OnRowDoubleClicked($event)"
+      (selectionChanged)="OnSelectionChanged($event)"
+      (sortChanged)="OnSortChanged($event)"
+      (columnResized)="OnColumnResized($event)"
+      (columnMoved)="OnColumnMoved($event)">
+    </ag-grid-angular>
+  </div>
 
-    <!-- Empty state -->
-    <div class="empty-state" *ngIf="!IsLoading && RowCount === 0" @fadeIn>
-        <i class="fa-solid fa-database empty-icon"></i>
-        <p class="empty-message">No results</p>
-        <p class="empty-hint">Run the query to see results</p>
+  <!-- Empty state -->
+  @if (!IsLoading && RowCount === 0) {
+    <div class="empty-state" @fadeIn>
+      <i class="fa-solid fa-database empty-icon"></i>
+      <p class="empty-message">No results</p>
+      <p class="empty-hint">Run the query to see results</p>
     </div>
+  }
 </div>
 
 <!-- Export Dialog -->
 <mj-export-dialog
-    [visible]="ShowExportDialog"
-    [config]="ExportDialogConfig"
-    (closed)="OnExportDialogClosed($event)">
+  [visible]="ShowExportDialog"
+  [config]="ExportDialogConfig"
+  (closed)="OnExportDialogClosed($event)">
 </mj-export-dialog>
 
 <!-- Row Detail Panel -->
 <mj-query-row-detail
-    [RowData]="RowDetailData"
-    [Columns]="Columns"
-    [QueryInfo]="QueryInfo"
-    [Visible]="ShowRowDetailPanel"
-    [RowIndex]="RowDetailIndex"
-    [TotalRows]="RowCount"
-    (Close)="CloseRowDetailPanel()"
-    (EntityLinkClick)="OnRowDetailEntityLinkClick($event)"
-    (NavigateRow)="NavigateRowDetail($event)">
+  [RowData]="RowDetailData"
+  [Columns]="Columns"
+  [QueryInfo]="QueryInfo"
+  [Visible]="ShowRowDetailPanel"
+  [RowIndex]="RowDetailIndex"
+  [TotalRows]="RowCount"
+  (Close)="CloseRowDetailPanel()"
+  (EntityLinkClick)="OnRowDetailEntityLinkClick($event)"
+  (NavigateRow)="NavigateRowDetail($event)">
 </mj-query-row-detail>

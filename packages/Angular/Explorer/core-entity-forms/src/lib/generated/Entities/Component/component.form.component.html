@@ -300,7 +300,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJComponentDependencies')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','DependencyComponentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
@@ -310,6 +311,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Component Library Links Section -->
@@ -322,7 +324,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJComponentLibraryLinks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','ComponentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
@@ -332,6 +335,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Component Dependencies Section -->
@@ -344,7 +348,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJComponentDependencies')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','ComponentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
@@ -354,6 +359,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

@@ -104,7 +104,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJArtifacts')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','EnvironmentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
@@ -114,6 +115,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Collections Section -->
@@ -126,7 +128,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJCollections')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collections','EnvironmentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Collections')"
@@ -136,6 +139,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Projects Section -->
@@ -148,7 +152,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJProjects')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','EnvironmentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Projects')"
@@ -158,6 +163,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Dashboards Section -->
@@ -170,7 +176,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('dashboards')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Dashboards','EnvironmentID')"
                 [NewRecordValues]="NewRecordValues('Dashboards')"
@@ -180,6 +187,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Tasks Section -->
@@ -192,7 +200,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTasks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','EnvironmentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Tasks')"
@@ -202,6 +211,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Reports Section -->
@@ -214,7 +224,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('reports')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Reports','EnvironmentID')"
                 [NewRecordValues]="NewRecordValues('Reports')"
@@ -224,6 +235,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Conversations Section -->
@@ -236,7 +248,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('conversations')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Conversations','EnvironmentID')"
                 [NewRecordValues]="NewRecordValues('Conversations')"
@@ -246,6 +259,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

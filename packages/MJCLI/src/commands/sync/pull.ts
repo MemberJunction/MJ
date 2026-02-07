@@ -2,6 +2,8 @@ import { Command, Flags } from '@oclif/core';
 import { select } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import chalk from 'chalk';
+import fs from 'fs';
+import path from 'path';
 import {
   PullService,
   ValidationService,
@@ -270,8 +272,6 @@ export default class Pull extends Command {
   }
 
   private findAllEntityDirectoriesRecursive(dir: string): string[] {
-    const fs = require('fs');
-    const path = require('path');
     const directories: string[] = [];
     
     try {

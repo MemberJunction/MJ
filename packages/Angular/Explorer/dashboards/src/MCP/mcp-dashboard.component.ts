@@ -187,6 +187,7 @@ export type MCPDashboardTab = 'servers' | 'connections' | 'tools' | 'logs';
  */
 @RegisterClass(BaseDashboard, 'MCPDashboard')
 @Component({
+  standalone: false,
     selector: 'mj-mcp-dashboard',
     templateUrl: './mcp-dashboard.component.html',
     styleUrls: ['./mcp-dashboard.component.css']
@@ -1882,11 +1883,4 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.ShowTestToolDialog = true;
         this.cdr.detectChanges();
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPDashboard(): void {
-    // Ensures the component is not tree-shaken
 }

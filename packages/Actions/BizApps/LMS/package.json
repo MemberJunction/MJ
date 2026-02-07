@@ -1,11 +1,12 @@
 {
   "name": "@memberjunction/actions-bizapps-lms",
+  "type": "module",
   "version": "3.4.0",
   "description": "LMS system integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
     "test": "echo \"No tests yet\""
@@ -30,9 +31,9 @@
     "@memberjunction/core-entities": "3.4.0"
   },
   "devDependencies": {
-    "@types/node": "20.8.7",
-    "rimraf": "^5.0.5",
-    "typescript": "~5.3.3"
+    "@types/node": "24.10.11",
+    "rimraf": "^6.1.2",
+    "typescript": "~5.9.3"
   },
   "engines": {
     "node": ">=16"

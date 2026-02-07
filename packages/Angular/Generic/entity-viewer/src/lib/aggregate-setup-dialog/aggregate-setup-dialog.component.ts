@@ -48,6 +48,7 @@ const FUNCTION_LABELS: Record<AggregateFunctionType, string> = {
  * - Optional label and icon customization
  */
 @Component({
+  standalone: false,
   selector: 'mj-aggregate-setup-dialog',
   templateUrl: './aggregate-setup-dialog.component.html',
   styleUrls: ['./aggregate-setup-dialog.component.css']

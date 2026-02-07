@@ -147,7 +147,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIArchitectures')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Architectures','ParentArchitectureID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Architectures')"
@@ -157,6 +158,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Model Architectures Section -->
@@ -169,7 +171,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIModelArchitectures')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Architectures','ArchitectureID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Architectures')"
@@ -179,6 +182,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

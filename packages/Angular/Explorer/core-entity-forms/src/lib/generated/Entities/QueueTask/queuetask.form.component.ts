@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Queue Tasks') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-queuetask-form',
     templateUrl: './queuetask.form.component.html'
 })

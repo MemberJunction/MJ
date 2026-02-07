@@ -311,6 +311,43 @@ export interface ILocalStorageProvider {
 }
 
 /**
+ * Provider interface for filesystem operations.
+ * Enables environment-specific file I/O without requiring `eval("require('fs')")` or other
+ * bundler-unfriendly patterns. Server-side providers (e.g. SQLServerDataProvider) supply a
+ * Node.js implementation; browser-side providers return null from IMetadataProvider.FileSystemProvider.
+ *
+ * Follows the same pattern as ILocalStorageProvider — defined in core, implemented per environment.
+ */
+export interface IFileSystemProvider {
+    /**
+     * Appends content to a file, creating it if it doesn't exist.
+     * @param filePath - Full path to the file
+     * @param content - Content to append
+     */
+    AppendToFile(filePath: string, content: string): Promise<void>;
+
+    /**
+     * Writes content to a file, overwriting if it exists.
+     * @param filePath - Full path to the file
+     * @param content - Content to write
+     */
+    WriteFile(filePath: string, content: string): Promise<void>;
+
+    /**
+     * Reads content from a file.
+     * @param filePath - Full path to the file
+     * @returns File content or null if file doesn't exist
+     */
+    ReadFile(filePath: string): Promise<string | null>;
+
+    /**
+     * Checks if a file exists.
+     * @param filePath - Full path to the file
+     */
+    FileExists(filePath: string): Promise<boolean>;
+}
+
+/**
  * Core interface for metadata providers in MemberJunction.
  * Provides access to all system metadata including entities, applications, security, and queries.
  * This is the primary interface for accessing MemberJunction's metadata layer.
@@ -451,6 +488,13 @@ export interface IMetadataProvider {
     CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
 
     get LocalStorageProvider(): ILocalStorageProvider
+
+    /**
+     * Returns the filesystem provider for the current environment, or null if filesystem
+     * operations are not available (e.g. in browser environments).
+     * Server-side providers should return a NodeFileSystemProvider instance.
+     */
+    get FileSystemProvider(): IFileSystemProvider | null
 
     RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider): Promise<boolean>
 

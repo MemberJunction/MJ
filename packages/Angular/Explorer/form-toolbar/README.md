@@ -23,7 +23,7 @@ npm install @memberjunction/ng-form-toolbar
 
 ## Requirements
 
-- Angular 18+
+- Angular 21+
 - @memberjunction/global ^2.43.0
 - @memberjunction/core ^2.43.0
 - @memberjunction/ng-shared ^2.43.0

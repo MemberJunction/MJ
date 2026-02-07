@@ -103,5 +103,3 @@ export class EntityPermissionsEntity_Server extends EntityPermissionEntity {
     return success;
   }
 }
-
-export function LoadEntityPermissionsServerSubClass() {}

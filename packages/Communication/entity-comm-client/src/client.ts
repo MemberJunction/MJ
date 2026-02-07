@@ -129,16 +129,5 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
     }
 }
 
-/**
- * Stub function to prevent tree-shaking of EntityCommunicationsEngineClient in production builds.
- * Call this function early in your application initialization (before using the client)
- * to ensure the class and its inherited Config() method are not removed by the bundler.
- */
-export function LoadEntityCommunicationsEngineClient(): void {
-    // Reference the class and its Instance/Config to prevent tree-shaking
-    const _instance = EntityCommunicationsEngineClient.Instance;
-    const _config = _instance.Config;
-}
-
 type Scalar = string | number | boolean | null | undefined;
 

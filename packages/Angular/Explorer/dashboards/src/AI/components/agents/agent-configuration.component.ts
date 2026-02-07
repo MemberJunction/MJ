@@ -30,20 +30,13 @@ interface AgentConfigurationUserPreferences {
   sortDirection: 'asc' | 'desc';
   filters: AgentFilter;
 }
-
-/**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIAgentsResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * AI Agents Resource - displays AI agent configuration and management
  * Extends BaseResourceComponent to work with the resource type system
  */
 @RegisterClass(BaseResourceComponent, 'AIAgentsResource')
 @Component({
+  standalone: false,
   selector: 'app-agent-configuration',
   templateUrl: './agent-configuration.component.html',
   styleUrls: ['./agent-configuration.component.css']

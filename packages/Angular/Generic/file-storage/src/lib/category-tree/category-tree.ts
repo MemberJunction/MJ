@@ -7,6 +7,7 @@ import { ContextMenuSelectEvent } from '@progress/kendo-angular-menu';
 import { TreeItemAddRemoveArgs } from '@progress/kendo-angular-treeview';
 
 @Component({
+  standalone: false,
   selector: 'mj-files-category-tree',
   templateUrl: './category-tree.html',
   styleUrls: ['./category-tree.css'],

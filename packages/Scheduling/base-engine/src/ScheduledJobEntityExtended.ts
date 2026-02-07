@@ -147,11 +147,3 @@ export class ScheduledJobEntityExtended extends ScheduledJobEntity {
         engine.UpdatePollingInterval();
     }
 }
-
-/**
- * Loader function to ensure this class is registered
- * Prevents tree-shaking from removing the class
- */
-export function LoadScheduledJobEntityExtended(): void {
-    // No-op function, just ensures class is loaded
-}

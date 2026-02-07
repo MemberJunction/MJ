@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Record Documents') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entityrecorddocument-form',
     templateUrl: './entityrecorddocument.form.component.html'
 })

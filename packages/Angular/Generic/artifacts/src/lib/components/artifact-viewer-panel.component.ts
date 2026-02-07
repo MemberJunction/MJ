@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
@@ -12,6 +12,7 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
 @Component({
+  standalone: false,
   selector: 'mj-artifact-viewer-panel',
   templateUrl: './artifact-viewer-panel.component.html',
   styleUrls: ['./artifact-viewer-panel.component.css']
@@ -191,6 +192,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   private recentAccessService: RecentAccessService;
 
   constructor(
+    private cdr: ChangeDetectorRef,
     private notificationService: MJNotificationService,
     private sanitizer: DomSanitizer,
     private artifactIconService: ArtifactIconService
@@ -329,6 +331,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       this.error = 'Error loading artifact: ' + (err as Error).message;
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 

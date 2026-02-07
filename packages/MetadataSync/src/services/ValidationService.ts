@@ -1,6 +1,7 @@
 import { EntityFieldInfo, EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import * as fs from 'fs';
 import * as path from 'path';
+import { minimatch } from 'minimatch';
 import {
   ValidationResult,
   ValidationError,
@@ -1032,7 +1033,6 @@ export class ValidationService {
 
     // Apply include filter (whitelist)
     if (this.options.include && this.options.include.length > 0) {
-      const minimatch = require('minimatch').minimatch;
       filteredDirs = directories.filter(dirName => {
         return this.options.include!.some(pattern =>
           minimatch(dirName, pattern, { nocase: true })
@@ -1042,7 +1042,6 @@ export class ValidationService {
 
     // Apply exclude filter (blacklist)
     if (this.options.exclude && this.options.exclude.length > 0) {
-      const minimatch = require('minimatch').minimatch;
       filteredDirs = filteredDirs.filter(dirName => {
         return !this.options.exclude!.some(pattern =>
           minimatch(dirName, pattern, { nocase: true })

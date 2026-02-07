@@ -1,93 +1,93 @@
-<div class="json-detail-pane" *ngIf="selectedTimelineItem">
-  <div class="json-pane-header">
-    <h3>
-      <i class="fas" [ngClass]="selectedTimelineItem.icon"></i>
-      {{ selectedTimelineItem.title }}
-    </h3>
-    <button class="btn-icon" (click)="onClosePanel()" title="Close">
-      <i class="fas fa-times"></i>
-    </button>
-  </div>
-  <div class="json-pane-content">
-    <div class="json-meta">
-      <div class="meta-item">
-        <label>Type</label>
-        <span>{{ selectedTimelineItem.type }}</span>
-      </div>
-      <div class="meta-item">
-        <label>Status</label>
-        <span class="status-badge small" [attr.data-status]="selectedTimelineItem.status">
-          {{ selectedTimelineItem.status }}
-        </span>
-      </div>
-      <div class="meta-item">
-        <label>Duration</label>
-        <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
-      </div>
-    </div>
-    
-    <!-- Action-specific link -->
-    <div class="action-link" *ngIf="selectedTimelineItem.type === 'action' && selectedTimelineItem.data?.ID">
-      <button class="btn-link" (click)="onNavigateToActionLog(selectedTimelineItem.data.ID)">
-        <i class="fas fa-external-link-alt"></i> View Action Execution Log
+@if (selectedTimelineItem) {
+  <div class="json-detail-pane">
+    <div class="json-pane-header">
+      <h3>
+        <i class="fas" [ngClass]="selectedTimelineItem.icon"></i>
+        {{ selectedTimelineItem.title }}
+      </h3>
+      <button class="btn-icon" (click)="onClosePanel()" title="Close">
+        <i class="fas fa-times"></i>
       </button>
     </div>
-    
-    <!-- Tab Navigation - Only show when we have both options -->
-    @if (showStepPayloadDiff) {
-      <div class="detail-pane-tabs">
-        <button 
-          class="detail-tab" 
-          [class.active]="detailPaneTab === 'diff'"
-          (click)="detailPaneTab = 'diff'">
-          <i class="fa-solid fa-code-branch"></i>
-          Payload Changes
-        </button>
-        <button 
-          class="detail-tab" 
-          [class.active]="detailPaneTab === 'json'"
-          (click)="detailPaneTab = 'json'">
-          <i class="fa-solid fa-code"></i>
-          Full JSON
-        </button>
+    <div class="json-pane-content">
+      <div class="json-meta">
+        <div class="meta-item">
+          <label>Type</label>
+          <span>{{ selectedTimelineItem.type }}</span>
+        </div>
+        <div class="meta-item">
+          <label>Status</label>
+          <span class="status-badge small" [attr.data-status]="selectedTimelineItem.status">
+            {{ selectedTimelineItem.status }}
+          </span>
+        </div>
+        <div class="meta-item">
+          <label>Duration</label>
+          <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
+        </div>
       </div>
-    }
-    
-    <!-- Tab Content -->
-    <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff">
-      <!-- Payload Diff Tab -->
-      @if (detailPaneTab === 'diff' && showStepPayloadDiff) {
-        <div class="step-payload-diff">
-          <mj-deep-diff
-            [oldValue]="stepPayloadAtStartObject"
-            [newValue]="stepPayloadAtEndObject"
-            [title]="''"
-            [showSummary]="true"
-            [showUnchanged]="false"
-            [expandAll]="false"
-            [maxDepth]="8"
-            [maxStringLength]="150"
-            [treatNullAsUndefined]="true">
-          </mj-deep-diff>
+      <!-- Action-specific link -->
+      @if (selectedTimelineItem.type === 'action' && selectedTimelineItem.data?.ID) {
+        <div class="action-link">
+          <button class="btn-link" (click)="onNavigateToActionLog(selectedTimelineItem.data.ID)">
+            <i class="fas fa-external-link-alt"></i> View Action Execution Log
+          </button>
         </div>
       }
-      
-      <!-- Full JSON Tab -->
-      @if (detailPaneTab === 'json' || !showStepPayloadDiff) {
-        <div class="json-viewer">
-          <div class="json-toolbar">
-            <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
-              <i class="fas fa-copy"></i>
-            </button>
+      <!-- Tab Navigation - Only show when we have both options -->
+      @if (showStepPayloadDiff) {
+        <div class="detail-pane-tabs">
+          <button
+            class="detail-tab"
+            [class.active]="detailPaneTab === 'diff'"
+            (click)="detailPaneTab = 'diff'">
+            <i class="fa-solid fa-code-branch"></i>
+            Payload Changes
+          </button>
+          <button
+            class="detail-tab"
+            [class.active]="detailPaneTab === 'json'"
+            (click)="detailPaneTab = 'json'">
+            <i class="fa-solid fa-code"></i>
+            Full JSON
+          </button>
+        </div>
+      }
+      <!-- Tab Content -->
+      <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff">
+        <!-- Payload Diff Tab -->
+        @if (detailPaneTab === 'diff' && showStepPayloadDiff) {
+          <div class="step-payload-diff">
+            <mj-deep-diff
+              [oldValue]="stepPayloadAtStartObject"
+              [newValue]="stepPayloadAtEndObject"
+              [title]="''"
+              [showSummary]="true"
+              [showUnchanged]="false"
+              [expandAll]="false"
+              [maxDepth]="8"
+              [maxStringLength]="150"
+              [treatNullAsUndefined]="true">
+            </mj-deep-diff>
           </div>
-          <mj-code-editor
-            [(ngModel)]="selectedItemJsonString"
-            [language]="'json'"
-            [readonly]="true"
-            style="width: 100%;">
-          </mj-code-editor>
-        </div>
-      }
+        }
+        <!-- Full JSON Tab -->
+        @if (detailPaneTab === 'json' || !showStepPayloadDiff) {
+          <div class="json-viewer">
+            <div class="json-toolbar">
+              <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
+                <i class="fas fa-copy"></i>
+              </button>
+            </div>
+            <mj-code-editor
+              [(ngModel)]="selectedItemJsonString"
+              [language]="'json'"
+              [readonly]="true"
+              style="width: 100%;">
+            </mj-code-editor>
+          </div>
+        }
+      </div>
     </div>
   </div>
-</div>
+}

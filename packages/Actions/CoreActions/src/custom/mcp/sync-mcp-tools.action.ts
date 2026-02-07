@@ -123,10 +123,3 @@ export class SyncMCPToolsAction extends BaseAction {
         });
     }
 }
-
-/**
- * Loader function to prevent tree-shaking
- */
-export function LoadSyncMCPToolsAction(): void {
-    // Intentionally empty - ensures decorator executes
-}

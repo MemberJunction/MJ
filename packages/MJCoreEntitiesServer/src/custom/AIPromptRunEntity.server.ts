@@ -242,8 +242,3 @@ export class AIPromptRunEntityServer extends AIPromptRunEntityExtended {
         this.TotalCost = descendantCost + cost; // update total cost
     }
 }
-
-/**
- * This function is used to ensure the class is loaded and registered
- */
-export function LoadAIPromptRunEntityServerSubClass() {}

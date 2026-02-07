@@ -262,7 +262,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTaskDependencies')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','DependsOnTaskID')"
                 [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
@@ -272,6 +273,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Task Dependencies Section -->
@@ -284,7 +286,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTaskDependencies')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','TaskID')"
                 [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
@@ -294,6 +297,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Tasks Section -->
@@ -306,7 +310,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTasks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Tasks')"
@@ -316,6 +321,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

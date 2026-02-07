@@ -2,7 +2,7 @@ import { confirm, input, select } from '@inquirer/prompts';
 import * as dotenv from 'dotenv';
 import * as recast from 'recast';
 import { Command, Flags } from '@oclif/core';
-import { ParserOutput } from '@oclif/core/lib/interfaces/parser';
+import type { ParserOutput } from '@oclif/core/lib/interfaces/parser';
 import * as fs from 'fs-extra';
 import { execSync } from 'node:child_process';
 import os from 'node:os';
@@ -148,7 +148,7 @@ ASK_SKIP_ORGANIZATION_ID = 1
 
     // next, run CodeGen
     // We do not manually run the compilation for GeneratedEntities because CodeGen handles that, but notice above that we did npm install for GeneratedEntities otherwise when CodeGen attempts to compile it, it will fail.
-    dotenv.config();
+    dotenv.config({ quiet: true });
     this.config.runCommand('codegen');
 
     // Process MJExplorer

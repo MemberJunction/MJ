@@ -1,229 +1,269 @@
 <div class="diff-container">
-    <mj-loading *ngIf="IsLoading" text="Loading diff viewer..."></mj-loading>
+  @if (IsLoading) {
+    <mj-loading text="Loading diff viewer..."></mj-loading>
+  }
 
-    <ng-container *ngIf="!IsLoading">
-        <!-- Header -->
-        <div class="page-header">
-            <div class="header-left">
-                <h2 class="page-title">Diff Viewer</h2>
-                <p class="page-subtitle">Compare states between version labels or against current data</p>
-            </div>
+  @if (!IsLoading) {
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">Diff Viewer</h2>
+        <p class="page-subtitle">Compare states between version labels or against current data</p>
+      </div>
+    </div>
+    <!-- Diff Configuration Panel -->
+    <div class="config-panel">
+      <!-- Mode Selector -->
+      <div class="mode-selector">
+        <button class="mode-btn"
+          [class.active]="DiffMode === 'label-to-current'"
+          (click)="OnDiffModeChange('label-to-current')">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          Label vs Current
+        </button>
+        <button class="mode-btn"
+          [class.active]="DiffMode === 'label-to-label'"
+          (click)="OnDiffModeChange('label-to-label')">
+          <i class="fa-solid fa-code-compare"></i>
+          Label vs Label
+        </button>
+      </div>
+      <!-- Label Selectors -->
+      <div class="label-selectors">
+        <div class="selector-group">
+          <label class="selector-label">
+            {{DiffMode === 'label-to-current' ? 'Compare label' : 'From label'}}
+          </label>
+          <select class="selector-input"
+            [(ngModel)]="FromLabelId">
+            <option value="">Select a label...</option>
+            @for (label of FilteredFromLabels; track label) {
+              <option
+                [value]="label.ID">
+                {{FormatLabelOption(label)}}
+              </option>
+            }
+          </select>
         </div>
-
-        <!-- Diff Configuration Panel -->
-        <div class="config-panel">
-            <!-- Mode Selector -->
-            <div class="mode-selector">
-                <button class="mode-btn"
-                        [class.active]="DiffMode === 'label-to-current'"
-                        (click)="OnDiffModeChange('label-to-current')">
-                    <i class="fa-solid fa-clock-rotate-left"></i>
-                    Label vs Current
-                </button>
-                <button class="mode-btn"
-                        [class.active]="DiffMode === 'label-to-label'"
-                        (click)="OnDiffModeChange('label-to-label')">
-                    <i class="fa-solid fa-code-compare"></i>
-                    Label vs Label
-                </button>
-            </div>
-
-            <!-- Label Selectors -->
-            <div class="label-selectors">
-                <div class="selector-group">
-                    <label class="selector-label">
-                        {{DiffMode === 'label-to-current' ? 'Compare label' : 'From label'}}
-                    </label>
-                    <select class="selector-input"
-                            [(ngModel)]="FromLabelId">
-                        <option value="">Select a label...</option>
-                        <option *ngFor="let label of FilteredFromLabels"
-                                [value]="label.ID">
-                            {{FormatLabelOption(label)}}
-                        </option>
-                    </select>
-                </div>
-
-                <div class="selector-arrow" *ngIf="DiffMode === 'label-to-label'">
-                    <button class="swap-btn" (click)="SwapLabels()" title="Swap direction">
-                        <i class="fa-solid fa-arrows-rotate"></i>
-                    </button>
-                </div>
-                <div class="selector-arrow" *ngIf="DiffMode === 'label-to-current'">
-                    <i class="fa-solid fa-arrow-right"></i>
-                    <span class="current-state-badge">Current State</span>
-                </div>
-
-                <div class="selector-group" *ngIf="DiffMode === 'label-to-label'">
-                    <label class="selector-label">To label</label>
-                    <select class="selector-input"
-                            [(ngModel)]="ToLabelId">
-                        <option value="">Select a label...</option>
-                        <option *ngFor="let label of FilteredToLabels"
-                                [value]="label.ID">
-                            {{FormatLabelOption(label)}}
-                        </option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Run Button -->
-            <button class="btn-primary"
-                    [disabled]="!CanRunDiff || IsDiffLoading"
-                    (click)="RunDiff()">
-                <i class="fa-solid fa-play" *ngIf="!IsDiffLoading"></i>
-                <i class="fa-solid fa-spinner fa-spin" *ngIf="IsDiffLoading"></i>
-                <span>{{IsDiffLoading ? 'Comparing...' : 'Compare'}}</span>
+        @if (DiffMode === 'label-to-label') {
+          <div class="selector-arrow">
+            <button class="swap-btn" (click)="SwapLabels()" title="Swap direction">
+              <i class="fa-solid fa-arrows-rotate"></i>
             </button>
+          </div>
+        }
+        @if (DiffMode === 'label-to-current') {
+          <div class="selector-arrow">
+            <i class="fa-solid fa-arrow-right"></i>
+            <span class="current-state-badge">Current State</span>
+          </div>
+        }
+        @if (DiffMode === 'label-to-label') {
+          <div class="selector-group">
+            <label class="selector-label">To label</label>
+            <select class="selector-input"
+              [(ngModel)]="ToLabelId">
+              <option value="">Select a label...</option>
+              @for (label of FilteredToLabels; track label) {
+                <option
+                  [value]="label.ID">
+                  {{FormatLabelOption(label)}}
+                </option>
+              }
+            </select>
+          </div>
+        }
+      </div>
+      <!-- Run Button -->
+      <button class="btn-primary"
+        [disabled]="!CanRunDiff || IsDiffLoading"
+        (click)="RunDiff()">
+        @if (!IsDiffLoading) {
+          <i class="fa-solid fa-play"></i>
+        }
+        @if (IsDiffLoading) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        }
+        <span>{{IsDiffLoading ? 'Comparing...' : 'Compare'}}</span>
+      </button>
+    </div>
+    <!-- Diff Results -->
+    @if (HasDiffResult) {
+      <!-- Summary Stats -->
+      <div class="diff-summary">
+        <div class="diff-stat change-added">
+          <i class="fa-solid fa-plus"></i>
+          <span class="diff-stat-value">{{TotalAdded}}</span>
+          <span class="diff-stat-label">Added</span>
         </div>
-
-        <!-- Diff Results -->
-        <ng-container *ngIf="HasDiffResult">
-            <!-- Summary Stats -->
-            <div class="diff-summary">
-                <div class="diff-stat change-added">
-                    <i class="fa-solid fa-plus"></i>
-                    <span class="diff-stat-value">{{TotalAdded}}</span>
-                    <span class="diff-stat-label">Added</span>
-                </div>
-                <div class="diff-stat change-removed">
-                    <i class="fa-solid fa-minus"></i>
-                    <span class="diff-stat-value">{{TotalRemoved}}</span>
-                    <span class="diff-stat-label">Removed</span>
-                </div>
-                <div class="diff-stat change-modified">
-                    <i class="fa-solid fa-pen"></i>
-                    <span class="diff-stat-value">{{TotalModified}}</span>
-                    <span class="diff-stat-label">Modified</span>
-                </div>
-                <div class="diff-stat change-unchanged">
-                    <i class="fa-solid fa-equals"></i>
-                    <span class="diff-stat-value">{{TotalUnchanged}}</span>
-                    <span class="diff-stat-label">Unchanged</span>
-                </div>
+        <div class="diff-stat change-removed">
+          <i class="fa-solid fa-minus"></i>
+          <span class="diff-stat-value">{{TotalRemoved}}</span>
+          <span class="diff-stat-label">Removed</span>
+        </div>
+        <div class="diff-stat change-modified">
+          <i class="fa-solid fa-pen"></i>
+          <span class="diff-stat-value">{{TotalModified}}</span>
+          <span class="diff-stat-label">Modified</span>
+        </div>
+        <div class="diff-stat change-unchanged">
+          <i class="fa-solid fa-equals"></i>
+          <span class="diff-stat-value">{{TotalUnchanged}}</span>
+          <span class="diff-stat-label">Unchanged</span>
+        </div>
+      </div>
+      <!-- Results toolbar -->
+      @if (EntityGroups.length > 0) {
+        <div class="diff-toolbar">
+          <div class="diff-search">
+            <i class="fa-solid fa-search diff-search-icon"></i>
+            <input type="text" class="diff-search-input"
+              placeholder="Search by entity or record..."
+              [ngModel]="DiffSearch"
+              (ngModelChange)="OnDiffSearchChange($event)" />
+          </div>
+          <div class="diff-filter-pills">
+            <button class="filter-pill" [class.active]="DiffFilterType === 'all'"
+            (click)="OnDiffFilterChange('all')">All</button>
+            <button class="filter-pill change-added" [class.active]="DiffFilterType === 'added'"
+            (click)="OnDiffFilterChange('added')">Added</button>
+            <button class="filter-pill change-removed" [class.active]="DiffFilterType === 'removed'"
+            (click)="OnDiffFilterChange('removed')">Removed</button>
+            <button class="filter-pill change-modified" [class.active]="DiffFilterType === 'modified'"
+            (click)="OnDiffFilterChange('modified')">Modified</button>
+          </div>
+          <div class="diff-toolbar-right">
+            <button class="toolbar-action-btn" (click)="ExpandAllGroups()" title="Expand all">
+              <i class="fa-solid fa-angles-down"></i>
+            </button>
+            <button class="toolbar-action-btn" (click)="CollapseAllGroups()" title="Collapse all">
+              <i class="fa-solid fa-angles-up"></i>
+            </button>
+            <div class="diff-sort-toggle">
+              <button class="toggle-btn-sm" [class.active]="DiffSortBy === 'name'"
+                (click)="OnDiffSortChange('name')" title="Sort by name">
+                <i class="fa-solid" [ngClass]="DiffSortBy === 'name' && DiffSortDir === 'desc' ? 'fa-arrow-up-z-a' : 'fa-arrow-down-a-z'"></i>
+              </button>
+              <button class="toggle-btn-sm" [class.active]="DiffSortBy === 'count'"
+                (click)="OnDiffSortChange('count')" title="Sort by count">
+                <i class="fa-solid" [ngClass]="DiffSortBy === 'count' && DiffSortDir === 'asc' ? 'fa-arrow-up-1-9' : 'fa-arrow-down-9-1'"></i>
+              </button>
             </div>
-
-            <!-- Results toolbar -->
-            <div class="diff-toolbar" *ngIf="EntityGroups.length > 0">
-                <div class="diff-search">
-                    <i class="fa-solid fa-search diff-search-icon"></i>
-                    <input type="text" class="diff-search-input"
-                           placeholder="Search by entity or record..."
-                           [ngModel]="DiffSearch"
-                           (ngModelChange)="OnDiffSearchChange($event)" />
+          </div>
+        </div>
+      }
+      <!-- Entity Groups -->
+      @if (FilteredEntityGroups.length > 0) {
+        <div class="entity-groups">
+          @for (group of FilteredEntityGroups; track group) {
+            <div class="entity-group">
+              <div class="entity-group-header" (click)="ToggleEntityGroup(group)">
+                <div class="entity-group-left">
+                  <i class="fa-solid fa-chevron-right entity-chevron"
+                    [class.expanded]="group.IsExpanded">
+                  </i>
+                  <i [class]="group.EntityIcon" class="entity-icon"></i>
+                  <span class="entity-group-name">{{group.EntityName}}</span>
                 </div>
-                <div class="diff-filter-pills">
-                    <button class="filter-pill" [class.active]="DiffFilterType === 'all'"
-                            (click)="OnDiffFilterChange('all')">All</button>
-                    <button class="filter-pill change-added" [class.active]="DiffFilterType === 'added'"
-                            (click)="OnDiffFilterChange('added')">Added</button>
-                    <button class="filter-pill change-removed" [class.active]="DiffFilterType === 'removed'"
-                            (click)="OnDiffFilterChange('removed')">Removed</button>
-                    <button class="filter-pill change-modified" [class.active]="DiffFilterType === 'modified'"
-                            (click)="OnDiffFilterChange('modified')">Modified</button>
+                <div class="entity-group-badges">
+                  @if (group.AddedCount > 0) {
+                    <span class="badge change-added">
+                      +{{group.AddedCount}}
+                    </span>
+                  }
+                  @if (group.RemovedCount > 0) {
+                    <span class="badge change-removed">
+                      -{{group.RemovedCount}}
+                    </span>
+                  }
+                  @if (group.ModifiedCount > 0) {
+                    <span class="badge change-modified">
+                      ~{{group.ModifiedCount}}
+                    </span>
+                  }
                 </div>
-                <div class="diff-toolbar-right">
-                    <button class="toolbar-action-btn" (click)="ExpandAllGroups()" title="Expand all">
-                        <i class="fa-solid fa-angles-down"></i>
-                    </button>
-                    <button class="toolbar-action-btn" (click)="CollapseAllGroups()" title="Collapse all">
-                        <i class="fa-solid fa-angles-up"></i>
-                    </button>
-                    <div class="diff-sort-toggle">
-                        <button class="toggle-btn-sm" [class.active]="DiffSortBy === 'name'"
-                                (click)="OnDiffSortChange('name')" title="Sort by name">
-                            <i class="fa-solid" [ngClass]="DiffSortBy === 'name' && DiffSortDir === 'desc' ? 'fa-arrow-up-z-a' : 'fa-arrow-down-a-z'"></i>
+              </div>
+              @if (group.IsExpanded) {
+                <div class="entity-group-items">
+                  @for (item of group.Items; track item) {
+                    <div class="diff-item-wrapper">
+                      <div class="diff-item" [ngClass]="GetChangeTypeClass(item.ChangeType)"
+                        [class.clickable]="item.ChangeType === 'Modified'"
+                        (click)="ToggleItem(item)">
+                        <i [class]="GetChangeTypeIcon(item.ChangeType)" class="diff-item-icon"></i>
+                        <span class="diff-item-record">
+                          {{FormatRecordID(item.RecordID)}}
+                          @if (item.DisplayName) {
+                            <span class="diff-item-display-name"> ({{item.DisplayName}})</span>
+                          }
+                        </span>
+                        <span class="diff-item-type">{{item.ChangeType}}</span>
+                        <button class="diff-item-open-btn" (click)="OnOpenRecord(item); $event.stopPropagation()"
+                          title="Open record">
+                          <i class="fa-solid fa-arrow-up-right-from-square"></i>
                         </button>
-                        <button class="toggle-btn-sm" [class.active]="DiffSortBy === 'count'"
-                                (click)="OnDiffSortChange('count')" title="Sort by count">
-                            <i class="fa-solid" [ngClass]="DiffSortBy === 'count' && DiffSortDir === 'asc' ? 'fa-arrow-up-1-9' : 'fa-arrow-down-9-1'"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Entity Groups -->
-            <div class="entity-groups" *ngIf="FilteredEntityGroups.length > 0">
-                <div class="entity-group" *ngFor="let group of FilteredEntityGroups">
-                    <div class="entity-group-header" (click)="ToggleEntityGroup(group)">
-                        <div class="entity-group-left">
-                            <i class="fa-solid fa-chevron-right entity-chevron"
-                               [class.expanded]="group.IsExpanded">
-                            </i>
-                            <i [class]="group.EntityIcon" class="entity-icon"></i>
-                            <span class="entity-group-name">{{group.EntityName}}</span>
-                        </div>
-                        <div class="entity-group-badges">
-                            <span class="badge change-added" *ngIf="group.AddedCount > 0">
-                                +{{group.AddedCount}}
-                            </span>
-                            <span class="badge change-removed" *ngIf="group.RemovedCount > 0">
-                                -{{group.RemovedCount}}
-                            </span>
-                            <span class="badge change-modified" *ngIf="group.ModifiedCount > 0">
-                                ~{{group.ModifiedCount}}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="entity-group-items" *ngIf="group.IsExpanded">
-                        <div class="diff-item-wrapper" *ngFor="let item of group.Items">
-                            <div class="diff-item" [ngClass]="GetChangeTypeClass(item.ChangeType)"
-                                 [class.clickable]="item.ChangeType === 'Modified'"
-                                 (click)="ToggleItem(item)">
-                                <i [class]="GetChangeTypeIcon(item.ChangeType)" class="diff-item-icon"></i>
-                                <span class="diff-item-record">
-                                    {{FormatRecordID(item.RecordID)}}
-                                    <span class="diff-item-display-name" *ngIf="item.DisplayName"> ({{item.DisplayName}})</span>
+                        @if (item.ChangeType === 'Modified') {
+                          <i class="fa-solid fa-chevron-right diff-item-chevron"
+                            [class.expanded]="item.IsExpanded"
+                          ></i>
+                        }
+                      </div>
+                      <!-- Field-level changes -->
+                      @if (item.IsExpanded && item.ChangeType === 'Modified') {
+                        <div class="diff-fields">
+                          @if (item.IsLoadingFields) {
+                            <mj-loading text="Loading changes..." size="small"></mj-loading>
+                          }
+                          @if (!item.IsLoadingFields && item.FieldChanges.length > 0) {
+                            @for (field of item.FieldChanges; track field) {
+                              <div class="diff-field"
+                                [ngClass]="GetChangeTypeClass(field.ChangeType)">
+                                <span class="diff-field-name">{{field.FieldName}}</span>
+                                <span class="diff-field-values">
+                                  @if (field.OldValue) {
+                                    <span class="diff-field-old">{{field.OldValue | slice:0:60}}</span>
+                                  }
+                                  @if (field.OldValue && field.NewValue) {
+                                    <i class="fa-solid fa-arrow-right diff-field-arrow"></i>
+                                  }
+                                  @if (field.NewValue) {
+                                    <span class="diff-field-new">{{field.NewValue | slice:0:60}}</span>
+                                  }
                                 </span>
-                                <span class="diff-item-type">{{item.ChangeType}}</span>
-                                <button class="diff-item-open-btn" (click)="OnOpenRecord(item); $event.stopPropagation()"
-                                        title="Open record">
-                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                                </button>
-                                <i class="fa-solid fa-chevron-right diff-item-chevron"
-                                   [class.expanded]="item.IsExpanded"
-                                   *ngIf="item.ChangeType === 'Modified'"></i>
+                              </div>
+                            }
+                          }
+                          @if (!item.IsLoadingFields && item.FieldsLoaded && item.FieldChanges.length === 0) {
+                            <div class="diff-fields-empty">
+                              <span>No field-level changes available</span>
                             </div>
-
-                            <!-- Field-level changes -->
-                            <div class="diff-fields" *ngIf="item.IsExpanded && item.ChangeType === 'Modified'">
-                                <mj-loading *ngIf="item.IsLoadingFields" text="Loading changes..." size="small"></mj-loading>
-
-                                <ng-container *ngIf="!item.IsLoadingFields && item.FieldChanges.length > 0">
-                                    <div class="diff-field" *ngFor="let field of item.FieldChanges"
-                                         [ngClass]="GetChangeTypeClass(field.ChangeType)">
-                                        <span class="diff-field-name">{{field.FieldName}}</span>
-                                        <span class="diff-field-values">
-                                            <span class="diff-field-old" *ngIf="field.OldValue">{{field.OldValue | slice:0:60}}</span>
-                                            <i class="fa-solid fa-arrow-right diff-field-arrow" *ngIf="field.OldValue && field.NewValue"></i>
-                                            <span class="diff-field-new" *ngIf="field.NewValue">{{field.NewValue | slice:0:60}}</span>
-                                        </span>
-                                    </div>
-                                </ng-container>
-
-                                <div class="diff-fields-empty" *ngIf="!item.IsLoadingFields && item.FieldsLoaded && item.FieldChanges.length === 0">
-                                    <span>No field-level changes available</span>
-                                </div>
-                            </div>
+                          }
                         </div>
+                      }
                     </div>
+                  }
                 </div>
+              }
             </div>
-
-            <!-- No changes -->
-            <div class="empty-state" *ngIf="FilteredEntityGroups.length === 0 && TotalChanges === 0">
-                <i class="fa-solid fa-check-circle empty-icon" style="color: #10b981;"></i>
-                <h3>No differences found</h3>
-                <p>The compared states are identical.</p>
-            </div>
-        </ng-container>
-
-        <!-- No results yet -->
-        <div class="empty-state" *ngIf="!HasDiffResult && !IsDiffLoading">
-            <i class="fa-solid fa-code-compare empty-icon"></i>
-            <h3>Select labels to compare</h3>
-            <p>Choose a diff mode and select labels above, then click Compare.</p>
+          }
         </div>
-    </ng-container>
+      }
+      <!-- No changes -->
+      @if (FilteredEntityGroups.length === 0 && TotalChanges === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-check-circle empty-icon" style="color: #10b981;"></i>
+          <h3>No differences found</h3>
+          <p>The compared states are identical.</p>
+        </div>
+      }
+    }
+    <!-- No results yet -->
+    @if (!HasDiffResult && !IsDiffLoading) {
+      <div class="empty-state">
+        <i class="fa-solid fa-code-compare empty-icon"></i>
+        <h3>Select labels to compare</h3>
+        <p>Choose a diff mode and select labels above, then click Compare.</p>
+      </div>
+    }
+  }
 </div>

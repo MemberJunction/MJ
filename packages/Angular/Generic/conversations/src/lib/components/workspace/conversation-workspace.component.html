@@ -28,114 +28,122 @@
         <div class="mobile-sidebar-backdrop visible" (click)="closeSidebar()"></div>
       }
 
-    <!-- Left Sidebar (hidden when Collections or Tasks view is active) -->
-    <div class="workspace-sidebar"
-         *ngIf="activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarSettingsLoaded"
-         [class.open]="isSidebarVisible"
-         [class.collapsed]="isSidebarCollapsed"
-         [class.no-transition]="!sidebarTransitionsEnabled"
-         [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
-      <mj-conversation-sidebar
-        [activeTab]="activeTab"
-        [environmentId]="environmentId"
-        [currentUser]="currentUser"
-        [selectedConversationId]="selectedConversationId"
-        [renamedConversationId]="renamedConversationId"
-        [isSidebarPinned]="isSidebarPinned"
-        [isMobileView]="isMobileView"
-        (conversationSelected)="onConversationSelected($event)"
-        (newConversationRequested)="startNewConversation()"
-        (pinSidebarRequested)="pinSidebar()"
-        (unpinSidebarRequested)="unpinSidebar()">
-      </mj-conversation-sidebar>
-    </div>
-
-    <!-- Floating toggle button (only visible when sidebar is collapsed and settings loaded) -->
-    @if (activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarCollapsed && isSidebarSettingsLoaded) {
-      <button class="sidebar-floating-toggle"
-              (click)="expandSidebar()"
-              title="Show conversations">
-        <i class="fas fa-table-columns"></i>
-      </button>
-    }
-
-    <!-- Resize handle for sidebar (only when expanded and settings loaded) -->
-    <div class="sidebar-resize-handle"
-         *ngIf="isSidebarVisible && !isSidebarCollapsed && activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarSettingsLoaded"
-         (mousedown)="onSidebarResizeStart($event)"></div>
-
-    <!-- Collections Full-Panel View -->
-    <div class="workspace-main" *ngIf="activeTab === 'collections'">
-      <mj-collections-full-view
-        [environmentId]="environmentId"
-        [currentUser]="currentUser"
-        (collectionNavigated)="onCollectionNavigated($event)">
-      </mj-collections-full-view>
-    </div>
-
-    <!-- Tasks Full-Panel View -->
-    <div class="workspace-main" *ngIf="activeTab === 'tasks'">
-      <mj-tasks-full-view
-        [environmentId]="environmentId"
-        [currentUser]="currentUser"
-        [baseFilter]="tasksFilter"
-        [activeTaskId]="activeTaskId"
-        (openEntityRecord)="onOpenEntityRecordFromTasks($event)">
-      </mj-tasks-full-view>
-    </div>
-
-    <!-- Main Chat Area (only shown when not in Collections or Tasks view) -->
-    <div class="workspace-main" *ngIf="activeTab !== 'collections' && activeTab !== 'tasks'">
-      <mj-conversation-chat-area
-        [environmentId]="environmentId"
-        [currentUser]="currentUser"
-        [conversationId]="selectedConversationId"
-        [conversation]="selectedConversation"
-        [threadId]="selectedThreadId"
-        [isNewConversation]="isNewUnsavedConversation"
-        [pendingMessage]="pendingMessageToSend"
-        [pendingAttachments]="pendingAttachmentsToSend"
-        [pendingArtifactId]="pendingArtifactId"
-        [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
-        (conversationRenamed)="onConversationRenamed($event)"
-        (openEntityRecord)="onOpenEntityRecord($event)"
-        (taskClicked)="onTaskClicked($event)"
-        (artifactLinkClicked)="onArtifactLinkNavigation($event)"
-        (conversationCreated)="onConversationCreated($event)"
-        (threadOpened)="onThreadOpened($event)"
-        (threadClosed)="onThreadClosed()"
-        (pendingArtifactConsumed)="pendingArtifactId = null; pendingArtifactVersionNumber = null"
-        (pendingMessageConsumed)="pendingMessageToSend = null; pendingAttachmentsToSend = null"
-        (pendingMessageRequested)="onPendingMessageRequested($event)">
-      </mj-conversation-chat-area>
-    </div>
-
-    <!-- Right Artifact Panel -->
-    @if (isArtifactPanelOpen && activeArtifactId) {
-      @if (!isArtifactPanelMaximized) {
-        <div class="artifact-panel-resize-handle" (mousedown)="onArtifactPanelResizeStart($event)"></div>
+      <!-- Left Sidebar (hidden when Collections or Tasks view is active) -->
+      @if (activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarSettingsLoaded) {
+        <div class="workspace-sidebar"
+          [class.open]="isSidebarVisible"
+          [class.collapsed]="isSidebarCollapsed"
+          [class.no-transition]="!sidebarTransitionsEnabled"
+          [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
+          <mj-conversation-sidebar
+            [activeTab]="activeTab"
+            [environmentId]="environmentId"
+            [currentUser]="currentUser"
+            [selectedConversationId]="selectedConversationId"
+            [renamedConversationId]="renamedConversationId"
+            [isSidebarPinned]="isSidebarPinned"
+            [isMobileView]="isMobileView"
+            (conversationSelected)="onConversationSelected($event)"
+            (newConversationRequested)="startNewConversation()"
+            (pinSidebarRequested)="pinSidebar()"
+            (unpinSidebarRequested)="unpinSidebar()">
+          </mj-conversation-sidebar>
+        </div>
       }
-      <div class="workspace-artifact-panel"
-           [style.width.%]="artifactPanelWidth"
-           [class.maximized]="isArtifactPanelMaximized">
-        <mj-artifact-viewer-panel
-          [artifactId]="activeArtifactId"
-          [currentUser]="currentUser"
-          [environmentId]="environmentId"
-          [versionNumber]="activeVersionNumber ?? undefined"
-          [showSaveToCollection]="activeTab !== 'collections'"
-          [viewContext]="activeTab === 'collections' ? 'collection' : 'conversation'"
-          [contextCollectionId]="collectionState.activeCollectionId ?? undefined"
-          [canShare]="canShareActiveArtifact"
-          [canEdit]="canEditActiveArtifact"
-          [isMaximized]="isArtifactPanelMaximized"
-          (closed)="closeArtifactPanel()"
-          (navigateToLink)="onArtifactLinkNavigation($event)"
-          (shareRequested)="onArtifactShareRequested($event)"
-          (maximizeToggled)="toggleMaximizeArtifactPanel()">
-        </mj-artifact-viewer-panel>
-      </div>
-    }
+
+      <!-- Floating toggle button (only visible when sidebar is collapsed and settings loaded) -->
+      @if (activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarCollapsed && isSidebarSettingsLoaded) {
+        <button class="sidebar-floating-toggle"
+          (click)="expandSidebar()"
+          title="Show conversations">
+          <i class="fas fa-table-columns"></i>
+        </button>
+      }
+
+      <!-- Resize handle for sidebar (only when expanded and settings loaded) -->
+      @if (isSidebarVisible && !isSidebarCollapsed && activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarSettingsLoaded) {
+        <div class="sidebar-resize-handle"
+        (mousedown)="onSidebarResizeStart($event)"></div>
+      }
+
+      <!-- Collections Full-Panel View -->
+      @if (activeTab === 'collections') {
+        <div class="workspace-main">
+          <mj-collections-full-view
+            [environmentId]="environmentId"
+            [currentUser]="currentUser"
+            (collectionNavigated)="onCollectionNavigated($event)">
+          </mj-collections-full-view>
+        </div>
+      }
+
+      <!-- Tasks Full-Panel View -->
+      @if (activeTab === 'tasks') {
+        <div class="workspace-main">
+          <mj-tasks-full-view
+            [environmentId]="environmentId"
+            [currentUser]="currentUser"
+            [baseFilter]="tasksFilter"
+            [activeTaskId]="activeTaskId"
+            (openEntityRecord)="onOpenEntityRecordFromTasks($event)">
+          </mj-tasks-full-view>
+        </div>
+      }
+
+      <!-- Main Chat Area (only shown when not in Collections or Tasks view) -->
+      @if (activeTab !== 'collections' && activeTab !== 'tasks') {
+        <div class="workspace-main">
+          <mj-conversation-chat-area
+            [environmentId]="environmentId"
+            [currentUser]="currentUser"
+            [conversationId]="selectedConversationId"
+            [conversation]="selectedConversation"
+            [threadId]="selectedThreadId"
+            [isNewConversation]="isNewUnsavedConversation"
+            [pendingMessage]="pendingMessageToSend"
+            [pendingAttachments]="pendingAttachmentsToSend"
+            [pendingArtifactId]="pendingArtifactId"
+            [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
+            (conversationRenamed)="onConversationRenamed($event)"
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            (taskClicked)="onTaskClicked($event)"
+            (artifactLinkClicked)="onArtifactLinkNavigation($event)"
+            (conversationCreated)="onConversationCreated($event)"
+            (threadOpened)="onThreadOpened($event)"
+            (threadClosed)="onThreadClosed()"
+            (pendingArtifactConsumed)="pendingArtifactId = null; pendingArtifactVersionNumber = null"
+            (pendingMessageConsumed)="pendingMessageToSend = null; pendingAttachmentsToSend = null"
+            (pendingMessageRequested)="onPendingMessageRequested($event)">
+          </mj-conversation-chat-area>
+        </div>
+      }
+
+      <!-- Right Artifact Panel -->
+      @if (isArtifactPanelOpen && activeArtifactId) {
+        @if (!isArtifactPanelMaximized) {
+          <div class="artifact-panel-resize-handle" (mousedown)="onArtifactPanelResizeStart($event)"></div>
+        }
+        <div class="workspace-artifact-panel"
+          [style.width.%]="artifactPanelWidth"
+          [class.maximized]="isArtifactPanelMaximized">
+          <mj-artifact-viewer-panel
+            [artifactId]="activeArtifactId"
+            [currentUser]="currentUser"
+            [environmentId]="environmentId"
+            [versionNumber]="activeVersionNumber ?? undefined"
+            [showSaveToCollection]="activeTab !== 'collections'"
+            [viewContext]="activeTab === 'collections' ? 'collection' : 'conversation'"
+            [contextCollectionId]="collectionState.activeCollectionId ?? undefined"
+            [canShare]="canShareActiveArtifact"
+            [canEdit]="canEditActiveArtifact"
+            [isMaximized]="isArtifactPanelMaximized"
+            (closed)="closeArtifactPanel()"
+            (navigateToLink)="onArtifactLinkNavigation($event)"
+            (shareRequested)="onArtifactShareRequested($event)"
+            (maximizeToggled)="toggleMaximizeArtifactPanel()">
+          </mj-artifact-viewer-panel>
+        </div>
+      }
     </div>
   }
 

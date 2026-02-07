@@ -247,7 +247,3 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
         }
     }
 }
-
-export function LoadApplicationEntityServer() {
-    // Force class to load and register with the system
-}

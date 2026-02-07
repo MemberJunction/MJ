@@ -23,6 +23,7 @@ export interface ConnectionDialogResult {
  * MCP Connection Dialog Component
  */
 @Component({
+  standalone: false,
     selector: 'mj-mcp-connection-dialog',
     templateUrl: './mcp-connection-dialog.component.html',
     styleUrls: ['./mcp-connection-dialog.component.css']
@@ -281,11 +282,4 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
         const control = this.connectionForm.get(controlName);
         return control?.hasError(errorType) && control?.touched || false;
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPConnectionDialog(): void {
-    // Ensures the component is not tree-shaken
 }

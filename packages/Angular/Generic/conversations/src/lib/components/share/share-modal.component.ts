@@ -13,96 +13,95 @@ interface SharePermission {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-share-modal',
   template: `
-    <kendo-dialog
-      [title]="'Share: ' + (conversation.Name || '')"
-      [width]="500"
-      [height]="600"
-      *ngIf="isOpen"
-      (close)="onClose()">
-
-      <div class="share-content">
-        <div class="add-user-section">
-          <h4>Add People</h4>
-          <div class="add-user-form">
-            <kendo-textbox
-              [(value)]="newUserEmail"
-              placeholder="Enter email address"
-              [style.flex]="1">
-            </kendo-textbox>
-            <button kendoButton [primary]="true" (click)="onAddUser()">
-              Add
-            </button>
-          </div>
-        </div>
-
-        <div class="permissions-section">
-          <h4>People with Access</h4>
-
-          <div class="permission-list">
-            <div *ngIf="permissions.length === 0" class="empty-state">
-              <p>No one has been given access yet</p>
+    @if (isOpen) {
+      <kendo-dialog
+        [title]="'Share: ' + (conversation.Name || '')"
+        [width]="500"
+        [height]="600"
+        (close)="onClose()">
+        <div class="share-content">
+          <div class="add-user-section">
+            <h4>Add People</h4>
+            <div class="add-user-form">
+              <kendo-textbox
+                [(value)]="newUserEmail"
+                placeholder="Enter email address"
+                [style.flex]="1">
+              </kendo-textbox>
+              <button kendoButton [primary]="true" (click)="onAddUser()">
+                Add
+              </button>
             </div>
-
-            <div *ngFor="let permission of permissions" class="permission-item">
-              <div class="user-info">
-                <i class="fas fa-user-circle"></i>
-                <div class="user-details">
-                  <div class="user-name">{{ permission.userName }}</div>
-                  <div class="user-email">{{ permission.userEmail }}</div>
+          </div>
+          <div class="permissions-section">
+            <h4>People with Access</h4>
+            <div class="permission-list">
+              @if (permissions.length === 0) {
+                <div class="empty-state">
+                  <p>No one has been given access yet</p>
                 </div>
-              </div>
-
-              <div class="permission-controls">
-                <kendo-dropdownlist
-                  [data]="accessLevels"
-                  [textField]="'label'"
-                  [valueField]="'value'"
-                  [value]="getAccessLevel(permission)"
-                  (valueChange)="onAccessLevelChange(permission, $event)"
-                  [style.width.px]="120">
-                </kendo-dropdownlist>
-
-                <button
-                  class="btn-remove"
-                  (click)="onRemoveUser(permission)"
-                  title="Remove access">
-                  <i class="fas fa-times"></i>
+              }
+              @for (permission of permissions; track permission) {
+                <div class="permission-item">
+                  <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <div class="user-details">
+                      <div class="user-name">{{ permission.userName }}</div>
+                      <div class="user-email">{{ permission.userEmail }}</div>
+                    </div>
+                  </div>
+                  <div class="permission-controls">
+                    <kendo-dropdownlist
+                      [data]="accessLevels"
+                      [textField]="'label'"
+                      [valueField]="'value'"
+                      [value]="getAccessLevel(permission)"
+                      (valueChange)="onAccessLevelChange(permission, $event)"
+                      [style.width.px]="120">
+                    </kendo-dropdownlist>
+                    <button
+                      class="btn-remove"
+                      (click)="onRemoveUser(permission)"
+                      title="Remove access">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+          <div class="link-section">
+            <h4>Share Link</h4>
+            <div class="link-controls">
+              <kendo-switch
+                [(ngModel)]="isPublicLink"
+                (valueChange)="onTogglePublicLink()">
+              </kendo-switch>
+              <label>Anyone with the link can view</label>
+            </div>
+            @if (isPublicLink) {
+              <div class="link-display">
+                <kendo-textbox
+                  [value]="shareLink"
+                  [readonly]="true"
+                  [style.flex]="1">
+                </kendo-textbox>
+                <button kendoButton (click)="onCopyLink()">
+                  <i class="fas fa-copy"></i> Copy
                 </button>
               </div>
-            </div>
+            }
           </div>
         </div>
-
-        <div class="link-section">
-          <h4>Share Link</h4>
-          <div class="link-controls">
-            <kendo-switch
-              [(ngModel)]="isPublicLink"
-              (valueChange)="onTogglePublicLink()">
-            </kendo-switch>
-            <label>Anyone with the link can view</label>
-          </div>
-
-          <div *ngIf="isPublicLink" class="link-display">
-            <kendo-textbox
-              [value]="shareLink"
-              [readonly]="true"
-              [style.flex]="1">
-            </kendo-textbox>
-            <button kendoButton (click)="onCopyLink()">
-              <i class="fas fa-copy"></i> Copy
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onClose()">Close</button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        <kendo-dialog-actions>
+          <button kendoButton (click)="onClose()">Close</button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .share-content { display: flex; flex-direction: column; gap: 24px; }
 

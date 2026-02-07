@@ -74,6 +74,3 @@ export class GetUploadUrlAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadGetUploadUrlAction() {
-    // Stub function to prevent tree shaking
-}

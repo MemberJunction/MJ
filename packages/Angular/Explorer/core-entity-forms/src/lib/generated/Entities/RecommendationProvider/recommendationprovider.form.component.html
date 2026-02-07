@@ -68,7 +68,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recommendationRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Runs','RecommendationProviderID')"
                 [NewRecordValues]="NewRecordValues('Recommendation Runs')"
@@ -78,6 +79,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

@@ -5,6 +5,7 @@ import { Component } from '@angular/core';
  * Navigate to this component to see the file browser in action.
  */
 @Component({
+  standalone: false,
   selector: 'mj-file-browser-demo',
   template: `
     <div style="height: 100vh; width: 100vw; display: flex; flex-direction: column;">

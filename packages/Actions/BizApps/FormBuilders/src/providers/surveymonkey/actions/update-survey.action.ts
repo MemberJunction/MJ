@@ -232,10 +232,3 @@ export class UpdateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
     ];
   }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadUpdateSurveyMonkeyAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

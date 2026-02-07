@@ -104,7 +104,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('fileCategories')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('File Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('File Categories')"
@@ -114,6 +115,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Files Section -->
@@ -126,7 +128,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('files')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Files','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Files')"
@@ -136,6 +139,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

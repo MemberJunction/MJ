@@ -1,33 +1,32 @@
 <div class="record-form-container">
-    <form *ngIf="record" class="record-form"  #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
-                <div #topArea class="record-form-group">
-                    
-                </div>
-                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    <mj-tab Name="Details">
-                        Details
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Entity Actions" 
-                            Section="details" 
-                            [record]="record" 
-                            [EditMode]="EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-
-                    <mj-tab Name="Entity Action Params" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 247}">
-                        Params
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-join-grid
-                            [ShowSaveButton]="false"
-                            [ShowCancelButton]="false"
-                            [EditMode]="GridEditMode()"
-                            RowsEntityName="Action Params"
+  @if (record) {
+    <form class="record-form"  #form="ngForm" >
+      <mj-form-toolbar [form]="this"></mj-form-toolbar>
+      <div #topArea class="record-form-group">
+      </div>
+      <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+        <mj-tab Name="Details">
+          Details
+        </mj-tab>
+        <mj-tab-body>
+          <mj-form-section
+            Entity="Entity Actions"
+            Section="details"
+            [record]="record"
+            [EditMode]="EditMode">
+          </mj-form-section>
+        </mj-tab-body>
+        <mj-tab Name="Entity Action Params"
+          [Visible]="record.IsSaved"
+          [Props]="{EntityRelationshipID: 247}">
+          Params
+        </mj-tab>
+        <mj-tab-body>
+          <mj-join-grid
+            [ShowSaveButton]="false"
+            [ShowCancelButton]="false"
+            [EditMode]="GridEditMode()"
+            RowsEntityName="Action Params"
                             [RowsExtraFilter]="'ActionID=' + record.ActionID"
                             RowsEntityDisplayField="Name"
                             RowsEntityDataSource="FullEntity"
@@ -38,55 +37,50 @@
                             JoinEntityRowForeignKey="ActionParamID"
                             [JoinEntityExtraFilter]="'EntityActionID=' + record.ID"
                             [JoinEntityDisplayColumns]="['ValueType', 'Value','Comments']"
-                            [NewRecordDefaultValues]="{EntityActionID: record.ID}"
-                        >
-                        </mj-join-grid>
-                    </mj-tab-body>
-
-
-
-
-                    <mj-tab Name="Entity Action Invocations" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 247}">
-                        Invocations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-join-grid
-                            [ShowSaveButton]="false"
-                            [ShowCancelButton]="false"
-                            [EditMode]="GridEditMode()"
-                            RowsEntityName="Entity Action Invocation Types"
-                            RowsEntityDisplayField="Name"
-                            RowsEntityDataSource="FullEntity"
-                            RowsOrderBy="Name"
-                            RowsEntityDisplayName="Type"
-                            ColumnsMode="Fields"
-                            JoinEntityName="Entity Action Invocations"
-                            JoinEntityRowForeignKey="InvocationTypeID"
+            [NewRecordDefaultValues]="{EntityActionID: record.ID}"
+            >
+          </mj-join-grid>
+        </mj-tab-body>
+        <mj-tab Name="Entity Action Invocations"
+          [Visible]="record.IsSaved"
+          [Props]="{EntityRelationshipID: 247}">
+          Invocations
+        </mj-tab>
+        <mj-tab-body>
+          <mj-join-grid
+            [ShowSaveButton]="false"
+            [ShowCancelButton]="false"
+            [EditMode]="GridEditMode()"
+            RowsEntityName="Entity Action Invocation Types"
+            RowsEntityDisplayField="Name"
+            RowsEntityDataSource="FullEntity"
+            RowsOrderBy="Name"
+            RowsEntityDisplayName="Type"
+            ColumnsMode="Fields"
+            JoinEntityName="Entity Action Invocations"
+            JoinEntityRowForeignKey="InvocationTypeID"
                             [JoinEntityExtraFilter]="'EntityActionID=' + record.ID"
                             [JoinEntityDisplayColumns]="['Status']"
-                            CheckBoxValueMode="RecordExists"
-                            [NewRecordDefaultValues]="{EntityActionID: record.ID}"
-                            style="height: 500px; width: 800px;"
-                        >
-                        </mj-join-grid> 
-                    </mj-tab-body>
-
-                    <mj-tab Name="Entity Action Filters" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 248}">
-                        Filters
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-explorer-entity-data-grid
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters')"
-                            [NewRecordValues]="NewRecordValues('Entity Action Filters')"
-                            [AllowLoad]="IsCurrentTab('Entity Action Filters')"
-                            [ShowToolbar]="false">
-                        </mj-explorer-entity-data-grid>
-                    </mj-tab-body>
-                </mj-tabstrip>
+            CheckBoxValueMode="RecordExists"
+            [NewRecordDefaultValues]="{EntityActionID: record.ID}"
+            style="height: 500px; width: 800px;"
+            >
+          </mj-join-grid>
+        </mj-tab-body>
+        <mj-tab Name="Entity Action Filters"
+          [Visible]="record.IsSaved"
+          [Props]="{EntityRelationshipID: 248}">
+          Filters
+        </mj-tab>
+        <mj-tab-body>
+          <mj-explorer-entity-data-grid
+            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters')"
+            [NewRecordValues]="NewRecordValues('Entity Action Filters')"
+            [AllowLoad]="IsCurrentTab('Entity Action Filters')"
+            [ShowToolbar]="false">
+          </mj-explorer-entity-data-grid>
+        </mj-tab-body>
+      </mj-tabstrip>
     </form>
+  }
 </div>
-        

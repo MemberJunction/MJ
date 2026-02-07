@@ -179,10 +179,3 @@ export class GetSurveyMonkeyDetailsAction extends SurveyMonkeyBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadGetSurveyMonkeyAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

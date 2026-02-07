@@ -23,7 +23,7 @@ npm install @memberjunction/ng-notifications
 ## Requirements
 
 ### Angular Version
-- Angular 18.0.2 or higher
+- Angular 21 or higher
 
 ### Peer Dependencies
 - `@angular/common`: ^18.0.2

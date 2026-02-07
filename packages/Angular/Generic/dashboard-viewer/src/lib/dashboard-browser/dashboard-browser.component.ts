@@ -104,6 +104,7 @@ export interface ViewPreferenceChangeEvent {
  * All navigation and persistence events are bubbled up for the parent to handle.
  */
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-browser',
     templateUrl: './dashboard-browser.component.html',
     styleUrls: ['./dashboard-browser.component.css'],
@@ -1218,11 +1219,4 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             this.SelectedIds.add(this.FilteredDashboards[i].ID);
         }
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadDashboardBrowser() {
-    // Prevents tree-shaking of the component
 }

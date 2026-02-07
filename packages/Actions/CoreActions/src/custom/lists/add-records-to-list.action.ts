@@ -205,7 +205,3 @@ export class AddRecordsToListAction extends BaseAction {
     });
   }
 }
-
-export function LoadAddRecordsToListAction(): void {
-  // Prevents tree-shaking
-}

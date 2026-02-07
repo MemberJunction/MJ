@@ -1,5 +1,5 @@
 import { Metadata, TransactionGroupBase, TransactionResult } from "@memberjunction/core";
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 import { LogError, LogStatus } from "@memberjunction/core";
 

@@ -9,6 +9,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
  * and passes through the agent ID and edit mode.
  */
 @Component({
+  standalone: false,
     selector: 'mj-flow-agent-form-section',
     templateUrl: './flow-agent-form-section.component.html',
     styleUrls: ['./flow-agent-form-section.component.css']

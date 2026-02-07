@@ -23,7 +23,7 @@ npm install @memberjunction/ng-record-changes
 
 ## Requirements
 
-- Angular 18+
+- Angular 21+
 - @memberjunction/core (^2.43.0)
 - @memberjunction/global (^2.43.0)
 - @memberjunction/core-entities

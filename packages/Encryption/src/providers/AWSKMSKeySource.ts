@@ -194,7 +194,7 @@ export class AWSKMSKeySource extends EncryptionKeySourceBase {
 
             // Decrypt the data key using KMS
             const command = new DecryptCommand({
-                CiphertextBlob: ciphertextBlob
+                CiphertextBlob: Uint8Array.from(ciphertextBlob)
             });
 
             const response = await this._client.send(command);

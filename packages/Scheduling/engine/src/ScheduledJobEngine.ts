@@ -3,6 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
+import os from 'os';
 import {
     UserInfo,
     Metadata,
@@ -13,12 +14,10 @@ import {
 import { ScheduledJobEntity, ScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { ScheduledJobResult, NotificationChannel } from '@memberjunction/scheduling-base-types';
-import { SchedulingEngineBase, LoadBaseSchedulingEngine } from '@memberjunction/scheduling-engine-base';
+import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJob';
 import { CronExpressionHelper } from './CronExpressionHelper';
 import { NotificationManager } from './NotificationManager';
-
-LoadBaseSchedulingEngine(); // Ensure extended entities are loaded
 
 /**
  * Engine for managing scheduled job execution
@@ -603,7 +602,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
      */
     private getInstanceIdentifier(): string {
         // Use hostname + process ID for unique instance identification
-        const os = require('os');
         return `${os.hostname()}-${process.pid}`;
     }
 
