@@ -1454,9 +1454,15 @@ export class PushService {
     // Deletions exist - proceed with full audit
     callbacks?.onLog?.('\n🔍 Analyzing deletion operations...\n');
 
-    // Load all records from all entity directories
-    const allRecords: FlattenedRecord[] = [];
+    // Two-phase approach for cross-file dependency detection:
+    // Phase 1: Flatten all records from all files (no dependency analysis yet)
+    // Phase 2: Analyze dependencies globally across all records
+
     const analyzer = new RecordDependencyAnalyzer();
+    analyzer.reset(); // Ensure clean state before processing multiple files
+
+    // Phase 1: Flatten all records from all files
+    const allFlattenedRecords: FlattenedRecord[] = [];
 
     for (const entityDir of entityDirs) {
       const entityConfig = await loadEntityConfig(entityDir);
@@ -1474,7 +1480,7 @@ export class PushService {
         ignore: ['**/node_modules/**', '**/.mj-*.json']
       });
 
-      // Load and flatten records from each file
+      // Load and flatten records from each file (no dependency analysis yet)
       for (const filePath of files) {
         try {
           const rawFileData = await fs.readJson(filePath);
@@ -1491,15 +1497,25 @@ export class PushService {
 
           const records = Array.isArray(fileData) ? fileData : [fileData];
 
-          // Analyze and flatten records
-          const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
-          allRecords.push(...analysisResult.sortedRecords);
+          // Phase 1: Flatten only - accumulates into analyzer's internal state
+          const flattenedRecords = analyzer.flattenFileRecords(records, entityConfig.entity);
+          allFlattenedRecords.push(...flattenedRecords);
         } catch (error) {
           if (options.verbose) {
             callbacks?.onLog?.(`Warning: Could not load ${filePath}: ${error}`);
           }
         }
       }
+    }
+
+    // Phase 2: Analyze dependencies globally across ALL records
+    // This enables cross-file dependency detection (e.g., AIPromptModel -> AIConfiguration)
+    const analysisResult = analyzer.analyzeAllDependencies(allFlattenedRecords);
+    const allRecords = analysisResult.sortedRecords;
+
+    // Log any circular dependencies detected across files
+    if (analysisResult.circularDependencies.length > 0 && options.verbose) {
+      callbacks?.onWarn?.(`⚠️  Detected ${analysisResult.circularDependencies.length} circular dependencies across metadata files`);
     }
 
     // Perform comprehensive deletion audit
