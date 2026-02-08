@@ -1,6 +1,6 @@
 # Action Packages
 
-MemberJunction's action framework -- a metadata-driven abstraction layer for exposing functionality to workflow systems, agents, and low-code environments.
+MemberJunction's action framework — a metadata-driven abstraction layer for exposing functionality to workflow systems, agents, and low-code environments.
 
 ## Packages
 
@@ -27,8 +27,14 @@ MemberJunction's action framework -- a metadata-driven abstraction layer for exp
 | [ScheduledActions](./ScheduledActions/README.md) | `@memberjunction/scheduled-actions` | Allows system administrators to schedule any MemberJunction action for recurring or one-time future execution. |
 | [ScheduledActionsServer](./ScheduledActionsServer/README.md) | `@memberjunction/scheduled-actions-server` | Simple application server that can be called via URL to invoke Scheduled Actions. |
 
-### Sub-Directories
+### [BizApps](./BizApps/README.md)
 
-| Directory | Packages | Description |
-|-----------|----------|-------------|
-| [BizApps](./BizApps/README.md) | 5 | Business application-specific actions (Accounting, CRM, FormBuilders, LMS, Social). |
+Business application-specific actions for integrating with external business systems.
+
+| Package | npm | Description |
+|---------|-----|-------------|
+| [Accounting](./BizApps/Accounting/README.md) | `@memberjunction/actions-bizapps-accounting` | Accounting system integration actions (QuickBooks, NetSuite, Sage, Dynamics) |
+| [CRM](./BizApps/CRM/README.md) | `@memberjunction/actions-bizapps-crm` | CRM system integration actions (Salesforce, HubSpot, Dynamics, Pipedrive) |
+| [FormBuilders](./BizApps/FormBuilders/README.md) | `@memberjunction/actions-bizapps-formbuilders` | Form builder and survey platform integration actions (Typeform, Google Forms, Jotform) |
+| [LMS](./BizApps/LMS/README.md) | `@memberjunction/actions-bizapps-lms` | Learning management system integration actions (Moodle, Canvas, Blackboard, LearnDash) |
+| [Social](./BizApps/Social/README.md) | `@memberjunction/actions-bizapps-social` | Social media integration actions (Twitter, LinkedIn, Facebook, Instagram, TikTok, YouTube, HootSuite, Buffer) |

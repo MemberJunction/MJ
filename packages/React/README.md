@@ -6,5 +6,5 @@ React component infrastructure for the MemberJunction platform, providing runtim
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [runtime](./runtime/) | `@memberjunction/react-runtime` | Platform-agnostic component runtime with Babel compilation, registry, and error boundaries |
-| [test-harness](./test-harness/) | `@memberjunction/react-test-harness` | Playwright-based test harness for validating React components |
+| [runtime](./runtime/README.md) | `@memberjunction/react-runtime` | Platform-agnostic component runtime with Babel compilation, registry, and error boundaries |
+| [test-harness](./test-harness/README.md) | `@memberjunction/react-test-harness` | Playwright-based test harness for validating React components |
