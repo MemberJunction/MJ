@@ -6,5 +6,5 @@ Server-side API key authorization with hierarchical scopes and pattern-based acc
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [Base](./Base/) | `@memberjunction/api-keys-base` | Metadata caching for API scopes, applications, and key bindings (client or server) |
-| [Engine](./Engine/) | `@memberjunction/api-keys` | Server-side authorization engine with hierarchical scopes and application-level restrictions |
+| [Base](./Base/README.md) | `@memberjunction/api-keys-base` | Metadata caching for API scopes, applications, and key bindings (client or server) |
+| [Engine](./Engine/README.md) | `@memberjunction/api-keys` | Server-side authorization engine with hierarchical scopes and application-level restrictions |
