@@ -27,6 +27,13 @@
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "43D87233-DCA3-4371-A45B-1B702BDD8DC9"
+          },
+          "sync": {
+            "lastModified": "2026-02-08T02:09:45.542Z",
+            "checksum": "b7f9171aaec23e10fa0d1925552a9455d156c4a5c046a442e530258dcbb7a1d5"
           }
         },
         {
@@ -35,9 +42,23 @@
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "4A09FEF7-9E45-4CB2-A4AA-E71E30DA24B4"
+          },
+          "sync": {
+            "lastModified": "2026-02-08T02:09:45.554Z",
+            "checksum": "e9b1e0df1114ad130d76df24a66b3aee574595f779f023ff9d6b694d311f5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "BAB684EB-11B1-4DE1-9C27-55EFB239B478"
+    },
+    "sync": {
+      "lastModified": "2026-02-08T02:21:53.949Z",
+      "checksum": "c31fa9bfd7f3d9db78736eac0942141185cdb716056d7774ec58f45615f4d907"
     }
   }
 ]

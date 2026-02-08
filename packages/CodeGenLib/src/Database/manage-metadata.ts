@@ -394,9 +394,11 @@ export class ManageMetadataBase {
             logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${viewName}]`);
             createdCount++;
 
-            // Add virtual entity to the application for its schema (same logic as table-backed entities)
+            // Add virtual entity to the application for its schema and set default permissions
+            // (same logic as table-backed entities)
             if (newEntityId) {
                await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
+               await this.addDefaultPermissionsForEntity(pool, newEntityId, entityName);
             }
          } catch (err) {
             const errMessage = err instanceof Error ? err.message : String(err);
@@ -726,8 +728,11 @@ export class ManageMetadataBase {
    ): Promise<{ decorated: boolean; skipped: boolean }> {
       try {
          // Idempotency check: if entity already has soft PK or soft FK annotations, skip
+         // unless forceRegenerate option is enabled on this feature
+         const feature = ag.getFeature('VirtualEntityFieldDecoration');
+         const forceRegenerate = feature?.options?.find(o => o.name === 'forceRegenerate')?.value === true;
          const hasSoftAnnotations = entity.Fields.some(f => f.IsSoftPrimaryKey || f.IsSoftForeignKey);
-         if (hasSoftAnnotations) {
+         if (hasSoftAnnotations && !forceRegenerate) {
             return { decorated: false, skipped: true };
          }
 
@@ -927,9 +932,12 @@ export class ManageMetadataBase {
          const escapedDescription = fd.description.replace(/'/g, "''");
          let setClauses = `Description='${escapedDescription}'`;
 
-         // Apply extended type if provided (Email, URL, Phone, etc.)
+         // Apply extended type if provided and valid
          if (fd.extendedType) {
-            setClauses += `, ExtendedType='${fd.extendedType}'`;
+            const validExtendedType = this.validateExtendedType(fd.extendedType);
+            if (validExtendedType) {
+               setClauses += `, ExtendedType='${validExtendedType}'`;
+            }
          }
 
          const setSQL = `UPDATE [${schema}].[EntityField]
@@ -942,6 +950,49 @@ export class ManageMetadataBase {
       return anyApplied;
    }
 
+   /**
+    * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
+    */
+   private static readonly VALID_EXTENDED_TYPES = new Set([
+      'Code', 'Email', 'FaceTime', 'Geo', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
+   ]);
+
+   private static readonly EXTENDED_TYPE_ALIASES: Record<string, string> = {
+      'phone': 'Tel',
+      'telephone': 'Tel',
+      'website': 'URL',
+      'link': 'URL',
+      'hyperlink': 'URL',
+      'mail': 'Email',
+      'e-mail': 'Email',
+      'text': 'SMS',
+      'location': 'Geo',
+      'address': 'Geo',
+      'teams': 'MSTeams',
+      'facetime': 'FaceTime',
+      'zoom': 'ZoomMtg',
+      'whatsapp': 'WhatsApp',
+      'skype': 'Skype',
+   };
+
+   /**
+    * Validates an LLM-suggested ExtendedType against the allowed values in EntityField.
+    * Returns the valid value (case-corrected) or null if invalid.
+    */
+   protected validateExtendedType(suggested: string): string | null {
+      // Direct match (case-insensitive)
+      for (const valid of ManageMetadataBase.VALID_EXTENDED_TYPES) {
+         if (valid.toLowerCase() === suggested.toLowerCase()) {
+            return valid;
+         }
+      }
+      // Check aliases
+      const alias = ManageMetadataBase.EXTENDED_TYPE_ALIASES[suggested.toLowerCase()];
+      if (alias) {
+         return alias;
+      }
+      return null;
+   }
 
    /**
     * Manages virtual EntityField records for IS-A parent entity fields.
@@ -2955,6 +3006,34 @@ NumberedRows AS (
          }
       } else {
          LogError(`   >>>> WARNING: No application found for schema ${schemaName} to add entity ${entityName}`);
+      }
+   }
+
+   /**
+    * Adds default permissions for a newly created entity based on config settings.
+    * Shared by both table-backed entity creation and virtual entity creation.
+    */
+   protected async addDefaultPermissionsForEntity(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      entityName: string
+   ): Promise<void> {
+      if (!configInfo.newEntityDefaults.PermissionDefaults?.AutoAddPermissionsForNewEntities) {
+         return;
+      }
+
+      const md = new Metadata();
+      const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
+      for (const p of permissions) {
+         const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
+         if (RoleID) {
+            const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityPermission
+                                 (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                 ('${entityId}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
+            await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
+         } else {
+            LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
+         }
       }
    }
 

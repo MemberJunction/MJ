@@ -34,7 +34,13 @@ ELSE
 BEGIN
     PRINT '  Schema [AdvancedEntities] already exists, dropping existing objects...';
 
-    -- Drop view first (depends on tables)
+    -- Drop views first (depends on tables)
+    IF OBJECT_ID('AdvancedEntities.vwCustomerOrdersByStatus', 'V') IS NOT NULL
+        DROP VIEW [AdvancedEntities].[vwCustomerOrdersByStatus];
+    IF OBJECT_ID('AdvancedEntities.vwOrderDetailsWithCustomer', 'V') IS NOT NULL
+        DROP VIEW [AdvancedEntities].[vwOrderDetailsWithCustomer];
+    IF OBJECT_ID('AdvancedEntities.vwProductCatalogOverview', 'V') IS NOT NULL
+        DROP VIEW [AdvancedEntities].[vwProductCatalogOverview];
     IF OBJECT_ID('AdvancedEntities.vwCustomerOrderSummary', 'V') IS NOT NULL
         DROP VIEW [AdvancedEntities].[vwCustomerOrderSummary];
 
@@ -251,6 +257,155 @@ GO
 PRINT '  Created [AdvancedEntities].[vwCustomerOrderSummary]';
 GO
 
+-- ---------------------------------------------------------------------------
+-- vwProductCatalogOverview: Flattened Product Catalog
+-- Joins Product with its IS-A subtypes (Meeting, Webinar, Publication) to
+-- produce a unified catalog view. Each row is one product with its
+-- specialization columns filled in based on type. NULL columns indicate
+-- the product is not that subtype.
+--
+-- This is a SECOND virtual entity for testing LLM-assisted field decoration.
+-- The PK is aliased as ProductID (not "ID"), and the LLM must identify it.
+-- The join pattern (shared PK across IS-A tables) is non-trivial.
+-- ---------------------------------------------------------------------------
+CREATE VIEW [AdvancedEntities].[vwProductCatalogOverview]
+AS
+SELECT
+    p.[ID]                                              AS [ProductID],
+    p.[Name]                                            AS [ProductName],
+    p.[Description]                                     AS [ProductDescription],
+    p.[Price],
+    p.[SKU],
+    p.[Category],
+    p.[IsActive],
+    CASE
+        WHEN w.[ID] IS NOT NULL THEN 'Webinar'
+        WHEN m.[ID] IS NOT NULL THEN 'Meeting'
+        WHEN pub.[ID] IS NOT NULL THEN 'Publication'
+        ELSE 'Standard'
+    END                                                 AS [ProductType],
+    -- Meeting fields (NULL for non-meetings)
+    m.[StartTime]                                       AS [MeetingStartTime],
+    m.[EndTime]                                         AS [MeetingEndTime],
+    m.[Location]                                        AS [MeetingLocation],
+    m.[MaxAttendees],
+    m.[MeetingPlatform],
+    m.[OrganizerName],
+    -- Webinar fields (NULL for non-webinars)
+    w.[StreamingURL],
+    w.[IsRecorded],
+    w.[WebinarProvider],
+    w.[RegistrationURL],
+    w.[ExpectedAttendees],
+    -- Publication fields (NULL for non-publications)
+    pub.[ISBN],
+    pub.[PublishDate],
+    pub.[Publisher],
+    pub.[Format]                                        AS [PublicationFormat],
+    pub.[PageCount],
+    pub.[Author]
+FROM
+    [AdvancedEntities].[Product] p
+LEFT JOIN
+    [AdvancedEntities].[Meeting] m ON p.[ID] = m.[ID]
+LEFT JOIN
+    [AdvancedEntities].[Webinar] w ON m.[ID] = w.[ID]
+LEFT JOIN
+    [AdvancedEntities].[Publication] pub ON p.[ID] = pub.[ID];
+GO
+
+PRINT '  Created [AdvancedEntities].[vwProductCatalogOverview]';
+GO
+
+-- ---------------------------------------------------------------------------
+-- vwOrderDetailsWithCustomer: Denormalized Order + Customer View
+-- Joins Order with Customer to produce a flat view of every order with full
+-- customer details inlined. Includes window-function computed columns:
+--   - CustomerOrderNumber: sequence # of this order for the customer
+--   - CustomerRunningTotal: cumulative spend up to and including this order
+--   - DaysSinceSignup: days between customer signup and order date
+--
+-- This is a THIRD virtual entity for testing LLM-assisted field decoration.
+-- The LLM should detect:
+--   PK: OrderID (aliased from Order.ID)
+--   FK: CustomerID -> Customer.ID (from the INNER JOIN)
+-- ---------------------------------------------------------------------------
+CREATE VIEW [AdvancedEntities].[vwOrderDetailsWithCustomer]
+AS
+SELECT
+    o.[ID]                                                  AS [OrderID],
+    o.[CustomerID],
+    o.[OrderDate],
+    o.[TotalAmount],
+    o.[Status],
+    o.[ItemCount],
+    o.[ShippingAddress],
+    o.[Notes]                                               AS [OrderNotes],
+    -- Customer details
+    c.[FirstName],
+    c.[LastName],
+    c.[FirstName] + ' ' + c.[LastName]                      AS [CustomerFullName],
+    c.[Email],
+    c.[Phone],
+    c.[Company],
+    c.[City],
+    c.[State],
+    c.[Country],
+    c.[Tier]                                                AS [CustomerTier],
+    c.[CustomerSince],
+    -- Computed: days between customer signup and this order
+    DATEDIFF(DAY, c.[CustomerSince], o.[OrderDate])         AS [DaysSinceSignup],
+    -- Computed: order sequence number for this customer
+    ROW_NUMBER() OVER (
+        PARTITION BY o.[CustomerID]
+        ORDER BY o.[OrderDate]
+    )                                                       AS [CustomerOrderNumber],
+    -- Computed: running spend total for this customer
+    SUM(o.[TotalAmount]) OVER (
+        PARTITION BY o.[CustomerID]
+        ORDER BY o.[OrderDate]
+        ROWS UNBOUNDED PRECEDING
+    )                                                       AS [CustomerRunningTotal]
+FROM
+    [AdvancedEntities].[Order] o
+INNER JOIN
+    [AdvancedEntities].[Customer] c ON o.[CustomerID] = c.[ID];
+GO
+
+PRINT '  Created [AdvancedEntities].[vwOrderDetailsWithCustomer]';
+GO
+
+-- ---------------------------------------------------------------------------
+-- vwCustomerOrdersByStatus: Simple aggregation of orders grouped by
+-- customer and status. Composite PK of CustomerID + OrderStatus.
+-- FK: CustomerID -> Customer.
+-- ---------------------------------------------------------------------------
+CREATE VIEW [AdvancedEntities].[vwCustomerOrdersByStatus]
+AS
+SELECT
+    o.[CustomerID],
+    o.[Status]                                              AS [OrderStatus],
+    c.[FirstName] + ' ' + c.[LastName]                      AS [CustomerName],
+    c.[Email]                                               AS [CustomerEmail],
+    c.[Tier]                                                AS [CustomerTier],
+    COUNT(*)                                                AS [OrderCount],
+    SUM(o.[TotalAmount])                                    AS [TotalSpend],
+    AVG(o.[TotalAmount])                                    AS [AvgOrderAmount],
+    SUM(o.[ItemCount])                                      AS [TotalItems],
+    MIN(o.[OrderDate])                                      AS [FirstOrderDate],
+    MAX(o.[OrderDate])                                      AS [LastOrderDate]
+FROM
+    [AdvancedEntities].[Order] o
+INNER JOIN
+    [AdvancedEntities].[Customer] c ON o.[CustomerID] = c.[ID]
+GROUP BY
+    o.[CustomerID], o.[Status],
+    c.[FirstName], c.[LastName], c.[Email], c.[Tier];
+GO
+
+PRINT '  Created [AdvancedEntities].[vwCustomerOrdersByStatus]';
+GO
+
 -- =============================================================================================================
 -- PHASE 5: EXTENDED PROPERTIES
 --
@@ -457,6 +612,30 @@ EXEC sp_addextendedproperty
     @value = N'Virtual entity view: aggregates Customer and Order data into a per-customer summary. This view backs a read-only Virtual Entity in MemberJunction. CustomerID is the soft primary key and soft foreign key to Customer.',
     @level0type = N'SCHEMA', @level0name = N'AdvancedEntities',
     @level1type = N'VIEW',   @level1name = N'vwCustomerOrderSummary';
+GO
+
+-- ---- vwProductCatalogOverview ----
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Virtual entity view: flattened product catalog joining Product with its IS-A subtypes (Meeting, Webinar, Publication). Each row is one product with specialized columns filled in based on type. ProductID is the primary key.',
+    @level0type = N'SCHEMA', @level0name = N'AdvancedEntities',
+    @level1type = N'VIEW',   @level1name = N'vwProductCatalogOverview';
+GO
+
+-- ---- vwOrderDetailsWithCustomer ----
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Virtual entity view: denormalized order details with full customer information inlined. Includes window-function computed columns for order sequencing and running spend totals per customer. OrderID is the primary key, CustomerID is a foreign key to Customer.',
+    @level0type = N'SCHEMA', @level0name = N'AdvancedEntities',
+    @level1type = N'VIEW',   @level1name = N'vwOrderDetailsWithCustomer';
+GO
+
+-- ---- vwCustomerOrdersByStatus ----
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Virtual entity view: order counts and spend totals grouped by customer and order status. Composite primary key of CustomerID + OrderStatus. CustomerID is a foreign key to Customer.',
+    @level0type = N'SCHEMA', @level0name = N'AdvancedEntities',
+    @level1type = N'VIEW',   @level1name = N'vwCustomerOrdersByStatus';
 GO
 
 -- =============================================================================================================

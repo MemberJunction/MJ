@@ -22,17 +22,17 @@ You are an expert database analyst specializing in SQL Server views and MemberJu
 
 | Field Name | SQL Type | Nullable | Current PK | Current FK (Related Entity) |
 |-----------|----------|----------|------------|---------------------------|
-{{#each fields}}
-| {{ this.Name }} | {{ this.Type }}{{ #if this.Length }}({{ this.Length }}){{/if}} | {{ #if this.AllowsNull }}Yes{{else}}No{{/if}} | {{ #if this.IsPrimaryKey }}Yes{{else}}No{{/if}} | {{ #if this.RelatedEntityName }}{{ this.RelatedEntityName }}{{else}}-{{/if}} |
-{{/each}}
+{% for field in fields %}
+| {{ field.Name }} | {{ field.Type }}{% if field.Length %}({{ field.Length }}){% endif %} | {% if field.AllowsNull %}Yes{% else %}No{% endif %} | {% if field.IsPrimaryKey %}Yes{% else %}No{% endif %} | {% if field.RelatedEntityName %}{{ field.RelatedEntityName }}{% else %}-{% endif %} |
+{% endfor %}
 
 ## Available Entities in This Database
 
 These are the entities that foreign keys could reference:
 
-{{#each availableEntities}}
-- **{{ this.Name }}** (Table: [{{ this.SchemaName }}].[{{ this.BaseTable }}], PK: {{ this.PrimaryKeyField }})
-{{/each}}
+{% for entity in availableEntities %}
+- **{{ entity.Name }}** (Table: [{{ entity.SchemaName }}].[{{ entity.BaseTable }}], PK: {{ entity.PrimaryKeyField }})
+{% endfor %}
 
 ## Instructions
 
@@ -76,5 +76,5 @@ Return ONLY valid JSON with this exact structure:
 Notes:
 - `confidence` must be "high", "medium", or "low"
 - Only include foreign keys with "high" or "medium" confidence
-- `extendedType` is optional — use values like "Email", "URL", "Phone" when field content is clearly that type
+- `extendedType` is optional — only use one of these exact values when the field content clearly matches: `Code`, `Email`, `FaceTime`, `Geo`, `MSTeams`, `Other`, `SIP`, `SMS`, `Skype`, `Tel`, `URL`, `WhatsApp`, `ZoomMtg`. For phone numbers use `Tel`, for addresses/coordinates use `Geo`, for Microsoft Teams links use `MSTeams`, for Zoom links use `ZoomMtg`. Do NOT use values outside this list.
 - Do NOT guess — if unsure about a PK or FK, omit it

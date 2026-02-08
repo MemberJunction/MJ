@@ -18,6 +18,7 @@ export class ErrorLogFormComponent extends BaseFormComponent {
             { sectionKey: 'technicalInformation', sectionName: 'Technical Information', isExpanded: true },
             { sectionKey: 'errorClassification', sectionName: 'Error Classification', isExpanded: true },
             { sectionKey: 'errorContent', sectionName: 'Error Content', isExpanded: false },
+            { sectionKey: 'integrationContext', sectionName: 'Integration Context', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

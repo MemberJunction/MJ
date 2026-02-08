@@ -457,6 +457,7 @@ flowchart TD
 | `EntityDescriptions` | Generates human-readable descriptions for entities | Entity creation only |
 | `TransitiveJoinIntelligence` | Detects junction tables and many-to-many relationships | Entity/relationship creation |
 | `EntityNames` | Converts technical table names to user-friendly entity names | Entity creation only |
+| `VirtualEntityFieldDecoration` | Analyzes SQL view definitions to identify PKs, FKs, descriptions, and extended types for virtual entities | Virtual entity creation (idempotent unless `forceRegenerate` option is set) |
 
 ### Form Layout Stability Guarantees
 
@@ -798,16 +799,18 @@ Virtual entities are defined in `database-metadata-config.json` under the `Virtu
 {
   "VirtualEntities": [
     {
-      "viewName": "vwSalesSummary",
-      "entityName": "Sales Summary",
-      "schemaName": "__mj",
-      "description": "Aggregated sales data by region and period",
-      "primaryKeyColumnName": "SummaryID",
-      "foreignKeyDefinitions": [
+      "ViewName": "vwSalesSummary",
+      "EntityName": "Sales Summary",
+      "SchemaName": "__mj",
+      "Description": "Aggregated sales data by region and period",
+      "PrimaryKey": ["SummaryID"],
+      "ForeignKeys": [
         {
-          "columnName": "RegionID",
-          "relatedEntityName": "Regions",
-          "isVirtual": false
+          "FieldName": "RegionID",
+          "SchemaName": "__mj",
+          "RelatedTable": "Region",
+          "RelatedField": "ID",
+          "Description": "FK to Region table"
         }
       ]
     }
@@ -817,12 +820,12 @@ Virtual entities are defined in `database-metadata-config.json` under the `Virtu
 
 #### Key Configuration Properties
 
-- **`viewName`**: The SQL view name (must already exist in the database)
-- **`entityName`**: The MemberJunction entity name (appears in metadata, UI, APIs)
-- **`schemaName`**: Database schema (typically `__mj` for core entities)
-- **`description`**: Entity description for metadata and documentation
-- **`primaryKeyColumnName`**: Column to use as the entity's primary key (must be in the view)
-- **`foreignKeyDefinitions`**: Array of foreign key relationships to other entities
+- **`ViewName`**: The SQL view name (must already exist in the database)
+- **`EntityName`**: The MemberJunction entity name (appears in metadata, UI, APIs)
+- **`SchemaName`**: Database schema (typically `__mj` for core entities)
+- **`Description`**: Entity description for metadata and documentation
+- **`PrimaryKey`**: Array of column names forming the primary key (supports composite keys)
+- **`ForeignKeys`**: Optional array of foreign key relationships to other entities (if omitted, LLM decoration discovers them)
 
 ### CodeGen Pipeline for Virtual Entities
 
@@ -987,19 +990,23 @@ Virtual entities are **read-only** by design:
 
 ### Advanced Generation Features Configuration
 
-Virtual entity LLM decoration is controlled in the config:
+Virtual entity LLM decoration is controlled in the `advancedGeneration.features` array in `mj.config.cjs`:
 
-```json
-{
-  "AdvancedGenerationFeatures": [
-    {
-      "Name": "VirtualEntityFieldDecoration",
-      "Description": "Use LLM to generate descriptions and metadata for virtual entity fields",
-      "Active": true
-    }
-  ]
-}
+```javascript
+advancedGeneration: {
+    enableAdvancedGeneration: true,
+    features: [
+        {
+            name: 'VirtualEntityFieldDecoration',
+            enabled: true,
+            // Optional: force re-decoration even if entities already have soft PK/FK annotations
+            options: [{ name: 'forceRegenerate', value: true }],
+        },
+    ],
+},
 ```
+
+By default, `VirtualEntityFieldDecoration` is **enabled** and uses an idempotency check — entities that already have `IsSoftPrimaryKey` or `IsSoftForeignKey` annotations are skipped. Set the `forceRegenerate` option to `true` to override this check and re-run LLM decoration for all virtual entities (useful after prompt improvements or when you want to refresh metadata).
 
 When active, CodeGen calls `decorateVirtualEntitiesWithLLM()` after field synchronization.
 

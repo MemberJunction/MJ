@@ -17,6 +17,7 @@ export class EntityCommunicationFieldFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identification', sectionName: 'Identification', isExpanded: true },
             { sectionKey: 'mappingConfiguration', sectionName: 'Mapping Configuration', isExpanded: true },
+            { sectionKey: 'messageType', sectionName: 'Message Type', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

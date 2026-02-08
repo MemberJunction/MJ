@@ -217,7 +217,7 @@ const advancedGenerationSchema = z.object({
       name: 'VirtualEntityFieldDecoration',
       description:
         'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions. Only runs for virtual entities that lack soft PK/FK annotations. Respects explicit config-defined PKs/FKs (from additionalSchemaInfo) — LLM fills in the gaps.',
-      enabled: false,
+      enabled: true,
     },
   ]),
 });
@@ -589,7 +589,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
       {
         name: 'VirtualEntityFieldDecoration',
         description: 'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions.',
-        enabled: false,
+        enabled: true,
       },
     ],
   },

@@ -18,6 +18,27 @@
           "Description": "Soft foreign key to Customer table — each summary row corresponds to exactly one customer"
         }
       ]
+    },
+    {
+      "ViewName": "vwProductCatalogOverview",
+      "SchemaName": "AdvancedEntities",
+      "EntityName": "Product Catalog Overview",
+      "Description": "Read-only virtual entity providing a flattened view of the entire product catalog. Joins Product with its IS-A subtypes (Meeting, Webinar, Publication) so each row shows a single product with its specialization columns. Includes a computed ProductType discriminator column.",
+      "PrimaryKey": ["ProductID"]
+    },
+    {
+      "ViewName": "vwOrderDetailsWithCustomer",
+      "SchemaName": "AdvancedEntities",
+      "EntityName": "Order Details With Customers",
+      "Description": "Read-only virtual entity denormalizing every order with full customer details inlined. Includes window-function computed columns: customer order sequence number, cumulative running spend total, and days between signup and order.",
+      "PrimaryKey": ["OrderID"]
+    },
+    {
+      "ViewName": "vwCustomerOrdersByStatus",
+      "SchemaName": "AdvancedEntities",
+      "EntityName": "Customer Orders By Status",
+      "Description": "Read-only virtual entity showing order counts and spend totals grouped by customer and order status.",
+      "PrimaryKey": ["CustomerID", "OrderStatus"]
     }
   ],
   "ISARelationships": [
