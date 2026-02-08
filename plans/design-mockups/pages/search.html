@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-4);
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .code-block {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-4);
+      font-family: var(--mj-font-family-mono);
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      overflow-x: auto;
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Search</h1>
+      <p>Search box patterns for finding content across the application.</p>
+    </header>
+
+    <!-- Basic Search -->
+    <section class="section">
+      <h2 class="section-title">Basic Search Input</h2>
+      <p class="mj-text-secondary mj-mb-4">Simple search box with icon for inline searching.</p>
+      <div class="demo-row">
+        <div class="mj-search-box">
+          <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+          <input type="text" class="mj-search-input" placeholder="Search...">
+        </div>
+        <div class="mj-search-box mj-search-box-lg">
+          <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+          <input type="text" class="mj-search-input" placeholder="Search entities, records, and more...">
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-search-box"&gt;
+  &lt;i class="fa-solid fa-magnifying-glass mj-search-icon"&gt;&lt;/i&gt;
+  &lt;input type="text" class="mj-search-input" placeholder="Search..."&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Search with Clear Button -->
+    <section class="section">
+      <h2 class="section-title">Search with Clear Button</h2>
+      <p class="mj-text-secondary mj-mb-4">Search box with a clear button for resetting the search.</p>
+      <div class="demo-row">
+        <div class="mj-search-box">
+          <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+          <input type="text" class="mj-search-input" placeholder="Search..." value="example query">
+          <button class="mj-search-clear" type="button">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-search-box"&gt;
+  &lt;i class="fa-solid fa-magnifying-glass mj-search-icon"&gt;&lt;/i&gt;
+  &lt;input type="text" class="mj-search-input" placeholder="Search..." value="example"&gt;
+  &lt;button class="mj-search-clear" type="button"&gt;
+    &lt;i class="fa-solid fa-times"&gt;&lt;/i&gt;
+  &lt;/button&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Search with Filters -->
+    <section class="section">
+      <h2 class="section-title">Search with Filter Dropdown</h2>
+      <p class="mj-text-secondary mj-mb-4">Combined search and filter for targeted searching.</p>
+      <div class="demo-row">
+        <div class="mj-search-group">
+          <div class="mj-search-dropdown">
+            <select class="mj-search-select">
+              <option>All</option>
+              <option>Entities</option>
+              <option>Records</option>
+              <option>Users</option>
+            </select>
+          </div>
+          <div class="mj-search-box mj-search-box-attached">
+            <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+            <input type="text" class="mj-search-input" placeholder="Search...">
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-search-group"&gt;
+  &lt;div class="mj-search-dropdown"&gt;
+    &lt;select class="mj-search-select"&gt;
+      &lt;option&gt;All&lt;/option&gt;
+      &lt;option&gt;Entities&lt;/option&gt;
+    &lt;/select&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-search-box mj-search-box-attached"&gt;
+    &lt;i class="fa-solid fa-magnifying-glass mj-search-icon"&gt;&lt;/i&gt;
+    &lt;input type="text" class="mj-search-input" placeholder="Search..."&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Global Search Bar -->
+    <section class="section">
+      <h2 class="section-title">Global Search Bar</h2>
+      <p class="mj-text-secondary mj-mb-4">Full-width search for application header or command palette style.</p>
+      <div class="demo-row">
+        <div class="mj-global-search">
+          <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+          <input type="text" class="mj-search-input" placeholder="Search everything... (Ctrl+K)">
+          <kbd class="mj-search-shortcut">Ctrl+K</kbd>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-global-search"&gt;
+  &lt;i class="fa-solid fa-magnifying-glass mj-search-icon"&gt;&lt;/i&gt;
+  &lt;input type="text" class="mj-search-input" placeholder="Search everything... (Ctrl+K)"&gt;
+  &lt;kbd class="mj-search-shortcut"&gt;Ctrl+K&lt;/kbd&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Search with Results Preview -->
+    <section class="section">
+      <h2 class="section-title">Search with Results Preview</h2>
+      <p class="mj-text-secondary mj-mb-4">Search input with inline results dropdown.</p>
+      <div class="demo-row">
+        <div class="mj-search-container">
+          <div class="mj-search-box">
+            <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+            <input type="text" class="mj-search-input" placeholder="Search users...">
+          </div>
+          <div class="mj-search-results">
+            <div class="mj-search-results-header">
+              <span>Recent Searches</span>
+            </div>
+            <div class="mj-search-result-item">
+              <i class="fa-solid fa-clock mj-search-result-icon"></i>
+              <div class="mj-search-result-content">
+                <span class="mj-search-result-title">John Smith</span>
+                <span class="mj-search-result-meta">User</span>
+              </div>
+            </div>
+            <div class="mj-search-result-item">
+              <i class="fa-solid fa-clock mj-search-result-icon"></i>
+              <div class="mj-search-result-content">
+                <span class="mj-search-result-title">Invoice #2024-001</span>
+                <span class="mj-search-result-meta">Invoice</span>
+              </div>
+            </div>
+            <div class="mj-search-results-divider"></div>
+            <div class="mj-search-results-header">
+              <span>Suggestions</span>
+            </div>
+            <div class="mj-search-result-item mj-search-result-item-active">
+              <i class="fa-solid fa-user mj-search-result-icon"></i>
+              <div class="mj-search-result-content">
+                <span class="mj-search-result-title">Jane Doe</span>
+                <span class="mj-search-result-meta">User - Active</span>
+              </div>
+            </div>
+            <div class="mj-search-result-item">
+              <i class="fa-solid fa-building mj-search-result-icon"></i>
+              <div class="mj-search-result-content">
+                <span class="mj-search-result-title">Acme Corporation</span>
+                <span class="mj-search-result-meta">Organization</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-search-container"&gt;
+  &lt;div class="mj-search-box"&gt;...&lt;/div&gt;
+  &lt;div class="mj-search-results"&gt;
+    &lt;div class="mj-search-result-item"&gt;
+      &lt;i class="fa-solid fa-user mj-search-result-icon"&gt;&lt;/i&gt;
+      &lt;div class="mj-search-result-content"&gt;
+        &lt;span class="mj-search-result-title"&gt;Jane Doe&lt;/span&gt;
+        &lt;span class="mj-search-result-meta"&gt;User&lt;/span&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Search in Table Header -->
+    <section class="section">
+      <h2 class="section-title">Search in Table Header</h2>
+      <p class="mj-text-secondary mj-mb-4">Compact search for filtering table data.</p>
+      <div class="demo-row">
+        <div class="mj-table-toolbar">
+          <div class="mj-search-box mj-search-box-sm">
+            <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+            <input type="text" class="mj-search-input" placeholder="Filter records...">
+          </div>
+          <div class="mj-flex mj-gap-2">
+            <button class="mj-btn mj-btn-secondary mj-btn-sm">
+              <i class="fa-solid fa-filter"></i> Filters
+            </button>
+            <button class="mj-btn mj-btn-primary mj-btn-sm">
+              <i class="fa-solid fa-plus"></i> Add New
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-table-toolbar"&gt;
+  &lt;div class="mj-search-box mj-search-box-sm"&gt;
+    &lt;i class="fa-solid fa-magnifying-glass mj-search-icon"&gt;&lt;/i&gt;
+    &lt;input type="text" class="mj-search-input" placeholder="Filter..."&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-flex mj-gap-2"&gt;
+    &lt;button class="mj-btn mj-btn-secondary mj-btn-sm"&gt;...&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+</body>
+</html>
