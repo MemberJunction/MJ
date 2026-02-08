@@ -1,10 +1,10 @@
 import sql from 'mssql';
 import { configInfo, currentWorkingDirectory, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { ApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -64,6 +64,39 @@ export interface SoftPKFKTableConfig {
    Description?: string;
    PrimaryKey: SoftPKFieldConfig[];
    ForeignKeys: SoftFKFieldConfig[];
+}
+
+/**
+ * Configuration for a virtual entity in the additionalSchemaInfo config file.
+ * Virtual entities are backed by SQL views with no physical table.
+ */
+export interface VirtualEntityConfig {
+   /** The name of the SQL view backing this virtual entity */
+   ViewName: string;
+   /** The schema containing the view */
+   SchemaName?: string;
+   /** The display name for the entity. If not provided, derived from ViewName */
+   EntityName?: string;
+   /** Optional description for the entity */
+   Description?: string;
+   /** Primary key field name(s). If not provided, defaults to 'ID' */
+   PrimaryKey?: string[];
+   /** Optional soft foreign key definitions for the virtual entity */
+   ForeignKeys?: SoftFKFieldConfig[];
+}
+
+/**
+ * Configuration for an IS-A (Table-Per-Type) relationship in the additionalSchemaInfo config file.
+ * Declares that a child entity inherits from a parent entity. CodeGen sets Entity.ParentID
+ * automatically, then manages virtual field records and view JOINs for the inheritance chain.
+ */
+export interface ISARelationshipConfig {
+   /** The entity name of the child (e.g., "AE Meetings"). Can also be the table name if entity names haven't been created yet. */
+   ChildEntity: string;
+   /** The entity name of the parent (e.g., "AE Products"). Can also be the table name. */
+   ParentEntity: string;
+   /** Optional schema name for table-name lookups (defaults to MJ core schema if not provided) */
+   SchemaName?: string;
 }
 
 /**
@@ -139,7 +172,7 @@ export class ManageMetadataBase {
     *   2. Flat tables array (legacy format): { "Tables": [{ "SchemaName": "dbo", "TableName": "Orders", ... }] }
     * Returns a normalized array where each entry has SchemaName, TableName, PrimaryKey[], and ForeignKeys[].
     */
-   private extractTablesFromConfig(config: Record<string, unknown>): SoftPKFKTableConfig[] {
+   protected extractTablesFromConfig(config: Record<string, unknown>): SoftPKFKTableConfig[] {
       const results: SoftPKFKTableConfig[] = [];
 
       // Check for flat "Tables" array format first
@@ -156,8 +189,8 @@ export class ManageMetadataBase {
          return results;
       }
 
-      // Schema-as-key format: iterate over keys, skip metadata keys
-      const metadataKeys = new Set(['$schema', 'description', 'version']);
+      // Schema-as-key format: iterate over keys, skip metadata and special section keys
+      const metadataKeys = new Set(['$schema', 'description', 'version', 'VirtualEntities', 'ISARelationships', 'Tables']);
       for (const key of Object.keys(config)) {
          if (metadataKeys.has(key)) continue;
 
@@ -177,6 +210,210 @@ export class ManageMetadataBase {
       }
 
       return results;
+   }
+
+   /**
+    * Extracts VirtualEntities array from the additionalSchemaInfo config file.
+    * The config may contain a top-level "VirtualEntities" key with an array of
+    * virtual entity definitions.
+    */
+   protected extractVirtualEntitiesFromConfig(config: Record<string, unknown>): VirtualEntityConfig[] {
+      const virtualEntities = config.VirtualEntities;
+      if (!Array.isArray(virtualEntities)) return [];
+
+      return virtualEntities.map((ve: Record<string, unknown>) => ({
+         ViewName: ve.ViewName as string,
+         SchemaName: (ve.SchemaName as string) || undefined,
+         EntityName: (ve.EntityName as string) || undefined,
+         Description: (ve.Description as string) || undefined,
+         PrimaryKey: Array.isArray(ve.PrimaryKey) ? (ve.PrimaryKey as string[]) : undefined,
+         ForeignKeys: Array.isArray(ve.ForeignKeys) ? (ve.ForeignKeys as SoftFKFieldConfig[]) : undefined,
+      }));
+   }
+
+   /**
+    * Extracts ISARelationships array from the additionalSchemaInfo config file.
+    * The config may contain a top-level "ISARelationships" key with an array of
+    * parent-child relationship definitions.
+    */
+   protected extractISARelationshipsFromConfig(config: Record<string, unknown>): ISARelationshipConfig[] {
+      const relationships = config.ISARelationships;
+      if (!Array.isArray(relationships)) return [];
+
+      return relationships.map((rel: Record<string, unknown>) => ({
+         ChildEntity: rel.ChildEntity as string,
+         ParentEntity: rel.ParentEntity as string,
+         SchemaName: (rel.SchemaName as string) || undefined,
+      }));
+   }
+
+   /**
+    * Processes IS-A relationship configurations from the additionalSchemaInfo config.
+    * For each configured relationship, looks up both entities by name (or by table name
+    * within the given schema) and sets Entity.ParentID on the child entity.
+    * Must run AFTER entities are created but BEFORE manageParentEntityFields().
+    */
+   protected async processISARelationshipConfig(pool: sql.ConnectionPool): Promise<{ success: boolean; updatedCount: number }> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return { success: true, updatedCount: 0 };
+
+      const relationships = this.extractISARelationshipsFromConfig(config as Record<string, unknown>);
+      if (relationships.length === 0) return { success: true, updatedCount: 0 };
+
+      let updatedCount = 0;
+      const schema = mj_core_schema();
+
+      for (const rel of relationships) {
+         try {
+            // Look up the parent entity — try by Name first, then by BaseTable within the given schema
+            const parentResult = await pool.request()
+               .input('ParentName', rel.ParentEntity)
+               .input('SchemaName', rel.SchemaName || null)
+               .query(`
+                  SELECT TOP 1 ID, Name
+                  FROM [${schema}].vwEntities
+                  WHERE Name = @ParentName
+                     OR (BaseTable = @ParentName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))
+                  ORDER BY CASE WHEN Name = @ParentName THEN 0 ELSE 1 END
+               `);
+
+            if (parentResult.recordset.length === 0) {
+               logError(`    > IS-A config: parent entity "${rel.ParentEntity}" not found — skipping`);
+               continue;
+            }
+
+            const parentId = parentResult.recordset[0].ID;
+            const parentName = parentResult.recordset[0].Name;
+
+            // Look up the child entity — same strategy
+            const childResult = await pool.request()
+               .input('ChildName', rel.ChildEntity)
+               .input('SchemaName', rel.SchemaName || null)
+               .query(`
+                  SELECT TOP 1 ID, Name, ParentID
+                  FROM [${schema}].vwEntities
+                  WHERE Name = @ChildName
+                     OR (BaseTable = @ChildName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))
+                  ORDER BY CASE WHEN Name = @ChildName THEN 0 ELSE 1 END
+               `);
+
+            if (childResult.recordset.length === 0) {
+               logError(`    > IS-A config: child entity "${rel.ChildEntity}" not found — skipping`);
+               continue;
+            }
+
+            const childId = childResult.recordset[0].ID;
+            const childName = childResult.recordset[0].Name;
+            const existingParentId = childResult.recordset[0].ParentID;
+
+            // Skip if already set correctly
+            if (existingParentId === parentId) {
+               logStatus(`    > IS-A: "${childName}" already has ParentID set to "${parentName}", skipping`);
+               continue;
+            }
+
+            // Set ParentID on the child entity
+            await pool.request()
+               .input('ParentID', parentId)
+               .input('ChildID', childId)
+               .query(`UPDATE [${schema}].Entity SET ParentID = @ParentID WHERE ID = @ChildID`);
+
+            if (existingParentId) {
+               logStatus(`    > IS-A: Updated "${childName}" ParentID from previous value to "${parentName}"`);
+            } else {
+               logStatus(`    > IS-A: Set "${childName}" ParentID to "${parentName}"`);
+            }
+            updatedCount++;
+         } catch (err) {
+            const errMessage = err instanceof Error ? err.message : String(err);
+            logError(`    > IS-A config: Failed to set ParentID for "${rel.ChildEntity}": ${errMessage}`);
+         }
+      }
+
+      return { success: true, updatedCount };
+   }
+
+   /**
+    * Processes virtual entity configurations from the additionalSchemaInfo config.
+    * For each configured virtual entity, checks if it already exists and creates
+    * it if not. Uses the spCreateVirtualEntity stored procedure.
+    * Must run BEFORE manageVirtualEntities() so newly created entities get field-synced.
+    */
+   protected async processVirtualEntityConfig(pool: sql.ConnectionPool): Promise<{ success: boolean; createdCount: number }> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return { success: true, createdCount: 0 };
+
+      const virtualEntities = this.extractVirtualEntitiesFromConfig(config as Record<string, unknown>);
+      if (virtualEntities.length === 0) return { success: true, createdCount: 0 };
+
+      let createdCount = 0;
+      const schema = mj_core_schema();
+
+      for (const ve of virtualEntities) {
+         const viewSchema = ve.SchemaName || schema;
+         const viewName = ve.ViewName;
+         const entityName = ve.EntityName || this.deriveEntityNameFromView(viewName);
+         const pkField = ve.PrimaryKey?.[0] || 'ID';
+
+         // Check if entity already exists for this view
+         const existsResult = await pool.request()
+            .input('ViewName', viewName)
+            .input('SchemaName', viewSchema)
+            .query(`SELECT ID FROM [${schema}].vwEntities WHERE BaseView = @ViewName AND SchemaName = @SchemaName`);
+
+         if (existsResult.recordset.length > 0) {
+            logStatus(`    > Virtual entity "${entityName}" already exists for view [${viewSchema}].[${viewName}], skipping creation`);
+            continue;
+         }
+
+         // Verify the view actually exists in the database
+         const viewExistsResult = await pool.request()
+            .input('ViewName', viewName)
+            .input('SchemaName', viewSchema)
+            .query(`SELECT 1 FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = @ViewName AND TABLE_SCHEMA = @SchemaName`);
+
+         if (viewExistsResult.recordset.length === 0) {
+            logError(`    > View [${viewSchema}].[${viewName}] does not exist — skipping virtual entity creation for "${entityName}"`);
+            continue;
+         }
+
+         // Create the virtual entity via the stored procedure
+         try {
+            const createResult = await pool.request()
+               .input('Name', entityName)
+               .input('BaseView', viewName)
+               .input('SchemaName', viewSchema)
+               .input('PrimaryKeyFieldName', pkField)
+               .input('Description', ve.Description || null)
+               .execute(`[${schema}].spCreateVirtualEntity`);
+
+            const newEntityId = createResult.recordset?.[0]?.['']
+               || createResult.recordset?.[0]?.ID
+               || createResult.recordset?.[0]?.Column0;
+
+            logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${viewName}]`);
+            createdCount++;
+         } catch (err) {
+            const errMessage = err instanceof Error ? err.message : String(err);
+            logError(`    > Failed to create virtual entity "${entityName}": ${errMessage}`);
+         }
+      }
+
+      return { success: true, createdCount };
+   }
+
+   /**
+    * Derives an entity name from a view name by removing common prefixes (vw, v_)
+    * and converting to a human-friendly format.
+    */
+   protected deriveEntityNameFromView(viewName: string): string {
+      let name = viewName;
+      // Remove common view prefixes
+      if (name.startsWith('vw')) name = name.substring(2);
+      else if (name.startsWith('v_')) name = name.substring(2);
+      // Add spaces before capital letters (PascalCase → "Pascal Case")
+      name = name.replace(/([a-z])([A-Z])/g, '$1 $2');
+      return name.trim();
    }
 
    /**
@@ -247,10 +484,31 @@ export class ManageMetadataBase {
          await this.generateNewEntityDescriptions(pool, md, currentUser); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
       }
 
+      // Config-driven virtual entity creation — run BEFORE manageVirtualEntities
+      // so newly created entities get their fields synced in the next step
+      const vecResult = await this.processVirtualEntityConfig(pool);
+      if (vecResult.createdCount > 0) {
+         logStatus(`    > Created ${vecResult.createdCount} virtual entit${vecResult.createdCount === 1 ? 'y' : 'ies'} from config`);
+         // Refresh metadata so manageVirtualEntities can find the newly-created entities
+         // in the cache — otherwise EntityByName() returns null and field sync is silently skipped
+         const md = new Metadata();
+         await md.Refresh();
+      }
+
       const veResult = await this.manageVirtualEntities(pool)
       if (! veResult.success) {
          logError('   Error managing virtual entities');
          bSuccess = false;
+      }
+
+      // LLM-assisted virtual entity field decoration — identify PKs, FKs, and descriptions
+      await this.decorateVirtualEntitiesWithLLM(pool, currentUser);
+
+      // Config-driven IS-A relationship setup — set ParentID on child entities
+      // Must run AFTER entities exist but BEFORE manageEntityFields() which calls manageParentEntityFields()
+      const isaConfigResult = await this.processISARelationshipConfig(pool);
+      if (isaConfigResult.updatedCount > 0) {
+         logStatus(`    > Set ParentID on ${isaConfigResult.updatedCount} IS-A child entit${isaConfigResult.updatedCount === 1 ? 'y' : 'ies'} from config`);
       }
 
       start = new Date();
@@ -412,6 +670,431 @@ export class ManageMetadataBase {
          }
       }
       return {success: true, updatedField: didUpdate, newFieldID: newEntityFieldUUID};
+   }
+
+   /**
+    * Iterates over all virtual entities and applies LLM-assisted field decoration
+    * to identify primary keys, foreign keys, and field descriptions.
+    * Only runs if the VirtualEntityFieldDecoration advanced generation feature is enabled.
+    * Idempotent: skips entities that already have soft PK/FK annotations.
+    */
+   protected async decorateVirtualEntitiesWithLLM(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<void> {
+      const ag = new AdvancedGeneration();
+      if (!ag.featureEnabled('VirtualEntityFieldDecoration')) {
+         return; // Feature not enabled, nothing to do
+      }
+
+      const md = new Metadata();
+      const virtualEntities = md.Entities.filter(e => e.VirtualEntity);
+      if (virtualEntities.length === 0) {
+         return;
+      }
+
+      logStatus(`   Decorating virtual entity fields with LLM (${virtualEntities.length} entities)...`);
+      let decoratedCount = 0;
+      let skippedCount = 0;
+
+      for (const entity of virtualEntities) {
+         const result = await this.decorateSingleVirtualEntityWithLLM(pool, entity, ag, currentUser);
+         if (result.decorated) {
+            decoratedCount++;
+         } else if (result.skipped) {
+            skippedCount++;
+         }
+      }
+
+      if (decoratedCount > 0 || skippedCount > 0) {
+         logStatus(`    > LLM field decoration: ${decoratedCount} decorated, ${skippedCount} skipped (already annotated)`);
+      }
+   }
+
+   /**
+    * Applies LLM-assisted field decoration to a single virtual entity.
+    * Gets the view definition, calls the LLM, and applies the identified PKs, FKs, and descriptions.
+    * @returns Whether the entity was decorated, skipped, or encountered an error.
+    */
+   protected async decorateSingleVirtualEntityWithLLM(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      ag: AdvancedGeneration,
+      currentUser: UserInfo
+   ): Promise<{ decorated: boolean; skipped: boolean }> {
+      try {
+         // Idempotency check: if entity already has soft PK or soft FK annotations, skip
+         const hasSoftAnnotations = entity.Fields.some(f => f.IsSoftPrimaryKey || f.IsSoftForeignKey);
+         if (hasSoftAnnotations) {
+            return { decorated: false, skipped: true };
+         }
+
+         // Get view definition from SQL Server
+         const viewDefSQL = `SELECT OBJECT_DEFINITION(OBJECT_ID('[${entity.SchemaName}].[${entity.BaseView}]')) AS ViewDef`;
+         const viewDefResult = await pool.request().query(viewDefSQL);
+         const viewDefinition = viewDefResult.recordset[0]?.ViewDef;
+         if (!viewDefinition) {
+            logStatus(`         ⚠️  Could not get view definition for ${entity.SchemaName}.${entity.BaseView} — skipping LLM decoration`);
+            return { decorated: false, skipped: false };
+         }
+
+         // Build field info for the prompt
+         const fields = entity.Fields.map(f => ({
+            Name: f.Name,
+            Type: f.Type,
+            Length: f.Length,
+            AllowsNull: f.AllowsNull,
+            IsPrimaryKey: f.IsPrimaryKey,
+            RelatedEntityName: f.RelatedEntity || null
+         }));
+
+         // Build available entities list for FK matching
+         const md = new Metadata();
+         const availableEntities = md.Entities
+            .filter(e => !e.VirtualEntity && e.PrimaryKeys.length > 0)
+            .map(e => ({
+               Name: e.Name,
+               SchemaName: e.SchemaName,
+               BaseTable: e.BaseTable,
+               PrimaryKeyField: e.PrimaryKeys[0]?.Name || 'ID'
+            }));
+
+         // Call the LLM
+         const result = await ag.decorateVirtualEntityFields(
+            entity.Name,
+            entity.SchemaName,
+            entity.BaseView,
+            viewDefinition,
+            entity.Description || '',
+            fields,
+            availableEntities,
+            currentUser
+         );
+
+         if (!result) {
+            return { decorated: false, skipped: false };
+         }
+
+         // Apply results to EntityField records
+         const schema = mj_core_schema();
+         let anyUpdated = false;
+
+         // Apply primary keys
+         anyUpdated = await this.applyLLMPrimaryKeys(pool, entity, result.primaryKeys, schema) || anyUpdated;
+
+         // Apply foreign keys
+         anyUpdated = await this.applyLLMForeignKeys(pool, entity, result.foreignKeys, schema) || anyUpdated;
+
+         // Apply field descriptions
+         anyUpdated = await this.applyLLMFieldDescriptions(pool, entity, result.fieldDescriptions, schema) || anyUpdated;
+
+         if (anyUpdated) {
+            const sqlUpdate = `UPDATE [${schema}].Entity SET [${EntityInfo.UpdatedAtFieldName}]=GETUTCDATE() WHERE ID='${entity.ID}'`;
+            await this.LogSQLAndExecute(pool, sqlUpdate, `Update entity timestamp for ${entity.Name} after LLM decoration`);
+         }
+
+         return { decorated: anyUpdated, skipped: false };
+      } catch (e) {
+         logError(`   Error decorating virtual entity ${entity.Name} with LLM: ${e}`);
+         return { decorated: false, skipped: false };
+      }
+   }
+
+   /**
+    * Applies LLM-identified primary keys to entity fields.
+    * Sets IsPrimaryKey=1 and IsSoftPrimaryKey=1 for identified fields.
+    * First clears any default PK that was set by field-sync (field #1 fallback).
+    */
+   protected async applyLLMPrimaryKeys(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      primaryKeys: string[],
+      schema: string
+   ): Promise<boolean> {
+      if (!primaryKeys || primaryKeys.length === 0) {
+         return false;
+      }
+
+      // Validate that all identified PK fields exist on the entity
+      const validPKs = primaryKeys.filter(pk =>
+         entity.Fields.some(f => f.Name.toLowerCase() === pk.toLowerCase())
+      );
+      if (validPKs.length === 0) {
+         return false;
+      }
+
+      // Clear existing default PK (field #1 fallback) before applying LLM-identified PKs
+      const clearSQL = `UPDATE [${schema}].[EntityField]
+                        SET IsPrimaryKey=0, IsUnique=0
+                        WHERE EntityID='${entity.ID}' AND IsPrimaryKey=1 AND IsSoftPrimaryKey=0`;
+      await this.LogSQLAndExecute(pool, clearSQL, `Clear default PK for ${entity.Name} before LLM PK`);
+
+      // Set LLM-identified PKs
+      for (const pk of validPKs) {
+         const setSQL = `UPDATE [${schema}].[EntityField]
+                         SET IsPrimaryKey=1, IsUnique=1, IsSoftPrimaryKey=1
+                         WHERE EntityID='${entity.ID}' AND Name='${pk}'`;
+         await this.LogSQLAndExecute(pool, setSQL, `Set LLM-identified PK for ${entity.Name}.${pk}`);
+         logStatus(`         ✓ Set PK for ${entity.Name}.${pk} (LLM-identified)`);
+      }
+
+      return true;
+   }
+
+   /**
+    * Applies LLM-identified foreign keys to entity fields.
+    * Sets RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey=1.
+    * Only applies high and medium confidence FKs.
+    */
+   protected async applyLLMForeignKeys(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      foreignKeys: VirtualEntityDecorationResult['foreignKeys'],
+      schema: string
+   ): Promise<boolean> {
+      if (!foreignKeys || foreignKeys.length === 0) {
+         return false;
+      }
+
+      const md = new Metadata();
+      let anyApplied = false;
+
+      for (const fk of foreignKeys) {
+         // Only apply high/medium confidence
+         if (fk.confidence !== 'high' && fk.confidence !== 'medium') {
+            continue;
+         }
+
+         // Validate that the field exists on this entity
+         const field = entity.Fields.find(f => f.Name.toLowerCase() === fk.fieldName.toLowerCase());
+         if (!field) {
+            continue;
+         }
+
+         // Skip if field already has a FK set (config-defined takes precedence)
+         if (field.RelatedEntityID) {
+            continue;
+         }
+
+         // Look up the related entity by name
+         const relatedEntity = md.EntityByName(fk.relatedEntityName);
+         if (!relatedEntity) {
+            logStatus(`         ⚠️  LLM FK: related entity '${fk.relatedEntityName}' not found for ${entity.Name}.${fk.fieldName}`);
+            continue;
+         }
+
+         const setSQL = `UPDATE [${schema}].[EntityField]
+                         SET RelatedEntityID='${relatedEntity.ID}',
+                             RelatedEntityFieldName='${fk.relatedFieldName}',
+                             IsSoftForeignKey=1
+                         WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`;
+         await this.LogSQLAndExecute(pool, setSQL, `Set LLM-identified FK for ${entity.Name}.${field.Name} → ${fk.relatedEntityName}`);
+         logStatus(`         ✓ Set FK for ${entity.Name}.${field.Name} → ${fk.relatedEntityName}.${fk.relatedFieldName} (${fk.confidence}, LLM)`);
+         anyApplied = true;
+      }
+
+      return anyApplied;
+   }
+
+   /**
+    * Applies LLM-generated field descriptions to entity fields that lack descriptions.
+    */
+   protected async applyLLMFieldDescriptions(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      fieldDescriptions: VirtualEntityDecorationResult['fieldDescriptions'],
+      schema: string
+   ): Promise<boolean> {
+      if (!fieldDescriptions || fieldDescriptions.length === 0) {
+         return false;
+      }
+
+      let anyApplied = false;
+
+      for (const fd of fieldDescriptions) {
+         const field = entity.Fields.find(f => f.Name.toLowerCase() === fd.fieldName.toLowerCase());
+         if (!field) {
+            continue;
+         }
+
+         // Only apply if field doesn't already have a description
+         if (field.Description && field.Description.trim().length > 0) {
+            continue;
+         }
+
+         const escapedDescription = fd.description.replace(/'/g, "''");
+         let setClauses = `Description='${escapedDescription}'`;
+
+         // Apply extended type if provided (Email, URL, Phone, etc.)
+         if (fd.extendedType) {
+            setClauses += `, ExtendedType='${fd.extendedType}'`;
+         }
+
+         const setSQL = `UPDATE [${schema}].[EntityField]
+                         SET ${setClauses}
+                         WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`;
+         await this.LogSQLAndExecute(pool, setSQL, `Set LLM-generated description for ${entity.Name}.${field.Name}`);
+         anyApplied = true;
+      }
+
+      return anyApplied;
+   }
+
+
+   /**
+    * Manages virtual EntityField records for IS-A parent entity fields.
+    * For each entity with ParentID set (IS-A child), creates/updates virtual field records
+    * that mirror the parent entity's base table fields (excluding PKs, timestamps, and virtual fields).
+    * Runs collision detection to prevent child table columns from shadowing parent fields.
+    */
+   protected async manageParentEntityFields(pool: sql.ConnectionPool): Promise<{success: boolean, anyUpdates: boolean}> {
+      let bSuccess = true;
+      let anyUpdates = false;
+
+      const md = new Metadata();
+      const childEntities = md.Entities.filter(e => e.IsChildType);
+
+      if (childEntities.length === 0) {
+         return { success: true, anyUpdates: false };
+      }
+
+      logStatus(`   Processing IS-A parent fields for ${childEntities.length} child entit${childEntities.length === 1 ? 'y' : 'ies'}...`);
+
+      for (const childEntity of childEntities) {
+         try {
+            const { success, updated } = await this.manageSingleEntityParentFields(pool, childEntity);
+            anyUpdates = anyUpdates || updated;
+            if (!success) {
+               logError(`   Error managing IS-A parent fields for ${childEntity.Name}`);
+               bSuccess = false;
+            }
+         } catch (e) {
+            logError(`   Exception managing IS-A parent fields for ${childEntity.Name}: ${e}`);
+            bSuccess = false;
+         }
+      }
+
+      return { success: bSuccess, anyUpdates };
+   }
+
+   /**
+    * Creates/updates virtual EntityField records for a single child entity's parent fields.
+    * Detects field name collisions between child's own base table columns and parent fields.
+    */
+   protected async manageSingleEntityParentFields(pool: sql.ConnectionPool, childEntity: EntityInfo): Promise<{success: boolean, updated: boolean}> {
+      let bUpdated = false;
+
+      // Get all parent fields: non-PK, non-__mj_, non-virtual from each parent in chain
+      const parentFields = childEntity.AllParentFields;
+      if (parentFields.length === 0) {
+         return { success: true, updated: false };
+      }
+
+      // Get child's own (non-virtual) field names for collision detection
+      const childOwnFieldNames = new Set(
+         childEntity.Fields.filter(f => !f.IsVirtual).map(f => f.Name.toLowerCase())
+      );
+
+      for (const parentField of parentFields) {
+         // Collision detection: child's own base table column has same name as parent field.
+         // This uses in-memory metadata which filters to non-virtual (base table) fields only.
+         if (childOwnFieldNames.has(parentField.Name.toLowerCase())) {
+            logError(
+               `   FIELD COLLISION: Entity '${childEntity.Name}' has its own column '${parentField.Name}' ` +
+               `that conflicts with IS-A parent field '${parentField.Name}' from '${parentField.Entity}'. ` +
+               `Rename the child column to resolve this collision. Skipping IS-A field sync for this entity.`
+            );
+            return { success: false, updated: false };
+         }
+
+         // Check the DATABASE for existing field record — in-memory metadata may be stale
+         // (e.g. createNewEntityFieldsFromSchema may have already added this field from the view)
+         const existsResult = await pool.request()
+            .input('EntityID', childEntity.ID)
+            .input('FieldName', parentField.Name)
+            .query(`SELECT ID, IsVirtual, Type, Length, Precision, Scale, AllowsNull, AllowUpdateAPI
+                    FROM [${mj_core_schema()}].EntityField
+                    WHERE EntityID = @EntityID AND Name = @FieldName`);
+
+         if (existsResult.recordset.length > 0) {
+            // Field already exists — update it to ensure it's marked as a virtual IS-A field
+            const existingRow = existsResult.recordset[0];
+            const needsUpdate = !existingRow.IsVirtual ||
+               existingRow.Type?.trim().toLowerCase() !== parentField.Type.trim().toLowerCase() ||
+               existingRow.Length !== parentField.Length ||
+               existingRow.Precision !== parentField.Precision ||
+               existingRow.Scale !== parentField.Scale ||
+               existingRow.AllowsNull !== parentField.AllowsNull ||
+               !existingRow.AllowUpdateAPI;
+
+            if (needsUpdate) {
+               const sqlUpdate = `UPDATE [${mj_core_schema()}].EntityField
+                  SET IsVirtual=1,
+                      Type='${parentField.Type}',
+                      Length=${parentField.Length},
+                      Precision=${parentField.Precision},
+                      Scale=${parentField.Scale},
+                      AllowsNull=${parentField.AllowsNull ? 1 : 0},
+                      AllowUpdateAPI=1
+                  WHERE ID='${existingRow.ID}'`;
+               await this.LogSQLAndExecute(pool, sqlUpdate,
+                  `Update IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
+               bUpdated = true;
+            }
+         } else {
+            // Create new virtual field record for this parent field
+            const newFieldID = this.createNewUUID();
+            // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema
+            const sequence = 100000 + parentFields.indexOf(parentField);
+
+            const sqlInsert = `INSERT INTO [${mj_core_schema()}].EntityField (
+                  ID, EntityID, Name, Type, AllowsNull,
+                  Length, Precision, Scale,
+                  Sequence, IsVirtual, AllowUpdateAPI,
+                  IsPrimaryKey, IsUnique)
+               VALUES (
+                  '${newFieldID}', '${childEntity.ID}', '${parentField.Name}',
+                  '${parentField.Type}', ${parentField.AllowsNull ? 1 : 0},
+                  ${parentField.Length}, ${parentField.Precision}, ${parentField.Scale},
+                  ${sequence}, 1, 1, 0, 0)`;
+            await this.LogSQLAndExecute(pool, sqlInsert,
+               `Create IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
+            bUpdated = true;
+         }
+      }
+
+      // Remove stale IS-A parent virtual fields no longer in the parent chain.
+      // IS-A parent fields are identified by IsVirtual=true AND AllowUpdateAPI=true.
+      const currentParentFieldNames = new Set(parentFields.map(f => f.Name.toLowerCase()));
+      const staleFields = childEntity.Fields.filter(f =>
+         f.IsVirtual && f.AllowUpdateAPI &&
+         !f.IsPrimaryKey && !f.Name.startsWith('__mj_') &&
+         !currentParentFieldNames.has(f.Name.toLowerCase())
+      );
+
+      for (const staleField of staleFields) {
+         const sqlDelete = `DELETE FROM [${mj_core_schema()}].EntityField WHERE ID='${staleField.ID}'`;
+         await this.LogSQLAndExecute(pool, sqlDelete,
+            `Remove stale IS-A parent field ${staleField.Name} from ${childEntity.Name}`);
+         bUpdated = true;
+      }
+
+      if (bUpdated) {
+         const sqlUpdate = `UPDATE [${mj_core_schema()}].Entity SET [${EntityInfo.UpdatedAtFieldName}]=GETUTCDATE() WHERE ID='${childEntity.ID}'`;
+         await this.LogSQLAndExecute(pool, sqlUpdate,
+            `Update entity timestamp for ${childEntity.Name} after IS-A field sync`);
+      }
+
+      return { success: true, updated: bUpdated };
+   }
+
+   /**
+    * Checks if an existing virtual parent field record needs to be updated to match the parent field.
+    */
+   protected parentFieldNeedsUpdate(existing: EntityFieldInfo, parentField: EntityFieldInfo): boolean {
+      return existing.Type.trim().toLowerCase() !== parentField.Type.trim().toLowerCase() ||
+         existing.Length !== parentField.Length ||
+         existing.Precision !== parentField.Precision ||
+         existing.Scale !== parentField.Scale ||
+         existing.AllowsNull !== parentField.AllowsNull ||
+         !existing.AllowUpdateAPI;
    }
 
 
@@ -671,6 +1354,15 @@ export class ManageMetadataBase {
          logError('Error applying soft PK/FK configuration');
       }
       logStatus(`      Applied soft PK/FK configuration in ${(new Date().getTime() - stepConfigStartTime.getTime()) / 1000} seconds`);
+
+      // IS-A parent field sync: create/update virtual EntityField records for parent chain fields
+      const stepISAStartTime: Date = new Date();
+      const isaResult = await this.manageParentEntityFields(pool);
+      if (!isaResult.success) {
+         logError('Error managing IS-A parent entity fields');
+         bSuccess = false;
+      }
+      logStatus(`      Managed IS-A parent entity fields in ${(new Date().getTime() - stepISAStartTime.getTime()) / 1000} seconds`);
 
       const step4StartTime: Date = new Date();
       if (! await this.setDefaultColumnWidthWhereNeeded(pool, excludeSchemas)) {

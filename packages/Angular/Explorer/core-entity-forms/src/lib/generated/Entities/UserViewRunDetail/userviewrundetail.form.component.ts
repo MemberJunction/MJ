@@ -21,6 +21,3 @@ export class UserViewRunDetailFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserViewRunDetailFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

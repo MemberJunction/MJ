@@ -1,6 +1,6 @@
 import { MJEventType, MJGlobal, uuidv4, WarningManager } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
-import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, SimpleEmbeddingResult } from './interfaces';
+import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -613,12 +613,141 @@ export abstract class BaseEntity<T = unknown> {
     private _isLoading: boolean = false;
     private _pendingDelete$: Observable<boolean> | null = null;
 
+    /**************************************************************************
+     * IS-A Type Relationship — Parent Entity Composition
+     *
+     * For IS-A child entities, _parentEntity holds a persistent live reference
+     * to the parent entity instance. All data routing (Set/Get), dirty tracking,
+     * validation, and save/delete orchestration flow through this composition chain.
+     **************************************************************************/
+
+    /**
+     * Persistent reference to the parent entity in the IS-A chain.
+     * For example, if MeetingEntity IS-A ProductEntity, the MeetingEntity instance
+     * holds a reference to a ProductEntity instance here. This is null for entities
+     * that are not IS-A child types.
+     */
+    private _parentEntity: BaseEntity | null = null;
+
+    /**
+     * Cached set of field names that belong to parent entities — used for
+     * efficient O(1) lookup during Set/Get routing to determine if a field
+     * should be forwarded to _parentEntity.
+     */
+    private _parentEntityFieldNames: Set<string> | null = null;
+
+    /**
+     * Opaque provider-level transaction handle. Used by IS-A save/delete orchestration
+     * to share a single SQL transaction across the parent chain.
+     * On client (GraphQLDataProvider), this remains null.
+     * On server (SQLServerDataProvider), this holds a sql.Transaction.
+     */
+    private _providerTransaction: unknown = null;
+
+    /**
+     * Gets the provider transaction handle for IS-A chain orchestration.
+     */
+    get ProviderTransaction(): unknown { return this._providerTransaction; }
+
+    /**
+     * Sets the provider transaction handle. Used during IS-A save/delete to share
+     * a single database transaction across the entire parent chain.
+     */
+    set ProviderTransaction(value: unknown) { this._providerTransaction = value; }
+
+    /**
+     * Returns the parent entity in the IS-A composition chain, or null if this
+     * entity is not an IS-A child type. Read-only public access for inspection.
+     * Named ISAParentEntity to avoid collision with generated Entity.ParentEntity
+     * string column (which contains the parent entity's name from the view).
+     */
+    get ISAParentEntity(): BaseEntity | null { return this._parentEntity; }
+
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
         this._EntityInfo = Entity;
         EntityInfo.AssertEntityActiveStatus(Entity, 'BaseEntity::constructor');
         this._provider = Provider;
         this.init();
+    }
+
+    /**
+     * Initializes the IS-A parent entity composition chain. For child type entities,
+     * this creates the parent entity instance (and recursively its parent, etc.) and
+     * caches the parent field name set for routing.
+     *
+     * Must be called AFTER EntityInfo is available but BEFORE any Load/NewRecord/Set/Get.
+     * This is called by Metadata.GetEntityObject() after constructing the entity.
+     */
+    public async InitializeParentEntity(): Promise<void> {
+        if (!this.EntityInfo?.IsChildType) return;
+
+        const md = new Metadata();
+        const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
+        if (!parentEntityInfo) return;
+
+        // Create the parent entity via Metadata to ensure proper class factory resolution
+        this._parentEntity = await md.GetEntityObject(
+            parentEntityInfo.Name,
+            this._contextCurrentUser
+        );
+        // Recursive: the parent's InitializeParentEntity() was called by GetEntityObject()
+
+        // Cache the parent field names for O(1) routing lookups
+        this._parentEntityFieldNames = this.EntityInfo.ParentEntityFieldNames;
+    }
+
+    /**
+     * Resets this entity to a pristine state and populates it from the provided data object.
+     *
+     * Unlike {@link SetMany}, which incrementally updates existing field values, `Hydrate()`
+     * first resets ALL internal state — fields, composite key cache, loaded/saved flags —
+     * then populates from the provided data as if loading a fresh record from the database.
+     *
+     * This is critical for IS-A (table-per-type) inheritance: when a child entity loads
+     * its record, parent entities in the chain must be fully reset and re-populated from
+     * the child's view data, including the shared primary key. After `init()`, each
+     * EntityField's `_NeverSet` flag is `true`, allowing even ReadOnly PK fields to be
+     * set exactly once via `SetMany`.
+     *
+     * After population, entities are automatically marked as saved/loaded when all PK
+     * values are present (via {@link UpdateSavedStateFromPrimaryKeys}).
+     *
+     * The parent chain is handled recursively: if this entity has an IS-A parent, the
+     * parent is hydrated first (deepest ancestor first) via SetMany's built-in routing.
+     *
+     * @param data - A plain object whose properties map to field names on this entity
+     *               (and potentially parent entities in the IS-A chain).
+     */
+    public Hydrate(data: Record<string, unknown>): void {
+        // Reset this entity to pristine state: clears _compositeKey, _recordLoaded,
+        // _everSaved, and recreates all EntityField instances with _NeverSet = true
+        this.init();
+
+        // Recursively hydrate parent entities first (deepest ancestor resets first).
+        // After init(), parent fields have fresh _NeverSet=true, so SetMany can set PKs.
+        if (this._parentEntity) {
+            this._parentEntity.Hydrate(data);
+        }
+
+        // Populate this entity's fields. SetMany also routes parent field values to
+        // _parentEntity via the IS-A routing block (which now includes PK fields).
+        // replaceOldValues=true ensures OldValue matches Value (no false dirty flags).
+        // ignoreNonExistentFields=true because data may contain fields from other
+        // entities in the chain that don't exist on this entity.
+        this.SetMany(data, true, true, true);
+    }
+
+    /**
+     * Propagates the ProviderTransaction handle down the IS-A parent chain so all
+     * entities in the chain execute on the same database transaction.
+     */
+    protected PropagateTransactionToParents(): void {
+        let current = this._parentEntity;
+        while (current) {
+            current.ProviderTransaction = this._providerTransaction;
+            current = current._parentEntity;
+        }
     }
 
     /**
@@ -913,7 +1042,9 @@ export abstract class BaseEntity<T = unknown> {
      * Returns true if the object is Dirty, meaning something has changed since it was last saved to the database, and false otherwise. For new records, this will always return true.
      */
     get Dirty(): boolean {
-        return !this.IsSaved || this.Fields.some(f => f.Dirty);
+        return !this.IsSaved ||
+               this.Fields.some(f => f.Dirty) ||
+               (this._parentEntity?.Dirty ?? false);
     }
 
     /**
@@ -954,10 +1085,31 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Sets the value of a given field. If the field doesn't exist, nothing happens.
      * The field's type is used to convert the value to the appropriate type.
+     *
+     * For IS-A child entities, parent fields are routed to `_parentEntity.Set()` (recursive
+     * for N-level chains). The value is also mirrored on the child's own virtual EntityField
+     * so that code iterating `entity.Fields` still sees it. The authoritative state for parent
+     * fields lives on `_parentEntity`.
+     *
      * @param FieldName
      * @param Value
      */
     public Set(FieldName: string, Value: any) {
+        // IS-A routing: if this field belongs to a parent entity, route to parent
+        if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
+            this._parentEntity.Set(FieldName, Value); // recursive for N-level chains
+            // Also mirror the value on our own virtual EntityField for UI compatibility
+            this.SetLocal(FieldName, Value);
+            return;
+        }
+        this.SetLocal(FieldName, Value);
+    }
+
+    /**
+     * Internal helper that sets a field value directly on THIS entity's own Fields array
+     * without IS-A routing. Used by Set() for own-fields and for mirroring parent field values.
+     */
+    private SetLocal(FieldName: string, Value: any) {
         const field = this.GetFieldByName(FieldName);
         if (field != null) {
             if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
@@ -994,10 +1146,19 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Returns the value of the field with the given name. If the field is a date, and the value is a string, it will be converted to a date object.
+     *
+     * For IS-A child entities, parent fields return the authoritative value from `_parentEntity.Get()`
+     * (recursive for N-level chains), NOT the mirrored value on the child's own Fields array.
+     *
      * @param FieldName
      * @returns
      */
     public Get(FieldName: string): any {
+        // IS-A routing: return the authoritative value from the parent entity
+        if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
+            return this._parentEntity.Get(FieldName); // recursive for N-level chains
+        }
+
         const field = this.GetFieldByName(FieldName);
         if (field != null) {
             // if the field is a date and the value is a string, convert it to a date
@@ -1013,6 +1174,11 @@ export abstract class BaseEntity<T = unknown> {
      * NOTE: Do not call this method directly. Use the {@link From} method instead
      *
      * Sets any number of values on the entity object from the object passed in. The properties of the object being passed in must either match the field name (in most cases) or the CodeName (which is only different from field name if field name has spaces in it)
+     *
+     * For IS-A child entities, all fields are first set on self (including parent fields as mirrors),
+     * then parent fields are extracted and forwarded to `_parentEntity.SetMany()` for authoritative
+     * state, including proper OldValue tracking via the replaceOldValues parameter.
+     *
      * @param object
      * @param ignoreNonExistentFields - if set to true, fields that don't exist on the entity object will be ignored, if false, an error will be thrown if a field doesn't exist
      * @param replaceOldValues - if set to true, the old values of the fields will be reset to the values provided in the object parameter, if false, they will be left alone
@@ -1030,7 +1196,8 @@ export abstract class BaseEntity<T = unknown> {
                 if (ignoreActiveStatusAssertions) {
                     field.ActiveStatusAssertions = false; // disable active status assertions for this field
                 }
-                this.Set(key, object[key]);
+                // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
+                this.SetLocal(key, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
                 }
@@ -1047,7 +1214,8 @@ export abstract class BaseEntity<T = unknown> {
                     if (ignoreActiveStatusAssertions) {
                         field.ActiveStatusAssertions = false; // disable active status assertions for this field
                     }
-                    this.Set(field.Name, object[key]);
+                    // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
+                    this.SetLocal(field.Name, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
                     }
@@ -1056,6 +1224,12 @@ export abstract class BaseEntity<T = unknown> {
                     }
                 }
                 else {
+                    // IS-A routing: parent fields may not have local mirrors (virtual EntityField records)
+                    // yet — they'll be handled by the IS-A routing block below, so skip the error/warning
+                    if (this._parentEntityFieldNames?.has(key)) {
+                        continue; // parent field — will be forwarded to _parentEntity below
+                    }
+
                     // if we get here, we have a field that doesn't match either the field name or the code name, so throw an error
                     if (!ignoreNonExistentFields)
                         throw new Error(`Field ${key} does not exist on ${this.EntityInfo.Name}`);
@@ -1069,6 +1243,46 @@ export abstract class BaseEntity<T = unknown> {
                     }
                 }
             }
+        }
+
+        // IS-A routing: forward parent fields to _parentEntity for authoritative state
+        // This ensures proper OldValue tracking and dirty flags on the parent entity
+        if (this._parentEntity && this._parentEntityFieldNames) {
+            const parentData: Record<string, unknown> = {};
+            for (const key of Object.keys(object)) {
+                if (this._parentEntityFieldNames.has(key)) {
+                    parentData[key] = object[key];
+                }
+            }
+            if (Object.keys(parentData).length > 0) {
+                this._parentEntity.SetMany(parentData, true, replaceOldValues, ignoreActiveStatusAssertions);
+            }
+        }
+
+        // When replaceOldValues is true, this is a load operation (not a user edit).
+        // If all primary keys are set, mark the entity as a saved record. This is critical
+        // for IS-A parent entities whose data is populated via SetMany routing from the child's
+        // load — without this, the parent would think it's a new record and attempt CREATE
+        // instead of UPDATE on save.
+        if (replaceOldValues) {
+            this.UpdateSavedStateFromPrimaryKeys();
+        }
+    }
+
+    /**
+     * Checks if all primary key fields have values set, and if so, marks the entity as
+     * a saved/loaded record. This enables entities populated via SetMany (e.g., IS-A parent
+     * entities) to correctly recognize themselves as existing records.
+     */
+    private UpdateSavedStateFromPrimaryKeys(): void {
+        if (!this.PrimaryKeys || this.PrimaryKeys.length === 0) return;
+
+        const allPKsSet = this.PrimaryKeys.every(
+            pk => pk.Value !== null && pk.Value !== undefined
+        );
+        if (allPKsSet) {
+            this._recordLoaded = true;
+            this._everSaved = true;
         }
     }
 
@@ -1096,6 +1310,15 @@ export abstract class BaseEntity<T = unknown> {
                 field.ActiveStatusAssertions = tempStatus; // restore the prior status for assertions
             }
         }
+
+        // IS-A composition: merge parent entity data with own data
+        // Parent data goes first, own fields override (for shared PK 'ID')
+        // Parent's GetAll() recursively collects from its own parent for N-level chains
+        if (this._parentEntity) {
+            const parentData = this._parentEntity.GetAll(oldValues, onlyDirtyFields);
+            return { ...parentData, ...obj };
+        }
+
         return obj;
     }
 
@@ -1265,12 +1488,12 @@ export abstract class BaseEntity<T = unknown> {
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
         this._everSaved = false; // Reset save state for new record
-        
+
         // Generate UUID for non-auto-increment uniqueidentifier primary keys
         if (this.EntityInfo.PrimaryKeys.length === 1) {
             const pk = this.EntityInfo.PrimaryKeys[0];
-            if (!pk.AutoIncrement && 
-                pk.Type.toLowerCase().trim() === 'uniqueidentifier' && 
+            if (!pk.AutoIncrement &&
+                pk.Type.toLowerCase().trim() === 'uniqueidentifier' &&
                 !this.Get(pk.Name)) {
                 // Generate and set UUID for this primary key
                 const uuid = uuidv4();
@@ -1278,16 +1501,30 @@ export abstract class BaseEntity<T = unknown> {
                 const field = this.GetFieldByName(pk.Name);
                 if (field) {
                     // Reset the never set flag so that we can set this value later if needed, this is so that people who do deferred load after new record are still ok
-                    field.ResetNeverSetFlag(); 
+                    field.ResetNeverSetFlag();
                 }
             }
         }
-        
+
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
             });
         }
+
+        // IS-A composition: propagate PK value to parent entity chain
+        // Parent needs NewRecord() called first, then share the same PK value
+        if (this._parentEntity) {
+            this._parentEntity.NewRecord();
+            // Propagate PK — child and parent must share the same UUID
+            for (const pk of this.EntityInfo.PrimaryKeys) {
+                const pkValue = this.Get(pk.Name);
+                if (pkValue != null) {
+                    this._parentEntity.Set(pk.Name, pkValue);
+                }
+            }
+        }
+
         this.RaiseEvent('new_record', null);
         return true;
     }
@@ -1340,9 +1577,49 @@ export abstract class BaseEntity<T = unknown> {
         try {
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
 
+            // IS-A orchestration: determine if this is the initiating save in a parent chain
+            const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
+
+            // Begin provider transaction if IS-A initiator and NOT in a TransactionGroup
+            // TransactionGroup manages its own atomicity; IS-A just orchestrates save order within it
+            if (isISAInitiator && !this.TransactionGroup) {
+                const txn = await this.ProviderToUse?.BeginISATransaction?.();
+                if (txn) {
+                    this.ProviderTransaction = txn;
+                    this.PropagateTransactionToParents();
+                }
+            }
+
+            // Save parent chain first (root → branch → immediate parent)
+            // Parent calls Save() recursively which handles its own parents, permissions, validation
+            if (this._parentEntity) {
+                const parentSaveOptions = new EntitySaveOptions();
+                parentSaveOptions.IgnoreDirtyState = _options.IgnoreDirtyState;
+                parentSaveOptions.SkipEntityAIActions = _options.SkipEntityAIActions;
+                parentSaveOptions.SkipEntityActions = _options.SkipEntityActions;
+                parentSaveOptions.ReplayOnly = _options.ReplayOnly;
+                parentSaveOptions.SkipOldValuesCheck = _options.SkipOldValuesCheck;
+                parentSaveOptions.SkipAsyncValidation = _options.SkipAsyncValidation;
+                parentSaveOptions.IsParentEntitySave = true;
+
+                const parentResult = await this._parentEntity.Save(parentSaveOptions); // we know parent entity exists hre 
+                if (!parentResult) {
+                    // Parent save failed — rollback if we started the transaction
+                    await this.RollbackISATransaction(isISAInitiator);
+                    return false;
+                }
+            }
+
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
+
+            // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
+            // isn't already claimed by another child type (e.g., can't create Meeting
+            // if a Publication already exists with the same Product ID)
+            if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
+                await this.EnforceDisjointSubtype();
+            }
 
             if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
                 // Raise save_started event only when we're actually going to save
@@ -1359,22 +1636,22 @@ export abstract class BaseEntity<T = unknown> {
                     else {
                         // First run synchronous validation
                         valResult = this.Validate();
-                        
+
                         // Determine if we should run async validation:
                         // 1. Explicitly set in options, OR
                         // 2. Use the subclass's default if not specified in options
-                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ? 
+                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ?
                             _options.SkipAsyncValidation : this.DefaultSkipAsyncValidation;
-                            
+
                         // If not skipping async validation, run it - even if sync validation failed
                         // This ensures all validation errors (sync and async) are collected
                         if (!skipAsyncValidation) {
                             const asyncResult = await this.ValidateAsync();
-                            
+
                             // Combine the results of both validations
                             // If either validation fails, the overall result fails
                             valResult.Success = valResult.Success && asyncResult.Success;
-                            
+
                             // Add any async validation errors to the result
                             asyncResult.Errors.forEach(error => {
                                 valResult.Errors.push(error);
@@ -1385,13 +1662,21 @@ export abstract class BaseEntity<T = unknown> {
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
-                            return this.finalizeSave(data, saveSubType);
+                            const result = this.finalizeSave(data, saveSubType);
+
+                            // IS-A: commit transaction after successful save (only the initiator commits)
+                            if (isISAInitiator && this.ProviderTransaction) {
+                                await this.ProviderToUse.CommitISATransaction?.(this.ProviderTransaction);
+                                this.ProviderTransaction = null;
+                            }
+
+                            return result;
                         }
                         else {
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
-                                if (success) {
-                                    const transItem = results.find(r => r.Transaction.BaseEntity === this); 
+                                if (success && results) {
+                                    const transItem = results.find(r => r.Transaction.BaseEntity === this);
                                     if (transItem) {
                                         this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                     }
@@ -1415,7 +1700,11 @@ export abstract class BaseEntity<T = unknown> {
             else
                 return true; // nothing to save since we're not dirty
         }
-        catch (e) {
+        catch (e: any) {
+            // IS-A: rollback transaction on failure (only the initiator rolls back)
+            const isISAInitiator = this._parentEntity != null && !options?.IsParentEntitySave;
+            await this.RollbackISATransaction(isISAInitiator);
+
             if (currentResultCount === this.ResultHistory.length) {
                 // this means that NO new results were added to the history anywhere
                 // so we need to add a new result to the history here
@@ -1429,6 +1718,21 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             return false;
+        }
+    }
+
+    /**
+     * Helper to rollback an IS-A provider transaction if one is active.
+     * Only called by the IS-A initiator (the leaf entity that started the chain).
+     */
+    private async RollbackISATransaction(isInitiator: boolean): Promise<void> {
+        if (isInitiator && this.ProviderTransaction) {
+            try {
+                await this.ProviderToUse?.RollbackISATransaction?.(this.ProviderTransaction);
+            } catch (rollbackError) {
+                LogError(`Error rolling back IS-A transaction: ${rollbackError}`);
+            }
+            this.ProviderTransaction = null;
         }
     }
 
@@ -1467,6 +1771,17 @@ export abstract class BaseEntity<T = unknown> {
         const u: UserInfo = this.ActiveUser;
         if (!u)
             throw new Error('No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set');
+
+        // Virtual entities are read-only — block Create, Update, Delete at the ORM level
+        // This catches server-side code calling .Save()/.Delete() directly, which bypasses the API layer flags
+        if (this.EntityInfo.VirtualEntity &&
+            (type === EntityPermissionType.Create ||
+             type === EntityPermissionType.Update ||
+             type === EntityPermissionType.Delete)) {
+            const msg = `Cannot ${type} on virtual entity '${this.EntityInfo.Name}' — virtual entities are read-only`;
+            if (throwError) throw new Error(msg);
+            return false;
+        }
 
         // first check if the AllowCreateAPI/AllowUpdateAPI/AllowDeleteAPI settings are flipped on for the entity in question
         switch (type) {
@@ -1542,6 +1857,10 @@ export abstract class BaseEntity<T = unknown> {
             for (let field of this.Fields) {
                 field.Value = field.OldValue;
             }
+            // IS-A composition: revert parent entity chain as well
+            if (this._parentEntity) {
+                this._parentEntity.Revert();
+            }
         }
         return true;
     }
@@ -1579,6 +1898,14 @@ export abstract class BaseEntity<T = unknown> {
             if (!data) {
                 LogError(`Error in BaseEntity.Load(${this.EntityInfo.Name}, Key: ${CompositeKey.ToString()}`);
                 return false; // no data loaded, return false
+            }
+
+            // IS-A: hydrate parent chain from loaded data before populating self.
+            // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
+            // then populates from data. This must happen before self's SetMany so parents
+            // are in clean state when they receive routed field values.
+            if (this._parentEntity) {
+                this._parentEntity.Hydrate(data);
             }
 
             this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
@@ -1659,11 +1986,17 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean> - Returns true if the load was successful
      */
     public async LoadFromData(data: any, _replaceOldValues: boolean = false): Promise<boolean> {
+        // IS-A: hydrate parent chain from data before populating self.
+        // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
+        // then populates from data, ensuring correct PK and saved state on parents.
+        if (this._parentEntity) {
+            this._parentEntity.Hydrate(data);
+        }
+
         this.SetMany(data, true, _replaceOldValues, true); // ignore non-existent fields, but DO replace old values based on the provided param
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
         if (this.PrimaryKeys && this.PrimaryKeys.length > 0) {
-            // chck each pkey's value to make sur it is set
             this._recordLoaded = true; // all primary keys are set, so we are loaded
             this._everSaved = true; // Mark as saved since we loaded from data
             for (let pkey of this.PrimaryKeys) {
@@ -1679,6 +2012,7 @@ export abstract class BaseEntity<T = unknown> {
             this._recordLoaded = false;
             this._everSaved = false; // Mark as NOT saved since we loaded from data without primary keys
         }
+
         return true;
     }
 
@@ -1692,7 +2026,21 @@ export abstract class BaseEntity<T = unknown> {
         const result = new ValidationResult();
         result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
 
+        // IS-A composition: validate parent entity first to collect all chain errors
+        if (this._parentEntity) {
+            const parentResult = this._parentEntity.Validate();
+            if (!parentResult.Success) {
+                result.Success = false;
+                parentResult.Errors.forEach(err => result.Errors.push(err));
+            }
+        }
+
+        // Validate own fields — for IS-A entities, skip parent field mirrors since
+        // those are validated via _parentEntity above
         for (let field of this.Fields) {
+            if (this._parentEntityFieldNames?.has(field.Name))
+                continue; // skip parent field mirrors — authoritative validation is on _parentEntity
+
             const err = field.Validate();
             err.Errors.forEach(element => {
                 result.Errors.push(element);
@@ -1782,6 +2130,49 @@ export abstract class BaseEntity<T = unknown> {
                 throw new Error('No provider set');
             }
             else{
+                const _options: EntityDeleteOptions = options ? options : new EntityDeleteOptions();
+
+                // IS-A orchestration: determine if this is the initiating delete
+                const hasParentChain = this._parentEntity != null;
+                const isISAInitiator = hasParentChain && !_options.IsParentEntityDelete;
+
+                // IS-A parent delete protection: prevent deleting a parent record
+                // that has child records — FK constraints require child deletion first.
+                // If CascadeDeletes is enabled, auto-delete child records through the chain.
+                if (this.EntityInfo.IsParentType && !_options.IsParentEntityDelete) {
+                    const childCheck = await this.CheckForChildRecords();
+                    if (childCheck.HasChildren) {
+                        if (this.EntityInfo.CascadeDeletes) {
+                            // CascadeDeletes enabled: auto-delete the child record
+                            // This will recursively cascade through the IS-A chain
+                            const cascadeResult = await this.CascadeDeleteChildRecord(childCheck, _options);
+                            if (!cascadeResult) {
+                                throw new Error(
+                                    `Cascade delete failed for ${childCheck.ChildEntityName} child record ` +
+                                    `of ${this.EntityInfo.Name} '${this.PrimaryKey.Values()}'.`
+                                );
+                            }
+                            // After cascade, proceed with our own delete (parent chain will be handled)
+                        } else {
+                            throw new Error(
+                                `Cannot delete ${this.EntityInfo.Name} record '${this.PrimaryKey.Values()}': ` +
+                                `it is referenced as a ${childCheck.ChildEntityName} record. ` +
+                                `Delete the ${childCheck.ChildEntityName} record first, ` +
+                                `or enable CascadeDeletes on the ${this.EntityInfo.Name} entity.`
+                            );
+                        }
+                    }
+                }
+
+                // Begin provider transaction if IS-A initiator and NOT in a TransactionGroup
+                if (isISAInitiator && !this.TransactionGroup) {
+                    const txn = await this.ProviderToUse?.BeginISATransaction?.();
+                    if (txn) {
+                        this.ProviderTransaction = txn;
+                        this.PropagateTransactionToParents();
+                    }
+                }
+
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
 
                 // Raise delete_started event before the actual delete operation begins
@@ -1796,7 +2187,31 @@ export abstract class BaseEntity<T = unknown> {
                     includeRelatedEntityData: false,
                     relatedEntityList: null
                 });
-                if (await this.ProviderToUse.Delete(this, options, this.ActiveUser)) {
+
+                // Delete OWN row first (FK constraint: child must be deleted before parent)
+                if (await this.ProviderToUse.Delete(this, _options, this.ActiveUser)) {
+                    // IS-A: after own delete succeeds, cascade to parent chain
+                    if (hasParentChain) {
+                        const parentDeleteOptions = new EntityDeleteOptions();
+                        parentDeleteOptions.SkipEntityAIActions = _options.SkipEntityAIActions;
+                        parentDeleteOptions.SkipEntityActions = _options.SkipEntityActions;
+                        parentDeleteOptions.ReplayOnly = _options.ReplayOnly;
+                        parentDeleteOptions.IsParentEntityDelete = true;
+
+                        const parentResult = await this._parentEntity.Delete(parentDeleteOptions);
+                        if (!parentResult) {
+                            // Parent delete failed — rollback if we started the transaction
+                            await this.RollbackISATransaction(isISAInitiator);
+                            return false;
+                        }
+                    }
+
+                    // IS-A: commit transaction after successful chain delete
+                    if (isISAInitiator && this.ProviderTransaction) {
+                        await this.ProviderToUse.CommitISATransaction?.(this.ProviderTransaction);
+                        this.ProviderTransaction = null;
+                    }
+
                     if (!this.TransactionGroup) {
                         // NOT part of a transaction - raise event immediately
 
@@ -1830,11 +2245,15 @@ export abstract class BaseEntity<T = unknown> {
                     }
                     return true;
                 }
-                else // record didn't save, return false, but also don't wipe out the entity like we do if the Delete() worked
+                else // record didn't delete, return false, but also don't wipe out the entity like we do if the Delete() worked
                     return false;
             }
         }
         catch (e) {
+            // IS-A: rollback transaction on failure (only the initiator rolls back)
+            const isISAInitiator = this._parentEntity != null && !options?.IsParentEntityDelete;
+            await this.RollbackISATransaction(isISAInitiator);
+
             if (currentResultCount === this.ResultHistory.length) {
                 // this means that NO new results were added to the history anywhere
                 // so we need to add a new result to the history here
@@ -1847,6 +2266,188 @@ export abstract class BaseEntity<T = unknown> {
                 this.ResultHistory.push(newResult);
             }
             return false;
+        }
+    }
+
+    /**
+     * Checks if this entity has any child records in IS-A child entity tables.
+     * Used for parent delete protection — a parent record cannot be deleted
+     * while child type records referencing it still exist.
+     * @returns Object with HasChildren flag and the name of the child entity found
+     */
+    protected async CheckForChildRecords(): Promise<{ HasChildren: boolean; ChildEntityName: string }> {
+        const childEntities = this.EntityInfo.ChildEntities;
+        if (childEntities.length === 0) {
+            return { HasChildren: false, ChildEntityName: '' };
+        }
+
+        // Use RunView to check each child entity for records with our PK
+        const rv = new RunView();
+        const pkValue = this.PrimaryKey.Values();
+
+        for (const childEntity of childEntities) {
+            const pkField = childEntity.PrimaryKeys[0];
+            if (!pkField) continue;
+
+            const result = await rv.RunView({
+                EntityName: childEntity.Name,
+                ExtraFilter: `${pkField.Name} = '${pkValue}'`,
+                ResultType: 'simple',
+                Fields: [pkField.Name],
+                MaxRows: 1
+            }, this._contextCurrentUser);
+
+            if (result && result.Success && result.Results && result.Results.length > 0) {
+                return { HasChildren: true, ChildEntityName: childEntity.Name };
+            }
+        }
+
+        return { HasChildren: false, ChildEntityName: '' };
+    }
+
+    /**
+     * Cascade-deletes an IS-A child record when the parent entity has CascadeDeletes enabled.
+     * Loads the child entity, then deletes it through the normal IS-A chain. The child's
+     * delete will cascade further down if it also has children and CascadeDeletes.
+     */
+    protected async CascadeDeleteChildRecord(
+        childCheck: { HasChildren: boolean; ChildEntityName: string },
+        parentOptions: EntityDeleteOptions
+    ): Promise<boolean> {
+        const md = new Metadata();
+        const childEntity = await md.GetEntityObject<BaseEntity>(
+            childCheck.ChildEntityName,
+            this._contextCurrentUser
+        );
+        if (!childEntity) return false;
+
+        // Load the child record using the same PK as this parent
+        const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+        if (!loaded) return false;
+
+        // If the child entity itself is a parent with cascade, its delete will
+        // handle its own children recursively through _InnerDelete
+        const deleteOptions = new EntityDeleteOptions();
+        deleteOptions.SkipEntityAIActions = parentOptions.SkipEntityAIActions;
+        deleteOptions.SkipEntityActions = parentOptions.SkipEntityActions;
+        deleteOptions.ReplayOnly = parentOptions.ReplayOnly;
+        // Note: do NOT set IsParentEntityDelete — the child is the chain initiator
+        return childEntity.Delete(deleteOptions);
+    }
+
+    /**
+     * Resolves the leaf (most-derived) entity type for a given parent entity record.
+     * Walks down the IS-A child hierarchy to find which child type a record belongs to.
+     * Returns the child entity name, or the parent's own name if no children exist.
+     * Useful for polymorphic operations where you have a parent record and need
+     * to know its actual leaf type.
+     *
+     * @param entityName The parent entity name
+     * @param primaryKey The primary key to look up
+     * @param contextUser Optional context user for server-side operations
+     * @returns The leaf entity name and whether it was resolved to a child type
+     */
+    public static async ResolveLeafEntity(
+        entityName: string,
+        primaryKey: CompositeKey,
+        contextUser?: UserInfo
+    ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        if (!entityInfo) {
+            return { LeafEntityName: entityName, IsLeaf: true };
+        }
+
+        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser);
+    }
+
+    /**
+     * Internal recursive helper for leaf entity resolution.
+     * Walks down the child hierarchy until no more children are found.
+     */
+    private static async ResolveLeafEntityRecursive(
+        entityInfo: EntityInfo,
+        primaryKey: CompositeKey,
+        contextUser?: UserInfo
+    ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
+        const childEntities = entityInfo.ChildEntities;
+        if (childEntities.length === 0) {
+            return { LeafEntityName: entityInfo.Name, IsLeaf: true };
+        }
+
+        const rv = new RunView();
+        const pkValue = primaryKey.Values();
+
+        for (const child of childEntities) {
+            const childPK = child.PrimaryKeys[0];
+            if (!childPK) continue;
+
+            const result = await rv.RunView({
+                EntityName: child.Name,
+                ExtraFilter: `${childPK.Name} = '${pkValue}'`,
+                ResultType: 'simple',
+                Fields: [childPK.Name],
+                MaxRows: 1
+            }, contextUser);
+
+            if (result?.Success && result.Results?.length > 0) {
+                // Found a child — recurse to see if there's an even more specific leaf
+                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser);
+            }
+        }
+
+        // No child found — this entity IS the leaf
+        return { LeafEntityName: entityInfo.Name, IsLeaf: true };
+    }
+
+    /**
+     * Enforces disjoint subtype constraint during IS-A child entity creation.
+     * A parent record can only be ONE child type at a time. Checks all sibling
+     * child types (excluding self) for records with the same PK value.
+     * Throws if a sibling child record is found.
+     *
+     * Only runs on Database providers — client-side (Network/GraphQL) skips this
+     * because the server-side save will perform the check authoritatively.
+     */
+    protected async EnforceDisjointSubtype(): Promise<void> {
+        // Skip on client-side providers — the server will enforce this during its save
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        if (md.ProviderType !== ProviderType.Database) return;
+
+        const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
+        if (!parentEntityInfo) return;
+
+        const siblingChildEntities = parentEntityInfo.ChildEntities.filter(
+            e => e.ID !== this.EntityInfo.ID
+        );
+        if (siblingChildEntities.length === 0) return;
+
+        const pkValue = this.PrimaryKey.Values();
+        if (!pkValue) return;
+
+        // Build all sibling queries and execute them in a single batch
+        const rv = new RunView();
+        const validSiblings = siblingChildEntities.filter(s => s.PrimaryKeys[0]);
+        if (validSiblings.length === 0) return;
+
+        const viewParams = validSiblings.map(sibling => ({
+            EntityName: sibling.Name,
+            ExtraFilter: `${sibling.PrimaryKeys[0].Name} = '${pkValue}'`,
+            ResultType: 'simple' as const,
+            Fields: [sibling.PrimaryKeys[0].Name],
+            MaxRows: 1
+        }));
+
+        const results = await rv.RunViews(viewParams, this._contextCurrentUser);
+        for (let i = 0; i < results.length; i++) {
+            const result = results[i];
+            if (result?.Success && result.Results?.length > 0) {
+                const sibling = validSiblings[i];
+                throw new Error(
+                    `Cannot create ${this.EntityInfo.Name} record: ID '${pkValue}' already exists as ${sibling.Name}. ` +
+                    `A ${parentEntityInfo.Name} record can only be one child type at a time.`
+                );
+            }
         }
     }
 

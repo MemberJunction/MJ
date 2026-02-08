@@ -91,8 +91,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             // New rows to insert (IDs 11-15)
@@ -121,8 +120,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             // Update first 3 records with new data
@@ -160,8 +158,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             // Delete first 3 records - using CompositeKey format "Field|Value"
@@ -200,8 +197,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             // Mixed operations:
@@ -247,8 +243,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                500
+                '2024-06-15T00:00:00.000Z'
             );
 
             // Update 50 records, delete 25, insert 25
@@ -295,8 +290,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             const result = await cacheManager.ApplyDifferentialUpdate(
@@ -325,8 +319,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                3
+                '2024-06-15T00:00:00.000Z'
             );
 
             const result = await cacheManager.ApplyDifferentialUpdate(
@@ -358,8 +351,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                3
+                '2024-06-15T00:00:00.000Z'
             );
 
             const result = await cacheManager.ApplyDifferentialUpdate(
@@ -383,8 +375,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                20
+                '2024-06-15T00:00:00.000Z'
             );
 
             // Delete using composite key format "Field1|Value1||Field2|Value2"
@@ -414,8 +405,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             // Malformed keys - these should not cause errors
@@ -449,8 +439,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                2
+                '2024-06-15T00:00:00.000Z'
             );
 
             // Try to delete the record with pipe in value
@@ -486,8 +475,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 guidRows,
-                '2024-06-15T00:00:00.000Z',
-                3
+                '2024-06-15T00:00:00.000Z'
             );
 
             const result = await cacheManager.ApplyDifferentialUpdate(
@@ -518,8 +506,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 numericRows,
-                '2024-06-15T00:00:00.000Z',
-                3
+                '2024-06-15T00:00:00.000Z'
             );
 
             const result = await cacheManager.ApplyDifferentialUpdate(
@@ -544,8 +531,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             await cacheManager.ApplyDifferentialUpdate(
@@ -570,8 +556,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             await cacheManager.ApplyDifferentialUpdate(
@@ -597,8 +582,7 @@ describe('LocalCacheManager Differential Caching', () => {
                 testFingerprint,
                 testParams,
                 initialRows,
-                '2024-06-15T00:00:00.000Z',
-                10
+                '2024-06-15T00:00:00.000Z'
             );
 
             // Simulate storage failure during read
@@ -646,8 +630,7 @@ describe('LocalCacheManager - Cache Operations', () => {
             testFingerprint,
             testParams,
             rows,
-            '2024-06-15T00:00:00.000Z',
-            10
+            '2024-06-15T00:00:00.000Z'
         );
 
         const cached = await cacheManager.GetRunViewResult(testFingerprint);
@@ -668,8 +651,7 @@ describe('LocalCacheManager - Cache Operations', () => {
             testFingerprint,
             testParams,
             rows,
-            '2024-06-15T00:00:00.000Z',
-            10
+            '2024-06-15T00:00:00.000Z'
         );
 
         await cacheManager.InvalidateRunViewResult(testFingerprint);

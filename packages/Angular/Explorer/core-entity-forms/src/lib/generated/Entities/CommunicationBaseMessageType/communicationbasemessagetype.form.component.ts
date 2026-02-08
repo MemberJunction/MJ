@@ -25,6 +25,3 @@ export class CommunicationBaseMessageTypeFormComponent extends BaseFormComponent
     }
 }
 
-export function LoadCommunicationBaseMessageTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

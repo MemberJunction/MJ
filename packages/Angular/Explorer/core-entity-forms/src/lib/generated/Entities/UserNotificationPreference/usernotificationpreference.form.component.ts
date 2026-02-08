@@ -22,6 +22,3 @@ export class UserNotificationPreferenceFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserNotificationPreferenceFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

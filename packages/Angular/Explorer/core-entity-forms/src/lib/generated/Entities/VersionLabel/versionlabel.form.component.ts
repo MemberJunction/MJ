@@ -28,6 +28,3 @@ export class VersionLabelFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadVersionLabelFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

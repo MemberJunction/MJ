@@ -17,12 +17,8 @@ export class ConversationDetailArtifactFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'coreIdentifiers', sectionName: 'Core Identifiers', isExpanded: true },
             { sectionKey: 'artifactDetails', sectionName: 'Artifact Details', isExpanded: true },
-            { sectionKey: 'conversationContent', sectionName: 'Conversation Content', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }
 
-export function LoadConversationDetailArtifactFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

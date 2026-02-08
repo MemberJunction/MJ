@@ -786,9 +786,13 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     get ReadOnly(): boolean {
-        return this.IsVirtual || 
-               !this.AllowUpdateAPI || 
-               this.IsPrimaryKey || 
+        // Note: IsVirtual is intentionally NOT checked here. For IS-A (table-per-type) inheritance,
+        // parent entity fields on child entities are marked IsVirtual=1 (they don't exist in the
+        // child's base table) but ARE editable via the parent save chain. The AllowUpdateAPI flag
+        // already correctly distinguishes editable IS-A parent fields (AllowUpdateAPI=1) from
+        // truly read-only virtual fields like joined display names (AllowUpdateAPI=0).
+        return !this.AllowUpdateAPI ||
+               this.IsPrimaryKey ||
                this.IsSpecialDateField;
     }
 
@@ -1462,16 +1466,130 @@ export class EntityInfo extends BaseInfo {
     get NameField(): EntityFieldInfo | null {
       const f = this.Fields.find((f) => f.IsNameField);
 
-      if (!f) 
+      if (!f)
         return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
       else
         return f;
     }
 
+    /**************************************************************************
+     * IS-A Type Relationship Computed Properties
+     *
+     * These properties support the IS-A (parent/child type) inheritance model
+     * where child entities share their parent's primary key and inherit all
+     * parent fields. Example: Meeting IS-A Product, Webinar IS-A Meeting.
+     **************************************************************************/
+
+    /**
+     * Returns the parent EntityInfo for IS-A type inheritance, or null if this entity
+     * has no parent type. Uses the existing ParentID column on the Entity table.
+     * Example: For "Meetings" entity with ParentID pointing to "Products", returns the Products EntityInfo.
+     */
+    get ParentEntityInfo(): EntityInfo | null {
+        if (!this.ParentID) return null;
+        return Metadata.Provider?.Entities?.find(e => e.ID === this.ParentID) ?? null;
+    }
+
+    /**
+     * Returns all child entities that have their ParentID set to this entity's ID.
+     * These represent IS-A type specializations of this entity.
+     * Example: For "Products" entity, might return [Meetings, Publications].
+     */
+    get ChildEntities(): EntityInfo[] {
+        return Metadata.Provider?.Entities?.filter(e => e.ParentID === this.ID) ?? [];
+    }
+
+    // Cache for ParentChain to avoid repeated walks
+    private _parentChainCache: EntityInfo[] | null = null;
+
+    /**
+     * Walks the IS-A chain upward from this entity to the root, returning all parent entities.
+     * Does NOT include this entity itself.
+     * Example: For Webinars (IS-A Meetings IS-A Products), returns [Meetings, Products].
+     * Results are cached after first computation for performance.
+     */
+    get ParentChain(): EntityInfo[] {
+        if (this._parentChainCache !== null) return this._parentChainCache;
+
+        const chain: EntityInfo[] = [];
+        let current = this.ParentEntityInfo;
+        const visited = new Set<string>(); // circular reference protection
+        while (current) {
+            if (visited.has(current.ID)) break; // prevent infinite loop
+            visited.add(current.ID);
+            chain.push(current);
+            current = current.ParentEntityInfo;
+        }
+        this._parentChainCache = chain;
+        return chain;
+    }
+
+    /**
+     * Returns true if this entity is a child type in an IS-A relationship (has a parent entity).
+     */
+    get IsChildType(): boolean {
+        return this.ParentID != null;
+    }
+
+    /**
+     * Returns true if this entity is a parent type in an IS-A relationship (has child entities).
+     */
+    get IsParentType(): boolean {
+        return this.ChildEntities.length > 0;
+    }
+
+    /**
+     * Returns all fields from all parent entities in the IS-A chain, excluding primary keys,
+     * virtual fields, and timestamp fields (__mj_ prefixed). These represent the inherited
+     * fields that should be available on child entities.
+     */
+    get AllParentFields(): EntityFieldInfo[] {
+        const fields: EntityFieldInfo[] = [];
+        for (const parent of this.ParentChain) {
+            fields.push(...parent.Fields.filter(
+                f => !f.IsPrimaryKey && !f.Name.startsWith('__mj_') && !f.IsVirtual
+            ));
+        }
+        return fields;
+    }
+
+    // Cache for ParentEntityFieldNames
+    private _parentEntityFieldNamesCache: Set<string> | null = null;
+
+    /**
+     * Returns a cached Set of field names that belong to parent entities in the IS-A chain,
+     * including the shared primary key(s). Used for efficient field routing in
+     * BaseEntity.Set/Get/SetMany/Hydrate operations.
+     * The Set enables O(1) lookup to determine if a field should be routed to the parent entity.
+     *
+     * Note: AllParentFields excludes PKs (they aren't "inherited data" fields), but the
+     * routing set must include them so that SetMany and Hydrate can forward the shared
+     * IS-A primary key to parent entities.
+     */
+    get ParentEntityFieldNames(): Set<string> {
+        if (this._parentEntityFieldNamesCache !== null) return this._parentEntityFieldNamesCache;
+
+        const names = this.AllParentFields.map(f => f.Name);
+
+        // Add shared PK names from the immediate parent — these are excluded from
+        // AllParentFields but must be routed so parent entities receive their identity.
+        const parentEntity = this.ParentEntityInfo;
+        if (parentEntity) {
+            for (const pk of parentEntity.PrimaryKeys) {
+                if (!names.includes(pk.Name)) {
+                    names.push(pk.Name);
+                }
+            }
+        }
+
+        this._parentEntityFieldNamesCache = new Set(names);
+        return this._parentEntityFieldNamesCache;
+    }
+
     /**
      * Returns the Permissions for this entity for a given user, based on the roles the user is part of
-     * @param user 
-     * @returns 
+     * @param user
+     * @returns
      */
     public GetUserPermisions(user: UserInfo ): EntityUserPermissionInfo {
         try {

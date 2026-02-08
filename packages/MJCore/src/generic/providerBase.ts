@@ -1776,9 +1776,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
-                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this); 
+                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this);
                     await newObject.Config(actualContextUser);
-                    
+
+                    // Initialize IS-A parent entity composition chain before any data operations
+                    await newObject.InitializeParentEntity();
+
                     if (actualLoadKey) {
                         // Load existing record
                         const loadResult = await newObject.InnerLoad(actualLoadKey);

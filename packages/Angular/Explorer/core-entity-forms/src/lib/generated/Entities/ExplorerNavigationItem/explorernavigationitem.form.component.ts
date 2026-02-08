@@ -23,6 +23,3 @@ export class ExplorerNavigationItemFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadExplorerNavigationItemFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -6940,10 +6940,6 @@ export class MJAIResultCache_ {
     @MaxLength(200)
     Configuration?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    PromptRun?: string;
-        
 }
 
 //****************************************************************************
@@ -13896,10 +13892,6 @@ export class MJConversation_ {
     @MaxLength(510)
     Project?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    TestRun?: string;
-        
     @Field(() => [MJConversationDetail_])
     ConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to ConversationDetails
     
@@ -15845,10 +15837,6 @@ export class MJDuplicateRunDetail_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(510)
-    DuplicateRun: string;
-        
     @Field(() => [MJDuplicateRunDetailMatch_])
     DuplicateRunDetailMatches_DuplicateRunDetailIDArray: MJDuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
     
@@ -16304,10 +16292,6 @@ export class MJEmployeeCompanyIntegration_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(162)
-    Employee?: string;
-        
     @Field() 
     @MaxLength(510)
     CompanyIntegration: string;
@@ -16472,10 +16456,6 @@ export class MJEmployeeRole_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(162)
-    Employee?: string;
-        
     @Field() 
     @MaxLength(100)
     Role: string;
@@ -16627,10 +16607,6 @@ export class MJEmployeeSkill_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(162)
-    Employee?: string;
         
     @Field() 
     @MaxLength(100)
@@ -17410,11 +17386,11 @@ export class MJEntity_ {
     @Field(() => [MJRecordLink_])
     MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
     
-    @Field(() => [MJAIAgentNote_])
-    AIAgentNotes_PrimaryScopeEntityIDArray: MJAIAgentNote_[]; // Link to AIAgentNotes
-    
     @Field(() => [MJAIAgentExample_])
     MJ_AIAgentExamples_PrimaryScopeEntityIDArray: MJAIAgentExample_[]; // Link to MJ_AIAgentExamples
+    
+    @Field(() => [MJAIAgentNote_])
+    AIAgentNotes_PrimaryScopeEntityIDArray: MJAIAgentNote_[]; // Link to AIAgentNotes
     
     @Field(() => [MJVersionLabel_])
     MJ_VersionLabels_EntityIDArray: MJVersionLabel_[]; // Link to MJ_VersionLabels
@@ -18257,17 +18233,6 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJAIAgentNote_])
-    async AIAgentNotes_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIAgentExample_])
     async MJ_AIAgentExamples_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
@@ -18276,6 +18241,17 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentExamples] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Examples', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Examples', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentNote_])
+    async AIAgentNotes_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -18405,13 +18381,6 @@ export class MJEntityActionFilter_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(850)
-    EntityAction: string;
-        
-    @Field() 
-    ActionFilter: string;
         
 }
 
@@ -18748,10 +18717,6 @@ export class MJEntityActionInvocation_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(850)
-    EntityAction: string;
-        
-    @Field() 
     @MaxLength(510)
     InvocationType: string;
         
@@ -18918,10 +18883,6 @@ export class MJEntityActionParam_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(850)
-    EntityAction: string;
         
     @Field() 
     @MaxLength(510)
@@ -19574,10 +19535,6 @@ export class MJEntityCommunicationField_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(200)
-    EntityCommunicationMessageType: string;
         
 }
 
@@ -22748,14 +22705,6 @@ export class MJErrorLog_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    CompanyIntegrationRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(900)
-    CompanyIntegrationRunDetail?: string;
         
 }
 
@@ -28428,14 +28377,6 @@ detailed information about what validation rules failed.`})
         
     @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
     Comments?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    AgentRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    Parent?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -35079,11 +35020,11 @@ export class MJAPIApplication_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => [MJAPIApplicationScope_])
-    MJ_APIApplicationScopes_ApplicationIDArray: MJAPIApplicationScope_[]; // Link to MJ_APIApplicationScopes
-    
     @Field(() => [MJAPIKeyUsageLog_])
     MJ_APIKeyUsageLogs_ApplicationIDArray: MJAPIKeyUsageLog_[]; // Link to MJ_APIKeyUsageLogs
+    
+    @Field(() => [MJAPIApplicationScope_])
+    MJ_APIApplicationScopes_ApplicationIDArray: MJAPIApplicationScope_[]; // Link to MJ_APIApplicationScopes
     
     @Field(() => [MJAPIKeyApplication_])
     MJ_APIKeyApplications_ApplicationIDArray: MJAPIKeyApplication_[]; // Link to MJ_APIKeyApplications
@@ -35188,17 +35129,6 @@ export class MJAPIApplicationResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJAPIApplicationScope_])
-    async MJ_APIApplicationScopes_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIApplicationScopes] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Application Scopes', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAPIKeyUsageLog_])
     async MJ_APIKeyUsageLogs_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Key Usage Logs', userPayload);
@@ -35207,6 +35137,17 @@ export class MJAPIApplicationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeyUsageLogs] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Usage Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Key Usage Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIApplicationScope_])
+    async MJ_APIApplicationScopes_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIApplicationScopes] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Application Scopes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -40204,9 +40145,6 @@ export class MJConversationDetailArtifact_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    ConversationDetail: string;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     ArtifactVersion?: string;
@@ -40631,9 +40569,6 @@ export class MJConversationDetailRating_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    ConversationDetail: string;
         
     @Field() 
     @MaxLength(200)
@@ -44391,10 +44326,6 @@ export class MJMCPServerConnectionTool_ {
     @MaxLength(510)
     MCPServerConnection: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    MCPServerTool?: string;
-        
 }
 
 //****************************************************************************
@@ -44626,14 +44557,14 @@ export class MJMCPServerConnection_ {
     @Field(() => [MJMCPToolExecutionLog_])
     MJ_MCPToolExecutionLogs_MCPServerConnectionIDArray: MJMCPToolExecutionLog_[]; // Link to MJ_MCPToolExecutionLogs
     
-    @Field(() => [MJOAuthAuthorizationState_])
-    MJ_OAuthAuthorizationStates_MCPServerConnectionIDArray: MJOAuthAuthorizationState_[]; // Link to MJ_OAuthAuthorizationStates
-    
     @Field(() => [MJOAuthClientRegistration_])
     MJ_OAuthClientRegistrations_MCPServerConnectionIDArray: MJOAuthClientRegistration_[]; // Link to MJ_OAuthClientRegistrations
     
     @Field(() => [MJOAuthToken_])
     MJ_OAuthTokens_MCPServerConnectionIDArray: MJOAuthToken_[]; // Link to MJ_OAuthTokens
+    
+    @Field(() => [MJOAuthAuthorizationState_])
+    MJ_OAuthAuthorizationStates_MCPServerConnectionIDArray: MJOAuthAuthorizationState_[]; // Link to MJ_OAuthAuthorizationStates
     
     @Field(() => [MJMCPServerConnectionPermission_])
     MJ_MCPServerConnectionPermissions_MCPServerConnectionIDArray: MJMCPServerConnectionPermission_[]; // Link to MJ_MCPServerConnectionPermissions
@@ -44838,17 +44769,6 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJOAuthAuthorizationState_])
-    async MJ_OAuthAuthorizationStates_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthAuthorizationStates] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Authorization States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Authorization States', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJOAuthClientRegistration_])
     async MJ_OAuthClientRegistrations_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: O Auth Client Registrations', userPayload);
@@ -44868,6 +44788,17 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthTokens] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Tokens', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Tokens', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOAuthAuthorizationState_])
+    async MJ_OAuthAuthorizationStates_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthAuthorizationStates] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Authorization States', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Authorization States', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -45642,10 +45573,6 @@ export class MJMCPToolExecutionLog_ {
     @Field() 
     @MaxLength(510)
     MCPServerConnection: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    MCPServerTool?: string;
         
     @Field() 
     @MaxLength(200)
@@ -49372,9 +49299,6 @@ export class MJTask_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Project?: string;
-        
-    @Field({nullable: true}) 
-    ConversationDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -55653,9 +55577,6 @@ export class MJRecommendationItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    Recommendation: string;
-        
-    @Field() 
     @MaxLength(510)
     DestinationEntity: string;
         
@@ -56194,10 +56115,6 @@ export class MJRecommendation_ {
         
     @Field() 
     @MaxLength(510)
-    RecommendationRun: string;
-        
-    @Field() 
-    @MaxLength(510)
     SourceEntity: string;
         
     @Field(() => [MJRecommendationItem_])
@@ -56607,10 +56524,6 @@ export class MJRecordChange_ {
         
     @Field({nullable: true}) 
     @MaxLength(200)
-    ReplayRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
     Integration?: string;
         
     @Field(() => [MJVersionLabelItem_])
@@ -56853,10 +56766,6 @@ export class MJRecordMergeDeletionLog_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(900)
-    RecordMergeLog: string;
         
 }
 
@@ -57724,9 +57633,6 @@ export class MJReport_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Conversation?: string;
-        
-    @Field({nullable: true}) 
-    ConversationDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -60990,10 +60896,6 @@ export class MJTemplateParam_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    TemplateContent?: string;
         
 }
 

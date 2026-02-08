@@ -24,6 +24,3 @@ export class TemplateContentFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadTemplateContentFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}
