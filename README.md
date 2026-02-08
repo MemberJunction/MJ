@@ -1,393 +1,250 @@
-![](./MJ_logo.webp#gh-light-mode-only)
-![](./MJ_logo_dark.png#gh-dark-mode-only)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./MJ_logo_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="./MJ_logo.webp">
+    <img alt="MemberJunction" src="./MJ_logo.webp" width="400">
+  </picture>
+</p>
 
-# MemberJunction (MJ)
+<h3 align="center">The open-source, AI-native data platform.</h3>
 
-MemberJunction (MJ) is an open-source, AI-powered data platform that unifies data management, business logic, and intelligent interfaces through a metadata-driven architecture. Built with TypeScript, Angular 21, and SQL Server, MemberJunction combines enterprise-grade data capabilities with deep AI integration — supporting 15+ AI providers, vector operations, and an extensible agent framework — while remaining accessible to organizations of all sizes.
+<p align="center">
+  Unify your data. Add intelligence. Ship faster.
+</p>
 
-## Key Features
-
-- **🤖 AI-Native Platform** - Deep integration with 15+ AI providers (OpenAI, Anthropic, Google, and more), vector operations, embeddings, and an extensible agent framework
-- **🗄️ Unified Data Platform** - Integrate data from multiple sources into a singular, well-organized repository
-- **📊 Rich Metadata Layer** - Comprehensive metadata system that drives UI generation, validation, and business logic
-- **🔍 MemberJunction Explorer** - Powerful web application for browsing, searching, and managing your unified data
-- **📨 Communication Framework** - Send emails, SMS, and messages through multiple providers with template support
-- **⚡ Actions System** - Flexible framework for implementing and scheduling custom business logic
-- **🔐 Enterprise Security** - Row-level security, field permissions, and integration with Auth0/MSAL
-- **🛠️ Developer Friendly** - Full TypeScript, comprehensive APIs, and extensive documentation
-- **📦 Modular Architecture** - 100+ npm packages that can be used independently or together
-
-## 🤖 AI Capabilities
-
-MemberJunction's AI framework is one of the most comprehensive open-source AI integration layers available. It provides a **provider-agnostic abstraction** that lets you swap AI providers without changing application code, plus a full agent framework for building autonomous workflows.
-
-> **[Full AI Framework Documentation](./packages/AI)**
-
-### AI Providers (15+)
-
-Connect to any major AI service through a consistent API — switch providers with zero code changes:
-
-| Provider | Capabilities | Package |
-|----------|-------------|---------|
-| **OpenAI** | GPT-4o, o1/o3 reasoning, DALL-E, Whisper, embeddings | [@memberjunction/ai-openai](./packages/AI/Providers/OpenAI) |
-| **Anthropic** | Claude 4 family, streaming, prompt caching, extended thinking | [@memberjunction/ai-anthropic](./packages/AI/Providers/Anthropic) |
-| **Google Gemini** | Gemini Pro/Flash, native multimodal, long context | [@memberjunction/ai-gemini](./packages/AI/Providers/Gemini) |
-| **Azure OpenAI** | Enterprise Azure-hosted models | [@memberjunction/ai-azure](./packages/AI/Providers/Azure) |
-| **Amazon Bedrock** | Multi-model access via AWS | [@memberjunction/ai-bedrock](./packages/AI/Providers/Bedrock) |
-| **Google Vertex** | Vertex AI platform integration | [@memberjunction/ai-vertex](./packages/AI/Providers/Vertex) |
-| **Mistral** | Open-source and commercial models, embeddings | [@memberjunction/ai-mistral](./packages/AI/Providers/Mistral) |
-| **Groq** | Ultra-fast inference for Llama, Mixtral | [@memberjunction/ai-groq](./packages/AI/Providers/Groq) |
-| **Cerebras** | High-performance inference | [@memberjunction/ai-cerebras](./packages/AI/Providers/Cerebras) |
-| **OpenRouter** | Multi-provider routing | [@memberjunction/ai-openrouter](./packages/AI/Providers/OpenRouter) |
-| **ElevenLabs** | Text-to-speech | [@memberjunction/ai-elevenlabs](./packages/AI/Providers/ElevenLabs) |
-| **HeyGen** | AI video generation | [@memberjunction/ai-heygen](./packages/AI/Providers/HeyGen) |
-
-> **[All AI Providers](./packages/AI/Providers)**
-
-### Agent Framework
-
-Build autonomous AI agents that orchestrate complex, multi-step workflows:
-
-- **[BaseAgent](./packages/AI/Agents)** - Core agent execution engine with hierarchical prompt composition, sub-agent delegation, action integration, and automatic context compression
-- **LoopAgentType** - Iterative agents that execute until task completion with ForEach/While operations (90% token reduction for batch tasks)
-- **FlowAgentType** - Deterministic workflow agents using directed graphs with conditional branching, parallel execution, and hybrid AI/deterministic paths
-- **AgentRunner** - Orchestrator that loads agent metadata, instantiates correct classes, and manages execution lifecycle
-
-> **[Agent Framework Documentation](./packages/AI/Agents)**
-
-### Prompt Management
-
-Database-driven prompt templates with advanced features:
-
-- **Hierarchical composition** - Parent/child template patterns for system + agent prompts
-- **Dynamic context injection** - Automatic variable substitution and placeholder resolution
-- **Effort level control** - Fine-grained reasoning intensity (1-100 scale) mapped per-provider
-- **Intelligent model selection** - Automatic failover across configured models
-- **Execution tracking** - Every prompt run logged to database for analysis
-
-> **[Prompt Engine Documentation](./packages/AI/Prompts)**
-
-### Vector Operations & Semantic Search
-
-Full vector pipeline from embedding to search:
-
-- **[Core vector operations](./packages/AI/Vectors/Core)** - Embeddings, similarity search, entity vectorization
-- **[Vector database layer](./packages/AI/Vectors/Database)** - Abstraction supporting Pinecone and extensible to other stores
-- **[Vector sync](./packages/AI/Vectors/Sync)** - Automatic entity vectorization with batch processing and incremental updates
-- **[Duplicate detection](./packages/AI/Vectors/Dupe)** - Find duplicates across entities using vector similarity
-- **[Memory vectors](./packages/AI/Vectors/Memory)** - In-memory vector operations
-
-> **[Vector Operations Documentation](./packages/AI/Vectors)**
-
-### Interoperability Protocols
-
-Connect MJ to the broader AI ecosystem:
-
-- **[MCP Server](./packages/AI/MCPServer)** - Model Context Protocol server exposing MJ entities and agents as tools for any MCP-compatible client (Claude Desktop, Cursor, etc.)
-- **[MCP Client](./packages/AI/MCPClient)** - Consume tools from external MCP servers with multi-transport support, authentication, and rate limiting
-- **[A2A Server](./packages/AI/A2AServer)** - Google Agent-to-Agent protocol for agent interoperability across platforms
-
-### AI Recommendations
-
-- **[Recommendation Engine](./packages/AI/Recommendations)** - Pluggable recommendation framework with entity-aware suggestions
+<p align="center">
+  <a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MemberJunction/MJ?style=flat-square" alt="License"></a>
+  <a href="https://www.npmjs.com/package/@memberjunction/core"><img src="https://img.shields.io/npm/v/@memberjunction/core?style=flat-square&label=npm" alt="npm version"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"></a>
+  <a href="https://github.com/MemberJunction/MJ/stargazers"><img src="https://img.shields.io/github/stars/MemberJunction/MJ?style=flat-square" alt="GitHub Stars"></a>
+  <a href="https://docs.memberjunction.org"><img src="https://img.shields.io/badge/docs-memberjunction.org-blue?style=flat-square" alt="Documentation"></a>
+  <a href="https://github.com/MemberJunction/MJ/issues"><img src="https://img.shields.io/github/issues/MemberJunction/MJ?style=flat-square" alt="Issues"></a>
+</p>
 
 ---
 
-## Why MemberJunction?
+## What is MemberJunction?
 
-MemberJunction was designed to solve common challenges in data management and AI-powered application development:
+MemberJunction is a **metadata-driven application platform** that turns your database into a fully functional application — complete with auto-generated APIs, forms, security, and deep AI integration. Define your schema, and MJ generates everything else: typed entity classes, GraphQL endpoints, Angular UI components, validation, and audit trails.
 
-- **Eliminate Data Silos** - Bring all your data together in one place
-- **Add AI Without Complexity** - Plug in any AI provider through a unified abstraction layer
-- **Build Intelligent Agents** - Create autonomous AI workflows with the agent framework
-- **Reduce Development Time** - Auto-generate forms, APIs, and documentation from metadata
-- **Ensure Consistency** - Single source of truth for data structure and business rules
-- **Scale Efficiently** - From small non-profits to large enterprises
-- **Stay Flexible** - Extend and customize every aspect of the platform
+What makes it different: **175 modular TypeScript packages** that work together or independently, **15+ AI providers** behind a single abstraction layer, and an **agent framework** for building autonomous workflows — all driven by metadata, not boilerplate.
 
-Originally created to support non-profits and associations, MemberJunction is free to use and open source!
-
-## 📚 Documentation
-
-Extensive documentation is available at [https://docs.memberjunction.org](https://docs.memberjunction.org)
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Node.js** 20+ (22+ recommended)
-- **npm** 9+
-- **SQL Server** 2019+ (or Azure SQL Database)
-- **Angular CLI** 21+
-- **Git** for cloning the repository
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/MemberJunction/MJ.git
-   cd MJ
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure your environment**
-   - Copy `install.config.json.example` to `install.config.json`
-   - Update with your database connection and authentication settings
-   - Set up environment variables for API keys (if using AI features)
-
-4. **Run the installation**
-   ```bash
-   node InstallMJ.js
-   ```
-   This will:
-   - Create the MemberJunction database schema
-   - Install base metadata
-   - Generate entity classes and GraphQL types
-   - Set up initial configuration
-
-5. **Start the services**
-   ```bash
-   # Start the API server
-   npm run start:api
-
-   # In another terminal, start the Explorer UI
-   npm run start:explorer
-   ```
-
-6. **Access MemberJunction Explorer**
-   - Navigate to http://localhost:4200
-   - Log in with your configured authentication provider
-
-   > **⚠️ Important:** If you change the database connection information (switching to a different database while keeping the same API URL), you must clear the browser's IndexedDB cache to remove cached metadata from the previous connection.
-   >
-   > To clear the cache:
-   > 1. Open browser DevTools → Application → Storage → IndexedDB
-   > 2. Delete the `MJ_Metadata` database
-   > 3. Refresh the page to rebuild the cache from the new database
-   >
-   > This is necessary because the current cache implementation uses only the API URL (not the database name) as the cache key, which can cause stale data issues when switching databases.
-
-## 🏗️ Architecture & Package Structure
-
-MemberJunction uses a modular monorepo architecture with 175 TypeScript packages. Each package is designed to be used independently or as part of the complete platform. See the [Full Package Directory](#-full-package-directory) at the bottom of this file for a complete, navigable listing of every package.
-
-### 📁 Repository Organization
-
-```
-MJ/
-├── packages/           # All npm packages (175 packages)
-│   ├── Actions/       # Action framework (13 packages)
-│   ├── AI/            # AI infrastructure (42 packages)
-│   ├── Angular/       # UI components (61 packages)
-│   ├── Communication/ # Messaging (10 packages)
-│   ├── Scheduling/    # Job scheduling (4 packages)
-│   └── ...           # Core, data, server, and utility packages
-├── SQL Scripts/       # Database setup and migrations
-├── migrations/        # Flyway migration scripts
-└── docs/             # Additional documentation
-```
-
-### 🎯 Core Framework
-
-- **[@memberjunction/global](./packages/MJGlobal)** - Foundation utilities, class factory, singleton management
-- **[@memberjunction/core](./packages/MJCore)** - Metadata engine, entity management, data access
-- **[@memberjunction/core-entities](./packages/MJCoreEntities)** - Strongly-typed entity classes
-- **[@memberjunction/server](./packages/MJServer)** - GraphQL API server with authentication
-
-### 🤖 AI Framework (42 packages)
-
-Provider-agnostic AI with 23 providers, vector operations, agent orchestration, and MCP/A2A interoperability. See [AI Capabilities](#-ai-capabilities) above and the [Full AI listing](#ai).
-
-### 💬 Communication & Actions
-
-- **[Communication](./packages/Communication)** - Multi-channel messaging (email, SMS) with SendGrid, Microsoft Graph, Gmail, and Twilio providers
-- **[Actions](./packages/Actions)** - Metadata-driven action framework with scheduling, BizApps integrations, and sandboxed code execution
-
-### 🎨 UI Components (61 Angular packages)
-
-100+ Angular 21 components (ESBuild/Vite powered) spanning Explorer, forms, grids, dashboards, chat, and more. See the [Full Angular listing](#angular).
-
-### 🔧 Developer Tools
-
-- **[@memberjunction/cli](./packages/MJCLI)** - Command-line tools
-- **[@memberjunction/codegen-lib](./packages/CodeGenLib)** - Code generation library
-- **[@memberjunction/templates](./packages/Templates/engine)** - Nunjucks-based templating with AI content generation
-
-## 🛠️ Development
-
-### Essential Commands
-
-```bash
-# Build everything
-npm run build
-
-# Build specific package (run from that package's directory)
-cd packages/MJCore && npm run build
-
-# Watch mode (auto-rebuild on changes)
-npm run watch
-
-# Start services
-npm run start:api        # Start API server (port 4000)
-npm run start:explorer   # Start Explorer UI (port 4200)
-
-# Code quality
-npm run lint            # Run ESLint
-npm run format          # Format with Prettier
-npm test               # Run tests
-```
-
-### Development Workflow
-
-1. **Make changes** in the relevant package under `/packages`
-2. **Build the package** using `npm run build` in the package directory
-3. **Test locally** using the watch mode for rapid development
-4. **Run tests** to ensure nothing is broken
-5. **Create a PR** with your changes
-
-### Package Development
-
-Each package follows a consistent structure:
-```
-packages/MyPackage/
-├── src/               # TypeScript source files
-├── dist/              # Compiled output
-├── package.json       # Package configuration
-├── tsconfig.json      # TypeScript configuration
-├── README.md          # Package documentation
-└── CHANGELOG.md       # Version history
-```
-
-## 📋 Key Concepts
-
-### Metadata-Driven Development
-
-MemberJunction's core philosophy is metadata-driven development:
-- **Entities** define data structure and relationships
-- **Fields** specify data types, validation, and UI hints
-- **Views** control data access and filtering
-- **Actions** implement business logic
-- **Forms** are auto-generated or customized
-
-### Entity System
-
-Entities are the building blocks:
 ```typescript
-// Never instantiate directly - use Metadata
+// Three lines to load, modify, and save any entity — fully typed, validated, and audited
 const md = new Metadata();
 const customer = await md.GetEntityObject<CustomerEntity>('Customers');
 await customer.Load(customerId);
-customer.Name = 'New Name';
-await customer.Save();
+customer.Status = 'Active';
+await customer.Save(); // Triggers validation, audit logging, and downstream actions automatically
 ```
 
-### Code Generation
+```typescript
+// Swap AI providers with zero code changes
+const ai = new AIEngine();
+const result = await ai.ChatCompletion({
+  model: 'gpt-4o',          // or 'claude-sonnet-4-5-20250929', 'gemini-pro', 'llama-3', ...
+  messages: [{ role: 'user', content: 'Summarize this quarter\'s metrics' }],
+  data: await rv.RunView({ EntityName: 'Quarterly Reports', ResultType: 'simple' })
+});
+```
 
-MemberJunction generates code from metadata:
-- Entity subclasses with full TypeScript typing
-- GraphQL schemas and resolvers
-- SQL views and stored procedures
-- API documentation
+---
 
-## 🧪 Code Style & Best Practices
+## Key Capabilities
 
-### TypeScript Guidelines
-- **Strict mode** enabled for all packages
-- **No `any` types** - use proper typing or `unknown`
-- **Explicit return types** for public methods
-- **Interface-first** design for extensibility
+<table>
+<tr>
+<td width="50%" valign="top">
 
-### Naming Conventions
-- **PascalCase** for classes, interfaces, and **public class members** (properties, methods)
-- **camelCase** for private/protected members, local variables, and function parameters
-- **UPPER_CASE** for constants
-- **Descriptive names** over abbreviations
+### Metadata-Driven Core
+- **Auto-generated APIs** — GraphQL endpoints from database schema
+- **Typed entity classes** — Full TypeScript with validation and change tracking
+- **Dynamic UI** — Angular forms, grids, and dashboards generated from metadata
+- **Row-level security** — Fine-grained access control with field-level permissions
+- **Audit trail** — Every change tracked automatically via Record Changes
 
-### Code Organization
-- **Single responsibility** - one class, one purpose
-- **Dependency injection** where appropriate
-- **Error handling** with meaningful messages
-- **Logging** at appropriate levels
-- **Tests** for critical functionality
+</td>
+<td width="50%" valign="top">
 
-## 🐳 Deployment
+### AI-Native Platform
+- **15+ AI providers** — OpenAI, Anthropic, Google, Mistral, Groq, and [more](./packages/AI/Providers)
+- **Agent framework** — Autonomous multi-step workflows with sub-agent delegation
+- **Vector operations** — Embedding, semantic search, duplicate detection, and sync
+- **MCP + A2A protocols** — Interop with Claude Desktop, Cursor, and external agents
+- **Prompt engine** — Hierarchical templates with model selection and execution tracking
 
-### Docker Support
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-MemberJunction includes Docker configuration for containerized deployment:
+### Communication & Automation
+- **Multi-channel messaging** — Email (SendGrid, Gmail, MSGraph), SMS (Twilio)
+- **Actions framework** — Metadata-driven business logic for workflows and agents
+- **Scheduled jobs** — Cron-based scheduling with distributed locking
+- **Template engine** — Nunjucks templates with AI-powered content generation
+
+</td>
+<td width="50%" valign="top">
+
+### Developer Experience
+- **175 npm packages** — Use the whole platform or just the pieces you need
+- **Code generation** — Entity classes, stored procedures, views, and Angular forms
+- **CLI tooling** — Command-line tools for codegen, metadata sync, and AI operations
+- **Docker support** — Containerized deployment with Flyway migrations
+
+</td>
+</tr>
+</table>
+
+---
+
+## Quick Start
 
 ```bash
-# Build the Docker image
-docker build -f docker/MJAPI/Dockerfile -t memberjunction/api .
+# Clone and install
+git clone https://github.com/MemberJunction/MJ.git && cd MJ
+npm install
 
-# Run with docker-compose
-docker-compose up -d
+# Configure your database and auth
+cp install.config.json.example install.config.json
+# Edit install.config.json with your SQL Server connection and auth settings
+
+# Initialize the database
+node InstallMJ.js
+
+# Start the platform
+npm run start:api        # GraphQL API on port 4000
+npm run start:explorer   # Angular UI on port 4200
 ```
 
-Features:
-- Multi-stage build for optimal image size
-- Includes SQL Server tools and Flyway migrations
-- Environment-based configuration
-- Health checks and logging
+> **Prerequisites:** Node.js 20+, npm 9+, SQL Server 2019+ (or Azure SQL), Angular CLI 21+
 
-### Database Migrations
+> **Full documentation:** [docs.memberjunction.org](https://docs.memberjunction.org)
 
-Database changes are managed through Flyway migrations:
-- **Versioned migrations** in `/migrations/v2/`
-- **Automatic execution** on startup
-- **Rollback support** for safe deployments
-- **Schema versioning** for upgrade paths
+---
 
-## 🔒 Security
+## Architecture
 
-MemberJunction includes enterprise-grade security features:
+```mermaid
+flowchart TD
+    subgraph Client["Client Layer"]
+        EX["MJExplorer<br/>Angular 21 UI"]
+        CLI["MJCLI<br/>Command Line"]
+        MCP["MCP Clients<br/>Claude Desktop, Cursor"]
+    end
 
-- **Authentication** - Auth0 and Azure AD (MSAL) support
-- **Row-Level Security** - Fine-grained data access control
-- **Field Permissions** - Control access to sensitive fields
-- **API Security** - GraphQL query depth limiting and rate limiting
-- **Audit Logging** - Complete audit trail of all changes
+    subgraph API["API Layer"]
+        GQL["GraphQL API<br/>@memberjunction/server"]
+        MCPS["MCP Server"]
+        A2A["A2A Server"]
+    end
 
-## 🚀 Use Cases
+    subgraph Core["Core Engine"]
+        META["Metadata Engine<br/>@memberjunction/core"]
+        ENT["Entity Framework<br/>Typed classes, validation, audit"]
+        ACT["Actions Engine<br/>Workflows, scheduling"]
+    end
 
-MemberJunction is ideal for:
+    subgraph AI["AI Layer"]
+        AIE["AI Engine<br/>Provider routing"]
+        AGT["Agent Framework<br/>Autonomous workflows"]
+        VEC["Vectors<br/>Embeddings, search, sync"]
+        PRV["15+ Providers<br/>OpenAI, Anthropic, Google..."]
+    end
 
-- **AI-Powered Applications** - Build intelligent features with integrated AI providers, vector search, and agent orchestration
-- **Non-Profit Organizations** - Manage members, donors, and programs
-- **Associations** - Track memberships, events, and communications
-- **Enterprise Applications** - Build custom business applications
-- **Data Integration** - Unify data from multiple systems
+    subgraph Data["Data Layer"]
+        SQL["SQL Server<br/>Data Provider"]
+        COMM["Communication<br/>Email, SMS, Push"]
+    end
 
-## 🤝 Contributing
+    EX --> GQL
+    CLI --> GQL
+    MCP --> MCPS
+    MCPS --> META
+    A2A --> AGT
+    GQL --> META
+    META --> ENT
+    META --> ACT
+    ENT --> SQL
+    ACT --> AIE
+    AIE --> PRV
+    AIE --> AGT
+    AGT --> VEC
+    ACT --> COMM
 
-We welcome contributions from the community! 
+    style Client fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style API fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Core fill:#b8762f,stroke:#8a5722,color:#fff
+    style AI fill:#7c5295,stroke:#563a6b,color:#fff
+    style Data fill:#64748b,stroke:#475569,color:#fff
+```
 
-- **Code Contributions** - See our [Contributing Guide](CONTRIBUTING.md)
-- **Bug Reports** - Use [GitHub Issues](https://github.com/MemberJunction/MJ/issues)
-- **Feature Requests** - Start a [Discussion](https://github.com/MemberJunction/MJ/discussions)
-- **Documentation** - Help improve our docs
-- **Community** - Join our [forum](https://docs.memberjunction.org/discuss)
+> **[Full package directory with 175 packages](#-full-package-directory)** | **[packages/ overview](./packages/README.md)**
 
-## 📄 License
+---
 
-MemberJunction is open source software licensed under the ISC License. See the [LICENSE](LICENSE) file for details.
+## AI Providers
 
-## 🙏 Acknowledgements
+Connect to any major AI service through a unified API — swap providers with zero code changes:
 
-- **Contributors** - Thank you to all who have contributed code, documentation, and ideas
-- **BrowserStack** - For providing testing infrastructure
-- **Open Source Community** - For the amazing tools and libraries we build upon
+| Provider | Capabilities | Package |
+|----------|-------------|---------|
+| **OpenAI** | GPT-4o, o1/o3 reasoning, DALL-E, Whisper, embeddings | [`@memberjunction/ai-openai`](./packages/AI/Providers/OpenAI) |
+| **Anthropic** | Claude 4 family, streaming, prompt caching, extended thinking | [`@memberjunction/ai-anthropic`](./packages/AI/Providers/Anthropic) |
+| **Google Gemini** | Gemini Pro/Flash, native multimodal, long context | [`@memberjunction/ai-gemini`](./packages/AI/Providers/Gemini) |
+| **Azure OpenAI** | Enterprise Azure-hosted models | [`@memberjunction/ai-azure`](./packages/AI/Providers/Azure) |
+| **Amazon Bedrock** | Multi-model access via AWS | [`@memberjunction/ai-bedrock`](./packages/AI/Providers/Bedrock) |
+| **Google Vertex** | Vertex AI platform integration | [`@memberjunction/ai-vertex`](./packages/AI/Providers/Vertex) |
+| **Mistral** | Open-source and commercial models, embeddings | [`@memberjunction/ai-mistral`](./packages/AI/Providers/Mistral) |
+| **Groq** | Ultra-fast LPU inference | [`@memberjunction/ai-groq`](./packages/AI/Providers/Groq) |
+| **Ollama** | Local inference, no API keys | [`@memberjunction/ai-ollama`](./packages/AI/Providers/Ollama) |
+| **+ 6 more** | Cerebras, Fireworks, OpenRouter, LM Studio, xAI, Cohere | [All providers →](./packages/AI/Providers) |
 
-## 📞 Support
+**Specialized:** [ElevenLabs](./packages/AI/Providers/ElevenLabs) (TTS) · [HeyGen](./packages/AI/Providers/HeyGen) (video) · [BlackForestLabs](./packages/AI/Providers/BlackForestLabs) (image gen) · [Pinecone](./packages/AI/Providers/Vectors-Pinecone) (vectors)
 
-- **Documentation** - [https://docs.memberjunction.org](https://docs.memberjunction.org)
-- **GitHub Issues** - [Bug reports and feature requests](https://github.com/MemberJunction/MJ/issues)
-- **Discussions** - [Community forum](https://github.com/MemberJunction/MJ/discussions)
-- **Email** - support@memberjunction.org
+---
+
+## Agent Framework
+
+Build autonomous AI agents that orchestrate complex, multi-step workflows:
+
+- **[AI Agents](./packages/AI/Agents)** — Core execution engine with hierarchical prompt composition, sub-agent delegation, and automatic context compression
+- **LoopAgentType** — Iterative agents with ForEach/While operations (90% token reduction for batch tasks)
+- **FlowAgentType** — Deterministic workflow graphs with conditional branching and parallel execution
+- **[MCP Server](./packages/AI/MCPServer)** — Expose MJ entities and agents as tools for Claude Desktop, Cursor, and other MCP clients
+- **[A2A Server](./packages/AI/A2AServer)** — Google's Agent-to-Agent protocol for cross-platform agent interop
+- **[Prompt Engine](./packages/AI/Prompts)** — Hierarchical templates, model selection, effort level control, and execution tracking
+
+---
+
+## Deployment
+
+```bash
+# Docker
+docker build -f docker/MJAPI/Dockerfile -t memberjunction/api .
+docker-compose up -d
+
+# Database migrations (Flyway)
+# Versioned migrations in /migrations/v2/ run automatically on startup
+```
+
+**Security:** Auth0 + Azure AD (MSAL) authentication, row-level security, field permissions, GraphQL query depth limiting, and complete audit logging.
+
+---
+
+## Contributing
+
+We welcome contributions!
+
+- **[GitHub Issues](https://github.com/MemberJunction/MJ/issues)** — Bug reports and feature requests
+- **[Discussions](https://github.com/MemberJunction/MJ/discussions)** — Questions and ideas
+- **[Documentation](https://docs.memberjunction.org)** — Full platform docs
+- **Development Guide** — See [`CLAUDE.md`](./CLAUDE.md) for coding standards, naming conventions, and architecture guidelines
+
+## License
+
+MemberJunction is open source under the [ISC License](./LICENSE).
 
 ---
 
@@ -740,7 +597,7 @@ Secure credential management (1 package).
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [Engine](./packages/Credentials/Engine/) | `@memberjunction/credentials` | Credential Engine - secure credential management with caching, encryption, and audit logging |
+| [Engine](./packages/Credentials/Engine/README.md) | `@memberjunction/credentials` | Credential Engine - secure credential management with caching, encryption, and audit logging |
 
 ### [React](./packages/React/README.md)
 
@@ -789,69 +646,73 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [MJGlobal](./packages/MJGlobal/) | `@memberjunction/global` | Global class factory and event system -- required by all other MJ components |
-| [MJCore](./packages/MJCore/) | `@memberjunction/core` | Core metadata engine, entity framework, and utilities |
-| [MJCoreEntities](./packages/MJCoreEntities/) | `@memberjunction/core-entities` | Entity subclasses for the MJ metadata layer (core schema) |
-| [MJCoreEntitiesServer](./packages/MJCoreEntitiesServer/) | `@memberjunction/core-entities-server` | Server-only entity subclasses for the MJ metadata layer |
-| [Config](./packages/Config/) | `@memberjunction/config` | Central configuration with default configs and merge utilities |
+| [MJGlobal](./packages/MJGlobal/README.md) | `@memberjunction/global` | Global class factory and event system -- required by all other MJ components |
+| [MJCore](./packages/MJCore/README.md) | `@memberjunction/core` | Core metadata engine, entity framework, and utilities |
+| [MJCoreEntities](./packages/MJCoreEntities/README.md) | `@memberjunction/core-entities` | Entity subclasses for the MJ metadata layer (core schema) |
+| [MJCoreEntitiesServer](./packages/MJCoreEntitiesServer/README.md) | `@memberjunction/core-entities-server` | Server-only entity subclasses for the MJ metadata layer |
+| [Config](./packages/Config/README.md) | `@memberjunction/config` | Central configuration with default configs and merge utilities |
 
 #### Data Layer
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [SQLServerDataProvider](./packages/SQLServerDataProvider/) | `@memberjunction/sqlserver-dataprovider` | SQL Server data provider |
-| [GraphQLDataProvider](./packages/GraphQLDataProvider/) | `@memberjunction/graphql-dataprovider` | GraphQL client data provider |
-| [MJDataContext](./packages/MJDataContext/) | `@memberjunction/data-context` | Runtime data context loading and cross-tier interaction types |
-| [MJDataContextServer](./packages/MJDataContextServer/) | `@memberjunction/data-context-server` | Server-side data context implementation with raw SQL support |
-| [MJStorage](./packages/MJStorage/) | `@memberjunction/storage` | Cloud storage provider interface for server-side API integration |
+| [SQLServerDataProvider](./packages/SQLServerDataProvider/README.md) | `@memberjunction/sqlserver-dataprovider` | SQL Server data provider |
+| [GraphQLDataProvider](./packages/GraphQLDataProvider/README.md) | `@memberjunction/graphql-dataprovider` | GraphQL client data provider |
+| [MJDataContext](./packages/MJDataContext/README.md) | `@memberjunction/data-context` | Runtime data context loading and cross-tier interaction types |
+| [MJDataContextServer](./packages/MJDataContextServer/README.md) | `@memberjunction/data-context-server` | Server-side data context implementation with raw SQL support |
+| [MJStorage](./packages/MJStorage/README.md) | `@memberjunction/storage` | Cloud storage provider interface for server-side API integration |
 
 #### Server
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [MJServer](./packages/MJServer/) | `@memberjunction/server` | GraphQL API access to the MemberJunction data store |
-| [ServerBootstrap](./packages/ServerBootstrap/) | `@memberjunction/server-bootstrap` | Server initialization logic and class registration manifests |
-| [ServerBootstrapLite](./packages/ServerBootstrapLite/) | `@memberjunction/server-bootstrap-lite` | Lightweight server bootstrap without ESM-incompatible dependencies |
-| [MJAPI](./packages/MJAPI/) | `mj_api` | MemberJunction API server application |
+| [MJServer](./packages/MJServer/README.md) | `@memberjunction/server` | GraphQL API access to the MemberJunction data store |
+| [ServerBootstrap](./packages/ServerBootstrap/README.md) | `@memberjunction/server-bootstrap` | Server initialization logic and class registration manifests |
+| [ServerBootstrapLite](./packages/ServerBootstrapLite/README.md) | `@memberjunction/server-bootstrap-lite` | Lightweight server bootstrap without ESM-incompatible dependencies |
+| [MJAPI](./packages/MJAPI/README.md) | `mj_api` | MemberJunction API server application |
 
 #### Code Generation and Tooling
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [CodeGenLib](./packages/CodeGenLib/) | `@memberjunction/codegen-lib` | Reusable code generation library for the MemberJunction platform |
-| [MJCodeGenAPI](./packages/MJCodeGenAPI/) | `mj_codegen_api` | API engine for MemberJunction CodeGen |
-| [GeneratedEntities](./packages/GeneratedEntities/) | `mj_generatedentities` | Auto-generated entity subclasses maintained by CodeGen |
-| [GeneratedActions](./packages/GeneratedActions/) | `mj_generatedactions` | Auto-generated action subclasses maintained by CodeGen |
+| [CodeGenLib](./packages/CodeGenLib/README.md) | `@memberjunction/codegen-lib` | Reusable code generation library for the MemberJunction platform |
+| [MJCodeGenAPI](./packages/MJCodeGenAPI/README.md) | `mj_codegen_api` | API engine for MemberJunction CodeGen |
+| [GeneratedEntities](./packages/GeneratedEntities/README.md) | `mj_generatedentities` | Auto-generated entity subclasses maintained by CodeGen |
+| [GeneratedActions](./packages/GeneratedActions/README.md) | `mj_generatedactions` | Auto-generated action subclasses maintained by CodeGen |
 
 #### Client Applications
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [MJExplorer](./packages/MJExplorer/) | `mj_explorer` | MemberJunction Explorer UI (Angular) |
-| [MJCLI](./packages/MJCLI/) | `@memberjunction/cli` | MemberJunction command-line tools |
-| [AngularElements](./packages/AngularElements/) | `mj_angular_elements_demo` | Angular Elements demo application |
+| [MJExplorer](./packages/MJExplorer/README.md) | `mj_explorer` | MemberJunction Explorer UI (Angular) |
+| [MJCLI](./packages/MJCLI/README.md) | `@memberjunction/cli` | MemberJunction command-line tools |
+| [AngularElements](./packages/AngularElements/mj-angular-elements-demo/README.md) | `mj_angular_elements_demo` | Angular Elements demo application |
 
 #### Utilities
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [ComponentRegistry](./packages/ComponentRegistry/) | `@memberjunction/component-registry-server` | Component registry server API implementation |
-| [ComponentRegistryClientSDK](./packages/ComponentRegistryClientSDK/) | `@memberjunction/component-registry-client-sdk` | Component registry client SDK |
-| [ContentAutotagging](./packages/ContentAutotagging/) | `@memberjunction/content-autotagging` | Content autotagging application |
-| [DBAutoDoc](./packages/DBAutoDoc/) | `@memberjunction/db-auto-doc` | AI-powered database documentation generator for SQL Server, MySQL, and PostgreSQL |
-| [DocUtils](./packages/DocUtils/) | `@memberjunction/doc-utils` | Dynamic retrieval and caching of MJ object model documentation |
-| [Encryption](./packages/Encryption/) | `@memberjunction/encryption` | Field-level AES-256-GCM/CBC encryption with pluggable key sources |
-| [ExternalChangeDetection](./packages/ExternalChangeDetection/) | `@memberjunction/external-change-detection` | Detection of entity changes made by external systems |
-| [InteractiveComponents](./packages/InteractiveComponents/) | `@memberjunction/interactive-component-types` | Type specifications for MJ interactive UI components |
-| [MetadataSync](./packages/MetadataSync/) | `@memberjunction/metadata-sync` | Metadata synchronization CLI tool |
-| [MJExportEngine](./packages/MJExportEngine/) | `@memberjunction/export-engine` | Export engine for Excel, CSV, and JSON with sampling and formatting |
-| [MJQueue](./packages/MJQueue/) | `@memberjunction/queue` | Server-side queue management |
-| [QueryGen](./packages/QueryGen/) | `@memberjunction/query-gen` | AI-powered SQL query template generation with automatic testing and refinement |
-| [SkipTypes](./packages/SkipTypes/) | `@memberjunction/skip-types` | Shared types for the Skip AI Assistant used across MJAPI, Skip API, and Explorer |
-| [VersionHistory](./packages/VersionHistory/) | `@memberjunction/version-history` | Label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore |
+| [ComponentRegistry](./packages/ComponentRegistry/README.md) | `@memberjunction/component-registry-server` | Component registry server API implementation |
+| [ComponentRegistryClientSDK](./packages/ComponentRegistryClientSDK/README.md) | `@memberjunction/component-registry-client-sdk` | Component registry client SDK |
+| [ContentAutotagging](./packages/ContentAutotagging/README.md) | `@memberjunction/content-autotagging` | Content autotagging application |
+| [DBAutoDoc](./packages/DBAutoDoc/README.md) | `@memberjunction/db-auto-doc` | AI-powered database documentation generator for SQL Server, MySQL, and PostgreSQL |
+| [DocUtils](./packages/DocUtils/README.md) | `@memberjunction/doc-utils` | Dynamic retrieval and caching of MJ object model documentation |
+| [Encryption](./packages/Encryption/README.md) | `@memberjunction/encryption` | Field-level AES-256-GCM/CBC encryption with pluggable key sources |
+| [ExternalChangeDetection](./packages/ExternalChangeDetection/README.md) | `@memberjunction/external-change-detection` | Detection of entity changes made by external systems |
+| [InteractiveComponents](./packages/InteractiveComponents/README.md) | `@memberjunction/interactive-component-types` | Type specifications for MJ interactive UI components |
+| [MetadataSync](./packages/MetadataSync/README.md) | `@memberjunction/metadata-sync` | Metadata synchronization CLI tool |
+| [MJExportEngine](./packages/MJExportEngine/README.md) | `@memberjunction/export-engine` | Export engine for Excel, CSV, and JSON with sampling and formatting |
+| [MJQueue](./packages/MJQueue/README.md) | `@memberjunction/queue` | Server-side queue management |
+| [QueryGen](./packages/QueryGen/README.md) | `@memberjunction/query-gen` | AI-powered SQL query template generation with automatic testing and refinement |
+| [SkipTypes](./packages/SkipTypes/README.md) | `@memberjunction/skip-types` | Shared types for the Skip AI Assistant used across MJAPI, Skip API, and Explorer |
+| [VersionHistory](./packages/VersionHistory/README.md) | `@memberjunction/version-history` | Label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore |
 
 ---
 
 <p align="center">
-  Built with ❤️ by the MemberJunction community
+  <a href="https://docs.memberjunction.org">Documentation</a> · <a href="https://github.com/MemberJunction/MJ/issues">Issues</a> · <a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a> · <a href="mailto:support@memberjunction.org">Support</a>
+</p>
+
+<p align="center">
+  <sub>Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License</sub>
 </p>
