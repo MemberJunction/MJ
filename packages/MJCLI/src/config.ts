@@ -1,5 +1,5 @@
 import { cosmiconfigSync } from 'cosmiconfig';
-import { FlywayConfig } from 'node-flyway/dist/types/types';
+import type { FlywayConfig } from 'node-flyway/dist/types/types';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
