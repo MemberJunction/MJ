@@ -98,7 +98,7 @@ describe('AIPromptExtension', () => {
                 skip: vi.fn(),
             };
             const nodes = {
-                CallExtensionAsync: vi.fn().mockReturnValue(callExtNode),
+                CallExtensionAsync: vi.fn(function () { return callExtNode; }),
             };
             const lexer = {
                 TOKEN_BLOCK_END: 'end',
@@ -127,7 +127,7 @@ describe('AIPromptExtension', () => {
                 skip: vi.fn(),
             };
             const nodes = {
-                CallExtensionAsync: vi.fn().mockReturnValue({}),
+                CallExtensionAsync: vi.fn(function () { return {}; }),
             };
             const lexer = { TOKEN_BLOCK_END: 'end' };
 

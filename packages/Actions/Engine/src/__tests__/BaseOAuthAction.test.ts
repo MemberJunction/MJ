@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock @memberjunction/core
+const { mockGetEntityObject } = vi.hoisted(() => ({
+    mockGetEntityObject: vi.fn(),
+}));
 vi.mock('@memberjunction/core', () => ({
-    Metadata: vi.fn(),
+    Metadata: vi.fn(function() {
+        return { GetEntityObject: mockGetEntityObject };
+    }),
     RunView: vi.fn(),
     LogError: vi.fn(),
     LogStatus: vi.fn(),
@@ -115,11 +120,9 @@ describe('BaseOAuthAction', () => {
                 Load: vi.fn().mockResolvedValue(true),
             };
 
-            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-                GetEntityObject: vi.fn()
-                    .mockResolvedValueOnce(mockCI)
-                    .mockResolvedValueOnce(mockIntegration),
-            }));
+            mockGetEntityObject
+                .mockResolvedValueOnce(mockCI)
+                .mockResolvedValueOnce(mockIntegration);
 
             const result = await action.testInitializeOAuth('ci-123');
             expect(result).toBe(true);
@@ -131,9 +134,7 @@ describe('BaseOAuthAction', () => {
                 Load: vi.fn().mockResolvedValue(false),
             };
 
-            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-                GetEntityObject: vi.fn().mockResolvedValue(mockCI),
-            }));
+            mockGetEntityObject.mockResolvedValue(mockCI);
 
             const result = await action.testInitializeOAuth('bad-id');
             expect(result).toBe(false);
@@ -141,9 +142,7 @@ describe('BaseOAuthAction', () => {
         });
 
         it('should return false when GetEntityObject returns null', async () => {
-            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-                GetEntityObject: vi.fn().mockResolvedValue(null),
-            }));
+            mockGetEntityObject.mockResolvedValue(null);
 
             const result = await action.testInitializeOAuth('ci-123');
             expect(result).toBe(false);

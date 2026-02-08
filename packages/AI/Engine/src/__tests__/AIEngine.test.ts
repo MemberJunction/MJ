@@ -98,7 +98,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     AIPromptCategoryEntityExtended: class AIPromptCategoryEntityExtended {},
 }));
 
-const mockBaseInstance = {
+const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     Loaded: true,
     Agents: [],
     AgentRelationships: [],
@@ -173,7 +173,7 @@ const mockBaseInstance = {
     GetCredentialBindingsForTarget: vi.fn().mockReturnValue([]),
     HasCredentialBindings: vi.fn().mockReturnValue(false),
     Config: vi.fn().mockResolvedValue(undefined),
-};
+} }));
 
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIEngineBase: {

@@ -60,7 +60,9 @@ vi.mock('@memberjunction/core-entities', () => ({
     TemplateContentTypeEntity: class {},
 }));
 
-const mockGetAllRegistrations = vi.fn().mockReturnValue([]);
+const { mockGetAllRegistrations } = vi.hoisted(() => ({
+    mockGetAllRegistrations: vi.fn().mockReturnValue([]),
+}));
 vi.mock('@memberjunction/global', () => ({
     MJGlobal: {
         Instance: {
@@ -298,7 +300,7 @@ describe('TemplateEngineServer', () => {
     describe('Custom Filters', () => {
         it('should provide json filter for object serialization', async () => {
             const result = await engine.RenderTemplateSimple(
-                '{{ data | json }}',
+                '{{ data | json | safe }}',
                 { data: { key: 'value' } }
             );
 
@@ -310,7 +312,7 @@ describe('TemplateEngineServer', () => {
 
         it('should provide jsoninline filter for compact output', async () => {
             const result = await engine.RenderTemplateSimple(
-                '{{ data | jsoninline }}',
+                '{{ data | jsoninline | safe }}',
                 { data: { a: 1, b: 2 } }
             );
 
@@ -458,13 +460,13 @@ describe('TemplateEngineServer', () => {
             };
             const templateContent = {
                 ID: 'tc-err',
-                TemplateText: '{% for item in items %}{{ item.missingProperty.deep }}{% endfor %}',
+                TemplateText: '{% if %}missing condition{% endif %}',
             };
 
             const result = await engine.RenderTemplate(
                 templateEntity as never,
                 templateContent as never,
-                { items: [null] }
+                {}
             );
 
             expect(result.Success).toBe(false);

@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock MJGlobal
-const mockClassFactory = {
-    CreateInstance: vi.fn(),
-    GetAllRegistrations: vi.fn().mockReturnValue([]),
-};
+const { mockClassFactory } = vi.hoisted(() => ({
+    mockClassFactory: {
+        CreateInstance: vi.fn(),
+        GetAllRegistrations: vi.fn().mockReturnValue([]),
+    },
+}));
 vi.mock('@memberjunction/global', () => ({
     MJGlobal: {
         Instance: {

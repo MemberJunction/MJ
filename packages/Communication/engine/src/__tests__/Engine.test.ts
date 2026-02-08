@@ -4,15 +4,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks
 // ============================================================================
 
-const mockProviderInstance = {
-    SendSingleMessage: vi.fn().mockResolvedValue({ Success: true, Error: '' }),
-    CreateDraft: vi.fn().mockResolvedValue({ Success: true, DraftID: 'draft-1' }),
-};
+const { mockProviderInstance, mockClassFactory } = vi.hoisted(() => {
+    const mockProviderInstance = {
+        SendSingleMessage: vi.fn().mockResolvedValue({ Success: true, Error: '' }),
+        CreateDraft: vi.fn().mockResolvedValue({ Success: true, DraftID: 'draft-1' }),
+    };
 
-const mockClassFactory = {
-    CreateInstance: vi.fn().mockReturnValue(mockProviderInstance),
-    GetAllRegistrations: vi.fn().mockReturnValue([]),
-};
+    const mockClassFactory = {
+        CreateInstance: vi.fn().mockReturnValue(mockProviderInstance),
+        GetAllRegistrations: vi.fn().mockReturnValue([]),
+    };
+
+    return { mockProviderInstance, mockClassFactory };
+});
 
 vi.mock('@memberjunction/global', () => ({
     MJGlobal: {

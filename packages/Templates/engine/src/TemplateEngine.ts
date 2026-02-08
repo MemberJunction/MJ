@@ -9,7 +9,7 @@ import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templa
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
 export class TemplateEntityLoader extends nunjucks.Loader {
-    public async: true; // tell nunjucks this is an async loader
+    public override async = true; // tell nunjucks this is an async loader
 
     private templates: { [templateId: string]: TemplateEntityExtended } = {};
 

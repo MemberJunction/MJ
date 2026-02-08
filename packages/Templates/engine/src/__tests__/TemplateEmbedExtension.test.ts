@@ -37,8 +37,10 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 // Mock the TemplateEngineServer
-const mockRenderTemplateSimple = vi.fn();
-const mockFindTemplate = vi.fn();
+const { mockRenderTemplateSimple, mockFindTemplate } = vi.hoisted(() => ({
+    mockRenderTemplateSimple: vi.fn(),
+    mockFindTemplate: vi.fn(),
+}));
 vi.mock('../TemplateEngine', () => ({
     TemplateEngineServer: {
         Instance: {
@@ -78,7 +80,7 @@ describe('TemplateEmbedExtension', () => {
                 advanceAfterBlockEnd: vi.fn(),
             };
             const nodes = {
-                CallExtensionAsync: vi.fn().mockReturnValue(callExtNode),
+                CallExtensionAsync: vi.fn(function () { return callExtNode; }),
             };
             const lexer = {};
 

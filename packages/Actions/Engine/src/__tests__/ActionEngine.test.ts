@@ -27,9 +27,9 @@ vi.mock('@memberjunction/core', () => {
     };
 
     return {
-        Metadata: vi.fn().mockImplementation(() => ({
-            GetEntityObject: vi.fn().mockResolvedValue(mockLogEntity),
-        })),
+        Metadata: vi.fn(function() {
+            return { GetEntityObject: vi.fn().mockResolvedValue(mockLogEntity) };
+        }),
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         RunView: vi.fn(),
@@ -70,10 +70,12 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 // Mock @memberjunction/global
-const mockClassFactory = {
-    CreateInstance: vi.fn(),
-    GetAllRegistrations: vi.fn().mockReturnValue([]),
-};
+const { mockClassFactory } = vi.hoisted(() => ({
+    mockClassFactory: {
+        CreateInstance: vi.fn(),
+        GetAllRegistrations: vi.fn().mockReturnValue([]),
+    },
+}));
 vi.mock('@memberjunction/global', () => ({
     MJGlobal: {
         Instance: {
@@ -567,9 +569,9 @@ describe('ActionEngineServer', () => {
                 set UserID(_v: string) {},
                 set Params(_v: string) {},
             };
-            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-                GetEntityObject: vi.fn().mockResolvedValue(mockEntity),
-            }));
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+                return { GetEntityObject: vi.fn().mockResolvedValue(mockEntity) };
+            });
 
             const params = {
                 Action: { ID: 'action-1', Name: 'Test' },
@@ -592,9 +594,9 @@ describe('ActionEngineServer', () => {
                 set UserID(_v: string) {},
                 set Params(_v: string) {},
             };
-            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-                GetEntityObject: vi.fn().mockResolvedValue(mockEntity),
-            }));
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+                return { GetEntityObject: vi.fn().mockResolvedValue(mockEntity) };
+            });
 
             const params = {
                 Action: { ID: 'action-1', Name: 'Test' },
@@ -617,9 +619,9 @@ describe('ActionEngineServer', () => {
                 set UserID(_v: string) {},
                 set Params(_v: string) {},
             };
-            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-                GetEntityObject: vi.fn().mockResolvedValue(mockEntity),
-            }));
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+                return { GetEntityObject: vi.fn().mockResolvedValue(mockEntity) };
+            });
 
             const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [] };
             await (engine as never)['StartActionLog'](params as never, true);
