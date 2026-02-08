@@ -1,0 +1,22 @@
+{
+  "entityName": "Templates",
+  "fields": {
+    "Name": "Member Junction Central - Email",
+    "Description": "Email template for Member Junction Central notifications",
+    "UserID": "@lookup:Users.Name=System",
+    "IsActive": true
+  },
+  "relatedEntities": {
+    "Template Contents": [
+      {
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "TypeID": "@lookup:Template Content Types.Name=HTML",
+          "TemplateText": "@file:templates/mjc-email.html",
+          "Priority": 100,
+          "IsActive": true
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "entityName": "Templates",
+  "fields": {
+    "Name": "Member Junction Central - SMS",
+    "Description": "SMS template for Member Junction Central notifications",
+    "UserID": "@lookup:Users.Name=System",
+    "IsActive": true
+  },
+  "relatedEntities": {
+    "Template Contents": [
+      {
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "TypeID": "@lookup:Template Content Types.Name=Text",
+          "TemplateText": "@file:templates/mjc-sms.txt",
+          "Priority": 100,
+          "IsActive": true
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: #4CAF50;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .header .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .content p {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+        }
+        .action-info {
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .action-info .title {
+            font-weight: 600;
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .action-info .detail {
+            color: #666;
+            font-size: 14px;
+        }
+        .button {
+            display: inline-block;
+            background: #2196F3;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .button:hover {
+            background: #1976D2;
+        }
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-top: 1px solid #eee;
+        }
+        .footer a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="icon">🤖</div>
+            <h2>{{ actionTitle }}</h2>
+        </div>
+        <div class="content">
+            <p>{{ message }}</p>
+
+            {% if actionDetail %}
+            <div class="action-info">
+                <div class="title">{{ actionName }}</div>
+                <div class="detail">{{ actionDetail }}</div>
+            </div>
+            {% endif %}
+
+            {% if actionUrl %}
+            <p>Click the button below to view the details:</p>
+            <a href="{{ actionUrl }}" class="button">View Details</a>
+            {% endif %}
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from Member Junction Central</p>
+            <p>Powered by <a href="https://memberjunction.org">MemberJunction</a></p>
+        </div>
+    </div>
+</body>
+</html>

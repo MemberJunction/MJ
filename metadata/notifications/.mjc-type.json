@@ -1,0 +1,17 @@
+{
+  "entityName": "MJ: User Notification Types",
+  "fields": {
+    "Name": "MJC",
+    "Description": "Notifications sent when Member Junction Central completes an action",
+    "DefaultInApp": true,
+    "DefaultEmail": true,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "EmailTemplateID": "@lookup:Templates.Name=Member Junction Central - Email",
+    "SMSTemplateID": "@lookup:Templates.Name=Member Junction Central - SMS",
+    "Icon": "fa-robot",
+    "Color": "#4CAF50",
+    "AutoExpireDays": 7,
+    "Priority": 10
+  }
+}
