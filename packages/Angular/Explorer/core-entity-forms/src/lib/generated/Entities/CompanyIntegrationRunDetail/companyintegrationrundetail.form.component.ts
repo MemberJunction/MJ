@@ -25,6 +25,3 @@ export class CompanyIntegrationRunDetailFormComponent extends BaseFormComponent 
     }
 }
 
-export function LoadCompanyIntegrationRunDetailFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

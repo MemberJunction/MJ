@@ -22,6 +22,3 @@ export class APIApplicationScopeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAPIApplicationScopeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

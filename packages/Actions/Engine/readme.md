@@ -1,21 +1,6 @@
 # @memberjunction/actions
 
-The `@memberjunction/actions` library provides the core server-side infrastructure for the MemberJunction Actions Framework. It includes base classes for actions and filters, the action execution engine, and support for entity-specific actions.
-
-## Overview
-
-The Actions Framework is a powerful system for creating reusable, parameterized business logic that can be executed on demand. Actions are "verbs" in the MemberJunction ecosystem - they perform specific tasks and can be triggered through various mechanisms including entity events, API calls, or scheduled jobs.
-
-**IMPORTANT:** This library should only be imported on the server side.
-
-## Key Features
-
-- **Action Engine**: Central execution engine for running actions with parameter validation, filtering, and logging
-- **Entity Actions**: Actions that can be triggered on entity lifecycle events (create, update, delete)
-- **Code Generation**: AI-powered automatic code generation for actions based on natural language prompts
-- **Action Filters**: Pre-execution filters to control when actions should run
-- **Transaction Support**: Built-in transaction management for complex multi-step operations
-- **Comprehensive Logging**: Automatic logging of all action executions with parameters and results
+Server-side action execution engine for MemberJunction. This package provides the runtime infrastructure for executing actions — including input validation, filter evaluation, ClassFactory-based action dispatch, execution logging, OAuth token management, and entity-bound action invocation. It is intended for server-side use only.
 
 ## Installation
 
@@ -23,502 +8,409 @@ The Actions Framework is a powerful system for creating reusable, parameterized 
 npm install @memberjunction/actions
 ```
 
-## Dependencies
+## Overview
 
-This package depends on several other MemberJunction packages:
-- `@memberjunction/global` - Global utilities and class factory
-- `@memberjunction/core` - Core MJ functionality and base classes
-- `@memberjunction/actions-base` - Base types and interfaces for actions
-- `@memberjunction/core-entities` - Entity definitions
-- `@memberjunction/ai` - AI integration capabilities
-- `@memberjunction/aiengine` - AI engine functionality
-- `@memberjunction/doc-utils` - Documentation utilities
+The Actions Engine sits between external consumers (AI agents, workflows, APIs) and the actual action implementations registered via `@RegisterClass`. It handles the full execution lifecycle: validating inputs, running pre-execution filters, dispatching to the correct `BaseAction` subclass via ClassFactory, and logging results.
+
+The package contains two subsystems:
+
+- **Generic Action Engine** — Executes standalone actions with validation, filtering, and logging
+- **Entity Action Engine** — Executes actions bound to entity records, supporting CRUD lifecycle hooks, list/view batch operations, and record validation
+
+```mermaid
+flowchart TD
+    subgraph Consumers["External Consumers"]
+        Agent["AI Agents"]
+        WF["Workflows"]
+        API["GraphQL API"]
+    end
+
+    subgraph Engine["@memberjunction/actions"]
+        AES["ActionEngineServer"]
+        EAES["EntityActionEngineServer"]
+    end
+
+    subgraph Pipeline["Execution Pipeline"]
+        Validate["Validate Inputs"]
+        Filter["Run Filters"]
+        Dispatch["ClassFactory Dispatch"]
+        Log["Execution Logging"]
+    end
+
+    subgraph Actions["Registered Actions"]
+        BA["BaseAction Subclasses"]
+        OAuth["BaseOAuthAction Subclasses"]
+    end
+
+    Consumers --> Engine
+    AES --> Validate --> Filter --> Dispatch --> Log
+    Dispatch --> BA
+    Dispatch --> OAuth
+    EAES --> AES
+
+    style Consumers fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Engine fill:#7c5295,stroke:#563a6b,color:#fff
+    style Pipeline fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Actions fill:#b8762f,stroke:#8a5722,color:#fff
+```
+
+## Key Features
+
+- **Action Execution Pipeline** — Validates inputs, evaluates filters, dispatches via ClassFactory, and logs all executions
+- **ClassFactory Dispatch** — Looks up `BaseAction` subclasses by `DriverClass` or action name at runtime
+- **Pre-Execution Filters** — `BaseActionFilter` subclasses can gate whether an action should run
+- **Execution Logging** — Automatic start/end logging to `Action Execution Logs` entity with params and result codes
+- **OAuth Token Management** — `BaseOAuthAction` provides token lifecycle (refresh, retry on auth failure, persistence)
+- **OAuth2Manager** — Standalone OAuth2 client supporting authorization code, client credentials, and refresh token flows
+- **Entity Action Invocation** — Bind actions to entity CRUD lifecycle events (BeforeCreate, AfterUpdate, etc.)
+- **Batch Entity Actions** — Run actions against Lists or Views of records with consolidated results
+- **Script Evaluation** — Entity action params support runtime script evaluation with entity context
 
 ## Usage
 
-### Creating a Custom Action
-
-To create a custom action, extend the `BaseAction` class and implement the `InternalRunAction` method:
+### Running a Standalone Action
 
 ```typescript
-import { BaseAction } from '@memberjunction/actions';
-import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { RegisterClass } from '@memberjunction/global';
+import { ActionEngineServer } from '@memberjunction/actions';
 
-@RegisterClass(BaseAction, 'MyCustomAction')
+// Configure the engine (typically done once at startup)
+await ActionEngineServer.Instance.Config(false, contextUser);
+
+// Find the action by name
+const action = ActionEngineServer.Instance.Actions.find(a => a.Name === 'Send Email');
+
+// Execute it
+const result = await ActionEngineServer.Instance.RunAction({
+    Action: action,
+    ContextUser: contextUser,
+    Params: [
+        { Name: 'to', Value: 'user@example.com', Type: 'Input' },
+        { Name: 'subject', Value: 'Hello', Type: 'Input' },
+        { Name: 'body', Value: 'Message content', Type: 'Input' }
+    ],
+    Filters: []
+});
+
+if (result.Success) {
+    console.log('Action completed:', result.Message);
+} else {
+    console.error('Action failed:', result.Message);
+}
+```
+
+### Creating a Custom Action
+
+All actions extend `BaseAction` and implement `InternalRunAction`. Register them with `@RegisterClass` so the engine can discover them via ClassFactory:
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { BaseAction } from '@memberjunction/actions';
+import { RunActionParams, ActionResultSimple } from '@memberjunction/actions-base';
+
+@RegisterClass(BaseAction, 'My Custom Action')
 export class MyCustomAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        // Access input parameters
-        const inputParam = params.Params.find(p => p.Name === 'InputValue');
-        
-        // Perform your action logic
-        const result = await this.performBusinessLogic(inputParam?.Value);
-        
-        // Return the result
+        const inputValue = params.Params.find(p => p.Name === 'input')?.Value;
+
+        // Your action logic here
+        const result = await this.doWork(inputValue);
+
         return {
             Success: true,
             ResultCode: 'SUCCESS',
-            Message: 'Action completed successfully',
-            Params: params.Params // Include any output parameters
+            Message: `Processed: ${result}`
         };
     }
-    
-    private async performBusinessLogic(value: any): Promise<any> {
-        // Your custom logic here
-        return value;
+
+    private async doWork(input: string): Promise<string> {
+        // Delegate to service classes for real logic
+        return `Done with ${input}`;
     }
 }
 ```
 
-### Running Actions with ActionEngine
+### Creating an OAuth-Authenticated Action
 
-The `ActionEngineServer` class provides the main interface for executing actions:
-
-```typescript
-import { ActionEngineServer } from '@memberjunction/actions';
-import { RunActionParams } from '@memberjunction/actions-base';
-
-// Get the singleton instance
-const engine = ActionEngineServer.Instance;
-
-// Configure the engine (only needs to be done once)
-await engine.Config(false, currentUser);
-
-// Run an action by ID
-const result = await engine.RunActionByID({
-    ActionID: 'your-action-id',
-    ContextUser: currentUser,
-    Params: [
-        { Name: 'InputParam', Value: 'some value', Type: 'string' }
-    ]
-});
-
-// Run an action with full parameters
-const params: RunActionParams = {
-    Action: actionEntity, // ActionEntity instance
-    ContextUser: currentUser,
-    Filters: [], // Optional filters
-    Params: [
-        { Name: 'InputParam', Value: 'some value', Type: 'string' }
-    ]
-};
-
-const result = await engine.RunAction(params);
-```
-
-### Using Context in Actions (New in v2.51.0)
-
-Actions now support type-safe context propagation for runtime-specific information:
+For actions that need to call external APIs with OAuth2 credentials:
 
 ```typescript
-import { BaseAction } from '@memberjunction/actions';
-import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
+import { BaseOAuthAction } from '@memberjunction/actions';
+import { RunActionParams, ActionResultSimple } from '@memberjunction/actions-base';
 
-// Define your context type
-interface APIContext {
-    apiEndpoint: string;
-    apiKey: string;
-    timeout: number;
-    retryCount: number;
-}
-
-// Note: BaseAction does not have generics - context is typed through params
-@RegisterClass(BaseAction, 'APICallAction')
-export class APICallAction extends BaseAction {
-    protected async InternalRunAction(params: RunActionParams<APIContext>): Promise<ActionResultSimple> {
-        // Access typed context through params
-        const endpoint = params.Context?.apiEndpoint;
-        const apiKey = params.Context?.apiKey;
-        const timeout = params.Context?.timeout || 30000;
-        
-        if (!endpoint || !apiKey) {
-            return {
-                Success: false,
-                ResultCode: 'MISSING_CONTEXT',
-                Message: 'API endpoint and key are required in context'
-            };
-        }
-        
-        // Use context for API call
-        const requestData = params.Params.find(p => p.Name === 'RequestData')?.Value;
-        
-        try {
-            const response = await this.callAPI(endpoint, apiKey, requestData, timeout);
-            
-            // Set output parameter
-            const outputParam = params.Params.find(p => p.Name === 'ResponseData');
-            if (outputParam) {
-                outputParam.Value = response;
-            }
-            
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: 'API call completed successfully',
-                Params: params.Params
-            };
-        } catch (error) {
-            return {
-                Success: false,
-                ResultCode: 'API_ERROR',
-                Message: error.message
-            };
-        }
+@RegisterClass(BaseAction, 'Fetch External Data')
+export class FetchExternalDataAction extends BaseOAuthAction {
+    protected async refreshAccessToken(): Promise<void> {
+        // Platform-specific token refresh logic
+        const response = await fetch('https://api.example.com/oauth/token', {
+            method: 'POST',
+            body: new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: this.getRefreshToken(),
+            })
+        });
+        const data = await response.json();
+        await this.updateStoredTokens(data.access_token, data.refresh_token, data.expires_in);
     }
-    
-    private async callAPI(endpoint: string, apiKey: string, data: any, timeout: number): Promise<any> {
-        // Implementation details
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        
-        try {
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data),
-                signal: controller.signal
+
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        const companyIntegrationId = params.Params.find(
+            p => p.Name === 'CompanyIntegrationID'
+        )?.Value as string;
+
+        // Initialize OAuth (loads tokens, refreshes if expired)
+        if (!await this.initializeOAuth(companyIntegrationId)) {
+            return this.handleOAuthError(new Error('OAuth initialization failed'));
+        }
+
+        // Make authenticated request with automatic retry on 401
+        const data = await this.makeAuthenticatedRequest(async (token) => {
+            const res = await fetch('https://api.example.com/data', {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            
-            clearTimeout(timeoutId);
-            return await response.json();
-        } catch (error) {
-            clearTimeout(timeoutId);
-            throw error;
-        }
+            return res.json();
+        });
+
+        return { Success: true, ResultCode: 'SUCCESS', Message: JSON.stringify(data) };
     }
 }
 ```
 
-#### Running Actions with Context
+### Using OAuth2Manager Directly
 
-```typescript
-import { ActionEngineServer } from '@memberjunction/actions';
-import { RunActionParams } from '@memberjunction/actions-base';
-
-// Define context type
-interface APIContext {
-    apiEndpoint: string;
-    apiKey: string;
-    timeout: number;
-    retryCount: number;
-}
-
-// Configure parameters with context
-const params = new RunActionParams<APIContext>();
-params.Action = apiCallAction;
-params.ContextUser = currentUser;
-params.Params = [
-    { Name: 'RequestData', Value: { orderId: '12345' }, Type: 'Input' },
-    { Name: 'ResponseData', Value: null, Type: 'Output' }
-];
-
-// Set runtime context
-params.Context = {
-    apiEndpoint: process.env.API_ENDPOINT,
-    apiKey: process.env.API_KEY,
-    timeout: 10000,
-    retryCount: 3
-};
-
-// Execute with typed context
-const result = await ActionEngineServer.Instance.RunAction(params);
-```
-
-#### Context vs Parameters
-
-**Use Context for:**
-- Environment-specific configuration (API endpoints, service URLs)
-- Runtime credentials (API keys, tokens)
-- Session information (user preferences, correlation IDs)
-- Feature flags and toggles
-- Timeout and retry policies
-
-**Use Parameters for:**
-- Business data (customer ID, order details)
-- Action-specific inputs (email content, calculation values)
-- Data that should be logged and audited
-- Values that need to be stored in the database
-- Output values that other actions may depend on
-
-The context is particularly useful when actions are executed from AI agents, as it allows the agent to pass runtime information down through the entire execution hierarchy without modifying the action's formal parameter structure.
-
-### Entity Actions
-
-Entity Actions are triggered automatically during entity lifecycle events. To work with entity actions, use the `EntityActionEngineServer`:
-
-```typescript
-import { EntityActionEngineServer } from '@memberjunction/actions';
-import { EntityActionInvocationParams } from '@memberjunction/actions-base';
-
-const entityActionEngine = EntityActionEngineServer.Instance;
-
-// Run an entity action
-const params: EntityActionInvocationParams = {
-    EntityAction: entityActionEntity,
-    InvocationType: invocationTypeEntity, // e.g., 'BeforeCreate', 'AfterUpdate'
-    EntityObject: entityInstance,
-    ContextUser: currentUser
-};
-
-const result = await entityActionEngine.RunEntityAction(params);
-```
-
-### Creating Custom Action Filters
-
-Action filters determine whether an action should run. Create custom filters by extending `BaseActionFilter`:
-
-```typescript
-import { BaseActionFilter } from '@memberjunction/actions';
-import { RunActionParams } from '@memberjunction/actions-base';
-import { ActionFilterEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-
-@RegisterClass(BaseActionFilter, 'MyCustomFilter')
-export class MyCustomFilter extends BaseActionFilter {
-    protected async InternalRun(
-        params: RunActionParams, 
-        filter: ActionFilterEntity
-    ): Promise<boolean> {
-        // Implement your filter logic
-        // Return true to allow action execution, false to skip
-        return params.ContextUser.IsActive === true;
-    }
-}
-```
-
-## API Reference
-
-### Classes
-
-#### ActionEngineServer
-
-The main engine for executing actions.
-
-**Methods:**
-- `RunAction(params: RunActionParams): Promise<ActionResult>` - Executes an action with full control over parameters
-- `RunActionByID(params: RunActionByNameParams): Promise<ActionResult>` - Convenience method to run an action by its ID
-- `Config(forceRefresh?: boolean, contextUser?: UserInfo): Promise<void>` - Configures the engine (inherited from base)
-
-#### BaseAction
-
-Abstract base class for all actions. Note that BaseAction does not use generics - context typing is achieved through the RunActionParams parameter.
-
-**Methods:**
-- `Run(params: RunActionParams): Promise<ActionResultSimple>` - Public method called by the engine
-- `InternalRunAction(params: RunActionParams): Promise<ActionResultSimple>` - Abstract method to implement action logic
-
-#### EntityActionEngineServer
-
-Engine specifically for entity-related actions.
-
-**Methods:**
-- `RunEntityAction(params: EntityActionInvocationParams): Promise<EntityActionResult>` - Executes an entity action
-
-#### BaseActionFilter
-
-Abstract base class for action filters.
-
-**Methods:**
-- `Run(params: RunActionParams, filter: ActionFilterEntity): Promise<boolean>` - Public method called by the engine
-- `InternalRun(params: RunActionParams, filter: ActionFilterEntity): Promise<boolean>` - Abstract method to implement filter logic
-
-#### ActionEntityServerEntity
-
-Server-side entity class for Actions with AI-powered code generation. This class is located in the `@memberjunction/core-entities-server` package.
-
-**Key Features:**
-- Automatic code generation from natural language prompts
-- Code validation and improvement through AI
-- Library dependency management
-- Transaction-safe save operations
-- Automatic creation of action parameters and result codes from AI-generated definitions
-
-### Types and Interfaces
-
-The package exports all types from `@memberjunction/actions-base`, including:
-
-- `RunActionParams` - Parameters for running an action
-- `ActionResult` - Detailed result of action execution
-- `ActionResultSimple` - Simplified action result
-- `ActionParam` - Parameter definition for actions
-- `EntityActionInvocationParams` - Parameters for entity actions
-- `EntityActionResult` - Result of entity action execution
-
-## Entity Action Invocation Types
-
-The framework supports various invocation types for entity actions:
-
-### Single Record Operations
-- `Read` - Triggered when reading an entity
-- `BeforeCreate` - Before creating a new record
-- `AfterCreate` - After creating a new record
-- `BeforeUpdate` - Before updating a record
-- `AfterUpdate` - After updating a record
-- `BeforeDelete` - Before deleting a record
-- `AfterDelete` - After deleting a record
-
-### Multiple Record Operations
-- `List` - Actions operating on a list of records
-- `View` - Actions operating on records from a view
-
-### Validation
-- `Validate` - Special invocation type for validation logic
-
-## Code Generation
-
-The framework includes sophisticated AI-powered code generation capabilities:
-
-1. **Natural Language Input**: Define action behavior using plain English in the `UserPrompt` field
-2. **Automatic Code Generation**: The system generates TypeScript code based on your prompt
-3. **Code Validation**: Generated code is automatically validated and improved
-4. **Library Management**: Automatic tracking and importing of required libraries
-
-Example workflow:
-```typescript
-// In your database, create an Action record with:
-// Name: "SendWelcomeEmail"
-// Type: "Generated"
-// UserPrompt: "Send a welcome email to a new user with their name and registration date"
-
-// The system will automatically generate the implementation code
-```
-
-## Best Practices
-
-1. **Action Naming**: Use clear, descriptive names for actions (e.g., `SendInvoiceEmail`, `CalculateOrderTotal`)
-
-2. **Parameter Design**: Design action parameters to be reusable and flexible:
-   ```typescript
-   params: [
-       { Name: 'EmailTemplate', Type: 'string', ValueType: 'Scalar' },
-       { Name: 'RecipientUser', Type: 'User', ValueType: 'BaseEntity Sub-Class' },
-       { Name: 'EmailSent', Type: 'boolean', ValueType: 'Scalar', IsInput: false }
-   ]
-   ```
-
-3. **Error Handling**: Always include proper error handling in your actions:
-   ```typescript
-   try {
-       // Action logic
-       return { Success: true, ResultCode: 'SUCCESS', Message: 'Completed' };
-   } catch (error) {
-       return { Success: false, ResultCode: 'ERROR', Message: error.message };
-   }
-   ```
-
-4. **Logging**: The framework automatically logs action executions, but include additional logging for debugging:
-   ```typescript
-   import { LogError, LogStatus } from '@memberjunction/core';
-   
-   LogStatus('Starting custom action processing...');
-   ```
-
-5. **Transaction Management**: Use transaction groups for multi-step operations:
-   ```typescript
-   const tg = await metadata.CreateTransactionGroup();
-   try {
-       // Multiple operations
-       await tg.Submit();
-   } catch (error) {
-       // Automatic rollback on error
-   }
-   ```
-
-## Integration with Other MJ Packages
-
-This package integrates seamlessly with:
-
-- **@memberjunction/core**: Provides base entity functionality and metadata access
-- **@memberjunction/ai**: Enables AI-powered code generation
-- **@memberjunction/core-entities**: Provides strongly-typed entity classes
-- **@memberjunction/global**: Manages class registration and instantiation
-
-## OAuth2Manager (Server-Side Only)
-
-The package includes a generic OAuth2 token manager for server-side integrations:
+For standalone OAuth2 token management outside the action framework:
 
 ```typescript
 import { OAuth2Manager } from '@memberjunction/actions';
 
-// Initialize OAuth2 manager
 const oauth = new OAuth2Manager({
-    clientId: process.env.OAUTH_CLIENT_ID,
-    clientSecret: process.env.OAUTH_CLIENT_SECRET,
+    clientId: 'your-client-id',
+    clientSecret: 'your-client-secret',
     tokenEndpoint: 'https://api.example.com/oauth/token',
-    authorizationEndpoint: 'https://api.example.com/oauth/authorize',
     scopes: ['read', 'write'],
     onTokenUpdate: async (tokens) => {
-        // Persist updated tokens to database
+        // Persist tokens to your storage
         await saveTokens(tokens);
     }
 });
 
-// Get authorization URL for user to visit
-const authUrl = oauth.getAuthorizationUrl('random-state-string');
+// Get a valid token (auto-refreshes if expired)
+const token = await oauth.getAccessToken();
 
-// Exchange authorization code for tokens
-const tokens = await oauth.exchangeAuthorizationCode(code);
-
-// Get valid access token (auto-refreshes if needed)
-const accessToken = await oauth.getAccessToken();
+// Or use client credentials flow
+const tokenData = await oauth.getClientCredentialsToken();
 ```
 
-**Features:**
-- Multiple grant type support (authorization_code, client_credentials, refresh_token)
-- Automatic token refresh before expiration
-- Thread-safe token refresh (prevents concurrent requests)
-- Token persistence callbacks
-- Provider customization hooks for non-standard OAuth2 implementations
+## Architecture
 
-**⚠️ Server-Side Only**: OAuth2Manager requires `process.env` and should only be used in Node.js server environments, not in browser/client code.
+### Action Execution Pipeline
 
-## Advanced Topics
+The `ActionEngineServer.RunAction()` method follows this sequence:
 
-### Custom Action Engines
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Engine as ActionEngineServer
+    participant Filter as BaseActionFilter
+    participant CF as ClassFactory
+    participant Action as BaseAction Subclass
+    participant Log as Execution Log
 
-You can create custom action engines by extending `ActionEngineServer`:
+    Caller->>Engine: RunAction(params)
+    Engine->>Engine: ValidateInputs(params)
+    alt Validation fails
+        Engine->>Log: StartAndEndActionLog()
+        Engine-->>Caller: {Success: false}
+    end
+    Engine->>Filter: RunFilters(params)
+    alt Filters block execution
+        Engine->>Log: StartAndEndActionLog()
+        Engine-->>Caller: {Success: true, "Filters blocked"}
+    end
+    Engine->>Log: StartActionLog()
+    Engine->>CF: CreateInstance(BaseAction, driverClass)
+    CF-->>Engine: action instance
+    Engine->>Action: Run(params)
+    Action->>Action: InternalRunAction(params)
+    Action-->>Engine: ActionResultSimple
+    Engine->>Log: EndActionLog()
+    Engine-->>Caller: ActionResult
+```
 
-```typescript
-@RegisterClass(BaseEngine, 'ActionEngineBase', 1) // Higher priority
-export class CustomActionEngine extends ActionEngineServer {
-    protected async ValidateInputs(params: RunActionParams): Promise<boolean> {
-        // Custom validation logic
-        return super.ValidateInputs(params);
+### Entity Action Invocation
+
+Entity actions are bound to entity lifecycle events. The `EntityActionEngineServer` delegates to invocation-type-specific handlers via ClassFactory:
+
+```mermaid
+classDiagram
+    class EntityActionInvocationBase {
+        <<abstract>>
+        +InvokeAction(params) EntityActionResult
+        +MapParams(params, entityActionParams, entity) ActionParam[]
+        +SafeEvalScript(id, script, entity) any
     }
-    
-    protected async RunFilters(params: RunActionParams): Promise<boolean> {
-        // Custom filter logic
-        return super.RunFilters(params);
+
+    class SingleRecord {
+        +InvokeAction(params) EntityActionResult
+        +ValidateParams(params) boolean
     }
-}
+
+    class MultipleRecords {
+        +InvokeAction(params) EntityActionResult
+        #GetRecordList() BaseEntity[]
+    }
+
+    class Validate {
+        +InvokeAction(params) EntityActionResult
+    }
+
+    EntityActionInvocationBase <|-- SingleRecord
+    EntityActionInvocationBase <|-- MultipleRecords
+    SingleRecord <|-- Validate
+
+    note for SingleRecord "Registered for: Read, BeforeCreate,\nBeforeUpdate, BeforeDelete, AfterCreate,\nAfterUpdate, AfterDelete, SingleRecord"
+    note for MultipleRecords "Registered for: List, View"
+    note for Validate "Registered for: Validate"
 ```
 
-### Script Evaluation in Entity Actions
+### Class Hierarchy
 
-Entity actions support dynamic script evaluation for parameter mapping:
+```mermaid
+classDiagram
+    class BaseAction {
+        <<abstract>>
+        +Run(params) ActionResultSimple
+        #InternalRunAction(params)* ActionResultSimple
+    }
 
-```typescript
-// In EntityActionParam configuration:
-{
-    ValueType: 'Script',
-    Value: `
-        const user = EntityActionContext.entityObject;
-        EntityActionContext.result = user.Email.toUpperCase();
-    `
-}
+    class BaseOAuthAction {
+        <<abstract>>
+        #initializeOAuth(id) boolean
+        #getAccessToken() string
+        #makeAuthenticatedRequest(fn) T
+        #refreshAccessToken()* void
+    }
+
+    class BaseActionFilter {
+        <<abstract>>
+        +Run(params, filter) boolean
+        #InternalRun(params, filter)* boolean
+    }
+
+    class ActionEngineServer {
+        +RunAction(params) ActionResult
+        #ValidateInputs(params) boolean
+        #RunFilters(params) boolean
+        #InternalRunAction(params) ActionResult
+    }
+
+    class EntityActionEngineServer {
+        +RunEntityAction(params) EntityActionResult
+    }
+
+    class OAuth2Manager {
+        +getAccessToken() string
+        +getAuthorizationUrl() string
+        +exchangeAuthorizationCode(code) OAuth2TokenData
+        +getClientCredentialsToken() OAuth2TokenData
+        +refreshAccessToken() OAuth2TokenData
+    }
+
+    BaseAction <|-- BaseOAuthAction
+    ActionEngineServer --> BaseAction : dispatches to
+    ActionEngineServer --> BaseActionFilter : evaluates
+    EntityActionEngineServer --> ActionEngineServer : delegates to
+    BaseOAuthAction --> OAuth2Manager : can use
 ```
 
-## Troubleshooting
+## API Reference
 
-1. **Action Not Found**: Ensure your action class is properly registered with `@RegisterClass`
-2. **Code Generation Fails**: Check that AI models are configured and API keys are set
-3. **Filter Not Running**: Verify filter is associated with the action in metadata
-4. **Entity Action Not Triggering**: Confirm invocation type matches the entity operation
+### ActionEngineServer
 
-## License
+Singleton engine that executes actions. Access via `ActionEngineServer.Instance`.
 
-This package is part of the MemberJunction ecosystem. See the main repository for license information. 
+| Method | Description |
+|--------|-------------|
+| `Config(forceRefresh, contextUser)` | Initialize/refresh the engine's action and filter metadata |
+| `RunAction(params)` | Execute an action through the full pipeline (validate, filter, dispatch, log) |
+
+### BaseAction
+
+Abstract base class for all action implementations.
+
+| Method | Description |
+|--------|-------------|
+| `Run(params)` | Public entry point — calls `InternalRunAction` |
+| `InternalRunAction(params)` | **Abstract** — implement your action logic here |
+
+### BaseOAuthAction
+
+Abstract base for actions requiring OAuth authentication. Extends `BaseAction`.
+
+| Method | Description |
+|--------|-------------|
+| `initializeOAuth(companyIntegrationId)` | Load integration, check/refresh tokens |
+| `getAccessToken()` | Get the current access token |
+| `makeAuthenticatedRequest(fn)` | Execute a request with automatic retry on 401/403 |
+| `refreshAccessToken()` | **Abstract** — implement platform-specific token refresh |
+| `updateStoredTokens(access, refresh?, expiresIn?)` | Persist new tokens to the Company Integration entity |
+| `handleOAuthError(error)` | Return a standardized error result for OAuth failures |
+
+### BaseActionFilter
+
+Abstract base for pre-execution filters.
+
+| Method | Description |
+|--------|-------------|
+| `Run(params, filter)` | Public entry point — calls `InternalRun` |
+| `InternalRun(params, filter)` | **Abstract** — implement filter logic, return `true` to allow execution |
+
+### EntityActionEngineServer
+
+Singleton engine for entity-bound actions. Access via `EntityActionEngineServer.Instance`.
+
+| Method | Description |
+|--------|-------------|
+| `RunEntityAction(params)` | Execute an entity action, dispatching to the correct invocation type handler |
+
+### OAuth2Manager
+
+Standalone OAuth2 token manager supporting multiple grant types.
+
+| Method | Description |
+|--------|-------------|
+| `getAccessToken()` | Get a valid token, auto-refreshing if needed (thread-safe) |
+| `getAuthorizationUrl(state?)` | Build the authorization URL for auth code flow |
+| `exchangeAuthorizationCode(code)` | Exchange an auth code for tokens |
+| `getClientCredentialsToken()` | Obtain tokens via client credentials flow |
+| `refreshAccessToken()` | Refresh using the stored refresh token |
+| `setTokens(access, refresh?, expiresIn?)` | Set tokens obtained externally |
+| `isTokenValid()` | Check if current token is valid (with buffer) |
+
+## Dependencies
+
+This package depends on:
+
+- [@memberjunction/global](../../MJGlobal/README.md) — ClassFactory and `@RegisterClass` decorator
+- [@memberjunction/core](../../MJCore/README.md) — `Metadata`, `RunView`, `BaseEntity`, logging utilities
+- [@memberjunction/actions-base](../Base/README.md) — Shared types (`ActionEngineBase`, `RunActionParams`, `ActionResult`, etc.)
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) — Generated entity classes (`ActionExecutionLogEntity`, `ActionFilterEntity`, etc.)
+- [@memberjunction/ai](../../AI/Core/README.md) — AI model integration
+- [@memberjunction/ai-core-plus](../../AI/CorePlus/README.md) — Extended AI utilities
+- [@memberjunction/aiengine](../../AI/Engine/README.md) — AI engine orchestration
+- [@memberjunction/ai-prompts](../../AI/Prompts/README.md) — AI prompt execution
+
+## Related Packages
+
+- [@memberjunction/actions-base](../Base/README.md) — Shared types and base classes used by both client and server
+- [CoreActions](../CoreActions/) — Built-in action implementations (Create Record, generated actions, etc.)
+- [ScheduledActions](../ScheduledActions/) — Scheduled action execution support
+- [ApolloEnrichment](../ApolloEnrichment/) — Apollo data enrichment actions
+- [ContentAutotag](../ContentAutotag/) — Content auto-tagging actions
+- [CodeExecution](../CodeExecution/) — Dynamic code execution actions
+
+For the Actions system philosophy and development guide, see the [Actions CLAUDE.md](../CLAUDE.md).
+
+## Contributing
+
+See the [MemberJunction Contributing Guide](../../../CONTRIBUTING.md) for development setup and guidelines.

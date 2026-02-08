@@ -45,6 +45,26 @@ export type CategoryInfo = {
     description: string;
 }
 
+/**
+ * Result from LLM-assisted virtual entity field decoration.
+ * Identifies PKs, FKs, and field descriptions for constraint-less views.
+ */
+export type VirtualEntityDecorationResult = {
+    primaryKeys: string[];
+    foreignKeys: Array<{
+        fieldName: string;
+        relatedEntityName: string;
+        relatedFieldName: string;
+        confidence: 'high' | 'medium' | 'low';
+    }>;
+    fieldDescriptions: Array<{
+        fieldName: string;
+        description: string;
+        extendedType: string | null;
+    }>;
+    reasoning: string;
+}
+
 export type FormLayoutResult = {
     entityIcon?: string;
     fieldCategories: Array<{
@@ -536,6 +556,80 @@ export class AdvancedGeneration {
             }
         } catch (error) {
             LogError('AdvancedGeneration', `Error in parseCheckConstraint: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Decorates virtual entity fields using LLM analysis of the view definition.
+     * Identifies primary keys, foreign keys, and generates field descriptions
+     * for virtual entities that lack database constraints.
+     *
+     * @param entityName The virtual entity name
+     * @param schemaName The schema containing the view
+     * @param viewName The SQL view name
+     * @param viewDefinition The SQL view definition text
+     * @param entityDescription Optional entity description
+     * @param fields Array of field info objects with Name, Type, Length, AllowsNull, IsPrimaryKey, RelatedEntityName
+     * @param availableEntities Array of available entities for FK resolution
+     * @param contextUser The context user for AI operations
+     * @returns Decoration result or null if feature disabled or LLM call fails
+     */
+    public async decorateVirtualEntityFields(
+        entityName: string,
+        schemaName: string,
+        viewName: string,
+        viewDefinition: string,
+        entityDescription: string,
+        fields: Array<{
+            Name: string;
+            Type: string;
+            Length: number;
+            AllowsNull: boolean;
+            IsPrimaryKey: boolean;
+            RelatedEntityName: string | null;
+        }>,
+        availableEntities: Array<{
+            Name: string;
+            SchemaName: string;
+            BaseTable: string;
+            PrimaryKeyField: string;
+        }>,
+        contextUser: UserInfo
+    ): Promise<VirtualEntityDecorationResult | null> {
+        if (!this.featureEnabled('VirtualEntityFieldDecoration')) {
+            return null;
+        }
+
+        try {
+            const prompt = await this.getPromptEntity('CodeGen: Virtual Entity Field Decoration', contextUser);
+
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = {
+                entityName,
+                schemaName,
+                viewName,
+                viewDefinition,
+                entityDescription: entityDescription || 'No description available',
+                fields,
+                availableEntities: availableEntities.slice(0, 200) // Limit to prevent token overflow
+            };
+            params.contextUser = contextUser;
+
+            const result: AIPromptRunResult<VirtualEntityDecorationResult> =
+                await this._promptRunner.ExecutePrompt<VirtualEntityDecorationResult>(params);
+
+            if (result.success && result.result) {
+                LogStatus(`Virtual entity field decoration completed for ${entityName} — ` +
+                    `${result.result.primaryKeys?.length || 0} PKs, ${result.result.foreignKeys?.length || 0} FKs identified`);
+                return result.result;
+            } else {
+                LogError('AdvancedGeneration', `Virtual entity field decoration failed for ${entityName}: ${result.errorMessage}`);
+                return null;
+            }
+        } catch (error) {
+            LogError('AdvancedGeneration', `Error in decorateVirtualEntityFields for ${entityName}: ${error}`);
             return null;
         }
     }

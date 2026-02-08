@@ -20,6 +20,3 @@ export class ContentTypeAttributeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadContentTypeAttributeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

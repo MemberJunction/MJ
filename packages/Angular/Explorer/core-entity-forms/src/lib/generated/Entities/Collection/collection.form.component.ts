@@ -27,6 +27,3 @@ export class CollectionFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadCollectionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

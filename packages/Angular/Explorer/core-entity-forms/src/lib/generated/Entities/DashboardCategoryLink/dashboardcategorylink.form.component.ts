@@ -22,6 +22,3 @@ export class DashboardCategoryLinkFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDashboardCategoryLinkFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

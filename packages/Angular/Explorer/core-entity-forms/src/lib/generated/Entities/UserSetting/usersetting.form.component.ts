@@ -21,6 +21,3 @@ export class UserSettingFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserSettingFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

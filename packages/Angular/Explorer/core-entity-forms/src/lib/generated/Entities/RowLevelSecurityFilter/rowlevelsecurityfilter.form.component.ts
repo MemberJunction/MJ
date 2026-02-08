@@ -24,6 +24,3 @@ export class RowLevelSecurityFilterFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadRowLevelSecurityFilterFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

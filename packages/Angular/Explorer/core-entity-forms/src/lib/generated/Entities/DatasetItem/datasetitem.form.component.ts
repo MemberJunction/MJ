@@ -23,6 +23,3 @@ export class DatasetItemFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDatasetItemFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

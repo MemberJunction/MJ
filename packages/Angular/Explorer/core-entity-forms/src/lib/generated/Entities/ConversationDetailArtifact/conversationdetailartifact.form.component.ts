@@ -23,6 +23,3 @@ export class ConversationDetailArtifactFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadConversationDetailArtifactFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

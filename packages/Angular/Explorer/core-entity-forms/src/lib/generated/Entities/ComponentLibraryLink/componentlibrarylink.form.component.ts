@@ -22,6 +22,3 @@ export class ComponentLibraryLinkFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadComponentLibraryLinkFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

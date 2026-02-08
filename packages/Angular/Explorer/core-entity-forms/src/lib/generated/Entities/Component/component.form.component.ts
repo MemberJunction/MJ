@@ -28,6 +28,3 @@ export class ComponentFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadComponentFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

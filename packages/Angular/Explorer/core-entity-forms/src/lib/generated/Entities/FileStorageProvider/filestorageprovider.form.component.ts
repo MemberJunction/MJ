@@ -29,6 +29,3 @@ export class FileStorageProviderFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadFileStorageProviderFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -23,6 +23,3 @@ export class IntegrationURLFormatFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadIntegrationURLFormatFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

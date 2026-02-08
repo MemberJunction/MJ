@@ -1355,6 +1355,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
+        // IS-A parent entity save: the full ORM pipeline (permissions, validation, events)
+        // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
+        // mutation will include all chain fields. Return current entity state.
+        if (options?.IsParentEntitySave) {
+            const result = new BaseEntityResult();
+            result.StartedAt = new Date();
+            result.EndedAt = new Date();
+            result.Type = entity.IsSaved ? 'update' : 'create';
+            result.Success = true;
+            result.NewValues = entity.GetAll();
+            entity.ResultHistory.push(result);
+            return result.NewValues;
+        }
+
         const result = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing(); // as of the time of writing, this isn't technically needed because we are not doing any async preprocessing, but it is good to have it here for future use in case something is added with async between here and the TransactionItem being added.

@@ -22,6 +22,3 @@ export class AuditLogFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAuditLogFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

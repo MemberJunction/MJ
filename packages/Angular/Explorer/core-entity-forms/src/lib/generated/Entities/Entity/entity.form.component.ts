@@ -73,6 +73,3 @@ export class EntityFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadEntityFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

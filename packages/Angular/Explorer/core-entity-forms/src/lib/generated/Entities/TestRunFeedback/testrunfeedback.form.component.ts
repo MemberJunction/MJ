@@ -22,6 +22,3 @@ export class TestRunFeedbackFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadTestRunFeedbackFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

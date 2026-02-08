@@ -449,7 +449,9 @@ export class ${classPrefix}${typeNameBase}Input {`;
     const fieldsToInclude = entity.Fields.filter((f) => {
       // include primary key for updates and also for creates if it is not an autoincrement field
       const includePrimaryKey = classPrefix === 'Update' || !f.AutoIncrement;
-      return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly
+      // IS-A parent fields are virtual but writable through the child entity's ORM routing
+      const isISAParentField = f.IsVirtual && f.AllowUpdateAPI && entity.IsChildType;
+      return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly || isISAParentField;
     });
 
     // sort the fields by sequence and created date for consistent ordering

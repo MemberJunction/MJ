@@ -26,6 +26,3 @@ export class UserNotificationTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserNotificationTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

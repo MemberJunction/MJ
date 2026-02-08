@@ -23,6 +23,3 @@ export class VersionInstallationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadVersionInstallationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

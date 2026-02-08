@@ -92,21 +92,26 @@ export const loadModule = () => {
             typeString += ' | null';
           }
         }
-        const fieldDeprecatedFlag: string = e.Status === 'Deprecated' || e.Status === 'Disabled' ? 
+        const fieldDeprecatedFlag: string = e.Status === 'Deprecated' || e.Status === 'Disabled' ?
             `\n    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
-        const fieldDisabledFlag: string = e.Status === 'Disabled' ? 
+        const fieldDisabledFlag: string = e.Status === 'Disabled' ?
             `\n    * * @disabled This field is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
+
+        // IS-A parent field detection: virtual fields with AllowUpdateAPI on child entities
+        const isISAParentField = e.IsVirtual && e.AllowUpdateAPI && entity.IsChildType;
+        const isaSourceComment = isISAParentField
+            ? `\n    * * IS-A Source: Inherited from ${this.getISAFieldSourceEntity(entity, e)}`
+            : '';
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + e.Description : ''}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + e.Description : ''}${isaSourceComment}
     */
     get ${e.CodeName}(): ${typeString} {
         return this.Get('${e.Name}');
     }`;
-        if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement)) {
-          // Generate setter for non-readonly fields OR for primary keys that are not auto-increment
-          // This allows manual override of non-auto-increment primary keys (like UUIDs)
+        if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement) || isISAParentField) {
+          // Generate setter for non-readonly fields, non-auto-increment PKs, or IS-A parent fields
           sRet += `
     set ${e.CodeName}(value: ${typeString}) {
         this.Set('${e.Name}', value);
@@ -234,6 +239,23 @@ ${fields}
 
       return sRet;
     }
+  }
+
+  /**
+   * Finds the source parent entity for an IS-A inherited field by walking the parent chain.
+   * Returns the name of the parent entity that originally defines the field (as a non-virtual column).
+   */
+  protected getISAFieldSourceEntity(entity: EntityInfo, field: EntityFieldInfo): string {
+    for (const parent of entity.ParentChain) {
+      const parentField = parent.Fields.find(
+        pf => pf.Name === field.Name && !pf.IsVirtual
+      );
+      if (parentField) {
+        return parent.Name;
+      }
+    }
+    // Fallback: return the immediate parent entity name
+    return entity.ParentEntityInfo?.Name ?? 'parent entity';
   }
 
   public async LogAndGenerateValidateFunction(pool: sql.ConnectionPool, entity: EntityInfo, skipDBUpdate: boolean): Promise<string | null> {

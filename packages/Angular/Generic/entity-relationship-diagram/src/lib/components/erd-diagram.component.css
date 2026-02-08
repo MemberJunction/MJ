@@ -165,44 +165,30 @@
   }
 }
 
-/* Node highlighting styles - using MD3 color tokens */
+/* Node highlighting styles */
 :host ::ng-deep .erd-container svg .node .entity-rect.highlighted {
   stroke: var(--mat-sys-tertiary) !important;
   stroke-width: 4px !important;
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mat-sys-tertiary) 60%, transparent));
-  animation: pulse 1s ease-in-out infinite alternate;
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-rect {
-  stroke: var(--mat-sys-primary) !important;
+  stroke: #4CAF50 !important;
   stroke-width: 4px !important;
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--mat-sys-primary) 80%, transparent));
-  fill: var(--mat-sys-primary-container) !important;
-  animation: selectedPulse 2s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 8px rgba(76, 175, 80, 0.5));
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-header {
-  fill: var(--mat-sys-primary) !important;
+  fill: #388E3C !important;
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-header-bottom {
-  fill: var(--mat-sys-primary) !important;
+  fill: #388E3C !important;
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-name {
-  fill: var(--mat-sys-on-primary) !important;
+  fill: white !important;
   font-weight: bold !important;
-}
-
-@keyframes selectedPulse {
-  0% {
-    stroke-width: 4px;
-    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--mat-sys-primary) 80%, transparent));
-  }
-  100% {
-    stroke-width: 5px;
-    filter: drop-shadow(0 0 16px var(--mat-sys-primary));
-  }
 }
 
 /* Related/connected nodes - using tertiary accent */
@@ -210,7 +196,6 @@
   stroke: var(--mat-sys-tertiary) !important;
   stroke-width: 3px !important;
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mat-sys-tertiary) 50%, transparent));
-  animation: entityPulse 1.5s ease-in-out infinite alternate;
 }
 
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-header {
@@ -256,7 +241,6 @@
   stroke-width: 4px !important;
   opacity: 1 !important;
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mat-sys-tertiary) 60%, transparent));
-  animation: linkPulse 1.5s ease-in-out infinite alternate;
 }
 
 :host ::ng-deep .erd-container svg .link-group .link-label {
@@ -285,33 +269,3 @@
   fill: var(--mat-sys-primary-container) !important;
 }
 
-@keyframes pulse {
-  0% {
-    stroke-width: 4px;
-  }
-  100% {
-    stroke-width: 6px;
-  }
-}
-
-@keyframes linkPulse {
-  0% {
-    stroke-width: 4px;
-    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mat-sys-tertiary) 60%, transparent));
-  }
-  100% {
-    stroke-width: 5px;
-    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--mat-sys-tertiary) 80%, transparent));
-  }
-}
-
-@keyframes entityPulse {
-  0% {
-    stroke-width: 3px;
-    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mat-sys-tertiary) 50%, transparent));
-  }
-  100% {
-    stroke-width: 4px;
-    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mat-sys-tertiary) 70%, transparent));
-  }
-}

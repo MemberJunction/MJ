@@ -22,6 +22,3 @@ export class ConversationArtifactPermissionFormComponent extends BaseFormCompone
     }
 }
 
-export function LoadConversationArtifactPermissionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

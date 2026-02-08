@@ -23,6 +23,3 @@ export class AIModelPriceUnitTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIModelPriceUnitTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

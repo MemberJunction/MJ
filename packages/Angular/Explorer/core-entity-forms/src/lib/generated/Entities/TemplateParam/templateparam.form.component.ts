@@ -23,6 +23,3 @@ export class TemplateParamFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadTemplateParamFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

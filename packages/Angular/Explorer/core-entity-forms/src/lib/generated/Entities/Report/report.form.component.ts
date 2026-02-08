@@ -27,6 +27,3 @@ export class ReportFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadReportFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

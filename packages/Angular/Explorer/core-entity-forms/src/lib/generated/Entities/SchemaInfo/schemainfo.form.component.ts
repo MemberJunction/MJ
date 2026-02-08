@@ -22,6 +22,3 @@ export class SchemaInfoFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadSchemaInfoFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

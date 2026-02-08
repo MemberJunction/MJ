@@ -9,7 +9,13 @@ module.exports = {
   ],
   transform: {
     '^.+\\.ts$': 'ts-jest',
+    '^.+\\.js$': ['ts-jest', { useESM: false }],
   },
+  // Transform ESM packages that Jest can't parse natively
+  // Uses full path pattern to match hoisted node_modules at repo root
+  transformIgnorePatterns: [
+    '/node_modules/(?!(uuid|lodash)/)',
+  ],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',

@@ -52,6 +52,3 @@ export class AIAgentFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIAgentFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

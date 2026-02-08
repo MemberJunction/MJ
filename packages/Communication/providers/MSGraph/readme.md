@@ -1,20 +1,40 @@
 # @memberjunction/communication-ms-graph
 
-Microsoft Graph Provider for the MemberJunction Communication Framework. This package provides email communication capabilities through Microsoft Graph API, allowing you to send, receive, reply to, and forward emails using Azure Active Directory service accounts.
+Microsoft Graph (Office 365 / Exchange Online) provider for the MemberJunction Communication Framework. This provider enables full mailbox operations -- sending, receiving, searching, managing folders, attachments, drafts, and more -- through the Microsoft Graph API with Azure AD application authentication.
 
-## Overview
+## Architecture
 
-The `@memberjunction/communication-ms-graph` package implements the `BaseCommunicationProvider` interface from the MemberJunction communication framework, specifically for Microsoft Graph email operations. It uses OAuth 2.0 client credentials flow for authentication and supports full email functionality including HTML/text content, attachments, and thread management.
+```mermaid
+graph TD
+    subgraph msgraph["@memberjunction/communication-ms-graph"]
+        MSP["MSGraphProvider"]
+        AUTH["Auth Module\n(ClientSecretCredential)"]
+        CFG["Config Module\n(Environment Variables)"]
+        CRED["MSGraphCredentials"]
+    end
 
-## Features
+    subgraph azure["Azure / Microsoft"]
+        AAD["Azure AD\n(OAuth2 Client Credentials)"]
+        GRAPH["Microsoft Graph API\n(/users/email/...)"]
+        MAIL["Exchange Online\nMailbox"]
+    end
 
-- **Send Emails**: Send single or bulk emails with HTML/text content
-- **Receive Emails**: Fetch emails with filtering, pagination, and read status management
-- **Reply to Emails**: Reply to existing email threads
-- **Forward Emails**: Forward emails to multiple recipients
-- **HTML to Text Conversion**: Automatic conversion of HTML email content to plain text
-- **Thread Management**: Track email conversations using thread IDs
-- **Service Account Support**: Uses Azure AD service accounts for authentication
+    subgraph base["@memberjunction/communication-types"]
+        BCP["BaseCommunicationProvider"]
+    end
+
+    BCP --> MSP
+    MSP --> AUTH
+    MSP --> CFG
+    MSP --> CRED
+    AUTH --> AAD
+    MSP --> GRAPH
+    GRAPH --> MAIL
+
+    style msgraph fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style azure fill:#7c5295,stroke:#563a6b,color:#fff
+    style base fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 ## Installation
 
@@ -24,235 +44,208 @@ npm install @memberjunction/communication-ms-graph
 
 ## Configuration
 
-This provider requires the following environment variables to be set:
+Set the following environment variables:
 
 ```env
-# Azure AD Application Registration
-AZURE_CLIENT_ID=your-client-id
-AZURE_TENANT_ID=your-tenant-id
-AZURE_CLIENT_SECRET=your-client-secret
-
-# Azure Endpoints
-AZURE_AAD_ENDPOINT=https://login.microsoftonline.com
-AZURE_GRAPH_ENDPOINT=https://graph.microsoft.com
-
-# Service Account
-AZURE_ACCOUNT_EMAIL=serviceaccount@yourdomain.com
-AZURE_ACCOUNT_ID=optional-account-id
+AZURE_TENANT_ID=your-azure-tenant-id
+AZURE_CLIENT_ID=your-azure-app-client-id
+AZURE_CLIENT_SECRET=your-azure-app-client-secret
+AZURE_ACCOUNT_EMAIL=mailbox@yourdomain.com
 ```
 
-### Azure AD Setup
+### Required Azure AD App Permissions (Application type)
 
-1. Register an application in Azure Active Directory
-2. Grant the following Microsoft Graph API permissions:
-   - `Mail.Read`
-   - `Mail.ReadWrite`
-   - `Mail.Send`
-   - `User.Read.All`
-3. Create a client secret for the application
-4. Grant admin consent for the permissions
+| Permission | Operations |
+|-----------|------------|
+| `Mail.Send` | SendSingleMessage, ForwardMessage, ReplyToMessage |
+| `Mail.Read` | GetMessages, GetSingleMessage, SearchMessages, ListFolders, ListAttachments, DownloadAttachment |
+| `Mail.ReadWrite` | CreateDraft, DeleteMessage, MoveMessage, MarkAsRead, ArchiveMessage |
+| `User.Read.All` | GetServiceAccount (user lookup, optional) |
+
+## Supported Operations
+
+This provider supports all 14 operations defined in `BaseCommunicationProvider`:
+
+| Operation | Description |
+|-----------|-------------|
+| `SendSingleMessage` | Send email via Graph API |
+| `GetMessages` | Retrieve messages with filtering and header extraction |
+| `GetSingleMessage` | Retrieve a single message by ID |
+| `ForwardMessage` | Forward email to new recipients |
+| `ReplyToMessage` | Reply to an existing email thread |
+| `CreateDraft` | Create a draft message in the mailbox |
+| `DeleteMessage` | Move to Deleted Items or permanently delete |
+| `MoveMessage` | Move message to a different mail folder |
+| `ListFolders` | List mail folders with optional message counts |
+| `MarkAsRead` | Mark messages as read or unread (batch) |
+| `ArchiveMessage` | Move message to Archive folder |
+| `SearchMessages` | Full-text search with KQL syntax and date filtering |
+| `ListAttachments` | List attachments on a message |
+| `DownloadAttachment` | Download attachment content as base64/Buffer |
 
 ## Usage
 
-### Basic Setup
+### Sending Email
 
 ```typescript
-import { MSGraphProvider } from '@memberjunction/communication-ms-graph';
-import { ProcessedMessage } from '@memberjunction/communication-types';
+import { CommunicationEngine } from '@memberjunction/communication-engine';
+import { Message } from '@memberjunction/communication-types';
 
-// The provider is automatically registered with the MemberJunction framework
-// using the @RegisterClass decorator with name 'Microsoft Graph'
-const provider = new MSGraphProvider();
+const engine = CommunicationEngine.Instance;
+await engine.Config(false, contextUser);
+
+const message = new Message();
+message.From = 'user@yourdomain.com';
+message.To = 'recipient@example.com';
+message.Subject = 'Hello from MS Graph';
+message.HTMLBody = '<h1>Hello</h1><p>Sent via Microsoft Graph.</p>';
+message.ContextData = { saveToSentItems: true };
+
+const result = await engine.SendSingleMessage(
+    'Microsoft Graph',
+    'Standard Email',
+    message
+);
 ```
 
-### Sending an Email
+### Per-Request Credentials
+
+Override credentials on a per-request basis for multi-tenant scenarios:
 
 ```typescript
-const message: ProcessedMessage = {
-    To: 'recipient@example.com',
-    Subject: 'Test Email',
-    ProcessedBody: 'This is a plain text email',
-    ProcessedHTMLBody: '<h1>This is an HTML email</h1>',
-    CCRecipients: ['cc@example.com'],
-    BCCRecipients: ['bcc@example.com']
-};
+import { MSGraphCredentials } from '@memberjunction/communication-ms-graph';
 
-const result = await provider.SendSingleMessage(message);
-
-if (result.Success) {
-    console.log('Email sent successfully');
-} else {
-    console.error('Failed to send email:', result.Error);
-}
+const result = await engine.SendSingleMessage(
+    'Microsoft Graph',
+    'Standard Email',
+    message,
+    undefined,
+    false,
+    {
+        tenantId: 'customer-tenant-id',
+        clientId: 'customer-app-id',
+        clientSecret: 'customer-secret',
+        accountEmail: 'user@customer.com'
+    } as MSGraphCredentials
+);
 ```
 
-### Receiving Emails
+### Reading Messages
 
 ```typescript
-import { GetMessagesParams } from '@memberjunction/communication-types';
-import { GetMessagesContextDataParams } from '@memberjunction/communication-ms-graph';
+const provider = engine.GetProvider('Microsoft Graph');
 
-const params: GetMessagesParams<GetMessagesContextDataParams> = {
+const result = await provider.GetMessages({
     NumMessages: 10,
     UnreadOnly: true,
+    IncludeHeaders: true,
     ContextData: {
-        Email: 'optional-service-account@domain.com', // Optional, defaults to AZURE_ACCOUNT_EMAIL
-        ReturnAsPlainText: true, // Converts HTML to plain text
-        MarkAsRead: true, // Marks messages as read after fetching
-        Filter: "(importance eq 'high')", // Optional OData filter
-        Top: 20 // Optional, overrides NumMessages
+        ReturnAsPlainText: true,
+        MarkAsRead: true
     }
-};
+});
 
-const result = await provider.GetMessages(params);
+result.Messages.forEach(msg => {
+    console.log(`${msg.From}: ${msg.Subject}`);
+    console.log(`Thread: ${msg.ThreadID}`);
+});
+```
 
+### Searching Messages
+
+MS Graph supports KQL (Keyword Query Language) for search:
+
+```typescript
+const result = await provider.SearchMessages({
+    Query: 'invoice',
+    FromDate: new Date('2025-01-01'),
+    MaxResults: 25,
+    FolderID: 'inbox-folder-id'
+});
+```
+
+### Creating Drafts
+
+```typescript
+const result = await engine.CreateDraft(message, 'Microsoft Graph', contextUser);
 if (result.Success) {
-    result.Messages.forEach(message => {
-        console.log(`From: ${message.From}`);
-        console.log(`Subject: ${message.Subject}`);
-        console.log(`Body: ${message.Body}`);
-        console.log(`Thread ID: ${message.ThreadID}`);
+    console.log(`Draft ID: ${result.DraftID}`);
+}
+```
+
+### Managing Folders
+
+```typescript
+// List top-level folders
+const folders = await provider.ListFolders({ IncludeCounts: true });
+folders.Folders.forEach(f => {
+    console.log(`${f.Name}: ${f.MessageCount} total, ${f.UnreadCount} unread`);
+});
+
+// List subfolders
+const subfolders = await provider.ListFolders({
+    ParentFolderID: 'parent-folder-id',
+    IncludeCounts: true
+});
+
+// Move a message
+await provider.MoveMessage({
+    MessageID: 'msg-id',
+    DestinationFolderID: 'folder-id'
+});
+
+// Archive a message
+await provider.ArchiveMessage({ MessageID: 'msg-id' });
+```
+
+### Downloading Attachments
+
+```typescript
+const attachments = await provider.ListAttachments({ MessageID: 'msg-id' });
+for (const att of attachments.Attachments) {
+    const download = await provider.DownloadAttachment({
+        MessageID: 'msg-id',
+        AttachmentID: att.ID
     });
+    // download.Content is a Buffer
+    // download.ContentBase64 is the raw base64 string
 }
 ```
 
-### Replying to an Email
+## Client Caching
 
-```typescript
-import { ReplyToMessageParams } from '@memberjunction/communication-types';
+The provider caches Microsoft Graph `Client` instances per credential set for performance. Environment credential clients are shared across all calls; per-request credential clients are cached by `tenantId:clientId`.
 
-const replyParams: ReplyToMessageParams = {
-    MessageID: 'original-message-id',
-    Message: {
-        To: 'recipient@example.com',
-        ProcessedBody: 'This is my reply',
-        CCRecipients: ['cc@example.com'],
-        BCCRecipients: ['bcc@example.com']
-    }
-};
+## System Folder Mapping
 
-const result = await provider.ReplyToMessage(replyParams);
+| Exchange Display Name | SystemFolderType |
+|----------------------|-----------------|
+| Inbox | `inbox` |
+| Sent Items | `sent` |
+| Drafts | `drafts` |
+| Deleted Items | `trash` |
+| Junk Email | `spam` |
+| Archive | `archive` |
+| Other folders | `other` |
 
-if (result.Success) {
-    console.log('Reply sent successfully');
-}
-```
+## HTML to Text Conversion
 
-### Forwarding an Email
-
-```typescript
-import { ForwardMessageParams } from '@memberjunction/communication-types';
-
-const forwardParams: ForwardMessageParams = {
-    MessageID: 'original-message-id',
-    Message: 'Please see the forwarded message below',
-    ToRecipients: ['forward-to@example.com'],
-    CCRecipients: ['cc@example.com'],
-    BCCRecipients: ['bcc@example.com']
-};
-
-const result = await provider.ForwardMessage(forwardParams);
-
-if (result.Success) {
-    console.log('Message forwarded successfully');
-}
-```
-
-## API Reference
-
-### MSGraphProvider
-
-The main class that implements email communication through Microsoft Graph.
-
-#### Methods
-
-##### `SendSingleMessage(message: ProcessedMessage): Promise<MessageResult>`
-Sends a single email message.
-
-##### `GetMessages(params: GetMessagesParams<GetMessagesContextDataParams>): Promise<GetMessagesResult<Message>>`
-Retrieves emails from the service account's mailbox with optional filtering.
-
-##### `ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult>`
-Replies to an existing email thread.
-
-##### `ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult>`
-Forwards an email to specified recipients.
-
-### Types
-
-#### `GetMessagesContextDataParams`
-Context data specific to MS Graph operations:
-
-```typescript
-type GetMessagesContextDataParams = {
-    Email?: string;           // Service account email (optional)
-    ReturnAsPlainText?: boolean; // Convert HTML to plain text
-    MarkAsRead?: boolean;     // Mark messages as read after fetching
-    Filter?: string;          // OData filter for message query
-    Top?: number;            // Number of messages to return
-}
-```
+When `ReturnAsPlainText` is set in `ContextData`, the provider uses the `html-to-text` library to convert HTML email bodies to plain text with 130-character word wrap.
 
 ## Dependencies
 
-### Core Dependencies
-- `@memberjunction/communication-types`: Base types and interfaces
-- `@memberjunction/core`: Core MemberJunction functionality
-- `@memberjunction/core-entities`: Entity management
-- `@memberjunction/global`: Global utilities and decorators
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/communication-types` | Base provider class and type definitions |
+| `@memberjunction/core` | Logging utilities |
+| `@memberjunction/global` | RegisterClass decorator |
+| `@microsoft/microsoft-graph-client` | Microsoft Graph SDK |
+| `@azure/identity` | Azure AD ClientSecretCredential |
+| `html-to-text` | HTML to plain text conversion |
 
-### Microsoft Graph Dependencies
-- `@microsoft/microsoft-graph-client`: Microsoft Graph API client
-- `@microsoft/microsoft-graph-types`: TypeScript types for Graph API
-- `@azure/identity`: Azure authentication library
-- `@azure/msal-node`: Microsoft Authentication Library
-
-### Utility Dependencies
-- `html-to-text`: HTML to plain text conversion
-- `axios`: HTTP client
-- `dotenv`: Environment variable management
-- `env-var`: Environment variable validation
-
-## Integration with MemberJunction
-
-This provider integrates seamlessly with the MemberJunction communication framework:
-
-1. **Automatic Registration**: The provider is automatically registered using the `@RegisterClass` decorator
-2. **Entity Support**: Works with MemberJunction entities for message persistence
-3. **AI Integration**: Compatible with AI-powered message processing through `@memberjunction/ai` packages
-4. **Template Support**: Can be used with the MemberJunction template engine for dynamic content
-
-## Build and Development
+## Development
 
 ```bash
-# Build the package
-npm run build
-
-# Development mode with watch
-npm start
-
-# Run tests (not yet implemented)
-npm test
+npm run build    # Compile TypeScript
+npm run clean    # Remove dist directory
 ```
-
-## Error Handling
-
-The provider includes comprehensive error handling:
-- All methods return result objects with `Success` boolean and error details
-- Errors are logged using MemberJunction's logging system
-- Network and authentication errors are gracefully handled
-
-## Security Considerations
-
-- Uses OAuth 2.0 client credentials flow
-- Requires admin-consented permissions
-- Service account credentials should be stored securely
-- Supports principle of least privilege through scoped permissions
-
-## License
-
-ISC License - see LICENSE file for details.
-
-## Author
-
-MemberJunction.com

@@ -25,6 +25,3 @@ export class QueryCategoryFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadQueryCategoryFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

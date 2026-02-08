@@ -20,6 +20,3 @@ export class ContentSourceTypeParamFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadContentSourceTypeParamFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -22,6 +22,3 @@ export class CollectionArtifactFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadCollectionArtifactFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

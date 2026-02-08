@@ -22,6 +22,3 @@ export class ArtifactUseFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadArtifactUseFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

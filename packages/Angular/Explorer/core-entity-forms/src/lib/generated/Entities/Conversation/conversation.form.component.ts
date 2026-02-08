@@ -31,6 +31,3 @@ export class ConversationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadConversationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

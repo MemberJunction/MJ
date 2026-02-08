@@ -21,6 +21,3 @@ export class RecordMergeDeletionLogFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadRecordMergeDeletionLogFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

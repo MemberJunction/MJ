@@ -35,6 +35,3 @@ export class ConversationDetailFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadConversationDetailFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

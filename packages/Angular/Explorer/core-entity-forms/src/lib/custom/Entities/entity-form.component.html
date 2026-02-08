@@ -14,7 +14,28 @@
             <span class="status-badge" [ngClass]="statusClass">
               {{ entity.Status }}
             </span>
+            @if (IsVirtualEntity) {
+              <span class="status-badge isa-badge virtual">
+                <i class="fa-solid fa-eye"></i> Virtual
+              </span>
+            }
+            @if (IsChildType) {
+              <span class="status-badge isa-badge child-type" (click)="NavigateToEntity(ParentChain[0])" title="Click to navigate to parent entity">
+                <i class="fa-solid fa-arrow-up"></i> IS-A {{ ParentChain[0]?.Name }}
+              </span>
+            }
+            @if (IsParentType) {
+              <span class="status-badge isa-badge parent-type">
+                <i class="fa-solid fa-sitemap"></i> {{ ChildEntities.length }} child type{{ ChildEntities.length !== 1 ? 's' : '' }}
+              </span>
+            }
           </div>
+          @if (IsChildType) {
+            <div class="isa-breadcrumb">
+              <i class="fa-solid fa-layer-group"></i>
+              {{ IsaBreadcrumb }}
+            </div>
+          }
           <div class="entity-subtitle">
             <span class="schema-table">{{ entity.SchemaName }}.{{ entity.BaseTable }}</span>
             <span class="separator">|</span>
@@ -175,6 +196,109 @@
                   }
                 </div>
               </div>
+              <!-- IS-A Type Hierarchy -->
+              @if (HasISARelationship || IsVirtualEntity) {
+                <div class="info-panel isa-panel">
+                  <h3 class="panel-title">
+                    <i class="fa-solid fa-layer-group"></i>
+                    Type Hierarchy
+                  </h3>
+                  @if (IsVirtualEntity) {
+                    <div class="isa-info-row virtual-info">
+                      <i class="fa-solid fa-eye"></i>
+                      <span>Virtual Entity — read-only view backed by <span class="code">{{ entity.BaseView }}</span></span>
+                    </div>
+                  }
+                  @if (IsChildType) {
+                    <div class="isa-chain">
+                      <div class="isa-chain-label">Inheritance Chain</div>
+                      <div class="isa-chain-nodes">
+                        <span class="isa-node current">{{ entity.Name }}</span>
+                        @for (parent of ParentChain; track parent.ID) {
+                          <i class="fa-solid fa-arrow-right isa-arrow"></i>
+                          <span class="isa-node parent clickable" (click)="NavigateToEntity(parent)" [title]="'Navigate to ' + parent.Name">
+                            {{ parent.Name }}
+                          </span>
+                        }
+                      </div>
+                      <div class="isa-inherited-fields">
+                        <i class="fa-solid fa-table-cells"></i>
+                        <span>{{ InheritedFieldCount }} field{{ InheritedFieldCount !== 1 ? 's' : '' }} inherited from parent{{ ParentChain.length > 1 ? 's' : '' }}</span>
+                      </div>
+                    </div>
+                    <!-- IS-A Field Inspector: shows fields grouped by source entity -->
+                    @if (isaFieldGroups.length > 1) {
+                      <div class="isa-field-inspector">
+                        <div class="isa-chain-label clickable" (click)="isaFieldInspectorExpanded = !isaFieldInspectorExpanded">
+                          <i class="fa-solid" [ngClass]="isaFieldInspectorExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                          Field Source Inspector
+                        </div>
+                        @if (isaFieldInspectorExpanded) {
+                          <div class="isa-inspector-groups">
+                            @for (group of isaFieldGroups; track group.EntityName) {
+                              <div class="isa-inspector-group" [class.own]="group.Level === 0" [class.inherited]="group.Level > 0">
+                                <div class="isa-inspector-header">
+                                  <span class="isa-inspector-entity">
+                                    @if (group.Level === 0) {
+                                      <i class="fa-solid fa-circle" style="color: #3b82f6; font-size: 8px;"></i>
+                                    } @else {
+                                      <i class="fa-solid fa-arrow-up" style="color: #6366f1; font-size: 10px;"></i>
+                                    }
+                                    {{ group.Label }}
+                                  </span>
+                                  <span class="isa-inspector-count">{{ group.Fields.length }} field{{ group.Fields.length !== 1 ? 's' : '' }}</span>
+                                </div>
+                                <div class="isa-inspector-fields">
+                                  @for (field of group.Fields; track field.ID) {
+                                    <span class="isa-inspector-field" [title]="field.Description || field.Name">
+                                      {{ field.DisplayName || field.Name }}
+                                      <span class="isa-inspector-type">{{ field.Type }}</span>
+                                    </span>
+                                  }
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                    <!-- Sibling Types -->
+                    @if (SiblingEntities.length > 0) {
+                      <div class="isa-siblings">
+                        <div class="isa-chain-label">Sibling Types (disjoint under {{ ParentChain[0]?.Name }})</div>
+                        <div class="isa-child-list">
+                          @for (sibling of SiblingEntities; track sibling.ID) {
+                            <span class="isa-sibling-chip clickable" (click)="NavigateToEntity(sibling)" [title]="'Navigate to ' + sibling.Name">
+                              <i class="fa-solid fa-arrows-left-right"></i>
+                              {{ sibling.Name }}
+                            </span>
+                          }
+                        </div>
+                      </div>
+                    }
+                  }
+                  @if (IsParentType) {
+                    <div class="isa-children">
+                      <div class="isa-chain-label">Child Types</div>
+                      <div class="isa-child-list">
+                        @for (childCount of childEntityCounts; track childCount.EntityName) {
+                          <span class="isa-child-chip clickable" (click)="NavigateToEntity(childCount.EntityInfo)" [title]="'Navigate to ' + childCount.EntityName">
+                            <i class="fa-solid fa-arrow-down"></i>
+                            {{ childCount.EntityName }}
+                            <span class="isa-child-count">
+                              @if (childCount.IsLoading) {
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                              } @else {
+                                {{ childCount.RecordCount | number }}
+                              }
+                            </span>
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
               <!-- Database Info -->
               <div class="info-panel database-panel">
                 <h3 class="panel-title">
@@ -348,6 +472,11 @@
                                     <i class="fa-solid fa-lock"></i>
                                   </span>
                                 }
+                                @if (IsInheritedField(field)) {
+                                  <span class="badge inherited" [title]="'Inherited from ' + GetISAFieldSource(field)">
+                                    <i class="fa-solid fa-arrow-up"></i> {{ GetISAFieldSource(field) }}
+                                  </span>
+                                }
                               </div>
                             </div>
                           }
@@ -434,6 +563,11 @@
                             @if (field.Encrypt) {
                               <span class="flag-badge encrypted" title="Encrypted">
                                 <i class="fa-solid fa-lock"></i>
+                              </span>
+                            }
+                            @if (IsInheritedField(field)) {
+                              <span class="flag-badge inherited" [title]="'Inherited from ' + GetISAFieldSource(field)">
+                                <i class="fa-solid fa-arrow-up"></i> {{ GetISAFieldSource(field) }}
                               </span>
                             }
                           </div>
@@ -850,6 +984,80 @@
         @if (activeSection === 'settings') {
           <section class="section settings-section">
             <div class="section-content">
+              <!-- IS-A Type Relationship Configuration -->
+              @if (HasISARelationship || IsVirtualEntity) {
+                <div class="settings-panel isa-settings-panel">
+                  <h3 class="panel-title">
+                    <i class="fa-solid fa-layer-group"></i>
+                    Type Relationship (IS-A)
+                  </h3>
+                  <div class="config-grid">
+                    <div class="config-row">
+                      <span class="config-label">Virtual Entity</span>
+                      <span class="config-value">
+                        @if (IsVirtualEntity) {
+                          <i class="fa-solid fa-circle-check" style="color: #7c3aed;"></i> Yes — read-only view
+                        } @else {
+                          <i class="fa-solid fa-circle-minus" style="color: #94a3b8;"></i> No
+                        }
+                      </span>
+                    </div>
+                    <div class="config-row">
+                      <span class="config-label">Parent Entity</span>
+                      <span class="config-value">
+                        @if (IsChildType) {
+                          <span class="link" (click)="NavigateToEntity(ParentChain[0])" title="Navigate to parent entity">
+                            {{ ParentChain[0]?.Name }}
+                            <i class="fa-solid fa-arrow-right"></i>
+                          </span>
+                        } @else {
+                          <span class="muted">None</span>
+                        }
+                      </span>
+                    </div>
+                    @if (IsChildType) {
+                      <div class="config-row">
+                        <span class="config-label">Full Inheritance Chain</span>
+                        <span class="config-value">{{ IsaBreadcrumb }}</span>
+                      </div>
+                      <div class="config-row">
+                        <span class="config-label">Inherited Fields</span>
+                        <span class="config-value">{{ InheritedFieldCount }} field{{ InheritedFieldCount !== 1 ? 's' : '' }}</span>
+                      </div>
+                    }
+                    @if (IsParentType) {
+                      <div class="config-row">
+                        <span class="config-label">Child Types</span>
+                        <span class="config-value">
+                          @for (child of ChildEntities; track child.ID; let last = $last) {
+                            <span class="link" (click)="NavigateToEntity(child)">{{ child.Name }}</span>{{ last ? '' : ', ' }}
+                          }
+                        </span>
+                      </div>
+                    }
+                    @if (SiblingEntities.length > 0) {
+                      <div class="config-row">
+                        <span class="config-label">Sibling Types</span>
+                        <span class="config-value">
+                          @for (sibling of SiblingEntities; track sibling.ID; let last = $last) {
+                            <span class="link" (click)="NavigateToEntity(sibling)">{{ sibling.Name }}</span>{{ last ? '' : ', ' }}
+                          }
+                        </span>
+                      </div>
+                    }
+                    <div class="config-row">
+                      <span class="config-label">Disjoint Subtypes</span>
+                      <span class="config-value">
+                        @if (IsParentType || IsChildType) {
+                          <i class="fa-solid fa-circle-check" style="color: #059669;"></i> Enforced — a parent record can only be one child type
+                        } @else {
+                          <span class="muted">N/A</span>
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              }
               <!-- Entity Settings -->
               <div class="settings-panel">
                 <h3 class="panel-title">
@@ -1004,6 +1212,27 @@
                 }
               </div>
             </div>
+            @if (IsInheritedField(selectedField)) {
+              <div class="detail-section isa-source-section">
+                <h5>
+                  <i class="fa-solid fa-arrow-up"></i>
+                  IS-A Inherited Field
+                </h5>
+                <div class="detail-grid">
+                  <div class="detail-item">
+                    <span class="label">Source Entity</span>
+                    <span class="value link" (click)="NavigateToEntity(ParentChain[0])" title="Navigate to source entity">
+                      {{ GetISAFieldSource(selectedField) }}
+                      <i class="fa-solid fa-arrow-right"></i>
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="label">Routing</span>
+                    <span class="value">ORM routes Set/Get to parent</span>
+                  </div>
+                </div>
+              </div>
+            }
             @if (selectedField.RelatedEntityID) {
               <div class="detail-section">
                 <h5>Relationship</h5>

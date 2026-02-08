@@ -22,6 +22,3 @@ export class ReportSnapshotFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadReportSnapshotFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -24,6 +24,3 @@ export class ErrorLogFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadErrorLogFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

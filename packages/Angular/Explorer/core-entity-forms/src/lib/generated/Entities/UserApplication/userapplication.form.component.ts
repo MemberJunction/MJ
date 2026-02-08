@@ -24,6 +24,3 @@ export class UserApplicationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserApplicationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}
