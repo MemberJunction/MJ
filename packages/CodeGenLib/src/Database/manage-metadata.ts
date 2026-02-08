@@ -992,7 +992,6 @@ export class ManageMetadataBase {
                         ef.EntityID = e.ID
                       WHERE
                         ef.DisplayName IS NULL AND
-                        ef.DisplayName <> ef.Name AND
                         ef.Name <> \'ID\' AND
                         e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
                         `
@@ -2290,7 +2289,7 @@ NumberedRows AS (
                [${mj_core_schema()}].EntitySetting es
             WHERE
                es.EntityID IN (${entityIds})
-               AND es.Name IN ('FieldCategoryIcons', 'FieldCategoryInfo')
+               AND es.Name = 'FieldCategoryInfo'
          `;
          const settingsResult = await pool.request().query(settingsSQL);
          const allSettings = settingsResult.recordset;
@@ -2399,8 +2398,10 @@ NumberedRows AS (
       }
 
       // Form Layout Generation
-      // Only run if at least one field allows auto-update
-      if (fields.some((f: any) => f.AutoUpdateCategory)) {
+      // Only run if at least one auto-updatable field still needs a category assigned.
+      // This prevents unnecessary LLM calls for entities where all categories are already set.
+      const needsCategoryGeneration = fields.some((f: any) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''));
+      if (needsCategoryGeneration) {
          const layoutAnalysis = await ag.generateFormLayout({
             Name: entity.Name,
             Description: entity.Description,
@@ -2615,14 +2616,8 @@ NumberedRows AS (
          }
       }
 
-      // Store category info (icons + descriptions) in EntitySetting if provided
-      // Use the new categoryInfo format, with backwards compatibility for categoryIcons
-      const categoryInfoToStore = result.categoryInfo ||
-         (result.categoryIcons ?
-            // Convert legacy format: { icon: string } -> { icon, description: '' }
-            Object.fromEntries(
-               Object.entries(result.categoryIcons).map(([cat, icon]) => [cat, { icon, description: '' }])
-            ) : null);
+      // Store category info (icons + descriptions) in EntitySetting
+      const categoryInfoToStore = result.categoryInfo || null;
 
       if (categoryInfoToStore && Object.keys(categoryInfoToStore).length > 0) {
          const infoJSON = JSON.stringify(categoryInfoToStore).replace(/'/g, "''");
@@ -2653,38 +2648,6 @@ NumberedRows AS (
             await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryInfo setting for entity`, false);
          }
 
-         // Also update legacy FieldCategoryIcons for backwards compatibility
-         // Extract just icons from categoryInfo
-         const iconsOnly: Record<string, string> = {};
-         for (const [category, info] of Object.entries(categoryInfoToStore)) {
-            if (info && typeof info === 'object' && 'icon' in info) {
-               iconsOnly[category] = (info as { icon: string }).icon;
-            }
-         }
-         const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
-
-         const checkLegacySQL = `
-            SELECT ID FROM [${mj_core_schema()}].EntitySetting
-            WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
-         `;
-         const existingLegacy = await pool.request().query(checkLegacySQL);
-
-         if (existingLegacy.recordset.length > 0) {
-            const updateSQL = `
-               UPDATE [${mj_core_schema()}].EntitySetting
-               SET Value = '${iconsJSON}',
-                   __mj_UpdatedAt = GETUTCDATE()
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
-            `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryIcons setting for entity (legacy format)`, false);
-         } else {
-            const newId = uuidv4();
-            const insertSQL = `
-               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
-            `;
-            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity (legacy format)`, false);
-         }
       }
 
       // Apply entity importance analysis to ApplicationEntity records ONLY for NEW entities

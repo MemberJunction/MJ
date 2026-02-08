@@ -420,6 +420,11 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       '-i', absoluteFilePath
     ];
 
+    // Add -C flag to trust server certificate when configured
+    if (sqlConfig.options?.trustServerCertificate) {
+      args.push('-C');
+    }
+
     // Execute the command using spawn to completely bypass shell escaping issues
     logIf(configInfo.verboseOutput, `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`);
 

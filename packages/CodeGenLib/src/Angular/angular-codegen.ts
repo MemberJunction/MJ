@@ -994,14 +994,21 @@ ${componentCodeWithIndent}
       protected async generateSingleEntityHTMLForAngular(entity: EntityInfo, contextUser: UserInfo): Promise<{htmlCode: string,
                                                                                                               additionalSections: AngularFormSectionInfo[],
                                                                                                               relatedEntitySections: AngularFormSectionInfo[]}> {
-          // Load category icons from EntitySetting if available
+          // Load category icons from FieldCategoryInfo EntitySetting if available
           let categoryIcons: Record<string, string> | undefined;
           const entitySettings = entity.Settings;
           if (entitySettings) {
-              const iconSetting = entitySettings.find((s: any) => s.Name === 'FieldCategoryIcons');
-              if (iconSetting && iconSetting.Value) {
+              const infoSetting = entitySettings.find((s: any) => s.Name === 'FieldCategoryInfo');
+              if (infoSetting && infoSetting.Value) {
                   try {
-                      categoryIcons = JSON.parse(iconSetting.Value);
+                      const categoryInfo = JSON.parse(infoSetting.Value) as Record<string, { icon: string; description: string }>;
+                      // Extract just icons for the icon lookup
+                      categoryIcons = {};
+                      for (const [category, info] of Object.entries(categoryInfo)) {
+                          if (info && info.icon) {
+                              categoryIcons[category] = info.icon;
+                          }
+                      }
                   } catch (e) {
                       // Invalid JSON, ignore and fall back to keyword matching
                   }

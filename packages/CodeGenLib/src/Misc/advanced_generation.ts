@@ -55,9 +55,7 @@ export type FormLayoutResult = {
         extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
-    /** @deprecated Use categoryInfo instead */
-    categoryIcons?: Record<string, string>;
-    /** New format: category name -> { icon, description } */
+    /** Category metadata: category name -> { icon, description } */
     categoryInfo?: Record<string, CategoryInfo>;
     entityImportance?: EntityImportanceInfo;
 }
@@ -269,25 +267,6 @@ export class AdvancedGeneration {
             }
         }
 
-        // Fallback: check for legacy FieldCategoryIcons format and convert
-        if (!categoryInfo) {
-            const iconSetting = entity.Settings?.find(
-                (s: any) => s.Name === 'FieldCategoryIcons'
-            );
-            if (iconSetting?.Value) {
-                try {
-                    const icons = JSON.parse(iconSetting.Value) as Record<string, string>;
-                    // Convert legacy format to new format
-                    categoryInfo = {};
-                    for (const [category, icon] of Object.entries(icons)) {
-                        categoryInfo[category] = { icon, description: '' };
-                    }
-                } catch (e) {
-                    // Invalid JSON, ignore
-                }
-            }
-        }
-
         return { categories, fieldsByCategory, categoryInfo };
     }
 
@@ -397,15 +376,6 @@ export class AdvancedGeneration {
                     // Preserve existing - don't let LLM overwrite
                     for (const [category, info] of Object.entries(existingInfo.categoryInfo)) {
                         result.result.categoryInfo[category] = info;
-                    }
-                }
-
-                // Handle legacy categoryIcons format for backwards compatibility
-                if (result.result.categoryIcons && !result.result.categoryInfo) {
-                    // Convert legacy format to new format
-                    result.result.categoryInfo = {};
-                    for (const [category, icon] of Object.entries(result.result.categoryIcons)) {
-                        result.result.categoryInfo[category] = { icon, description: '' };
                     }
                 }
 
