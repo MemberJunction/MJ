@@ -1,10 +1,10 @@
 import sql from 'mssql';
 import { configInfo, currentWorkingDirectory, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { ApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
-import { AdvancedGeneration, CategoryInfo, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { SQLParser } from "@memberjunction/core-entities-server";
 import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
@@ -3583,7 +3583,7 @@ NumberedRows AS (
          (result.categoryIcons ?
             Object.fromEntries(
                Object.entries(result.categoryIcons).map(([cat, icon]) => [cat, { icon, description: '' }])
-            ) as Record<string, CategoryInfo> : null);
+            ) as Record<string, FieldCategoryInfo> : null);
 
       if (categoryInfoToStore) {
          await this.applyCategoryInfoSettings(pool, entityId, categoryInfoToStore);
@@ -3720,7 +3720,7 @@ NumberedRows AS (
    protected async applyCategoryInfoSettings(
       pool: sql.ConnectionPool,
       entityId: string,
-      categoryInfo: Record<string, CategoryInfo>
+      categoryInfo: Record<string, FieldCategoryInfo>
    ): Promise<void> {
       if (!categoryInfo || Object.keys(categoryInfo).length === 0) return;
 

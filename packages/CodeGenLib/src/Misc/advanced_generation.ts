@@ -1,5 +1,5 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
-import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -40,11 +40,6 @@ export type EntityImportanceInfo = {
     recommendedSequence?: number;
 }
 
-export type CategoryInfo = {
-    icon: string;
-    description: string;
-}
-
 /**
  * Result from LLM-assisted virtual entity field decoration.
  * Identifies PKs, FKs, field descriptions, and category assignments for constraint-less views.
@@ -68,7 +63,7 @@ export type VirtualEntityDecorationResult = {
     /** Font Awesome icon class for the entity (e.g. "fa-solid fa-chart-line") */
     entityIcon?: string;
     /** Per-category icon + description */
-    categoryInfo?: Record<string, CategoryInfo>;
+    categoryInfo?: Record<string, FieldCategoryInfo>;
     reasoning: string;
 }
 
@@ -85,7 +80,7 @@ export type FormLayoutResult = {
     /** @deprecated Use categoryInfo instead */
     categoryIcons?: Record<string, string>;
     /** New format: category name -> { icon, description } */
-    categoryInfo?: Record<string, CategoryInfo>;
+    categoryInfo?: Record<string, FieldCategoryInfo>;
     entityImportance?: EntityImportanceInfo;
 }
 
@@ -143,7 +138,7 @@ export class AdvancedGeneration {
             const result = await this._promptRunner.ExecutePrompt<T>(params);
             return result;
         } catch (error) {
-            LogError('AdvancedGeneration', `Prompt execution failed: ${error}`);
+            LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
             throw error;
         }
     }
@@ -189,11 +184,11 @@ export class AdvancedGeneration {
             if (result.success && result.result) {
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Smart field identification failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Smart field identification failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in identifyFields: ${error}`);
+            LogError(`AdvancedGeneration:Error in identifyFields: ${error}`);
             return null; // Graceful fallback
         }
     }
@@ -240,11 +235,11 @@ export class AdvancedGeneration {
                 LogStatus(`Transitive join analysis for ${sourceEntity.Name} → ${targetEntity.Name}: Junction=${result.result.isJunctionTable}`);
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Transitive join analysis failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Transitive join analysis failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in analyzeTransitiveJoin: ${error}`);
+            LogError(`AdvancedGeneration:Error in analyzeTransitiveJoin: ${error}`);
             return null;
         }
     }
@@ -254,10 +249,10 @@ export class AdvancedGeneration {
      * This looks at ALL fields that have categories assigned, not just locked ones,
      * so the LLM can see and reuse existing categories when categorizing new fields
      */
-    private getExistingCategoryInfo(entity: any): {
+    private getExistingFieldCategoryInfo(entity: any): {
         categories: string[];
         fieldsByCategory: Record<string, string[]>;
-        categoryInfo: Record<string, CategoryInfo> | null;
+        categoryInfo: Record<string, FieldCategoryInfo> | null;
     } {
         // Get ALL fields that have categories assigned (not just locked ones)
         // This ensures the LLM sees existing categories and reuses them
@@ -283,37 +278,8 @@ export class AdvancedGeneration {
             fieldsByCategory[field.Category].push(field.Name);
         }
 
-        // Load category info (icons and descriptions) from EntitySettings
-        let categoryInfo: Record<string, CategoryInfo> | null = null;
-        const infoSetting = entity.Settings?.find(
-            (s: any) => s.Name === 'FieldCategoryInfo'
-        );
-        if (infoSetting?.Value) {
-            try {
-                categoryInfo = JSON.parse(infoSetting.Value);
-            } catch (e) {
-                // Invalid JSON, ignore
-            }
-        }
-
-        // Fallback: check for legacy FieldCategoryIcons format and convert
-        if (!categoryInfo) {
-            const iconSetting = entity.Settings?.find(
-                (s: any) => s.Name === 'FieldCategoryIcons'
-            );
-            if (iconSetting?.Value) {
-                try {
-                    const icons = JSON.parse(iconSetting.Value) as Record<string, string>;
-                    // Convert legacy format to new format
-                    categoryInfo = {};
-                    for (const [category, icon] of Object.entries(icons)) {
-                        categoryInfo[category] = { icon, description: '' };
-                    }
-                } catch (e) {
-                    // Invalid JSON, ignore
-                }
-            }
-        }
+        // Use the typed FieldCategories property (auto-populated from EntitySettings with legacy fallback)
+        const categoryInfo: Record<string, FieldCategoryInfo> | null = entity.FieldCategories ?? null;
 
         return { categories, fieldsByCategory, categoryInfo };
     }
@@ -366,7 +332,7 @@ export class AdvancedGeneration {
             const prompt = await this.getPromptEntity('CodeGen: Form Layout Generation', contextUser);
 
             // Extract existing category information
-            const existingInfo = this.getExistingCategoryInfo(entity);
+            const existingInfo = this.getExistingFieldCategoryInfo(entity);
             const hasExistingCategories = existingInfo.categories.length > 0;
 
             // Map fields with FK flag for statistics calculation
@@ -406,7 +372,7 @@ export class AdvancedGeneration {
                 fieldsByCategory: existingInfo.fieldsByCategory,
                 hasExistingCategories: hasExistingCategories,
                 // Pass existing category info (icons + descriptions) so LLM can reference them
-                existingCategoryInfo: existingInfo.categoryInfo || {},
+                existingFieldCategoryInfo: existingInfo.categoryInfo || {},
                 // Flag to tell LLM whether to bother with entityImportance
                 isExistingEntity: !isNewEntity
             };
@@ -417,9 +383,9 @@ export class AdvancedGeneration {
             if (result.success && result.result) {
                 // Merge category info - preserve ALL existing categories, only add new ones
                 if (existingInfo.categoryInfo) {
-                    const newCategoryInfo = result.result.categoryInfo || {};
+                    const newFieldCategoryInfo = result.result.categoryInfo || {};
                     result.result.categoryInfo = {
-                        ...newCategoryInfo  // Only new categories from LLM
+                        ...newFieldCategoryInfo  // Only new categories from LLM
                     };
                     // Preserve existing - don't let LLM overwrite
                     for (const [category, info] of Object.entries(existingInfo.categoryInfo)) {
@@ -438,11 +404,11 @@ export class AdvancedGeneration {
 
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Form layout generation failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Form layout generation failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in generateFormLayout: ${error}`);
+            LogError(`AdvancedGeneration:Error in generateFormLayout: ${error}`);
             return null;
         }
     }
@@ -472,11 +438,11 @@ export class AdvancedGeneration {
                 LogStatus(`Entity name generated for ${tableName}: ${result.result.entityName}`);
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Entity name generation failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Entity name generation failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in generateEntityName: ${error}`);
+            LogError(`AdvancedGeneration:Error in generateEntityName: ${error}`);
             return null;
         }
     }
@@ -508,11 +474,11 @@ export class AdvancedGeneration {
                 LogStatus(`Entity description generated for ${entityName}`);
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Entity description generation failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Entity description generation failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in generateEntityDescription: ${error}`);
+            LogError(`AdvancedGeneration:Error in generateEntityDescription: ${error}`);
             return null;
         }
     }
@@ -548,7 +514,7 @@ export class AdvancedGeneration {
                 const modelId = result.modelInfo?.modelId || result.modelSelectionInfo?.modelSelected?.ID;
                 if (!modelId) {
                     // shuoldn't ever happen.
-                    LogError('AdvancedGeneration', 'Model ID not found');
+                    LogError('AdvancedGeneration: Model ID not found');
                     return null;
                 }
                 else {
@@ -558,11 +524,11 @@ export class AdvancedGeneration {
                     };
                 }
             } else {
-                LogError('AdvancedGeneration', `CHECK constraint parsing failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:CHECK constraint parsing failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in parseCheckConstraint: ${error}`);
+            LogError(`AdvancedGeneration:Error in parseCheckConstraint: ${error}`);
             return null;
         }
     }
@@ -642,15 +608,14 @@ export class AdvancedGeneration {
                 await this._promptRunner.ExecutePrompt<VirtualEntityDecorationResult>(params);
 
             if (result.success && result.result) {
-                LogStatus(`Virtual entity field decoration completed for ${entityName} — ` +
-                    `${result.result.primaryKeys?.length || 0} PKs, ${result.result.foreignKeys?.length || 0} FKs identified`);
+                LogStatus(`      ${entityName}: ${result.result.primaryKeys?.length || 0} PKs, ${result.result.foreignKeys?.length || 0} FKs identified`);
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Virtual entity field decoration failed for ${entityName}: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Virtual entity field decoration failed for ${entityName}: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in decorateVirtualEntityFields for ${entityName}: ${error}`);
+            LogError(`AdvancedGeneration:Error in decorateVirtualEntityFields for ${entityName}: ${error}`);
             return null;
         }
     }

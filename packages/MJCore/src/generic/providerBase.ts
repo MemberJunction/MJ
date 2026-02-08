@@ -8,7 +8,7 @@ import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterIn
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
-import { LogError, LogStatus } from "./logging";
+import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
@@ -1374,7 +1374,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const start = new Date().getTime();
             const res = await this.GetAllMetadata(providerToUse);
             const end = new Date().getTime();
-            LogStatus(`GetAllMetadata() took ${end - start} ms`);
+            LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
             if (res) {
                 // Atomic swap via UpdateLocalMetadata: single property assignment is atomic in JavaScript
                 // Readers now see new metadata instead of old
