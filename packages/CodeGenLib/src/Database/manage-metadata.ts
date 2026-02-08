@@ -4,7 +4,8 @@ import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, Extra
 import { ApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, CategoryInfo, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { SQLParser } from "@memberjunction/core-entities-server";
 import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -697,16 +698,33 @@ export class ManageMetadataBase {
          return;
       }
 
+      // Pre-build available entities list once (shared across all virtual entity decorations)
+      const availableEntities = md.Entities
+         .filter(e => !e.VirtualEntity && e.PrimaryKeys.length > 0)
+         .map(e => ({
+            Name: e.Name,
+            SchemaName: e.SchemaName,
+            BaseTable: e.BaseTable,
+            PrimaryKeyField: e.PrimaryKeys[0]?.Name || 'ID'
+         }));
+
       logStatus(`   Decorating virtual entity fields with LLM (${virtualEntities.length} entities)...`);
       let decoratedCount = 0;
       let skippedCount = 0;
 
-      for (const entity of virtualEntities) {
-         const result = await this.decorateSingleVirtualEntityWithLLM(pool, entity, ag, currentUser);
-         if (result.decorated) {
-            decoratedCount++;
-         } else if (result.skipped) {
-            skippedCount++;
+      // Process in batches of up to 5 in parallel for better throughput
+      const batchSize = 5;
+      for (let i = 0; i < virtualEntities.length; i += batchSize) {
+         const batch = virtualEntities.slice(i, i + batchSize);
+         const results = await Promise.all(
+            batch.map(entity => this.decorateSingleVirtualEntityWithLLM(pool, entity, ag, currentUser, availableEntities))
+         );
+         for (const result of results) {
+            if (result.decorated) {
+               decoratedCount++;
+            } else if (result.skipped) {
+               skippedCount++;
+            }
          }
       }
 
@@ -717,14 +735,16 @@ export class ManageMetadataBase {
 
    /**
     * Applies LLM-assisted field decoration to a single virtual entity.
-    * Gets the view definition, calls the LLM, and applies the identified PKs, FKs, and descriptions.
+    * Parses the view SQL to identify source entities, enriches the LLM prompt with their
+    * field metadata (descriptions, categories), then applies PKs, FKs, descriptions, and categories.
     * @returns Whether the entity was decorated, skipped, or encountered an error.
     */
    protected async decorateSingleVirtualEntityWithLLM(
       pool: sql.ConnectionPool,
       entity: EntityInfo,
       ag: AdvancedGeneration,
-      currentUser: UserInfo
+      currentUser: UserInfo,
+      availableEntities: Array<{ Name: string; SchemaName: string; BaseTable: string; PrimaryKeyField: string }>
    ): Promise<{ decorated: boolean; skipped: boolean }> {
       try {
          // Idempotency check: if entity already has soft PK or soft FK annotations, skip
@@ -741,9 +761,12 @@ export class ManageMetadataBase {
          const viewDefResult = await pool.request().query(viewDefSQL);
          const viewDefinition = viewDefResult.recordset[0]?.ViewDef;
          if (!viewDefinition) {
-            logStatus(`         ⚠️  Could not get view definition for ${entity.SchemaName}.${entity.BaseView} — skipping LLM decoration`);
+            logStatus(`         Could not get view definition for ${entity.SchemaName}.${entity.BaseView} — skipping LLM decoration`);
             return { decorated: false, skipped: false };
          }
+
+         // Parse the view SQL to identify referenced tables, then resolve to entities
+         const sourceEntities = this.buildSourceEntityContext(viewDefinition);
 
          // Build field info for the prompt
          const fields = entity.Fields.map(f => ({
@@ -755,18 +778,7 @@ export class ManageMetadataBase {
             RelatedEntityName: f.RelatedEntity || null
          }));
 
-         // Build available entities list for FK matching
-         const md = new Metadata();
-         const availableEntities = md.Entities
-            .filter(e => !e.VirtualEntity && e.PrimaryKeys.length > 0)
-            .map(e => ({
-               Name: e.Name,
-               SchemaName: e.SchemaName,
-               BaseTable: e.BaseTable,
-               PrimaryKeyField: e.PrimaryKeys[0]?.Name || 'ID'
-            }));
-
-         // Call the LLM
+         // Call the LLM with enriched source entity context
          const result = await ag.decorateVirtualEntityFields(
             entity.Name,
             entity.SchemaName,
@@ -775,6 +787,7 @@ export class ManageMetadataBase {
             entity.Description || '',
             fields,
             availableEntities,
+            sourceEntities,
             currentUser
          );
 
@@ -795,6 +808,9 @@ export class ManageMetadataBase {
          // Apply field descriptions
          anyUpdated = await this.applyLLMFieldDescriptions(pool, entity, result.fieldDescriptions, schema) || anyUpdated;
 
+         // Apply categories using the shared methods (same stability rules as regular entities)
+         anyUpdated = await this.applyVEFieldCategories(pool, entity, result) || anyUpdated;
+
          if (anyUpdated) {
             const sqlUpdate = `UPDATE [${schema}].Entity SET [${EntityInfo.UpdatedAtFieldName}]=GETUTCDATE() WHERE ID='${entity.ID}'`;
             await this.LogSQLAndExecute(pool, sqlUpdate, `Update entity timestamp for ${entity.Name} after LLM decoration`);
@@ -808,9 +824,133 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Parses a view definition SQL and resolves referenced tables to MJ entities.
+    * Returns enriched source entity context (all fields with descriptions and categories)
+    * for the LLM to use when decorating virtual entity fields.
+    */
+   protected buildSourceEntityContext(viewDefinition: string): Array<{
+      Name: string;
+      Description: string;
+      Fields: Array<{
+         Name: string;
+         Type: string;
+         Description: string;
+         Category: string | null;
+         IsPrimaryKey: boolean;
+         IsForeignKey: boolean;
+      }>;
+   }> {
+      const parseResult = SQLParser.Parse(viewDefinition);
+      const md = new Metadata();
+      const sourceEntities: Array<{
+         Name: string;
+         Description: string;
+         Fields: Array<{
+            Name: string;
+            Type: string;
+            Description: string;
+            Category: string | null;
+            IsPrimaryKey: boolean;
+            IsForeignKey: boolean;
+         }>;
+      }> = [];
+
+      const seen = new Set<string>();
+
+      for (const tableRef of parseResult.Tables) {
+         // Match against MJ entities by BaseTable/BaseView + SchemaName
+         const matchingEntity = md.Entities.find(e =>
+            (e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase() ||
+             e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase()) &&
+            e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
+         );
+
+         if (matchingEntity && !seen.has(matchingEntity.ID)) {
+            seen.add(matchingEntity.ID);
+            sourceEntities.push({
+               Name: matchingEntity.Name,
+               Description: matchingEntity.Description || '',
+               Fields: matchingEntity.Fields.map(f => ({
+                  Name: f.Name,
+                  Type: f.Type,
+                  Description: f.Description || '',
+                  Category: f.Category || null,
+                  IsPrimaryKey: f.IsPrimaryKey,
+                  IsForeignKey: !!(f.RelatedEntityID)
+               }))
+            });
+         }
+      }
+
+      return sourceEntities;
+   }
+
+   /**
+    * Applies category assignments from VE decoration results using the shared category methods.
+    * Loads field records from DB (needs ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName)
+    * then delegates to the shared methods.
+    */
+   protected async applyVEFieldCategories(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      result: VirtualEntityDecorationResult
+   ): Promise<boolean> {
+      // Check if the LLM returned any category data
+      const hasCategories = result.fieldDescriptions?.some(fd => fd.category);
+      if (!hasCategories) {
+         return false;
+      }
+
+      // Load VE EntityField rows from DB (we need the ID and auto-update flags)
+      const schema = mj_core_schema();
+      const fieldsSQL = `
+         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName
+         FROM [${schema}].EntityField
+         WHERE EntityID = '${entity.ID}'
+      `;
+      const fieldsResult = await pool.request().query(fieldsSQL);
+      const dbFields = fieldsResult.recordset as Array<{
+         ID: string; Name: string; Category: string | null;
+         AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean;
+      }>;
+
+      if (dbFields.length === 0) return false;
+
+      // Convert VE decoration field descriptions into the format expected by applyFieldCategories
+      const fieldCategories = result.fieldDescriptions
+         .filter(fd => fd.category)
+         .map(fd => ({
+            fieldName: fd.fieldName,
+            category: fd.category!,
+            displayName: fd.displayName || undefined,
+            extendedType: fd.extendedType,
+            codeType: fd.codeType
+         }));
+
+      if (fieldCategories.length === 0) return false;
+
+      const existingCategories = this.buildExistingCategorySet(dbFields);
+      await this.applyFieldCategories(pool, entity.ID, dbFields, fieldCategories, existingCategories);
+
+      // Apply entity icon if provided
+      if (result.entityIcon) {
+         await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
+      }
+
+      // Apply category info settings if provided
+      if (result.categoryInfo && Object.keys(result.categoryInfo).length > 0) {
+         await this.applyCategoryInfoSettings(pool, entity.ID, result.categoryInfo);
+      }
+
+      logStatus(`         Applied categories for VE ${entity.Name} (${fieldCategories.length} fields)`);
+      return true;
+   }
+
+   /**
     * Applies LLM-identified primary keys to entity fields.
     * Sets IsPrimaryKey=1 and IsSoftPrimaryKey=1 for identified fields.
     * First clears any default PK that was set by field-sync (field #1 fallback).
+    * All SQL updates are batched into a single execution for performance.
     */
    protected async applyLLMPrimaryKeys(
       pool: sql.ConnectionPool,
@@ -830,21 +970,23 @@ export class ManageMetadataBase {
          return false;
       }
 
+      // Build batched SQL: clear default PK + set all LLM-identified PKs
+      const sqlStatements: string[] = [];
+
       // Clear existing default PK (field #1 fallback) before applying LLM-identified PKs
-      const clearSQL = `UPDATE [${schema}].[EntityField]
+      sqlStatements.push(`UPDATE [${schema}].[EntityField]
                         SET IsPrimaryKey=0, IsUnique=0
-                        WHERE EntityID='${entity.ID}' AND IsPrimaryKey=1 AND IsSoftPrimaryKey=0`;
-      await this.LogSQLAndExecute(pool, clearSQL, `Clear default PK for ${entity.Name} before LLM PK`);
+                        WHERE EntityID='${entity.ID}' AND IsPrimaryKey=1 AND IsSoftPrimaryKey=0`);
 
       // Set LLM-identified PKs
       for (const pk of validPKs) {
-         const setSQL = `UPDATE [${schema}].[EntityField]
+         sqlStatements.push(`UPDATE [${schema}].[EntityField]
                          SET IsPrimaryKey=1, IsUnique=1, IsSoftPrimaryKey=1
-                         WHERE EntityID='${entity.ID}' AND Name='${pk}'`;
-         await this.LogSQLAndExecute(pool, setSQL, `Set LLM-identified PK for ${entity.Name}.${pk}`);
+                         WHERE EntityID='${entity.ID}' AND Name='${pk}'`);
          logStatus(`         ✓ Set PK for ${entity.Name}.${pk} (LLM-identified)`);
       }
 
+      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-identified PKs for ${entity.Name}: ${validPKs.join(', ')}`);
       return true;
    }
 
@@ -852,6 +994,7 @@ export class ManageMetadataBase {
     * Applies LLM-identified foreign keys to entity fields.
     * Sets RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey=1.
     * Only applies high and medium confidence FKs.
+    * All SQL updates are batched into a single execution for performance.
     */
    protected async applyLLMForeignKeys(
       pool: sql.ConnectionPool,
@@ -864,7 +1007,7 @@ export class ManageMetadataBase {
       }
 
       const md = new Metadata();
-      let anyApplied = false;
+      const sqlStatements: string[] = [];
 
       for (const fk of foreignKeys) {
          // Only apply high/medium confidence
@@ -890,21 +1033,25 @@ export class ManageMetadataBase {
             continue;
          }
 
-         const setSQL = `UPDATE [${schema}].[EntityField]
+         sqlStatements.push(`UPDATE [${schema}].[EntityField]
                          SET RelatedEntityID='${relatedEntity.ID}',
                              RelatedEntityFieldName='${fk.relatedFieldName}',
                              IsSoftForeignKey=1
-                         WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`;
-         await this.LogSQLAndExecute(pool, setSQL, `Set LLM-identified FK for ${entity.Name}.${field.Name} → ${fk.relatedEntityName}`);
+                         WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`);
          logStatus(`         ✓ Set FK for ${entity.Name}.${field.Name} → ${fk.relatedEntityName}.${fk.relatedFieldName} (${fk.confidence}, LLM)`);
-         anyApplied = true;
       }
 
-      return anyApplied;
+      if (sqlStatements.length === 0) {
+         return false;
+      }
+
+      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-identified FKs for ${entity.Name}`);
+      return true;
    }
 
    /**
     * Applies LLM-generated field descriptions to entity fields that lack descriptions.
+    * All SQL updates are batched into a single execution for performance.
     */
    protected async applyLLMFieldDescriptions(
       pool: sql.ConnectionPool,
@@ -916,7 +1063,7 @@ export class ManageMetadataBase {
          return false;
       }
 
-      let anyApplied = false;
+      const sqlStatements: string[] = [];
 
       for (const fd of fieldDescriptions) {
          const field = entity.Fields.find(f => f.Name.toLowerCase() === fd.fieldName.toLowerCase());
@@ -940,14 +1087,17 @@ export class ManageMetadataBase {
             }
          }
 
-         const setSQL = `UPDATE [${schema}].[EntityField]
+         sqlStatements.push(`UPDATE [${schema}].[EntityField]
                          SET ${setClauses}
-                         WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`;
-         await this.LogSQLAndExecute(pool, setSQL, `Set LLM-generated description for ${entity.Name}.${field.Name}`);
-         anyApplied = true;
+                         WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`);
       }
 
-      return anyApplied;
+      if (sqlStatements.length === 0) {
+         return false;
+      }
+
+      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-generated descriptions for ${entity.Name} (${sqlStatements.length} fields)`);
+      return true;
    }
 
    /**
@@ -3405,7 +3555,8 @@ NumberedRows AS (
    }
 
    /**
-    * Apply form layout generation results to set category on entity fields
+    * Apply form layout generation results to set category on entity fields.
+    * Delegates to shared methods for category assignment, icon, and category info persistence.
     * @param pool Database connection pool
     * @param entityId Entity ID to update
     * @param fields Entity fields
@@ -3415,23 +3566,75 @@ NumberedRows AS (
    protected async applyFormLayout(
       pool: sql.ConnectionPool,
       entityId: string,
-      fields: any[],
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean }>,
       result: FormLayoutResult,
       isNewEntity: boolean = false
    ): Promise<void> {
-      // Collect all SQL statements for batch execution
-      const sqlStatements: string[] = [];
+      const existingCategories = this.buildExistingCategorySet(fields);
 
-      // Build set of existing categories from fields for enforcement
+      await this.applyFieldCategories(pool, entityId, fields, result.fieldCategories, existingCategories);
+
+      if (result.entityIcon) {
+         await this.applyEntityIcon(pool, entityId, result.entityIcon);
+      }
+
+      // Resolve categoryInfo from new or legacy format
+      const categoryInfoToStore = result.categoryInfo ||
+         (result.categoryIcons ?
+            Object.fromEntries(
+               Object.entries(result.categoryIcons).map(([cat, icon]) => [cat, { icon, description: '' }])
+            ) as Record<string, CategoryInfo> : null);
+
+      if (categoryInfoToStore) {
+         await this.applyCategoryInfoSettings(pool, entityId, categoryInfoToStore);
+      }
+
+      if (isNewEntity && result.entityImportance) {
+         await this.applyEntityImportance(pool, entityId, result.entityImportance);
+      }
+   }
+
+   // ─────────────────────────────────────────────────────────────────
+   // Shared category / icon / settings persistence methods
+   // Used by both the regular entity pipeline and VE decoration pipeline
+   // ─────────────────────────────────────────────────────────────────
+
+   /**
+    * Builds a set of existing category names from entity fields.
+    * Used to enforce category stability (prevent renaming).
+    */
+   protected buildExistingCategorySet(fields: Array<{ Category: string | null }>): Set<string> {
       const existingCategories = new Set<string>();
       for (const field of fields) {
          if (field.Category && field.Category.trim() !== '') {
             existingCategories.add(field.Category);
          }
       }
+      return existingCategories;
+   }
 
-      // Assign category to each field
-      for (const fieldCategory of result.fieldCategories) {
+   /**
+    * Applies category, display name, extended type, and code type to entity fields.
+    * Enforces stability rules: fields with existing categories cannot move to NEW categories.
+    * All SQL updates are batched into a single execution for performance.
+    */
+   protected async applyFieldCategories(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean }>,
+      fieldCategories: Array<{
+         fieldName: string;
+         category: string;
+         displayName?: string;
+         extendedType?: string | null;
+         codeType?: string | null;
+         reason?: string;
+      }>,
+      existingCategories: Set<string>
+   ): Promise<void> {
+      const sqlStatements: string[] = [];
+
+      for (const fieldCategory of fieldCategories) {
          const field = fields.find(f => f.Name === fieldCategory.fieldName);
 
          if (field && field.AutoUpdateCategory && field.ID) {
@@ -3442,176 +3645,152 @@ NumberedRows AS (
             }
 
             // ENFORCEMENT: Prevent category renaming
-            // If field already has a category, only allow:
-            // 1. Keeping the same category
-            // 2. Moving to another EXISTING category
-            // New categories are only allowed for fields that don't already have a category
-            const fieldHasExistingCategory = field.Category && field.Category.trim() !== '';
-            const categoryIsExisting = existingCategories.has(category);
-            const categoryIsNew = !categoryIsExisting;
+            const fieldHasExistingCategory = field.Category != null && field.Category.trim() !== '';
+            const categoryIsNew = !existingCategories.has(category);
 
             if (fieldHasExistingCategory && categoryIsNew) {
-               // LLM is trying to move an existing field to a brand new category
-               // This could be an attempt to rename a category - reject it
                logStatus(`         Rejected category change for field '${field.Name}': cannot move from existing category '${field.Category}' to new category '${category}'. Keeping original category.`);
-               category = field.Category; // Keep the original category
+               category = field.Category!;
             }
 
-            // Build SET clause with all available metadata
             const setClauses: string[] = [
                `Category = '${category.replace(/'/g, "''")}'`,
                `GeneratedFormSection = 'Category'`
             ];
 
-            // Add DisplayName if provided and field allows auto-update
             if (fieldCategory.displayName && field.AutoUpdateDisplayName) {
                setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
             }
 
-            // Add ExtendedType if provided
             if (fieldCategory.extendedType !== undefined) {
-               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${fieldCategory.extendedType.replace(/'/g, "''")}'`;
+               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${String(fieldCategory.extendedType).replace(/'/g, "''")}'`;
                setClauses.push(`ExtendedType = ${extendedType}`);
             }
 
-            // Add CodeType if provided
             if (fieldCategory.codeType !== undefined) {
-               const codeType = fieldCategory.codeType === null ? 'NULL' : `'${fieldCategory.codeType.replace(/'/g, "''")}'`;
+               const codeType = fieldCategory.codeType === null ? 'NULL' : `'${String(fieldCategory.codeType).replace(/'/g, "''")}'`;
                setClauses.push(`CodeType = ${codeType}`);
             }
 
-            const updateSQL = `UPDATE [${mj_core_schema()}].EntityField
+            sqlStatements.push(`UPDATE [${mj_core_schema()}].EntityField
    SET ${setClauses.join(',\n       ')}
    WHERE ID = '${field.ID}'
-   AND AutoUpdateCategory = 1`;
-
-            sqlStatements.push(updateSQL);
+   AND AutoUpdateCategory = 1`);
          } else if (!field) {
-            logError(`Form layout generation returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
+            logError(`Form layout returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
          }
       }
 
-      // Execute all field updates in one batch
       if (sqlStatements.length > 0) {
-         const combinedSQL = sqlStatements.join('\n');
-         await this.LogSQLAndExecute(pool, combinedSQL, `Set categories for ${sqlStatements.length} fields`, false);
+         await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set categories for ${sqlStatements.length} fields`, false);
       }
+   }
 
-      // Store entity icon if provided and entity doesn't already have one
-      if (result.entityIcon && result.entityIcon.trim().length > 0) {
-         // Check if entity already has an icon
-         const checkEntitySQL = `
-            SELECT Icon FROM [${mj_core_schema()}].Entity
-            WHERE ID = '${entityId}'
-         `;
-         const entityCheck = await pool.request().query(checkEntitySQL);
+   /**
+    * Sets the entity icon if the entity doesn't already have one.
+    */
+   protected async applyEntityIcon(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      entityIcon: string
+   ): Promise<void> {
+      if (!entityIcon || entityIcon.trim().length === 0) return;
 
-         if (entityCheck.recordset.length > 0) {
-            const currentIcon = entityCheck.recordset[0].Icon;
-            // Only update if entity doesn't have an icon set
-            if (!currentIcon || currentIcon.trim().length === 0) {
-               const escapedIcon = result.entityIcon.replace(/'/g, "''");
-               const updateEntitySQL = `
-                  UPDATE [${mj_core_schema()}].Entity
-                  SET Icon = '${escapedIcon}',
-                      __mj_UpdatedAt = GETUTCDATE()
-                  WHERE ID = '${entityId}'
-               `;
-               await this.LogSQLAndExecute(pool, updateEntitySQL, `Set entity icon to ${result.entityIcon}`, false);
-               logStatus(`  ✓ Set entity icon: ${result.entityIcon}`);
-            }
+      const checkSQL = `SELECT Icon FROM [${mj_core_schema()}].Entity WHERE ID = '${entityId}'`;
+      const entityCheck = await pool.request().query(checkSQL);
+
+      if (entityCheck.recordset.length > 0) {
+         const currentIcon = entityCheck.recordset[0].Icon;
+         if (!currentIcon || currentIcon.trim().length === 0) {
+            const escapedIcon = entityIcon.replace(/'/g, "''");
+            const updateSQL = `
+               UPDATE [${mj_core_schema()}].Entity
+               SET Icon = '${escapedIcon}', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = '${entityId}'
+            `;
+            await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
+            logStatus(`  Set entity icon: ${entityIcon}`);
          }
       }
+   }
 
-      // Store category info (icons + descriptions) in EntitySetting if provided
-      // Use the new categoryInfo format, with backwards compatibility for categoryIcons
-      const categoryInfoToStore = result.categoryInfo ||
-         (result.categoryIcons ?
-            // Convert legacy format: { icon: string } -> { icon, description: '' }
-            Object.fromEntries(
-               Object.entries(result.categoryIcons).map(([cat, icon]) => [cat, { icon, description: '' }])
-            ) : null);
+   /**
+    * Upserts FieldCategoryInfo (new format) and FieldCategoryIcons (legacy format) in EntitySetting.
+    */
+   protected async applyCategoryInfoSettings(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      categoryInfo: Record<string, CategoryInfo>
+   ): Promise<void> {
+      if (!categoryInfo || Object.keys(categoryInfo).length === 0) return;
 
-      if (categoryInfoToStore && Object.keys(categoryInfoToStore).length > 0) {
-         const infoJSON = JSON.stringify(categoryInfoToStore).replace(/'/g, "''");
+      const infoJSON = JSON.stringify(categoryInfo).replace(/'/g, "''");
 
-         // First check if new format setting already exists
-         const checkNewSQL = `
-            SELECT ID FROM [${mj_core_schema()}].EntitySetting
+      // Upsert FieldCategoryInfo (new format)
+      const checkNewSQL = `SELECT ID FROM [${mj_core_schema()}].EntitySetting WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'`;
+      const existingNew = await pool.request().query(checkNewSQL);
+
+      if (existingNew.recordset.length > 0) {
+         await this.LogSQLAndExecute(pool, `
+            UPDATE [${mj_core_schema()}].EntitySetting
+            SET Value = '${infoJSON}', __mj_UpdatedAt = GETUTCDATE()
             WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
-         `;
-         const existingNew = await pool.request().query(checkNewSQL);
+         `, `Update FieldCategoryInfo setting for entity`, false);
+      } else {
+         const newId = uuidv4();
+         await this.LogSQLAndExecute(pool, `
+            INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
+         `, `Insert FieldCategoryInfo setting for entity`, false);
+      }
 
-         if (existingNew.recordset.length > 0) {
-            // Update existing setting
-            const updateSQL = `
-               UPDATE [${mj_core_schema()}].EntitySetting
-               SET Value = '${infoJSON}',
-                   __mj_UpdatedAt = GETUTCDATE()
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
-            `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryInfo setting for entity`, false);
-         } else {
-            // Insert new setting
-            const newId = uuidv4();
-            const insertSQL = `
-               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
-            `;
-            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryInfo setting for entity`, false);
+      // Also upsert legacy FieldCategoryIcons for backwards compatibility
+      const iconsOnly: Record<string, string> = {};
+      for (const [category, info] of Object.entries(categoryInfo)) {
+         if (info && typeof info === 'object' && 'icon' in info) {
+            iconsOnly[category] = info.icon;
          }
+      }
+      const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
 
-         // Also update legacy FieldCategoryIcons for backwards compatibility
-         // Extract just icons from categoryInfo
-         const iconsOnly: Record<string, string> = {};
-         for (const [category, info] of Object.entries(categoryInfoToStore)) {
-            if (info && typeof info === 'object' && 'icon' in info) {
-               iconsOnly[category] = (info as { icon: string }).icon;
-            }
-         }
-         const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
+      const checkLegacySQL = `SELECT ID FROM [${mj_core_schema()}].EntitySetting WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'`;
+      const existingLegacy = await pool.request().query(checkLegacySQL);
 
-         const checkLegacySQL = `
-            SELECT ID FROM [${mj_core_schema()}].EntitySetting
+      if (existingLegacy.recordset.length > 0) {
+         await this.LogSQLAndExecute(pool, `
+            UPDATE [${mj_core_schema()}].EntitySetting
+            SET Value = '${iconsJSON}', __mj_UpdatedAt = GETUTCDATE()
             WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
-         `;
-         const existingLegacy = await pool.request().query(checkLegacySQL);
-
-         if (existingLegacy.recordset.length > 0) {
-            const updateSQL = `
-               UPDATE [${mj_core_schema()}].EntitySetting
-               SET Value = '${iconsJSON}',
-                   __mj_UpdatedAt = GETUTCDATE()
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
-            `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryIcons setting for entity (legacy format)`, false);
-         } else {
-            const newId = uuidv4();
-            const insertSQL = `
-               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
-            `;
-            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity (legacy format)`, false);
-         }
+         `, `Update FieldCategoryIcons setting (legacy)`, false);
+      } else {
+         const newId = uuidv4();
+         await this.LogSQLAndExecute(pool, `
+            INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
+         `, `Insert FieldCategoryIcons setting (legacy)`, false);
       }
+   }
 
-      // Apply entity importance analysis to ApplicationEntity records ONLY for NEW entities
-      // For existing entities, preserve admin's decision
-      if (isNewEntity && result.entityImportance) {
-         const defaultForNewUser = result.entityImportance.defaultForNewUser ? 1 : 0;
+   /**
+    * Applies entity importance analysis to ApplicationEntity records.
+    * Only called for NEW entities to set DefaultForNewUser.
+    */
+   protected async applyEntityImportance(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      importance: { defaultForNewUser: boolean; entityCategory: string; confidence: string; reasoning: string }
+   ): Promise<void> {
+      const defaultForNewUser = importance.defaultForNewUser ? 1 : 0;
+      const updateSQL = `
+         UPDATE [${mj_core_schema()}].ApplicationEntity
+         SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = '${entityId}'
+      `;
+      await this.LogSQLAndExecute(pool, updateSQL,
+         `Set DefaultForNewUser=${defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
 
-         // Update all ApplicationEntity records for this entity
-         const updateAppEntitySQL = `
-            UPDATE [${mj_core_schema()}].ApplicationEntity
-            SET DefaultForNewUser = ${defaultForNewUser},
-                __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '${entityId}'
-         `;
-         await this.LogSQLAndExecute(pool, updateAppEntitySQL, `Set DefaultForNewUser=${defaultForNewUser} for NEW entity based on AI analysis (category: ${result.entityImportance.entityCategory}, confidence: ${result.entityImportance.confidence})`, false);
-
-         logStatus(`  ✓ Entity importance (NEW Entity): ${result.entityImportance.entityCategory} (defaultForNewUser: ${result.entityImportance.defaultForNewUser}, confidence: ${result.entityImportance.confidence})`);
-         logStatus(`    Reasoning: ${result.entityImportance.reasoning}`);
-      }
+      logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
+      logStatus(`    Reasoning: ${importance.reasoning}`);
    }
 
    /**

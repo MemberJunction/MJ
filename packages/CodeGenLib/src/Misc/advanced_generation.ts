@@ -47,7 +47,7 @@ export type CategoryInfo = {
 
 /**
  * Result from LLM-assisted virtual entity field decoration.
- * Identifies PKs, FKs, and field descriptions for constraint-less views.
+ * Identifies PKs, FKs, field descriptions, and category assignments for constraint-less views.
  */
 export type VirtualEntityDecorationResult = {
     primaryKeys: string[];
@@ -61,7 +61,14 @@ export type VirtualEntityDecorationResult = {
         fieldName: string;
         description: string;
         extendedType: string | null;
+        category: string | null;
+        displayName: string | null;
+        codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
+    /** Font Awesome icon class for the entity (e.g. "fa-solid fa-chart-line") */
+    entityIcon?: string;
+    /** Per-category icon + description */
+    categoryInfo?: Record<string, CategoryInfo>;
     reasoning: string;
 }
 
@@ -562,8 +569,8 @@ export class AdvancedGeneration {
 
     /**
      * Decorates virtual entity fields using LLM analysis of the view definition.
-     * Identifies primary keys, foreign keys, and generates field descriptions
-     * for virtual entities that lack database constraints.
+     * Identifies primary keys, foreign keys, generates field descriptions,
+     * assigns categories, and suggests entity icons for constraint-less views.
      *
      * @param entityName The virtual entity name
      * @param schemaName The schema containing the view
@@ -572,6 +579,7 @@ export class AdvancedGeneration {
      * @param entityDescription Optional entity description
      * @param fields Array of field info objects with Name, Type, Length, AllowsNull, IsPrimaryKey, RelatedEntityName
      * @param availableEntities Array of available entities for FK resolution
+     * @param sourceEntities Enriched context from source entities referenced in the view SQL
      * @param contextUser The context user for AI operations
      * @returns Decoration result or null if feature disabled or LLM call fails
      */
@@ -595,6 +603,18 @@ export class AdvancedGeneration {
             BaseTable: string;
             PrimaryKeyField: string;
         }>,
+        sourceEntities: Array<{
+            Name: string;
+            Description: string;
+            Fields: Array<{
+                Name: string;
+                Type: string;
+                Description: string;
+                Category: string | null;
+                IsPrimaryKey: boolean;
+                IsForeignKey: boolean;
+            }>;
+        }>,
         contextUser: UserInfo
     ): Promise<VirtualEntityDecorationResult | null> {
         if (!this.featureEnabled('VirtualEntityFieldDecoration')) {
@@ -613,7 +633,8 @@ export class AdvancedGeneration {
                 viewDefinition,
                 entityDescription: entityDescription || 'No description available',
                 fields,
-                availableEntities: availableEntities.slice(0, 200) // Limit to prevent token overflow
+                availableEntities: availableEntities.slice(0, 200), // Limit to prevent token overflow
+                sourceEntities
             };
             params.contextUser = contextUser;
 
