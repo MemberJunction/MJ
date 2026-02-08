@@ -7,7 +7,9 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@memberjunction/core": "3.4.0",
@@ -26,7 +28,8 @@
     "@types/papaparse": "^5.5.2",
     "@types/uuid": "^11.0.0",
     "@types/validator": "^13.15.10",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "keywords": [
     "memberjunction",

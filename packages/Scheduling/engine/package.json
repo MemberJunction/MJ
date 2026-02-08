@@ -10,7 +10,9 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -29,7 +31,8 @@
   },
   "devDependencies": {
     "@types/node": "24.10.11",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
   },
   "repository": {
     "type": "git",

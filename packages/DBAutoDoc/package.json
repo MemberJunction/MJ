@@ -40,7 +40,8 @@
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
-    "test": "echo \"No tests configured yet\""
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "sql-server",
@@ -65,7 +66,8 @@
     "@types/pg": "^8.16.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
-    "@types/inquirer": "^9.0.7"
+    "@types/inquirer": "^9.0.7",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",

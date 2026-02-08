@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     projects: [
+      // Core infrastructure
       'packages/MJGlobal',
       'packages/MJCore',
       'packages/MJServer',
@@ -12,28 +13,42 @@ export default defineConfig({
       'packages/SQLServerDataProvider',
       'packages/Config',
       'packages/Encryption',
-      'packages/Actions/*',
+      'packages/MJCoreEntities',
+      'packages/CodeGenLib',
+      'packages/MetadataSync',
+      'packages/GraphQLDataProvider',
+      'packages/DBAutoDoc',
+      'packages/MJExportEngine',
+      'packages/ContentAutotagging',
+      // AI packages
       'packages/AI/Agents',
       'packages/AI/BaseAIEngine',
+      'packages/AI/Core',
+      'packages/AI/CorePlus',
       'packages/AI/Engine',
       'packages/AI/MCPClient',
+      'packages/AI/MCPServer',
+      'packages/AI/AICLI',
       'packages/AI/Prompts',
       'packages/AI/Providers/*',
       'packages/AI/Vectors/*',
       'packages/AI/Vectors/Memory/*',
       'packages/AI/AgentManager/*',
       'packages/AI/Recommendations/*',
-      'packages/APIKeys/*',
+      'packages/AI/Reranker',
+      // Actions
+      'packages/Actions/*',
+      // Communication, Templates, Scheduling
       'packages/Communication/*',
       'packages/Communication/providers/*',
-      'packages/Credentials/*',
       'packages/Templates/*',
       'packages/Scheduling/*',
+      // Auth, Keys, Credentials
+      'packages/APIKeys/*',
+      'packages/Credentials/*',
+      // Testing, React
       'packages/TestingFramework/*',
       'packages/React/*',
-      'packages/MetadataSync',
-      'packages/CodeGenLib',
-      'packages/MJCoreEntities',
     ],
     coverage: {
       provider: 'v8',

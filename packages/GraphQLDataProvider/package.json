@@ -21,13 +21,16 @@
   ],
   "scripts": {
     "build": "tsc -noEmit && pkgroll --sourcemap --minify",
-    "build-debug": "tsc -noEmit && pkgroll --sourcemap=inline --no-minify"
+    "build-debug": "tsc -noEmit && pkgroll --sourcemap=inline --no-minify",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "pkgroll": "2.23.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.17.2",

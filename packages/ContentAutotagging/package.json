@@ -11,7 +11,8 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "build": "tsc --build && tsc-alias -f",
-    "test": "echo \"No tests configured yet\""
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -41,7 +42,8 @@
     "@types/node": "^24.10.11",
     "@types/pdf-parse": "^1.1.5",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "keywords": [],
   "repository": {
