@@ -5,21 +5,23 @@ import { WorkerPool } from '../WorkerPool';
 
 // Mock the WorkerPool to avoid actually forking child processes
 vi.mock('../WorkerPool', () => {
-  const MockWorkerPool = vi.fn().mockImplementation(() => ({
-    initialize: vi.fn().mockResolvedValue(undefined),
-    execute: vi.fn().mockResolvedValue({
-      success: true,
-      output: 'test output',
-      executionTimeMs: 10
-    }),
-    getStats: vi.fn().mockReturnValue({
-      totalWorkers: 2,
-      activeWorkers: 2,
-      busyWorkers: 0,
-      queueLength: 0
-    }),
-    shutdown: vi.fn().mockResolvedValue(undefined)
-  }));
+  const MockWorkerPool = vi.fn().mockImplementation(function () {
+    return {
+      initialize: vi.fn().mockResolvedValue(undefined),
+      execute: vi.fn().mockResolvedValue({
+        success: true,
+        output: 'test output',
+        executionTimeMs: 10
+      }),
+      getStats: vi.fn().mockReturnValue({
+        totalWorkers: 2,
+        activeWorkers: 2,
+        busyWorkers: 0,
+        queueLength: 0
+      }),
+      shutdown: vi.fn().mockResolvedValue(undefined)
+    };
+  });
 
   return {
     WorkerPool: MockWorkerPool

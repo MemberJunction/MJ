@@ -76,8 +76,9 @@ describe('MermaidGenerator', () => {
 
     it('should include PK and FK constraints', () => {
       const mmd = generator.generate(createState());
-      expect(mmd).toContain('"PK"');
-      expect(mmd).toContain('"FK"');
+      // Constraints are combined in the output, e.g. "PK,NOT_NULL" and "FK,NOT_NULL"
+      expect(mmd).toContain('PK');
+      expect(mmd).toContain('FK');
     });
 
     it('should include NOT_NULL constraint', () => {

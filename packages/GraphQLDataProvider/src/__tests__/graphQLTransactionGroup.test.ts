@@ -30,13 +30,16 @@ vi.mock('@memberjunction/core', () => {
 
   return {
     TransactionGroupBase: MockTransactionGroupBase,
-    TransactionResult: vi.fn().mockImplementation(
-      (item: unknown, result: unknown, success: boolean) => ({
-        Item: item,
-        Result: result,
-        Success: success,
-      })
-    ),
+    TransactionResult: class {
+      Item: unknown;
+      Result: unknown;
+      Success: boolean;
+      constructor(item: unknown, result: unknown, success: boolean) {
+        this.Item = item;
+        this.Result = result;
+        this.Success = success;
+      }
+    },
   };
 });
 

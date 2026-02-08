@@ -105,7 +105,10 @@ describe('SQLGenerator', () => {
       state.schemas[0].tables[0].description = undefined;
       const sql = generator.generate(state);
 
-      expect(sql).not.toContain("@level1name = N'Users'");
+      // Table-level description block should be skipped
+      expect(sql).not.toContain("-- Table: dbo.Users");
+      // But column descriptions for that table's columns are still emitted
+      expect(sql).toContain("@level2name = N'ID'");
     });
 
     it('should skip columns without descriptions', () => {

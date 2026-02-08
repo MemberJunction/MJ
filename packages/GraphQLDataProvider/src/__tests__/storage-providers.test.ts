@@ -44,7 +44,7 @@ describe('BrowserIndexedDBStorageProvider', () => {
     expect(typeof provider.SetItem).toBe('function');
   });
 
-  it('should have RemoveItem method', () => {
-    expect(typeof provider.RemoveItem).toBe('function');
+  it('should have Remove method', () => {
+    expect(typeof provider.Remove).toBe('function');
   });
 });

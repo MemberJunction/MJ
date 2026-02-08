@@ -11,13 +11,21 @@ vi.mock('@memberjunction/core', () => ({
 
 // Mock the AWS SDK dynamic import
 const mockSend = vi.fn();
+const mockDestroy = vi.fn();
 vi.mock('@aws-sdk/client-kms', () => {
+    // Use proper classes instead of arrow functions so they are constructable
+    // (vitest v4 requires constructor-compatible implementations for `new`)
     return {
-        KMSClient: vi.fn().mockImplementation(() => ({
-            send: mockSend,
-            destroy: vi.fn()
-        })),
-        DecryptCommand: vi.fn().mockImplementation((params: Record<string, unknown>) => params)
+        KMSClient: class MockKMSClient {
+            send = mockSend;
+            destroy = mockDestroy;
+        },
+        DecryptCommand: class MockDecryptCommand {
+            CiphertextBlob: Uint8Array | undefined;
+            constructor(params: { CiphertextBlob?: Uint8Array }) {
+                this.CiphertextBlob = params?.CiphertextBlob;
+            }
+        }
     };
 });
 

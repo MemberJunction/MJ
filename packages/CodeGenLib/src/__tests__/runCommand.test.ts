@@ -72,9 +72,7 @@ describe('RunCommandsBase', () => {
         });
 
         it('should handle errors in individual commands without failing entire batch', async () => {
-            // This tests the error-catching behavior
-            const { logError } = require('../Misc/status_logging');
-            // The runCommand will fail because spawn won't work in test, but runCommands catches it
+            // The runCommand will fail because the command doesn't exist, but runCommands catches it
             const results = await runner.runCommands([
                 { command: 'nonexistent-command-xyz', args: [], workingDirectory: '/tmp', when: 'test', timeout: 1000 }
             ]);
@@ -89,7 +87,6 @@ describe('RunCommandsBase', () => {
         });
 
         it('should reject for invalid commands', async () => {
-            const { logStatus } = require('../Misc/status_logging');
             const command = {
                 command: 'echo',
                 args: ['hello'],

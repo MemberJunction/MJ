@@ -120,14 +120,20 @@ describe('GuardrailsManager', () => {
 
   describe('checkGuardrails - duration limits', () => {
     it('should stop when maxDurationSeconds is exceeded', () => {
-      const gm = new GuardrailsManager({ maxDurationSeconds: 0 }); // 0 seconds means immediate exceed
-      // The startTime is set in constructor, so elapsed will be > 0
+      const now = Date.now();
+      // Mock Date.now to simulate elapsed time: constructor gets 'now', checkGuardrails gets 'now + 5s'
+      vi.spyOn(Date, 'now')
+        .mockReturnValueOnce(now)       // constructor startTime
+        .mockReturnValueOnce(now + 5000); // checkGuardrails elapsed check
 
+      const gm = new GuardrailsManager({ maxDurationSeconds: 1 });
       const run = createMockRun();
       const result = gm.checkGuardrails(run);
 
       expect(result.canContinue).toBe(false);
       expect(result.reason).toContain('Duration limit exceeded');
+
+      vi.restoreAllMocks();
     });
   });
 

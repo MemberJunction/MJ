@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EntityField, ValidationResult, ValidationErrorInfo, ValidationErrorType, EntityFieldTSType } from '../generic/baseEntity';
-import { EntityFieldInfo } from '../generic/entityInfo';
+import { EntityField } from '../generic/baseEntity';
+import { EntityFieldInfo, EntityFieldTSType } from '../generic/entityInfo';
+import { ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 
 // Create minimal mock EntityFieldInfo for testing EntityField
 function createMockFieldInfo(overrides: Partial<EntityFieldInfo> = {}): EntityFieldInfo {
@@ -28,7 +29,8 @@ describe('EntityField', () => {
             const fieldInfo = createMockFieldInfo();
             const field = new EntityField(fieldInfo);
 
-            expect(field.Value).toBeUndefined();
+            // When no initial value or default is provided, the constructor sets Value to null
+            expect(field.Value).toBeNull();
             expect(field.Name).toBe('TestField');
         });
 
@@ -111,9 +113,8 @@ describe('EntityField', () => {
 
         it('should be dirty after value change', () => {
             const fieldInfo = createMockFieldInfo();
+            // Constructor with initial value sets both Value and OldValue to 'initial'
             const field = new EntityField(fieldInfo, 'initial');
-            // Need to set OldValue to make it track
-            field.OldValue = 'initial';
             field.Value = 'changed';
 
             expect(field.Dirty).toBe(true);
@@ -121,8 +122,8 @@ describe('EntityField', () => {
 
         it('should not be dirty when value is set to same value', () => {
             const fieldInfo = createMockFieldInfo();
+            // Constructor with initial value sets both Value and OldValue to 'same'
             const field = new EntityField(fieldInfo, 'same');
-            field.OldValue = 'same';
             field.Value = 'same';
 
             expect(field.Dirty).toBe(false);
@@ -195,10 +196,10 @@ describe('EntityField', () => {
 });
 
 describe('ValidationResult', () => {
-    it('should default to success', () => {
+    it('should default to not success', () => {
         const result = new ValidationResult();
 
-        expect(result.Success).toBe(true);
+        expect(result.Success).toBe(false);
         expect(result.Errors).toEqual([]);
     });
 });

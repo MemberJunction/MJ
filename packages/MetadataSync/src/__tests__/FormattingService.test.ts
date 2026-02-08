@@ -11,7 +11,7 @@ vi.mock('chalk', () => {
     gray: identity,
     cyan: identity,
     white: Object.assign(identity, { bold: identity }),
-    bold: identity,
+    bold: Object.assign(identity, { underline: identity }),
     dim: identity,
     underline: identity,
     bgRed: identity,
@@ -225,15 +225,16 @@ describe('FormattingService', () => {
         { type: 'reference', severity: 'error', file: 'c.json', message: 'Ref error' },
       ];
 
-      const grouped = formatter.getErrorsByType(errors);
+      // getErrorsByType is private but accessible at runtime; returns Record<string, number>
+      const grouped = (formatter as never as { getErrorsByType(errors: ValidationError[]): Record<string, number> }).getErrorsByType(errors);
 
-      expect(grouped.get('field')).toHaveLength(2);
-      expect(grouped.get('reference')).toHaveLength(1);
+      expect(grouped['field']).toBe(2);
+      expect(grouped['reference']).toBe(1);
     });
 
     it('should handle empty errors array', () => {
-      const grouped = formatter.getErrorsByType([]);
-      expect(grouped.size).toBe(0);
+      const grouped = (formatter as never as { getErrorsByType(errors: ValidationError[]): Record<string, number> }).getErrorsByType([]);
+      expect(Object.keys(grouped).length).toBe(0);
     });
 
     it('should handle single error type', () => {
@@ -241,8 +242,8 @@ describe('FormattingService', () => {
         { type: 'circular', severity: 'error', file: 'a.json', message: 'Circular dep' },
       ];
 
-      const grouped = formatter.getErrorsByType(errors);
-      expect(grouped.get('circular')).toHaveLength(1);
+      const grouped = (formatter as never as { getErrorsByType(errors: ValidationError[]): Record<string, number> }).getErrorsByType(errors);
+      expect(grouped['circular']).toBe(1);
     });
   });
 
@@ -254,64 +255,56 @@ describe('FormattingService', () => {
         { type: 'nesting', severity: 'warning', file: 'c.json', message: 'Nesting warning' },
       ];
 
-      const grouped = formatter.getWarningsByType(warnings);
+      // getWarningsByType is private but accessible at runtime; returns Record<string, number>
+      const grouped = (formatter as never as { getWarningsByType(warnings: ValidationWarning[]): Record<string, number> }).getWarningsByType(warnings);
 
-      expect(grouped.get('bestpractice')).toHaveLength(2);
-      expect(grouped.get('nesting')).toHaveLength(1);
+      expect(grouped['bestpractice']).toBe(2);
+      expect(grouped['nesting']).toBe(1);
     });
 
     it('should handle empty warnings array', () => {
-      const grouped = formatter.getWarningsByType([]);
-      expect(grouped.size).toBe(0);
+      const grouped = (formatter as never as { getWarningsByType(warnings: ValidationWarning[]): Record<string, number> }).getWarningsByType([]);
+      expect(Object.keys(grouped).length).toBe(0);
     });
   });
 
   describe('formatSyncSummary', () => {
     it('should format push summary', () => {
-      const summary = {
-        operation: 'push' as const,
+      const output = formatter.formatSyncSummary('push', {
         created: 5,
         updated: 3,
         deleted: 1,
         skipped: 0,
         errors: 0,
         duration: 1500,
-      };
-
-      const output = formatter.formatSyncSummary(summary);
+      });
 
       expect(typeof output).toBe('string');
       expect(output.length).toBeGreaterThan(0);
     });
 
     it('should format pull summary', () => {
-      const summary = {
-        operation: 'pull' as const,
+      const output = formatter.formatSyncSummary('pull', {
         created: 10,
         updated: 0,
         deleted: 0,
         skipped: 2,
         errors: 0,
         duration: 3000,
-      };
-
-      const output = formatter.formatSyncSummary(summary);
+      });
 
       expect(typeof output).toBe('string');
     });
 
     it('should format summary with errors', () => {
-      const summary = {
-        operation: 'push' as const,
+      const output = formatter.formatSyncSummary('push', {
         created: 0,
         updated: 0,
         deleted: 0,
         skipped: 0,
         errors: 3,
         duration: 500,
-      };
-
-      const output = formatter.formatSyncSummary(summary);
+      });
 
       expect(typeof output).toBe('string');
       expect(output).toContain('3');

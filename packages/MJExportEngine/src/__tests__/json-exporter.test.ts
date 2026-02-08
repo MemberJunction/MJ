@@ -62,8 +62,8 @@ describe('JSONExporter', () => {
 
         it('should handle empty data array', async () => {
             const result = await exporter.export([]);
-            // Empty arrays have no columns, so this fails
-            expect(result.success).toBe(false);
+            // Empty arrays succeed - they just produce empty JSON array
+            expect(result.success).toBe(true);
         });
 
         it('should preserve numeric types', async () => {
@@ -89,8 +89,8 @@ describe('JSONExporter', () => {
             const result = await exporter.export(data);
             const text = new TextDecoder().decode(result.data);
             const parsed = JSON.parse(text);
-            // null becomes '' via formatValue
-            expect(parsed[0].Value).toBe('');
+            // JSON preserves null values
+            expect(parsed[0].Value).toBeNull();
         });
 
         it('should handle special characters in strings', async () => {

@@ -173,9 +173,11 @@ describe('EntityPropertyExtractor', () => {
       const record = new MockEntity();
       const result = extractor.extractAllProperties(record as never);
 
-      expect(result.constructor).toBeUndefined();
-      expect(result.toString).toBeUndefined();
-      expect(result.valueOf).toBeUndefined();
+      // These should not be added as own properties to the result
+      const ownKeys = Object.keys(result);
+      expect(ownKeys).not.toContain('constructor');
+      expect(ownKeys).not.toContain('toString');
+      expect(ownKeys).not.toContain('valueOf');
     });
 
     it('should not include overridden virtual properties', () => {

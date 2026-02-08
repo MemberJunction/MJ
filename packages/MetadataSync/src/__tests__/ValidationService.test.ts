@@ -3,15 +3,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock all external dependencies before importing
 vi.mock('@memberjunction/core', () => {
   return {
-    Metadata: vi.fn().mockImplementation(() => ({
-      EntityByName: vi.fn().mockReturnValue(null),
-      GetEntityObject: vi.fn().mockResolvedValue({}),
-    })),
+    Metadata: vi.fn().mockImplementation(function () {
+      return {
+        EntityByName: vi.fn().mockReturnValue(null),
+        GetEntityObject: vi.fn().mockResolvedValue({}),
+      };
+    }),
     EntityInfo: vi.fn(),
     EntityFieldInfo: vi.fn(),
-    RunView: vi.fn().mockImplementation(() => ({
-      RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-    })),
+    RunView: vi.fn().mockImplementation(function () {
+      return {
+        RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+      };
+    }),
   };
 });
 

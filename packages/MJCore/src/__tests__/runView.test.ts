@@ -120,8 +120,21 @@ describe('RunView', () => {
         globalStore = {};
         vi.spyOn(MJGlobal.Instance, 'GetGlobalObjectStore').mockReturnValue(globalStore);
         RunView.Provider = mockProvider as never;
-        mockRunViewFn.mockClear();
-        mockRunViewsFn.mockClear();
+        // Use mockReset + re-set resolved values so the implementation is restored
+        mockRunViewFn.mockReset();
+        mockRunViewFn.mockResolvedValue({
+            Success: true,
+            Results: [{ ID: '1', Name: 'Test' }],
+            TotalRowCount: 1,
+            RowCount: 1
+        });
+        mockRunViewsFn.mockReset();
+        mockRunViewsFn.mockResolvedValue([{
+            Success: true,
+            Results: [{ ID: '1' }],
+            TotalRowCount: 1,
+            RowCount: 1
+        }]);
     });
 
     afterEach(() => {

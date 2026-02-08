@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock all external dependencies
-vi.mock('@memberjunction/core', () => ({
-  Metadata: vi.fn().mockImplementation(() => ({
-    GetEntityObject: vi.fn().mockResolvedValue({
+vi.mock('@memberjunction/core', () => {
+  class MockMetadata {
+    GetEntityObject = vi.fn().mockResolvedValue({
       NewRecord: vi.fn(),
       Load: vi.fn().mockResolvedValue(true),
       Delete: vi.fn().mockResolvedValue(true),
@@ -22,16 +22,20 @@ vi.mock('@memberjunction/core', () => ({
       EndTime: new Date(),
       Status: '',
       ProcessedItems: 0,
-    }),
-  })),
-  RunView: vi.fn().mockImplementation(() => ({
-    RunView: vi.fn().mockResolvedValue({
+    });
+  }
+  class MockRunView {
+    RunView = vi.fn().mockResolvedValue({
       Success: true,
       Results: [],
-    }),
-  })),
-  UserInfo: vi.fn(),
-}));
+    });
+  }
+  return {
+    Metadata: MockMetadata,
+    RunView: MockRunView,
+    UserInfo: vi.fn(),
+  };
+});
 
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: vi.fn(() => (target: Function) => target),

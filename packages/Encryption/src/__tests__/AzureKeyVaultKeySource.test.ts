@@ -8,14 +8,16 @@ vi.mock('@memberjunction/global', () => ({
 // Track mock calls for Azure SDK
 const mockGetSecret = vi.fn();
 
+// Use proper classes instead of arrow functions so they are constructable
+// (vitest v4 requires constructor-compatible implementations for `new`)
 vi.mock('@azure/keyvault-secrets', () => ({
-    SecretClient: vi.fn().mockImplementation(() => ({
-        getSecret: mockGetSecret
-    }))
+    SecretClient: class MockSecretClient {
+        getSecret = mockGetSecret;
+    }
 }));
 
 vi.mock('@azure/identity', () => ({
-    DefaultAzureCredential: vi.fn().mockImplementation(() => ({}))
+    DefaultAzureCredential: class MockDefaultAzureCredential {}
 }));
 
 import { AzureKeyVaultKeySource } from '../providers/AzureKeyVaultKeySource';

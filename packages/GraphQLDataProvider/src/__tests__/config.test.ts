@@ -24,18 +24,25 @@ vi.mock('@memberjunction/global', () => ({
   MJEventType: { LoggedIn: 'LoggedIn' },
 }));
 
-vi.mock('../graphQLDataProvider', () => ({
-  GraphQLDataProvider: vi.fn().mockImplementation(() => ({
-    Config: vi.fn().mockResolvedValue(true),
-  })),
-  GraphQLProviderConfigData: vi.fn().mockImplementation(
-    (token: string, url: string, wsurl: string) => ({
-      Token: token,
-      URL: url,
-      WSURL: wsurl,
-    })
-  ),
-}));
+vi.mock('../graphQLDataProvider', () => {
+  class MockGraphQLDataProvider {
+    Config = vi.fn().mockResolvedValue(true);
+  }
+  class MockGraphQLProviderConfigData {
+    Token: string;
+    URL: string;
+    WSURL: string;
+    constructor(token: string, url: string, wsurl: string) {
+      this.Token = token;
+      this.URL = url;
+      this.WSURL = wsurl;
+    }
+  }
+  return {
+    GraphQLDataProvider: MockGraphQLDataProvider,
+    GraphQLProviderConfigData: MockGraphQLProviderConfigData,
+  };
+});
 
 import { setupGraphQLClient } from '../config';
 import { GraphQLProviderConfigData } from '../graphQLDataProvider';

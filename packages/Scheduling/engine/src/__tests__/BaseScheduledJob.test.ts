@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 
 // Mock external dependencies
 vi.mock('@memberjunction/core', () => ({
@@ -33,6 +32,12 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
     ScheduledJobConfiguration: class {},
     NotificationContent: class {}
 }));
+
+import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
+import { LogError, LogStatusEx } from '@memberjunction/core';
+
+const mockedLogStatusEx = vi.mocked(LogStatusEx);
+const mockedLogError = vi.mocked(LogError);
 
 // Concrete test implementation
 class TestScheduledJob extends BaseScheduledJob {
@@ -127,9 +132,8 @@ describe('BaseScheduledJob', () => {
 
     describe('log', () => {
         it('should call LogStatusEx with formatted message', () => {
-            const { LogStatusEx } = require('@memberjunction/core');
             job.testLog('Test message');
-            expect(LogStatusEx).toHaveBeenCalledWith(
+            expect(mockedLogStatusEx).toHaveBeenCalledWith(
                 expect.objectContaining({
                     message: expect.stringContaining('Test message'),
                     verboseOnly: false
@@ -138,9 +142,8 @@ describe('BaseScheduledJob', () => {
         });
 
         it('should include class name in log message', () => {
-            const { LogStatusEx } = require('@memberjunction/core');
             job.testLog('Test message');
-            expect(LogStatusEx).toHaveBeenCalledWith(
+            expect(mockedLogStatusEx).toHaveBeenCalledWith(
                 expect.objectContaining({
                     message: expect.stringContaining('[TestScheduledJob]')
                 })
@@ -148,9 +151,8 @@ describe('BaseScheduledJob', () => {
         });
 
         it('should pass verboseOnly flag', () => {
-            const { LogStatusEx } = require('@memberjunction/core');
             job.testLog('Verbose message', true);
-            expect(LogStatusEx).toHaveBeenCalledWith(
+            expect(mockedLogStatusEx).toHaveBeenCalledWith(
                 expect.objectContaining({
                     verboseOnly: true
                 })
@@ -158,9 +160,8 @@ describe('BaseScheduledJob', () => {
         });
 
         it('should default verboseOnly to false', () => {
-            const { LogStatusEx } = require('@memberjunction/core');
             job.testLog('Default verbose');
-            expect(LogStatusEx).toHaveBeenCalledWith(
+            expect(mockedLogStatusEx).toHaveBeenCalledWith(
                 expect.objectContaining({
                     verboseOnly: false
                 })
@@ -170,9 +171,8 @@ describe('BaseScheduledJob', () => {
 
     describe('logError', () => {
         it('should call LogError with formatted message', () => {
-            const { LogError } = require('@memberjunction/core');
             job.testLogError('Error occurred');
-            expect(LogError).toHaveBeenCalledWith(
+            expect(mockedLogError).toHaveBeenCalledWith(
                 expect.stringContaining('Error occurred'),
                 undefined,
                 undefined
@@ -180,9 +180,8 @@ describe('BaseScheduledJob', () => {
         });
 
         it('should include class name in error message', () => {
-            const { LogError } = require('@memberjunction/core');
             job.testLogError('Something failed');
-            expect(LogError).toHaveBeenCalledWith(
+            expect(mockedLogError).toHaveBeenCalledWith(
                 expect.stringContaining('[TestScheduledJob]'),
                 undefined,
                 undefined
@@ -190,10 +189,9 @@ describe('BaseScheduledJob', () => {
         });
 
         it('should pass error object to LogError', () => {
-            const { LogError } = require('@memberjunction/core');
             const error = new Error('test error');
             job.testLogError('Failed', error);
-            expect(LogError).toHaveBeenCalledWith(
+            expect(mockedLogError).toHaveBeenCalledWith(
                 expect.stringContaining('Failed'),
                 undefined,
                 error

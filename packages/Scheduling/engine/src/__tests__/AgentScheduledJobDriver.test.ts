@@ -11,12 +11,12 @@ vi.mock('@memberjunction/core', () => ({
         Errors: Array<{ Source: string; Message: string; Value: unknown; Type: string }> = [];
     },
     UserInfo: class { ID = 'user-1' },
-    Metadata: vi.fn().mockImplementation(() => ({
-        GetEntityObject: vi.fn().mockResolvedValue({
+    Metadata: class MockMetadata {
+        GetEntityObject = vi.fn().mockResolvedValue({
             Load: vi.fn().mockResolvedValue(true),
             Name: 'Test Agent'
-        })
-    })),
+        });
+    },
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
     IsVerboseLoggingEnabled: vi.fn(() => false),
@@ -34,8 +34,8 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 }));
 
 vi.mock('@memberjunction/ai-agents', () => ({
-    AgentRunner: vi.fn().mockImplementation(() => ({
-        RunAgent: vi.fn().mockResolvedValue({
+    AgentRunner: class MockAgentRunner {
+        RunAgent = vi.fn().mockResolvedValue({
             success: true,
             agentRun: {
                 ID: 'agent-run-1',
@@ -47,8 +47,8 @@ vi.mock('@memberjunction/ai-agents', () => ({
                 ScheduledJobRunID: null,
                 Save: vi.fn().mockResolvedValue(true)
             }
-        })
-    }))
+        });
+    }
 }));
 
 vi.mock('@memberjunction/scheduling-base-types', () => ({

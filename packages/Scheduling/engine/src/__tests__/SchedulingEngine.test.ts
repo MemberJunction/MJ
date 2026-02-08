@@ -86,8 +86,13 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
 
 vi.mock('@memberjunction/scheduling-engine-base', () => ({
     SchedulingEngineBase: class {
+        private static _instances = new Map<Function, unknown>();
         static getInstance<T>(): T {
-            return new (this as unknown as new () => T)();
+            const ctor = this as unknown as new () => T;
+            if (!this._instances.has(ctor)) {
+                this._instances.set(ctor, new ctor());
+            }
+            return this._instances.get(ctor) as T;
         }
         ScheduledJobs: Array<Record<string, unknown>> = [];
         ScheduledJobTypes: Array<Record<string, unknown>> = [];

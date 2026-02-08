@@ -194,11 +194,11 @@ describe('WorkerPool', () => {
 
       // Make the single worker busy
       const params1: CodeExecutionParams = { code: 'output = 1;', language: 'javascript' };
-      pool.execute(params1); // First request takes the worker
+      pool.execute(params1).catch(() => { /* will be rejected on shutdown */ }); // First request takes the worker
 
       // Second request should be queued
       const params2: CodeExecutionParams = { code: 'output = 2;', language: 'javascript' };
-      pool.execute(params2); // Fills the queue
+      pool.execute(params2).catch(() => { /* will be resolved/rejected on shutdown */ }); // Fills the queue
 
       // Third request should fail because queue is full
       const params3: CodeExecutionParams = { code: 'output = 3;', language: 'javascript' };
@@ -275,7 +275,7 @@ describe('WorkerPool', () => {
         code: 'output = 1;',
         language: 'javascript'
       };
-      pool.execute(params); // Don't await - leave worker busy
+      pool.execute(params).catch(() => { /* will be rejected on shutdown */ }); // Don't await - leave worker busy
 
       const stats = pool.getStats();
       expect(stats.busyWorkers).toBe(1);
@@ -289,7 +289,7 @@ describe('WorkerPool', () => {
 
       // Make worker busy
       const params1: CodeExecutionParams = { code: 'output = 1;', language: 'javascript' };
-      pool.execute(params1);
+      pool.execute(params1).catch(() => { /* will be rejected when worker crashes during shutdown */ });
 
       // Queue another request
       const params2: CodeExecutionParams = { code: 'output = 2;', language: 'javascript' };
