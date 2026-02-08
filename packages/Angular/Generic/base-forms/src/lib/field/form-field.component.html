@@ -1,0 +1,168 @@
+@if (Record && (Record.IsSaved || !IsFieldReadOnly)) {
+  <!-- READ-ONLY MODE -->
+  @if ((!EditMode || IsFieldReadOnly) && !ShouldHideField) {
+    <div class="mj-forms-field" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly">
+      @if (ShowLabel) {
+        <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+      }
+      <div class="mj-forms-field-control">
+        @if (IsDirty) {
+          <span class="mj-forms-dirty-dot" title="Modified"></span>
+        }
+        <!-- FK fields with a mapped name field: show the name as a hyperlink -->
+        @if (IsFKWithNameField) {
+          <span class="mj-forms-field-value">
+            <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+              {{ FKDisplayName }}
+            </a>
+          </span>
+        }
+        @else {
+          @switch (LinkType) {
+            @case ('Email') {
+              <span class="mj-forms-field-value">
+                <a class="mj-forms-field-link" (click)="OnEmailLinkClick($event)" title="Send email">
+                  {{ FormatValue() }}
+                  <i class="fa-solid fa-envelope mj-forms-field-link-icon"></i>
+                </a>
+              </span>
+            }
+            @case ('URL') {
+              <span class="mj-forms-field-value">
+                <a class="mj-forms-field-link" (click)="OnUrlLinkClick($event)" title="Open link">
+                  {{ FormatValue() }}
+                  <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                </a>
+              </span>
+            }
+            @case ('Record') {
+              <span class="mj-forms-field-value">
+                <a class="mj-forms-field-link" (click)="OnRecordLinkClick($event)" title="View related record">
+                  {{ FormatValue() }}
+                  <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                </a>
+              </span>
+            }
+            @default {
+              @if (Type === 'checkbox') {
+                <span class="mj-forms-field-value">
+                  <div class="mj-forms-field-checkbox">
+                    <input type="checkbox" [checked]="!!Value" disabled>
+                  </div>
+                </span>
+              }
+              @else if (IsLongText) {
+                <span class="mj-forms-field-value mj-forms-field-value--long">{{ FormatValue() }}</span>
+              }
+              @else {
+                <span class="mj-forms-field-value">{{ FormatValue() }}</span>
+              }
+            }
+          }
+        }
+      </div>
+    </div>
+  }
+
+  <!-- EDIT MODE -->
+  @if (EditMode && !IsFieldReadOnly) {
+    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--dirty]="IsDirty">
+      @if (ShowLabel) {
+        <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+      }
+      <div class="mj-forms-field-control">
+        @if (IsDirty) {
+          <span class="mj-forms-dirty-dot" title="Modified"></span>
+        }
+        <!-- Foreign Key fields get autocomplete search -->
+        @if (HasRelatedEntity) {
+          <p-autocomplete
+            [ngModel]="FKAutoCompleteModel"
+            (ngModelChange)="OnFKModelChange($event)"
+            [suggestions]="FKSuggestions"
+            (completeMethod)="OnFKSearch($event)"
+            (onClear)="OnFKClear()"
+            optionLabel="DisplayName"
+            [forceSelection]="true"
+            [showClear]="true"
+            [minLength]="1"
+            [delay]="300"
+            placeholder="Search..."
+            inputStyleClass="mj-forms-field-input"
+            appendTo="body"
+            [styleClass]="'mj-fk-autocomplete' + (FKIsMatched ? ' mj-fk-matched' : '')">
+          </p-autocomplete>
+        }
+        @else {
+          @switch (Type) {
+            @case ('textbox') {
+              <input type="text"
+                class="mj-forms-field-input"
+                [value]="FormatValue()"
+                (change)="OnInputChange($event)">
+            }
+            @case ('textarea') {
+              <textarea
+                class="mj-forms-field-input mj-forms-field-input--textarea"
+                [value]="FormatValue()"
+                (change)="OnInputChange($event)"></textarea>
+            }
+            @case ('number') {
+              <input type="number"
+                class="mj-forms-field-input mj-forms-field-input--number"
+                [value]="Value"
+                (change)="OnNumberChange($event)">
+            }
+            @case ('datepicker') {
+              <input type="date"
+                class="mj-forms-field-input mj-forms-field-input--date"
+                [value]="DateInputValue"
+                (change)="OnDateChange($event)">
+            }
+            @case ('checkbox') {
+              <div class="mj-forms-field-checkbox">
+                <input type="checkbox"
+                  [checked]="!!Value"
+                  (change)="OnCheckboxChange($event)">
+              </div>
+            }
+            @case ('select') {
+              <p-select
+                [ngModel]="FormatValue()"
+                (ngModelChange)="Value = $event"
+                [options]="SelectOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="-- Select --"
+                [filter]="PossibleValues.length > 10"
+                [showClear]="true"
+                appendTo="body"
+                styleClass="mj-p-select">
+              </p-select>
+            }
+            @case ('autocomplete') {
+              <p-autocomplete
+                [ngModel]="FormatValue()"
+                (ngModelChange)="Value = $event"
+                [suggestions]="PossibleValues"
+                (completeMethod)="$event"
+                [minLength]="1"
+                [forceSelection]="false"
+                placeholder="Type to search..."
+                inputStyleClass="mj-forms-field-input"
+                appendTo="body"
+                styleClass="mj-fk-autocomplete">
+              </p-autocomplete>
+            }
+            @default {
+              <input type="text"
+                class="mj-forms-field-input"
+                [value]="FormatValue()"
+                (change)="OnInputChange($event)">
+            }
+          }
+        }
+      </div>
+    </div>
+  }
+}

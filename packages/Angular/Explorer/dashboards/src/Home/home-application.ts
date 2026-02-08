@@ -4,21 +4,45 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, FieldValueCollection } from '@memberjunction/core';
 
 /**
+ * Snapshot of an orphan resource tab for the recent navigation stack.
+ * Stored in memory (session-only) to allow quick jump-back to recently viewed resources.
+ */
+interface OrphanResourceSnapshot {
+  /** URL-encoded composite key segment — primary dedup key */
+  resourceRecordId: string;
+  /** Resource type name (e.g., 'record', 'Dashboards') */
+  resourceType: string;
+  /** Entity name from tab configuration (for record name resolution) */
+  entityName?: string;
+  /** Tab title at time of capture (fallback label) */
+  title: string;
+  /** Full tab configuration (passed to DynamicNavItem for re-opening) */
+  configuration: Record<string, unknown>;
+  /** Tab ID for fallback matching when no resourceRecordId */
+  tabId: string;
+}
+
+/**
  * Home Application - Provides dynamic navigation items for orphan resources.
  *
- * When a user opens a resource (record, view, dashboard, etc.) from within the Home app,
- * this application dynamically creates a nav item to represent that resource.
- * The nav item shows the resource name and appropriate icon from ResourceTypes metadata.
+ * Maintains a recency-ordered stack of up to 3 recently visited orphan resources.
+ * When the user opens a record/view/dashboard from within the Home app, the resource
+ * appears as a dynamic nav item. When they navigate away (e.g., click Home), the
+ * nav item persists so they can quickly jump back. Older items drop off as new ones
+ * are added.
  *
  * @example
- * User opens "John Smith" contact record from Home app:
- * - Dynamic nav item appears: [person icon] "John Smith"
- * - Clicking it re-selects that tab
+ * User opens "John Smith" contact, then "Acme Corp" company:
+ * - Nav shows: [Home] [Favorites] | [person] "Acme Corp" [building] "John Smith"
+ * - Clicking "John Smith" re-opens that record
  */
 @RegisterClass(BaseApplication, 'HomeApplication')
 export class HomeApplication extends BaseApplication {
+  private static readonly MAX_RECENT_ITEMS = 3;
+
   private workspaceManager: WorkspaceStateManager | null = null;
   private sharedService: SharedService | null = null;
+  private recentOrphanStack: OrphanResourceSnapshot[] = [];
 
   /**
    * Inject WorkspaceStateManager for accessing current tab state
@@ -35,17 +59,20 @@ export class HomeApplication extends BaseApplication {
   }
 
   /**
-   * Returns navigation items including any dynamic item for the active orphan resource.
-   * Static items (Apps, Favorites) come from DefaultNavItems in metadata.
-   * Dynamic items are generated based on the currently active tab.
+   * Returns navigation items including dynamic items for recently visited orphan resources.
+   * Static items come from DefaultNavItems in metadata.
+   * Dynamic items are generated from the recent orphan stack (up to 3).
    */
   override GetNavItems(): NavItem[] {
     const staticItems = super.GetNavItems();
 
-    // Get dynamic nav item for currently active orphan resource tab
-    const dynamicItem = this.getDynamicResourceNavItem();
-    if (dynamicItem) {
-      return [...staticItems, dynamicItem];
+    // Update the recent stack based on current active tab
+    this.updateRecentStack();
+
+    // Build dynamic nav items from the stack
+    const dynamicItems = this.buildDynamicNavItems();
+    if (dynamicItems.length > 0) {
+      return [...staticItems, ...dynamicItems];
     }
 
     return staticItems;
@@ -65,87 +92,128 @@ export class HomeApplication extends BaseApplication {
   }
 
   /**
-   * Creates a dynamic nav item for the currently active orphan resource tab.
-   * Returns null if:
-   * - No workspace manager is set
-   * - No active tab exists
-   * - Active tab doesn't belong to this app
-   * - Active tab matches a static nav item
-   * - Active tab has no resource type (e.g., app default dashboard)
+   * Updates the recent orphan stack based on the currently active tab.
+   * If the active tab is an orphan resource (not matching any static nav item),
+   * it gets pushed/promoted to the front of the stack. If the active tab is
+   * a static resource (e.g., Home dashboard), the stack is left unchanged.
    */
-  private getDynamicResourceNavItem(): DynamicNavItem | null {
+  private updateRecentStack(): void {
     if (!this.workspaceManager) {
-      return null;
+      return;
     }
 
     const config = this.workspaceManager.GetConfiguration();
     if (!config?.activeTabId) {
-      return null;
+      return;
     }
 
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     if (!activeTab || activeTab.applicationId !== this.ID) {
-      return null;
+      return;
     }
 
-    // Get resource type from tab configuration
-    const resourceType = activeTab.configuration?.['resourceType'] as string | undefined;
+    // Check if active tab qualifies as an orphan resource
+    const snapshot = this.createSnapshotIfOrphan(activeTab);
+    if (!snapshot) {
+      // Active tab is a static resource (Home dashboard, etc.) — leave stack as-is
+      return;
+    }
+
+    // Deduplicate: remove existing entry with same resourceRecordId
+    this.recentOrphanStack = this.recentOrphanStack.filter(
+      s => s.resourceRecordId !== snapshot.resourceRecordId
+    );
+
+    // Push to front (most recent first)
+    this.recentOrphanStack.unshift(snapshot);
+
+    // Trim to max size
+    if (this.recentOrphanStack.length > HomeApplication.MAX_RECENT_ITEMS) {
+      this.recentOrphanStack.length = HomeApplication.MAX_RECENT_ITEMS;
+    }
+  }
+
+  /**
+   * Creates an OrphanResourceSnapshot from a tab if it qualifies as an orphan resource.
+   * Returns null if the tab is a static nav item, has no resource type, or is an
+   * app-level custom dashboard (no record ID).
+   */
+  private createSnapshotIfOrphan(tab: WorkspaceTab): OrphanResourceSnapshot | null {
+    const resourceType = tab.configuration?.['resourceType'] as string | undefined;
     if (!resourceType) {
       return null;
     }
 
-    // Don't create dynamic nav item for 'custom' resource type without a specific record
-    // (these are typically app-level dashboards, not orphan resources)
-    if (resourceType.toLowerCase() === 'custom' && !activeTab.resourceRecordId) {
+    // Skip 'custom' resource type without a specific record (app-level dashboards)
+    if (resourceType.toLowerCase() === 'custom' && !tab.resourceRecordId) {
       return null;
     }
 
-    // Don't create dynamic nav item if it matches a static nav item
+    // Skip if it matches a static nav item
+    if (this.matchesStaticNavItem(tab)) {
+      return null;
+    }
+
+    return {
+      resourceRecordId: tab.resourceRecordId,
+      resourceType,
+      entityName: tab.configuration?.['Entity'] as string | undefined,
+      title: tab.title,
+      configuration: tab.configuration as Record<string, unknown>,
+      tabId: tab.id
+    };
+  }
+
+  /**
+   * Checks whether a tab matches any static nav item (by label, route, or driver class).
+   */
+  private matchesStaticNavItem(tab: WorkspaceTab): boolean {
     const staticItems = super.GetNavItems();
-    const matchesStatic = staticItems.some(item => {
-      // Match by label
-      if (item.Label === activeTab.title) {
+    return staticItems.some(item => {
+      if (item.Label === tab.title) {
         return true;
       }
-      // Match by route
-      if (item.Route && activeTab.configuration?.['route'] === item.Route) {
+      if (item.Route && tab.configuration?.['route'] === item.Route) {
         return true;
       }
-      // Match by driver class (for Custom resources)
-      if (item.DriverClass && activeTab.configuration?.['driverClass'] === item.DriverClass) {
+      if (item.DriverClass && tab.configuration?.['driverClass'] === item.DriverClass) {
         return true;
       }
       return false;
     });
+  }
 
-    if (matchesStatic) {
-      return null;
-    }
+  /**
+   * Creates DynamicNavItem entries for each item in the recent orphan stack.
+   * The active tab's item will be highlighted via isActiveMatch.
+   */
+  private buildDynamicNavItems(): DynamicNavItem[] {
+    return this.recentOrphanStack.map(snapshot => this.createDynamicNavItem(snapshot));
+  }
 
-    // Create the dynamic nav item representing this orphan resource
-    // Icon comes from ResourceTypes entity (metadata-driven, not hardcoded)
-    const tabId = activeTab.id;
-    const tabRecordId = activeTab.resourceRecordId;
-    const entityName = activeTab.configuration?.['Entity'] as string | undefined;
-
-    // Resolve display label: cached record name > tab title > generated default
-    const label = this.resolveRecordLabel(entityName, tabRecordId, activeTab.title);
+  /**
+   * Creates a single DynamicNavItem from an OrphanResourceSnapshot.
+   */
+  private createDynamicNavItem(snapshot: OrphanResourceSnapshot): DynamicNavItem {
+    const label = this.resolveRecordLabel(
+      snapshot.entityName,
+      snapshot.resourceRecordId,
+      snapshot.title
+    );
 
     return {
       Label: label,
-      Icon: this.getResourceTypeIcon(resourceType),
-      ResourceType: resourceType,
-      RecordID: tabRecordId,
-      Configuration: activeTab.configuration,
+      Icon: this.getResourceTypeIcon(snapshot.resourceType),
+      ResourceType: snapshot.resourceType,
+      RecordID: snapshot.resourceRecordId,
+      Configuration: snapshot.configuration,
       isDynamic: true,
-      // Custom matching function - matches if tab has same resource record ID
       isActiveMatch: (tab: unknown) => {
         const wsTab = tab as WorkspaceTab;
-        if (tabRecordId) {
-          return wsTab.resourceRecordId === tabRecordId;
+        if (snapshot.resourceRecordId) {
+          return wsTab.resourceRecordId === snapshot.resourceRecordId;
         }
-        // Fall back to tab ID matching if no record ID
-        return wsTab.id === tabId;
+        return wsTab.id === snapshot.tabId;
       }
     };
   }

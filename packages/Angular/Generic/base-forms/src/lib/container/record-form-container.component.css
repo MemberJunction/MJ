@@ -1,0 +1,136 @@
+/* ============================================
+   RECORD FORM CONTAINER
+   Top-level wrapper: toolbar + scrollable content
+   ============================================ */
+mj-record-form-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ViewEncapsulation.None fallback — ensure the element itself constrains overflow */
+mj-record-form-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ============================================
+   PANELS CONTAINER
+   ============================================ */
+.mj-forms-panels-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 32px 48px;
+  max-width: 920px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.mj-forms-panels--full-width {
+  max-width: none;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* Field panels area - vertical flex with gap between sections */
+.mj-forms-field-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* After panels area - typically related entity grids */
+.mj-after-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+/* Only show margin-top when after-panels has content */
+.mj-after-panels:empty {
+  margin-top: 0;
+}
+
+/* Hide related entity panels in edit mode */
+.mj-forms-panels--edit-mode .mj-before-panels,
+.mj-forms-panels--edit-mode .mj-after-panels {
+  display: none;
+}
+
+/* ============================================
+   EMPTY SEARCH STATE
+   ============================================ */
+.mj-forms-empty-search-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+  min-height: 400px;
+}
+
+.mj-forms-empty-search-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.mj-forms-empty-search-icon i {
+  font-size: 32px;
+  color: #9ca3af;
+}
+
+.mj-forms-empty-search-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 12px 0;
+}
+
+.mj-forms-empty-search-message {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.6;
+  max-width: 400px;
+  margin: 0;
+}
+
+.mj-forms-empty-search-message strong {
+  color: #374151;
+  font-weight: 600;
+}
+
+.mj-forms-empty-search-link {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.mj-forms-empty-search-link:hover {
+  text-decoration: underline;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+  .mj-forms-panels-container {
+    padding: 16px 12px 32px;
+  }
+}

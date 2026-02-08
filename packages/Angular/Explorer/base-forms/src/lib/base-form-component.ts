@@ -11,7 +11,8 @@ import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormSectionInfo } from './base-form-section-info';
 import { BaseFormContext } from './base-form-context';
-import { CollapsiblePanelComponent } from './collapsible-panel.component';
+import { MjCollapsiblePanelComponent } from '@memberjunction/ng-forms';
+import { FormNavigationEvent } from '@memberjunction/ng-forms';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
@@ -60,7 +61,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   @ViewChildren(MJTabStripComponent) tabStrips!: QueryList<MJTabStripComponent>;
 
-  @ViewChildren(CollapsiblePanelComponent) collapsiblePanels!: QueryList<CollapsiblePanelComponent>;
+  @ViewChildren(MjCollapsiblePanelComponent) collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
 
   public get TabStripComponent(): MJTabStripComponent {
     return this.tabComponent;
@@ -790,6 +791,32 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   /**
+   * Gets the persisted panel height for a section.
+   * @param sectionKey The section key
+   * @returns Panel height in pixels, or undefined if using default
+   */
+  public GetSectionPanelHeight(sectionKey: string): number | undefined {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      return this.formStateService.getSectionPanelHeight(entityName, sectionKey);
+    }
+    return undefined;
+  }
+
+  /**
+   * Sets the panel height for a section.
+   * Persists to User Settings via FormStateService.
+   * @param sectionKey The section key
+   * @param height Panel height in pixels
+   */
+  public SetSectionPanelHeight(sectionKey: string, height: number): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setSectionPanelHeight(entityName, sectionKey, height);
+    }
+  }
+
+  /**
    * Toggles the expanded state of a section.
    * Persists to User Settings via FormStateService.
    * @param sectionKey The section key to toggle
@@ -859,7 +886,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (!this.collapsiblePanels || this.collapsiblePanels.length === 0) {
       return this.sections.length;
     }
-    return this.collapsiblePanels.filter(panel => panel.isVisible).length;
+    return this.collapsiblePanels.filter(panel => panel.IsVisible).length;
   }
 
   /**
@@ -985,6 +1012,83 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     const order = this.getSectionOrder();
     const index = order.indexOf(sectionKey);
     return index >= 0 ? index : this.sections.length; // Put unknown sections at the end
+  }
+
+  // #endregion
+
+  // #region Form Container Event Handlers
+
+  /**
+   * Handles navigation events from the form container.
+   * Maps FormNavigationEvent kinds to the appropriate navigation actions.
+   * Generated form templates bind this as: (Navigate)="OnFormNavigate($event)"
+   */
+  public OnFormNavigate(event: FormNavigationEvent): void {
+    switch (event.Kind) {
+      case 'record':
+        this.sharedService.InvokeManualResize();
+        this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
+        break;
+      case 'external-link':
+        window.open(event.Url, '_blank');
+        break;
+      case 'email':
+        window.open(`mailto:${event.EmailAddress}`, '_self');
+        break;
+      case 'entity-hierarchy':
+        this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey);
+        break;
+      case 'child-entity-type':
+        // Navigate to a filtered view of the child entity type
+        break;
+      case 'new-record':
+        this.navigationService.OpenNewEntityRecord(event.EntityName, { newRecordValues: event.DefaultValues });
+        break;
+    }
+  }
+
+  /**
+   * Handles delete requests from the form container.
+   * The container's toolbar shows the delete confirmation before emitting this event.
+   * Generated form templates bind this as: (DeleteRequested)="OnDeleteRequested()"
+   */
+  public async OnDeleteRequested(): Promise<void> {
+    if (!this.record || !this.record.IsSaved) return;
+    try {
+      const result = await this.record.Delete();
+      if (result) {
+        this.sharedService.CreateSimpleNotification('Record deleted successfully', 'success', 2500);
+      } else {
+        this.sharedService.CreateSimpleNotification('Error deleting record', 'error', 5000);
+      }
+    } catch (e) {
+      this.sharedService.CreateSimpleNotification('Error deleting record: ' + e, 'error', 5000);
+    }
+  }
+
+  /**
+   * Handles favorite toggle from the form container.
+   * Generated form templates bind this as: (FavoriteToggled)="OnFavoriteToggled()"
+   */
+  public async OnFavoriteToggled(): Promise<void> {
+    await this.SetFavoriteStatus(!this.IsFavorite);
+  }
+
+  /**
+   * Handles history view requests from the form container.
+   * Generated form templates bind this as: (HistoryRequested)="OnHistoryRequested()"
+   */
+  public OnHistoryRequested(): void {
+    this.handleHistoryDialog();
+  }
+
+  /**
+   * Handles list management requests from the form container.
+   * Generated form templates bind this as: (ListManagementRequested)="OnListManagementRequested()"
+   */
+  public OnListManagementRequested(): void {
+    // List management dialog is handled by the host application
+    // Subclasses can override this to implement custom list management
   }
 
   // #endregion

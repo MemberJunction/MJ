@@ -10,20 +10,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
+import { MjFormsModule } from '@memberjunction/ng-forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
-
-// Kendo Imports
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
-import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 import { ActionAuthorizationFormComponent } from "./Entities/ActionAuthorization/actionauthorization.form.component";
@@ -326,17 +320,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -371,17 +361,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule,
     JoinGridModule
 ],
 exports: [
@@ -417,17 +403,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -462,17 +444,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -507,17 +485,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -552,17 +526,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -597,17 +567,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -642,17 +608,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -687,17 +649,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -732,17 +690,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -777,17 +731,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -822,17 +772,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -867,17 +813,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]
@@ -904,17 +846,13 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    MjFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    ContainerDirectivesModule
 ],
 exports: [
 ]

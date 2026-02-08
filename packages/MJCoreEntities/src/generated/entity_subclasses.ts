@@ -2455,27 +2455,27 @@ export const AIResultCacheSchema = z.object({
         * * Description: Reference to the AIPromptRun that created this cache entry.`),
     AIPrompt: z.string().describe(`
         * * Field Name: AIPrompt
-        * * Display Name: Prompt Name
+        * * Display Name: AI Prompt
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: Model Name
+        * * Display Name: AI Model
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor Name
+        * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration Name
+        * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
     PromptRun: z.string().nullable().describe(`
         * * Field Name: PromptRun
-        * * Display Name: Prompt Run Name
+        * * Display Name: Prompt Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -4440,7 +4440,7 @@ export const ConversationSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     ExternalID: z.string().nullable().describe(`
@@ -4470,7 +4470,7 @@ export const ConversationSchema = z.object({
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
     LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity ID
+        * * Display Name: Linked Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     LinkedRecordID: z.string().nullable().describe(`
@@ -4480,7 +4480,7 @@ export const ConversationSchema = z.object({
         * * Description: ID of a related record this conversation is about (support ticket, order, etc.).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context ID
+        * * Display Name: Data Context
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -4505,13 +4505,13 @@ export const ConversationSchema = z.object({
         * * Description: Tracks the processing status of the conversation: Available, Processing`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment ID
+        * * Display Name: Environment
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project ID
+        * * Display Name: Project
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
@@ -5077,12 +5077,12 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunID: z.string().describe(`
         * * Field Name: DuplicateRunID
-        * * Display Name: Duplicate Run
+        * * Display Name: Duplicate Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record ID
+        * * Display Name: Record
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record being analyzed for duplicates.`),
     MatchStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending'), z.literal('Skipped')]).describe(`
@@ -5136,7 +5136,7 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     DuplicateRun: z.string().describe(`
         * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run Name
+        * * Display Name: Duplicate Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -5264,7 +5264,7 @@ export const EmployeeCompanyIntegrationSchema = z.object({
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)`),
     ExternalSystemRecordID: z.string().describe(`
         * * Field Name: ExternalSystemRecordID
-        * * Display Name: External System Record
+        * * Display Name: External System Record ID
         * * SQL Data Type: nvarchar(750)
         * * Description: The employee's unique identifier in the external integrated system.`),
     IsActive: z.boolean().describe(`
@@ -5367,7 +5367,7 @@ export const EmployeeSkillSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
@@ -5966,7 +5966,7 @@ export const EntityActionInvocationSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Action
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
@@ -6028,11 +6028,11 @@ export const EntityActionParamSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Action
+        * * Display Name: Entity Action
         * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Parameter
+        * * Display Name: Action Parameter
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -6209,7 +6209,7 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityCommunicationMessageTypeID: z.string().describe(`
         * * Field Name: EntityCommunicationMessageTypeID
-        * * Display Name: Message Type ID
+        * * Display Name: Communication Message Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)`),
     FieldName: z.string().describe(`
@@ -6234,7 +6234,7 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityCommunicationMessageType: z.string().describe(`
         * * Field Name: EntityCommunicationMessageType
-        * * Display Name: Message Type
+        * * Display Name: Communication Message Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -7459,12 +7459,12 @@ export const ErrorLogSchema = z.object({
         * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Code
+        * * Display Name: Error Code
         * * SQL Data Type: nchar(20)
         * * Description: Error code for categorizing and handling specific error types.`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Error Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The primary error message describing what went wrong.`),
     CreatedBy: z.string().nullable().describe(`
@@ -7475,16 +7475,16 @@ export const ErrorLogSchema = z.object({
         * * Description: User or system process that encountered this error.`),
     Status: z.string().nullable().describe(`
         * * Field Name: Status
-        * * Display Name: Status
+        * * Display Name: Error Status
         * * SQL Data Type: nvarchar(10)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Error Category
         * * SQL Data Type: nvarchar(20)
         * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).`),
     Details: z.string().nullable().describe(`
         * * Field Name: Details
-        * * Display Name: Details
+        * * Display Name: Error Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full error details including stack trace, inner exceptions, and context data.`),
     __mj_CreatedAt: z.date().describe(`
@@ -9488,7 +9488,7 @@ permanently, Warn means validation failed but execution continues.`),
 detailed information about what validation rules failed.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`),
@@ -9507,7 +9507,7 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -13745,11 +13745,11 @@ export const ConversationDetailRatingSchema = z.object({
         * * Default Value: getutcdate()`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Message
         * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -14935,11 +14935,11 @@ export const MCPServerConnectionToolSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: Connection Name
+        * * Display Name: MCP Server Connection
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: Tool Name
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -15378,15 +15378,15 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: MCP Server Connection
+        * * Display Name: MCP Server Connection (Name)
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: MCP Server Tool
+        * * Display Name: MCP Server Tool (Name)
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User (Name)
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -16679,15 +16679,15 @@ export const TaskSchema = z.object({
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Task Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Task Environment
+        * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
@@ -18739,12 +18739,12 @@ export const RecommendationItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecommendationID: z.string().describe(`
         * * Field Name: RecommendationID
-        * * Display Name: Recommendation
+        * * Display Name: Recommendation ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)`),
     DestinationEntityID: z.string().describe(`
         * * Field Name: DestinationEntityID
-        * * Display Name: Destination Entity
+        * * Display Name: Destination Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     DestinationEntityRecordID: z.string().describe(`
@@ -18769,7 +18769,7 @@ export const RecommendationItemSchema = z.object({
         * * Default Value: getutcdate()`),
     Recommendation: z.string().describe(`
         * * Field Name: Recommendation
-        * * Display Name: Recommendation Text
+        * * Display Name: Recommendation
         * * SQL Data Type: nvarchar(MAX)`),
     DestinationEntity: z.string().describe(`
         * * Field Name: DestinationEntity
@@ -18888,17 +18888,17 @@ export const RecommendationSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecommendationRunID: z.string().describe(`
         * * Field Name: RecommendationRunID
-        * * Display Name: Recommendation Run
+        * * Display Name: Recommendation Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)`),
     SourceEntityID: z.string().describe(`
         * * Field Name: SourceEntityID
-        * * Display Name: Source Entity
+        * * Display Name: Source Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     SourceEntityRecordID: z.string().describe(`
         * * Field Name: SourceEntityRecordID
-        * * Display Name: Source Entity Record
+        * * Display Name: Source Entity Record ID
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The record ID of the source entity`),
     __mj_CreatedAt: z.date().describe(`
@@ -18987,7 +18987,7 @@ export const RecordChangeSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RecordID: z.string().describe(`
@@ -18997,7 +18997,7 @@ export const RecordChangeSchema = z.object({
         * * Description: Field RecordID for entity Record Changes.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Snapshot'), z.literal('Update')]).describe(`
@@ -19116,12 +19116,12 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecordMergeLogID: z.string().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log ID
+        * * Display Name: Record Merge Log
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)`),
     DeletedRecordID: z.string().describe(`
         * * Field Name: DeletedRecordID
-        * * Display Name: Deleted Record ID
+        * * Display Name: Deleted Record
         * * SQL Data Type: nvarchar(750)
         * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -19151,7 +19151,7 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     RecordMergeLog: z.string().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Record Merge Log
+        * * Display Name: Merge Log
         * * SQL Data Type: nvarchar(450)`),
 });
 
@@ -20330,7 +20330,7 @@ export const TemplateParamSchema = z.object({
         * * Description: Description of the parameter`),
     Type: z.union([z.literal('Array'), z.literal('Entity'), z.literal('Object'), z.literal('Record'), z.literal('Scalar')]).describe(`
         * * Field Name: Type
-        * * Display Name: Parameter Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Scalar
     * * Value List Type: List
@@ -20348,7 +20348,7 @@ export const TemplateParamSchema = z.object({
         * * Description: Default value of the parameter`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Required
+        * * Display Name: Is Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this parameter must be provided when using the template.`),
@@ -28045,7 +28045,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIPrompt
-    * * Display Name: Prompt Name
+    * * Display Name: AI Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get AIPrompt(): string {
@@ -28054,7 +28054,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIModel
-    * * Display Name: Model Name
+    * * Display Name: AI Model
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
@@ -28063,7 +28063,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor Name
+    * * Display Name: Vendor
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string | null {
@@ -28072,7 +28072,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -28081,7 +28081,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration Name
+    * * Display Name: Configuration
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -28090,7 +28090,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: PromptRun
-    * * Display Name: Prompt Run Name
+    * * Display Name: Prompt Run
     * * SQL Data Type: nvarchar(255)
     */
     get PromptRun(): string | null {
@@ -33291,7 +33291,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -33369,7 +33369,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity ID
+    * * Display Name: Linked Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -33395,7 +33395,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context ID
+    * * Display Name: Data Context
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
     */
@@ -33446,7 +33446,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment ID
+    * * Display Name: Environment
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -33460,7 +33460,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project ID
+    * * Display Name: Project
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -34894,7 +34894,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
 
     /**
     * * Field Name: DuplicateRunID
-    * * Display Name: Duplicate Run
+    * * Display Name: Duplicate Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)
     */
@@ -34907,7 +34907,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record ID
+    * * Display Name: Record
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record being analyzed for duplicates.
     */
@@ -35019,7 +35019,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
 
     /**
     * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run Name
+    * * Display Name: Duplicate Run
     * * SQL Data Type: nvarchar(255)
     */
     get DuplicateRun(): string {
@@ -35342,7 +35342,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: ExternalSystemRecordID
-    * * Display Name: External System Record
+    * * Display Name: External System Record ID
     * * SQL Data Type: nvarchar(750)
     * * Description: The employee's unique identifier in the external integrated system.
     */
@@ -35607,7 +35607,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -37093,7 +37093,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Action
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -37247,7 +37247,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Action
+    * * Display Name: Entity Action
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -37256,7 +37256,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: ActionParam
-    * * Display Name: Parameter
+    * * Display Name: Action Parameter
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -37705,7 +37705,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: EntityCommunicationMessageTypeID
-    * * Display Name: Message Type ID
+    * * Display Name: Communication Message Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)
     */
@@ -37764,7 +37764,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: EntityCommunicationMessageType
-    * * Display Name: Message Type
+    * * Display Name: Communication Message Type
     * * SQL Data Type: nvarchar(100)
     */
     get EntityCommunicationMessageType(): string {
@@ -40789,7 +40789,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Code
-    * * Display Name: Code
+    * * Display Name: Error Code
     * * SQL Data Type: nchar(20)
     * * Description: Error code for categorizing and handling specific error types.
     */
@@ -40802,7 +40802,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Error Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The primary error message describing what went wrong.
     */
@@ -40829,7 +40829,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Status
-    * * Display Name: Status
+    * * Display Name: Error Status
     * * SQL Data Type: nvarchar(10)
     */
     get Status(): string | null {
@@ -40841,7 +40841,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Error Category
     * * SQL Data Type: nvarchar(20)
     * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).
     */
@@ -40854,7 +40854,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Details
-    * * Display Name: Details
+    * * Display Name: Error Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full error details including stack trace, inner exceptions, and context data.
     */
@@ -46077,7 +46077,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
     * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles
@@ -46122,7 +46122,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -57470,7 +57470,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Message
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -57479,7 +57479,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -60517,7 +60517,7 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: Connection Name
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -60526,7 +60526,7 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: Tool Name
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -61665,7 +61665,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: MCP Server Connection
+    * * Display Name: MCP Server Connection (Name)
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -61674,7 +61674,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: MCP Server Tool
+    * * Display Name: MCP Server Tool (Name)
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -61683,7 +61683,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User (Name)
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -65154,7 +65154,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -65163,7 +65163,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Task Type
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(255)
     */
     get Type(): string {
@@ -65172,7 +65172,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Task Environment
+    * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -70524,7 +70524,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: RecommendationID
-    * * Display Name: Recommendation
+    * * Display Name: Recommendation ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)
     */
@@ -70537,7 +70537,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: DestinationEntityID
-    * * Display Name: Destination Entity
+    * * Display Name: Destination Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -70596,7 +70596,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: Recommendation
-    * * Display Name: Recommendation Text
+    * * Display Name: Recommendation
     * * SQL Data Type: nvarchar(MAX)
     */
     get Recommendation(): string {
@@ -70915,7 +70915,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: RecommendationRunID
-    * * Display Name: Recommendation Run
+    * * Display Name: Recommendation Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)
     */
@@ -70928,7 +70928,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: SourceEntityID
-    * * Display Name: Source Entity
+    * * Display Name: Source Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -70941,7 +70941,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: SourceEntityRecordID
-    * * Display Name: Source Entity Record
+    * * Display Name: Source Entity Record ID
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The record ID of the source entity
     */
@@ -71169,7 +71169,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -71195,7 +71195,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -71472,7 +71472,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log ID
+    * * Display Name: Record Merge Log
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -71485,7 +71485,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: DeletedRecordID
-    * * Display Name: Deleted Record ID
+    * * Display Name: Deleted Record
     * * SQL Data Type: nvarchar(750)
     * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.
     */
@@ -71549,7 +71549,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Record Merge Log
+    * * Display Name: Merge Log
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string {
@@ -74703,7 +74703,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Parameter Type
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Scalar
     * * Value List Type: List
@@ -74737,7 +74737,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Required
+    * * Display Name: Is Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this parameter must be provided when using the template.

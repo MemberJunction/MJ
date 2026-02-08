@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { BaseApplication, NavItem, WorkspaceStateManager, WorkspaceConfiguration } from '@memberjunction/ng-base-application';
+import { BaseApplication, DynamicNavItem, NavItem, WorkspaceStateManager, WorkspaceConfiguration } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Subject, takeUntil } from 'rxjs';
 
@@ -137,10 +137,18 @@ export class AppNavComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Get unique key for nav item (used for tracking and active state)
+   * Get unique key for nav item (used for tracking and active state).
+   * Prefers RecordID for dynamic items to avoid label collisions.
    */
   private getItemKey(item: NavItem): string {
-    return item.Route || item.Label || '';
+    return item.RecordID || item.Route || item.Label || '';
+  }
+
+  /**
+   * Check if a nav item is dynamic (generated from recent orphan resources)
+   */
+  isDynamic(item: NavItem): boolean {
+    return (item as DynamicNavItem).isDynamic === true;
   }
 
   /**

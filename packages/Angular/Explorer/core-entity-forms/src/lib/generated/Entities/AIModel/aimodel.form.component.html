@@ -1,208 +1,203 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Model Overview Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="modelOverview"
-        sectionName="Model Overview"
-        icon="fa fa-info-circle"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="modelOverview"
+        SectionName="Model Overview"
+        Icon="fa fa-info-circle"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="AIModelTypeID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="IsActive"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ModelSelectionInsights"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="InheritTypeModalities"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="PriorVersionID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AIModelType"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Vendor"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Performance Metrics Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="performanceMetrics"
-        sectionName="Performance Metrics"
-        icon="fa fa-tachometer-alt"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="performanceMetrics"
+        SectionName="Performance Metrics"
+        Icon="fa fa-tachometer-alt"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="PowerRank"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="SpeedRank"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="CostRank"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Technical Specifications Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="technicalSpecifications"
-        sectionName="Technical Specifications"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="technicalSpecifications"
+        SectionName="Technical Specifications"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="DriverClass"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="DriverImportPath"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="APIName"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="InputTokenLimit"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="SupportedResponseFormats"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="SupportsEffortLevel"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-database"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -211,15 +206,15 @@
          ======================================== -->
 
     <!-- AI Actions Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIActions"
-        sectionName="AI Actions"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIActions')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="aIActions"
+        SectionName="AI Actions"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('aIActions')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -235,15 +230,15 @@
     </mj-collapsible-panel>
 
     <!-- AI Model Actions Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIModelActions"
-        sectionName="AI Model Actions"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIModelActions')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="aIModelActions"
+        SectionName="AI Model Actions"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('aIModelActions')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -259,15 +254,15 @@
     </mj-collapsible-panel>
 
     <!-- Entity Documents Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="entityDocuments"
-        sectionName="Entity Documents"
-        icon="fa fa-file-alt"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityDocuments')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="entityDocuments"
+        SectionName="Entity Documents"
+        Icon="fa fa-file-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('entityDocuments')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -283,15 +278,15 @@
     </mj-collapsible-panel>
 
     <!-- Vector Indexes Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="vectorIndexes"
-        sectionName="Vector Indexes"
-        icon="fa fa-database"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('vectorIndexes')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="vectorIndexes"
+        SectionName="Vector Indexes"
+        Icon="fa fa-database"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('vectorIndexes')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -307,15 +302,15 @@
     </mj-collapsible-panel>
 
     <!-- AI Agent Notes Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIAgentNotes"
-        sectionName="AI Agent Notes"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIAgentNotes')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="aIAgentNotes"
+        SectionName="AI Agent Notes"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('aIAgentNotes')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -331,15 +326,15 @@
     </mj-collapsible-panel>
 
     <!-- AI Result Cache Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIResultCache"
-        sectionName="AI Result Cache"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIResultCache')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="aIResultCache"
+        SectionName="AI Result Cache"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('aIResultCache')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -355,15 +350,15 @@
     </mj-collapsible-panel>
 
     <!-- Content Types Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="contentTypes"
-        sectionName="Content Types"
-        icon="fa fa-folder"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('contentTypes')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="contentTypes"
+        SectionName="Content Types"
+        Icon="fa fa-folder"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('contentTypes')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -379,15 +374,15 @@
     </mj-collapsible-panel>
 
     <!-- Entity AI Actions Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="entityAIActions"
-        sectionName="Entity AI Actions"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityAIActions')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="entityAIActions"
+        SectionName="Entity AI Actions"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('entityAIActions')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -403,15 +398,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Examples Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIAgentExamples"
-        sectionName="MJ: AI Agent Examples"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIAgentExamples')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIAgentExamples"
+        SectionName="MJ: AI Agent Examples"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentExamples')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -427,15 +422,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Model Architectures Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIModelArchitectures"
-        sectionName="MJ: AI Model Architectures"
-        icon="fa fa-brain"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIModelArchitectures')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIModelArchitectures"
+        SectionName="MJ: AI Model Architectures"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIModelArchitectures')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -451,15 +446,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Model Modalities Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIModelModalities"
-        sectionName="MJ: AI Model Modalities"
-        icon="fa fa-brain"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIModelModalities')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIModelModalities"
+        SectionName="MJ: AI Model Modalities"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIModelModalities')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -475,15 +470,15 @@
     </mj-collapsible-panel>
 
     <!-- AIAgent Models Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIAgentModels"
-        sectionName="AIAgent Models"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIAgentModels')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="aIAgentModels"
+        SectionName="AIAgent Models"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('aIAgentModels')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -499,15 +494,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Model Vendors Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIModelVendors"
-        sectionName="MJ: AI Model Vendors"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIModelVendors')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIModelVendors"
+        SectionName="MJ: AI Model Vendors"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIModelVendors')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -523,15 +518,15 @@
     </mj-collapsible-panel>
 
     <!-- Generated Codes Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="generatedCodes"
-        sectionName="Generated Codes"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('generatedCodes')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="generatedCodes"
+        SectionName="Generated Codes"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('generatedCodes')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -547,15 +542,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Model Costs Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIModelCosts"
-        sectionName="MJ: AI Model Costs"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIModelCosts')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIModelCosts"
+        SectionName="MJ: AI Model Costs"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIModelCosts')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -571,15 +566,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Prompt Models Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIPromptModels"
-        sectionName="MJ: AI Prompt Models"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIPromptModels')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIPromptModels"
+        SectionName="MJ: AI Prompt Models"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIPromptModels')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -595,15 +590,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Prompt Runs Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIPromptRuns"
-        sectionName="MJ: AI Prompt Runs"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIPromptRuns')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIPromptRuns"
+        SectionName="MJ: AI Prompt Runs"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIPromptRuns')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -619,15 +614,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Runs Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIAgentRuns"
-        sectionName="MJ: AI Agent Runs"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIAgentRuns')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIAgentRuns"
+        SectionName="MJ: AI Agent Runs"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRuns')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -643,15 +638,15 @@
     </mj-collapsible-panel>
 
     <!-- Queries Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="queries"
-        sectionName="Queries"
-        icon="fa-solid fa-clipboard-question"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queries')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="queries"
+        SectionName="Queries"
+        Icon="fa-solid fa-clipboard-question"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('queries')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -667,15 +662,15 @@
     </mj-collapsible-panel>
 
     <!-- AI Models Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIModels"
-        sectionName="AI Models"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIModels')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="aIModels"
+        SectionName="AI Models"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('aIModels')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid

@@ -3,6 +3,7 @@
     <div
       class="nav-item"
       [class.active]="isActive(item)"
+      [class.dynamic]="isDynamic(item)"
       [class.no-icon]="!item.Icon"
       (click)="onNavClick(item, $event)"
       (dblclick)="onNavDblClick(item, $event)">

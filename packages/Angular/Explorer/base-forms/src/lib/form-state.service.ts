@@ -115,6 +115,27 @@ export class FormStateService {
     }
 
     /**
+     * Get the persisted panel height for a section.
+     * @param entityName The entity name
+     * @param sectionKey The section key
+     * @returns Panel height in pixels, or undefined if no custom height is set
+     */
+    getSectionPanelHeight(entityName: string, sectionKey: string): number | undefined {
+        const state = this.getCurrentState(entityName);
+        return state.sections[sectionKey]?.panelHeight;
+    }
+
+    /**
+     * Set the panel height for a section (persisted to User Settings).
+     * @param entityName The entity name
+     * @param sectionKey The section key
+     * @param height Panel height in pixels
+     */
+    setSectionPanelHeight(entityName: string, sectionKey: string, height: number): void {
+        this.updateSectionState(entityName, sectionKey, { panelHeight: height });
+    }
+
+    /**
      * Toggle section expanded state.
      * @param entityName The entity name
      * @param sectionKey The section key

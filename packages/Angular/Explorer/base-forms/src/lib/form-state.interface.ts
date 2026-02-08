@@ -4,6 +4,8 @@
 export interface FormSectionState {
     /** Whether the section is currently expanded */
     isExpanded: boolean;
+    /** User-resized panel height in pixels (related-entity panels only) */
+    panelHeight?: number;
 }
 
 /**
