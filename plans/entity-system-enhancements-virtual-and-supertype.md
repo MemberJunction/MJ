@@ -1853,8 +1853,8 @@ No Create/Edit/Delete buttons. Read-only grid with "Virtual: Read-Only View" bad
 - [x] 100% pass rate verified — 34 EntityInfo IS-A + 29 BaseEntity IS-A + 19 existing tests all pass
 
 **Files modified** (key changes):
-- `packages/MJCore/src/generic/baseEntity.ts` — IS-A orchestration, Set/Get routing, Save/Delete, transactions
-- `packages/MJCore/src/generic/entityInfo.ts` — IS-A computed properties (ParentChain, ChildEntities, AllParentFields)
+- `packages/MJCore/src/generic/baseEntity.ts` — IS-A orchestration, Set/Get routing, Save/Delete, transactions, Hydrate
+- `packages/MJCore/src/generic/entityInfo.ts` — IS-A computed properties (ParentChain, ChildEntities, AllParentFields), ReadOnly fix
 - `packages/MJCore/src/generic/interfaces.ts` — ISA transaction methods on IEntityDataProvider
 - `packages/SQLServerDataProvider/src/SQLServerDataProvider.ts` — Transaction implementation
 - `packages/Communication/providers/GraphQLDataProvider/src/graphQLDataProvider.ts` — Client IS-A handling
@@ -1864,5 +1864,173 @@ No Create/Edit/Delete buttons. Read-only grid with "Virtual: Read-Only View" bad
 - `packages/CodeGenLib/src/Database/sql_codegen.ts` — Parent entity JOINs, single-table SPs, GraphQL input types
 - `packages/CodeGenLib/src/Database/dbSchemaGeneration.ts` — IS-A JSDoc on generated accessors
 - `packages/Angular/Explorer/core-entity-forms/` — Enhanced entity form (TS, HTML, CSS)
+- `packages/Angular/Explorer/form-toolbar/src/lib/form-toolbar.css` — Button icon/text spacing fix
 - `metadata/prompts/` — LLM prompt template and metadata for virtual entity decoration
 - `config/database-metadata-config.template.json` — Virtual entity examples
+
+---
+
+## Session Context: IS-A Runtime Bug Fixes (2026-02-06/07)
+
+**Branch**: `claude/study-entity-system-YoU7b`
+**Last commit**: `779919e07` — pushed to `origin/claude/study-entity-system-YoU7b`
+
+This section documents critical runtime bugs found during live testing of the IS-A system and their fixes. A new session should read this section to understand the current state of the code.
+
+### Bug 1: IS-A Parent Fields Read-Only in Edit Mode
+
+**Symptom**: When viewing a Meeting entity form in edit mode, the inherited Product fields (Name, Description, Price, SKU, Category, Active) were read-only and couldn't be edited.
+
+**Root Cause**: `EntityFieldInfo.ReadOnly` getter (entityInfo.ts) checked `this.IsVirtual` before `AllowUpdateAPI`. IS-A parent fields are correctly `IsVirtual=1` (they don't exist in the child's base table) AND `AllowUpdateAPI=1` (they ARE editable through the parent save chain). The `IsVirtual` check short-circuited before `AllowUpdateAPI` was evaluated.
+
+**Fix** (entityInfo.ts ~line 788):
+```typescript
+get ReadOnly(): boolean {
+    // Note: IsVirtual is intentionally NOT checked here. For IS-A (table-per-type) inheritance,
+    // parent entity fields on child entities are marked IsVirtual=1 (they don't exist in the
+    // child's base table) but ARE editable via the parent save chain. The AllowUpdateAPI flag
+    // already correctly distinguishes editable IS-A parent fields (AllowUpdateAPI=1) from
+    // truly read-only virtual fields like joined display names (AllowUpdateAPI=0).
+    return !this.AllowUpdateAPI ||
+           this.IsPrimaryKey ||
+           this.IsSpecialDateField;
+}
+```
+
+**Cascading benefit**: This also fixed `EntityField.Dirty` for mirror fields — they now properly report dirty state since `EntityField.Dirty` checks `this.ReadOnly` first and returns false if ReadOnly. With the fix, IS-A parent field mirrors participate in dirty tracking correctly.
+
+### Bug 2: Toolbar Button Spacing
+
+**Symptom**: Save, Cancel, Changes buttons had poor spacing between icons and text.
+
+**Fix** (form-toolbar.css): Icon font-size 16px→14px, added `line-height: 1; display: inline-flex;` on icons, button-text `margin-left: 2px`, button `gap: 8px`.
+
+### Bug 3: Dirty Getter Simplification
+
+**Previous code**: The `Dirty` getter on BaseEntity defensively filtered out parent field mirrors before checking dirty state. This was necessary before the ReadOnly fix (mirrors were always ReadOnly → never Dirty).
+
+**After ReadOnly fix**: Mirrors now participate in dirty tracking, so the filter is unnecessary. Simplified to:
+```typescript
+get Dirty(): boolean {
+    return !this.IsSaved ||
+           this.Fields.some(f => f.Dirty) ||
+           (this._parentEntity?.Dirty ?? false);
+}
+```
+
+### Bug 4: EnforceDisjointSubtype Inefficiency
+
+**Problem**: `EnforceDisjointSubtype()` made sequential `RunView()` calls and ran on both client AND server.
+
+**Fix** (baseEntity.ts):
+1. Added `ProviderType.Database` check — skips on client (server enforces)
+2. Replaced sequential `RunView()` loop with batched `RunViews()` (one round-trip)
+3. Fixed index mapping bug (filtered `validSiblings` vs original `siblingChildEntities`)
+
+### Bug 5: Parent Entity State After Load (UPDATE vs CREATE)
+
+**Symptom**: When saving a Webinar (IS-A Meeting IS-A Product), the Product parent entity attempted a CREATE instead of an UPDATE — it didn't know it was an existing record.
+
+**Root Cause**: After child entity loads via `SetMany(data, true)`, parent entities' `_recordLoaded` and `_everSaved` were never set to `true`. The parent thought it was a new record.
+
+**Fix**: Added `UpdateSavedStateFromPrimaryKeys()` private method at end of `SetMany` when `replaceOldValues=true`. If all PK fields have values, marks `_recordLoaded=true` and `_everSaved=true`.
+
+### Bug 6: Wrong Product ID in SQL (Critical — Led to Hydrate)
+
+**Symptom**: When saving a Webinar, the Product parent entity was sending the WRONG ID in its UPDATE SQL — a random UUID instead of the Webinar's ID. Different random UUID each time.
+
+**Initial attempt (failed)**: `PropagatePKToParents()` method tried to walk the parent chain and set `parentField.Value = pkValue`. This **silently failed** because PK fields are ReadOnly, and `EntityField.Value` setter rejects sets after the first one (`_NeverSet=false` after entity construction).
+
+**Root cause chain**:
+1. `EntityField.Value` setter has a `_NeverSet` guard — first set is always allowed (even ReadOnly), subsequent sets on ReadOnly fields are rejected
+2. PK fields are ReadOnly (`IsPrimaryKey → ReadOnly = true`)
+3. After entity construction, `init()` creates EntityField instances with `_NeverSet=true`
+4. During construction/initial setup, PK gets set once (consumes `_NeverSet`)
+5. `PropagatePKToParents` tries to set PK again → rejected because `_NeverSet=false` and `ReadOnly=true`
+6. The random UUIDs came from parent entity initialization (likely `uuidv4()` in `NewRecord` path)
+
+**Solution: `Hydrate()` method** (baseEntity.ts ~line 706):
+```typescript
+public Hydrate(data: Record<string, unknown>): void {
+    // Reset to pristine state: clears _compositeKey, _recordLoaded,
+    // _everSaved, recreates all EntityField instances with _NeverSet = true
+    this.init();
+
+    // Recursively hydrate parent entities first (deepest ancestor resets first)
+    if (this._parentEntity) {
+        this._parentEntity.Hydrate(data);
+    }
+
+    // Populate fields. SetMany routes parent field values including PKs.
+    this.SetMany(data, true, true, true);
+}
+```
+
+**Key insight**: After `init()`, EntityField instances are fresh with `_NeverSet=true`, so even ReadOnly PK fields accept one value set via `SetMany`. The parent chain is hydrated recursively (deepest ancestor first), and `UpdateSavedStateFromPrimaryKeys()` at the end of `SetMany` auto-detects saved state.
+
+**PK routing fix** (entityInfo.ts `ParentEntityFieldNames` getter): `AllParentFields` excludes PK fields (they aren't "inherited data" fields). But the routing set MUST include PKs so `SetMany` can forward the shared IS-A primary key to parent entities. Added parent PK names to the `ParentEntityFieldNames` cached Set.
+
+**What was removed**: `PropagatePKToParents()` — completely deleted, no remaining references.
+
+**Where Hydrate is called**:
+- `InnerLoad()` (line ~1908): `if (this._parentEntity) this._parentEntity.Hydrate(data);` — before self's SetMany
+- `LoadFromData()` (line ~1993): Same pattern — hydrate parent chain before self's SetMany
+- Inside `Hydrate()` itself (line ~730): Recursive call to `_parentEntity.Hydrate(data)`
+
+### Current State Summary
+
+All changes compile clean (`npm run build` in MJCore). The IS-A system now has:
+
+1. **Correct field editability** — IS-A parent fields are editable in forms (ReadOnly fix)
+2. **Correct parent entity identity** — Parents know their PK and saved state after load (Hydrate)
+3. **Efficient disjoint enforcement** — Server-only, batched queries (EnforceDisjointSubtype fix)
+4. **Clean dirty tracking** — Simplified Dirty getter works correctly with ReadOnly fix
+5. **Good toolbar UX** — Button icon/text spacing fixed
+
+### Pending Work / Known Issues
+
+1. **End-to-end testing needed**: The Hydrate fix needs live testing with a running app to verify Webinar → Meeting → Product save chain works correctly (saves UPDATE with correct IDs at each level)
+2. **SetMany double-routing**: After `Hydrate` resets parents, the child's own `SetMany` still routes parent fields to already-hydrated parents. This is harmless (values are identical, PK re-route is rejected since `_NeverSet=false` but PK is already correct). Could be optimized later if performance matters.
+3. **`_compositeKey` cache invalidation**: `BaseEntity.PrimaryKey` getter lazy-creates a `CompositeKey` and caches it as `_compositeKey`. This cache is only cleared by `init()`. If PK value changes after first access (unlikely in normal flow but possible), the cached key is stale. `Hydrate()` handles this by calling `init()` which clears `_compositeKey`.
+4. **VSCode showing 216 errors**: The project's tsconfig chain (`tsconfig.server.json`) has no `strict: true`, so `tsc` compiles clean. VSCode's TS language service may show strict-mode errors. These are cosmetic — restart TS Server to clear. Not related to IS-A changes.
+
+### Architecture Diagram: Hydrate Flow
+
+```
+Webinar.InnerLoad(compositeKey)
+│
+├─ data = provider.Load(...)    // Returns ALL fields: Webinar + Meeting + Product via vwWebinars
+│
+├─ this._parentEntity.Hydrate(data)    // Hydrate Meeting parent
+│   │
+│   ├─ meeting.init()                  // Reset Meeting: fresh fields, _NeverSet=true, clear _compositeKey
+│   │
+│   ├─ meeting._parentEntity.Hydrate(data)    // Hydrate Product grandparent
+│   │   │
+│   │   ├─ product.init()              // Reset Product: fresh fields, _NeverSet=true
+│   │   │
+│   │   ├─ (no parent — recursion stops)
+│   │   │
+│   │   └─ product.SetMany(data, true, true, true)
+│   │       ├─ Sets Product fields: ID, Name, Description, Price, SKU, Category, IsActive
+│   │       ├─ ID set succeeds (_NeverSet=true on fresh PK field)
+│   │       └─ UpdateSavedStateFromPrimaryKeys() → _recordLoaded=true, _everSaved=true
+│   │
+│   └─ meeting.SetMany(data, true, true, true)
+│       ├─ Sets Meeting own fields: ID, StartTime, EndTime, Location, etc.
+│       ├─ Routes parent fields to product (already set, harmless duplicate)
+│       ├─ ID set succeeds (_NeverSet=true on fresh PK field)
+│       └─ UpdateSavedStateFromPrimaryKeys() → _recordLoaded=true, _everSaved=true
+│
+├─ this.SetMany(data, false, true, true)    // Populate Webinar's own fields
+│   ├─ Sets Webinar own fields: ID, StreamingURL, IsRecorded, WebinarProvider
+│   ├─ Routes parent fields to meeting (already set, harmless)
+│   └─ Routes grandparent fields to product (already set, harmless)
+│
+├─ this._recordLoaded = true
+├─ this._everSaved = true
+└─ this._compositeKey = compositeKey
+
+Result: All three entities (Webinar, Meeting, Product) have correct PKs,
+        correct saved state, and matching field values from the database view.
+```

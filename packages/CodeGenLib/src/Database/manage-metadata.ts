@@ -339,7 +339,7 @@ export class ManageMetadataBase {
     * it if not. Uses the spCreateVirtualEntity stored procedure.
     * Must run BEFORE manageVirtualEntities() so newly created entities get field-synced.
     */
-   protected async processVirtualEntityConfig(pool: sql.ConnectionPool): Promise<{ success: boolean; createdCount: number }> {
+   protected async processVirtualEntityConfig(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<{ success: boolean; createdCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
       if (!config) return { success: true, createdCount: 0 };
 
@@ -393,6 +393,11 @@ export class ManageMetadataBase {
 
             logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${viewName}]`);
             createdCount++;
+
+            // Add virtual entity to the application for its schema (same logic as table-backed entities)
+            if (newEntityId) {
+               await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
+            }
          } catch (err) {
             const errMessage = err instanceof Error ? err.message : String(err);
             logError(`    > Failed to create virtual entity "${entityName}": ${errMessage}`);
@@ -486,7 +491,7 @@ export class ManageMetadataBase {
 
       // Config-driven virtual entity creation — run BEFORE manageVirtualEntities
       // so newly created entities get their fields synced in the next step
-      const vecResult = await this.processVirtualEntityConfig(pool);
+      const vecResult = await this.processVirtualEntityConfig(pool, currentUser);
       if (vecResult.createdCount > 0) {
          logStatus(`    > Created ${vecResult.createdCount} virtual entit${vecResult.createdCount === 1 ? 'y' : 'ies'} from config`);
          // Refresh metadata so manageVirtualEntities can find the newly-created entities
@@ -2909,6 +2914,47 @@ NumberedRows AS (
             }
          });
          return apps.map((a: ApplicationInfo) => a.ID);
+      }
+   }
+
+   /**
+    * Adds a newly created entity to the application(s) that match its schema name.
+    * If no application exists for the schema and config allows it, creates one.
+    * Shared by both table-backed entity creation and virtual entity creation.
+    */
+   protected async addEntityToApplicationForSchema(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      entityName: string,
+      schemaName: string,
+      currentUser: UserInfo
+   ): Promise<void> {
+      let apps = await this.getApplicationIDForSchema(pool, schemaName);
+
+      // If no app exists and config says to create one for new schemas, create it
+      if ((!apps || apps.length === 0) && configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
+         const appUUID = this.createNewUUID();
+         const newAppID = await this.createNewApplication(pool, appUUID, schemaName, schemaName, currentUser);
+         if (newAppID) {
+            apps = [newAppID];
+            const md = new Metadata();
+            await md.Refresh();
+         } else {
+            LogError(`   >>>> ERROR: Unable to create new application for schema ${schemaName}`);
+         }
+      }
+
+      if (apps && apps.length > 0) {
+         if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
+            for (const appUUID of apps) {
+               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
+                                    (ApplicationID, EntityID, Sequence) VALUES
+                                    ('${appUUID}', '${entityId}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+               await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
+            }
+         }
+      } else {
+         LogError(`   >>>> WARNING: No application found for schema ${schemaName} to add entity ${entityName}`);
       }
    }
 
