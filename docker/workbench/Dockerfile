@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     zsh \
     fzf \
+    jq \
     gnupg2 \
     apt-transport-https \
     && rm -rf /var/lib/apt/lists/*
@@ -28,8 +29,8 @@ RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor
 # Add sqlcmd to PATH
 ENV PATH="$PATH:/opt/mssql-tools18/bin"
 
-# Install Angular CLI globally
-RUN npm install -g @angular/cli
+# Install Angular CLI and Turbo globally
+RUN npm install -g @angular/cli turbo
 
 # Install Playwright with Chromium and all system dependencies
 RUN npx playwright install --with-deps chromium
@@ -39,6 +40,13 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 
 # Install MemberJunction CLI globally
 RUN npm install -g @memberjunction/cli
+
+# Install Flyway CLI (with bundled JRE for linux-x64)
+ARG FLYWAY_VERSION=10.20.1
+RUN curl -fsSL "https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz" -o /tmp/flyway.tar.gz \
+    && tar -xzf /tmp/flyway.tar.gz -C /opt \
+    && ln -s "/opt/flyway-${FLYWAY_VERSION}/flyway" /usr/local/bin/flyway \
+    && rm /tmp/flyway.tar.gz
 
 # Install oh-my-zsh
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
@@ -51,9 +59,10 @@ COPY .zshrc /root/.zshrc
 RUN mkdir -p /root/.claude
 COPY claude-settings.json /root/.claude/settings.json
 
-# Copy entrypoint (handles auto-updates)
+# Copy scripts
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY db-bootstrap.sh /usr/local/bin/db-bootstrap
+RUN chmod +x /entrypoint.sh /usr/local/bin/db-bootstrap
 
 # Set zsh as default shell
 ENV SHELL=/bin/zsh

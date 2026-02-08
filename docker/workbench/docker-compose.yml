@@ -36,6 +36,9 @@ services:
     environment:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
       IS_SANDBOX: "1"
+    ports:
+      - "4100:4000"    # MJAPI (offset from local :4000)
+      - "4300:4200"    # Explorer (offset from local :4200)
     depends_on:
       sql-claude:
         condition: service_healthy

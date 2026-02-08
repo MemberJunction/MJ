@@ -15,10 +15,20 @@ alias sql='sqlcmd -S $DB_HOST -U $DB_USER -P $DB_PASSWORD -C'
 alias sqld='sqlcmd -S $DB_HOST -U $DB_USER -P $DB_PASSWORD -C -d'  # sqld <dbname>
 alias sqlq='sqlcmd -S $DB_HOST -U $DB_USER -P $DB_PASSWORD -C -Q'  # sqlq "SELECT 1"
 alias sqldbs='sqlcmd -S $DB_HOST -U $DB_USER -P $DB_PASSWORD -C -Q "SELECT name FROM sys.databases ORDER BY name"'
+alias sqlmj='sqlcmd -S $DB_HOST -U $DB_USER -P $DB_PASSWORD -C -d ${DB_DATABASE:-MJ_Workbench}'
 
-# ─── MemberJunction CLI shortcuts ────────────────────────────────────────────
+# ─── MemberJunction shortcuts ────────────────────────────────────────────────
 alias mjb='npm run build'
-alias mjba='npm run build'         # build all from root
+alias mjba='npm run build'                # build all from root
+alias mjapi='cd /workspace/MJ && npm run start:api'
+alias mjui='cd /workspace/MJ && npm run start:explorer'
+alias mjcg='cd /workspace/MJ && mj codegen'
+alias mjmig='cd /workspace/MJ && mj migrate'
+alias mjcd='cd /workspace/MJ'
+
+# ─── Build shortcuts ─────────────────────────────────────────────────────────
+alias tb='turbo build'
+alias tbf='turbo build --filter'          # tbf @memberjunction/core
 
 # ─── Git shortcuts ───────────────────────────────────────────────────────────
 alias gs='git status'
@@ -38,11 +48,16 @@ alias ...='cd ../..'
 echo ""
 echo "  Claude Dev Workbench"
 echo "  ─────────────────────────────────────────"
-echo "  cc      → claude --dangerously-skip-permissions"
-echo "  ccp     → cc -p <prompt>"
-echo "  ccr     → cc --resume"
-echo "  sql     → sqlcmd connected to $DB_HOST as $DB_USER"
-echo "  sqldbs  → list all databases"
-echo "  sqlq    → run inline query:  sqlq \"SELECT 1\""
+echo "  cc          → claude --dangerously-skip-permissions"
+echo "  ccp         → cc -p <prompt>"
+echo "  ccr         → cc --resume"
+echo "  sql / sqlmj → sqlcmd connected to $DB_HOST"
+echo "  sqldbs      → list all databases"
+echo "  sqlq        → run inline query"
+echo "  db-bootstrap→ create MJ database + run migrations"
+echo "  mjapi       → start MJAPI (host :4100)"
+echo "  mjui        → start Explorer (host :4300)"
+echo "  mjcd        → cd to /workspace/MJ"
+echo "  tb / tbf    → turbo build / turbo build --filter"
 echo "  ─────────────────────────────────────────"
 echo ""
