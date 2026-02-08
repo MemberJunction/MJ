@@ -14,6 +14,10 @@ import ora from 'ora';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { Metadata, DatabaseProviderBase, EntityInfo, LogStatus } from '@memberjunction/core';
 import { loadConfig } from '../config';
 import { getSystemUser } from '../../utils/user-helpers';

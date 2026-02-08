@@ -8,7 +8,7 @@ import { BaseEmbeddings, EmbedTextParams, GetAIAPIKey } from "@memberjunction/ai
 import { EmbedTextLocalHelper } from "./util";
 import NodeSqlParser from 'node-sql-parser';
 const { Parser } = NodeSqlParser;
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 
 interface ExtractedParameter {
     name: string;

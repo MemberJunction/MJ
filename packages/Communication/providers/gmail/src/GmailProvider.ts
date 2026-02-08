@@ -39,7 +39,7 @@ import {
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import * as Config from "./config";
-import * as googleApis from 'googleapis';
+import googleApis from 'googleapis';
 
 /**
  * Credentials for Gmail provider using OAuth2.

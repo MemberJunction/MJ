@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import * as zxcvbn from "zxcvbn";
+import zxcvbn from "zxcvbn";
 import * as crypto from "crypto";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
