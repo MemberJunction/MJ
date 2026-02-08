@@ -20,7 +20,9 @@
     "build": "tsc && tsc-alias -f",
     "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts && tsc && tsc-alias -f || echo 'Warning: mj codegen manifest not available, manifest will be generated on next build'); fi",
     "watch": "tsc --watch",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",

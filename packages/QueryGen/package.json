@@ -13,7 +13,8 @@
     "watch": "tsc --watch",
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest run"
   },
   "keywords": [
     "memberjunction",

@@ -9,14 +9,16 @@
   ],
   "scripts": {
     "test": "echo \"No tests configured yet\"",
-    "build": "ngc"
+    "build": "ngc",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@angular/compiler": "21.1.3",
-    "@angular/compiler-cli": "21.1.3"
+    "@angular/compiler-cli": "21.1.3",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "@angular/common": "21.1.3",

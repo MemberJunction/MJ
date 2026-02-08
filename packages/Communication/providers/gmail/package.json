@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "vitest run"
   },
   "dependencies": {
     "@memberjunction/communication-types": "3.4.0",

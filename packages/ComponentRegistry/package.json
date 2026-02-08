@@ -14,7 +14,8 @@
   },
   "scripts": {
     "build": "tsc && tsc-alias -f && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "vitest run"
   },
   "files": [
     "dist"
