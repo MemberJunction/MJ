@@ -104,6 +104,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
     private _localMetadata: AllMetadata = new AllMetadata();
+    private _entityRecordNameCache = new Map<string, string>();
 
     private _refresh = false;
 
@@ -129,23 +130,151 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public abstract get DatabaseConnection(): any;
 
     /**
-     * Gets the display name for a single entity record.
+     * Helper to generate cache key for entity record names
+     */
+    private getCacheKey(entityName: string, compositeKey: CompositeKey): string {
+        return `${entityName}|${compositeKey.ToString()}`;
+    }
+
+    /**
+     * Synchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    public GetCachedRecordName(entityName: string, compositeKey: CompositeKey): string | undefined {
+        return this._entityRecordNameCache.get(this.getCacheKey(entityName, compositeKey));
+    }
+
+    /**
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
+     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param recordName - The display name to cache
+     */
+    public SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
+        this._entityRecordNameCache.set(this.getCacheKey(entityName, compositeKey), recordName);
+    }
+
+    /**
+     * Gets the display name for a single entity record with caching.
      * Uses the entity's IsNameField or falls back to 'Name' field if available.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param contextUser - Optional user context for permissions
+     * @param forceRefresh - If true, bypasses cache and queries database
+     * @returns The display name of the record or null if not found
+     */
+    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
+        const cacheKey = this.getCacheKey(entityName, compositeKey);
+
+        // Check cache unless forceRefresh
+        if (!forceRefresh) {
+            const cached = this._entityRecordNameCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
+        // Fetch from database via provider-specific implementation
+        const name = await this.InternalGetEntityRecordName(entityName, compositeKey, contextUser);
+        if (name) {
+            this._entityRecordNameCache.set(cacheKey, name);
+        }
+        return name;
+    }
+
+    /**
+     * Gets display names for multiple entity records in a single operation with caching.
+     * More efficient than multiple GetEntityRecordName calls.
+     * @param info - Array of entity/key pairs to lookup
+     * @param contextUser - Optional user context for permissions
+     * @param forceRefresh - If true, bypasses cache and queries database for all records
+     * @returns Array of results with names and status for each requested record
+     */
+    public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
+        if (!forceRefresh) {
+            // Check cache for each item, collect uncached items
+            const results: EntityRecordNameResult[] = [];
+            const uncachedInfo: EntityRecordNameInput[] = [];
+            const uncachedIndexes: number[] = [];
+
+            for (let i = 0; i < info.length; i++) {
+                const item = info[i];
+                const cacheKey = this.getCacheKey(item.EntityName, item.CompositeKey);
+                const cached = this._entityRecordNameCache.get(cacheKey);
+
+                if (cached !== undefined) {
+                    // Cache hit
+                    results[i] = {
+                        EntityName: item.EntityName,
+                        CompositeKey: item.CompositeKey,
+                        Status: 'cached',
+                        Success: true,
+                        RecordName: cached
+                    };
+                } else {
+                    // Cache miss - need to fetch
+                    uncachedInfo.push(item);
+                    uncachedIndexes.push(i);
+                }
+            }
+
+            // Fetch uncached items from database
+            if (uncachedInfo.length > 0) {
+                const uncachedResults = await this.InternalGetEntityRecordNames(uncachedInfo, contextUser);
+
+                // Merge results and update cache
+                for (let i = 0; i < uncachedResults.length; i++) {
+                    const result = uncachedResults[i];
+                    const originalIndex = uncachedIndexes[i];
+                    results[originalIndex] = result;
+
+                    // Cache successful results
+                    if (result.Success && result.RecordName) {
+                        const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
+                        this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                    }
+                }
+            }
+
+            return results;
+        } else {
+            // Force refresh - bypass cache entirely
+            const results = await this.InternalGetEntityRecordNames(info, contextUser);
+
+            // Update cache with fresh results
+            for (const result of results) {
+                if (result.Success && result.RecordName) {
+                    const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
+                    this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                }
+            }
+
+            return results;
+        }
+    }
+
+    /**
+     * Internal provider-specific implementation to get a single entity record name from database.
+     * Subclasses must implement this to query the database.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param contextUser - Optional user context for permissions
      * @returns The display name of the record or null if not found
      */
-    public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>;
-    
+    protected abstract InternalGetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>;
+
     /**
-     * Gets display names for multiple entity records in a single operation.
-     * More efficient than multiple GetEntityRecordName calls.
+     * Internal provider-specific implementation to get multiple entity record names from database.
+     * Subclasses must implement this to query the database in batch.
      * @param info - Array of entity/key pairs to lookup
      * @param contextUser - Optional user context for permissions
      * @returns Array of results with names and status for each requested record
      */
-    public abstract GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>;
+    protected abstract InternalGetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>;
 
     /**
      * Checks if a specific record is marked as a favorite by the user.

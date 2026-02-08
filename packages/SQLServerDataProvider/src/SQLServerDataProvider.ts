@@ -5637,9 +5637,9 @@ export class SQLServerDataProvider
     return this._fileSystemProvider;
   }
 
-  public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
+  protected async InternalGetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
     const promises = info.map(async (item) => {
-      const r = await this.GetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
+      const r = await this.InternalGetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
       return {
         EntityName: item.EntityName,
         CompositeKey: item.CompositeKey,
@@ -5651,7 +5651,7 @@ export class SQLServerDataProvider
     return Promise.all(promises);
   }
 
-  public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
+  protected async InternalGetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
     try {
       const sql = this.GetEntityRecordNameSQL(entityName, CompositeKey);
       if (sql) {

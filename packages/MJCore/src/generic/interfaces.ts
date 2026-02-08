@@ -494,21 +494,43 @@ export interface IMetadataProvider {
 
 
     /**
-     * Returns the Name of the specific recordId for a given entityName. This is done by 
-     * looking for the IsNameField within the EntityFields collection for a given entity. 
-     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
-     * @param entityName 
-     * @param CompositeKey 
+     * Returns the Name of the specific recordId for a given entityName. This is done by
+     * looking for the IsNameField within the EntityFields collection for a given entity.
+     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned
+     * @param entityName
+     * @param CompositeKey
+     * @param contextUser - optional user context for permissions
+     * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>
+    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh?: boolean): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
-     * @param info 
+     * @param info
+     * @param contextUser - optional user context for permissions
+     * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns an array of EntityRecordNameResult objects
      */
-    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>
+    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh?: boolean): Promise<EntityRecordNameResult[]>
+
+    /**
+     * Synchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Cache is automatically populated by Load(), LoadFromData(), and Save() operations on BaseEntity.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    GetCachedRecordName(entityName: string, compositeKey: CompositeKey): string | undefined
+
+    /**
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
+     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param recordName - The display name to cache
+     */
+    SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void
 
     GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean>
 

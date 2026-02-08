@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { WorkspaceStateManager, NavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
+import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, Subscription } from 'rxjs';
@@ -237,6 +237,12 @@ export class NavigationService implements OnDestroy {
     const app = this.appManager.GetAppById(appId);
     const appName = app?.Name || '';
 
+    // Dynamic nav items (e.g. orphan entity records) carry their original tab Configuration
+    // and should NOT get navItemName stamped on them — that would cause buildResourceUrl
+    // to produce a nav-item-style URL like /app/home/<label> instead of the correct
+    // resource-type URL like /app/home/record/Entity/ID|...
+    const isDynamic = (navItem as DynamicNavItem).isDynamic === true;
+
     const request: TabRequest = {
       ApplicationId: appId,
       Title: navItem.Label,
@@ -248,7 +254,7 @@ export class NavigationService implements OnDestroy {
         recordId: navItem.RecordID,
         appName: appName,  // Store app name for URL building
         appId: appId,
-        navItemName: navItem.Label,  // Store nav item name for URL building
+        ...(isDynamic ? {} : { navItemName: navItem.Label }),  // Only set for static nav items
         ...(navItem.Configuration || {})
       },
       IsPinned: options?.pinTab || false
@@ -308,15 +314,16 @@ export class NavigationService implements OnDestroy {
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
+    let tabId: string;
     if (forceNew) {
-      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
+      tabId = this.workspaceManager.OpenTabForced(request, appColor);
       console.log('NavigationService.OpenEntityRecord created new tab:', tabId);
-      return tabId;
     } else {
-      const tabId = this.workspaceManager.OpenTab(request, appColor);
+      tabId = this.workspaceManager.OpenTab(request, appColor);
       console.log('NavigationService.OpenEntityRecord opened tab:', tabId);
-      return tabId;
     }
+
+    return tabId;
   }
 
   /**

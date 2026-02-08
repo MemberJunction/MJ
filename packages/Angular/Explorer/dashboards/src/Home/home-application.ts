@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseApplication, DynamicNavItem, NavItem, WorkspaceStateManager, WorkspaceTab } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
+import { Metadata, CompositeKey, FieldValueCollection } from '@memberjunction/core';
 
 /**
  * Home Application - Provides dynamic navigation items for orphan resources.
@@ -125,9 +126,13 @@ export class HomeApplication extends BaseApplication {
     // Icon comes from ResourceTypes entity (metadata-driven, not hardcoded)
     const tabId = activeTab.id;
     const tabRecordId = activeTab.resourceRecordId;
+    const entityName = activeTab.configuration?.['Entity'] as string | undefined;
+
+    // Resolve display label: cached record name > tab title > generated default
+    const label = this.resolveRecordLabel(entityName, tabRecordId, activeTab.title);
 
     return {
-      Label: activeTab.title,
+      Label: label,
       Icon: this.getResourceTypeIcon(resourceType),
       ResourceType: resourceType,
       RecordID: tabRecordId,
@@ -143,5 +148,80 @@ export class HomeApplication extends BaseApplication {
         return wsTab.id === tabId;
       }
     };
+  }
+
+  /**
+   * Resolves the best available display label for an entity record nav item.
+   * Priority order:
+   *   1. Cached record name (from EntityRecordNameCache, populated by entity Load/Save)
+   *   2. Tab title (whatever the workspace assigned when the tab was opened)
+   *   3. Generated default (entity name + truncated primary key values)
+   *
+   * @param entityName - Entity name from tab configuration, may be undefined for non-entity resources
+   * @param tabRecordId - URL-encoded composite key segment (e.g. "ID|abc-123" or "Field1|val1||Field2|val2")
+   * @param tabTitle - Fallback title assigned by the workspace when the tab was opened
+   */
+  private resolveRecordLabel(entityName: string | undefined, tabRecordId: string | undefined, tabTitle: string): string {
+    if (!entityName || !tabRecordId) {
+      return tabTitle || '';
+    }
+
+    // Parse the URL segment into a CompositeKey
+    const fvCollection = new FieldValueCollection();
+    fvCollection.SimpleLoadFromURLSegment(tabRecordId);
+    const compositeKey = new CompositeKey(fvCollection.KeyValuePairs);
+
+    // Check the cache first
+    try {
+      const cachedName = Metadata.Provider.GetCachedRecordName(entityName, compositeKey);
+      if (cachedName) {
+        return cachedName;
+      }
+    } catch (error) {
+      console.warn('Failed to look up cached record name:', error);
+    }
+
+    // Fall back generated default from the key values, then tabTitle if we have no default label(unlikely)
+    return this.createDefaultLabel(entityName, compositeKey) || tabTitle;
+  }
+
+  /**
+   * Generates a fallback label when no cached record name or tab title is available.
+   * Format: "EntityName: <truncated key value(s)>"
+   *
+   * @example
+   * // Single key:  "Contacts: abc1234..."
+   * // Multi key:   "Order Details: abc1..., 42"
+   * // No key:      "Contacts record"
+   */
+  private createDefaultLabel(entityName: string, key: CompositeKey): string {
+    if (!key || key.KeyValuePairs.length === 0) {
+      return `${entityName} record`;
+    }
+
+    if (key.KeyValuePairs.length === 1) {
+      return `${entityName}: ${this.trimValue(key.KeyValuePairs[0].Value)}`;
+    }
+
+    // Multiple keys - show each value trimmed, comma-separated
+    const values = key.KeyValuePairs.map(kv => this.trimValue(kv.Value)).join(', ');
+    return `${entityName}: ${values}`;
+  }
+
+  /**
+   * Truncates a primary key value for display, appending "..." if it exceeds maxLength.
+   * Returns the value as-is if it's short enough or empty.
+   */
+  private trimValue(value: string, maxLength: number = 8): string {
+    if (!value || value.trim().length === 0) {
+      return value;
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.length <= maxLength) {
+      return trimmed;
+    }
+
+    return trimmed.substring(0, maxLength) + '...';
   }
 }

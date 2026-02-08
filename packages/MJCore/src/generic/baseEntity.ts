@@ -1745,6 +1745,9 @@ export abstract class BaseEntity<T = unknown> {
             if (result)
                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
 
+            // Cache the record name for faster lookups (updates cache with potentially new name)
+            this.CacheRecordName();
+
             this.RaiseEvent('save', null, saveSubType);
 
             return true;
@@ -1759,6 +1762,26 @@ export abstract class BaseEntity<T = unknown> {
      */
     protected get ActiveUser(): UserInfo {
         return this.ContextCurrentUser || Metadata.Provider.CurrentUser; // use the context user ahead of the Provider.Current User - this is for SERVER side ops where the user changes per request
+    }
+
+    /**
+     * Caches the entity record name in the provider's EntityRecordNameCache for faster lookups.
+     * Called automatically after successful Load(), LoadFromData(), and Save() operations.
+     */
+    private CacheRecordName(): void {
+        // Only cache if we have a valid primary key
+        if (!this.PrimaryKey || !this.PrimaryKey.HasValue) {
+            return;
+        }
+
+        // Get the record name
+        const recordName = this.GetRecordName();
+        if (!recordName) {
+            return;
+        }
+
+        // Cache it via the provider's public API
+        Metadata.Provider.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
     }
 
     /**
@@ -1921,6 +1944,9 @@ export abstract class BaseEntity<T = unknown> {
             this._everSaved = true; // Mark as saved since we loaded from database
             this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
 
+            // Cache the record name for faster lookups
+            this.CacheRecordName();
+
             // Raise load completion event
             this.RaiseEvent('load_complete', { CompositeKey });
 
@@ -2004,6 +2030,11 @@ export abstract class BaseEntity<T = unknown> {
                     this._recordLoaded = false;
                     this._everSaved = false; // if any primary key is not set, we cannot consider ourselves loaded
                 }
+            }
+
+            // Cache the record name for faster lookups if successfully loaded
+            if (this._recordLoaded) {
+                this.CacheRecordName();
             }
         }
         else {

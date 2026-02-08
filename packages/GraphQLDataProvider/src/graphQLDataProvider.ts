@@ -1881,7 +1881,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.SetRecordFavoriteStatus.Success;
     }
 
-    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
+    protected async InternalGetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
         if (!entityName || !primaryKey || primaryKey.KeyValuePairs?.length === 0){
             return null;
         }
@@ -1902,7 +1902,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetEntityRecordName.RecordName;
     }
 
-    public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
+    protected async InternalGetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
         if (!info)
             return null;
 

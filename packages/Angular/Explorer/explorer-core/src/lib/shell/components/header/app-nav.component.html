@@ -1,5 +1,5 @@
 <nav class="nav-list" [style.--app-color]="appColor">
-  @for (item of navItems; track item) {
+  @for (item of navItems; track trackByNavItem($index, item)) {
     <div
       class="nav-item"
       [class.active]="isActive(item)"
