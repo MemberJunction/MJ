@@ -12,17 +12,15 @@
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
     "ts-node-dev": "^2.0.0",
+    "vitest": "^3.1.1",
     "typescript": "^5.9.3"
   },
   "dependencies": {

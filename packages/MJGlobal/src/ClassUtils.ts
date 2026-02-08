@@ -25,11 +25,11 @@ export function GetSuperclass(ClassRef: any): any | null {
     
     const superclass = Object.getPrototypeOf(ClassRef);
     
-    // Check if we've reached the top of the chain
-    if (!superclass || superclass === Function.prototype || superclass.constructor === Function) {
+    // Check if we've reached the top of the chain (built-in prototypes)
+    if (!superclass || superclass === Function.prototype) {
         return null;
     }
-    
+
     return superclass;
 }
 
@@ -44,21 +44,19 @@ export function GetRootClass(ClassRef: any): any {
     }
     
     let current = ClassRef;
-    let previous = ClassRef;
-    
+
     while (current) {
         const superclass = Object.getPrototypeOf(current);
-        
+
         // Stop when we reach built-in prototypes
-        if (!superclass || superclass === Function.prototype || superclass.constructor === Function) {
+        if (!superclass || superclass === Function.prototype) {
             break;
         }
-        
-        previous = current;
+
         current = superclass;
     }
-    
-    return previous;
+
+    return current;
 }
 
 /**
@@ -89,9 +87,9 @@ export function IsSubclassOf(PotentialSubclass: any, PotentialAncestor: any): bo
         if (current === PotentialAncestor) {
             return true;
         }
-        
+
         // Stop when we reach built-in prototypes
-        if (!current || current === Function.prototype || current.constructor === Function) {
+        if (!current || current === Function.prototype) {
             break;
         }
     }
@@ -112,9 +110,7 @@ export function IsRootClass(ClassRef: any): boolean {
     const superclass = Object.getPrototypeOf(ClassRef);
     
     // It's a root class if it has no superclass or only inherits from built-in prototypes
-    return !superclass || 
-           superclass === Function.prototype || 
-           superclass.constructor === Function;
+    return !superclass || superclass === Function.prototype;
 }
 
 /**
@@ -144,18 +140,18 @@ export function GetClassInheritance(ClassRef: any): ClassInfo[] {
     
     while (current) {
         // Stop when we reach built-in prototypes
-        if (current === Function.prototype || current.constructor === Function) {
+        if (current === Function.prototype) {
             break;
         }
-        
+
         chain.push({
             name: current.name || 'Anonymous',
             reference: current
         });
-        
+
         current = Object.getPrototypeOf(current);
     }
-    
+
     return chain;
 }
 
@@ -166,16 +162,16 @@ export function GetClassInheritance(ClassRef: any): ClassInfo[] {
  */
 export function GetFullClassHierarchy(ClassRef: any): ClassInfo[] {
     const chain: ClassInfo[] = [];
-    
+
     if (!ClassRef || typeof ClassRef !== 'function') {
         return chain;
     }
-    
+
     let current = ClassRef;
-    
+
     while (current) {
         // Stop when we reach built-in prototypes
-        if (current === Function.prototype || current.constructor === Function) {
+        if (current === Function.prototype) {
             break;
         }
         

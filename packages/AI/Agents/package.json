@@ -11,11 +11,8 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "npm run test:all",
-    "test:all": "npx ts-node src/__tests__/agent-type-prompt-params.test.ts && npx ts-node src/__tests__/action-changes.test.ts && npx ts-node src/__tests__/chat-handling-option.test.ts",
-    "test:chat-handling": "npx ts-node src/__tests__/chat-handling-option.test.ts",
-    "test:prompt-params": "npx ts-node src/__tests__/agent-type-prompt-params.test.ts",
-    "test:action-changes": "npx ts-node src/__tests__/action-changes.test.ts"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -39,7 +36,8 @@
     "@types/lodash": "^4.17.23",
     "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "repository": {
     "type": "git",
