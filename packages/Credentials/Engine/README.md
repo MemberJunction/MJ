@@ -1,17 +1,33 @@
 # @memberjunction/credentials
 
-Secure credential management engine for MemberJunction. Provides centralized storage, retrieval, and audit logging of credentials with automatic field-level encryption.
+Secure credential management engine for MemberJunction. Provides centralized storage, retrieval, validation, and audit logging of credentials with automatic field-level encryption and JSON Schema validation.
 
-## Features
+## Overview
 
-- **Centralized Credential Storage** - Store all credentials in one place with consistent access patterns
-- **Field-Level Encryption** - Credentials are automatically encrypted at rest using MJ's encryption engine
-- **Audit Logging** - Every credential access is logged for compliance and security monitoring
-- **Type-Safe Values** - Pre-defined interfaces for common credential types (API keys, OAuth, AWS, Azure, etc.)
-- **Cached Lookups** - Credential metadata is cached for fast resolution
-- **Per-Request Overrides** - Support for test/development credential injection
-- **Validation Support** - Optional endpoint-based credential validation
-- **API Key Management** - Fast hash-based lookup for API key authentication
+The `@memberjunction/credentials` package manages the full credential lifecycle: storing encrypted values, resolving credentials by name or ID, validating against JSON Schema constraints, and logging every access for audit compliance.
+
+```mermaid
+graph TD
+    A["CredentialEngine<br/>(Singleton)"] --> B["Credential Types<br/>(Schema Definitions)"]
+    A --> C["Credentials<br/>(Encrypted Values)"]
+    A --> D["Credential Categories<br/>(Organization)"]
+    A --> E["Audit Log<br/>(Access Tracking)"]
+    A --> F["Ajv Validator<br/>(JSON Schema)"]
+
+    G["Consumer Code"] --> A
+    G -->|"getCredential()"| H["ResolvedCredential<T>"]
+    G -->|"storeCredential()"| C
+    G -->|"validateCredential()"| I["ValidationResult"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#b8762f,stroke:#8a5722,color:#fff
+    style E fill:#b8762f,stroke:#8a5722,color:#fff
+    style F fill:#7c5295,stroke:#563a6b,color:#fff
+    style H fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style I fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 ## Installation
 
@@ -21,411 +37,106 @@ npm install @memberjunction/credentials
 
 ## Quick Start
 
-### 1. Initialize the Engine
-
-```typescript
-import { CredentialEngine } from '@memberjunction/credentials';
-
-// Initialize at application startup
-await CredentialEngine.Instance.Config(false, contextUser);
-```
-
-### 2. Retrieve a Credential
-
 ```typescript
 import { CredentialEngine, APIKeyCredentialValues } from '@memberjunction/credentials';
 
-// Get a credential with typed values
+// Initialize at application startup
+await CredentialEngine.Instance.Config(false, contextUser);
+
+// Retrieve a credential with typed values
 const cred = await CredentialEngine.Instance.getCredential<APIKeyCredentialValues>(
-    'OpenAI',
-    {
-        contextUser,
-        subsystem: 'AIService'
-    }
+  'OpenAI',
+  { contextUser, subsystem: 'AIService' }
 );
 
 // Use the decrypted values
-openai.setApiKey(cred.values.apiKey);
+console.log(cred.values.apiKey); // Strongly typed as string
 ```
 
-### 3. Store a New Credential
+## Credential Resolution
+
+```mermaid
+flowchart TD
+    A["getCredential(name, options)"] --> B{directValues<br/>provided?}
+    B -->|Yes| C["Return direct values<br/>source: request"]
+    B -->|No| D{credentialId<br/>provided?}
+    D -->|Yes| E["Lookup by ID"]
+    D -->|No| F["Lookup by name"]
+    E --> G["Parse & return values<br/>source: database"]
+    F --> G
+    G --> H["Log access to Audit Log"]
+    H --> I["Update LastUsedAt"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style G fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style H fill:#b8762f,stroke:#8a5722,color:#fff
+```
+
+Resolution priority:
+1. **Direct values** -- `directValues` in options (bypasses database, useful for testing)
+2. **By ID** -- `credentialId` in options (specific credential lookup)
+3. **By name** -- The `credentialName` parameter (most common usage)
+
+## Pre-defined Credential Types
+
+| Type | Interface | Fields |
+|------|-----------|--------|
+| API Key | `APIKeyCredentialValues` | `apiKey` |
+| API Key with Endpoint | `APIKeyWithEndpointCredentialValues` | `apiKey`, `endpoint` |
+| OAuth2 Client Credentials | `OAuth2ClientCredentialValues` | `clientId`, `clientSecret`, `tokenUrl`, `scope` |
+| Basic Auth | `BasicAuthCredentialValues` | `username`, `password` |
+| Azure Service Principal | `AzureServicePrincipalCredentialValues` | `tenantId`, `clientId`, `clientSecret` |
+| AWS IAM | `AWSIAMCredentialValues` | `accessKeyId`, `secretAccessKey`, `region` |
+| Database Connection | `DatabaseConnectionCredentialValues` | `host`, `port`, `database`, `username`, `password` |
+| Twilio | `TwilioCredentialValues` | `accountSid`, `authToken` |
+
+## Storing Credentials
 
 ```typescript
 const credential = await CredentialEngine.Instance.storeCredential(
-    'API Key',                    // Credential type name
-    'OpenAI Production',          // Credential name
-    { apiKey: 'sk-...' },        // Values (will be encrypted)
-    {
-        isDefault: true,
-        description: 'Production OpenAI API key'
-    },
-    contextUser
+  'API Key',                    // Credential type name
+  'OpenAI Production',          // Credential name
+  { apiKey: 'sk-...' },         // Values (encrypted on save)
+  {
+    isDefault: true,
+    description: 'Production OpenAI API key',
+    expiresAt: new Date('2025-12-31')
+  },
+  contextUser
 );
 ```
-
-## Credential Types
-
-MemberJunction includes pre-configured credential types with JSON schemas:
-
-| Type | Fields | Use Case |
-|------|--------|----------|
-| API Key | `apiKey` | OpenAI, Anthropic, SendGrid, etc. |
-| API Key with Endpoint | `apiKey`, `endpoint` | Azure OpenAI, custom APIs |
-| OAuth2 Client Credentials | `clientId`, `clientSecret`, `tokenUrl`, `scope` | OAuth integrations |
-| Basic Auth | `username`, `password` | Legacy systems |
-| Azure Service Principal | `tenantId`, `clientId`, `clientSecret` | Microsoft Graph, Azure services |
-| AWS IAM | `accessKeyId`, `secretAccessKey`, `region` | S3, SES, Lambda, etc. |
-| Database Connection | `host`, `port`, `database`, `username`, `password` | External databases |
-| Twilio | `accountSid`, `authToken` | SMS/Voice services |
-
-### Type-Safe Value Interfaces
-
-Use the provided interfaces for compile-time type safety:
-
-```typescript
-import {
-    CredentialEngine,
-    APIKeyCredentialValues,
-    AWSIAMCredentialValues,
-    AzureServicePrincipalCredentialValues
-} from '@memberjunction/credentials';
-
-// OpenAI/Anthropic/etc.
-const ai = await CredentialEngine.Instance.getCredential<APIKeyCredentialValues>(
-    'OpenAI',
-    { contextUser }
-);
-console.log(ai.values.apiKey); // Typed as string
-
-// AWS Services
-const aws = await CredentialEngine.Instance.getCredential<AWSIAMCredentialValues>(
-    'AWS Production',
-    { contextUser }
-);
-console.log(aws.values.accessKeyId, aws.values.secretAccessKey, aws.values.region);
-
-// Azure Services
-const azure = await CredentialEngine.Instance.getCredential<AzureServicePrincipalCredentialValues>(
-    'Microsoft Graph',
-    { contextUser }
-);
-console.log(azure.values.tenantId, azure.values.clientId);
-```
-
-## Resolution Priority
-
-When you call `getCredential()`, credentials are resolved in this order:
-
-1. **Direct Values** - If `directValues` is provided in options, use those (useful for testing)
-2. **By ID** - If `credentialId` is provided, look up that specific credential
-3. **By Name** - Look up by the credential name passed to `getCredential()`
-
-```typescript
-// Priority 1: Direct values (bypasses database)
-const cred = await engine.getCredential('OpenAI', {
-    directValues: { apiKey: 'test-key' },
-    contextUser
-});
-
-// Priority 2: Specific credential by ID
-const cred = await engine.getCredential('OpenAI', {
-    credentialId: 'specific-credential-uuid',
-    contextUser
-});
-
-// Priority 3: By name (most common)
-const cred = await engine.getCredential('OpenAI', { contextUser });
-```
-
-## API Key Lookup
-
-The CredentialEngine caches API keys for fast hash-based lookup, used by authentication systems:
-
-```typescript
-// Look up API key by hash (O(1) from cache)
-const apiKey = CredentialEngine.Instance.getAPIKeyByHash(keyHash);
-
-if (apiKey && apiKey.Status === 'Active') {
-    // Key is valid
-    console.log('User ID:', apiKey.UserID);
-}
-```
-
-This is used internally by `EncryptionEngine.ValidateAPIKey()` for fast API authentication.
-
-## Audit Logging
-
-Every credential access is automatically logged to the `Audit Logs` entity:
-
-```typescript
-const cred = await engine.getCredential('OpenAI', {
-    contextUser,
-    subsystem: 'AIService'  // Logged for tracking
-});
-```
-
-Audit log entry includes:
-- User who accessed the credential
-- Operation type (Decrypt, Create, Update, Validate)
-- Subsystem that requested access
-- Success/failure status
-- Duration in milliseconds
 
 ## JSON Schema Validation
 
-The CredentialEngine uses [Ajv JSON Schema validator](https://ajv.js.org/) to validate credential values against the `FieldSchema` defined in each Credential Type. This ensures data integrity and security by enforcing constraints at save time.
+The engine validates credential values against the `FieldSchema` defined on each Credential Type using Ajv. Supported constraints include `required`, `const`, `enum`, `format`, `pattern`, `minLength`/`maxLength`, and `minimum`/`maximum`.
 
-### Supported Constraints
+Default and const values are auto-populated before validation, and validation errors produce clear, human-readable messages.
 
-All JSON Schema Draft 7 validation keywords are supported:
+## Audit Logging
 
-| Constraint | Description | Example Use Case |
-|-----------|-------------|------------------|
-| `required` | Mandatory fields | API keys must include `apiKey` field |
-| `const` | Fixed immutable values | OAuth token URLs that must never change |
-| `enum` | Limited set of allowed values | Region selection, account types |
-| `format` | Value format validation | `uri`, `email`, `date`, `uuid` |
-| `pattern` | Regex pattern matching | API key format validation |
-| `minLength`/`maxLength` | String length bounds | Password length requirements |
-| `minimum`/`maximum` | Numeric range validation | Port numbers, timeout values |
-| `default` | Auto-populated values | Default regions, endpoints |
+Every credential operation (Decrypt, Create, Update, Validate) is logged to the Audit Logs entity with:
+- User who performed the operation
+- Subsystem that requested access
+- Success or failure status
+- Duration in milliseconds
 
-### Schema Validation Flow
+## Security
 
-1. **Create/Update**: When `storeCredential()` or `updateCredential()` is called
-2. **Apply Defaults**: Fields with `default` or `const` values are auto-populated
-3. **Validate**: The complete credential values are validated against the schema
-4. **Throw on Error**: If validation fails, a clear error message is thrown listing all violations
+- **Encryption at rest** -- The `Values` field uses MJ field-level encryption
+- **Audit trail** -- All access logged including failed attempts
+- **Access control** -- Entity-level permissions enforced via `contextUser`
+- **Expiration support** -- `ExpiresAt` field enforces credential rotation
 
-```typescript
-// This credential type schema
-{
-  "type": "object",
-  "properties": {
-    "apiKey": {
-      "type": "string",
-      "pattern": "^sk-[a-zA-Z0-9]{32}$",
-      "description": "OpenAI API key"
-    },
-    "endpoint": {
-      "type": "string",
-      "format": "uri",
-      "default": "https://api.openai.com/v1"
-    }
-  },
-  "required": ["apiKey"]
-}
+## Dependencies
 
-// Will reject this (invalid pattern)
-await engine.storeCredential('OpenAI', 'Production', {
-    apiKey: 'invalid-format'  // ❌ Fails pattern validation
-}, {}, contextUser);
-// Error: Field "apiKey" does not match required pattern
-
-// Will reject this (invalid URI format)
-await engine.storeCredential('OpenAI', 'Production', {
-    apiKey: 'sk-abcdefghijklmnopqrstuvwxyz123456',
-    endpoint: 'not-a-url'  // ❌ Fails format validation
-}, {}, contextUser);
-// Error: Field "endpoint" must be a valid uri
-
-// Will accept and auto-populate default
-await engine.storeCredential('OpenAI', 'Production', {
-    apiKey: 'sk-abcdefghijklmnopqrstuvwxyz123456'
-    // endpoint auto-populated with default: https://api.openai.com/v1
-}, {}, contextUser);
-// ✅ Success
-```
-
-### Error Messages
-
-Validation errors are formatted for clarity:
-
-- **Required**: `Missing required field: apiKey`
-- **Const**: `Field "tokenUrl" must be "https://api.box.com/oauth2/token"`
-- **Enum**: `Field "region" must be one of: us-east-1, us-west-2, eu-west-1`
-- **Format**: `Field "endpoint" must be a valid uri`
-- **Pattern**: `Field "apiKey" does not match required pattern`
-- **Length**: `Field "password" must be at least 8 characters`
-- **Range**: `Field "port" must be at least 1024`
-
-### Const Fields for Security
-
-Use `const` in schemas to enforce fixed values that must never change:
-
-```json
-{
-  "tokenUrl": {
-    "type": "string",
-    "const": "https://api.box.com/oauth2/token",
-    "description": "Box.com OAuth token endpoint"
-  }
-}
-```
-
-This prevents:
-- Users from accidentally changing critical endpoints
-- Malicious redirection of credentials to external servers
-- Configuration drift across environments
-
-Const values are:
-- **Auto-populated** when creating credentials (users don't need to enter them)
-- **Immutable** - validation rejects any attempt to change them
-- **Visible** in UI as read-only fields
-
-### Format Validation
-
-The `format` keyword validates common data types:
-
-- **uri** / **url** - Valid HTTP/HTTPS URLs
-- **email** - Valid email addresses
-- **date** - ISO 8601 dates
-- **date-time** - ISO 8601 timestamps
-- **uuid** - RFC 4122 UUIDs
-- **ipv4** / **ipv6** - IP addresses
-- **hostname** - Valid DNS hostnames
-
-### Default Values
-
-Use `default` to pre-populate fields with sensible values:
-
-```json
-{
-  "region": {
-    "type": "string",
-    "default": "us-east-1",
-    "enum": ["us-east-1", "us-west-2", "eu-west-1"]
-  }
-}
-```
-
-Users can override defaults, but they provide good starting points and reduce configuration errors.
-
-## Credential Validation
-
-Validate credentials against provider endpoints:
-
-```typescript
-const result = await engine.validateCredential(credentialId, contextUser);
-
-if (!result.isValid) {
-    console.error('Credential validation failed:', result.errors);
-}
-
-// Result structure
-interface CredentialValidationResult {
-    isValid: boolean;
-    errors: string[];
-    warnings: string[];
-    validatedAt: Date;
-}
-```
-
-## Updating Credentials
-
-Update credential values (automatically re-encrypted):
-
-```typescript
-await engine.updateCredential(
-    credentialId,
-    { apiKey: 'new-sk-...' },  // New values
-    contextUser
-);
-```
-
-## Cached Data Access
-
-Access cached credential metadata without database calls:
-
-```typescript
-// All credentials
-const credentials = engine.Credentials;
-
-// All credential types
-const types = engine.CredentialTypes;
-
-// All credential categories
-const categories = engine.CredentialCategories;
-
-// Lookup helpers
-const type = engine.getCredentialTypeByName('API Key');
-const defaultCred = engine.getDefaultCredentialForType('API Key');
-const credById = engine.getCredentialById('uuid-here');
-const credByName = engine.getCredentialByName('API Key', 'OpenAI');
-```
-
-## Database Schema
-
-### MJ: Credential Types
-
-Defines the shape of credential values:
-
-| Column | Description |
-|--------|-------------|
-| `Name` | Type name (e.g., 'API Key') |
-| `Description` | Human-readable description |
-| `FieldSchema` | JSON Schema for validation |
-| `ValidationEndpoint` | Optional URL for validation |
-
-### MJ: Credentials
-
-Stores credential instances:
-
-| Column | Description |
-|--------|-------------|
-| `Name` | Credential name (e.g., 'OpenAI Production') |
-| `CredentialTypeID` | Foreign key to type |
-| `Values` | Encrypted JSON blob |
-| `IsDefault` | Default for this type |
-| `IsActive` | Active status |
-| `ExpiresAt` | Optional expiration |
-| `LastUsedAt` | Updated on each access |
-| `LastValidatedAt` | Updated on validation |
-
-### MJ: Credential Categories
-
-Optional organization:
-
-| Column | Description |
-|--------|-------------|
-| `Name` | Category name |
-| `Description` | Description |
-| `ParentCategoryID` | For hierarchy |
-
-## Security Considerations
-
-1. **Encryption at Rest**
-   - The `Values` field uses MJ field-level encryption
-   - Only decrypted when explicitly accessed via `getCredential()`
-
-2. **Audit Trail**
-   - Every access is logged with user, timestamp, and subsystem
-   - Failed access attempts are also logged
-
-3. **Access Control**
-   - Credentials inherit MJ's entity-level permissions
-   - Use `contextUser` to enforce authorization
-
-4. **Expiration**
-   - Set `ExpiresAt` on credentials to enforce rotation
-   - Check `expiresAt` in the resolved credential for warnings
-
-5. **Per-Request Override**
-   - Use `directValues` for testing without database access
-   - Values are marked with `source: 'request'` for audit clarity
-
-## Integration with EncryptionEngine
-
-The Credentials package works alongside the Encryption package:
-
-- **CredentialEngine** - Manages credential storage and retrieval
-- **EncryptionEngine** - Handles API key generation, validation, and field encryption
-
-API key authentication flow:
-1. `EncryptionEngine.ValidateAPIKey()` hashes the incoming key
-2. `CredentialEngine.getAPIKeyByHash()` looks up the cached key entity
-3. Validation checks status, expiration, and user account
-4. User context is returned for authorized operations
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/core` | Base engine, metadata, entity system |
+| `@memberjunction/global` | Global state management |
+| `@memberjunction/core-entities` | Credential entity types |
+| `ajv` | JSON Schema validation |
+| `ajv-formats` | Format validators (uri, email, date) |
 
 ## License
 

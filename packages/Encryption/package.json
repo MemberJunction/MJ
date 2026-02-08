@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/encryption",
   "type": "module",
-  "version": "3.4.0",
+  "version": "4.0.0",
   "description": "MemberJunction: Field-level encryption engine with pluggable key sources. Server-side only - provides AES-256-GCM/CBC encryption with environment variable, config file, AWS KMS, and Azure Key Vault key sources.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,11 +22,11 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/credentials": "3.4.0",
-    "@memberjunction/actions-base": "3.4.0",
+    "@memberjunction/global": "4.0.0",
+    "@memberjunction/core": "4.0.0",
+    "@memberjunction/core-entities": "4.0.0",
+    "@memberjunction/credentials": "4.0.0",
+    "@memberjunction/actions-base": "4.0.0",
     "cosmiconfig": "^9.0.0"
   },
   "optionalDependencies": {
