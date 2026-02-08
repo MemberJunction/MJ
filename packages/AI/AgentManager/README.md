@@ -6,5 +6,5 @@ Meta-agent system for creating, managing, and orchestrating AI agents within Mem
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [core](./core/) | `@memberjunction/ai-agent-manager` | Core interfaces, types, and the `AgentSpec` class for agent metadata management |
-| [actions](./actions/) | `@memberjunction/ai-agent-manager-actions` | Agent management actions (create, update, list, deactivate, export, etc.) |
+| [core](./core/README.md) | `@memberjunction/ai-agent-manager` | Core interfaces, types, and the `AgentSpec` class for agent metadata management |
+| [actions](./actions/README.md) | `@memberjunction/ai-agent-manager-actions` | Agent management actions (create, update, list, deactivate, export, etc.) |

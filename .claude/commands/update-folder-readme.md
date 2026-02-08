@@ -224,27 +224,40 @@ Group packages logically (core, engine, providers, extensions, etc.) rather than
 | [Mistral](./Providers/Mistral/README.md) | `@memberjunction/ai-mistral` | Mistral AI integration |
 ```
 
-#### Format: Subdirectories as Rows
+#### Format: Subdirectories — FULL EXPANSION REQUIRED
 
-If the folder contains child directories that are themselves branch nodes (have 2+ packages), include them in the TOC with a package count:
+If the folder contains child directories that are themselves branch nodes (have 2+ packages), **you MUST list every package inside those sub-directories inline**. Do NOT just show a count like "19 packages" — expand the full contents so readers can navigate directly to any package from this level.
+
+Each sub-directory becomes a section heading (linked to its own README) with its own table listing ALL children:
 
 ```markdown
-### Subdirectories
+### [Providers](./Providers/README.md)
 
-| Directory | Description | Packages |
-|-----------|-------------|----------|
-| [Providers](./Providers/README.md) | AI model provider integrations | 6 packages |
-| [Vectorize](./Vectorize/README.md) | Vector embedding providers | 4 packages |
+| Package | npm | Description |
+|---------|-----|-------------|
+| [OpenAI](./Providers/OpenAI/README.md) | `@memberjunction/ai-openai` | OpenAI GPT integration |
+| [Anthropic](./Providers/Anthropic/README.md) | `@memberjunction/ai-anthropic` | Anthropic Claude integration |
+| [Mistral](./Providers/Mistral/README.md) | `@memberjunction/ai-mistral` | Mistral AI integration |
+
+### [Vectors](./Vectors/README.md)
+
+| Package | npm | Description |
+|---------|-----|-------------|
+| [Core](./Vectors/Core/README.md) | `@memberjunction/ai-vectors` | Core vector operations |
 ```
+
+This ensures **100% coverage at every level** — a reader at any branch node can see and link to ALL packages below them, regardless of nesting depth.
 
 #### Rules for the TOC
 
-1. **Every child package MUST appear** — no exceptions. The TOC is exhaustive.
+1. **Every package at ALL levels below MUST appear** — no exceptions. The TOC is exhaustive across the full sub-tree.
 2. **Link to each package's README** — use `./PackageName/README.md` relative paths
-3. **Show the npm package name** — helps consumers find the right install target
-4. **Pull descriptions from package.json** `description` field, trim to one line
-5. **Group logically** — by function/layer, not alphabetically. Use your judgment based on the architecture.
-6. **Flag missing READMEs** — if a child package lacks a README, still list it but note "(no README)" so it's visible
+3. **Sub-directory packages use relative paths from THIS branch** — e.g., `./Providers/OpenAI/README.md` not `./OpenAI/README.md`
+4. **Show the npm package name** — helps consumers find the right install target
+5. **Pull descriptions from package.json** `description` field, trim to one line
+6. **Group logically** — by function/layer, not alphabetically. Use your judgment based on the architecture.
+7. **Flag missing READMEs** — if a child package lacks a README, still list it but note "(no README)" so it's visible
+8. **Sub-directory section headings link to sub-directory README** — the heading itself is a hyperlink for drill-down
 
 ### Phase 5: Mermaid Diagrams
 
@@ -311,22 +324,31 @@ For folders with both packages and non-package directories:
 When the target is the repo root or `packages/` directory:
 - Use MemberJunction branding in the H1
 - Group child directories by functional area
-- Focus the TOC on directory-level entries (not individual packages — those are too numerous)
+- **Include FULL HIERARCHY TOC** with every package at every level, organized by directory structure
 - Include a top-level architecture diagram showing how the major areas relate
+- The TOC should allow direct navigation to ANY package in the repo from the root level
 
-Example root-level TOC:
+Example root-level TOC structure:
 
 ```markdown
-## Project Structure
+## Full Package Hierarchy
 
-| Area | Description | Packages |
-|------|-------------|----------|
-| [AI](./AI/README.md) | AI framework — models, providers, agents, prompts | 15 packages |
-| [Actions](./Actions/README.md) | Metadata-driven action system for workflows and agents | 8 packages |
-| [Angular](./Angular/README.md) | Angular UI components and Explorer application | 25 packages |
-| [Communication](./Communication/README.md) | Email, SMS, and messaging framework | 6 packages |
-| [MJCore](./MJCore/README.md) | Core framework — entities, metadata, providers | 1 package |
-| [MJServer](./MJServer/README.md) | Server-side infrastructure and GraphQL API | 1 package |
+### [AI](./packages/AI/README.md)
+| Package | npm | Description |
+|---------|-----|-------------|
+| [Core](./packages/AI/Core/README.md) | `@memberjunction/ai` | Base AI abstractions |
+| [Engine](./packages/AI/Engine/README.md) | `@memberjunction/aiengine` | AI orchestration |
+
+#### [AI / Providers](./packages/AI/Providers/README.md)
+| Package | npm | Description |
+|---------|-----|-------------|
+| [OpenAI](./packages/AI/Providers/OpenAI/README.md) | `@memberjunction/ai-openai` | OpenAI integration |
+| [Anthropic](./packages/AI/Providers/Anthropic/README.md) | `@memberjunction/ai-anthropic` | Anthropic integration |
+
+### Standalone Packages
+| Package | npm | Description |
+|---------|-----|-------------|
+| [MJGlobal](./packages/MJGlobal/README.md) | `@memberjunction/global` | Global class factory |
 ```
 
 ## Writing Guidelines

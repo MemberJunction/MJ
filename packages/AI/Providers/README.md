@@ -71,7 +71,7 @@ Providers focused on specific AI capabilities beyond general-purpose LLMs.
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [Recommendations-Rex](./Recommendations-Rex/) (no README) | `@memberjunction/ai-recommendations-rex` | Recommendations Provider for rasa.io Rex engine |
+| [Recommendations-Rex](./Recommendations-Rex/README.md) | `@memberjunction/ai-recommendations-rex` | Recommendations Provider for rasa.io Rex engine |
 
 ### Meta / Utility
 
