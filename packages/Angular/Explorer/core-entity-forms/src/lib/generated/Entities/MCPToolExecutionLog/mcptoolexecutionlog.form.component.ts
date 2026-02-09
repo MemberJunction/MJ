@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: MCP Tool Execution Logs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-mcptoolexecutionlog-form',
     templateUrl: './mcptoolexecutionlog.form.component.html'
 })
@@ -23,6 +24,3 @@ export class MCPToolExecutionLogFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadMCPToolExecutionLogFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

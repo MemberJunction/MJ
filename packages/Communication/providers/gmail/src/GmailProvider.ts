@@ -1374,7 +1374,3 @@ export class GmailProvider extends BaseCommunicationProvider {
     return null;
   }
 }
-
-export function LoadProvider() {
-  // do nothing, this prevents tree shaking from removing this class
-}

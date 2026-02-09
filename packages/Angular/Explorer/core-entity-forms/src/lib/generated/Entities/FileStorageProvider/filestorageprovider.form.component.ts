@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'File Storage Providers') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-filestorageprovider-form',
     templateUrl: './filestorageprovider.form.component.html'
 })
@@ -28,6 +29,3 @@ export class FileStorageProviderFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadFileStorageProviderFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

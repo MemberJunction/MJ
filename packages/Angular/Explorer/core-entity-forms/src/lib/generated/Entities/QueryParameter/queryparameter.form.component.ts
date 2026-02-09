@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Query Parameters') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-queryparameter-form',
     templateUrl: './queryparameter.form.component.html'
 })
@@ -21,6 +22,3 @@ export class QueryParameterFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadQueryParameterFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

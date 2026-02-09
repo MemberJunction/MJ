@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/communication-gmail",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "4.0.0",
   "description": "Gmail/Google Suite provider for MemberJunction Communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,20 +9,20 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "dotenv": "^16.3.1",
+    "@memberjunction/communication-types": "4.0.0",
+    "@memberjunction/core": "4.0.0",
+    "@memberjunction/global": "4.0.0",
+    "dotenv": "^17.2.4",
     "env-var": "^7.4.1",
-    "googleapis": "^130.0.0"
+    "googleapis": "^171.4.0"
   },
   "devDependencies": {
-    "typescript": "^5.0.2",
-    "rimraf": "^5.0.5"
+    "typescript": "^5.9.3",
+    "rimraf": "^6.1.2"
   },
   "repository": {
     "type": "git",

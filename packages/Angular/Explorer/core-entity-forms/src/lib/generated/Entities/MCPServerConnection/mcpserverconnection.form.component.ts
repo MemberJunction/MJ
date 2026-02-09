@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: MCP Server Connections') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-mcpserverconnection-form',
     templateUrl: './mcpserverconnection.form.component.html'
 })
@@ -29,6 +30,3 @@ export class MCPServerConnectionFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadMCPServerConnectionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'AI Prompt Categories') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aipromptcategory-form',
     templateUrl: './aipromptcategory.form.component.html'
 })
@@ -24,6 +25,3 @@ export class AIPromptCategoryFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIPromptCategoryFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

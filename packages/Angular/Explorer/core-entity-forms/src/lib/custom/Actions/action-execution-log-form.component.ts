@@ -1,5 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, ElementRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit } from '@angular/core';
 import { ActionExecutionLogEntity, ActionEntity, UserEntity } from '@memberjunction/core-entities';
 import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -15,6 +14,7 @@ interface ActionParameter {
 
 @RegisterClass(BaseFormComponent, 'Action Execution Logs')
 @Component({
+  standalone: false,
     selector: 'mj-action-execution-log-form',
     templateUrl: './action-execution-log-form.component.html',
     styleUrls: ['./action-execution-log-form.component.css']
@@ -52,16 +52,6 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         bothParams: true,
         metadata: false
     };
-    
-    constructor(
-        elementRef: ElementRef,
-        sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        public cdr: ChangeDetectorRef
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-    }
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -111,7 +101,6 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
             this.isLoadingUser = false;
         }
     }
-
 
     private formatJSONFields() {
         const parseOptions: ParseJSONOptions = {
@@ -278,10 +267,3 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         }
     }
 }
-
-
-// Loader function for ActionExecutionLogFormComponentExtended
-export function LoadActionExecutionLogFormComponentExtended() {
-    // This function is called to ensure the form is loaded
-}
-

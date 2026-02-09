@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Run Medias') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aiagentrunmedia-form',
     templateUrl: './aiagentrunmedia.form.component.html'
 })
@@ -22,6 +23,3 @@ export class AIAgentRunMediaFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIAgentRunMediaFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

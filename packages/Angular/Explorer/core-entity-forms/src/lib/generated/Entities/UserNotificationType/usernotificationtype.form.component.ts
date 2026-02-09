@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: User Notification Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-usernotificationtype-form',
     templateUrl: './usernotificationtype.form.component.html'
 })
@@ -25,6 +26,3 @@ export class UserNotificationTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserNotificationTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

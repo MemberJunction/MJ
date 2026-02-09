@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'AI Result Cache') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-airesultcache-form',
     templateUrl: './airesultcache.form.component.html'
 })
@@ -23,6 +24,3 @@ export class AIResultCacheFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIResultCacheFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

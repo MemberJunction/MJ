@@ -472,10 +472,3 @@ export class PasswordStrengthAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the PasswordStrengthAction class is included in the bundle
- */
-export function LoadPasswordStrengthAction() {
-    // Stub function to prevent tree shaking
-}

@@ -21,16 +21,9 @@ import {
   ActionFilters
 } from '../../services/action-explorer-state.service';
 import { ActionTreePanelComponent } from './action-tree-panel.component';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionExplorerResource() {
-  // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'ActionExplorerResource')
 @Component({
+  standalone: false,
   selector: 'mj-action-explorer',
   templateUrl: './action-explorer.component.html',
   styleUrls: ['./action-explorer.component.css'],

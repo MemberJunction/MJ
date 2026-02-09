@@ -1,11 +1,9 @@
 {
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
-  "newProjectRoot": "projects",
   "projects": {
     "MJExplorer": {
       "projectType": "application",
-      "schematics": {},
       "root": "",
       "sourceRoot": "src",
       "prefix": "app",
@@ -16,7 +14,7 @@
             "outputPath": "dist/MJExplorer",
             "index": "src/index.html",
             "browser": "src/main.ts",
-            "polyfills": ["zone.js"],
+            "polyfills": ["@angular/localize/init", "zone.js"],
             "tsConfig": "tsconfig.app.json",
             "assets": [
               "src/favicon.ico",
@@ -59,8 +57,11 @@
             "development": {
               "optimization": false,
               "extractLicenses": false,
-              "preserveSymlinks": true,
-              "sourceMap": true,
+              "sourceMap": {
+                "scripts": true,
+                "styles": true,
+                "vendor": true
+              },
               "namedChunks": true,
               "fileReplacements": [
                 {
@@ -72,7 +73,11 @@
             "local_modules": {
               "optimization": false,
               "extractLicenses": false,
-              "sourceMap": true,
+              "sourceMap": {
+                "scripts": true,
+                "styles": true,
+                "vendor": true
+              },
               "namedChunks": true,
               "fileReplacements": [
                 {
@@ -98,8 +103,11 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "prebundle": false
-          },          
+            "hmr": true,
+            "prebundle": {
+              "exclude": ["@memberjunction/*"]
+            }
+          },
           "configurations": {
             "production": {
               "buildTarget": "MJExplorer:build:production"
@@ -115,12 +123,6 @@
             }
           },
           "defaultConfiguration": "development"
-        },
-        "extract-i18n": {
-          "builder": "@angular-devkit/build-angular:extract-i18n",
-          "options": {
-            "buildTarget": "MJExplorer:build"
-          }
         },
         "test": {
           "builder": "@angular-devkit/build-angular:karma",

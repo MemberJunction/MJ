@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Data Context Items') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-datacontextitem-form',
     templateUrl: './datacontextitem.form.component.html'
 })
@@ -22,6 +23,3 @@ export class DataContextItemFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDataContextItemFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

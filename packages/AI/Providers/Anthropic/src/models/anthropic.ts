@@ -730,7 +730,3 @@ ${GetUserMessageFromChatParams(params)}`
         throw new Error("Method not implemented.");
     }
 }
-
-export function LoadAnthropicLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

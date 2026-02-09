@@ -20,5 +20,3 @@ export class AIModelEntityExtended extends AIModelEntity  {
         return this._modelVendors;
     }
 }
-// tree shaking load stub
-export function LoadAIModelExtended() {}

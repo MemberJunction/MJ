@@ -5,9 +5,22 @@
     "entryFile": "src/public-api.ts"
   },
   "allowedNonPeerDependencies": [
+    "@memberjunction/actions-base",
+    "@memberjunction/ai-core-plus",
+    "@memberjunction/ai-engine-base",
+    "@memberjunction/communication-types",
     "@memberjunction/core",
+    "@memberjunction/core-entities",
+    "@memberjunction/entity-communications-base",
     "@memberjunction/graphql-dataprovider",
+    "@memberjunction/ng-artifacts",
     "@memberjunction/ng-auth-services",
+    "@memberjunction/ng-core-entity-forms",
+    "@memberjunction/ng-dashboard-viewer",
+    "@memberjunction/ng-dashboards",
+    "@memberjunction/ng-explorer-core",
+    "@memberjunction/ng-explorer-settings",
+    "@memberjunction/ng-file-storage",
     "@memberjunction/ng-shared",
     "rxjs"
   ]

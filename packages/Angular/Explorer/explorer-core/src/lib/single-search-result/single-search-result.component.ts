@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { RunViewParams } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-single-search-result',
   templateUrl: './single-search-result.component.html',
   styleUrls: ['./single-search-result.component.css']

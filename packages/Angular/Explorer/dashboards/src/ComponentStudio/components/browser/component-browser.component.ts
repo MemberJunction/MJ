@@ -14,6 +14,7 @@ import {
 } from '../../services/component-studio-state.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-component-browser',
   templateUrl: './component-browser.component.html',
   styleUrls: ['./component-browser.component.css']

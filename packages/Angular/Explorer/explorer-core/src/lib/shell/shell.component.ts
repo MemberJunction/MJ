@@ -37,6 +37,7 @@ import { CommandPaletteService } from '../command-palette/command-palette.servic
  * - Unified workspace state management
  */
 @Component({
+  standalone: false,
   selector: 'mj-shell',
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
@@ -233,6 +234,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
+        this.cdr.detectChanges();
 
         // Create default tab when app is activated ONLY if:
         // 1. App has no tabs yet
@@ -389,6 +391,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.initialized = true;
     this.waitingForFirstResource = true;
+
+    // Force change detection to sync Angular's expected values after all async
+    // state changes (apps loaded, searchableEntities populated, etc.) to prevent
+    // NG0100 ExpressionChangedAfterItHasBeenCheckedError in dev mode
+    this.cdr.detectChanges();
   }
 
   /**
@@ -471,6 +478,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Check if this is a system tab (not associated with a registered app)
     if (tabAppId === SYSTEM_APP_ID) {
       this.isViewingSystemTab = true;
+      this.cdr.detectChanges();
+
       // Don't try to set active app - SYSTEM_APP_ID has no registered app
       // Update browser title with just the tab title (no app context)
       this.titleService.setContext(null, activeTab.title || 'Explorer');
@@ -479,6 +488,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Not a system tab - clear the flag
     this.isViewingSystemTab = false;
+    this.cdr.detectChanges();
 
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();
@@ -497,7 +507,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Sync URL with active tab's resource
    */
-  private syncUrlWithWorkspace(config: WorkspaceConfiguration): void {
+  private async syncUrlWithWorkspace(config: WorkspaceConfiguration): Promise<void> {
     // Don't sync URL during URL-based navigation initialization
     if (this.urlBasedNavigation) {
       return;
@@ -514,7 +524,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Build resource URL from tab configuration
-    const resourceUrl = this.buildResourceUrl(activeTab);
+    const resourceUrl = await this.buildResourceUrl(activeTab);
     if (resourceUrl) {
       // Compare full URLs including query params to detect changes
       const currentUrl = this.router.url;
@@ -545,7 +555,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Find the tab that matches this URL
-    const matchingTab = this.findTabForUrl(url, config.tabs);
+    const matchingTab = await this.findTabForUrl(url, config.tabs);
 
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
@@ -636,7 +646,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
 
         if (app) {
-          const navItems = app.GetNavItems();
+          const navItems = await app.GetNavItems();
           // Only auto-create tabs for apps with zero nav items
           // Apps with nav items should have had their tabs preserved
           if (navItems.length === 0) {
@@ -686,7 +696,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Find the tab that matches a given URL
    */
-  private findTabForUrl(url: string, tabs: WorkspaceTab[]): WorkspaceTab | null {
+  private async findTabForUrl(url: string, tabs: WorkspaceTab[]): Promise<WorkspaceTab | null> {
     // Parse the URL to extract resource info
     const urlPath = url.split('?')[0];
 
@@ -733,7 +743,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // Fallback for apps with zero nav items: match ANY tab belonging to this app
         // This handles the case where the default tab was replaced when navigating away
-        const navItems = app.GetNavItems();
+        const navItems = await app.GetNavItems();
         if (navItems.length === 0) {
           return tabs.find(tab => tab.applicationId === app.ID) || null;
         }
@@ -946,7 +956,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Build a shareable resource URL from tab data.
    * Uses app.Path for cleaner URLs (e.g., /app/data-explorer instead of /app/Data%20Explorer)
    */
-  private buildResourceUrl(tab: WorkspaceTab): string | null {
+  private async buildResourceUrl(tab: WorkspaceTab): Promise<string | null> {
     const config = tab.configuration || {};
     const resourceType = (config['resourceType'] as string | undefined)?.toLowerCase();
     const recordId = tab.resourceRecordId;
@@ -999,7 +1009,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       if (app) {
         // Prefer Path, fall back to Name
         const appPath = app.Path || app.Name;
-        const navItems = app.GetNavItems();
+        const navItems = await app.GetNavItems();
 
         // If app has nav items, try to find the matching one
         // Filter out dynamic nav items - they're generated from tab state and shouldn't affect URL building
@@ -1209,7 +1219,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private startLoadingAnimation(): void {
     // Select the appropriate theme based on date and locale
     this.activeTheme = getActiveTheme();
-    console.log(`🎨 Loading theme: ${this.activeTheme.name}`);
 
     // Reset state
     this.usedMessageIndices = [0]; // Mark first message as used
@@ -1483,7 +1492,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.appManager.SetActiveApp(appId);
 
       // Get the default nav item for this app (if any)
-      const navItems = app.GetNavItems();
+      const navItems = await app.GetNavItems();
       const defaultNavItem = navItems.find(item => item.isDefault);
 
       // Check if app has any tabs
@@ -1503,7 +1512,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (defaultNavItemTab) {
           // Found existing tab for default nav item - activate it
           this.workspaceManager.SetActiveTab(defaultNavItemTab.id);
-          const resourceUrl = this.buildResourceUrl(defaultNavItemTab);
+          const resourceUrl = await this.buildResourceUrl(defaultNavItemTab);
           if (resourceUrl) {
             this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
           }
@@ -1518,7 +1527,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // The workspace configuration subscription will trigger URL sync
         // but we can also manually trigger it here to ensure immediate update
-        const resourceUrl = this.buildResourceUrl(firstTab);
+        const resourceUrl = await this.buildResourceUrl(firstTab);
         if (resourceUrl) {
           this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
         }
@@ -1616,6 +1625,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.activeApp.GetColor(),
       { forceNewTab: shiftKey || dblClick }
     );
+  }
+
+  /**
+   * Handle dismiss of a dynamic nav item (remove from recent stack)
+   */
+  onNavItemDismiss(item: NavItem): void {
+    if (!this.activeApp) {
+      return;
+    }
+
+    // Delegate to HomeApplication's RemoveDynamicNavItem if available
+    const appWithRemove = this.activeApp as BaseApplication & {
+      RemoveDynamicNavItem?: (item: NavItem) => void;
+    };
+    if (typeof appWithRemove.RemoveDynamicNavItem === 'function') {
+      appWithRemove.RemoveDynamicNavItem(item);
+    }
   }
 
   /**
@@ -1846,8 +1872,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         configuration: defaultTabRequest.Configuration || {}
       }]
     };
-
-    console.log('🔄 Resetting layout to fresh state:', freshConfig);
 
     // Update workspace configuration
     this.workspaceManager.UpdateConfiguration(freshConfig);

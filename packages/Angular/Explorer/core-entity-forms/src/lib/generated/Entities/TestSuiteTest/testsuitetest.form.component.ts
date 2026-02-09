@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suite Tests') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-testsuitetest-form',
     templateUrl: './testsuitetest.form.component.html'
 })
@@ -19,6 +20,3 @@ export class TestSuiteTestFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadTestSuiteTestFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

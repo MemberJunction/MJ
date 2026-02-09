@@ -1,0 +1,447 @@
+/* ============================================================
+   Flow Agent Editor — MJ-specific flow editor wrapper
+   ============================================================ */
+
+/* ── Host element fullscreen positioning ──────────────────── */
+
+mj-flow-agent-editor.mj-flow-agent-editor--fullscreen {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  padding-right: 25px;
+  bottom: 12px;
+  z-index: 10000;
+  border-radius: 10px;
+  height: auto !important;
+  min-height: unset !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
+  height: 100%;
+  min-height: unset;
+  border-radius: 10px;
+}
+
+.mj-agent-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  background: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Backdrop overlay ─────────────────────────────────────── */
+
+.mj-agent-editor-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+}
+
+/* ── Toolbar ───────────────────────────────────────────────── */
+
+.mj-agent-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 12px;
+  flex-shrink: 0;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.mj-agent-editor-toolbar--editing {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdf4 100%);
+  border-bottom-color: #bbf7d0;
+}
+
+.mj-flow-agent-editor--fullscreen .mj-agent-editor-toolbar {
+  padding: 10px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 10px 10px 0 0;
+}
+
+.mj-flow-agent-editor--fullscreen .mj-agent-editor-toolbar--editing {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdf4 100%);
+  border-bottom-color: #bbf7d0;
+}
+
+.mj-agent-editor-toolbar-left,
+.mj-agent-editor-toolbar-center,
+.mj-agent-editor-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mj-agent-editor-toolbar-right {
+  gap: 10px;
+}
+
+.mj-agent-editor-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.mj-agent-editor-btn i { font-size: 12px; }
+
+.mj-agent-editor-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #cbd5e1; }
+.mj-agent-editor-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.mj-agent-editor-btn--primary {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.mj-agent-editor-btn--primary:hover:not(:disabled) { background: #2563eb; border-color: #2563eb; }
+
+.mj-agent-editor-btn--expand {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0284c7;
+}
+
+.mj-agent-editor-btn--expand:hover:not(:disabled) { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+
+.mj-agent-editor-btn--close {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.mj-agent-editor-btn--close:hover:not(:disabled) { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+
+.mj-agent-editor-btn-divider {
+  width: 1px;
+  height: 22px;
+  background: #e2e8f0;
+  margin: 0 2px;
+}
+
+/* ── View Toggle ───────────────────────────────────────────── */
+
+.mj-agent-editor-view-toggle {
+  display: flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mj-agent-editor-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: none;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mj-agent-editor-view-btn i { font-size: 11px; }
+
+.mj-agent-editor-view-btn:not(:last-child) { border-right: 1px solid #e2e8f0; }
+
+.mj-agent-editor-view-btn--active {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.mj-agent-editor-view-btn:hover:not(.mj-agent-editor-view-btn--active) { background: #f8fafc; }
+
+/* ── Fullscreen Title ──────────────────────────────────────── */
+
+.mj-agent-editor-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+}
+
+.mj-agent-editor-title i {
+  color: #3b82f6;
+  font-size: 14px;
+}
+
+/* ── Status Indicators ─────────────────────────────────────── */
+
+.mj-agent-editor-status {
+  font-size: 12px;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mj-agent-editor-status--unsaved {
+  color: #f59e0b;
+}
+
+.mj-agent-editor-status--unsaved i { font-size: 6px; }
+
+/* ── Inline Floating Controls (non-fullscreen) ────────────── */
+
+.mj-agent-editor-inline-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mj-agent-editor-inline-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(4px);
+}
+
+.mj-agent-editor-inline-expand:hover {
+  background: #ffffff;
+  border-color: #94a3b8;
+  color: #1e293b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transform: scale(1.05);
+}
+
+.mj-agent-editor-inline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 6px rgba(245, 158, 11, 0.4);
+  animation: mj-inline-dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes mj-inline-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Loading ───────────────────────────────────────────────── */
+
+.mj-agent-editor-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.mj-agent-editor-loading i { font-size: 16px; }
+
+/* ── Body ──────────────────────────────────────────────────── */
+
+.mj-agent-editor-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-agent-editor-diagram {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.mj-agent-editor-diagram mj-flow-editor {
+  flex: 1;
+  display: flex;
+}
+
+.mj-agent-editor-list {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.mj-agent-editor-list mj-agent-step-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ── Properties Panel ──────────────────────────────────────── */
+
+.mj-agent-editor-properties {
+  width: 320px;
+  flex-shrink: 0;
+  overflow: hidden;
+  transform: translateX(320px);
+  margin-right: -320px;
+  transition: transform 0.2s ease, margin-right 0.2s ease;
+  border-left: 1px solid #e2e8f0;
+}
+
+.mj-agent-editor-properties--visible {
+  transform: translateX(0);
+  margin-right: 0;
+}
+
+.mj-agent-editor-properties mj-agent-properties-panel {
+  display: block;
+  width: 320px;
+  height: 100%;
+}
+
+/* ── Mode Indicator Badge ─────────────────────────────────── */
+
+.mj-agent-editor-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  letter-spacing: 0.2px;
+}
+
+.mj-agent-editor-mode-badge i { font-size: 10px; }
+
+.mj-agent-editor-mode-badge--editing {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.mj-agent-editor-mode-badge--readonly {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* ── Edit Button ──────────────────────────────────────────── */
+
+.mj-agent-editor-btn--edit {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #059669;
+}
+
+.mj-agent-editor-btn--edit:hover:not(:disabled) {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+  color: #047857;
+}
+
+/* ── Danger Outline Button ────────────────────────────────── */
+
+.mj-agent-editor-btn--danger-outline {
+  border-color: #fecaca;
+  color: #dc2626;
+  background: #ffffff;
+}
+
+.mj-agent-editor-btn--danger-outline:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+/* ── Unsaved Changes Dialog ───────────────────────────────── */
+
+.mj-agent-editor-dialog-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  animation: mj-dialog-fade-in 0.15s ease-out;
+}
+
+@keyframes mj-dialog-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mj-agent-editor-dialog {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 28px 32px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  text-align: center;
+  animation: mj-dialog-scale-in 0.15s ease-out;
+}
+
+@keyframes mj-dialog-scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.mj-agent-editor-dialog-icon {
+  font-size: 28px;
+  color: #f59e0b;
+  margin-bottom: 12px;
+}
+
+.mj-agent-editor-dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px;
+}
+
+.mj-agent-editor-dialog-message {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.mj-agent-editor-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}

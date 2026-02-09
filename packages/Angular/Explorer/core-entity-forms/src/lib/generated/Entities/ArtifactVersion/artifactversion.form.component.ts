@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Artifact Versions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-artifactversion-form',
     templateUrl: './artifactversion.form.component.html'
 })
@@ -27,6 +28,3 @@ export class ArtifactVersionFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadArtifactVersionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

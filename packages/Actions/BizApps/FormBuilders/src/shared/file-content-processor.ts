@@ -160,7 +160,7 @@ export class FileContentProcessor {
             // Excel: Parse to structured text
             try {
                 const workbook = new ExcelJS.Workbook();
-                await workbook.xlsx.load(buffer);
+                await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
 
                 const sheets: Record<string, unknown[]> = {};
                 workbook.eachSheet((worksheet) => {

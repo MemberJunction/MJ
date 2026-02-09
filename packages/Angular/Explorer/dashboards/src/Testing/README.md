@@ -4,7 +4,7 @@ Angular components and dashboards for the MemberJunction Testing Framework. Prov
 
 ## Overview
 
-The Testing Framework UI integrates with MJExplorer to provide a complete test management and analysis experience. Built on Angular 18, it leverages MJ's existing component library while adding specialized testing views.
+The Testing Framework UI integrates with MJExplorer to provide a complete test management and analysis experience. Built on Angular 21, it leverages MJ's existing component library while adding specialized testing views.
 
 ## Components (Planned)
 
@@ -368,7 +368,7 @@ When CUA models mature:
 
 ## Technology Stack
 
-- **Framework:** Angular 18
+- **Framework:** Angular 21
 - **UI Library:** MemberJunction component library
 - **Charts:** D3.js (via MJ chart components)
 - **State:** RxJS

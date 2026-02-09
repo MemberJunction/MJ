@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Content Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-contenttype-form',
     templateUrl: './contenttype.form.component.html'
 })
@@ -23,6 +24,3 @@ export class ContentTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadContentTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

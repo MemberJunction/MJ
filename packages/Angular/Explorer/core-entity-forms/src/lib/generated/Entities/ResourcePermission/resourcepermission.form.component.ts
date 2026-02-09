@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Resource Permissions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-resourcepermission-form',
     templateUrl: './resourcepermission.form.component.html'
 })
@@ -22,6 +23,3 @@ export class ResourcePermissionFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadResourcePermissionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

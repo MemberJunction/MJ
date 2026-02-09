@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Audit Logs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-auditlog-form',
     templateUrl: './auditlog.form.component.html'
 })
@@ -21,6 +22,3 @@ export class AuditLogFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAuditLogFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

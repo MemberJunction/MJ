@@ -671,7 +671,7 @@ export class AzureFileStorage extends FileStorageBase {
         }
       }
 
-      return Buffer.concat(chunks as Uint8Array[]);
+      return Buffer.concat(chunks as unknown as Uint8Array[]);
     } catch (error) {
       console.error('Error getting object from Azure Blob Storage', { objectName });
       console.error(error);

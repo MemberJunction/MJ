@@ -38,7 +38,7 @@ import {
 import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
-import { User, Message } from "@microsoft/microsoft-graph-types";
+import { Message } from "@microsoft/microsoft-graph-types";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import { compile, compiledFunction } from 'html-to-text';
@@ -138,7 +138,6 @@ interface ResolvedMSGraphCredentials {
 @RegisterClass(BaseCommunicationProvider, 'Microsoft Graph')
 export class MSGraphProvider extends BaseCommunicationProvider {
 
-    private ServiceAccount: User | null = null;
     private HTMLConverter: compiledFunction;
 
     // Cache clients by credential hash for performance with per-request credentials
@@ -222,6 +221,11 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         return Auth.ApiConfig.uri;
     }
 
+    /**
+     * Sends a single email message via MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.Send (Application)
+     */
     public async SendSingleMessage(
         message: ProcessedMessage,
         credentials?: MSGraphCredentials
@@ -237,15 +241,6 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 message.From.trim() !== '' &&
                 message.From !== creds.accountEmail) {
                 senderEmail = message.From;
-            }
-
-            const user: User | null = await this.GetServiceAccountWithClient(client, senderEmail);
-            if (!user) {
-                return {
-                    Message: message,
-                    Success: false,
-                    Error: 'Service account not found'
-                };
             }
 
             if (!message) {
@@ -292,7 +287,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 }));
             }
 
-            const sendMessagePath: string = `${this.getApiUri()}/${user.id}/sendMail`;
+            // Use email address directly in API path instead of looking up user ID
+            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(senderEmail)}/sendMail`;
             await client.api(sendMessagePath).post(sendMail);
 
             return {
@@ -311,6 +307,11 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         }
     }
 
+    /**
+     * Replies to an email message via MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.Send (Application)
+     */
     public async ReplyToMessage(
         params: ReplyToMessageParams,
         credentials?: MSGraphCredentials
@@ -318,14 +319,6 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-
-            const user: User | null = await this.GetServiceAccountWithClient(client, creds.accountEmail);
-            if (!user) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
 
             const reply: Record<string, unknown> = {
                 message: {
@@ -350,7 +343,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 comment: params.Message.ProcessedBody || params.Message.ProcessedHTMLBody
             };
 
-            const sendMessagePath: string = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/reply`;
+            // Use email address directly in API path
+            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(creds.accountEmail)}/messages/${params.MessageID}/reply`;
             const result = await client.api(sendMessagePath).post(reply);
 
             return {
@@ -367,6 +361,11 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         }
     }
 
+    /**
+     * Retrieves email messages from a mailbox via MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application), or Mail.ReadWrite if using ContextData.MarkAsRead option
+     */
     public async GetMessages(
         params: GetMessagesParams<Record<string, unknown>>,
         credentials?: MSGraphCredentials
@@ -376,14 +375,6 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
         const contextData = params.ContextData;
         const emailToUse = params.Identifier || (contextData?.Email as string) || creds.accountEmail;
-
-        const user: User | null = await this.GetServiceAccountWithClient(client, emailToUse);
-        if (!user || !user.id) {
-            return {
-                Success: false,
-                Messages: []
-            };
-        }
 
         let filter: string = "";
         const top: number = params.NumMessages;
@@ -396,7 +387,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             filter = contextData.Filter as string;
         }
 
-        const messagesPath: string = `${this.getApiUri()}/${user.id}/messages`;
+        // Use email address directly in API path
+        const messagesPath: string = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages`;
         const response = await client.api(messagesPath)
             .filter(filter).top(top).get();
 
@@ -422,7 +414,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         // and then apply that in the mapped message below.
         if (params.IncludeHeaders) {
             const headersPromises = sourceMessages.map((message) =>
-                this.GetHeadersWithClient(client, params, user, message.id as string | undefined)
+                this.GetHeadersWithEmail(client, emailToUse, params, message.id as string | undefined)
             );
             headers = await Promise.all(headersPromises);
         }
@@ -455,13 +447,18 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
         if (contextData && contextData.MarkAsRead) {
             for (const message of messages) {
-                this.MarkMessageAsReadWithClient(client, user.id, message.ExternalSystemRecordID);
+                this.MarkMessageAsReadWithEmail(client, emailToUse, message.ExternalSystemRecordID);
             }
         }
 
         return messageResults;
     }
 
+    /**
+     * Forwards an email message via MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.Send (Application)
+     */
     public async ForwardMessage(
         params: ForwardMessageParams,
         credentials?: MSGraphCredentials
@@ -476,14 +473,6 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-
-            const user: User | null = await this.GetServiceAccountWithClient(client, creds.accountEmail);
-            if (!user) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
 
             const forward: Record<string, unknown> = {
                 comment: params.Message,
@@ -504,7 +493,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 }))
             };
 
-            const sendMessagePath: string = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/forward`;
+            // Use email address directly in API path
+            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(creds.accountEmail)}/messages/${params.MessageID}/forward`;
             const forwardResult = await client.api(sendMessagePath).post(forward);
 
             return {
@@ -521,14 +511,21 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         }
     }
 
-    protected async GetHeadersWithClient(
+    /**
+     * Gets headers for a specific message using email address directly.
+     * This is the preferred method for new code as it avoids an extra API call to look up the user.
+     *
+     * @protected
+     * @requires MS Graph Scope: Mail.Read (Application)
+     */
+    protected async GetHeadersWithEmail(
         client: Client,
+        emailAddress: string,
         params: GetMessagesParams,
-        user: User,
         messageID: string | undefined
     ): Promise<Record<string, string>> {
         if (params.IncludeHeaders && messageID) {
-            const messageHeaderPath = `${this.getApiUri()}/${user.id}/messages/${messageID}?$select=internetMessageHeaders`;
+            const messageHeaderPath = `${this.getApiUri()}/${encodeURIComponent(emailAddress)}/messages/${messageID}?$select=internetMessageHeaders`;
             const messageHeaderResponse = await client.api(messageHeaderPath).get();
             return messageHeaderResponse.internetMessageHeaders?.map((header: { name: string, value: string }) => ({
                 [header.name]: header.value
@@ -537,48 +534,16 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         return {};
     }
 
-    // Keep old method for backward compatibility (uses default client)
-    protected async GetHeaders(params: GetMessagesParams, user: User, messageID: string | undefined): Promise<Record<string, string>> {
-        return this.GetHeadersWithClient(Auth.GraphClient, params, user, messageID);
-    }
-
-    protected async GetServiceAccountWithClient(client: Client, email: string): Promise<User | null> {
-        const endpoint: string = `${this.getApiUri()}/${email}`;
-        const user: User | null = await client.api(endpoint).get();
-
-        if (!user) {
-            LogError('Error: could not get user info');
-            return null;
-        }
-
-        const userID: string | undefined = user.id;
-        if (!userID) {
-            LogError('Error: userID not set for user');
-            return null;
-        }
-
-        return user;
-    }
-
-    // Keep old method for backward compatibility (uses default client and caching)
-    protected async GetServiceAccount(email?: string): Promise<User | null> {
-        if (this.ServiceAccount) {
-            return this.ServiceAccount;
-        }
-
-        const accountEmail: string = email || Config.AZURE_ACCOUNT_EMAIL;
-        const user = await this.GetServiceAccountWithClient(Auth.GraphClient, accountEmail);
-
-        if (user) {
-            this.ServiceAccount = user;
-        }
-
-        return user;
-    }
-
-    protected async MarkMessageAsReadWithClient(client: Client, userID: string, messageID: string): Promise<boolean> {
+    /**
+     * Marks a message as read using email address directly.
+     * This is the preferred method for new code as it avoids an extra API call to look up the user.
+     *
+     * @protected
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
+     */
+    protected async MarkMessageAsReadWithEmail(client: Client, emailAddress: string, messageID: string): Promise<boolean> {
         try {
-            const updatePath: string = `${this.getApiUri()}/${userID}/messages/${messageID}`;
+            const updatePath: string = `${this.getApiUri()}/${encodeURIComponent(emailAddress)}/messages/${messageID}`;
             const updatedMessage = {
                 isRead: true
             };
@@ -593,11 +558,125 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         }
     }
 
-    // Keep old method for backward compatibility
+    /**
+     * Gets the user account information by making an API call to MS Graph.
+     * This method looks up the full User object from the Graph API.
+     *
+     * @protected
+     * @requires MS Graph Scope: User.Read.All (Application) - Required to look up user information
+     */
+    protected async GetServiceAccountWithClient(client: Client, email: string): Promise<{ id?: string; userPrincipalName?: string } | null> {
+        try {
+            const endpoint: string = `${this.getApiUri()}/${encodeURIComponent(email)}`;
+            const user = await client.api(endpoint).get();
+
+            if (!user) {
+                LogError('Error: could not get user info');
+                return null;
+            }
+
+            const userID: string | undefined = user.id;
+            if (!userID) {
+                LogError('Error: userID not set for user');
+                return null;
+            }
+
+            return user;
+        } catch (ex) {
+            LogError('Error getting service account', undefined, ex);
+            return null;
+        }
+    }
+
+    /**
+     * Gets the service account using default client.
+     * Caches the result for subsequent calls.
+     *
+     * @protected
+     * @requires MS Graph Scope: User.Read.All (Application) - Required to look up user information
+     */
+    protected async GetServiceAccount(email?: string): Promise<{ id?: string; userPrincipalName?: string } | null> {
+        const accountEmail: string = email || Config.AZURE_ACCOUNT_EMAIL;
+        return this.GetServiceAccountWithClient(Auth.GraphClient, accountEmail);
+    }
+
+    /**
+     * Gets headers for a message using User object (requires prior user lookup).
+     * For better performance, consider using GetHeadersWithEmail() instead.
+     *
+     * @protected
+     * @requires MS Graph Scope: Mail.Read (Application)
+     */
+    protected async GetHeadersWithClient(
+        client: Client,
+        params: GetMessagesParams,
+        user: { id?: string; userPrincipalName?: string },
+        messageID: string | undefined
+    ): Promise<Record<string, string>> {
+        const userId = user.id || user.userPrincipalName;
+        if (!userId) {
+            return {};
+        }
+
+        if (params.IncludeHeaders && messageID) {
+            const messageHeaderPath = `${this.getApiUri()}/${encodeURIComponent(userId)}/messages/${messageID}?$select=internetMessageHeaders`;
+            const messageHeaderResponse = await client.api(messageHeaderPath).get();
+            return messageHeaderResponse.internetMessageHeaders?.map((header: { name: string, value: string }) => ({
+                [header.name]: header.value
+            })) || {};
+        }
+        return {};
+    }
+
+    /**
+     * Gets headers using default client.
+     *
+     * @protected
+     * @requires MS Graph Scope: Mail.Read (Application)
+     */
+    protected async GetHeaders(params: GetMessagesParams, user: { id?: string; userPrincipalName?: string }, messageID: string | undefined): Promise<Record<string, string>> {
+        return this.GetHeadersWithClient(Auth.GraphClient, params, user, messageID);
+    }
+
+    /**
+     * Marks a message as read using User ID.
+     * For better performance, consider using MarkMessageAsReadWithEmail() instead.
+     *
+     * @protected
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
+     */
+    protected async MarkMessageAsReadWithClient(client: Client, userID: string, messageID: string): Promise<boolean> {
+        try {
+            const updatePath: string = `${this.getApiUri()}/${encodeURIComponent(userID)}/messages/${messageID}`;
+            const updatedMessage = {
+                isRead: true
+            };
+
+            await client.api(updatePath).update(updatedMessage);
+            LogStatus(`Message ${messageID} marked as read`);
+            return true;
+        }
+        catch (ex) {
+            LogError(ex);
+            return false;
+        }
+    }
+
+    /**
+     * Marks a message as read using default client.
+     *
+     * @protected
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
+     */
     protected async MarkMessageAsRead(userID: string, messageID: string): Promise<boolean> {
         return this.MarkMessageAsReadWithClient(Auth.GraphClient, userID, messageID);
     }
 
+    /**
+     * Creates a draft email message via MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
+     */
     public async CreateDraft(
         params: CreateDraftParams,
         credentials?: MSGraphCredentials
@@ -612,14 +691,6 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 params.Message.From.trim() !== '' &&
                 params.Message.From !== creds.accountEmail) {
                 senderEmail = params.Message.From;
-            }
-
-            const user: User | null = await this.GetServiceAccountWithClient(client, senderEmail);
-            if (!user) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
             }
 
             // Build message object (similar to SendSingleMessage but saved as draft)
@@ -649,8 +720,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                     }));
             }
 
-            // Create draft by POSTing to messages endpoint (not sendMail)
-            const createDraftPath = `${this.getApiUri()}/${user.id}/messages`;
+            // Create draft by POSTing to messages endpoint (not sendMail) - use email address directly
+            const createDraftPath = `${this.getApiUri()}/${encodeURIComponent(senderEmail)}/messages`;
             const result = await client.api(createDraftPath).post(draftMessage);
 
             LogStatus(`Draft created via MS Graph: ${result.id}`);
@@ -698,6 +769,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Gets a single message by ID from MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application)
      */
     public override async GetSingleMessage(
         params: GetSingleMessageParams,
@@ -708,15 +781,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
-            const messagePath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}`;
+            // Use email address directly in API path
+            const messagePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}`;
             const msgResponse = await client.api(messagePath).get();
 
             if (!msgResponse) {
@@ -758,6 +824,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
     /**
      * Deletes a message using MS Graph.
      * If PermanentDelete is false, moves to Deleted Items folder.
+     *
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
      */
     public override async DeleteMessage(
         params: DeleteMessageParams,
@@ -768,22 +836,15 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
-            const messagePath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}`;
+            // Use email address directly in API path
+            const messagePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}`;
 
             if (params.PermanentDelete) {
                 // Permanently delete the message
                 await client.api(messagePath).delete();
             } else {
                 // Move to Deleted Items (soft delete)
-                const deletedItemsFolder = await this.findSystemFolder(client, user.id, 'deleteditems');
+                const deletedItemsFolder = await this.findSystemFolder(client, emailToUse, 'deleteditems');
                 if (deletedItemsFolder) {
                     await client.api(`${messagePath}/move`).post({
                         destinationId: deletedItemsFolder
@@ -807,6 +868,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Moves a message to a different folder using MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
      */
     public override async MoveMessage(
         params: MoveMessageParams,
@@ -817,15 +880,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
-            const movePath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/move`;
+            // Use email address directly in API path
+            const movePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/move`;
             const result = await client.api(movePath).post({
                 destinationId: params.DestinationFolderID
             });
@@ -847,6 +903,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Lists mail folders using MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application)
      */
     public override async ListFolders(
         params: ListFoldersParams,
@@ -857,19 +915,12 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
+            // Use email address directly in API path
             let foldersPath: string;
             if (params.ParentFolderID) {
-                foldersPath = `${this.getApiUri()}/${user.id}/mailFolders/${params.ParentFolderID}/childFolders`;
+                foldersPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/mailFolders/${params.ParentFolderID}/childFolders`;
             } else {
-                foldersPath = `${this.getApiUri()}/${user.id}/mailFolders`;
+                foldersPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/mailFolders`;
             }
 
             const response = await client.api(foldersPath).get();
@@ -907,6 +958,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Marks messages as read or unread using MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
      */
     public override async MarkAsRead(
         params: MarkAsReadParams,
@@ -917,17 +970,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
-            // Update each message
+            // Use email address directly in API path - update each message
             const updatePromises = params.MessageIDs.map(async (messageId) => {
-                const updatePath = `${this.getApiUri()}/${user.id}/messages/${messageId}`;
+                const updatePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${messageId}`;
                 return client.api(updatePath).update({ isRead: params.IsRead });
             });
 
@@ -946,6 +991,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Archives a message by moving it to the Archive folder using MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
      */
     public override async ArchiveMessage(
         params: ArchiveMessageParams,
@@ -956,19 +1003,11 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
-            // Find or create the Archive folder
-            let archiveFolderId = await this.findSystemFolder(client, user.id, 'archive');
+            // Find or create the Archive folder - use email address directly
+            let archiveFolderId = await this.findSystemFolder(client, emailToUse, 'archive');
             if (!archiveFolderId) {
                 // Try to create an Archive folder
-                archiveFolderId = await this.createMailFolder(client, user.id, 'Archive');
+                archiveFolderId = await this.createMailFolder(client, emailToUse, 'Archive');
             }
 
             if (!archiveFolderId) {
@@ -978,8 +1017,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 };
             }
 
-            // Move the message to Archive
-            const movePath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/move`;
+            // Move the message to Archive - use email address directly in API path
+            const movePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/move`;
             await client.api(movePath).post({
                 destinationId: archiveFolderId
             });
@@ -997,6 +1036,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Searches messages using MS Graph search or filter.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application)
      */
     public override async SearchMessages(
         params: SearchMessagesParams,
@@ -1007,20 +1048,12 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
-            // Build search path - use $search for full-text search
+            // Build search path - use email address directly in API path
             let messagesPath: string;
             if (params.FolderID) {
-                messagesPath = `${this.getApiUri()}/${user.id}/mailFolders/${params.FolderID}/messages`;
+                messagesPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/mailFolders/${params.FolderID}/messages`;
             } else {
-                messagesPath = `${this.getApiUri()}/${user.id}/messages`;
+                messagesPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages`;
             }
 
             // Build filter conditions
@@ -1086,6 +1119,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Lists attachments on a message using MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application)
      */
     public override async ListAttachments(
         params: ListAttachmentsParams,
@@ -1096,15 +1131,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
-            const attachmentsPath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/attachments`;
+            // Use email address directly in API path
+            const attachmentsPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/attachments`;
             const response = await client.api(attachmentsPath).get();
 
             if (!response?.value) {
@@ -1139,6 +1167,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Downloads an attachment from a message using MS Graph.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application)
      */
     public override async DownloadAttachment(
         params: DownloadAttachmentParams,
@@ -1149,15 +1179,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
             const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
 
-            const user = await this.GetServiceAccountWithClient(client, emailToUse);
-            if (!user || !user.id) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Service account not found'
-                };
-            }
-
-            const attachmentPath = `${this.getApiUri()}/${user.id}/messages/${params.MessageID}/attachments/${params.AttachmentID}`;
+            // Use email address directly in API path
+            const attachmentPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/attachments/${params.AttachmentID}`;
             const response = await client.api(attachmentPath).get();
 
             if (!response) {
@@ -1193,8 +1216,11 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Finds a system folder by well-known name.
+     *
+     * @private
+     * @requires MS Graph Scope: Mail.Read (Application)
      */
-    private async findSystemFolder(client: Client, userId: string, folderName: string): Promise<string | null> {
+    private async findSystemFolder(client: Client, emailAddress: string, folderName: string): Promise<string | null> {
         try {
             // MS Graph well-known folder names
             const wellKnownNames: Record<string, string> = {
@@ -1211,14 +1237,14 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const normalizedName = folderName.toLowerCase();
             const graphFolderName = wellKnownNames[normalizedName] || normalizedName;
 
-            // Try well-known folder endpoint first
-            const folderPath = `${this.getApiUri()}/${userId}/mailFolders/${graphFolderName}`;
+            // Try well-known folder endpoint first - use email address directly
+            const folderPath = `${this.getApiUri()}/${encodeURIComponent(emailAddress)}/mailFolders/${graphFolderName}`;
             const folder = await client.api(folderPath).get();
             return folder?.id || null;
         } catch {
             // Folder not found or access denied - try search
             try {
-                const foldersPath = `${this.getApiUri()}/${userId}/mailFolders`;
+                const foldersPath = `${this.getApiUri()}/${encodeURIComponent(emailAddress)}/mailFolders`;
                 const response = await client.api(foldersPath)
                     .filter(`displayName eq '${folderName}'`)
                     .get();
@@ -1235,10 +1261,14 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /**
      * Creates a new mail folder.
+     *
+     * @private
+     * @requires MS Graph Scope: Mail.ReadWrite (Application)
      */
-    private async createMailFolder(client: Client, userId: string, folderName: string): Promise<string | null> {
+    private async createMailFolder(client: Client, emailAddress: string, folderName: string): Promise<string | null> {
         try {
-            const foldersPath = `${this.getApiUri()}/${userId}/mailFolders`;
+            // Use email address directly in API path
+            const foldersPath = `${this.getApiUri()}/${encodeURIComponent(emailAddress)}/mailFolders`;
             const result = await client.api(foldersPath).post({
                 displayName: folderName
             });
@@ -1275,8 +1305,4 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         };
         return mapping[displayName.toLowerCase()] || 'other';
     }
-}
-
-export function LoadMSGraphProvider() {
-    // do nothing, this prevents tree shaking from removing this class
 }

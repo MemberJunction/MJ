@@ -9,47 +9,50 @@ import { Subscription } from 'rxjs';
  * Shows multiple agents with avatars, status colors, and click-to-expand functionality
  */
 @Component({
+  standalone: false,
   selector: 'mj-active-agent-indicator',
   template: `
-    <div class="active-agents-container" *ngIf="activeAgents.length > 0">
-      <span class="active-agents-label">Active:</span>
-      <div class="agents-wrapper" [class.expanded]="isExpanded">
-        @for (agent of displayAgents; track agent.run.ID) {
-          <div class="agent-avatar"
-               [class.status-acknowledging]="agent.status === 'acknowledging'"
-               [class.status-working]="agent.status === 'working'"
-               [class.status-completing]="agent.status === 'completing'"
-               [class.status-completed]="agent.status === 'completed'"
-               [class.status-error]="agent.status === 'error'"
-               [title]="getAgentTooltip(agent)"
-               (click)="onAgentClick(agent)">
-            <div class="avatar-content">
-              <i class="fas fa-robot"></i>
-            </div>
-            <div class="status-indicator" *ngIf="agent.status !== 'completed'">
-              <div class="pulse-ring"></div>
-            </div>
-            @if (agent.confidence != null) {
-              <div class="confidence-badge" [title]="'Confidence: ' + (agent.confidence * 100).toFixed(0) + '%'">
-                {{ (agent.confidence * 100).toFixed(0) }}%
+    @if (activeAgents.length > 0) {
+      <div class="active-agents-container">
+        <span class="active-agents-label">Active:</span>
+        <div class="agents-wrapper" [class.expanded]="isExpanded">
+          @for (agent of displayAgents; track agent.run.ID) {
+            <div class="agent-avatar"
+              [class.status-acknowledging]="agent.status === 'acknowledging'"
+              [class.status-working]="agent.status === 'working'"
+              [class.status-completing]="agent.status === 'completing'"
+              [class.status-completed]="agent.status === 'completed'"
+              [class.status-error]="agent.status === 'error'"
+              [title]="getAgentTooltip(agent)"
+              (click)="onAgentClick(agent)">
+              <div class="avatar-content">
+                <i class="fas fa-robot"></i>
               </div>
-            }
-          </div>
-        }
-
-        @if (activeAgents.length > maxVisibleAgents && !isExpanded) {
-          <button class="more-agents" (click)="toggleExpanded()" [title]="'Show all ' + activeAgents.length + ' agents'">
-            +{{ activeAgents.length - maxVisibleAgents }}
-          </button>
-        }
+              @if (agent.status !== 'completed') {
+                <div class="status-indicator">
+                  <div class="pulse-ring"></div>
+                </div>
+              }
+              @if (agent.confidence != null) {
+                <div class="confidence-badge" [title]="'Confidence: ' + (agent.confidence * 100).toFixed(0) + '%'">
+                  {{ (agent.confidence * 100).toFixed(0) }}%
+                </div>
+              }
+            </div>
+          }
+          @if (activeAgents.length > maxVisibleAgents && !isExpanded) {
+            <button class="more-agents" (click)="toggleExpanded()" [title]="'Show all ' + activeAgents.length + ' agents'">
+              +{{ activeAgents.length - maxVisibleAgents }}
+            </button>
+          }
+        </div>
+        <button class="panel-toggle" (click)="onTogglePanel()" title="Open agent process panel">
+          <i class="fas fa-chart-line"></i>
+          <span class="agent-count">{{ activeAgents.length }}</span>
+        </button>
       </div>
-
-      <button class="panel-toggle" (click)="onTogglePanel()" title="Open agent process panel">
-        <i class="fas fa-chart-line"></i>
-        <span class="agent-count">{{ activeAgents.length }}</span>
-      </button>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .active-agents-container {
       display: flex;

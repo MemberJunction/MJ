@@ -40,7 +40,6 @@ import {
  * }
  * ```
  */
-@RegisterClass(BaseUserMenu)
 export class BaseUserMenu {
     protected _context: UserMenuContext | null = null;
     protected _options: UserMenuOptions;
@@ -427,9 +426,4 @@ export class BaseUserMenu {
             this._context = { ...this._context, ...updates };
         }
     }
-}
-
-// Tree-shaking prevention
-export function LoadBaseUserMenu(): void {
-    // This function ensures the decorator executes
 }

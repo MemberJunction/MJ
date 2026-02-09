@@ -68,6 +68,3 @@ export class DirectoryExistsAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadDirectoryExistsAction() {
-    // Stub function to prevent tree shaking
-}

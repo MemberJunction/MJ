@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Content Item Attributes') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-contentitemattribute-form',
     templateUrl: './contentitemattribute.form.component.html'
 })
@@ -20,6 +21,3 @@ export class ContentItemAttributeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadContentItemAttributeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

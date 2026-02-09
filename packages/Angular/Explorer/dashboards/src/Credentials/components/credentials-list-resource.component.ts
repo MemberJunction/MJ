@@ -6,16 +6,12 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialEditPanelComponent } from '@memberjunction/ng-credentials';
-
-export function LoadCredentialsListResource() {
-    // Prevents tree-shaking
-}
-
 type ViewMode = 'grid' | 'list';
 type StatusFilter = '' | 'active' | 'inactive' | 'expired' | 'expiring';
 
 @RegisterClass(BaseResourceComponent, 'CredentialsListResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-list-resource',
     templateUrl: './credentials-list-resource.component.html',
     styleUrls: ['./credentials-list-resource.component.css'],

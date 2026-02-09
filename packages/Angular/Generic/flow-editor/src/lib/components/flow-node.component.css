@@ -1,0 +1,466 @@
+/* ============================================================
+   Flow Node — Visual design for individual flow graph nodes
+   ============================================================ */
+
+mj-flow-node {
+  display: block;
+  position: relative;
+  cursor: default;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mj-flow-node-body {
+  position: relative;
+  min-width: 200px;
+  max-width: 280px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.mj-flow-node-body:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  border-color: #cbd5e1;
+}
+
+/* Selected state — applied by Foblex on the host fNode element */
+.f-selected .mj-flow-node-body {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25), 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Status variants */
+.mj-flow-node-body--start {
+  border: 2px solid #10b981;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 40%);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12), 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.mj-flow-node-body--start:hover {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 4px 16px rgba(16, 185, 129, 0.2);
+}
+
+.f-selected .mj-flow-node-body--start {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3), 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.mj-flow-node-body--disabled {
+  opacity: 0.5;
+  filter: grayscale(0.5);
+}
+
+.mj-flow-node-body--pending {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.mj-flow-node-body--running {
+  border-color: #3b82f6;
+  animation: mj-flow-node-pulse 1.5s ease-in-out infinite;
+}
+
+.mj-flow-node-body--warning {
+  border: 2px solid #ea580c;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 40%);
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.15), 0 2px 8px rgba(234, 88, 12, 0.1);
+}
+
+.mj-flow-node-body--warning:hover {
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.25), 0 4px 16px rgba(234, 88, 12, 0.15);
+}
+
+.f-selected .mj-flow-node-body--warning {
+  border-color: #ea580c;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.3), 0 4px 12px rgba(234, 88, 12, 0.15);
+}
+
+.mj-flow-node-body--error {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.mj-flow-node-body--success {
+  border-color: #10b981;
+}
+
+/* Color accent bar at top */
+.mj-flow-node-accent {
+  height: 3px;
+  width: 100%;
+}
+
+/* Header row */
+.mj-flow-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 4px;
+  gap: 8px;
+}
+
+.mj-flow-node-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.mj-flow-node-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mj-flow-node-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.mj-flow-node-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.mj-flow-node-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.mj-flow-node-start-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  line-height: 1.4;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+}
+
+/* Status indicator */
+.mj-flow-node-status {
+  font-size: 12px;
+}
+
+.mj-flow-node-status--success { color: #10b981; }
+.mj-flow-node-status--error { color: #ef4444; }
+.mj-flow-node-status--warning { color: #ea580c; }
+.mj-flow-node-status--running { color: #3b82f6; }
+.mj-flow-node-status--disabled { color: #94a3b8; }
+.mj-flow-node-status--pending { color: #f59e0b; }
+
+/* Subtitle line */
+.mj-flow-node-subtitle {
+  padding: 0 12px 2px;
+  font-size: 12px;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+/* Type badge */
+.mj-flow-node-type-badge {
+  padding: 2px 12px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.7;
+}
+
+/* Warning banner — inline alert on misconfigured nodes */
+.mj-flow-node-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 2px 8px 6px;
+  padding: 4px 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #c2410c;
+  line-height: 1.3;
+}
+
+.mj-flow-node-warning-banner i {
+  font-size: 10px;
+  flex-shrink: 0;
+  color: #ea580c;
+}
+
+.mj-flow-node-warning-banner span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Badges row */
+.mj-flow-node-badges {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px 8px;
+  flex-wrap: wrap;
+}
+
+.mj-flow-node-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+
+.mj-flow-node-badge i {
+  font-size: 9px;
+}
+
+/* ============================================================
+   Loop Node — distinctive container for ForEach/While
+   ============================================================ */
+
+.mj-flow-node-body--loop {
+  min-width: 230px;
+  max-width: 300px;
+  border-width: 2px;
+  border-style: solid;
+  border-image: none;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 30%);
+}
+
+.mj-flow-node-body--loop:hover {
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.12), 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.f-selected .mj-flow-node-body--loop {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25), 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Loop section container */
+.mj-flow-loop-section {
+  padding: 0 10px 8px;
+}
+
+/* Iteration summary (e.g., "over items" / "while condition") */
+.mj-flow-loop-iteration {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 0 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #92400e;
+  letter-spacing: 0.2px;
+}
+
+.mj-flow-loop-iteration-icon {
+  font-size: 9px;
+  color: #d97706;
+}
+
+.mj-flow-loop-max {
+  color: #b45309;
+  opacity: 0.7;
+}
+
+/* Inner body card — the "iterated operation" */
+.mj-flow-loop-body {
+  border: 1.5px dashed #d1d5db;
+  border-radius: 7px;
+  background: #ffffff;
+  transition: border-color 0.15s ease;
+}
+
+.mj-flow-loop-body:not(.mj-flow-loop-body--empty) {
+  border-color: #e5e7eb;
+  background: linear-gradient(180deg, #fafafa 0%, #ffffff 100%);
+}
+
+.mj-flow-loop-body-inner {
+  padding: 6px 10px;
+}
+
+.mj-flow-loop-body-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.mj-flow-loop-body-header i {
+  font-size: 11px;
+}
+
+.mj-flow-loop-body-type {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.mj-flow-loop-body-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 17px;
+  line-height: 1.4;
+}
+
+.mj-flow-loop-body-name--empty {
+  color: #9ca3af;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Empty body card — no body type selected */
+.mj-flow-loop-body--empty {
+  border-color: #fbbf24;
+  border-style: dashed;
+  background: #fffef5;
+}
+
+.mj-flow-loop-body-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #b45309;
+}
+
+.mj-flow-loop-body-empty i {
+  font-size: 11px;
+  color: #d97706;
+}
+
+/* Item variable badge */
+.mj-flow-loop-variable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+  font-size: 9px;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+.mj-flow-loop-variable i {
+  font-size: 8px;
+  color: #9ca3af;
+}
+
+/* ============================================================
+   Ports (Input/Output connectors)
+   ============================================================ */
+
+.mj-flow-node-port {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #94a3b8;
+  z-index: 10;
+  transition: border-color 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+  cursor: crosshair;
+}
+
+.mj-flow-node-port:hover {
+  border-color: #3b82f6;
+  transform: scale(1.3);
+  background: #eff6ff;
+}
+
+/* Position based on side */
+.mj-flow-node-port--top {
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.mj-flow-node-port--top:hover {
+  transform: translateX(-50%) scale(1.3);
+}
+
+.mj-flow-node-port--bottom {
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.mj-flow-node-port--bottom:hover {
+  transform: translateX(-50%) scale(1.3);
+}
+
+.mj-flow-node-port--left {
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.mj-flow-node-port--left:hover {
+  transform: translateY(-50%) scale(1.3);
+}
+
+.mj-flow-node-port--right {
+  right: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.mj-flow-node-port--right:hover {
+  transform: translateY(-50%) scale(1.3);
+}
+
+/* Disabled port */
+.mj-flow-node-port.f-node-input-disabled,
+.mj-flow-node-port.f-node-output-disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+
+@keyframes mj-flow-node-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+  }
+}

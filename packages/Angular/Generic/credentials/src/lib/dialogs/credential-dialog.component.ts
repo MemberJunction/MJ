@@ -10,10 +10,6 @@ import { CredentialEntity, CredentialTypeEntity } from '@memberjunction/core-ent
 import { RunView } from '@memberjunction/core';
 import { CredentialEditPanelComponent } from '../panels/credential-edit-panel/credential-edit-panel.component';
 
-export function LoadCredentialDialog() {
-    // Prevents tree-shaking
-}
-
 /**
  * Configuration options for opening the credential dialog
  */
@@ -45,6 +41,7 @@ export interface CredentialDialogResult {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-dialog',
     template: `
         @if (Visible) {

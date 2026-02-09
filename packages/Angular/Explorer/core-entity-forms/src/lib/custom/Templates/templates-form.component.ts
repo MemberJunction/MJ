@@ -15,6 +15,7 @@ import { TemplateEditorConfig } from '../../shared/components/template-editor.co
 
 @RegisterClass(BaseFormComponent, 'Templates') 
 @Component({
+  standalone: false,
     selector: 'mj-templates-form',
     templateUrl: './templates-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './templates-form.component.css']
@@ -270,18 +271,12 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     }
 
     async deleteTemplateContent(index: number) {
-        console.log('deleteTemplateContent called with index:', index);
-        console.log('templateContents length:', this.templateContents.length);
-        
         if (index >= 0 && index < this.templateContents.length) {
             const contentToDelete = this.templateContents[index];
-            console.log('Content to delete:', contentToDelete);
-            
+
             if (contentToDelete.ID) {
                 try {
-                    console.log('Attempting to delete content with ID:', contentToDelete.ID);
                     const result = await contentToDelete.Delete();
-                    console.log('Delete result:', result);
                     if (result) {
                         this.templateContents.splice(index, 1);
                         
@@ -294,7 +289,6 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                         if (this.templateContents.length === 0) {
                             await this.createDefaultTemplateContent();
                         }
-                        console.log('Content deleted successfully');
                     } else {
                         console.error('Delete returned false');
                         MJNotificationService.Instance.CreateSimpleNotification(`Failed to delete template content. ${contentToDelete.LatestResult.CompleteMessage}`, 'error');
@@ -304,7 +298,6 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                 }
             } else {
                 // Not saved yet, just remove from array
-                console.log('Removing unsaved content from array');
                 this.templateContents.splice(index, 1);
                 if (this.selectedContentIndex >= this.templateContents.length) {
                     this.selectedContentIndex = Math.max(0, this.templateContents.length - 1);
@@ -315,13 +308,11 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                     this.isAddingNewContent = false;
                     this.newTemplateContent = null;
                 }
-                console.log('Unsaved content removed successfully');
             }
         } else {
             console.error('Invalid index for deletion:', index);
         }
     }
-
 
     get currentTemplateContent(): TemplateContentEntity | null {
         if (this.isAddingNewContent) {
@@ -392,8 +383,6 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
             // Then tracked setTimeout for the next macrotask to ensure DOM is updated
             this.setTrackedTimeout(() => {
                 if (!this.codeEditor) {
-                    console.log('Code editor ViewChild is null - element may not be rendered yet');
-                    console.log('currentTemplateContent exists:', !!this.currentTemplateContent);
                     return;
                 }
                 
@@ -498,7 +487,6 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         return false;
     }
 
-
     getContentTypeDisplayText(typeId: string): string {
         if (!typeId) return '-';
         const option = this.contentTypeOptions.find(opt => opt.value === typeId);
@@ -600,7 +588,3 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     }
 
 } 
-
-export function LoadTemplatesFormExtendedComponent() {
-    // prevents tree shaking
-}

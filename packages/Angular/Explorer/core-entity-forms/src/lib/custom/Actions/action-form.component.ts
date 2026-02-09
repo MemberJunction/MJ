@@ -1,5 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, ElementRef, inject, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, inject, ViewContainerRef } from '@angular/core';
 import { ActionEntity, ActionParamEntity, ActionResultCodeEntity, ActionCategoryEntity, ActionExecutionLogEntity, ActionLibraryEntity, LibraryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -11,6 +10,7 @@ import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@me
 
 @RegisterClass(BaseFormComponent, 'Actions')
 @Component({
+  standalone: false,
     selector: 'mj-action-form',
     templateUrl: './action-form.component.html',
     styleUrls: ['./action-form.component.css']
@@ -69,16 +69,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     
     private dialogService = inject(DialogService);
     private viewContainerRef = inject(ViewContainerRef);
-    
-    constructor(
-        elementRef: ElementRef,
-        sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        public cdr: ChangeDetectorRef
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-    }
+    private sharedService = inject(SharedService);
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -249,7 +240,6 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             this._outputParams = [];
         } finally {
             this.isLoadingParams = false;
-            this.cdr.detectChanges(); // Force change detection
         }
     }
 
@@ -942,9 +932,4 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.updateParamArrays();
         this.cdr.detectChanges();
     }
-}
-
-// Loader function required for the component to be properly registered
-export function LoadActionFormComponentExtended() {
-    // This function is called to ensure the form is loaded and registered
 }

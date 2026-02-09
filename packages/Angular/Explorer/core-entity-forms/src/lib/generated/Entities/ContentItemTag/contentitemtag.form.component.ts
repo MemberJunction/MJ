@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Content Item Tags') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-contentitemtag-form',
     templateUrl: './contentitemtag.form.component.html'
 })
@@ -20,6 +21,3 @@ export class ContentItemTagFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadContentItemTagFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

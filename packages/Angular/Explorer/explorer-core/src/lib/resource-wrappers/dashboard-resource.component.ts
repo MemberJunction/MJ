@@ -5,10 +5,6 @@ import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { DataExplorerDashboardComponent, DataExplorerFilter, ShareDialogResult } from '@memberjunction/ng-dashboards';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
-
-export function LoadDashboardResource() {
-}
-
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
  * Extends BaseResourceComponent to work with the resource type system
@@ -16,6 +12,7 @@ export function LoadDashboardResource() {
  */
 @RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-resource',
     template: `
         <div class="dashboard-resource-wrapper">
@@ -717,7 +714,6 @@ export class DashboardResource extends BaseResourceComponent {
                 this.NotifyLoadComplete();
             };
 
-
             // Initialize dashboard (no database config needed for DataExplorer)
             const config: DashboardConfig = {
                 dashboard: null as unknown as DashboardEntity, // No database record
@@ -758,7 +754,6 @@ export class DashboardResource extends BaseResourceComponent {
             this.containerElement.nativeElement.innerHTML = '';
             this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
             const instance = this.componentRef.instance as BaseDashboard;
-
 
             // Setup LoadCompleteEvent() to know when the dashboard is ready
             instance.LoadCompleteEvent = () => {
@@ -810,8 +805,6 @@ export class DashboardResource extends BaseResourceComponent {
             this.NotifyLoadComplete();
         }
     }
-
-
 
     protected async loadDashboardUserState(dashboardId: string): Promise<DashboardUserStateEntity> {
         // handle user state changes for the dashboard

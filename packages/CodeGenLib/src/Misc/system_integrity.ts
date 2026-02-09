@@ -1,4 +1,4 @@
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { logError, logStatus } from "./status_logging";
 import { configInfo, mj_core_schema } from "../Config/config";
 

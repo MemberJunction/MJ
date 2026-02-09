@@ -4,11 +4,6 @@ import { ResourceData, CredentialEntity, CredentialTypeEntity, CredentialCategor
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
-
-export function LoadCredentialsOverviewResource() {
-    // Prevents tree-shaking
-}
-
 interface CategoryStat {
     category: string;
     categoryId: string;
@@ -46,6 +41,7 @@ interface UsageTrendPoint {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsOverviewResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-overview-resource',
     templateUrl: './credentials-overview-resource.component.html',
     styleUrls: ['./credentials-overview-resource.component.css'],

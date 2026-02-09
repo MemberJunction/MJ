@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Company Integration Record Maps') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-companyintegrationrecordmap-form',
     templateUrl: './companyintegrationrecordmap.form.component.html'
 })
@@ -21,6 +22,3 @@ export class CompanyIntegrationRecordMapFormComponent extends BaseFormComponent 
     }
 }
 
-export function LoadCompanyIntegrationRecordMapFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

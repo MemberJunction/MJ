@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Company Integration Run Details') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-companyintegrationrundetail-form',
     templateUrl: './companyintegrationrundetail.form.component.html'
 })
@@ -24,6 +25,3 @@ export class CompanyIntegrationRunDetailFormComponent extends BaseFormComponent 
     }
 }
 
-export function LoadCompanyIntegrationRunDetailFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

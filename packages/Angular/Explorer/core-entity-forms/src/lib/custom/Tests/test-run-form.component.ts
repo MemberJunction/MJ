@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, ViewContainerRef, inject } from '@angular/core';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
@@ -28,6 +27,7 @@ interface CheckResult {
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Runs')
 @Component({
+  standalone: false,
   selector: 'mj-test-run-form',
   templateUrl: './test-run-form.component.html',
   styleUrls: ['./test-run-form.component.css'],
@@ -75,18 +75,11 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
   savingTags = false;
   private originalTags: string[] = [];
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService,
-    private appManager: ApplicationManager,
-    private viewContainerRef: ViewContainerRef
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
+  // Service injections
+  private navigationService = inject(NavigationService);
+  private testingDialogService = inject(TestingDialogService);
+  private appManager = inject(ApplicationManager);
+  private viewContainerRef = inject(ViewContainerRef);
 
   async ngOnInit() {
     await super.ngOnInit();
@@ -564,9 +557,3 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
     return d.toLocaleDateString();
   }
 }
-
-export function LoadTestRunFormComponentExtended() {
-  // Prevents tree-shaking
-}
-
-LoadTestRunFormComponentExtended();

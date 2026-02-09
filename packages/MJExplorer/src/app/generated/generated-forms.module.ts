@@ -26,26 +26,57 @@ import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
-
+import { vwCustomerOrderSummaryFormComponent } from "./Entities/vwCustomerOrderSummary/vwcustomerordersummary.form.component";
+import { CustomerFormComponent } from "./Entities/Customer/customer.form.component";
+import { MeetingFormComponent } from "./Entities/Meeting/meeting.form.component";
+import { OrderFormComponent } from "./Entities/Order/order.form.component";
+import { ProductFormComponent } from "./Entities/Product/product.form.component";
+import { PublicationFormComponent } from "./Entities/Publication/publication.form.component";
+import { WebinarFormComponent } from "./Entities/Webinar/webinar.form.component";
    
 
+@NgModule({
+declarations: [
+    vwCustomerOrderSummaryFormComponent,
+    CustomerFormComponent,
+    MeetingFormComponent,
+    OrderFormComponent,
+    ProductFormComponent,
+    PublicationFormComponent,
+    WebinarFormComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    EntityViewerModule,
+    LinkDirectivesModule,
+    BaseFormsModule,
+    FormToolbarModule,
+    MJTabStripModule,
+    ContainerDirectivesModule,
+    DropDownListModule,
+    ComboBoxModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_0 { }
+    
 
 
 @NgModule({
 declarations: [
 ],
 imports: [
-    
+    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }
     
-export function LoadGeneratedForms() {
-    // This function doesn't do much, but it calls each generated form's loader function
-    // which in turn calls the sections for that generated form. Ultimately, those bits of
-    // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
-    // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
-    // in production builds tree shaking will eliminate the code unless we do this
-    
-}
+// Note: LoadXXXGeneratedForms() functions have been removed. Tree-shaking prevention
+// is now handled by the pre-built class registration manifest system.
+// See packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md for details.
     

@@ -293,8 +293,3 @@ export type AIPromptConfig = {
 //     models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
 //     return models[0];
 // }
-
-
-export function LoadAIPromptExtension() {
-    // does nothing just to ensure the extension class isn't tree-shaken
-}

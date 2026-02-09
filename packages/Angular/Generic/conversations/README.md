@@ -1,197 +1,329 @@
 # @memberjunction/ng-conversations
 
-Angular package for conversation, collection, and artifact management built on MemberJunction.
+A comprehensive Angular component library for building conversation-based interfaces in MemberJunction, including messaging, artifact management, collections, projects, tasks, agent interaction panels, and collaboration features.
 
-## Status: Foundation Complete ✅
+## Overview
 
-This package provides the core infrastructure for building Slack-style conversation interfaces with artifacts and collections. The initial implementation includes:
+The `@memberjunction/ng-conversations` package is a large, feature-rich module that powers MemberJunction's conversation UI. It provides 40+ components covering the entire conversation lifecycle: message composition and rendering (with markdown, mentions, code blocks, and artifacts), conversation navigation and history, threaded discussions, artifact collections and libraries, project/task management, agent execution panels, sharing/permission modals, search, notifications, and export.
 
-### ✅ Completed
+```mermaid
+graph TD
+    A[ConversationsModule] --> B[Messaging]
+    A --> C[Navigation]
+    A --> D[Collections & Library]
+    A --> E[Agent & Tasks]
+    A --> F[Collaboration]
 
-#### Core Services
-- **ConversationDataService** - CRUD operations for conversations with reactive state
-- **MessageDataService** - Message management with caching
-- **ArtifactDataService** - Artifact and version management
-- **ProjectDataService** - Project organization
-- **CollectionDataService** - Collection and artifact organization
-- **ConversationStateService** - Reactive state management for conversations
-- **ArtifactStateService** - Reactive state management for artifacts
+    B --> B1[MessageItemComponent]
+    B --> B2[MessageListComponent]
+    B --> B3[MessageInputComponent]
+    B --> B4[MentionEditorComponent]
+    B --> B5[SuggestedResponsesComponent]
+    B --> B6[ConversationMessageRatingComponent]
 
-#### Components
-- **MessageItemComponent** - Individual message display with dynamic rendering
-- **MessageListComponent** - Efficient message list using ViewContainerRef.createComponent()
+    C --> C1[ConversationWorkspaceComponent]
+    C --> C2[ConversationNavigationComponent]
+    C --> C3[ConversationSidebarComponent]
+    C --> C4[ConversationListComponent]
+    C --> C5[ConversationChatAreaComponent]
+    C --> C6[ThreadPanelComponent]
 
-#### Models
-- TypeScript interfaces for all state management types
-- Union types for navigation tabs, layouts, and view modes
+    D --> D1[CollectionTreeComponent]
+    D --> D2[CollectionViewComponent]
+    D --> D3[LibraryFullViewComponent]
+    D --> D4[ArtifactCreateModalComponent]
 
-### 🎯 Key Features
+    E --> E1[AgentProcessPanelComponent]
+    E --> E2[ActiveAgentIndicatorComponent]
+    E --> E3[TasksFullViewComponent]
+    E --> E4[GlobalTasksPanelComponent]
 
-1. **Performance Optimized**
-   - Uses dynamic component creation (ViewContainerRef.createComponent) instead of Angular template binding
-   - Follows the proven pattern from @memberjunction/ng-skip-chat
-   - Dramatically reduces render cycles and improves performance
+    F --> F1[ShareModalComponent]
+    F --> F2[MembersModalComponent]
+    F --> F3[ExportModalComponent]
+    F --> F4[SearchPanelComponent]
 
-2. **MJ Entity Integration**
-   - All services use Metadata.GetEntityObject() pattern
-   - RunView for efficient data loading
-   - Proper type safety with generic methods
-
-3. **Reactive State Management**
-   - RxJS BehaviorSubjects for all state
-   - Derived observables using combineLatest
-   - shareReplay(1) for efficient caching
-
-4. **Proper User Context**
-   - All server-side operations include contextUser parameter
-   - Follows MJ security patterns
-
-### 📦 Installation
-
-This package is part of the MemberJunction monorepo. It's installed via npm workspaces:
-
-```bash
-# From repo root
-npm install
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#b8762f,stroke:#8a5722,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
+    style F fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
-### 🔧 Usage Example
+## Installation
+
+```bash
+npm install @memberjunction/ng-conversations
+```
+
+## Usage
+
+### Import the Module
 
 ```typescript
-import {
-  ConversationDataService,
-  MessageDataService,
-  ConversationStateService,
-  MessageListComponent
-} from '@memberjunction/ng-conversations';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 
-// In your component
-constructor(
-  private conversationData: ConversationDataService,
-  private conversationState: ConversationStateService,
-  private currentUser: UserInfo
-) {}
-
-async ngOnInit() {
-  // Load conversations
-  const conversations = await this.conversationData.loadConversations(
-    environmentId,
-    this.currentUser
-  );
-
-  // Set active conversation
-  this.conversationState.setActiveConversation(conversations[0].ID);
-
-  // Subscribe to state changes
-  this.conversationState.activeConversation$.subscribe(conv => {
-    console.log('Active conversation changed:', conv);
-  });
-}
+@NgModule({
+  imports: [ConversationsModule]
+})
+export class YourModule { }
 ```
 
-### 📁 Package Structure
+### Full Conversation Workspace
 
-```
-src/
-├── lib/
-│   ├── components/
-│   │   └── message/                  # Message display components
-│   │       ├── message-item.component.ts
-│   │       ├── message-item.component.html
-│   │       ├── message-item.component.css
-│   │       ├── message-list.component.ts
-│   │       ├── message-list.component.html
-│   │       └── message-list.component.css
-│   ├── services/
-│   │   ├── conversation-data.service.ts      # Conversation CRUD
-│   │   ├── message-data.service.ts           # Message CRUD
-│   │   ├── artifact-data.service.ts          # Artifact & versions
-│   │   ├── project-data.service.ts           # Project management
-│   │   ├── collection-data.service.ts        # Collections
-│   │   ├── conversation-state.service.ts     # Conversation state
-│   │   └── artifact-state.service.ts         # Artifact state
-│   ├── models/
-│   │   └── conversation-state.model.ts       # TypeScript interfaces
-│   └── conversations.module.ts
-└── public-api.ts
+The top-level workspace component provides a complete conversation experience with sidebar, chat area, and thread panel:
+
+```html
+<mj-conversation-workspace
+  [conversationId]="selectedConversationId"
+  (conversationChanged)="onConversationChanged($event)">
+</mj-conversation-workspace>
 ```
 
-### 🚀 Next Steps
+### Chat Area
 
-To complete the full implementation as per the prototype:
+The chat area handles message display, input, and agent interactions:
 
-1. **Layout Components**
-   - ConversationWorkspaceComponent (3-column layout)
-   - ConversationNavigationComponent (top nav bar)
-   - ConversationSidebarComponent (left sidebar with tabs)
+```html
+<mj-conversation-chat-area
+  [conversationId]="conversationId"
+  [conversation]="conversation"
+  [threadId]="selectedThreadId"
+  [isNewConversation]="isNewConversation"
+  (conversationCreated)="onConversationCreated($event)"
+  (threadOpened)="onThreadOpened($event)"
+  (threadClosed)="onThreadClosed()">
+</mj-conversation-chat-area>
+```
 
-2. **Conversation Components**
-   - ConversationListComponent (with grouping/filtering)
-   - ConversationItemComponent (list item with badges)
-   - ConversationChatAreaComponent (main chat interface)
-   - MessageInputComponent (rich text input)
+### Message Components
 
-3. **Artifact Components**
-   - ArtifactPanelComponent (right panel)
-   - ArtifactViewerComponent (type-specific rendering)
-   - ArtifactEditorComponent (edit mode)
-   - ArtifactVersionHistoryComponent (version timeline)
-   - ArtifactShareModalComponent (sharing UI)
+#### Message List
 
-4. **Collection Components**
-   - CollectionTreeComponent (hierarchical tree)
-   - CollectionViewComponent (grid/list view)
-   - CollectionModalComponent (management UI)
+```html
+<mj-message-list
+  [messages]="conversationMessages"
+  [isLoading]="isLoadingMessages"
+  (messageRated)="onMessageRated($event)">
+</mj-message-list>
+```
 
-5. **Project & Task Components**
-   - ProjectListComponent
-   - ProjectSelectorComponent
-   - TaskListComponent
-   - TaskItemComponent
-   - AgentProcessPanelComponent (floating panel)
+#### Message Input with Mentions
 
-6. **Explorer Integration**
-   - Add `/chat` route to explorer-core
-   - Create wrapper components
-   - Integrate with Explorer navigation
+```html
+<mj-message-input
+  [conversationId]="conversationId"
+  [allowSend]="!isProcessing"
+  (messageSent)="onMessageSent($event)">
+</mj-message-input>
+```
 
-### 🧪 Testing
+#### Mention Editor
+
+```html
+<mj-mention-editor
+  [mentionSources]="availableMentionSources"
+  (mentionSelected)="onMentionSelected($event)">
+</mj-mention-editor>
+```
+
+### Collections and Library
+
+```html
+<!-- Collection tree for organizing artifacts -->
+<mj-collection-tree
+  [projectId]="currentProjectId"
+  (collectionSelected)="onCollectionSelected($event)">
+</mj-collection-tree>
+
+<!-- Full library view -->
+<mj-library-full-view
+  [projectId]="currentProjectId">
+</mj-library-full-view>
+```
+
+### Project and Task Management
+
+```html
+<!-- Project selector -->
+<mj-project-selector
+  [currentProjectId]="projectId"
+  (projectChanged)="onProjectChanged($event)">
+</mj-project-selector>
+
+<!-- Tasks view -->
+<mj-tasks-full-view
+  [projectId]="currentProjectId">
+</mj-tasks-full-view>
+```
+
+### Agent Components
+
+```html
+<!-- Agent execution panel -->
+<mj-agent-process-panel
+  [agentRunId]="activeRunId">
+</mj-agent-process-panel>
+
+<!-- Active agent indicator -->
+<mj-active-agent-indicator
+  [isActive]="agentIsRunning">
+</mj-active-agent-indicator>
+```
+
+### Collaboration
+
+```html
+<!-- Share modal -->
+<mj-share-modal
+  [visible]="showShareModal"
+  [resourceId]="resourceId"
+  [resourceType]="'conversation'"
+  (closed)="onShareClosed()">
+</mj-share-modal>
+
+<!-- Export modal -->
+<mj-export-modal
+  [visible]="showExportModal"
+  [conversationId]="conversationId"
+  (exported)="onExported($event)">
+</mj-export-modal>
+```
+
+## Component Reference
+
+### Messaging Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `MessageItemComponent` | `mj-message-item` | Single message display with markdown, artifacts, and rating |
+| `MessageListComponent` | `mj-message-list` | Scrollable message list with auto-scroll |
+| `MessageInputComponent` | `mj-message-input` | Message input with attachment support |
+| `MessageInputBoxComponent` | `mj-message-input-box` | Core input box with auto-resize |
+| `SuggestedResponsesComponent` | `mj-suggested-responses` | Quick response buttons |
+| `FormQuestionComponent` | `mj-form-question` | Structured form input within conversations |
+| `AgentResponseFormComponent` | `mj-agent-response-form` | Agent-generated form responses |
+| `ActionableCommandsComponent` | `mj-actionable-commands` | Clickable command suggestions |
+| `MentionDropdownComponent` | `mj-mention-dropdown` | @-mention autocomplete dropdown |
+| `MentionEditorComponent` | `mj-mention-editor` | Rich text input with mention support |
+| `ConversationMessageRatingComponent` | `mj-conversation-message-rating` | Message feedback (thumbs up/down) |
+
+### Navigation Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `ConversationWorkspaceComponent` | `mj-conversation-workspace` | Full workspace layout |
+| `ConversationNavigationComponent` | `mj-conversation-navigation` | Top-level navigation |
+| `ConversationSidebarComponent` | `mj-conversation-sidebar` | Left sidebar with conversation list |
+| `ConversationListComponent` | `mj-conversation-list` | Scrollable conversation history |
+| `ConversationChatAreaComponent` | `mj-conversation-chat-area` | Main chat area |
+| `ConversationEmptyStateComponent` | `mj-conversation-empty-state` | Empty state display |
+| `ThreadPanelComponent` | `mj-thread-panel` | Threaded discussion panel |
+
+### Collection and Library Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `CollectionTreeComponent` | `mj-collection-tree` | Hierarchical collection browser |
+| `CollectionViewComponent` | `mj-collection-view` | Collection detail view |
+| `CollectionArtifactCardComponent` | `mj-collection-artifact-card` | Artifact card within collections |
+| `LibraryFullViewComponent` | `mj-library-full-view` | Full library interface |
+| `CollectionFormModalComponent` | `mj-collection-form-modal` | Create/edit collection |
+| `ArtifactCreateModalComponent` | `mj-artifact-create-modal` | Create new artifact |
+| `CollectionsFullViewComponent` | `mj-collections-full-view` | All collections browser |
+
+### Project and Task Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `ProjectSelectorComponent` | `mj-project-selector` | Project selection dropdown |
+| `ProjectFormModalComponent` | `mj-project-form-modal` | Create/edit project |
+| `TasksFullViewComponent` | `mj-tasks-full-view` | Full tasks management view (standalone) |
+| `TasksDropdownComponent` | `mj-tasks-dropdown` | Task quick-access dropdown |
+| `TaskWidgetComponent` | `mj-task-widget` | Compact task widget |
+| `GlobalTasksPanelComponent` | `mj-global-tasks-panel` | Global tasks panel |
+
+### Agent Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `AgentProcessPanelComponent` | `mj-agent-process-panel` | Agent execution panel |
+| `ActiveAgentIndicatorComponent` | `mj-active-agent-indicator` | Active processing indicator |
+| `ActiveTasksPanelComponent` | `mj-active-tasks-panel` | Active tasks panel |
+
+### Utility Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `ShareModalComponent` | `mj-share-modal` | Resource sharing modal |
+| `MembersModalComponent` | `mj-members-modal` | Members management |
+| `ExportModalComponent` | `mj-export-modal` | Data export modal |
+| `SearchPanelComponent` | `mj-search-panel` | Search across conversations |
+| `NotificationBadgeComponent` | `mj-notification-badge` | Unread notification count |
+| `ActivityIndicatorComponent` | `mj-activity-indicator` | Active processing indicator |
+| `ToastComponent` | `mj-toast` | Toast notification display |
+| `InputDialogComponent` | `mj-input-dialog` | Generic text input dialog |
+| `ImageViewerComponent` | `mj-image-viewer` | Image attachment viewer |
+
+## Directives
+
+| Directive | Selector | Description |
+|-----------|----------|-------------|
+| `SearchShortcutDirective` | `[mjSearchShortcut]` | Keyboard shortcut for search |
+
+## Key Design Patterns
+
+### Performance Optimization
+
+Message components use dynamic component creation (`ViewContainerRef.createComponent`) instead of Angular template binding to minimize render cycles and improve performance with large message lists.
+
+### MJ Entity Integration
+
+All data operations use the MemberJunction entity system:
+- `Metadata.GetEntityObject()` for entity creation
+- `RunView` for efficient data loading
+- Proper generic typing throughout
+
+### Reactive State Management
+
+RxJS `BehaviorSubject` instances for all state, with derived observables using `combineLatest` and `shareReplay(1)` for efficient caching.
+
+## Dependencies
+
+### MemberJunction Packages
+
+| Package | Description |
+|---------|-------------|
+| `@memberjunction/core` | Core framework |
+| `@memberjunction/core-entities` | Entity type definitions |
+| `@memberjunction/global` | Global utilities |
+| `@memberjunction/graphql-dataprovider` | GraphQL data access |
+| `@memberjunction/ng-artifacts` | Artifact viewer components |
+| `@memberjunction/ng-code-editor` | Code editor component |
+| `@memberjunction/ng-container-directives` | Container directives |
+| `@memberjunction/ng-markdown` | Markdown rendering |
+| `@memberjunction/ng-shared-generic` | Shared generic components |
+| `@memberjunction/ng-testing` | Testing framework components |
+
+### Kendo UI Packages
+
+Uses `@progress/kendo-angular-dialog`, `@progress/kendo-angular-buttons`, `@progress/kendo-angular-inputs`, `@progress/kendo-angular-layout`, `@progress/kendo-angular-indicators`, `@progress/kendo-angular-dropdowns`, `@progress/kendo-angular-notification`, `@progress/kendo-angular-upload`, `@progress/kendo-angular-dateinputs`.
+
+### Peer Dependencies
+
+- `@angular/common` ^21.x
+- `@angular/core` ^21.x
+- `@angular/forms` ^21.x
+- `@angular/router` ^21.x
+
+## Build
 
 ```bash
-# Compile the package
 cd packages/Angular/Generic/conversations
 npm run build
-
-# Run from repo root
-npm run build:conversations
 ```
 
-### 📝 Notes
+## License
 
-- **No Commits**: This code has NOT been committed. Review required before committing.
-- **Dynamic Rendering**: The message components use ViewContainerRef.createComponent() to avoid Angular binding overhead - this is CRITICAL for performance.
-- **Type Safety**: All services use proper MJ entity types and generic methods.
-- **Caching**: Message data is cached per conversation to minimize database hits.
-
-### 🔗 Dependencies
-
-- @memberjunction/core ^2.101.0
-- @memberjunction/core-entities ^2.101.0
-- @memberjunction/global ^2.101.0
-- @memberjunction/graphql-dataprovider ^2.101.0
-- @memberjunction/ng-base-types ^2.101.0
-- @progress/kendo-angular-* ^16.2.0
-- @angular/* ^18.0.2
-- @memberjunction/ng-markdown ^2.125.0
-- marked ^9.1.6
-
-### 📚 References
-
-- Implementation Plan: See comprehensive plan created during initial analysis
-- Prototype: `/v3_conversations/slack-style-agent-chat-v22.html`
-- Entity Schema: `/v3_conversations/schema.sql`
-- Skip Chat Pattern: `packages/Angular/Generic/skip-chat/`
-
----
-
-**Built with MemberJunction** | Version 2.101.0
+ISC

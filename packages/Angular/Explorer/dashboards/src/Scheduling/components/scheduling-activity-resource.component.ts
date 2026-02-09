@@ -2,19 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadSchedulingActivityResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Scheduling Activity Resource - displays execution history, trends, and job type statistics
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingActivityResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-activity-resource',
   template: `
     <div class="resource-container">

@@ -1,5 +1,46 @@
 # @memberjunction/ai-provider-bundle
 
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [8366d44]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/ai-anthropic@4.0.0
+  - @memberjunction/ai-azure@4.0.0
+  - @memberjunction/ai-bedrock@4.0.0
+  - @memberjunction/ai-betty-bot@4.0.0
+  - @memberjunction/ai-blackforestlabs@4.0.0
+  - @memberjunction/ai-cerebras@4.0.0
+  - @memberjunction/ai-cohere@4.0.0
+  - @memberjunction/ai-elevenlabs@4.0.0
+  - @memberjunction/ai-fireworks@4.0.0
+  - @memberjunction/ai-gemini@4.0.0
+  - @memberjunction/ai-groq@4.0.0
+  - @memberjunction/ai-heygen@4.0.0
+  - @memberjunction/ai-lmstudio@4.0.0
+  - @memberjunction/ai-local-embeddings@4.0.0
+  - @memberjunction/ai-mistral@4.0.0
+  - @memberjunction/ai-ollama@4.0.0
+  - @memberjunction/ai-openai@4.0.0
+  - @memberjunction/ai-openrouter@4.0.0
+  - @memberjunction/ai-recommendations-rex@4.0.0
+  - @memberjunction/ai-vectors-pinecone@4.0.0
+  - @memberjunction/ai-vertex@4.0.0
+  - @memberjunction/ai-xai@4.0.0
+
 ## 3.4.0
 
 ### Patch Changes

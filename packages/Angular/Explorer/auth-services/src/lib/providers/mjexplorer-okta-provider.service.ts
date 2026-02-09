@@ -11,11 +11,6 @@ import {
   AuthErrorType,
   TokenRefreshResult
 } from '../auth-types';
-
-// Prevent tree-shaking by explicitly referencing the class
-export function LoadMJOktaProvider() {
-}
-
 /**
  * Okta authentication provider implementation - v3.0.0
  *

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { UserEntity } from '@memberjunction/core-entities';
@@ -15,7 +15,7 @@ export interface UserSearchResult {
 @Component({
     selector: 'mj-user-picker',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [FormsModule],
     template: `
         <div class="user-picker">
             <div class="search-input-wrapper">

@@ -858,10 +858,3 @@ export class CreateSVGSketchDiagramAction extends BaseAction {
         }
     }
 }
-
-/**
- * Loader function to ensure the CreateSVGSketchDiagramAction class is included in the bundle.
- */
-export function LoadCreateSVGSketchDiagramAction() {
-    // Stub function to prevent tree-shaking
-}

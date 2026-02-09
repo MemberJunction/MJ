@@ -3,11 +3,8 @@ import { CredentialCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-export function LoadCredentialCategoryEditPanel() {
-    // Prevents tree-shaking
-}
-
 @Component({
+  standalone: false,
     selector: 'mj-credential-category-edit-panel',
     templateUrl: './credential-category-edit-panel.component.html',
     styleUrls: ['./credential-category-edit-panel.component.css'],

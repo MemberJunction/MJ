@@ -68,6 +68,7 @@ interface RecordChangeRow {
 // =========================================================================
 
 @Component({
+  standalone: false,
     selector: 'mj-label-detail-panel',
     templateUrl: './label-detail.component.html',
     styleUrls: ['./label-detail.component.css'],
@@ -932,7 +933,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     // Display helpers
     // =========================================================================
 
-    public resolveEntityName(entityId: string): string {
+    public resolveEntityName(entityId: string | null | undefined): string {
         if (!entityId) return 'Unknown';
         const entity = this.metadata.Entities.find(e => e.ID === entityId);
         return entity ? entity.Name : 'Unknown';

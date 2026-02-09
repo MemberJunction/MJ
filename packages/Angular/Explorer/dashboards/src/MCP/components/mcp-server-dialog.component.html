@@ -1,250 +1,227 @@
-<kendo-dialog
-    *ngIf="visible"
+@if (visible) {
+  <kendo-dialog
     [title]="DialogTitle"
     (close)="cancel()"
     [width]="600"
     [minWidth]="400">
-
     <form [formGroup]="serverForm" class="server-form">
-        <!-- Error Message -->
-        @if (ErrorMessage) {
-            <div class="error-banner">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                {{ ErrorMessage }}
-            </div>
-        }
-
-        <!-- Basic Info Section -->
-        <div class="form-section">
-            <h3><i class="fa-solid fa-info-circle"></i> Basic Information</h3>
-
-            <div class="form-group">
-                <label for="name">Name <span class="required">*</span></label>
-                <input kendoTextBox
-                       id="name"
-                       formControlName="Name"
-                       placeholder="e.g., GitHub MCP Server" />
-                @if (hasError('Name', 'required')) {
-                    <span class="error-text">Name is required</span>
-                }
-            </div>
-
-            <div class="form-group">
-                <label for="description">Description</label>
-                <textarea kendoTextArea
-                          id="description"
-                          formControlName="Description"
-                          placeholder="Optional description of this server"
-                          [rows]="3"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="status">Status</label>
-                <kendo-dropdownlist
-                    id="status"
-                    formControlName="Status"
-                    [data]="['Active', 'Inactive']"
-                    [valuePrimitive]="true">
-                </kendo-dropdownlist>
-            </div>
+      <!-- Error Message -->
+      @if (ErrorMessage) {
+        <div class="error-banner">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          {{ ErrorMessage }}
         </div>
-
-        <!-- Transport Section -->
-        <div class="form-section">
-            <h3><i class="fa-solid fa-network-wired"></i> Transport Configuration</h3>
-
-            <div class="form-group">
-                <label for="transportType">Transport Type <span class="required">*</span></label>
-                <kendo-dropdownlist
-                    id="transportType"
-                    formControlName="TransportType"
-                    [data]="transportTypes"
-                    textField="label"
-                    valueField="value"
-                    [valuePrimitive]="true"
-                    (valueChange)="onTransportTypeChange()">
-                    <ng-template kendoDropDownListItemTemplate let-dataItem>
-                        <div class="transport-option">
-                            <span class="transport-label">{{ dataItem.label }}</span>
-                            <span class="transport-desc">{{ dataItem.description }}</span>
-                        </div>
-                    </ng-template>
-                </kendo-dropdownlist>
-            </div>
-
-            @if (RequiresURL) {
-                <div class="form-group">
-                    <label for="serverUrl">Server URL <span class="required">*</span></label>
-                    <input kendoTextBox
-                           id="serverUrl"
-                           formControlName="ServerURL"
-                           placeholder="https://api.example.com/mcp" />
-                    @if (hasError('ServerURL', 'required')) {
-                        <span class="error-text">Server URL is required for this transport type</span>
-                    }
-                </div>
-            }
-
-            @if (RequiresCommand) {
-                <div class="form-group">
-                    <label for="command">Command <span class="required">*</span></label>
-                    <input kendoTextBox
-                           id="command"
-                           formControlName="Command"
-                           placeholder="e.g., npx or /usr/local/bin/mcp-server" />
-                    @if (hasError('Command', 'required')) {
-                        <span class="error-text">Command is required for Stdio transport</span>
-                    }
-                </div>
-
-                <div class="form-group">
-                    <label for="commandArgs">Command Arguments (JSON array)</label>
-                    <input kendoTextBox
-                           id="commandArgs"
-                           formControlName="CommandArgs"
-                           placeholder='["arg1", "arg2"]' />
-                    <span class="hint">JSON array of command line arguments</span>
-                </div>
-            }
-        </div>
-
-        <!-- Authentication Section -->
-        <div class="form-section">
-            <h3><i class="fa-solid fa-shield-halved"></i> Authentication</h3>
-
-            <div class="form-group">
-                <label for="authType">Default Auth Type</label>
-                <kendo-dropdownlist
-                    id="authType"
-                    formControlName="DefaultAuthType"
-                    [data]="authTypes"
-                    textField="label"
-                    valueField="value"
-                    [valuePrimitive]="true"
-                    (valueChange)="onAuthTypeChange()">
-                    <ng-template kendoDropDownListItemTemplate let-dataItem>
-                        <div class="auth-option">
-                            <span class="auth-label">{{ dataItem.label }}</span>
-                            <span class="auth-desc">{{ dataItem.description }}</span>
-                        </div>
-                    </ng-template>
-                </kendo-dropdownlist>
-            </div>
-        </div>
-
-        <!-- OAuth 2.0 Configuration Section (only shown when OAuth2 is selected) -->
-        @if (IsOAuth2) {
-            <div class="form-section oauth-section">
-                <h3><i class="fa-solid fa-key"></i> OAuth 2.0 Configuration</h3>
-
-                <div class="form-group">
-                    <label for="oauthIssuerUrl">OAuth Issuer URL <span class="required">*</span></label>
-                    <input kendoTextBox
-                           id="oauthIssuerUrl"
-                           formControlName="OAuthIssuerURL"
-                           placeholder="https://auth.example.com" />
-                    @if (hasError('OAuthIssuerURL', 'required')) {
-                        <span class="error-text">OAuth Issuer URL is required for OAuth 2.0 authentication</span>
-                    }
-                    <span class="hint">The authorization server's issuer URL (e.g., https://login.microsoftonline.com/tenant-id or https://your-domain.auth0.com)</span>
-                </div>
-
-                <div class="form-group">
-                    <label for="oauthScopes">OAuth Scopes</label>
-                    <input kendoTextBox
-                           id="oauthScopes"
-                           formControlName="OAuthScopes"
-                           placeholder="openid profile email" />
-                    <span class="hint">Space-separated list of OAuth scopes to request</span>
-                </div>
-
-                <div class="form-group">
-                    <label for="oauthCacheTtl">Metadata Cache TTL (minutes)</label>
-                    <kendo-numerictextbox
-                        id="oauthCacheTtl"
-                        formControlName="OAuthMetadataCacheTTLMinutes"
-                        [min]="5"
-                        [format]="'n0'"
-                        placeholder="1440">
-                    </kendo-numerictextbox>
-                    <span class="hint">How long to cache OAuth metadata (default: 1440 minutes = 24 hours)</span>
-                </div>
-
-                <div class="oauth-client-section">
-                    <h4>Pre-configured Client (Optional)</h4>
-                    <p class="section-hint">Leave blank to use Dynamic Client Registration (DCR). If the auth server doesn't support DCR, configure your client credentials here.</p>
-
-                    <div class="form-group">
-                        <label for="oauthClientId">Client ID</label>
-                        <input kendoTextBox
-                               id="oauthClientId"
-                               formControlName="OAuthClientID"
-                               placeholder="your-client-id" />
-                    </div>
-
-                    <div class="form-group">
-                        <label for="oauthClientSecret">Client Secret</label>
-                        <input kendoTextBox
-                               id="oauthClientSecret"
-                               formControlName="OAuthClientSecretEncrypted"
-                               type="password"
-                               placeholder="your-client-secret" />
-                        <span class="hint">The secret will be encrypted before storage</span>
-                    </div>
-                </div>
-            </div>
+      }
+      <!-- Basic Info Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-info-circle"></i> Basic Information</h3>
+        <div class="form-group">
+          <label for="name">Name <span class="required">*</span></label>
+          <input kendoTextBox
+            id="name"
+            formControlName="Name"
+            placeholder="e.g., GitHub MCP Server" />
+          @if (hasError('Name', 'required')) {
+            <span class="error-text">Name is required</span>
           }
-
-        <!-- Rate Limiting Section -->
-        <div class="form-section">
-            <h3><i class="fa-solid fa-gauge-high"></i> Rate Limiting</h3>
-
-            <div class="form-row">
-                <div class="form-group half">
-                    <label for="rateLimitMinute">Requests per Minute</label>
-                    <kendo-numerictextbox
-                        id="rateLimitMinute"
-                        formControlName="RateLimitPerMinute"
-                        [min]="0"
-                        [format]="'n0'"
-                        placeholder="No limit">
-                    </kendo-numerictextbox>
-                </div>
-
-                <div class="form-group half">
-                    <label for="rateLimitHour">Requests per Hour</label>
-                    <kendo-numerictextbox
-                        id="rateLimitHour"
-                        formControlName="RateLimitPerHour"
-                        [min]="0"
-                        [format]="'n0'"
-                        placeholder="No limit">
-                    </kendo-numerictextbox>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label for="requestTimeout">Request Timeout (ms)</label>
-                <kendo-numerictextbox
-                    id="requestTimeout"
-                    formControlName="RequestTimeoutMs"
-                    [min]="1000"
-                    [max]="600000"
-                    [step]="1000"
-                    [format]="'n0'">
-                </kendo-numerictextbox>
-                <span class="hint">Timeout for individual tool calls (1000-600000ms)</span>
-            </div>
         </div>
-    </form>
-
-    <kendo-dialog-actions>
-        <button kendoButton (click)="save()" themeColor="primary" [disabled]="IsSaving">
-            @if (IsSaving) {
-                <i class="fa-solid fa-spinner fa-spin"></i>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea kendoTextArea
+            id="description"
+            formControlName="Description"
+            placeholder="Optional description of this server"
+          [rows]="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="status">Status</label>
+          <kendo-dropdownlist
+            id="status"
+            formControlName="Status"
+            [data]="['Active', 'Inactive']"
+            [valuePrimitive]="true">
+          </kendo-dropdownlist>
+        </div>
+      </div>
+      <!-- Transport Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-network-wired"></i> Transport Configuration</h3>
+        <div class="form-group">
+          <label for="transportType">Transport Type <span class="required">*</span></label>
+          <kendo-dropdownlist
+            id="transportType"
+            formControlName="TransportType"
+            [data]="transportTypes"
+            textField="label"
+            valueField="value"
+            [valuePrimitive]="true"
+            (valueChange)="onTransportTypeChange()">
+            <ng-template kendoDropDownListItemTemplate let-dataItem>
+              <div class="transport-option">
+                <span class="transport-label">{{ dataItem.label }}</span>
+                <span class="transport-desc">{{ dataItem.description }}</span>
+              </div>
+            </ng-template>
+          </kendo-dropdownlist>
+        </div>
+        @if (RequiresURL) {
+          <div class="form-group">
+            <label for="serverUrl">Server URL <span class="required">*</span></label>
+            <input kendoTextBox
+              id="serverUrl"
+              formControlName="ServerURL"
+              placeholder="https://api.example.com/mcp" />
+            @if (hasError('ServerURL', 'required')) {
+              <span class="error-text">Server URL is required for this transport type</span>
             }
-            {{ IsEditMode ? 'Update' : 'Create' }}
-        </button>
-        <button kendoButton (click)="cancel()">Cancel</button>
+          </div>
+        }
+        @if (RequiresCommand) {
+          <div class="form-group">
+            <label for="command">Command <span class="required">*</span></label>
+            <input kendoTextBox
+              id="command"
+              formControlName="Command"
+              placeholder="e.g., npx or /usr/local/bin/mcp-server" />
+            @if (hasError('Command', 'required')) {
+              <span class="error-text">Command is required for Stdio transport</span>
+            }
+          </div>
+          <div class="form-group">
+            <label for="commandArgs">Command Arguments (JSON array)</label>
+            <input kendoTextBox
+              id="commandArgs"
+              formControlName="CommandArgs"
+              placeholder='["arg1", "arg2"]' />
+            <span class="hint">JSON array of command line arguments</span>
+          </div>
+        }
+      </div>
+      <!-- Authentication Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-shield-halved"></i> Authentication</h3>
+        <div class="form-group">
+          <label for="authType">Default Auth Type</label>
+          <kendo-dropdownlist
+            id="authType"
+            formControlName="DefaultAuthType"
+            [data]="authTypes"
+            textField="label"
+            valueField="value"
+            [valuePrimitive]="true"
+            (valueChange)="onAuthTypeChange()">
+            <ng-template kendoDropDownListItemTemplate let-dataItem>
+              <div class="auth-option">
+                <span class="auth-label">{{ dataItem.label }}</span>
+                <span class="auth-desc">{{ dataItem.description }}</span>
+              </div>
+            </ng-template>
+          </kendo-dropdownlist>
+        </div>
+      </div>
+      <!-- OAuth 2.0 Configuration Section (only shown when OAuth2 is selected) -->
+      @if (IsOAuth2) {
+        <div class="form-section oauth-section">
+          <h3><i class="fa-solid fa-key"></i> OAuth 2.0 Configuration</h3>
+          <div class="form-group">
+            <label for="oauthIssuerUrl">OAuth Issuer URL <span class="required">*</span></label>
+            <input kendoTextBox
+              id="oauthIssuerUrl"
+              formControlName="OAuthIssuerURL"
+              placeholder="https://auth.example.com" />
+            @if (hasError('OAuthIssuerURL', 'required')) {
+              <span class="error-text">OAuth Issuer URL is required for OAuth 2.0 authentication</span>
+            }
+            <span class="hint">The authorization server's issuer URL (e.g., https://login.microsoftonline.com/tenant-id or https://your-domain.auth0.com)</span>
+          </div>
+          <div class="form-group">
+            <label for="oauthScopes">OAuth Scopes</label>
+            <input kendoTextBox
+              id="oauthScopes"
+              formControlName="OAuthScopes"
+              placeholder="openid profile email" />
+            <span class="hint">Space-separated list of OAuth scopes to request</span>
+          </div>
+          <div class="form-group">
+            <label for="oauthCacheTtl">Metadata Cache TTL (minutes)</label>
+            <kendo-numerictextbox
+              id="oauthCacheTtl"
+              formControlName="OAuthMetadataCacheTTLMinutes"
+              [min]="5"
+              [format]="'n0'"
+              placeholder="1440">
+            </kendo-numerictextbox>
+            <span class="hint">How long to cache OAuth metadata (default: 1440 minutes = 24 hours)</span>
+          </div>
+          <div class="oauth-client-section">
+            <h4>Pre-configured Client (Optional)</h4>
+            <p class="section-hint">Leave blank to use Dynamic Client Registration (DCR). If the auth server doesn't support DCR, configure your client credentials here.</p>
+            <div class="form-group">
+              <label for="oauthClientId">Client ID</label>
+              <input kendoTextBox
+                id="oauthClientId"
+                formControlName="OAuthClientID"
+                placeholder="your-client-id" />
+            </div>
+            <div class="form-group">
+              <label for="oauthClientSecret">Client Secret</label>
+              <input kendoTextBox
+                id="oauthClientSecret"
+                formControlName="OAuthClientSecretEncrypted"
+                type="password"
+                placeholder="your-client-secret" />
+              <span class="hint">The secret will be encrypted before storage</span>
+            </div>
+          </div>
+        </div>
+      }
+      <!-- Rate Limiting Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-gauge-high"></i> Rate Limiting</h3>
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="rateLimitMinute">Requests per Minute</label>
+            <kendo-numerictextbox
+              id="rateLimitMinute"
+              formControlName="RateLimitPerMinute"
+              [min]="0"
+              [format]="'n0'"
+              placeholder="No limit">
+            </kendo-numerictextbox>
+          </div>
+          <div class="form-group half">
+            <label for="rateLimitHour">Requests per Hour</label>
+            <kendo-numerictextbox
+              id="rateLimitHour"
+              formControlName="RateLimitPerHour"
+              [min]="0"
+              [format]="'n0'"
+              placeholder="No limit">
+            </kendo-numerictextbox>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="requestTimeout">Request Timeout (ms)</label>
+          <kendo-numerictextbox
+            id="requestTimeout"
+            formControlName="RequestTimeoutMs"
+            [min]="1000"
+            [max]="600000"
+            [step]="1000"
+            [format]="'n0'">
+          </kendo-numerictextbox>
+          <span class="hint">Timeout for individual tool calls (1000-600000ms)</span>
+        </div>
+      </div>
+    </form>
+    <kendo-dialog-actions>
+      <button kendoButton (click)="save()" themeColor="primary" [disabled]="IsSaving">
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        }
+        {{ IsEditMode ? 'Update' : 'Create' }}
+      </button>
+      <button kendoButton (click)="cancel()">Cancel</button>
     </kendo-dialog-actions>
-</kendo-dialog>
+  </kendo-dialog>
+}

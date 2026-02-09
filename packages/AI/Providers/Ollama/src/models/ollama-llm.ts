@@ -549,7 +549,3 @@ export class OllamaLLM extends BaseLLM {
         throw new Error("Method not implemented. Use Chat with a classification prompt instead.");
     }
 }
-
-export function LoadOllamaLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

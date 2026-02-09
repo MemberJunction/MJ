@@ -102,12 +102,9 @@ import { ResourceData } from '@memberjunction/core-entities';
  * @since 2.0.x
  * @version 1.0.0
  * @category Dashboard Components
- * @example
- * // Register the component in your module
- * import { LoadHelloDashboard } from './path/to/hello-dashboard.component';
- * LoadHelloDashboard(); // Prevents tree-shaking
  */
 @Component({
+  standalone: false,
   selector: 'mj-hello-dashboard',
   templateUrl: './hello-dashboard.component.html',
   styleUrls: ['./hello-dashboard.component.scss']
@@ -204,9 +201,9 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    * Controls when the featured entity changes to a new random entity.
    * 
    * @private
-   * @type {NodeJS.Timeout | null}
+   * @type {ReturnType<typeof setInterval> | null}
    */
-  private entityChangeInterval: NodeJS.Timeout | null = null;
+  private entityChangeInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Flag indicating whether the screensaver animation is currently running.
@@ -1096,21 +1093,3 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
   }
 }
 
-/**
- * Utility function to prevent tree-shaking of the HelloDashboardComponent.
- * Must be called during module initialization to ensure the component remains available.
- * 
- * @export
- * @function LoadHelloDashboard
- * @returns {void}
- * 
- * @example
- * ```typescript
- * // In your module or main.ts file:
- * import { LoadHelloDashboard } from './hello-dashboard.component';
- * LoadHelloDashboard(); // Prevents tree-shaking
- * ```
- */
-export function LoadHelloDashboard(): void {
-  // Intentionally empty - existence prevents tree-shaking of the component
-}

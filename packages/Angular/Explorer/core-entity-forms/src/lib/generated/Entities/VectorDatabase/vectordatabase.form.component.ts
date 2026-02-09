@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Vector Databases') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-vectordatabase-form',
     templateUrl: './vectordatabase.form.component.html'
 })
@@ -23,6 +24,3 @@ export class VectorDatabaseFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadVectorDatabaseFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

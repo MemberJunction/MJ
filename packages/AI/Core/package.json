@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ai",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "4.0.0",
   "description": "MemberJunction: AI - core components for abstracting LLMs and other AI model types that are usable anywhere without ANY other MJ dependencies past @memberjunction/global which itself has zero additional dependencies.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,20 +10,20 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "3.4.0",
-    "dotenv": "^16.4.1",
-    "rxjs": "^7.8.1"
+    "@memberjunction/global": "4.0.0",
+    "dotenv": "^17.2.4",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

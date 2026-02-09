@@ -78,8 +78,7 @@ packages/MJExplorer/src/environments/environment.development.ts
 packages/MJExplorer/src/environments/environment.staging.ts
 packages/MJExplorer/src/environments/environment.ts
 Schema Files/
-docs/
-!packages/DBAutoDoc/docs/
+/docs/
 SQL Scripts/generated/
 *.old
 SQL Scripts/internal_only/BC CDP - FULL TEXT Index Setup.sql
@@ -142,3 +141,4 @@ report.json
 report.html
 packages/MJAPI/src/generated/class-registrations-manifest.ts
 packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
+.needs-manifest-rebuild

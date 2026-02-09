@@ -23,5 +23,3 @@ export class DuplicateRunEntity_Server extends DuplicateRunEntity  {
         return saveResult;
     }
 }
-
-export function LoadDuplicateRunEntityServerSubClass() {}

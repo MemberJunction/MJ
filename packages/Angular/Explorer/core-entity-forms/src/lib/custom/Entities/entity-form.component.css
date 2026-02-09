@@ -1983,3 +1983,381 @@
 .explorer-error i {
     opacity: 1;
 }
+
+/* ============================================================
+   IS-A TYPE HIERARCHY & VIRTUAL ENTITY STYLES
+   ============================================================ */
+
+/* Badge variants for header */
+.isa-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: default;
+    white-space: nowrap;
+}
+
+.isa-badge.virtual {
+    background: rgba(139, 92, 246, 0.12);
+    color: #7c3aed;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+.isa-badge.child-type {
+    background: rgba(59, 130, 246, 0.12);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.isa-badge.child-type:hover {
+    background: rgba(59, 130, 246, 0.22);
+}
+
+.isa-badge.parent-type {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+/* Breadcrumb under title */
+.isa-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #6366f1;
+    font-weight: 500;
+    margin-top: 2px;
+    padding: 2px 0;
+}
+
+.isa-breadcrumb i {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* IS-A Panel (overview section) */
+.isa-panel {
+    border-left: 3px solid #6366f1;
+}
+
+.isa-info-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-primary, #334155);
+}
+
+.isa-info-row.virtual-info {
+    background: rgba(139, 92, 246, 0.06);
+}
+
+.isa-info-row.virtual-info i {
+    color: #7c3aed;
+    font-size: 14px;
+}
+
+.isa-info-row .code {
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.06);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: #7c3aed;
+}
+
+/* Inheritance chain */
+.isa-chain {
+    padding: 8px 0;
+}
+
+.isa-chain-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted, #94a3b8);
+    margin-bottom: 8px;
+}
+
+.isa-chain-nodes {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 0;
+}
+
+.isa-node {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.isa-node.current {
+    background: #3b82f6;
+    color: white;
+}
+
+.isa-node.parent {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.isa-arrow {
+    color: var(--text-muted, #94a3b8);
+    font-size: 11px;
+}
+
+.isa-inherited-fields {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted, #94a3b8);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+}
+
+.isa-inherited-fields i {
+    font-size: 12px;
+    color: #6366f1;
+}
+
+/* Child types list */
+.isa-children {
+    padding: 8px 0;
+}
+
+.isa-child-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.isa-child-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* Clickable elements */
+.clickable {
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.clickable:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.isa-node.parent.clickable:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+.isa-child-chip.clickable:hover {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+/* Field inherited badge (card and list views) */
+.badge.inherited,
+.flag-badge.inherited {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    font-size: 10px;
+    font-weight: 600;
+    gap: 3px;
+}
+
+.flag-badge.inherited {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+}
+
+.flag-badge.inherited i {
+    font-size: 9px;
+}
+
+/* IS-A source section in field detail panel */
+.isa-source-section {
+    background: rgba(99, 102, 241, 0.04);
+    border-radius: 6px;
+    padding: 12px;
+    margin: -4px -12px 8px;
+}
+
+.isa-source-section h5 {
+    color: #6366f1;
+}
+
+.isa-source-section h5 i {
+    margin-right: 4px;
+}
+
+/* IS-A settings panel */
+.isa-settings-panel {
+    border-left: 3px solid #6366f1;
+}
+
+.isa-settings-panel .link {
+    color: #3b82f6;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.isa-settings-panel .link:hover {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+.isa-settings-panel .muted {
+    color: var(--text-muted, #94a3b8);
+}
+
+/* IS-A Field Inspector */
+.isa-field-inspector {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+}
+
+.isa-field-inspector > .isa-chain-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.isa-inspector-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.isa-inspector-group {
+    border-radius: 6px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.isa-inspector-group.own {
+    background: rgba(59, 130, 246, 0.04);
+    border-color: rgba(59, 130, 246, 0.15);
+}
+
+.isa-inspector-group.inherited {
+    background: rgba(99, 102, 241, 0.04);
+    border-color: rgba(99, 102, 241, 0.15);
+}
+
+.isa-inspector-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.isa-inspector-entity {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary, #334155);
+}
+
+.isa-inspector-count {
+    font-size: 11px;
+    color: var(--text-muted, #94a3b8);
+    font-weight: 500;
+}
+
+.isa-inspector-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.isa-inspector-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--text-primary, #334155);
+}
+
+.isa-inspector-type {
+    font-size: 10px;
+    color: var(--text-muted, #94a3b8);
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* Sibling chips */
+.isa-siblings {
+    padding: 8px 0;
+}
+
+.isa-sibling-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.isa-sibling-chip.clickable:hover {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+/* Child count badge */
+.isa-child-count {
+    font-size: 11px;
+    background: rgba(0, 0, 0, 0.08);
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 2px;
+    font-weight: 600;
+}
+
+.isa-child-count i {
+    font-size: 10px;
+}

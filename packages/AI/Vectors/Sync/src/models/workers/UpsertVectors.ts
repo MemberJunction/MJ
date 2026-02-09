@@ -2,11 +2,8 @@ import { parentPort, threadId, workerData } from 'node:worker_threads';
 import type { WorkerData } from '../BatchWorker';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { MJGlobal } from '@memberjunction/global';
-import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { LogError } from '@memberjunction/core';
 import { ArchiveWorkerContext, EmbeddingData } from '../../generic/vectorSync.types';
-
-LoadPineconeVectorDB();
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

@@ -134,6 +134,7 @@ const DEFAULT_ICONS = [
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-timeline',
   templateUrl: './timeline.component.html',
   styleUrls: ['./timeline.component.css'],

@@ -199,7 +199,3 @@ export class RemoveRecordsFromListAction extends BaseAction {
     });
   }
 }
-
-export function LoadRemoveRecordsFromListAction(): void {
-  // Prevents tree-shaking
-}

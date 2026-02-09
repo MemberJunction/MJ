@@ -578,10 +578,3 @@ ${JSON.stringify(parentAction.Params.map(p => {
         });
     }
 }
-
-export function LoadActionEntityServer() {
-    // this function is used to force the class to load and register itself with the system
-    // this is necessary because the class is not explicitly referenced in the code, it is only registered with the system
-    // and the system will only load it when it is needed, this function forces the class to load
-}
-

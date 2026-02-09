@@ -29,6 +29,7 @@ export interface AgentDisplayItem extends AIAgentEntityExtended {
  * Only shows agents with NULL ParentID (root agents) that can become sub-agents.
  */
 @Component({
+  standalone: false,
   selector: 'mj-sub-agent-selector-dialog',
   templateUrl: './sub-agent-selector-dialog.component.html',
   styleUrls: ['./sub-agent-selector-dialog.component.css']

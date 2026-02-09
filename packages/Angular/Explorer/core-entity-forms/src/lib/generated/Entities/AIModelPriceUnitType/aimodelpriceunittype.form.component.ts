@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Model Price Unit Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aimodelpriceunittype-form',
     templateUrl: './aimodelpriceunittype.form.component.html'
 })
@@ -22,6 +23,3 @@ export class AIModelPriceUnitTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIModelPriceUnitTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

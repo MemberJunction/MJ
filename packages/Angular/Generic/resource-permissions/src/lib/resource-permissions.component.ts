@@ -9,6 +9,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  * an Angular application or component.
  */
 @Component({
+  standalone: false,
   selector: 'mj-resource-permissions',
   templateUrl: './resource-permissions.component.html',
   styleUrls: ['./resource-permissions.component.css']

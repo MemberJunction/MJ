@@ -21,6 +21,7 @@ export interface ArtifactLoadResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-artifact-load-dialog',
   templateUrl: './artifact-load-dialog.component.html',
   styleUrl: './artifact-load-dialog.component.css'

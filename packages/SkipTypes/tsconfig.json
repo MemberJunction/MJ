@@ -1,15 +1,9 @@
 {
-    "compilerOptions": {
-      "module": "commonjs",
-      "esModuleInterop": true,
-      "target": "es2020",
-      "declaration": true,
-      "declarationMap": true,
-      "moduleResolution": "node",
-      "sourceMap": true,
-      "outDir": "dist",
-    "skipLibCheck": true
-    },
-    "include": ["src/**/*"],
-    "exclude": ["node_modules", "**/*.spec.ts"]
-  }
+  "extends": "../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}

@@ -8,6 +8,7 @@ import { SkipDynamicLinearReportComponent } from './linear-report';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 @Component({
+  standalone: false,
   selector: 'skip-dynamic-report',
   styles: [
     `.report-tab-title { margin-left: 10px;}`,

@@ -115,7 +115,7 @@ export abstract class BaseTestDriver {
             } catch (error) {
                 errors.push({
                     category: 'input',
-                    message: `InputDefinition is not valid JSON: ${error.message}`,
+                    message: `InputDefinition is not valid JSON: ${(error as Error).message}`,
                     field: 'InputDefinition',
                     suggestion: 'Fix JSON syntax errors'
                 });
@@ -135,7 +135,7 @@ export abstract class BaseTestDriver {
             } catch (error) {
                 errors.push({
                     category: 'expected-outcome',
-                    message: `ExpectedOutcomes is not valid JSON: ${error.message}`,
+                    message: `ExpectedOutcomes is not valid JSON: ${(error as Error).message}`,
                     field: 'ExpectedOutcomes',
                     suggestion: 'Fix JSON syntax errors'
                 });
@@ -155,7 +155,7 @@ export abstract class BaseTestDriver {
             } catch (error) {
                 errors.push({
                     category: 'configuration',
-                    message: `Configuration is not valid JSON: ${error.message}`,
+                    message: `Configuration is not valid JSON: ${(error as Error).message}`,
                     field: 'Configuration',
                     suggestion: 'Fix JSON syntax errors'
                 });

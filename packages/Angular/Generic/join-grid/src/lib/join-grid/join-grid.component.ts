@@ -35,6 +35,7 @@ export class JoinGridRow {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-join-grid',
   templateUrl: './join-grid.component.html',
   styleUrls: ['./join-grid.component.css']

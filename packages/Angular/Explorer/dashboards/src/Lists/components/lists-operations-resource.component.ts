@@ -7,11 +7,6 @@ import { Subject } from 'rxjs';
 import { ListSetOperationsService, VennData, VennIntersection, SetOperation, SetOperationResult } from '../services/list-set-operations.service';
 import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-
-export function LoadListsOperationsResource() {
-  // tree shaker
-}
-
 interface ListSelection {
   list: ListEntity;
   entityName: string;
@@ -39,6 +34,7 @@ interface EntityOption {
 
 @RegisterClass(BaseResourceComponent, 'ListsOperationsResource')
 @Component({
+  standalone: false,
   selector: 'mj-lists-operations-resource',
   template: `
     <div class="operations-container">
@@ -49,30 +45,34 @@ interface EntityOption {
             <i class="fa-solid fa-diagram-project"></i>
             <h2>List Operations</h2>
           </div>
-          <button *ngIf="selectedLists.length > 0 || selectedEntityId"
-                  class="clear-all-btn"
-                  (click)="clearAllSelections()"
-                  title="Clear all selections">
-            <i class="fa-solid fa-xmark"></i>
-            Clear
-          </button>
+          @if (selectedLists.length > 0 || selectedEntityId) {
+            <button
+              class="clear-all-btn"
+              (click)="clearAllSelections()"
+              title="Clear all selections">
+              <i class="fa-solid fa-xmark"></i>
+              Clear
+            </button>
+          }
         </div>
         <div class="header-subtitle">
           Visualize overlaps and perform set operations on your lists
         </div>
       </div>
-
+    
       <!-- Main Content -->
       <div class="operations-content">
         <!-- Left Panel: List Selection -->
         <div class="selection-panel">
           <div class="panel-header">
             <h3>Selected Lists</h3>
-            <span class="list-count" *ngIf="selectedLists.length > 0">
-              {{selectedLists.length}}/{{maxLists}}
-            </span>
+            @if (selectedLists.length > 0) {
+              <span class="list-count">
+                {{selectedLists.length}}/{{maxLists}}
+              </span>
+            }
           </div>
-
+    
           <!-- Entity Filter Selector -->
           <div class="entity-filter-section">
             <label class="filter-label">Filter by Entity</label>
@@ -82,106 +82,125 @@ interface EntityOption {
                 (ngModelChange)="onEntityFilterChange()"
                 class="entity-select">
                 <option value="">All Entities</option>
-                <option *ngFor="let entity of entityOptions" [value]="entity.id">
-                  {{entity.name}} ({{entity.listCount}})
-                </option>
+                @for (entity of entityOptions; track entity) {
+                  <option [value]="entity.id">
+                    {{entity.name}} ({{entity.listCount}})
+                  </option>
+                }
               </select>
             </div>
           </div>
-
+    
           <!-- Selected lists -->
           <div class="selected-lists">
-            <div class="selected-item" *ngFor="let item of selectedLists; let i = index">
-              <div class="item-color" [style.background-color]="item.color"></div>
-              <div class="item-info">
-                <span class="item-name">{{item.list.Name}}</span>
-                <span class="item-entity">{{item.entityName}}</span>
-              </div>
-              <button class="remove-btn" (click)="removeList(i)">
-                <i class="fa-solid fa-times"></i>
-              </button>
-            </div>
-
-            <div class="add-list-area" *ngIf="selectedLists.length < maxLists">
-              <div class="add-list-search">
-                <i class="fa-solid fa-search"></i>
-                <input
-                  type="text"
-                  [(ngModel)]="listSearchTerm"
-                  (ngModelChange)="filterAvailableLists()"
-                  placeholder="Search lists to add..."
-                  (focus)="showListDropdown = true" />
-              </div>
-
-              <!-- Available lists dropdown -->
-              <div class="list-dropdown" *ngIf="showListDropdown && filteredAvailableLists.length > 0">
-                <div class="dropdown-backdrop" (click)="showListDropdown = false"></div>
-                <div class="dropdown-content">
-                  <div
-                    class="dropdown-item"
-                    *ngFor="let list of filteredAvailableLists"
-                    (click)="addList(list)">
-                    <span class="dropdown-name">{{list.Name}}</span>
-                    <span class="dropdown-entity">{{list.Entity}}</span>
-                  </div>
+            @for (item of selectedLists; track item; let i = $index) {
+              <div class="selected-item">
+                <div class="item-color" [style.background-color]="item.color"></div>
+                <div class="item-info">
+                  <span class="item-name">{{item.list.Name}}</span>
+                  <span class="item-entity">{{item.entityName}}</span>
                 </div>
+                <button class="remove-btn" (click)="removeList(i)">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+            }
+    
+            @if (selectedLists.length < maxLists) {
+              <div class="add-list-area">
+                <div class="add-list-search">
+                  <i class="fa-solid fa-search"></i>
+                  <input
+                    type="text"
+                    [(ngModel)]="listSearchTerm"
+                    (ngModelChange)="filterAvailableLists()"
+                    placeholder="Search lists to add..."
+                    (focus)="showListDropdown = true" />
+                </div>
+                <!-- Available lists dropdown -->
+                @if (showListDropdown && filteredAvailableLists.length > 0) {
+                  <div class="list-dropdown">
+                    <div class="dropdown-backdrop" (click)="showListDropdown = false"></div>
+                    <div class="dropdown-content">
+                      @for (list of filteredAvailableLists; track list) {
+                        <div
+                          class="dropdown-item"
+                          (click)="addList(list)">
+                          <span class="dropdown-name">{{list.Name}}</span>
+                          <span class="dropdown-entity">{{list.Entity}}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+    
+            @if (selectedLists.length >= maxLists) {
+              <div class="lists-full">
+                <i class="fa-solid fa-info-circle"></i>
+                Maximum {{maxLists}} lists can be compared
+              </div>
+            }
+          </div>
+    
+          <!-- Entity consistency note -->
+          @if (selectedLists.length > 0) {
+            <div class="entity-note">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>Comparing lists of type: <strong>{{selectedLists[0].entityName}}</strong></span>
+            </div>
+          }
+    
+          <!-- Quick Operations -->
+          @if (selectedLists.length >= 2) {
+            <div class="quick-operations">
+              <h4>Quick Operations</h4>
+              <div class="operation-buttons">
+                <button class="op-btn" (click)="performOperation('union')" [disabled]="isCalculating">
+                  <i class="fa-solid fa-layer-group"></i>
+                  <span>Union All</span>
+                </button>
+                <button class="op-btn" (click)="performOperation('intersection')" [disabled]="isCalculating">
+                  <i class="fa-solid fa-circle-notch"></i>
+                  <span>Intersection</span>
+                </button>
+                <button class="op-btn" (click)="performOperation('symmetric_difference')" [disabled]="isCalculating">
+                  <i class="fa-solid fa-arrows-split-up-and-left"></i>
+                  <span>Unique Each</span>
+                </button>
               </div>
             </div>
-
-            <div class="lists-full" *ngIf="selectedLists.length >= maxLists">
-              <i class="fa-solid fa-info-circle"></i>
-              Maximum {{maxLists}} lists can be compared
-            </div>
-          </div>
-
-          <!-- Entity consistency note -->
-          <div class="entity-note" *ngIf="selectedLists.length > 0">
-            <i class="fa-solid fa-info-circle"></i>
-            <span>Comparing lists of type: <strong>{{selectedLists[0].entityName}}</strong></span>
-          </div>
-
-          <!-- Quick Operations -->
-          <div class="quick-operations" *ngIf="selectedLists.length >= 2">
-            <h4>Quick Operations</h4>
-            <div class="operation-buttons">
-              <button class="op-btn" (click)="performOperation('union')" [disabled]="isCalculating">
-                <i class="fa-solid fa-layer-group"></i>
-                <span>Union All</span>
-              </button>
-              <button class="op-btn" (click)="performOperation('intersection')" [disabled]="isCalculating">
-                <i class="fa-solid fa-circle-notch"></i>
-                <span>Intersection</span>
-              </button>
-              <button class="op-btn" (click)="performOperation('symmetric_difference')" [disabled]="isCalculating">
-                <i class="fa-solid fa-arrows-split-up-and-left"></i>
-                <span>Unique Each</span>
-              </button>
-            </div>
-          </div>
+          }
         </div>
-
+    
         <!-- Center: Venn Diagram -->
         <div class="venn-panel">
-          <mj-venn-diagram
-            *ngIf="selectedLists.length > 0"
-            [data]="vennData"
-            [selectedRegion]="selectedRegion"
-            (regionClick)="onRegionClick($event)">
-          </mj-venn-diagram>
-
-          <div class="venn-empty" *ngIf="selectedLists.length === 0">
-            <div class="empty-icon">
-              <i class="fa-solid fa-circle-nodes"></i>
+          @if (selectedLists.length > 0) {
+            <mj-venn-diagram
+              [data]="vennData"
+              [selectedRegion]="selectedRegion"
+              (regionClick)="onRegionClick($event)">
+            </mj-venn-diagram>
+          }
+    
+          @if (selectedLists.length === 0) {
+            <div class="venn-empty">
+              <div class="empty-icon">
+                <i class="fa-solid fa-circle-nodes"></i>
+              </div>
+              <h3>Add Lists to Compare</h3>
+              <p>Select 2-4 lists from the same entity to visualize their overlaps and perform set operations.</p>
             </div>
-            <h3>Add Lists to Compare</h3>
-            <p>Select 2-4 lists from the same entity to visualize their overlaps and perform set operations.</p>
-          </div>
-
-          <div class="loading-overlay" *ngIf="isCalculating">
-            <mj-loading text="Calculating..."></mj-loading>
-          </div>
+          }
+    
+          @if (isCalculating) {
+            <div class="loading-overlay">
+              <mj-loading text="Calculating..."></mj-loading>
+            </div>
+          }
         </div>
-
+    
         <!-- Right Panel: Selected Region / Results -->
         <div class="results-panel">
           <div class="panel-header">
@@ -190,176 +209,199 @@ interface EntityOption {
               {{selectedRegion ? 'Selected Region' : 'Results'}}
             </h3>
           </div>
-
+    
           <!-- Selected region details -->
-          <div class="region-details" *ngIf="selectedRegion">
-            <div class="region-header">
-              <span class="region-label">{{selectedRegion.label}}</span>
-              <span class="region-count">{{selectedRegion.size}} records</span>
-            </div>
-
-            <div class="region-actions">
-              <button class="action-btn primary" (click)="createListFromSelection()">
-                <i class="fa-solid fa-plus"></i>
-                Create New List
-              </button>
-              <button class="action-btn" (click)="addToExistingList()">
-                <i class="fa-solid fa-folder-plus"></i>
-                Add to List
-              </button>
-              <button class="action-btn" (click)="exportToExcel()">
-                <i class="fa-solid fa-file-excel"></i>
-                Export
-              </button>
-            </div>
-
-            <div class="record-preview" *ngIf="previewRecordsDisplay.length > 0">
-              <h5>Preview (first 10)</h5>
-              <div class="preview-list">
-                <div class="preview-card" *ngFor="let record of previewRecordsDisplay">
-                  <div class="preview-card-content">
-                    <span class="preview-name">{{record.displayName}}</span>
-                    <span class="preview-secondary" *ngIf="record.secondaryInfo">{{record.secondaryInfo}}</span>
+          @if (selectedRegion) {
+            <div class="region-details">
+              <div class="region-header">
+                <span class="region-label">{{selectedRegion.label}}</span>
+                <span class="region-count">{{selectedRegion.size}} records</span>
+              </div>
+              <div class="region-actions">
+                <button class="action-btn primary" (click)="createListFromSelection()">
+                  <i class="fa-solid fa-plus"></i>
+                  Create New List
+                </button>
+                <button class="action-btn" (click)="addToExistingList()">
+                  <i class="fa-solid fa-folder-plus"></i>
+                  Add to List
+                </button>
+                <button class="action-btn" (click)="exportToExcel()">
+                  <i class="fa-solid fa-file-excel"></i>
+                  Export
+                </button>
+              </div>
+              @if (previewRecordsDisplay.length > 0) {
+                <div class="record-preview">
+                  <h5>Preview (first 10)</h5>
+                  <div class="preview-list">
+                    @for (record of previewRecordsDisplay; track record) {
+                      <div class="preview-card">
+                        <div class="preview-card-content">
+                          <span class="preview-name">{{record.displayName}}</span>
+                          @if (record.secondaryInfo) {
+                            <span class="preview-secondary">{{record.secondaryInfo}}</span>
+                          }
+                        </div>
+                        <button class="preview-open-btn" (click)="openRecord(record)" title="Open record">
+                          <i class="fa-solid fa-external-link-alt"></i>
+                        </button>
+                      </div>
+                    }
                   </div>
-                  <button class="preview-open-btn" (click)="openRecord(record)" title="Open record">
-                    <i class="fa-solid fa-external-link-alt"></i>
-                  </button>
+                  @if (loadingPreview) {
+                    <div class="preview-loading">
+                      <mj-loading text="Loading preview..." size="small"></mj-loading>
+                    </div>
+                  }
                 </div>
-              </div>
-              <div class="preview-loading" *ngIf="loadingPreview">
-                <mj-loading text="Loading preview..." size="small"></mj-loading>
-              </div>
+              }
             </div>
-          </div>
-
+          }
+    
           <!-- Operation result -->
-          <div class="operation-result" *ngIf="lastOperationResult && !selectedRegion">
-            <div class="result-header">
-              <span class="result-operation">{{getOperationLabel(lastOperationResult.operation)}}</span>
-              <span class="result-count">{{lastOperationResult.resultCount}} records</span>
+          @if (lastOperationResult && !selectedRegion) {
+            <div class="operation-result">
+              <div class="result-header">
+                <span class="result-operation">{{getOperationLabel(lastOperationResult.operation)}}</span>
+                <span class="result-count">{{lastOperationResult.resultCount}} records</span>
+              </div>
+              <div class="region-actions">
+                <button class="action-btn primary" (click)="createListFromResult()">
+                  <i class="fa-solid fa-plus"></i>
+                  Create New List
+                </button>
+                <button class="action-btn" (click)="addResultToExistingList()">
+                  <i class="fa-solid fa-folder-plus"></i>
+                  Add to List
+                </button>
+              </div>
             </div>
-
-            <div class="region-actions">
-              <button class="action-btn primary" (click)="createListFromResult()">
-                <i class="fa-solid fa-plus"></i>
-                Create New List
-              </button>
-              <button class="action-btn" (click)="addResultToExistingList()">
-                <i class="fa-solid fa-folder-plus"></i>
-                Add to List
-              </button>
-            </div>
-          </div>
-
+          }
+    
           <!-- Empty state -->
-          <div class="results-empty" *ngIf="!selectedRegion && !lastOperationResult">
-            <i class="fa-solid fa-hand-pointer"></i>
-            <p>Click a region in the diagram or run an operation to see results</p>
-          </div>
+          @if (!selectedRegion && !lastOperationResult) {
+            <div class="results-empty">
+              <i class="fa-solid fa-hand-pointer"></i>
+              <p>Click a region in the diagram or run an operation to see results</p>
+            </div>
+          }
         </div>
       </div>
-
+    
       <!-- Create List Dialog -->
-      <div class="modal-overlay" *ngIf="showCreateDialog" (click)="cancelCreateDialog()"></div>
-      <div class="modal-dialog" *ngIf="showCreateDialog">
-        <div class="modal-header">
-          <h3>Create New List from Selection</h3>
-          <button class="modal-close" (click)="cancelCreateDialog()">
-            <i class="fa-solid fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>List Name *</label>
-            <input
-              type="text"
-              [(ngModel)]="newListName"
-              placeholder="Enter list name"
-              class="form-input" />
+      @if (showCreateDialog) {
+        <div class="modal-overlay" (click)="cancelCreateDialog()"></div>
+      }
+      @if (showCreateDialog) {
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h3>Create New List from Selection</h3>
+            <button class="modal-close" (click)="cancelCreateDialog()">
+              <i class="fa-solid fa-times"></i>
+            </button>
           </div>
-          <div class="form-group">
-            <label>Description</label>
-            <textarea
-              [(ngModel)]="newListDescription"
-              placeholder="Optional description"
-              class="form-input"
+          <div class="modal-body">
+            <div class="form-group">
+              <label>List Name *</label>
+              <input
+                type="text"
+                [(ngModel)]="newListName"
+                placeholder="Enter list name"
+                class="form-input" />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea
+                [(ngModel)]="newListDescription"
+                placeholder="Optional description"
+                class="form-input"
               rows="3"></textarea>
+            </div>
+            <div class="form-info">
+              <i class="fa-solid fa-info-circle"></i>
+              {{recordsToAdd.length}} record{{recordsToAdd.length !== 1 ? 's' : ''}} will be added to this list
+            </div>
           </div>
-          <div class="form-info">
-            <i class="fa-solid fa-info-circle"></i>
-            {{recordsToAdd.length}} record{{recordsToAdd.length !== 1 ? 's' : ''}} will be added to this list
+          <div class="modal-footer">
+            <button class="btn-primary" (click)="confirmCreateList()" [disabled]="!newListName || isSaving">
+              @if (isSaving) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              }
+              {{isSaving ? 'Creating...' : 'Create List'}}
+            </button>
+            <button class="btn-secondary" (click)="cancelCreateDialog()">Cancel</button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn-primary" (click)="confirmCreateList()" [disabled]="!newListName || isSaving">
-            <i *ngIf="isSaving" class="fa-solid fa-spinner fa-spin"></i>
-            {{isSaving ? 'Creating...' : 'Create List'}}
-          </button>
-          <button class="btn-secondary" (click)="cancelCreateDialog()">Cancel</button>
-        </div>
-      </div>
-
+      }
+    
       <!-- Add to Existing List Dialog -->
-      <div class="modal-overlay" *ngIf="showAddToListDialog" (click)="cancelAddToListDialog()"></div>
-      <div class="modal-dialog add-to-list-dialog" *ngIf="showAddToListDialog">
-        <div class="modal-header">
-          <h3>Add to Existing List</h3>
-          <button class="modal-close" (click)="cancelAddToListDialog()">
-            <i class="fa-solid fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-info" style="margin-bottom: 16px;">
-            <i class="fa-solid fa-info-circle"></i>
-            {{recordsToAdd.length}} record{{recordsToAdd.length !== 1 ? 's' : ''}} will be added
+      @if (showAddToListDialog) {
+        <div class="modal-overlay" (click)="cancelAddToListDialog()"></div>
+      }
+      @if (showAddToListDialog) {
+        <div class="modal-dialog add-to-list-dialog">
+          <div class="modal-header">
+            <h3>Add to Existing List</h3>
+            <button class="modal-close" (click)="cancelAddToListDialog()">
+              <i class="fa-solid fa-times"></i>
+            </button>
           </div>
-
-          <!-- Search input -->
-          <div class="list-search">
-            <i class="fa-solid fa-search"></i>
-            <input
-              type="text"
-              [(ngModel)]="addToListSearchTerm"
-              (ngModelChange)="filterAddToListOptions()"
-              placeholder="Search lists..."
-              class="form-input" />
-          </div>
-
-          <!-- List options -->
-          <div class="list-options">
-            <div
-              class="list-option"
-              *ngFor="let list of filteredAddToListOptions"
-              [class.selected]="selectedTargetListId === list.ID"
-              (click)="selectTargetList(list.ID)">
-              <div class="list-option-radio">
-                <input
-                  type="radio"
-                  [checked]="selectedTargetListId === list.ID"
-                  name="targetList" />
-              </div>
-              <div class="list-option-info">
-                <span class="list-option-name">{{list.Name}}</span>
-                <span class="list-option-entity">{{list.Entity}}</span>
-              </div>
+          <div class="modal-body">
+            <div class="form-info" style="margin-bottom: 16px;">
+              <i class="fa-solid fa-info-circle"></i>
+              {{recordsToAdd.length}} record{{recordsToAdd.length !== 1 ? 's' : ''}} will be added
             </div>
-
-            <div class="list-options-empty" *ngIf="filteredAddToListOptions.length === 0">
-              <i class="fa-solid fa-inbox"></i>
-              <p>{{addToListSearchTerm ? 'No lists match your search' : 'No other lists available'}}</p>
+            <!-- Search input -->
+            <div class="list-search">
+              <i class="fa-solid fa-search"></i>
+              <input
+                type="text"
+                [(ngModel)]="addToListSearchTerm"
+                (ngModelChange)="filterAddToListOptions()"
+                placeholder="Search lists..."
+                class="form-input" />
+            </div>
+            <!-- List options -->
+            <div class="list-options">
+              @for (list of filteredAddToListOptions; track list) {
+                <div
+                  class="list-option"
+                  [class.selected]="selectedTargetListId === list.ID"
+                  (click)="selectTargetList(list.ID)">
+                  <div class="list-option-radio">
+                    <input
+                      type="radio"
+                      [checked]="selectedTargetListId === list.ID"
+                      name="targetList" />
+                  </div>
+                  <div class="list-option-info">
+                    <span class="list-option-name">{{list.Name}}</span>
+                    <span class="list-option-entity">{{list.Entity}}</span>
+                  </div>
+                </div>
+              }
+              @if (filteredAddToListOptions.length === 0) {
+                <div class="list-options-empty">
+                  <i class="fa-solid fa-inbox"></i>
+                  <p>{{addToListSearchTerm ? 'No lists match your search' : 'No other lists available'}}</p>
+                </div>
+              }
             </div>
           </div>
+          <div class="modal-footer">
+            <button class="btn-primary" (click)="confirmAddToList()" [disabled]="!selectedTargetListId || isSaving">
+              @if (isSaving) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              }
+              {{isSaving ? 'Adding...' : 'Add to List'}}
+            </button>
+            <button class="btn-secondary" (click)="cancelAddToListDialog()">Cancel</button>
+          </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn-primary" (click)="confirmAddToList()" [disabled]="!selectedTargetListId || isSaving">
-            <i *ngIf="isSaving" class="fa-solid fa-spinner fa-spin"></i>
-            {{isSaving ? 'Adding...' : 'Add to List'}}
-          </button>
-          <button class="btn-secondary" (click)="cancelAddToListDialog()">Cancel</button>
-        </div>
-      </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: block;

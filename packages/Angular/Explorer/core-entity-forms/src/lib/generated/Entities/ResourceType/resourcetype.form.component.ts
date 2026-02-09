@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Resource Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-resourcetype-form',
     templateUrl: './resourcetype.form.component.html'
 })
@@ -28,6 +29,3 @@ export class ResourceTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadResourceTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

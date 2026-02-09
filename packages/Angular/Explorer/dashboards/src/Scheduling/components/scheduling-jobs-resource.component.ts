@@ -2,19 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadSchedulingJobsResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Scheduling Jobs Resource - manage and configure scheduled jobs with slideout panels
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingJobsResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-jobs-resource',
   template: `
     <div class="resource-container">

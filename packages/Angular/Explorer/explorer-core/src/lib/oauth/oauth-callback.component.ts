@@ -43,6 +43,7 @@ const POLL_INTERVAL_MS = 500;
  * the code exchange, since the user's session needs to be restored first.
  */
 @Component({
+  standalone: false,
     selector: 'mj-oauth-callback',
     templateUrl: './oauth-callback.component.html',
     styleUrls: ['./oauth-callback.component.css']
@@ -378,11 +379,4 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
         this.clearStoredReturnUrls();
         this.router.navigate(['/app/admin/MCP']);
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadOAuthCallbackComponent(): void {
-    // Prevents tree-shaking
 }

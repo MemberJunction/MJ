@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Action Authorizations') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-actionauthorization-form',
     templateUrl: './actionauthorization.form.component.html'
 })
@@ -21,6 +22,3 @@ export class ActionAuthorizationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadActionAuthorizationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

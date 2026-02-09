@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ai-azure",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "4.0.0",
   "description": "Azure AI Provider for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,21 +9,21 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "clean": "rimraf dist"
   },
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
     "@azure-rest/ai-inference": "^1.0.0-beta.6",
-    "@azure/core-auth": "^1.5.0",
-    "@azure/identity": "^4.0.0",
-    "@memberjunction/ai": "3.4.0",
-    "@memberjunction/global": "3.4.0"
+    "@azure/core-auth": "^1.10.1",
+    "@azure/identity": "^4.13.0",
+    "@memberjunction/ai": "4.0.0",
+    "@memberjunction/global": "4.0.0"
   },
   "devDependencies": {
-    "rimraf": "^5.0.0",
-    "typescript": "^5.0.2"
+    "rimraf": "^6.1.2",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

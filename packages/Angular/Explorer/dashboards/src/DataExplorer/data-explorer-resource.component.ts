@@ -6,11 +6,6 @@ import { BaseResourceComponent, NavigationService, DashboardConfig } from '@memb
 import { ResourceData, DashboardEntity } from '@memberjunction/core-entities';
 import { DataExplorerDashboardComponent } from './data-explorer-dashboard.component';
 import { DataExplorerFilter } from './models/explorer-state.interface';
-
-export function LoadDataExplorerResource() {
-    // Prevents tree-shaking
-}
-
 /**
  * Resource component for the Data Explorer.
  * Wraps DataExplorerDashboardComponent as a BaseResourceComponent for use
@@ -18,6 +13,7 @@ export function LoadDataExplorerResource() {
  */
 @RegisterClass(BaseResourceComponent, 'DataExplorerResource')
 @Component({
+  standalone: false,
     selector: 'mj-data-explorer-resource',
     template: `
         <div class="data-explorer-resource-container">

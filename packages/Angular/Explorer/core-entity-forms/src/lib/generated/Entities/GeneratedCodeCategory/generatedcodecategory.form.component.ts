@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Generated Code Categories') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-generatedcodecategory-form',
     templateUrl: './generatedcodecategory.form.component.html'
 })
@@ -24,6 +25,3 @@ export class GeneratedCodeCategoryFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadGeneratedCodeCategoryFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

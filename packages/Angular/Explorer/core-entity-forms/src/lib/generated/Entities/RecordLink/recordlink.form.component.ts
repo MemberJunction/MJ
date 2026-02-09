@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Record Links') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-recordlink-form',
     templateUrl: './recordlink.form.component.html'
 })
@@ -22,6 +23,3 @@ export class RecordLinkFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadRecordLinkFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

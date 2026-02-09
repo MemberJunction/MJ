@@ -319,7 +319,3 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         }
     }
 }
-
-export function LoadRexRecommendationsProvider() {
-
-}

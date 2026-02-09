@@ -1,50 +1,58 @@
 <div>
-    <div *ngIf="isLoading"><mj-loading [showText]="false" size="medium"></mj-loading></div>
-    <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="savePermissions()">Save</button>
-    <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="cancelEdit()">Cancel</button>
-    <table *ngIf="!isLoading" class="grid">
-        <thead>
-            <tr>
-            <th *ngIf="this.Mode==='Entity'">Role</th>
-            <th *ngIf="this.Mode==='Role'">Entity</th>
-            <th (click)="flipAllPermissions('Read')">Read</th>
-            <th (click)="flipAllPermissions('Create')">Create</th>
-            <th (click)="flipAllPermissions('Update')">Update</th>
-            <th (click)="flipAllPermissions('Delete')">Delete</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr *ngFor="let permission of permissions" [ngClass]="IsPermissionReallyDirty(permission) ? 'dirty-row' : ''">
-                <td class="permission-left-col" (click)="flipRow(permission)">
-                    @if(this.Mode === 'Entity') {
-                        <span>
-                            {{ getRoleName(permission.RoleID) }}
-                        </span>    
-                    }
-                    @else if(this.Mode === 'Role') {
-                        <span>
-                            {{ permission.Entity }}
-                        </span>
-                    }
-
-                    @if(IsPermissionReallyDirty(permission)) {
-                        <span class="fa-solid fa-arrow-rotate-left" (click)="revertRow($event, permission)"></span>
-                    }
-                </td>
-                <td (click)="flipPermission($event, permission, 'Read', true)">
-                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanRead" (click)="flipPermission($event, permission, 'Read', false)">
-                </td>
-                <td (click)="flipPermission($event, permission, 'Create', true)">
-                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanCreate" (click)="flipPermission($event, permission, 'Create', false)">
-                </td>
-                <td (click)="flipPermission($event, permission, 'Update', true)">
-                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanUpdate" (click)="flipPermission($event, permission, 'Update', false)">
-                </td>
-                <td (click)="flipPermission($event, permission, 'Delete', true)">
-                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanDelete" (click)="flipPermission($event, permission, 'Delete', false)">
-                </td>
-                </tr>
-        </tbody>
-    </table>
+  @if (isLoading) {
+    <div><mj-loading [showText]="false" size="medium"></mj-loading></div>
+  }
+  <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="savePermissions()">Save</button>
+  <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="cancelEdit()">Cancel</button>
+  @if (!isLoading) {
+    <table class="grid">
+      <thead>
+        <tr>
+          @if (this.Mode==='Entity') {
+            <th>Role</th>
+          }
+          @if (this.Mode==='Role') {
+            <th>Entity</th>
+          }
+          <th (click)="flipAllPermissions('Read')">Read</th>
+          <th (click)="flipAllPermissions('Create')">Create</th>
+          <th (click)="flipAllPermissions('Update')">Update</th>
+          <th (click)="flipAllPermissions('Delete')">Delete</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (permission of permissions; track permission) {
+          <tr [ngClass]="IsPermissionReallyDirty(permission) ? 'dirty-row' : ''">
+            <td class="permission-left-col" (click)="flipRow(permission)">
+              @if(this.Mode === 'Entity') {
+                <span>
+                  {{ getRoleName(permission.RoleID) }}
+                </span>
+              }
+              @else if(this.Mode === 'Role') {
+              <span>
+                {{ permission.Entity }}
+              </span>
+            }
+            @if(IsPermissionReallyDirty(permission)) {
+              <span class="fa-solid fa-arrow-rotate-left" (click)="revertRow($event, permission)"></span>
+            }
+          </td>
+          <td (click)="flipPermission($event, permission, 'Read', true)">
+            <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanRead" (click)="flipPermission($event, permission, 'Read', false)">
+          </td>
+          <td (click)="flipPermission($event, permission, 'Create', true)">
+            <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanCreate" (click)="flipPermission($event, permission, 'Create', false)">
+          </td>
+          <td (click)="flipPermission($event, permission, 'Update', true)">
+            <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanUpdate" (click)="flipPermission($event, permission, 'Update', false)">
+          </td>
+          <td (click)="flipPermission($event, permission, 'Delete', true)">
+            <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanDelete" (click)="flipPermission($event, permission, 'Delete', false)">
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
 </div>
- 

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Queue Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-queuetype-form',
     templateUrl: './queuetype.form.component.html'
 })
@@ -23,6 +24,3 @@ export class QueueTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadQueueTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

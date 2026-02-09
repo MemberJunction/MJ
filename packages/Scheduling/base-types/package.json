@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/scheduling-base-types",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "4.0.0",
   "description": "MemberJunction: Scheduling Base Types - core type definitions for the scheduled jobs system, usable anywhere without heavy dependencies",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,17 +9,17 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "3.4.0"
+    "@memberjunction/global": "4.0.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
-    "typescript": "^5.4.5"
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Query Categories') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-querycategory-form',
     templateUrl: './querycategory.form.component.html'
 })
@@ -24,6 +25,3 @@ export class QueryCategoryFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadQueryCategoryFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

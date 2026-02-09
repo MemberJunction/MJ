@@ -14,7 +14,3 @@ export * from './lib/query-info-panel/query-info-panel.component';
 
 // Types
 export * from './lib/query-data-grid/models/query-grid-types';
-
-// Tree-shaking prevention
-import { LoadQueryViewerModule } from './lib/query-viewer.module';
-LoadQueryViewerModule();

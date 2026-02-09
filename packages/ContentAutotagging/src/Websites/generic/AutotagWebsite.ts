@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
 import dotenv from 'dotenv';
-dotenv.config()
+dotenv.config({ quiet: true })
 
 @RegisterClass(AutotagBase, 'AutotagWebsite')
 export class AutotagWebsite extends AutotagBase {

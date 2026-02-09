@@ -29,6 +29,7 @@ interface ExpandableSection {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-mcp-log-detail-panel',
     templateUrl: './mcp-log-detail-panel.component.html',
     styleUrls: ['./mcp-log-detail-panel.component.css'],
@@ -275,11 +276,4 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
             default: return 'status-unknown';
         }
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPLogDetailPanel(): void {
-    // Ensures the component is not tree-shaken
 }

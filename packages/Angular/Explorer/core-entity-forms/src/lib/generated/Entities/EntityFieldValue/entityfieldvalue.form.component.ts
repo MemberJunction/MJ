@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Field Values') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entityfieldvalue-form',
     templateUrl: './entityfieldvalue.form.component.html'
 })
@@ -21,6 +22,3 @@ export class EntityFieldValueFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadEntityFieldValueFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

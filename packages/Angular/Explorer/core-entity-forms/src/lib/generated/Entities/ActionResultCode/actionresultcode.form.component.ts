@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Action Result Codes') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-actionresultcode-form',
     templateUrl: './actionresultcode.form.component.html'
 })
@@ -21,6 +22,3 @@ export class ActionResultCodeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadActionResultCodeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

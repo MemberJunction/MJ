@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Settings') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entitysetting-form',
     templateUrl: './entitysetting.form.component.html'
 })
@@ -20,6 +21,3 @@ export class EntitySettingFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadEntitySettingFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -16,27 +16,3 @@ export * from './UpdateJobAction';
 export * from './DeleteJobAction';
 export * from './ExecuteJobNowAction';
 export * from './GetJobStatisticsAction';
-
-// Import loader functions
-import { LoadBaseJobAction } from './BaseJobAction';
-import { LoadQueryScheduledJobsAction } from './QueryJobsAction';
-import { LoadCreateScheduledJobAction } from './CreateJobAction';
-import { LoadUpdateScheduledJobAction } from './UpdateJobAction';
-import { LoadDeleteScheduledJobAction } from './DeleteJobAction';
-import { LoadExecuteScheduledJobNowAction } from './ExecuteJobNowAction';
-import { LoadGetScheduledJobStatisticsAction } from './GetJobStatisticsAction';
-
-/**
- * Load all scheduling actions to prevent tree shaking.
- * Call this function during application startup to ensure all action
- * classes are registered and available for use.
- */
-export function LoadAllSchedulingActions(): void {
-    LoadBaseJobAction();
-    LoadQueryScheduledJobsAction();
-    LoadCreateScheduledJobAction();
-    LoadUpdateScheduledJobAction();
-    LoadDeleteScheduledJobAction();
-    LoadExecuteScheduledJobNowAction();
-    LoadGetScheduledJobStatisticsAction();
-}

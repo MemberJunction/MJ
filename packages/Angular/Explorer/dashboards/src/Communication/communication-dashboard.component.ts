@@ -11,6 +11,7 @@ interface CommunicationDashboardState {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-communication-dashboard',
     templateUrl: './communication-dashboard.component.html',
     styleUrls: ['./communication-dashboard.component.css'],
@@ -126,8 +127,4 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         const labels = ['Monitor', 'Logs', 'Providers', 'Templates', 'Runs', 'Settings'];
         return tabIndex >= 0 ? labels[tabIndex] : 'Communication Management';
     }
-}
-
-export function LoadCommunicationDashboard() {
-    // Prevents tree-shaking
 }

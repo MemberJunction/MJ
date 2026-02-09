@@ -7,27 +7,33 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
  * Shows as a floating panel in bottom-right corner when tasks are active.
  */
 @Component({
+  standalone: false,
   selector: 'mj-active-tasks-panel',
   template: `
-    <div class="active-tasks-panel" *ngIf="(taskCount$ | async)! > 0">
-      <div class="panel-header" (click)="toggleExpanded()">
-        <i class="fas fa-tasks"></i>
-        <span>Active Tasks ({{ taskCount$ | async }})</span>
-        <i class="fas" [ngClass]="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-      </div>
-
-      <div class="panel-content" *ngIf="isExpanded">
-        <div class="task-item" *ngFor="let task of (tasks$ | async)">
-          <div class="task-header">
-            <i class="fas fa-circle-notch fa-spin"></i>
-            <span class="task-agent">{{ task.agentName }}</span>
-            <span class="task-elapsed">{{ getElapsedTime(task) }}</span>
-          </div>
-          <div class="task-status">{{ getTrimmedStatus(task.status) }}</div>
+    @if ((taskCount$ | async)! > 0) {
+      <div class="active-tasks-panel">
+        <div class="panel-header" (click)="toggleExpanded()">
+          <i class="fas fa-tasks"></i>
+          <span>Active Tasks ({{ taskCount$ | async }})</span>
+          <i class="fas" [ngClass]="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
         </div>
+        @if (isExpanded) {
+          <div class="panel-content">
+            @for (task of (tasks$ | async); track task) {
+              <div class="task-item">
+                <div class="task-header">
+                  <i class="fas fa-circle-notch fa-spin"></i>
+                  <span class="task-agent">{{ task.agentName }}</span>
+                  <span class="task-elapsed">{{ getElapsedTime(task) }}</span>
+                </div>
+                <div class="task-status">{{ getTrimmedStatus(task.status) }}</div>
+              </div>
+            }
+          </div>
+        }
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .active-tasks-panel {
       position: fixed;

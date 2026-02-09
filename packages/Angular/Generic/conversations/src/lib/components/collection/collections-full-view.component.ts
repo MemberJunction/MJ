@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { CollectionEntity, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
@@ -14,6 +14,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
  * Comprehensive collection management with artifacts display
  */
 @Component({
+  standalone: false,
   selector: 'mj-collections-full-view',
   template: `
     <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">
@@ -25,314 +26,374 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
             <i class="fas fa-home"></i>
             <a class="breadcrumb-link" (click)="navigateToRoot()">Collections</a>
           </div>
-          <span class="breadcrumb-path" *ngIf="breadcrumbs.length > 0">
-            <ng-container *ngFor="let crumb of breadcrumbs; let last = last">
-              <i class="fas fa-chevron-right breadcrumb-separator"></i>
-              <a class="breadcrumb-link"
-                 [class.active]="last"
-                 (click)="navigateTo(crumb)">
-                {{ crumb.name }}
-              </a>
-            </ng-container>
-          </span>
+          @if (breadcrumbs.length > 0) {
+            <span class="breadcrumb-path">
+              @for (crumb of breadcrumbs; track crumb; let last = $last) {
+                <i class="fas fa-chevron-right breadcrumb-separator"></i>
+                <a class="breadcrumb-link"
+                  [class.active]="last"
+                  (click)="navigateTo(crumb)">
+                  {{ crumb.name }}
+                </a>
+              }
+            </span>
+          }
         </div>
-
+    
         <!-- Action buttons -->
         <div class="collections-actions">
           <!-- View mode toggle -->
           <button class="btn-icon"
-                  (click)="toggleViewMode()"
-                  [title]="viewMode === 'grid' ? 'Switch to List View' : 'Switch to Grid View'">
+            (click)="toggleViewMode()"
+            [title]="viewMode === 'grid' ? 'Switch to List View' : 'Switch to Grid View'">
             <i class="fas" [ngClass]="viewMode === 'grid' ? 'fa-list' : 'fa-th'"></i>
           </button>
-
+    
           <!-- Select mode toggle -->
           <button class="btn-icon"
-                  [class.active]="isSelectMode"
-                  (click)="toggleSelectMode()"
-                  [title]="isSelectMode ? 'Exit Select Mode' : 'Select Items'">
+            [class.active]="isSelectMode"
+            (click)="toggleSelectMode()"
+            [title]="isSelectMode ? 'Exit Select Mode' : 'Select Items'">
             <i class="fas fa-check-square"></i>
           </button>
-
+    
           <!-- Sort dropdown (grid view only) -->
-          <div class="dropdown-container" *ngIf="viewMode === 'grid'">
-            <button class="btn-icon"
-                    (click)="showSortDropdown = !showSortDropdown"
-                    title="Sort options">
-              <i class="fas fa-sort"></i>
-            </button>
-            <div class="dropdown-menu" *ngIf="showSortDropdown">
-              <button class="dropdown-item"
-                      [class.active]="sortBy === 'name'"
-                      (click)="setSortBy('name')">
-                <i class="fas fa-sort-alpha-down"></i>
-                <span>Sort by Name</span>
+          @if (viewMode === 'grid') {
+            <div class="dropdown-container">
+              <button class="btn-icon"
+                (click)="showSortDropdown = !showSortDropdown"
+                title="Sort options">
+                <i class="fas fa-sort"></i>
               </button>
-              <button class="dropdown-item"
-                      [class.active]="sortBy === 'date'"
-                      (click)="setSortBy('date')">
-                <i class="fas fa-calendar"></i>
-                <span>Sort by Date</span>
-              </button>
-              <button class="dropdown-item"
-                      [class.active]="sortBy === 'type'"
-                      (click)="setSortBy('type')">
-                <i class="fas fa-tag"></i>
-                <span>Sort by Type</span>
-              </button>
+              @if (showSortDropdown) {
+                <div class="dropdown-menu">
+                  <button class="dropdown-item"
+                    [class.active]="sortBy === 'name'"
+                    (click)="setSortBy('name')">
+                    <i class="fas fa-sort-alpha-down"></i>
+                    <span>Sort by Name</span>
+                  </button>
+                  <button class="dropdown-item"
+                    [class.active]="sortBy === 'date'"
+                    (click)="setSortBy('date')">
+                    <i class="fas fa-calendar"></i>
+                    <span>Sort by Date</span>
+                  </button>
+                  <button class="dropdown-item"
+                    [class.active]="sortBy === 'type'"
+                    (click)="setSortBy('type')">
+                    <i class="fas fa-tag"></i>
+                    <span>Sort by Type</span>
+                  </button>
+                </div>
+              }
             </div>
-          </div>
-
+          }
+    
           <!-- Search -->
           <div class="search-container">
             <i class="fas fa-search"></i>
             <input type="text"
-                   class="search-input"
-                   placeholder="Search..."
-                   [(ngModel)]="searchQuery"
-                   (ngModelChange)="onSearchChange($event)">
-            <button class="search-clear"
-                    *ngIf="searchQuery"
-                    (click)="searchQuery = ''; onSearchChange('')"
-                    title="Clear search">
-              <i class="fas fa-times"></i>
-            </button>
+              class="search-input"
+              placeholder="Search..."
+              [(ngModel)]="searchQuery"
+              (ngModelChange)="onSearchChange($event)">
+            @if (searchQuery) {
+              <button class="search-clear"
+                (click)="searchQuery = ''; onSearchChange('')"
+                title="Clear search">
+                <i class="fas fa-times"></i>
+              </button>
+            }
           </div>
-
+    
           <!-- New dropdown -->
-          <div class="dropdown-container" *ngIf="canEditCurrent()">
-            <button class="btn-primary"
-                    (click)="showNewDropdown = !showNewDropdown">
-              <i class="fas fa-plus"></i>
-              <span>New</span>
-              <i class="fas fa-chevron-down"></i>
-            </button>
-            <div class="dropdown-menu dropdown-menu-right" *ngIf="showNewDropdown">
-              <button class="dropdown-item" (click)="createCollection()">
-                <i class="fas fa-folder-plus"></i>
-                <span>New Collection</span>
+          @if (canEditCurrent()) {
+            <div class="dropdown-container">
+              <button class="btn-primary"
+                (click)="showNewDropdown = !showNewDropdown">
+                <i class="fas fa-plus"></i>
+                <span>New</span>
+                <i class="fas fa-chevron-down"></i>
               </button>
-              <button class="dropdown-item"
-                      (click)="addArtifact()"
-                      [disabled]="!currentCollectionId">
-                <i class="fas fa-file-plus"></i>
-                <span>New Artifact</span>
-              </button>
+              @if (showNewDropdown) {
+                <div class="dropdown-menu dropdown-menu-right">
+                  <button class="dropdown-item" (click)="createCollection()">
+                    <i class="fas fa-folder-plus"></i>
+                    <span>New Collection</span>
+                  </button>
+                  <button class="dropdown-item"
+                    (click)="addArtifact()"
+                    [disabled]="!currentCollectionId">
+                    <i class="fas fa-file-plus"></i>
+                    <span>New Artifact</span>
+                  </button>
+                </div>
+              }
             </div>
-          </div>
-
+          }
+    
           <!-- Refresh button -->
           <button class="btn-icon" (click)="refresh()" title="Refresh">
             <i class="fas fa-sync"></i>
           </button>
         </div>
       </div>
-
+    
       <!-- Multi-select toolbar (appears when items selected) -->
-      <div class="selection-toolbar" *ngIf="selectedItems.size > 0">
-        <div class="selection-info">
-          <span class="selection-count">{{ selectedItems.size }} selected</span>
+      @if (selectedItems.size > 0) {
+        <div class="selection-toolbar">
+          <div class="selection-info">
+            <span class="selection-count">{{ selectedItems.size }} selected</span>
+          </div>
+          <div class="selection-actions">
+            <button class="btn-toolbar" (click)="clearSelection()">
+              <i class="fas fa-times"></i>
+              Clear Selection
+            </button>
+            <button class="btn-toolbar btn-danger" (click)="deleteSelected()">
+              <i class="fas fa-trash"></i>
+              Delete Selected
+            </button>
+          </div>
         </div>
-        <div class="selection-actions">
-          <button class="btn-toolbar" (click)="clearSelection()">
-            <i class="fas fa-times"></i>
-            Clear Selection
-          </button>
-          <button class="btn-toolbar btn-danger" (click)="deleteSelected()">
-            <i class="fas fa-trash"></i>
-            Delete Selected
-          </button>
-        </div>
-      </div>
-
+      }
+    
       <!-- Content area -->
       <div class="collections-content">
         <!-- Loading state -->
-        <div *ngIf="isLoading" class="loading-state">
-          <mj-loading text="Loading collections..." size="large"></mj-loading>
-        </div>
-
-        <!-- Empty state -->
-        <div *ngIf="!isLoading && unifiedItems.length === 0" class="empty-state">
-          <i class="fas fa-folder-open"></i>
-
-          <!-- Search returned no results -->
-          <ng-container *ngIf="searchQuery">
-            <h3>No items found</h3>
-            <p>Try adjusting your search</p>
-          </ng-container>
-
-          <!-- Empty root level -->
-          <ng-container *ngIf="!searchQuery && !currentCollectionId">
-            <h3>No collections yet</h3>
-            <p>Create your first collection to get started</p>
-            <button class="btn-primary"
-                    (click)="createCollection()"
-                    *ngIf="canEditCurrent()">
-              <i class="fas fa-plus"></i>
-              Create Collection
-            </button>
-          </ng-container>
-
-          <!-- Empty collection (has parent) -->
-          <ng-container *ngIf="!searchQuery && currentCollectionId">
-            <h3>This collection is empty</h3>
-            <p>Use the <strong>New</strong> button above to add collections or artifacts</p>
-          </ng-container>
-        </div>
-
-        <!-- Grid view -->
-        <div *ngIf="!isLoading && unifiedItems.length > 0 && viewMode === 'grid'"
-             class="unified-grid"
-             [class.select-mode]="isSelectMode">
-          <div *ngFor="let item of unifiedItems"
-               class="grid-item"
-               [class.selected]="item.selected"
-               [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
-               (click)="onItemClick(item, $event)"
-               (dblclick)="onItemDoubleClick(item, $event)"
-               (contextmenu)="onItemContextMenu(item, $event)">
-
-            <!-- Selection checkbox (only visible in select mode) -->
-            <div class="item-checkbox"
-                 *ngIf="isSelectMode"
-                 (click)="toggleItemSelection(item, $event)">
-              <i class="fas"
-                 [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"></i>
-            </div>
-
-            <!-- Folder item -->
-            <div *ngIf="item.type === 'folder'"
-                 class="grid-item-content"
-                 [title]="item.description || item.name">
-              <div class="grid-icon folder-icon">
-                <i class="fas fa-folder"></i>
-                <div class="shared-badge" *ngIf="item.isShared" title="Shared">
-                  <i class="fas fa-users"></i>
-                </div>
-              </div>
-              <div class="grid-info">
-                <div class="grid-name">{{ item.name }}</div>
-                <div class="grid-description" *ngIf="item.description">
-                  {{ item.description }}
-                </div>
-                <div class="grid-meta" *ngIf="item.itemCount !== undefined">
-                  {{ getItemCountText(item.itemCount) }}
-                </div>
-                <div class="grid-owner" *ngIf="item.isShared && item.owner">
-                  <i class="fas fa-user"></i>
-                  {{ item.owner }}
-                </div>
-              </div>
-            </div>
-
-            <!-- Artifact item -->
-            <div *ngIf="item.type === 'artifact'"
-                 class="grid-item-content"
-                 [title]="item.description || item.name">
-              <div class="grid-icon artifact-icon">
-                <i class="fas" [ngClass]="item.icon"></i>
-              </div>
-              <div class="grid-info">
-                <div class="grid-name">{{ item.name }}</div>
-                <div class="grid-description" *ngIf="item.description">
-                  {{ item.description }}
-                </div>
-                <div class="grid-meta">
-                  <span class="version-badge" *ngIf="item.versionNumber">
-                    v{{ item.versionNumber }}
-                  </span>
-                  <span class="artifact-type-badge" *ngIf="item.artifactType">
-                    {{ item.artifactType }}
-                  </span>
-                </div>
-              </div>
-            </div>
+        @if (isLoading) {
+          <div class="loading-state">
+            <mj-loading text="Loading collections..." size="large"></mj-loading>
           </div>
-        </div>
-
-        <!-- List view -->
-        <div *ngIf="!isLoading && unifiedItems.length > 0 && viewMode === 'list'"
-             class="unified-list"
-             [class.select-mode]="isSelectMode">
-          <table class="list-table">
-            <thead>
-              <tr>
-                <th class="col-checkbox" *ngIf="isSelectMode">
-                  <i class="fas"
-                     [ngClass]="selectedItems.size === unifiedItems.length ? 'fa-check-square' : 'fa-square'"
-                     (click)="selectedItems.size === unifiedItems.length ? clearSelection() : selectAll()"></i>
-                </th>
-                <th class="col-name sortable" (click)="setSortBy('name')">
-                  <span>Name</span>
-                  <i class="fas fa-sort" *ngIf="sortBy !== 'name'"></i>
-                  <i class="fas" *ngIf="sortBy === 'name'"
-                     [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
-                </th>
-                <th class="col-type sortable" (click)="setSortBy('type')">
-                  <span>Type</span>
-                  <i class="fas fa-sort" *ngIf="sortBy !== 'type'"></i>
-                  <i class="fas" *ngIf="sortBy === 'type'"
-                     [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
-                </th>
-                <th class="col-modified sortable" (click)="setSortBy('date')">
-                  <span>Modified</span>
-                  <i class="fas fa-sort" *ngIf="sortBy !== 'date'"></i>
-                  <i class="fas" *ngIf="sortBy === 'date'"
-                     [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
-                </th>
-                <th class="col-owner">Owner</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let item of unifiedItems"
-                  class="list-item"
-                  [class.selected]="item.selected"
-                  [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
-                  (click)="onItemClick(item, $event)"
-                  (dblclick)="onItemDoubleClick(item, $event)"
-                  (contextmenu)="onItemContextMenu(item, $event)">
-
-                <td class="col-checkbox" *ngIf="isSelectMode">
-                  <i class="fas"
-                     [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"
-                     (click)="toggleItemSelection(item, $event)"></i>
-                </td>
-
-                <td class="col-name">
-                  <div class="list-name-cell">
+        }
+    
+        <!-- Empty state -->
+        @if (!isLoading && unifiedItems.length === 0) {
+          <div class="empty-state">
+            <i class="fas fa-folder-open"></i>
+            <!-- Search returned no results -->
+            @if (searchQuery) {
+              <h3>No items found</h3>
+              <p>Try adjusting your search</p>
+            }
+            <!-- Empty root level -->
+            @if (!searchQuery && !currentCollectionId) {
+              <h3>No collections yet</h3>
+              <p>Create your first collection to get started</p>
+              @if (canEditCurrent()) {
+                <button class="btn-primary"
+                  (click)="createCollection()"
+                  >
+                  <i class="fas fa-plus"></i>
+                  Create Collection
+                </button>
+              }
+            }
+            <!-- Empty collection (has parent) -->
+            @if (!searchQuery && currentCollectionId) {
+              <h3>This collection is empty</h3>
+              <p>Use the <strong>New</strong> button above to add collections or artifacts</p>
+            }
+          </div>
+        }
+    
+        <!-- Grid view -->
+        @if (!isLoading && unifiedItems.length > 0 && viewMode === 'grid') {
+          <div
+            class="unified-grid"
+            [class.select-mode]="isSelectMode">
+            @for (item of unifiedItems; track item) {
+              <div
+                class="grid-item"
+                [class.selected]="item.selected"
+                [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                (click)="onItemClick(item, $event)"
+                (dblclick)="onItemDoubleClick(item, $event)"
+                (contextmenu)="onItemContextMenu(item, $event)">
+                <!-- Selection checkbox (only visible in select mode) -->
+                @if (isSelectMode) {
+                  <div class="item-checkbox"
+                    (click)="toggleItemSelection(item, $event)">
                     <i class="fas"
-                       [ngClass]="item.type === 'folder' ? 'fa-folder' : item.icon"></i>
-                    <span>{{ item.name }}</span>
-                    <i class="fas fa-users shared-indicator"
-                       *ngIf="item.isShared"
-                       title="Shared"></i>
+                    [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"></i>
                   </div>
-                </td>
-
-                <td class="col-type">
-                  <span *ngIf="item.type === 'folder'">Folder</span>
-                  <span *ngIf="item.type === 'artifact'" class="artifact-type-badge">
-                    {{ item.artifactType }}
-                  </span>
-                </td>
-
-                <td class="col-modified">
-                  <span *ngIf="item.lastModified">
-                    {{ item.lastModified | date:'short' }}
-                  </span>
-                </td>
-
-                <td class="col-owner">
-                  <span *ngIf="item.owner">{{ item.owner }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                }
+                <!-- Folder item -->
+                @if (item.type === 'folder') {
+                  <div
+                    class="grid-item-content"
+                    [title]="item.description || item.name">
+                    <div class="grid-icon folder-icon">
+                      <i class="fas fa-folder"></i>
+                      @if (item.isShared) {
+                        <div class="shared-badge" title="Shared">
+                          <i class="fas fa-users"></i>
+                        </div>
+                      }
+                    </div>
+                    <div class="grid-info">
+                      <div class="grid-name">{{ item.name }}</div>
+                      @if (item.description) {
+                        <div class="grid-description">
+                          {{ item.description }}
+                        </div>
+                      }
+                      @if (item.itemCount !== undefined) {
+                        <div class="grid-meta">
+                          {{ getItemCountText(item.itemCount) }}
+                        </div>
+                      }
+                      @if (item.isShared && item.owner) {
+                        <div class="grid-owner">
+                          <i class="fas fa-user"></i>
+                          {{ item.owner }}
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+                <!-- Artifact item -->
+                @if (item.type === 'artifact') {
+                  <div
+                    class="grid-item-content"
+                    [title]="item.description || item.name">
+                    <div class="grid-icon artifact-icon">
+                      <i class="fas" [ngClass]="item.icon"></i>
+                    </div>
+                    <div class="grid-info">
+                      <div class="grid-name">{{ item.name }}</div>
+                      @if (item.description) {
+                        <div class="grid-description">
+                          {{ item.description }}
+                        </div>
+                      }
+                      <div class="grid-meta">
+                        @if (item.versionNumber) {
+                          <span class="version-badge">
+                            v{{ item.versionNumber }}
+                          </span>
+                        }
+                        @if (item.artifactType) {
+                          <span class="artifact-type-badge">
+                            {{ item.artifactType }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+    
+        <!-- List view -->
+        @if (!isLoading && unifiedItems.length > 0 && viewMode === 'list') {
+          <div
+            class="unified-list"
+            [class.select-mode]="isSelectMode">
+            <table class="list-table">
+              <thead>
+                <tr>
+                  @if (isSelectMode) {
+                    <th class="col-checkbox">
+                      <i class="fas"
+                        [ngClass]="selectedItems.size === unifiedItems.length ? 'fa-check-square' : 'fa-square'"
+                      (click)="selectedItems.size === unifiedItems.length ? clearSelection() : selectAll()"></i>
+                    </th>
+                  }
+                  <th class="col-name sortable" (click)="setSortBy('name')">
+                    <span>Name</span>
+                    @if (sortBy !== 'name') {
+                      <i class="fas fa-sort"></i>
+                    }
+                    @if (sortBy === 'name') {
+                      <i class="fas"
+                      [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
+                    }
+                  </th>
+                  <th class="col-type sortable" (click)="setSortBy('type')">
+                    <span>Type</span>
+                    @if (sortBy !== 'type') {
+                      <i class="fas fa-sort"></i>
+                    }
+                    @if (sortBy === 'type') {
+                      <i class="fas"
+                      [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
+                    }
+                  </th>
+                  <th class="col-modified sortable" (click)="setSortBy('date')">
+                    <span>Modified</span>
+                    @if (sortBy !== 'date') {
+                      <i class="fas fa-sort"></i>
+                    }
+                    @if (sortBy === 'date') {
+                      <i class="fas"
+                      [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
+                    }
+                  </th>
+                  <th class="col-owner">Owner</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of unifiedItems; track item) {
+                  <tr
+                    class="list-item"
+                    [class.selected]="item.selected"
+                    [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                    (click)="onItemClick(item, $event)"
+                    (dblclick)="onItemDoubleClick(item, $event)"
+                    (contextmenu)="onItemContextMenu(item, $event)">
+                    @if (isSelectMode) {
+                      <td class="col-checkbox">
+                        <i class="fas"
+                          [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"
+                        (click)="toggleItemSelection(item, $event)"></i>
+                      </td>
+                    }
+                    <td class="col-name">
+                      <div class="list-name-cell">
+                        <i class="fas"
+                        [ngClass]="item.type === 'folder' ? 'fa-folder' : item.icon"></i>
+                        <span>{{ item.name }}</span>
+                        @if (item.isShared) {
+                          <i class="fas fa-users shared-indicator"
+                          title="Shared"></i>
+                        }
+                      </div>
+                    </td>
+                    <td class="col-type">
+                      @if (item.type === 'folder') {
+                        <span>Folder</span>
+                      }
+                      @if (item.type === 'artifact') {
+                        <span class="artifact-type-badge">
+                          {{ item.artifactType }}
+                        </span>
+                      }
+                    </td>
+                    <td class="col-modified">
+                      @if (item.lastModified) {
+                        <span>
+                          {{ item.lastModified | date:'short' }}
+                        </span>
+                      }
+                    </td>
+                    <td class="col-owner">
+                      @if (item.owner) {
+                        <span>{{ item.owner }}</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
       </div>
     </div>
-
+    
     <!-- Modals (unchanged) -->
     <mj-collection-form-modal
       [isOpen]="isFormModalOpen"
@@ -343,7 +404,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       (saved)="onCollectionSaved($event)"
       (cancelled)="onFormCancelled()">
     </mj-collection-form-modal>
-
+    
     <mj-artifact-create-modal
       [isOpen]="isArtifactModalOpen"
       [collectionId]="currentCollectionId || ''"
@@ -352,7 +413,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       (saved)="onArtifactSaved($event)"
       (cancelled)="onArtifactModalCancelled()">
     </mj-artifact-create-modal>
-
+    
     <mj-collection-share-modal
       [isOpen]="isShareModalOpen"
       [collection]="sharingCollection"
@@ -361,7 +422,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       (saved)="onPermissionsChanged()"
       (cancelled)="onShareModalCancelled()">
     </mj-collection-share-modal>
-  `,
+    `,
   styles: [`
     /* Main container */
     .collections-view {
@@ -1104,7 +1165,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     private artifactState: ArtifactStateService,
     private collectionState: CollectionStateService,
     private permissionService: CollectionPermissionService,
-    private artifactIconService: ArtifactIconService
+    private artifactIconService: ArtifactIconService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -1206,6 +1268,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       this.buildUnifiedItemList();
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 

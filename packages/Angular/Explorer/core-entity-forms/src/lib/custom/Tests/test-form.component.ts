@@ -1,12 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, ViewContainerRef, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TestEntity, TestRunEntity, TestSuiteTestEntity, TestSuiteRunEntity, UserSettingEntity, UserInfoEngine, TestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { TestFormComponent } from '../../generated/Entities/Test/test.form.component';
 import {
@@ -54,6 +53,7 @@ interface ParsedJSON {
 
 @RegisterClass(BaseFormComponent, 'MJ: Tests')
 @Component({
+  standalone: false,
   selector: 'mj-test-form',
   templateUrl: './test-form.component.html',
   styleUrls: ['./test-form.component.css'],
@@ -108,19 +108,12 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   // Evaluation preferences
   evalPreferences: EvaluationPreferences = { showExecution: true, showHuman: true, showAuto: false };
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService,
-    private evalPrefsService: EvaluationPreferencesService,
-    private viewContainerRef: ViewContainerRef,
-    private appManager: ApplicationManager
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
+  // Service injections
+  private navigationService = inject(NavigationService);
+  private testingDialogService = inject(TestingDialogService);
+  private evalPrefsService = inject(EvaluationPreferencesService);
+  private viewContainerRef = inject(ViewContainerRef);
+  private appManager = inject(ApplicationManager);
 
   async ngOnInit() {
     await super.ngOnInit();
@@ -844,9 +837,3 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     }
   }
 }
-
-export function LoadTestFormComponentExtended() {
-  // Prevents tree-shaking
-}
-
-LoadTestFormComponentExtended();

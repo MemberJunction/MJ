@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: User Settings') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-usersetting-form',
     templateUrl: './usersetting.form.component.html'
 })
@@ -20,6 +21,3 @@ export class UserSettingFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserSettingFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

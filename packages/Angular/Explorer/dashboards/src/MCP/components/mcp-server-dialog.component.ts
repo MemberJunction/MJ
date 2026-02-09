@@ -44,6 +44,7 @@ export interface ServerDialogResult {
  * MCP Server Dialog Component
  */
 @Component({
+  standalone: false,
     selector: 'mj-mcp-server-dialog',
     templateUrl: './mcp-server-dialog.component.html',
     styleUrls: ['./mcp-server-dialog.component.css']
@@ -287,11 +288,4 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
         const control = this.serverForm.get(controlName);
         return control?.hasError(errorType) && control?.touched || false;
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPServerDialog(): void {
-    // Ensures the component is not tree-shaken
 }

@@ -27,6 +27,7 @@ interface ScopeData {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-visualization',
   templateUrl: './ai-agent-run-visualization.component.html',
   styleUrls: ['./ai-agent-run-visualization.component.css'],

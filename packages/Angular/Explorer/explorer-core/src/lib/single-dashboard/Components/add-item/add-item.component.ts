@@ -5,6 +5,7 @@ import { ResourceData } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'app-add-item-dialog',
   templateUrl: './add-item.component.html',
   styleUrls: ['./add-item.component.css']

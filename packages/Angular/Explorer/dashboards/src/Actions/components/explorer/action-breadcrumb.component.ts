@@ -16,6 +16,7 @@ interface BreadcrumbItem {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-action-breadcrumb',
   templateUrl: './action-breadcrumb.component.html',
   styleUrls: ['./action-breadcrumb.component.css'],

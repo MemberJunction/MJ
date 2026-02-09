@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Entity Document Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entitydocumenttype-form',
     templateUrl: './entitydocumenttype.form.component.html'
 })
@@ -23,6 +24,3 @@ export class EntityDocumentTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadEntityDocumentTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

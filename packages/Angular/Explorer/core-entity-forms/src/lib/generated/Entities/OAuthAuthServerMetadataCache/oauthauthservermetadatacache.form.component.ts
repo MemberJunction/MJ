@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: O Auth Auth Server Metadata Caches') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-oauthauthservermetadatacache-form',
     templateUrl: './oauthauthservermetadatacache.form.component.html'
 })
@@ -19,6 +20,3 @@ export class OAuthAuthServerMetadataCacheFormComponent extends BaseFormComponent
     }
 }
 
-export function LoadOAuthAuthServerMetadataCacheFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

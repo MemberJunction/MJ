@@ -127,5 +127,3 @@ export class ReportEntity_Server extends ReportEntity  {
         }
     }
 }
-
-export function LoadReportEntityServerSubClass() {}

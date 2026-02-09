@@ -28,6 +28,7 @@ export interface TimelineItem {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-timeline',
   templateUrl: './ai-agent-run-timeline.component.html',
   styleUrls: ['./ai-agent-run-timeline.component.css'],

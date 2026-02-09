@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: O Auth Client Registrations') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-oauthclientregistration-form',
     templateUrl: './oauthclientregistration.form.component.html'
 })
@@ -19,6 +20,3 @@ export class OAuthClientRegistrationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadOAuthClientRegistrationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -15,6 +15,7 @@ import { DataRequirementsViewerComponent } from './data-requirements-viewer/data
  * - Provides tabs for: Code, Functional Requirements, Technical Design, Data Requirements
  */
 @Component({
+  standalone: false,
   selector: 'mj-component-artifact-viewer',
   templateUrl: './component-artifact-viewer.component.html',
   styleUrls: ['./component-artifact-viewer.component.css']

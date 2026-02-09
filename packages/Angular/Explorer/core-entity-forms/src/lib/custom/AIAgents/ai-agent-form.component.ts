@@ -1,10 +1,10 @@
-import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { ActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentTypeEntity, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
@@ -17,7 +17,8 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
-import { AgentPermissionsDialogComponent } from './agent-permissions-dialog.component';
+import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
+// AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
 /**
  * Type for sub-agent filter options
@@ -32,8 +33,6 @@ export interface UnifiedSubAgent {
     type: 'child' | 'related';
     relationship?: AIAgentRelationshipEntity;  // Only for related sub-agents
 }
-
-
 
 /**
  * Enhanced AI Agent form component that extends the auto-generated base form
@@ -67,6 +66,7 @@ export interface UnifiedSubAgent {
  */
 @RegisterClass(BaseFormComponent, 'AI Agents')
 @Component({
+  standalone: false,
     selector: 'mj-ai-agent-form',
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
@@ -245,8 +245,19 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         prompts: true,
         actions: true,
         learningCycles: true,
-        notes: true
+        notes: true,
+        customSection: true
     };
+
+    // === User Preferences ===
+    private static readonly PREFS_KEY = 'ai-agent-form/preferences';
+    private preferencesLoaded = false;
+
+    /** Whether the form header is collapsed to a single compact line */
+    public HeaderCollapsed = false;
+
+    /** Tracked expanded/collapsed state for each panelbar section */
+    public SectionStates: Record<string, boolean> = {};
 
     // === Dropdown Data ===
     /** Model selection mode options for the dropdown */
@@ -518,26 +529,23 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         executionHistoryCount: number;
     } | null = null;
 
-    constructor(
-        elementRef: ElementRef,
-        protected override sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        cdr: ChangeDetectorRef,
-        private dialogService: DialogService,
-        private viewContainerRef: ViewContainerRef,
-        private agentManagementService: AIAgentManagementService,
-        private testHarnessService: AITestHarnessDialogService
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-    }
+    // Dependency injection using inject() function
+    private sharedService = inject(SharedService);
+    private dialogService = inject(DialogService);
+    private viewContainerRef = inject(ViewContainerRef);
+    private agentManagementService = inject(AIAgentManagementService);
+    private testHarnessService = inject(AITestHarnessDialogService);
+    private createAgentService = inject(CreateAgentService);
     
     /**
      * After view initialization, load any custom form section if defined
      */
     async ngOnInit() {
         await super.ngOnInit();
-        
+
+        // Restore user preferences (header state, section expand/collapse)
+        this.loadUserPreferences();
+
         // Load agent types for dropdown (needed for both new and existing records)
         await AIEngineBase.Instance.Config(false); // in UI context user and provider default to global
         await ActionEngineBase.Instance.Config(false);
@@ -566,9 +574,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
     }
 
-
-
-
     /**
      * Loads counts and preview data for all related entities including sub-agents,
      * prompts, actions, learning cycles, notes, and execution history. 
@@ -594,7 +599,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             prompts: true,
             actions: true,
             learningCycles: true,
-            notes: true
+            notes: true,
+            customSection: true
         };
         this.cdr.detectChanges(); // update UI
 
@@ -688,6 +694,13 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: this.executionHistoryPageSize
+                },
+                // Agent permissions (to determine open-to-everyone state)
+                {
+                    EntityName: 'MJ: AI Agent Permissions',
+                    Fields: ['ID'],
+                    ExtraFilter: `AgentID='${this.record.ID}'`,
+                    ResultType: 'simple'
                 }
             ]);
 
@@ -705,6 +718,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                 // Initialize filtered executions
                 this.filteredExecutions = [...this.recentExecutions];
+
+                // Determine open-to-everyone state from permissions query
+                const permissionRows = results[3]?.Results || [];
+                this.IsOpenToEveryone = permissionRows.length === 0;
             }
 
             // Create snapshot for cancel/revert functionality
@@ -721,7 +738,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 prompts: false,
                 actions: false,
                 learningCycles: false,
-                notes: false
+                notes: false,
+                customSection: false
             };
             this.cdr.detectChanges();
         }
@@ -886,40 +904,43 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         if (!this.agentType?.UIFormSectionKey || !this.customSectionContainer) {
             return;
         }
-        
+
         // Check if component still exists in container
         if (this.customSectionLoaded && this.customSectionContainer.length > 0) {
             return;
         }
-        
+
+        this.loadingStates.customSection = true;
+        this.cdr.markForCheck();
+
         try {
             // Build the full registration key (Entity.Section pattern)
             const sectionKey = `AI Agents.${this.agentType.UIFormSectionKey}`;
-            
+
             // Get the component registration from the class factory
             const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, sectionKey);
-            
+
             if (registration && registration.SubClass) {
                 // Clear any existing custom section
                 this.customSectionContainer.clear();
-                
+
                 // Create the component
                 const componentRef = this.customSectionContainer.createComponent(registration.SubClass);
                 this.customSectionComponent = componentRef.instance as BaseFormSectionComponent;
                 this.customSectionComponentRef = componentRef;
-                
+
                 // Pass the record and edit mode to the custom section
                 this.customSectionComponent.record = this.record;
                 this.customSectionComponent.EditMode = this.EditMode;
-                
+
                 // Mark as loaded
                 this.customSectionLoaded = true;
-                
-                // Mark for check instead of forcing immediate detection
-                this.cdr.markForCheck();
             }
         } catch (error) {
             console.error('Error loading custom form section:', error);
+        } finally {
+            this.loadingStates.customSection = false;
+            this.cdr.markForCheck();
         }
     }
 
@@ -927,7 +948,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Handles state change events for the custom section panel
      * @param event The panel bar state change event
      */
-    public onCustomSectionStateChange(event: any): void {
+    public onCustomSectionStateChange(event: { expanded: boolean }): void {
         // When panel is expanded, check if we need to load or reload the custom section
         if (event.expanded && this.agentType?.UIFormSectionKey) {
             // Always try to load on expand to handle cases where container might have been recreated
@@ -935,6 +956,67 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 this.loadCustomFormSection();
             }, 0);
         }
+    }
+
+    // === User Preferences (Header & Section State) ===
+
+    /** Load saved preferences for header state and section expand/collapse */
+    private loadUserPreferences(): void {
+        try {
+            const raw = UserInfoEngine.Instance.GetSetting(AIAgentFormComponentExtended.PREFS_KEY);
+            if (raw) {
+                const prefs = JSON.parse(raw);
+                this.HeaderCollapsed = prefs.headerCollapsed ?? false;
+                this.SectionStates = prefs.sectionStates ?? {};
+            }
+        } catch (error) {
+            console.error('Error loading AI Agent form preferences:', error);
+        }
+        this.preferencesLoaded = true;
+    }
+
+    /** Persist preferences with debounce */
+    private persistPreferences(): void {
+        if (!this.preferencesLoaded) return;
+        const prefs = {
+            headerCollapsed: this.HeaderCollapsed,
+            sectionStates: this.SectionStates
+        };
+        UserInfoEngine.Instance.SetSettingDebounced(
+            AIAgentFormComponentExtended.PREFS_KEY,
+            JSON.stringify(prefs)
+        );
+    }
+
+    /** Toggle the header between expanded and collapsed modes */
+    public ToggleHeaderCollapsed(): void {
+        this.HeaderCollapsed = !this.HeaderCollapsed;
+        this.persistPreferences();
+        this.cdr.detectChanges();
+    }
+
+    /** Get the expanded state for a panelbar section, falling back to a default */
+    public GetSectionExpanded(sectionId: string, defaultValue: boolean): boolean {
+        if (this.preferencesLoaded && sectionId in this.SectionStates) {
+            return this.SectionStates[sectionId];
+        }
+        return defaultValue;
+    }
+
+    /** Handle panelbar stateChange — fires when any section expands or collapses */
+    public OnPanelBarStateChange(event: { items: Array<{ id: string; expanded: boolean }> }): void {
+        if (!event?.items) return;
+        for (const item of event.items) {
+            if (item.id) {
+                this.SectionStates[item.id] = item.expanded;
+
+                // Keep existing custom section load logic
+                if (item.id === 'custom' && item.expanded) {
+                    this.onCustomSectionStateChange({ expanded: true });
+                }
+            }
+        }
+        this.persistPreferences();
     }
 
     /**
@@ -983,7 +1065,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
     }
 
-
     /**
      * Opens the integrated test harness for the current agent.
      * Validates that the agent has been saved before allowing testing.
@@ -1008,6 +1089,12 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Opens the permissions management dialog for this agent.
      * Allows viewing and editing user/role-based permissions for the agent.
      */
+    /** Controls visibility of the new permissions dialog from @memberjunction/ng-agents */
+    public ShowPermissionsDialog = false;
+
+    /** True when no explicit permission records exist (agent is open to everyone) */
+    public IsOpenToEveryone = true;
+
     public openPermissionsDialog() {
         if (!this.record?.ID) {
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -1017,16 +1104,28 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             );
             return;
         }
+        this.ShowPermissionsDialog = true;
+    }
 
-        const dialogRef = this.dialogService.open({
-            content: AgentPermissionsDialogComponent,
-            width: 900,
-            height: 600
+    public async onPermissionsDialogClosed() {
+        this.ShowPermissionsDialog = false;
+        // Refresh open-to-everyone state in case permissions were added/removed
+        await this.refreshPermissionState();
+    }
+
+    private async refreshPermissionState(): Promise<void> {
+        if (!this.record?.ID) return;
+        const rv = new RunView();
+        const result = await rv.RunView<{ID: string}>({
+            EntityName: 'MJ: AI Agent Permissions',
+            Fields: ['ID'],
+            ExtraFilter: `AgentID='${this.record.ID}'`,
+            ResultType: 'simple'
         });
-
-        const dialog = dialogRef.content.instance as AgentPermissionsDialogComponent;
-        dialog.agent = this.record;
-        dialog.dialogRef = dialogRef;
+        if (result.Success) {
+            this.IsOpenToEveryone = (result.Results || []).length === 0;
+            this.cdr.markForCheck();
+        }
     }
 
     /**
@@ -1131,108 +1230,24 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Creates a new sub-agent using the create sub-agent dialog
+     * Creates a new sub-agent using the CreateAgentService slide-in panel.
+     * Uses the new unified agent creation UI from @memberjunction/ng-agents.
      */
     public async createSubAgent() {
         try {
-            this.agentManagementService.openCreateSubAgentDialog({
-                title: `Create Sub-Agent for ${this.record.Name || 'Agent'}`,
-                initialName: '',
-                parentAgentId: this.record.ID,
-                parentAgentName: this.record.Name || 'Agent',
-                viewContainerRef: this.viewContainerRef
-            }).pipe(takeUntil(this.destroy$)).subscribe({
-                next: async (result) => {
-                    if (result && result.subAgent) {
-                        try {
-                            // Handle deferred sub-agent creation if parent is not saved
-                            if (!this.record.IsSaved) {
-                                // Store a temporary reference to the parent - will be resolved during save
-                                result.subAgent.Set('_tempParentId', this.record.ID);
-                            }
-
-                            // Add the sub-agent to pending records
-                            this.PendingRecords.push({
-                                entityObject: result.subAgent,
-                                action: 'save'
-                            });
-
-                            // Add any newly created prompts to pending records
-                            if (result.newPrompts) {
-                                for (const prompt of result.newPrompts) {
-                                    this.PendingRecords.push({
-                                        entityObject: prompt,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Add any newly created prompt templates to pending records
-                            if (result.newPromptTemplates) {
-                                for (const template of result.newPromptTemplates) {
-                                    this.PendingRecords.push({
-                                        entityObject: template,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Add any newly created template contents to pending records
-                            if (result.newTemplateContents) {
-                                for (const content of result.newTemplateContents) {
-                                    this.PendingRecords.push({
-                                        entityObject: content,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Add agent prompt links to pending records
-                            if (result.agentPrompts) {
-                                for (const agentPrompt of result.agentPrompts) {
-                                    this.PendingRecords.push({
-                                        entityObject: agentPrompt,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Add agent action links to pending records
-                            if (result.agentActions) {
-                                for (const agentAction of result.agentActions) {
-                                    this.PendingRecords.push({
-                                        entityObject: agentAction,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Update UI to show the new sub-agent
-                            this.subAgents.push(result.subAgent);
-                            this.hasUnsavedChanges = true;
-
-                            // Mark for check instead of forcing immediate detection
-                            this.cdr.markForCheck();
-
-                            MJNotificationService.Instance.CreateSimpleNotification(
-                                `Sub-agent "${result.subAgent.Name}" created and will be saved when you save the parent agent`,
-                                'success',
-                                4000
-                            );
-                        } catch (error) {
-                            console.error('Error processing created sub-agent:', error);
-                            MJNotificationService.Instance.CreateSimpleNotification(
-                                'Error processing created sub-agent. Please try again.',
-                                'error',
-                                3000
-                            );
-                        }
+            this.createAgentService.OpenSubAgentSlideIn(
+                this.record.ID,
+                this.record.Name || 'Agent'
+            ).pipe(takeUntil(this.destroy$)).subscribe({
+                next: async (dialogResult) => {
+                    if (!dialogResult.Cancelled && dialogResult.Result) {
+                        await this.handleSubAgentCreated(dialogResult.Result);
                     }
                 },
                 error: (error) => {
-                    console.error('Error in create sub-agent dialog:', error);
+                    console.error('Error in create sub-agent slide-in:', error);
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        'Error opening sub-agent creation dialog. Please try again.',
+                        'Error opening sub-agent creation panel. Please try again.',
                         'error',
                         3000
                     );
@@ -1242,6 +1257,68 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             console.error('Error in createSubAgent:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Error creating sub-agent. Please try again.',
+                'error',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Handles the result from the create sub-agent slide-in.
+     * Adds entities to PendingRecords for atomic save with parent.
+     */
+    private async handleSubAgentCreated(result: CreateAgentResult): Promise<void> {
+        try {
+            const subAgent = result.Agent;
+
+            // Handle deferred sub-agent creation if parent is not saved
+            if (!this.record.IsSaved) {
+                // Store a temporary reference to the parent - will be resolved during save
+                subAgent.Set('_tempParentId', this.record.ID);
+            }
+
+            // Add the sub-agent to pending records
+            this.PendingRecords.push({
+                entityObject: subAgent,
+                action: 'save'
+            });
+
+            // Add agent prompt links to pending records
+            if (result.AgentPrompts) {
+                for (const agentPrompt of result.AgentPrompts) {
+                    this.PendingRecords.push({
+                        entityObject: agentPrompt,
+                        action: 'save'
+                    });
+                }
+            }
+
+            // Add agent action links to pending records
+            if (result.AgentActions) {
+                for (const agentAction of result.AgentActions) {
+                    this.PendingRecords.push({
+                        entityObject: agentAction,
+                        action: 'save'
+                    });
+                }
+            }
+
+            // Update UI to show the new sub-agent
+            this.subAgents.push(subAgent);
+            this.hasUnsavedChanges = true;
+
+            // Mark for check instead of forcing immediate detection
+            this.cdr.markForCheck();
+
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Sub-agent "${subAgent.Name}" created and will be saved when you save the parent agent`,
+                'success',
+                4000
+            );
+        } catch (error) {
+            console.error('Error processing created sub-agent:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error processing created sub-agent. Please try again.',
                 'error',
                 3000
             );
@@ -1806,7 +1883,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public debugPendingRecords() {
         // Debug method for troubleshooting - console output removed for production
     }
-
 
     /**
      * Adds a new note to the agent
@@ -2850,8 +2926,4 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         this.agentType = null;
     }
     
-}
-
-export function LoadAIAgentFormComponentExtended() {
-    // This function is called to ensure the component is loaded and registered
 }

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Duplicate Runs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-duplicaterun-form',
     templateUrl: './duplicaterun.form.component.html'
 })
@@ -24,6 +25,3 @@ export class DuplicateRunFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDuplicateRunFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

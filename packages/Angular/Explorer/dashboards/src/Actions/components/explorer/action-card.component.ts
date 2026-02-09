@@ -19,6 +19,7 @@ export interface ActionExecutionStats {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-action-card',
   templateUrl: './action-card.component.html',
   styleUrls: ['./action-card.component.css'],

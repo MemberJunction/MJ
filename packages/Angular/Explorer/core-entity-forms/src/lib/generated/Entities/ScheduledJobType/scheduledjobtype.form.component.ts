@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Scheduled Job Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-scheduledjobtype-form',
     templateUrl: './scheduledjobtype.form.component.html'
 })
@@ -23,6 +24,3 @@ export class ScheduledJobTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadScheduledJobTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

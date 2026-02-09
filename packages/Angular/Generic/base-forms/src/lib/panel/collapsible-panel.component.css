@@ -1,0 +1,266 @@
+mj-collapsible-panel {
+  --mj-card-bg: #ffffff;
+  --mj-card-radius: 8px;
+  --mj-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --mj-accent: #667eea;
+  --mj-accent-light: rgba(102, 126, 234, 0.08);
+  --mj-text-primary: #1f2937;
+  --mj-text-secondary: #6b7280;
+  --mj-text-muted: #9ca3af;
+  --mj-border: #e5e7eb;
+  --mj-success: #10b981;
+  --mj-isa-parent: #8b5cf6;
+  --mj-related-accent: #3b82f6;
+  --mj-transition: 200ms;
+
+  display: block;
+}
+
+mj-collapsible-panel.mj-search-hidden {
+  display: none;
+}
+
+mj-collapsible-panel.mj-drag-over {
+  border: 2px dashed var(--mj-accent);
+  border-radius: var(--mj-card-radius);
+}
+
+/* ============================================
+   PANEL CARD
+   ============================================ */
+.mj-forms-panel {
+  background: var(--mj-card-bg);
+  border-radius: var(--mj-card-radius);
+  box-shadow: var(--mj-card-shadow);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+.mj-forms-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+  border-bottom: 2px solid var(--mj-border);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s ease;
+}
+
+.mj-forms-panel-header:hover {
+  background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%);
+  border-bottom-color: var(--mj-accent);
+}
+
+/* Drag handle */
+.mj-forms-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: 24px;
+  color: var(--mj-text-muted);
+  cursor: grab;
+  opacity: 0;
+  overflow: hidden;
+  transition: width var(--mj-transition) ease, opacity var(--mj-transition) ease;
+  flex-shrink: 0;
+}
+
+.mj-forms-panel-header:hover .mj-forms-drag-handle {
+  width: 24px;
+  opacity: 1;
+}
+
+.mj-forms-drag-handle:hover {
+  color: var(--mj-accent);
+}
+
+.mj-forms-drag-handle:active {
+  cursor: grabbing;
+}
+
+mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
+  width: 24px;
+  opacity: 1;
+  color: var(--mj-accent);
+}
+
+/* Title group */
+.mj-forms-panel-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.mj-forms-panel-icon {
+  font-size: 18px;
+  color: var(--mj-accent);
+  width: 24px;
+  text-align: center;
+}
+
+.mj-forms-panel-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.mj-forms-panel-chevron {
+  color: var(--mj-text-secondary);
+  font-size: 14px;
+  transition: transform 0.3s ease;
+  padding: 4px;
+}
+
+/* Row count badge */
+.mj-forms-row-count-badge {
+  background: var(--mj-success);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  line-height: 1;
+}
+
+.mj-forms-row-count-badge--zero {
+  background: var(--mj-text-muted);
+}
+
+/* ============================================
+   INHERITED VARIANT (IS-A parent fields)
+   ============================================ */
+.mj-forms-panel--inherited {
+  border-left: 3px solid var(--mj-isa-parent);
+}
+
+.mj-forms-panel--inherited .mj-forms-panel-header {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%);
+}
+
+.mj-forms-panel--inherited .mj-forms-panel-header:hover {
+  background: linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%);
+  border-bottom-color: var(--mj-isa-parent);
+}
+
+.mj-forms-panel--inherited .mj-forms-panel-icon {
+  color: var(--mj-isa-parent);
+}
+
+.mj-forms-inherited-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: #f3f0ff;
+  color: var(--mj-isa-parent);
+  border: 1px solid #e0d5ff;
+  cursor: pointer;
+  transition: all var(--mj-transition) ease;
+  text-decoration: none;
+}
+
+.mj-forms-inherited-badge:hover {
+  background: #e8e0ff;
+  border-color: var(--mj-isa-parent);
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.2);
+}
+
+.mj-forms-inherited-badge i {
+  font-size: 10px;
+}
+
+/* ============================================
+   RELATED ENTITY VARIANT
+   ============================================ */
+.mj-forms-panel--related {
+  border-left: 3px solid var(--mj-related-accent);
+}
+
+.mj-forms-panel--related .mj-forms-panel-header {
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+}
+
+.mj-forms-panel--related .mj-forms-panel-header:hover {
+  background: linear-gradient(135deg, #bfdbfe 0%, #e0f2fe 100%);
+  border-bottom-color: var(--mj-related-accent);
+}
+
+.mj-forms-panel--related .mj-forms-panel-icon {
+  color: var(--mj-related-accent);
+}
+
+/* Related entity content — 400px default, user can drag-resize vertically */
+.mj-forms-panel--related .mj-forms-panel-content {
+  height: 400px;
+  padding: 0;
+  overflow: hidden;
+  resize: vertical;
+  min-height: 120px;
+  max-height: 800px;
+}
+
+/* Ensure child chain fills the resizable content area */
+.mj-forms-panel--related .mj-forms-panel-content > *,
+.mj-forms-panel--related .mj-forms-panel-content > .ng-star-inserted {
+  height: 100%;
+}
+
+.mj-forms-panel--related .mj-forms-panel-content > * > * {
+  height: 100%;
+}
+
+/* Related entity panels need the body to not clip the resize handle */
+.mj-forms-panel--related .mj-forms-panel-body {
+  overflow: visible;
+}
+
+/* ============================================
+   BODY (collapsible)
+   ============================================ */
+.mj-forms-panel-body {
+  max-height: 2000px;
+  overflow: hidden;
+  transition: max-height 0.4s ease, padding 0.4s ease, opacity 0.3s ease;
+  opacity: 1;
+}
+
+.mj-forms-panel-body--collapsed {
+  max-height: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.mj-forms-panel-content {
+  padding: 20px;
+  overflow: auto;
+  max-height: 600px;
+}
+
+/* ============================================
+   SEARCH HIGHLIGHTING
+   ============================================ */
+.mj-forms-panel-title ::ng-deep .mj-forms-search-highlight {
+  background-color: #fef08a;
+  color: #854d0e;
+  padding: 0;
+  border-radius: 2px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px #fef08a;
+}

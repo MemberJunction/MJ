@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Tasks') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-task-form',
     templateUrl: './task.form.component.html'
 })
@@ -26,6 +27,3 @@ export class TaskFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadTaskFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

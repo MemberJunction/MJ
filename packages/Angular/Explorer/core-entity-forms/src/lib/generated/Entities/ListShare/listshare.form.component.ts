@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: List Shares') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-listshare-form',
     templateUrl: './listshare.form.component.html'
 })
@@ -20,6 +21,3 @@ export class ListShareFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadListShareFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

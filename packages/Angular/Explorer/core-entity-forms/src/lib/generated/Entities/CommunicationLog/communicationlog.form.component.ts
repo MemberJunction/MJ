@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Communication Logs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-communicationlog-form',
     templateUrl: './communicationlog.form.component.html'
 })
@@ -22,6 +23,3 @@ export class CommunicationLogFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadCommunicationLogFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

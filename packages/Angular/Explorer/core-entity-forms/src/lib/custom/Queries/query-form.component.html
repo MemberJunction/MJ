@@ -1,611 +1,617 @@
 <div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-    @if (record) {
-        <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-            <mj-form-toolbar [form]="this"></mj-form-toolbar>
+  @if (record) {
+    <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
+      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
-            <!-- Header Section -->
-            <div class="query-header" style="flex-shrink: 0; background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 20px;">
-                <div style="display: flex; flex-direction: column; gap: 16px;">
-                    
-                    <!-- Top Row: Name and Run Button -->
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
-                        <!-- Left: Query Name -->
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <i class="fa-solid fa-database" style="color: #17a2b8; font-size: 1.4em;"></i>
-                                @if (EditMode) {
-                                    <kendo-textbox [(ngModel)]="record.Name" 
-                                                  name="queryName"
-                                                  placeholder="Enter query name..."
-                                                  style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
-                                    </kendo-textbox>
-                                } @else {
-                                    <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled Query' }}</h4>
-                                }
-                            </div>
-                        </div>
+      <!-- Header Section -->
+      <div class="query-header" style="flex-shrink: 0; background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
 
-                        <!-- Right: Action Buttons -->
-                        <div class="action-buttons" style="display: flex; gap: 8px; align-items: center;">
-                            @if (record.ID) {
-                                <button kendoButton 
-                                        [themeColor]="'primary'" 
-                                        [size]="'large'"
-                                        [disabled]="EditMode || record.Status !== 'Approved' || !record.SQL || record.SQL.trim().length === 0"
-                                        (click)="runQuery()"
-                                        title="Run Query">
-                                    <i class="fa-solid fa-play"></i> Run
-                                </button>
-                            }
+          <!-- Top Row: Name and Run Button -->
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+            <!-- Left: Query Name -->
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <i class="fa-solid fa-database" style="color: #17a2b8; font-size: 1.4em;"></i>
+                @if (EditMode) {
+                  <kendo-textbox [(ngModel)]="record.Name"
+                    name="queryName"
+                    placeholder="Enter query name..."
+                    style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
+                  </kendo-textbox>
+                } @else {
+                  <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled Query' }}</h4>
+                }
+              </div>
+            </div>
+
+            <!-- Right: Action Buttons -->
+            <div class="action-buttons" style="display: flex; gap: 8px; align-items: center;">
+              @if (record.ID) {
+                <button kendoButton
+                  [themeColor]="'primary'"
+                  [size]="'large'"
+                  [disabled]="EditMode || record.Status !== 'Approved' || !record.SQL || record.SQL.trim().length === 0"
+                  (click)="runQuery()"
+                  title="Run Query">
+                  <i class="fa-solid fa-play"></i> Run
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Second Row: Category and Status -->
+          <div style="display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center;">
+            <!-- Category -->
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <label style="font-weight: 600; color: #495057; min-width: 80px;">Category:</label>
+              @if (EditMode) {
+                <kendo-dropdownlist
+                  [(ngModel)]="record.CategoryID"
+                  name="categoryId"
+                  [data]="categoryOptions"
+                  textField="text"
+                  valueField="value"
+                  [valuePrimitive]="true"
+                  placeholder="Select category..."
+                  style="flex: 1;">
+                </kendo-dropdownlist>
+              } @else {
+                <span style="color: #495057;">{{ getCategoryPath() || 'Uncategorized' }}</span>
+              }
+            </div>
+
+            <!-- Status -->
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <label style="font-weight: 600; color: #495057; min-width: 50px;">Status:</label>
+              @if (EditMode) {
+                <kendo-dropdownlist
+                  [(ngModel)]="record.Status"
+                  name="status"
+                  [data]="statusOptions"
+                  textField="text"
+                  valueField="value"
+                  [valuePrimitive]="true"
+                  style="flex: 1;">
+                </kendo-dropdownlist>
+              } @else {
+                <span class="badge"
+                  [style.background]="getStatusBadgeColor()"
+                  style="color: white; padding: 6px 12px; border-radius: 12px; font-size: 0.85em;">
+                  @if (record.Status === 'Approved') {
+                    <i class="fa-solid fa-check-circle"></i>
+                  }
+                  @if (record.Status === 'Pending') {
+                    <i class="fa-solid fa-clock"></i>
+                  }
+                  @if (record.Status === 'Rejected') {
+                    <i class="fa-solid fa-times-circle"></i>
+                  }
+                  {{ record.Status || 'Unknown' }}
+                </span>
+              }
+            </div>
+          </div>
+
+          <!-- Third Row: Description -->
+          @if (EditMode || record.Description) {
+            <div>
+              @if (EditMode) {
+                <kendo-textarea [(ngModel)]="record.Description"
+                  name="description"
+                  [rows]="2"
+                  placeholder="Enter query description..."
+                  style="width: 100%;">
+                </kendo-textarea>
+              } @else {
+                <p style="margin: 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Main Content Area with Expansion Panels -->
+      <div class="query-content" style="flex: 1; min-height: 0; padding: 20px; overflow-y: auto; background: #f5f7fa;">
+
+        <!-- SQL Query Panel -->
+        <kendo-expansionpanel
+          [(expanded)]="sqlPanelExpanded"
+          style="margin-bottom: 16px;">
+          <ng-template kendoExpansionPanelTitleDirective>
+            <span style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-code" style="color: #17a2b8;"></i>
+                SQL
+                @if (record.SQL) {
+                  <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                    <i class="fa-solid fa-check"></i> Defined
+                  </span>
+                }
+              </span>
+              <button type="button"
+                kendoButton
+                fillMode="flat"
+                size="small"
+                (click)="toggleFiltersHelp(); $event.stopPropagation()"
+                title="Show/hide SQL filters help"
+                style="margin-right: 8px;">
+                <i class="fa-solid fa-question-circle"></i>
+                <span style="margin-left: 4px;">Filters Help</span>
+                <i class="fa-solid" [ngClass]="showFiltersHelp ? 'fa-chevron-up' : 'fa-chevron-down'" style="margin-left: 4px;"></i>
+              </button>
+            </span>
+          </ng-template>
+
+          <div style="display: flex; flex-direction: column;">
+            <!-- Code Editor -->
+            <mj-code-editor #sqlEditor
+              (change)="onSQLChange($event)"
+              [language]="'sql'"
+              style="flex: 1; height: 400px; border: 1px solid #ced4da; border-radius: 4px;">
+            </mj-code-editor>
+
+            <!-- SQL Filters Help (Below Editor) -->
+            @if (showFiltersHelp) {
+              <div class="filters-help" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin-top: 16px;">
+                <h6 style="margin: 0 0 12px 0; color: #495057; font-weight: 600;">
+                  <i class="fa-solid fa-filter"></i> Available SQL Filters for Parameterized Queries
+                </h6>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">
+                  @for (filter of sqlFilters; track filter.name) {
+                    <div class="filter-card" style="background: white; border: 1px solid #e9ecef; border-radius: 4px; padding: 12px;">
+                      <div style="font-family: 'Courier New', monospace; font-weight: bold; color: #007bff; margin-bottom: 4px;">
+                        {{ filter.name }}
+                      </div>
+                      <div style="font-size: 0.85em; color: #495057; margin-bottom: 8px;">
+                        {{ filter.description }}
+                      </div>
+                      <div style="font-family: 'Courier New', monospace; font-size: 0.8em; background: #f1f3f4; padding: 6px; border-radius: 3px; margin-bottom: 4px;">
+                        {{ filter.exampleSyntax }}
+                      </div>
+                      @if (filter.notes) {
+                        <div style="font-size: 0.75em; color: #6c757d; font-style: italic;">
+                          {{ filter.notes }}
                         </div>
+                      }
                     </div>
-
-                    <!-- Second Row: Category and Status -->
-                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center;">
-                        <!-- Category -->
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <label style="font-weight: 600; color: #495057; min-width: 80px;">Category:</label>
-                            @if (EditMode) {
-                                <kendo-dropdownlist
-                                    [(ngModel)]="record.CategoryID"
-                                    name="categoryId"
-                                    [data]="categoryOptions"
-                                    textField="text"
-                                    valueField="value"
-                                    [valuePrimitive]="true"
-                                    placeholder="Select category..."
-                                    style="flex: 1;">
-                                </kendo-dropdownlist>
-                            } @else {
-                                <span style="color: #495057;">{{ getCategoryPath() || 'Uncategorized' }}</span>
-                            }
-                        </div>
-
-                        <!-- Status -->
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <label style="font-weight: 600; color: #495057; min-width: 50px;">Status:</label>
-                            @if (EditMode) {
-                                <kendo-dropdownlist
-                                    [(ngModel)]="record.Status"
-                                    name="status"
-                                    [data]="statusOptions"
-                                    textField="text"
-                                    valueField="value"
-                                    [valuePrimitive]="true"
-                                    style="flex: 1;">
-                                </kendo-dropdownlist>
-                            } @else {
-                                <span class="badge" 
-                                      [style.background]="getStatusBadgeColor()" 
-                                      style="color: white; padding: 6px 12px; border-radius: 12px; font-size: 0.85em;">
-                                    <i class="fa-solid fa-check-circle" *ngIf="record.Status === 'Approved'"></i>
-                                    <i class="fa-solid fa-clock" *ngIf="record.Status === 'Pending'"></i>
-                                    <i class="fa-solid fa-times-circle" *ngIf="record.Status === 'Rejected'"></i>
-                                    {{ record.Status || 'Unknown' }}
-                                </span>
-                            }
-                        </div>
-                    </div>
-
-                    <!-- Third Row: Description -->
-                    @if (EditMode || record.Description) {
-                        <div>
-                            @if (EditMode) {
-                                <kendo-textarea [(ngModel)]="record.Description" 
-                                               name="description"
-                                               [rows]="2"
-                                               placeholder="Enter query description..."
-                                               style="width: 100%;">
-                                </kendo-textarea>
-                            } @else {
-                                <p style="margin: 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
-                            }
-                        </div>
-                    }
+                  }
                 </div>
-            </div>
+              </div>
+            }
+          </div>
+        </kendo-expansionpanel>
 
-            <!-- Main Content Area with Expansion Panels -->
-            <div class="query-content" style="flex: 1; min-height: 0; padding: 20px; overflow-y: auto; background: #f5f7fa;">
-                
-                <!-- SQL Query Panel -->
-                <kendo-expansionpanel 
-                    [(expanded)]="sqlPanelExpanded"
-                    style="margin-bottom: 16px;">
-                    <ng-template kendoExpansionPanelTitleDirective>
-                        <span style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-code" style="color: #17a2b8;"></i>
-                                SQL
-                                @if (record.SQL) {
-                                    <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                        <i class="fa-solid fa-check"></i> Defined
-                                    </span>
-                                }
-                            </span>
-                            <button type="button"
-                                    kendoButton 
-                                    fillMode="flat"
-                                    size="small"
-                                    (click)="toggleFiltersHelp(); $event.stopPropagation()"
-                                    title="Show/hide SQL filters help"
-                                    style="margin-right: 8px;">
-                                <i class="fa-solid fa-question-circle"></i>
-                                <span style="margin-left: 4px;">Filters Help</span>
-                                <i class="fa-solid" [ngClass]="showFiltersHelp ? 'fa-chevron-up' : 'fa-chevron-down'" style="margin-left: 4px;"></i>
+        <!-- Parameters Panel -->
+        @if (record.IsSaved) {
+          <kendo-expansionpanel
+            [(expanded)]="parametersPanelExpanded"
+            style="margin-bottom: 16px;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                Query Parameters
+                @if (queryParameters.length > 0) {
+                  <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                    {{ queryParameters.length }}
+                  </span>
+                }
+              </span>
+            </ng-template>
+
+            <div style="padding: 16px 0;">
+              @if (isLoadingParameters) {
+                <div style="display: flex; align-items: center; justify-content: center; padding: 40px;">
+                  <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
+                  <span style="color: #6c757d;">Loading parameters...</span>
+                </div>
+              } @else {
+                @if (queryParameters.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-sliders empty-state-icon"></i>
+                    <div class="empty-state-title">No Parameters Defined</div>
+                    <div class="empty-state-text">
+                      Add parameters to make your query dynamic and reusable.
+                    </div>
+                    @if (EditMode) {
+                      <button type="button" class="add-param-btn" (click)="addParameter()">
+                        <i class="fa-solid fa-plus"></i> Add First Parameter
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <!-- Parameters Header with Add Button -->
+                  @if (EditMode) {
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; padding: 0 20px;">
+                      <button type="button" class="add-param-btn" (click)="addParameter()">
+                        <i class="fa-solid fa-plus"></i> Add Parameter
+                      </button>
+                    </div>
+                  }
+
+                  <!-- Parameters Grid -->
+                  <div class="parameters-grid">
+                    @for (param of queryParameters; track param.ID || $index) {
+                      <div class="param-card" [class.required]="param.IsRequired" (click)="editParameter(param)">
+                        <div class="param-card-header">
+                          <div class="param-name">
+                            <i class="fa-solid fa-at" style="color: #007bff;"></i>
+                            {{ param.Name }}
+                          </div>
+                          <div class="param-badges">
+                            @if (param.IsRequired) {
+                              <span class="param-badge required">Required</span>
+                            }
+                          </div>
+                        </div>
+
+                        <div class="param-card-body">
+                          @if (param.Description) {
+                            <div style="margin-bottom: 8px;">{{ param.Description }}</div>
+                          }
+
+                          <div style="display: flex; gap: 16px; font-size: 0.85em;">
+                            <div>
+                              <strong>Type:</strong> {{ param.Type || 'Text' }}
+                            </div>
+                            @if (param.DefaultValue) {
+                              <div>
+                                <strong>Default:</strong>
+                                <code style="background: #f1f3f4; padding: 2px 4px; border-radius: 3px;">
+                                  {{ param.DefaultValue }}
+                                </code>
+                              </div>
+                            }
+                          </div>
+                        </div>
+
+                        @if (EditMode) {
+                          <div class="param-actions" (click)="$event.stopPropagation()">
+                            <button type="button" class="param-action-btn" (click)="editParameter(param)" title="Edit parameter">
+                              <i class="fa-solid fa-pen"></i>
                             </button>
-                        </span>
-                    </ng-template>
-                    
-                    <div style="display: flex; flex-direction: column;">
-                        <!-- Code Editor -->
-                        <mj-code-editor #sqlEditor
-                                       (change)="onSQLChange($event)"
-                                       [language]="'sql'"
-                                       style="flex: 1; height: 400px; border: 1px solid #ced4da; border-radius: 4px;">
-                        </mj-code-editor>
-                        
-                        <!-- SQL Filters Help (Below Editor) -->
-                        @if (showFiltersHelp) {
-                            <div class="filters-help" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin-top: 16px;">
-                                <h6 style="margin: 0 0 12px 0; color: #495057; font-weight: 600;">
-                                    <i class="fa-solid fa-filter"></i> Available SQL Filters for Parameterized Queries
-                                </h6>
-                                
-                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">
-                                    @for (filter of sqlFilters; track filter.name) {
-                                        <div class="filter-card" style="background: white; border: 1px solid #e9ecef; border-radius: 4px; padding: 12px;">
-                                            <div style="font-family: 'Courier New', monospace; font-weight: bold; color: #007bff; margin-bottom: 4px;">
-                                                {{ filter.name }}
-                                            </div>
-                                            <div style="font-size: 0.85em; color: #495057; margin-bottom: 8px;">
-                                                {{ filter.description }}
-                                            </div>
-                                            <div style="font-family: 'Courier New', monospace; font-size: 0.8em; background: #f1f3f4; padding: 6px; border-radius: 3px; margin-bottom: 4px;">
-                                                {{ filter.exampleSyntax }}
-                                            </div>
-                                            @if (filter.notes) {
-                                                <div style="font-size: 0.75em; color: #6c757d; font-style: italic;">
-                                                    {{ filter.notes }}
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            </div>
+                            <button type="button" class="param-action-btn delete" (click)="deleteParameter(param)" title="Delete parameter">
+                              <i class="fa-solid fa-trash"></i>
+                            </button>
+                          </div>
                         }
-                    </div>
-                </kendo-expansionpanel>
-
-                <!-- Parameters Panel -->
-                @if (record.IsSaved) {
-                    <kendo-expansionpanel 
-                        [(expanded)]="parametersPanelExpanded"
-                        style="margin-bottom: 16px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
-                                Query Parameters
-                                @if (queryParameters.length > 0) {
-                                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                        {{ queryParameters.length }}
-                                    </span>
-                                }
-                            </span>
-                        </ng-template>
-                        
-                        <div style="padding: 16px 0;">
-                            @if (isLoadingParameters) {
-                                <div style="display: flex; align-items: center; justify-content: center; padding: 40px;">
-                                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
-                                    <span style="color: #6c757d;">Loading parameters...</span>
-                                </div>
-                            } @else {
-                                @if (queryParameters.length === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-sliders empty-state-icon"></i>
-                                        <div class="empty-state-title">No Parameters Defined</div>
-                                        <div class="empty-state-text">
-                                            Add parameters to make your query dynamic and reusable.
-                                        </div>
-                                        @if (EditMode) {
-                                            <button type="button" class="add-param-btn" (click)="addParameter()">
-                                                <i class="fa-solid fa-plus"></i> Add First Parameter
-                                            </button>
-                                        }
-                                    </div>
-                                } @else {
-                                    <!-- Parameters Header with Add Button -->
-                                    @if (EditMode) {
-                                        <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; padding: 0 20px;">
-                                            <button type="button" class="add-param-btn" (click)="addParameter()">
-                                                <i class="fa-solid fa-plus"></i> Add Parameter
-                                            </button>
-                                        </div>
-                                    }
-                                    
-                                    <!-- Parameters Grid -->
-                                    <div class="parameters-grid">
-                                        @for (param of queryParameters; track param.ID || $index) {
-                                            <div class="param-card" [class.required]="param.IsRequired" (click)="editParameter(param)">
-                                                <div class="param-card-header">
-                                                    <div class="param-name">
-                                                        <i class="fa-solid fa-at" style="color: #007bff;"></i>
-                                                        {{ param.Name }}
-                                                    </div>
-                                                    <div class="param-badges">
-                                                        @if (param.IsRequired) {
-                                                            <span class="param-badge required">Required</span>
-                                                        }
-                                                    </div>
-                                                </div>
-                                                
-                                                <div class="param-card-body">
-                                                    @if (param.Description) {
-                                                        <div style="margin-bottom: 8px;">{{ param.Description }}</div>
-                                                    }
-                                                    
-                                                    <div style="display: flex; gap: 16px; font-size: 0.85em;">
-                                                        <div>
-                                                            <strong>Type:</strong> {{ param.Type || 'Text' }}
-                                                        </div>
-                                                        @if (param.DefaultValue) {
-                                                            <div>
-                                                                <strong>Default:</strong> 
-                                                                <code style="background: #f1f3f4; padding: 2px 4px; border-radius: 3px;">
-                                                                    {{ param.DefaultValue }}
-                                                                </code>
-                                                            </div>
-                                                        }
-                                                    </div>
-                                                </div>
-                                                
-                                                @if (EditMode) {
-                                                    <div class="param-actions" (click)="$event.stopPropagation()">
-                                                        <button type="button" class="param-action-btn" (click)="editParameter(param)" title="Edit parameter">
-                                                            <i class="fa-solid fa-pen"></i>
-                                                        </button>
-                                                        <button type="button" class="param-action-btn delete" (click)="deleteParameter(param)" title="Delete parameter">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            }
-                        </div>
-                    </kendo-expansionpanel>
+                      </div>
+                    }
+                  </div>
                 }
-
-                <!-- Query Fields Panel -->
-                @if (record.IsSaved) {
-                    <kendo-expansionpanel 
-                        [(expanded)]="fieldsPanelExpanded"
-                        style="margin-bottom: 16px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-table" style="color: #6c757d;"></i>
-                                Query Fields
-                                @if (queryFields.length > 0) {
-                                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                        {{ queryFields.length }}
-                                    </span>
-                                }
-                            </span>
-                        </ng-template>
-                        
-                        <div style="padding: 16px 0;">
-                            @if (isLoadingFields) {
-                                <div style="display: flex; justify-content: center; padding: 40px;">
-                                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; color: #007bff;"></i>
-                                </div>
-                            } @else {
-                                @if (queryFields.length === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-table" style="font-size: 3em; color: #dee2e6; margin-bottom: 12px;"></i>
-                                        <h5 style="color: #6c757d; margin-bottom: 8px;">No Fields Defined</h5>
-                                        <div style="color: #adb5bd; margin-bottom: 16px;">
-                                            Define output fields for your query results.
-                                        </div>
-                                        @if (EditMode) {
-                                            <button type="button" class="add-param-btn" (click)="addField()">
-                                                <i class="fa-solid fa-plus"></i> Add First Field
-                                            </button>
-                                        }
-                                    </div>
-                                } @else {
-                                    <!-- Fields Header with Add Button -->
-                                    @if (EditMode) {
-                                        <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; padding: 0 20px;">
-                                            <button type="button" class="add-param-btn" (click)="addField()">
-                                                <i class="fa-solid fa-plus"></i> Add Field
-                                            </button>
-                                        </div>
-                                    }
-                                    
-                                    <!-- Fields Grid -->
-                                    <div class="parameters-grid">
-                                        @for (field of queryFields; track field.ID) {
-                                            <div class="param-card">
-                                                <div class="param-card-header">
-                                                    <div class="param-name">
-                                                        <i class="fa-solid fa-columns" style="color: #17a2b8;"></i>
-                                                        {{ field.Name }}
-                                                    </div>
-                                                    <div class="param-badges">
-                                                        <span class="param-badge" style="background: #e3f2fd; color: #1976d2;">{{ field.SQLBaseType }}</span>
-                                                        @if (field.Sequence) {
-                                                            <span class="param-badge" style="background: #f3e5f5; color: #7b1fa2;">#{{ field.Sequence }}</span>
-                                                        }
-                                                    </div>
-                                                </div>
-                                                
-                                                <div class="param-card-body">
-                                                    @if (field.Description) {
-                                                        <div class="param-description">{{ field.Description }}</div>
-                                                    }
-                                                    <div class="param-meta">
-                                                        <span class="meta-item">
-                                                            <i class="fa-solid fa-code"></i> {{ field.SQLFullType || field.SQLBaseType }}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                
-                                                @if (EditMode) {
-                                                    <div class="param-card-actions">
-                                                        <button type="button" class="action-btn danger" (click)="deleteField(field)" title="Delete field">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            }
-                        </div>
-                    </kendo-expansionpanel>
-                }
-
-                <!-- Query Entities Panel -->
-                @if (record.IsSaved) {
-                    <kendo-expansionpanel 
-                        [(expanded)]="entitiesPanelExpanded"
-                        style="margin-bottom: 16px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-database" style="color: #6c757d;"></i>
-                                Query Entities
-                                @if (queryEntities.length > 0) {
-                                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                        {{ queryEntities.length }}
-                                    </span>
-                                }
-                            </span>
-                        </ng-template>
-                        
-                        <div style="padding: 16px 0;">
-                            @if (isLoadingEntities) {
-                                <div style="display: flex; justify-content: center; padding: 40px;">
-                                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; color: #007bff;"></i>
-                                </div>
-                            } @else {
-                                @if (queryEntities.length === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-database" style="font-size: 3em; color: #dee2e6; margin-bottom: 12px;"></i>
-                                        <h5 style="color: #6c757d; margin-bottom: 8px;">No Entities Tracked</h5>
-                                        <div style="color: #adb5bd; margin-bottom: 16px;">
-                                            Track which entities this query uses for documentation.
-                                        </div>
-                                        @if (EditMode) {
-                                            <button type="button" class="add-param-btn" (click)="addEntity()">
-                                                <i class="fa-solid fa-plus"></i> Add First Entity
-                                            </button>
-                                        }
-                                    </div>
-                                } @else {
-                                    <!-- Entities Header with Add Button -->
-                                    @if (EditMode) {
-                                        <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; padding: 0 20px;">
-                                            <button type="button" class="add-param-btn" (click)="addEntity()">
-                                                <i class="fa-solid fa-plus"></i> Add Entity
-                                            </button>
-                                        </div>
-                                    }
-                                    
-                                    <!-- Entities Grid -->
-                                    <div class="parameters-grid">
-                                        @for (entity of queryEntities; track entity.ID) {
-                                            <div class="param-card">
-                                                <div class="param-card-header">
-                                                    <div class="param-name">
-                                                        <i class="fa-solid fa-table" style="color: #28a745;"></i>
-                                                        {{ entity.Entity || 'Select Entity...' }}
-                                                    </div>
-                                                    @if (EditMode) {
-                                                        <div style="flex: 1; margin-left: 12px;">
-                                                            <kendo-dropdownlist
-                                                                [(ngModel)]="entity.EntityID"
-                                                                [name]="'entity_' + entity.ID"
-                                                                [data]="getEntityOptions()"
-                                                                textField="text"
-                                                                valueField="id"
-                                                                [valuePrimitive]="true"
-                                                                placeholder="Select entity..."
-                                                                style="width: 100%;">
-                                                            </kendo-dropdownlist>
-                                                        </div>
-                                                    }
-                                                </div>
-                                                
-                                                @if (!EditMode && entity.Entity) {
-                                                    <div class="param-card-body">
-                                                        <div class="param-meta">
-                                                            <span class="meta-item">
-                                                                <i class="fa-solid fa-database"></i> Data Source
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                }
-                                                
-                                                @if (EditMode) {
-                                                    <div class="param-card-actions">
-                                                        <button type="button" class="action-btn danger" (click)="deleteEntity(entity)" title="Delete entity">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            }
-                        </div>
-                    </kendo-expansionpanel>
-                }
-
-                <!-- Details Panel -->
-                <kendo-expansionpanel 
-                    [(expanded)]="detailsPanelExpanded"
-                    style="margin-bottom: 16px;">
-                    <ng-template kendoExpansionPanelTitleDirective>
-                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                            <i class="fa-solid fa-info-circle" style="color: #6c757d;"></i>
-                            Query Details
-                        </span>
-                    </ng-template>
-                    
-                    <div style="padding: 20px;">
-                        <div class="details-grid">
-                            <!-- Uses Template -->
-                            <div class="detail-item">
-                                <label class="detail-label">
-                                    <i class="fa-solid fa-file-code"></i> Template Usage
-                                </label>
-                                @if (EditMode) {
-                                    <kendo-switch [(ngModel)]="record.UsesTemplate" name="usesTemplate"></kendo-switch>
-                                } @else {
-                                    <div class="detail-value">
-                                        @if (record.UsesTemplate) {
-                                            <span style="color: #28a745;"><i class="fa-solid fa-check"></i> Uses Templates</span>
-                                        } @else {
-                                            <span style="color: #6c757d;"><i class="fa-solid fa-times"></i> No Templates</span>
-                                        }
-                                    </div>
-                                }
-                            </div>
-
-                            <!-- Created Date -->
-                            <div class="detail-item">
-                                <label class="detail-label">
-                                    <i class="fa-solid fa-calendar-plus"></i> Created
-                                </label>
-                                <div class="detail-value">{{ formatDate(record.__mj_CreatedAt) }}</div>
-                            </div>
-
-                            <!-- Updated Date -->
-                            <div class="detail-item">
-                                <label class="detail-label">
-                                    <i class="fa-solid fa-calendar-check"></i> Last Updated
-                                </label>
-                                <div class="detail-value">{{ formatDate(record.__mj_UpdatedAt) }}</div>
-                            </div>
-
-                            <!-- Quality Rank -->
-                            @if (record.QualityRank != null) {
-                                <div class="detail-item">
-                                    <label class="detail-label">
-                                        <i class="fa-solid fa-star"></i> Quality Rank
-                                    </label>
-                                    <div class="detail-value">{{ record.QualityRank }}/10</div>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                </kendo-expansionpanel>
-
-                <!-- Permissions Panel -->
-                @if (record.IsSaved) {
-                    <kendo-expansionpanel 
-                        [(expanded)]="permissionsPanelExpanded"
-                        style="margin-bottom: 16px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-shield-alt" style="color: #6c757d;"></i>
-                                Query Permissions
-                            </span>
-                        </ng-template>
-                        
-                        <div style="padding: 16px 0;">
-                            @if (isLoadingPermissions) {
-                                <div style="display: flex; justify-content: center; padding: 40px;">
-                                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; color: #007bff;"></i>
-                                </div>
-                            } @else {
-                                @if (queryPermissions.length === 0 && !EditMode) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-shield-alt" style="font-size: 3em; color: #dee2e6; margin-bottom: 12px;"></i>
-                                        <h5 style="color: #6c757d; margin-bottom: 8px;">No Permissions Set</h5>
-                                        <div style="color: #adb5bd;">
-                                            This query uses default permissions.
-                                        </div>
-                                    </div>
-                                } @else {
-                                    @if (EditMode) {
-                                        <!-- Edit Mode: Use the standard grid -->
-                                        <mj-explorer-entity-data-grid
-                                            [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"
-                                            [NewRecordValues]="NewRecordValues('Query Permissions')"
-                                            [AllowLoad]="true"
-                                            [ShowToolbar]="false">
-                                        </mj-explorer-entity-data-grid>
-                                    } @else {
-                                        <!-- Read Mode: Nice card-based display -->
-                                        <div class="permissions-display">
-                                            @for (permission of queryPermissions; track permission.ID) {
-                                                <div class="permission-card" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
-                                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                                        <i class="fa-solid fa-users" style="font-size: 1.5em; color: #6c757d;"></i>
-                                                        <div style="flex: 1;">
-                                                            <div style="font-weight: 600; color: #495057;">
-                                                                {{ permission.Role }}
-                                                            </div>
-                                                            <div style="font-size: 0.85em; color: #6c757d;">
-                                                                Role Permission
-                                                            </div>
-                                                        </div>
-                                                        <div style="display: flex; gap: 8px;">
-                                                            <span class="permission-badge" style="background: #6f42c1; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em;">
-                                                                <i class="fa-solid fa-play"></i> Can Execute
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                }
-                            }
-                        </div>
-                    </kendo-expansionpanel>
-                }
+              }
             </div>
-        </form>
+          </kendo-expansionpanel>
+        }
 
-        <!-- Query Run Dialog -->
-        <mj-query-run-dialog 
-            [query]="record"
-            [parameters]="queryParameters"
-            [(isVisible)]="showRunDialog"
-            (onClose)="onRunDialogClose()">
-        </mj-query-run-dialog>
+        <!-- Query Fields Panel -->
+        @if (record.IsSaved) {
+          <kendo-expansionpanel
+            [(expanded)]="fieldsPanelExpanded"
+            style="margin-bottom: 16px;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-table" style="color: #6c757d;"></i>
+                Query Fields
+                @if (queryFields.length > 0) {
+                  <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                    {{ queryFields.length }}
+                  </span>
+                }
+              </span>
+            </ng-template>
 
-        <!-- Category Creation Dialog -->
-        <mj-query-category-dialog
-            [(isVisible)]="showCategoryDialog"
-            (onCategoryCreated)="onCategoryCreated($event)">
-        </mj-query-category-dialog>
-    }
+            <div style="padding: 16px 0;">
+              @if (isLoadingFields) {
+                <div style="display: flex; justify-content: center; padding: 40px;">
+                  <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; color: #007bff;"></i>
+                </div>
+              } @else {
+                @if (queryFields.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-table" style="font-size: 3em; color: #dee2e6; margin-bottom: 12px;"></i>
+                    <h5 style="color: #6c757d; margin-bottom: 8px;">No Fields Defined</h5>
+                    <div style="color: #adb5bd; margin-bottom: 16px;">
+                      Define output fields for your query results.
+                    </div>
+                    @if (EditMode) {
+                      <button type="button" class="add-param-btn" (click)="addField()">
+                        <i class="fa-solid fa-plus"></i> Add First Field
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <!-- Fields Header with Add Button -->
+                  @if (EditMode) {
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; padding: 0 20px;">
+                      <button type="button" class="add-param-btn" (click)="addField()">
+                        <i class="fa-solid fa-plus"></i> Add Field
+                      </button>
+                    </div>
+                  }
+
+                  <!-- Fields Grid -->
+                  <div class="parameters-grid">
+                    @for (field of queryFields; track field.ID) {
+                      <div class="param-card">
+                        <div class="param-card-header">
+                          <div class="param-name">
+                            <i class="fa-solid fa-columns" style="color: #17a2b8;"></i>
+                            {{ field.Name }}
+                          </div>
+                          <div class="param-badges">
+                            <span class="param-badge" style="background: #e3f2fd; color: #1976d2;">{{ field.SQLBaseType }}</span>
+                            @if (field.Sequence) {
+                              <span class="param-badge" style="background: #f3e5f5; color: #7b1fa2;">#{{ field.Sequence }}</span>
+                            }
+                          </div>
+                        </div>
+
+                        <div class="param-card-body">
+                          @if (field.Description) {
+                            <div class="param-description">{{ field.Description }}</div>
+                          }
+                          <div class="param-meta">
+                            <span class="meta-item">
+                              <i class="fa-solid fa-code"></i> {{ field.SQLFullType || field.SQLBaseType }}
+                            </span>
+                          </div>
+                        </div>
+
+                        @if (EditMode) {
+                          <div class="param-card-actions">
+                            <button type="button" class="action-btn danger" (click)="deleteField(field)" title="Delete field">
+                              <i class="fa-solid fa-trash"></i>
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          </kendo-expansionpanel>
+        }
+
+        <!-- Query Entities Panel -->
+        @if (record.IsSaved) {
+          <kendo-expansionpanel
+            [(expanded)]="entitiesPanelExpanded"
+            style="margin-bottom: 16px;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-database" style="color: #6c757d;"></i>
+                Query Entities
+                @if (queryEntities.length > 0) {
+                  <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                    {{ queryEntities.length }}
+                  </span>
+                }
+              </span>
+            </ng-template>
+
+            <div style="padding: 16px 0;">
+              @if (isLoadingEntities) {
+                <div style="display: flex; justify-content: center; padding: 40px;">
+                  <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; color: #007bff;"></i>
+                </div>
+              } @else {
+                @if (queryEntities.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-database" style="font-size: 3em; color: #dee2e6; margin-bottom: 12px;"></i>
+                    <h5 style="color: #6c757d; margin-bottom: 8px;">No Entities Tracked</h5>
+                    <div style="color: #adb5bd; margin-bottom: 16px;">
+                      Track which entities this query uses for documentation.
+                    </div>
+                    @if (EditMode) {
+                      <button type="button" class="add-param-btn" (click)="addEntity()">
+                        <i class="fa-solid fa-plus"></i> Add First Entity
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <!-- Entities Header with Add Button -->
+                  @if (EditMode) {
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; padding: 0 20px;">
+                      <button type="button" class="add-param-btn" (click)="addEntity()">
+                        <i class="fa-solid fa-plus"></i> Add Entity
+                      </button>
+                    </div>
+                  }
+
+                  <!-- Entities Grid -->
+                  <div class="parameters-grid">
+                    @for (entity of queryEntities; track entity.ID) {
+                      <div class="param-card">
+                        <div class="param-card-header">
+                          <div class="param-name">
+                            <i class="fa-solid fa-table" style="color: #28a745;"></i>
+                            {{ entity.Entity || 'Select Entity...' }}
+                          </div>
+                          @if (EditMode) {
+                            <div style="flex: 1; margin-left: 12px;">
+                              <kendo-dropdownlist
+                                [(ngModel)]="entity.EntityID"
+                                [name]="'entity_' + entity.ID"
+                                [data]="getEntityOptions()"
+                                textField="text"
+                                valueField="id"
+                                [valuePrimitive]="true"
+                                placeholder="Select entity..."
+                                style="width: 100%;">
+                              </kendo-dropdownlist>
+                            </div>
+                          }
+                        </div>
+
+                        @if (!EditMode && entity.Entity) {
+                          <div class="param-card-body">
+                            <div class="param-meta">
+                              <span class="meta-item">
+                                <i class="fa-solid fa-database"></i> Data Source
+                              </span>
+                            </div>
+                          </div>
+                        }
+
+                        @if (EditMode) {
+                          <div class="param-card-actions">
+                            <button type="button" class="action-btn danger" (click)="deleteEntity(entity)" title="Delete entity">
+                              <i class="fa-solid fa-trash"></i>
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          </kendo-expansionpanel>
+        }
+
+        <!-- Details Panel -->
+        <kendo-expansionpanel
+          [(expanded)]="detailsPanelExpanded"
+          style="margin-bottom: 16px;">
+          <ng-template kendoExpansionPanelTitleDirective>
+            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+              <i class="fa-solid fa-info-circle" style="color: #6c757d;"></i>
+              Query Details
+            </span>
+          </ng-template>
+
+          <div style="padding: 20px;">
+            <div class="details-grid">
+              <!-- Uses Template -->
+              <div class="detail-item">
+                <label class="detail-label">
+                  <i class="fa-solid fa-file-code"></i> Template Usage
+                </label>
+                @if (EditMode) {
+                  <kendo-switch [(ngModel)]="record.UsesTemplate" name="usesTemplate"></kendo-switch>
+                } @else {
+                  <div class="detail-value">
+                    @if (record.UsesTemplate) {
+                      <span style="color: #28a745;"><i class="fa-solid fa-check"></i> Uses Templates</span>
+                    } @else {
+                      <span style="color: #6c757d;"><i class="fa-solid fa-times"></i> No Templates</span>
+                    }
+                  </div>
+                }
+              </div>
+
+              <!-- Created Date -->
+              <div class="detail-item">
+                <label class="detail-label">
+                  <i class="fa-solid fa-calendar-plus"></i> Created
+                </label>
+                <div class="detail-value">{{ formatDate(record.__mj_CreatedAt) }}</div>
+              </div>
+
+              <!-- Updated Date -->
+              <div class="detail-item">
+                <label class="detail-label">
+                  <i class="fa-solid fa-calendar-check"></i> Last Updated
+                </label>
+                <div class="detail-value">{{ formatDate(record.__mj_UpdatedAt) }}</div>
+              </div>
+
+              <!-- Quality Rank -->
+              @if (record.QualityRank != null) {
+                <div class="detail-item">
+                  <label class="detail-label">
+                    <i class="fa-solid fa-star"></i> Quality Rank
+                  </label>
+                  <div class="detail-value">{{ record.QualityRank }}/10</div>
+                </div>
+              }
+            </div>
+          </div>
+        </kendo-expansionpanel>
+
+        <!-- Permissions Panel -->
+        @if (record.IsSaved) {
+          <kendo-expansionpanel
+            [(expanded)]="permissionsPanelExpanded"
+            style="margin-bottom: 16px;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-shield-alt" style="color: #6c757d;"></i>
+                Query Permissions
+              </span>
+            </ng-template>
+
+            <div style="padding: 16px 0;">
+              @if (isLoadingPermissions) {
+                <div style="display: flex; justify-content: center; padding: 40px;">
+                  <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; color: #007bff;"></i>
+                </div>
+              } @else {
+                @if (queryPermissions.length === 0 && !EditMode) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-shield-alt" style="font-size: 3em; color: #dee2e6; margin-bottom: 12px;"></i>
+                    <h5 style="color: #6c757d; margin-bottom: 8px;">No Permissions Set</h5>
+                    <div style="color: #adb5bd;">
+                      This query uses default permissions.
+                    </div>
+                  </div>
+                } @else {
+                  @if (EditMode) {
+                    <!-- Edit Mode: Use the standard grid -->
+                    <mj-explorer-entity-data-grid
+                      [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"
+                      [NewRecordValues]="NewRecordValues('Query Permissions')"
+                      [AllowLoad]="true"
+                      [ShowToolbar]="false">
+                    </mj-explorer-entity-data-grid>
+                  } @else {
+                    <!-- Read Mode: Nice card-based display -->
+                    <div class="permissions-display">
+                      @for (permission of queryPermissions; track permission.ID) {
+                        <div class="permission-card" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                          <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fa-solid fa-users" style="font-size: 1.5em; color: #6c757d;"></i>
+                            <div style="flex: 1;">
+                              <div style="font-weight: 600; color: #495057;">
+                                {{ permission.Role }}
+                              </div>
+                              <div style="font-size: 0.85em; color: #6c757d;">
+                                Role Permission
+                              </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                              <span class="permission-badge" style="background: #6f42c1; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em;">
+                                <i class="fa-solid fa-play"></i> Can Execute
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                }
+              }
+            </div>
+          </kendo-expansionpanel>
+        }
+      </div>
+    </form>
+
+    <!-- Query Run Dialog -->
+    <mj-query-run-dialog
+      [query]="record"
+      [parameters]="queryParameters"
+      [(isVisible)]="showRunDialog"
+      (onClose)="onRunDialogClose()">
+    </mj-query-run-dialog>
+
+    <!-- Category Creation Dialog -->
+    <mj-query-category-dialog
+      [(isVisible)]="showCategoryDialog"
+      (onCategoryCreated)="onCategoryCreated($event)">
+    </mj-query-category-dialog>
+  }
 </div>

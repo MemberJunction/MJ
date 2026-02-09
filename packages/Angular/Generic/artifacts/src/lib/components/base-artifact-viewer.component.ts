@@ -52,6 +52,7 @@ export interface ArtifactViewerTab {
  * Note: This is an abstract class and should not be declared in Angular module.
  */
 @Component({
+  standalone: false,
   template: ''
 })
 export abstract class BaseArtifactViewerPluginComponent implements IArtifactViewerComponent {

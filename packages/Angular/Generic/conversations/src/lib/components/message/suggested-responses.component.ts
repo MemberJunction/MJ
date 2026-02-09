@@ -6,6 +6,7 @@ import { SuggestedResponse } from '../../models/conversation-state.model';
  * Provides quick reply buttons and optional text input for streamlined conversation flow
  */
 @Component({
+  standalone: false,
   selector: 'mj-suggested-responses',
   templateUrl: './suggested-responses.component.html',
   styleUrls: ['./suggested-responses.component.css']

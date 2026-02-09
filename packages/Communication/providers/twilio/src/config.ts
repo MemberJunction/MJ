@@ -2,7 +2,7 @@ import * as env from 'env-var';
 import * as dotenv from 'dotenv';
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // Twilio credentials - now optional to support per-request credential override
 // When not set, credentials must be provided via API

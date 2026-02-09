@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Encryption Keys') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-encryptionkey-form',
     templateUrl: './encryptionkey.form.component.html'
 })
@@ -21,6 +22,3 @@ export class EncryptionKeyFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadEncryptionKeyFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

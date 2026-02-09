@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Action Context Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-actioncontexttype-form',
     templateUrl: './actioncontexttype.form.component.html'
 })
@@ -22,6 +23,3 @@ export class ActionContextTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadActionContextTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

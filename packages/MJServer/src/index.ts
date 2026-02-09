@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
@@ -29,44 +29,8 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 
-import { LoadAllCoreActions } from '@memberjunction/core-actions';
-LoadAllCoreActions(); // prevent tree shaking for this dynamic module
-import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo'
-LoadApolloAccountsEnrichmentAction();
-LoadApolloContactsEnrichmentAction();
-
-import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
-LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module
-
-import { LoadAgentManagementActions } from '@memberjunction/ai-agent-manager-actions';
-LoadAgentManagementActions();
-
-// Load agent manager core classes (registers custom agent classes like AgentBuilderAgent, AgentArchitectAgent)
-import { LoadAgentManagerCore } from '@memberjunction/ai-agent-manager';
-LoadAgentManagerCore();
-
-import { LoadSchedulingEngine } from '@memberjunction/scheduling-engine';
-LoadSchedulingEngine(); // This also loads drivers
-
-import { LoadAllSchedulingActions } from '@memberjunction/scheduling-actions';
-LoadAllSchedulingActions(); // prevent tree shaking for scheduling actions
-
-import { GetTypeformResponsesAction } from '@memberjunction/actions-bizapps-formbuilders';
-const x = GetTypeformResponsesAction; // prevent tree shaking for this dynamic module
-
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
-import { LoadAIEngine } from '@memberjunction/aiengine';
-import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
-// Load AI Engine and all providers to prevent tree shaking
-LoadAIEngine();
-LoadAIProviders();
-
-// Load Communication Providers
-import { LoadMSGraphProvider } from '@memberjunction/communication-ms-graph';
-import { LoadProvider as LoadSendGridProvider } from '@memberjunction/communication-sendgrid';
-LoadMSGraphProvider();
-LoadSendGridProvider();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
@@ -124,6 +88,18 @@ export * from './resolvers/CreateQueryResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
+export * from './resolvers/ActionResolver.js';
+export * from './resolvers/EntityCommunicationsResolver.js';
+export * from './resolvers/EntityResolver.js';
+export * from './resolvers/FileCategoryResolver.js';
+export * from './resolvers/FileResolver.js';
+export * from './resolvers/InfoResolver.js';
+export * from './resolvers/PotentialDuplicateRecordResolver.js';
+export * from './resolvers/RunTestResolver.js';
+export * from './resolvers/UserFavoriteResolver.js';
+export * from './resolvers/UserResolver.js';
+export * from './resolvers/UserViewResolver.js';
+export * from './resolvers/VersionHistoryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -386,6 +362,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   setupRESTEndpoints(app, restApiConfig, authMiddleware);
 
   // GraphQL middleware (after REST so /api/v1/* routes are handled first)
+  // Note: Type assertion needed due to @apollo/server bundling older @types/express types
+  // that are incompatible with Express 5.x types (missing 'param' property)
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
@@ -396,7 +374,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
                                  dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
                                  dataSources // all data source
                                }),
-    })
+    }) as unknown as express.RequestHandler
   );
 
   // Initialize and start scheduled jobs service if enabled

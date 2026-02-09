@@ -16,6 +16,7 @@ import { ActionResult } from '../action-test-harness/action-test-harness.compone
  * </mj-action-test-harness-dialog>
  */
 @Component({
+  standalone: false,
     selector: 'mj-action-test-harness-dialog',
     templateUrl: './action-test-harness-dialog.component.html',
     styleUrls: ['./action-test-harness-dialog.component.css']
@@ -77,9 +78,4 @@ export class ActionTestHarnessDialogComponent implements OnInit {
     public OnExecutionComplete(result: ActionResult): void {
         this.ExecutionComplete.emit(result);
     }
-}
-
-// Tree-shaking prevention function
-export function LoadActionTestHarnessDialogComponent(): void {
-    // This function ensures the component is included in the bundle
 }

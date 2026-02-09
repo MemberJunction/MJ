@@ -1,6 +1,9 @@
 import { Command, Flags } from '@oclif/core';
 import { Flyway } from 'node-flyway';
 import ora from 'ora-classic';
+import { spawnSync } from 'child_process';
+import path from 'path';
+import os from 'os';
 import { getValidatedConfig, getFlywayConfig } from '../../config';
 
 export default class Migrate extends Command {
@@ -60,10 +63,6 @@ export default class Migrate extends Command {
       spinner.text = 'Verifying migration status...';
 
       try {
-        const { spawnSync } = require('child_process');
-        const path = require('path');
-        const os = require('os');
-
         // Construct Flyway executable path
         const flywayDir = result.additionalDetails.flywayCli.location;
         const flywayExeName = os.platform() === 'win32' ? 'flyway.cmd' : 'flyway';
@@ -108,6 +107,7 @@ export default class Migrate extends Command {
           ...baseArgs,
           `-baselineVersion=${config.baselineVersion}`,
           `-baselineOnMigrate=${config.baselineOnMigrate}`,
+          `-createSchemas=true`,
           `-locations=${absoluteMigrationPaths.join(',')}`,
           'migrate'
         ];

@@ -126,7 +126,3 @@ export class CreateUserAction extends CreateRecordAction {
         }
     }
 }
-
-export function LoadCreateUserAction() {
-    // Prevent tree shaking
-}
