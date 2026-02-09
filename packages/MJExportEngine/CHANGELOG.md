@@ -1,5 +1,11 @@
 # @memberjunction/export-engine
 
+## 4.1.0
+
+### Patch Changes
+
+- 9fab8ca: ESM Compatibility
+
 ## 4.0.0
 
 ### Major Changes

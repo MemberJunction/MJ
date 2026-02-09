@@ -1,5 +1,30 @@
 # @memberjunction/ng-bootstrap
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/ng-core-entity-forms@4.1.0
+  - @memberjunction/ng-dashboards@4.1.0
+  - @memberjunction/ng-explorer-core@4.1.0
+  - @memberjunction/ng-explorer-settings@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ai-engine-base@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/actions-base@4.1.0
+  - @memberjunction/ng-auth-services@4.1.0
+  - @memberjunction/ng-shared@4.1.0
+  - @memberjunction/ng-artifacts@4.1.0
+  - @memberjunction/ng-dashboard-viewer@4.1.0
+  - @memberjunction/ng-file-storage@4.1.0
+  - @memberjunction/communication-types@4.1.0
+  - @memberjunction/entity-communications-base@4.1.0
+  - @memberjunction/graphql-dataprovider@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

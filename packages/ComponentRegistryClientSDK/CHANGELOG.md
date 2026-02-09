@@ -1,5 +1,15 @@
 # @memberjunction/component-registry-client-sdk
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [77839a9]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/interactive-component-types@4.1.0
+  - @memberjunction/global@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

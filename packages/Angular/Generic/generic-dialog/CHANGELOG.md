@@ -1,5 +1,7 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 4.1.0
+
 ## 4.0.0
 
 ### Major Changes

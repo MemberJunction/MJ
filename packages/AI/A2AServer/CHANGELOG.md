@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/a2aserver
 
+## 4.1.0
+
+### Patch Changes
+
+- 9fab8ca: ESM Compatibility
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/server-bootstrap-lite@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/server@4.1.0
+  - @memberjunction/ai-agents@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/aiengine@4.1.0
+  - @memberjunction/api-keys@4.1.0
+  - @memberjunction/encryption@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/config@4.1.0
+  - @memberjunction/global@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

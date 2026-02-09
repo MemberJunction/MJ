@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 4.1.0
+
+### Patch Changes
+
+- 77839a9: Enable cascade deletes for AI Agent and Prompt entities, add cross-file dependency detection and --delete-db-only flag to MetadataSync for proper deletion ordering, fix CodeGen duplicate variable names for self-referential FKs, add requireConnectivity config to QueryGen, and add Gemini JSON parser support to DBAutoDoc.
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/server-bootstrap-lite@4.1.0
+  - @memberjunction/core-entities-server@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/aiengine@4.1.0
+  - @memberjunction/ai-prompts@4.1.0
+  - @memberjunction/actions-base@4.1.0
+  - @memberjunction/actions@4.1.0
+  - @memberjunction/ai-provider-bundle@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/config@4.1.0
+  - @memberjunction/global@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

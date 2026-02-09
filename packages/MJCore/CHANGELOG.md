@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 4.1.0
+
+### Minor Changes
+
+- 77839a9: Enable cascade deletes for AI Agent and Prompt entities, add cross-file dependency detection and --delete-db-only flag to MetadataSync for proper deletion ordering, fix CodeGen duplicate variable names for self-referential FKs, add requireConnectivity config to QueryGen, and add Gemini JSON parser support to DBAutoDoc.
+- 5af036f: Migration for metadata
+
+### Patch Changes
+
+- @memberjunction/global@4.1.0
+
 ## 4.0.0
 
 ### Major Changes
