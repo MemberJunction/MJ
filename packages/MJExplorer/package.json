@@ -41,7 +41,6 @@
     "@memberjunction/ng-explorer-modules": "4.0.0",
     "@memberjunction/ng-explorer-settings": "4.0.0",
     "@memberjunction/ng-workspace-initializer": "4.0.0",
-    "@memberjunction/ng-form-toolbar": "4.0.0",
     "@memberjunction/ng-join-grid": "4.0.0",
     "@memberjunction/ng-link-directives": "4.0.0",
     "@memberjunction/ng-record-changes": "4.0.0",

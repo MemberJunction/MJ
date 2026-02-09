@@ -457,6 +457,7 @@ flowchart TD
 | `EntityDescriptions` | Generates human-readable descriptions for entities | Entity creation only |
 | `TransitiveJoinIntelligence` | Detects junction tables and many-to-many relationships | Entity/relationship creation |
 | `EntityNames` | Converts technical table names to user-friendly entity names | Entity creation only |
+| `VirtualEntityFieldDecoration` | Analyzes SQL view definitions to identify PKs, FKs, descriptions, and extended types for virtual entities | Virtual entity creation (idempotent unless `forceRegenerate` option is set) |
 
 ### Form Layout Stability Guarantees
 
@@ -651,6 +652,384 @@ This package depends on:
 - [Class Manifest Guide](CLASS_MANIFEST_GUIDE.md) - Comprehensive guide to the manifest system for preventing tree-shaking of `@RegisterClass` classes
 - [EXAMPLE_MANIFEST_MJAPI.md](EXAMPLE_MANIFEST_MJAPI.md) - Example server-side manifest (54 packages, 715 classes)
 - [EXAMPLE_MANIFEST_MJEXPLORER.md](EXAMPLE_MANIFEST_MJEXPLORER.md) - Example client-side manifest (17 packages, 721 classes)
+
+## IS-A Type Relationships in CodeGen
+
+MemberJunction supports **IS-A (inheritance) relationships** between entities, where one entity extends another by adding additional fields while inheriting the parent's schema. CodeGen automatically handles IS-A relationships with specialized generation logic.
+
+For comprehensive conceptual documentation, see the **[IS-A Relationships Guide](../../MJCore/docs/isa-relationships.md)** in MJCore.
+
+### How CodeGen Handles IS-A Entities
+
+When an entity has a `ParentEntity` relationship (IS-A child):
+
+#### 1. SQL View Generation - Parent JOINs
+**Child views automatically JOIN to parent views** to provide a complete record with all inherited fields:
+
+```sql
+-- CodeGen automatically generates:
+CREATE VIEW [vwEmployee]
+AS
+SELECT
+    e.*,               -- All Employee fields
+    p.FirstName,       -- Inherited from Person
+    p.LastName,        -- Inherited from Person
+    p.DateOfBirth      -- Inherited from Person
+FROM
+    [__mj].[Employee] AS e
+INNER JOIN
+    [__mj].[vwPerson] AS p ON e.[ID] = p.[ID]
+```
+
+This ensures querying the child view returns a complete record including all parent fields.
+
+#### 2. Stored Procedure Generation - Child Fields Only
+**Create and Update procedures only include the child's own fields**, not parent fields:
+
+```sql
+-- spCreateEmployee only has Employee-specific parameters
+CREATE PROCEDURE [spCreateEmployee]
+    @ID uniqueidentifier,
+    @EmployeeNumber nvarchar(50),
+    @HireDate date,
+    @Salary decimal(18,2)
+    -- No FirstName, LastName (those are Person fields)
+AS BEGIN
+    -- Only inserts into Employee table
+    INSERT INTO [__mj].[Employee] (ID, EmployeeNumber, HireDate, Salary)
+    VALUES (@ID, @EmployeeNumber, @HireDate, @Salary)
+END
+```
+
+**Why this design?** When creating an Employee, you first create the Person record (which gets an ID), then use that same ID to create the Employee record. The stored procedures reflect this two-step creation pattern.
+
+#### 3. GraphQL Schema Generation - Complete Field Set
+**GraphQL input types include ALL fields (parent + child)** for seamless API usage:
+
+```graphql
+input CreateEmployeeInput {
+  # Parent fields (from Person)
+  firstName: String!
+  lastName: String!
+  dateOfBirth: Date
+
+  # Child fields (from Employee)
+  employeeNumber: String!
+  hireDate: Date!
+  salary: Decimal!
+}
+```
+
+This provides a convenient single-operation API while the resolver handles the underlying two-step creation.
+
+#### 4. TypeScript Entity Classes - JSDoc Annotations
+**Generated entity classes include JSDoc annotations** on getter/setter methods to indicate IS-A relationships:
+
+```typescript
+export class EmployeeEntity extends BaseEntity {
+  /**
+   * Inherited from Person entity
+   */
+  get FirstName(): string {
+    return this.Get('FirstName');
+  }
+
+  set FirstName(value: string) {
+    this.Set('FirstName', value);
+  }
+
+  // Own fields have no annotation
+  get EmployeeNumber(): string {
+    return this.Get('EmployeeNumber');
+  }
+}
+```
+
+#### 5. EntityField Metadata Synchronization
+**`manageEntityFields()` respects IS-A hierarchy** when syncing field metadata:
+
+- Fields from parent entities are NOT duplicated in child entity metadata
+- Only the child's own fields appear in `EntityField` for the child entity
+- `RelatedEntityID` and field relationships are preserved across the hierarchy
+- Prevents metadata pollution from inherited fields
+
+### Configuration in Database Metadata
+
+IS-A relationships are defined in the `Entity` table:
+
+```sql
+-- Person is the base entity
+INSERT INTO Entity (ID, ParentEntity, Name)
+VALUES (NEWID(), NULL, 'Person')
+
+-- Employee IS-A Person
+INSERT INTO Entity (ID, ParentEntity, Name)
+VALUES (NEWID(), 'Person', 'Employee')
+```
+
+CodeGen detects the `ParentEntity` relationship and applies the specialized generation logic automatically.
+
+### Use Cases for IS-A Relationships
+
+Common scenarios where IS-A relationships improve your schema:
+
+- **Person → Employee, Customer, Vendor** - Shared contact information with role-specific fields
+- **Document → Invoice, PurchaseOrder, Contract** - Common document metadata with type-specific data
+- **Product → PhysicalProduct, DigitalProduct** - Shared catalog info with delivery-specific fields
+- **Communication → Email, SMS, PhoneCall** - Common tracking with channel-specific metadata
+
+### Best Practices
+
+1. **Keep hierarchies shallow** - One or two levels is ideal (Person → Employee, not Person → Worker → Employee)
+2. **Parent entities should be meaningful** - Don't create artificial base classes just for inheritance
+3. **Child fields should be truly specific** - If a field applies to all children, put it in the parent
+4. **ID management is manual** - When creating child records, explicitly use the parent's ID
+
+## Virtual Entity Support
+
+MemberJunction supports **virtual entities** - entities backed by database views instead of tables. Virtual entities enable read-only access to complex queries, external data sources, or denormalized views while maintaining the full MemberJunction metadata and API experience.
+
+For comprehensive conceptual documentation, see the **[Virtual Entities Guide](../../MJCore/docs/virtual-entities.md)** in MJCore.
+
+### Configuration-Driven Virtual Entity Creation
+
+Virtual entities are defined in `database-metadata-config.json` under the `VirtualEntities` array:
+
+```json
+{
+  "VirtualEntities": [
+    {
+      "ViewName": "vwSalesSummary",
+      "EntityName": "Sales Summary",
+      "SchemaName": "__mj",
+      "Description": "Aggregated sales data by region and period",
+      "PrimaryKey": ["SummaryID"],
+      "ForeignKeys": [
+        {
+          "FieldName": "RegionID",
+          "SchemaName": "__mj",
+          "RelatedTable": "Region",
+          "RelatedField": "ID",
+          "Description": "FK to Region table"
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Key Configuration Properties
+
+- **`ViewName`**: The SQL view name (must already exist in the database)
+- **`EntityName`**: The MemberJunction entity name (appears in metadata, UI, APIs)
+- **`SchemaName`**: Database schema (typically `__mj` for core entities)
+- **`Description`**: Entity description for metadata and documentation
+- **`PrimaryKey`**: Array of column names forming the primary key (supports composite keys)
+- **`ForeignKeys`**: Optional array of foreign key relationships to other entities (if omitted, LLM decoration discovers them)
+
+### CodeGen Pipeline for Virtual Entities
+
+CodeGen processes virtual entities through several specialized steps:
+
+#### 1. `processVirtualEntityConfig()` - Entity Creation
+Reads the `VirtualEntities` configuration and calls `spCreateVirtualEntity` for each entry:
+
+```typescript
+// CodeGen calls this stored procedure for each virtual entity
+EXEC spCreateVirtualEntity
+    @Name = 'Sales Summary',
+    @SchemaName = '__mj',
+    @BaseView = 'vwSalesSummary',
+    @Description = 'Aggregated sales data...',
+    @PrimaryKeyColumnName = 'SummaryID'
+```
+
+This creates the `Entity` metadata record with `VirtualEntity = 1`.
+
+#### 2. `manageVirtualEntities()` - Field Synchronization
+Scans `sys.columns` on the virtual entity's view and creates `EntityField` metadata for each column:
+
+- Automatically detects data types, nullability, and max lengths
+- Creates `EntityField` records for all view columns
+- Updates existing fields if column definitions change
+- Marks fields as `IsVirtual = 1` in metadata
+
+```typescript
+// CodeGen inspects the view schema
+SELECT
+    c.name,
+    t.name AS TypeName,
+    c.max_length,
+    c.is_nullable
+FROM
+    sys.columns c
+INNER JOIN
+    sys.types t ON c.user_type_id = t.user_type_id
+WHERE
+    object_id = OBJECT_ID('__mj.vwSalesSummary')
+```
+
+#### 3. `applySoftPKFKConfig()` - Explicit Relationship Overrides
+Applies the `primaryKeyColumnName` and `foreignKeyDefinitions` from the config:
+
+```typescript
+// Sets the primary key field
+UPDATE EntityField
+SET IsPrimaryKey = 1
+WHERE EntityID = @VirtualEntityID
+  AND Name = 'SummaryID'
+
+// Creates foreign key relationships
+INSERT INTO EntityRelationship (...)
+SELECT ... FROM foreignKeyDefinitions
+```
+
+**Why explicit FK definitions?** Views don't have database-level foreign keys, so CodeGen can't detect relationships automatically. The config provides this metadata.
+
+#### 4. LLM-Assisted Field Decoration (Advanced Feature)
+The **`decorateVirtualEntitiesWithLLM()`** pipeline step uses AI to enhance virtual entity field metadata:
+
+```typescript
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+
+// CodeGen calls a database-driven prompt to decorate fields
+const promptParams = new AIPromptParams();
+promptParams.prompt = 'Decorate Virtual Entity Fields';
+promptParams.data = {
+    entityName: 'Sales Summary',
+    viewDefinition: viewSQL,
+    existingFields: fieldsFromMetadata
+};
+
+const runner = new AIPromptRunner();
+const result = await runner.ExecutePrompt(promptParams);
+```
+
+The LLM analyzes the view definition and provides:
+- **Display names** - User-friendly field labels (e.g., `TotalRevenue` → "Total Revenue")
+- **Descriptions** - Field-level documentation explaining what each column represents
+- **Category assignments** - Semantic grouping for form layouts
+- **DefaultInView flags** - Recommended visibility settings for grid displays
+
+This is controlled by the `VirtualEntityFieldDecoration` feature in the Advanced Generation Features configuration.
+
+### Virtual Entity Metadata Structure
+
+After CodeGen processing, virtual entities have complete metadata:
+
+```sql
+-- Entity record
+SELECT * FROM Entity WHERE Name = 'Sales Summary'
+-- VirtualEntity = 1, BaseView = 'vwSalesSummary'
+
+-- EntityField records (auto-detected from view)
+SELECT * FROM EntityField WHERE EntityID = @SalesEntityID
+-- Name, Type, Description, IsVirtual = 1
+
+-- EntityRelationship records (from config)
+SELECT * FROM EntityRelationship WHERE EntityID = @SalesEntityID
+-- Foreign keys defined in foreignKeyDefinitions
+```
+
+### Generated Code for Virtual Entities
+
+Virtual entities generate the same TypeScript, GraphQL, and Angular code as table-based entities:
+
+**TypeScript Entity Class:**
+```typescript
+export class SalesSummaryEntity extends BaseEntity {
+  get SummaryID(): string {
+    return this.Get('SummaryID');
+  }
+
+  get RegionID(): string {
+    return this.Get('RegionID');
+  }
+
+  get TotalRevenue(): number {
+    return this.Get('TotalRevenue');
+  }
+
+  // Save/Delete methods throw errors (read-only entity)
+}
+```
+
+**GraphQL Schema:**
+```graphql
+type SalesSummary {
+  summaryID: ID!
+  regionID: ID!
+  region: Region    # Auto-resolved from FK definition
+  totalRevenue: Float!
+}
+
+type Query {
+  SalesSummaries(filter: String): [SalesSummary!]!
+}
+```
+
+**Angular Form:**
+```html
+<mj-form-field
+    [record]="record"
+    FieldName="TotalRevenue"
+    Type="textbox"
+    [ReadOnly]="true"  <!-- Virtual entities are read-only -->
+></mj-form-field>
+```
+
+### Virtual Entity Limitations
+
+Virtual entities are **read-only** by design:
+
+- No `spCreate`, `spUpdate`, or `spDelete` procedures generated
+- `AllowCreateAPI`, `AllowUpdateAPI`, `AllowDeleteAPI` set to `0` in metadata
+- Entity class `Save()` and `Delete()` methods throw errors
+- GraphQL mutations not generated for virtual entities
+- Angular forms display in read-only mode
+
+### Advanced Generation Features Configuration
+
+Virtual entity LLM decoration is controlled in the `advancedGeneration.features` array in `mj.config.cjs`:
+
+```javascript
+advancedGeneration: {
+    enableAdvancedGeneration: true,
+    features: [
+        {
+            name: 'VirtualEntityFieldDecoration',
+            enabled: true,
+            // Optional: force re-decoration even if entities already have soft PK/FK annotations
+            options: [{ name: 'forceRegenerate', value: true }],
+        },
+    ],
+},
+```
+
+By default, `VirtualEntityFieldDecoration` is **enabled** and uses an idempotency check — entities that already have `IsSoftPrimaryKey` or `IsSoftForeignKey` annotations are skipped. Set the `forceRegenerate` option to `true` to override this check and re-run LLM decoration for all virtual entities (useful after prompt improvements or when you want to refresh metadata).
+
+When active, CodeGen calls `decorateVirtualEntitiesWithLLM()` after field synchronization.
+
+### Use Cases for Virtual Entities
+
+Virtual entities excel at:
+
+- **Reporting and Analytics** - Pre-aggregated views for dashboards (sales summaries, usage metrics)
+- **External Data Sources** - Linked server views, API-backed views, federated queries
+- **Denormalized Views** - Flattened data for grid displays without JOIN overhead
+- **Legacy System Integration** - Expose legacy tables through normalized MJ entity layer
+- **Calculated Fields** - Complex computed columns not suitable for table storage
+- **Security Views** - Row-level security via filtered views with full MJ API access
+
+### Best Practices
+
+1. **View must exist first** - Create the SQL view before running CodeGen with virtual entity config
+2. **Primary key is required** - Views must have a unique identifier column
+3. **Use meaningful names** - `entityName` appears throughout UI and APIs
+4. **Document foreign keys** - Explicit FK definitions enable relationship navigation
+5. **Enable LLM decoration** - Let AI generate field descriptions for better UX
+6. **Keep views simple** - Complex views with subqueries may have performance issues
+7. **Test read operations** - Verify grid displays and API queries perform acceptably
 
 ## Contributing
 

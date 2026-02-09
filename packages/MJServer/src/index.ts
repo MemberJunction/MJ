@@ -88,6 +88,18 @@ export * from './resolvers/CreateQueryResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
+export * from './resolvers/ActionResolver.js';
+export * from './resolvers/EntityCommunicationsResolver.js';
+export * from './resolvers/EntityResolver.js';
+export * from './resolvers/FileCategoryResolver.js';
+export * from './resolvers/FileResolver.js';
+export * from './resolvers/InfoResolver.js';
+export * from './resolvers/PotentialDuplicateRecordResolver.js';
+export * from './resolvers/RunTestResolver.js';
+export * from './resolvers/UserFavoriteResolver.js';
+export * from './resolvers/UserResolver.js';
+export * from './resolvers/UserViewResolver.js';
+export * from './resolvers/VersionHistoryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';

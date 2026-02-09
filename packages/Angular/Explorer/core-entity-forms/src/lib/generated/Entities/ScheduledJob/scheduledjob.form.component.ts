@@ -27,6 +27,3 @@ export class ScheduledJobFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadScheduledJobFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

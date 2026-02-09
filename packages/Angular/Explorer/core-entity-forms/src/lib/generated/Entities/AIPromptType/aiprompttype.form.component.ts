@@ -23,6 +23,3 @@ export class AIPromptTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIPromptTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

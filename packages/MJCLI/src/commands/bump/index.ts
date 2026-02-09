@@ -2,7 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import { readFileSync, writeFileSync } from 'node:fs';
 import * as recast from 'recast';
 import { z } from 'zod';
-import * as fg from 'fast-glob';
+import fg from 'fast-glob';
 import ora from 'ora-classic';
 import { dirname } from 'node:path';
 

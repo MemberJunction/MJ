@@ -1,107 +1,112 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Integration Overview Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="integrationOverview"
-        sectionName="Integration Overview"
-        icon="fa fa-plug"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="integrationOverview"
+        SectionName="Integration Overview"
+        Icon="fa fa-plug"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Description"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="NavigationBaseURL"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="URL"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Technical Settings Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="technicalSettings"
-        sectionName="Technical Settings"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="technicalSettings"
+        SectionName="Technical Settings"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ClassName"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ImportPath"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="BatchMaxRequestCount"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="BatchRequestWaitTime"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-database"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -110,15 +115,15 @@
          ======================================== -->
 
     <!-- Company Integrations Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="companyIntegrations"
-        sectionName="Company Integrations"
-        icon="fa fa-plug"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('companyIntegrations')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="companyIntegrations"
+        SectionName="Company Integrations"
+        Icon="fa fa-plug"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('companyIntegrations')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -126,6 +131,7 @@
                 [NewRecordValues]="NewRecordValues('Company Integrations')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('companyIntegrations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -134,15 +140,15 @@
     </mj-collapsible-panel>
 
     <!-- URL Formats Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="uRLFormats"
-        sectionName="URL Formats"
-        icon="fa fa-link"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('uRLFormats')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="uRLFormats"
+        SectionName="URL Formats"
+        Icon="fa fa-link"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('uRLFormats')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -150,6 +156,7 @@
                 [NewRecordValues]="NewRecordValues('Integration URL Formats')"
                 [AllowLoad]="IsSectionExpanded('uRLFormats')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('uRLFormats', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -158,15 +165,15 @@
     </mj-collapsible-panel>
 
     <!-- Record Changes Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="recordChanges"
-        sectionName="Record Changes"
-        icon="fa fa-history"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('recordChanges')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="recordChanges"
+        SectionName="Record Changes"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('recordChanges')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -174,6 +181,7 @@
                 [NewRecordValues]="NewRecordValues('Record Changes')"
                 [AllowLoad]="IsSectionExpanded('recordChanges')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('recordChanges', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

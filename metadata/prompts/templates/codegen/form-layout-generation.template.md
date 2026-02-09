@@ -31,9 +31,22 @@ Analyze the provided entity and assign each field to a domain-specific, semantic
 - **Junction/join tables** (examples: ContactAccount, UserRole): Narrow tables with 2-4 FKs and almost NO non-FK business fields. FK ratio typically 40-80%.
 - **Reference/type tables** (examples: AccountType, OrderStatus): Usually 0-1 FKs with a few descriptive fields like Name, Description. FK ratio typically 0-20%.
 
+{% if isChildEntity %}
+### IS-A Entity Inheritance
+
+This entity uses **IS-A (table-per-type) inheritance**. It inherits fields from parent entities in the following chain:
+
+**{{ entityName }}** inherits from:
+{% for parent in parentChain %}
+{{ loop.index }}. **{{ parent.entityName }}**
+{% endfor %}
+
+Fields marked with `[Inherited from ...]` below come from a parent entity in this chain. See the **Inherited Field Handling Rules** section below for how to categorize them.
+
+{% endif %}
 ### Fields
 {% for field in fields %}
-- **{{ field.Name }}** ({{ field.Type }}){% if field.IsNullable %} - Nullable{% endif %}
+- **{{ field.Name }}** ({{ field.Type }}){% if field.IsNullable %} - Nullable{% endif %}{% if field.InheritedFromEntityName %} **[Inherited from {{ field.InheritedFromEntityName }}]**{% endif %}
   {% if field.Description %}
   {{ field.Description }}
   {% endif %}
@@ -111,6 +124,25 @@ Analyze the provided entity and assign each field to a domain-specific, semantic
 - Users should navigate 3-5 logical sections, not 10-20 tiny tabs
 - Broader categories with clear semantic groupings are more intuitive
 
+{% if isChildEntity %}
+### **CRITICAL: Inherited Field Handling (IS-A Inheritance)**
+
+This entity inherits fields from parent entities. You **MUST** handle inherited fields differently from the entity's own fields:
+
+1. **Create ONE category per parent entity** for its inherited fields. Name it using the parent entity's business domain (e.g., "Product Details" for fields inherited from Products, "Meeting Details" for fields inherited from Meetings).
+2. **Never mix inherited and own fields** in the same category. Inherited fields from the same parent go together; the child entity's own fields get their own separate categories.
+3. **Include `inheritedFromEntityName`** in the `categoryInfo` entry for each inherited category. This is the parent entity name exactly as shown in the inheritance chain above.
+4. **`__mj_` system fields** always go in "System Metadata" regardless of origin — do NOT put them in inherited categories.
+5. **Category count limits still apply** to the child's own fields. Inherited categories are additional (one per parent entity in the chain) and do not count toward the 3-5 target.
+6. **Order**: Place the child entity's own categories FIRST, then inherited categories (nearest parent first, then grandparent, etc.), then "System Metadata" last.
+
+**Example**: For entity "Webinars" (inherits from Meetings, which inherits from Products):
+- Own categories: "Webinar Details" (StartURL, MaxViewers, etc.)
+- Inherited category: "Meeting Details" (StartTime, EndTime, Location) with `inheritedFromEntityName: "Meetings"`
+- Inherited category: "Product Details" (Name, Price, SKU) with `inheritedFromEntityName: "Products"`
+- System: "System Metadata" (__mj_CreatedAt, __mj_UpdatedAt)
+
+{% endif %}
 ### Domain-Specific Categories
 
 Create categories that are **specific to this entity's business domain**, not generic labels.
@@ -250,6 +282,18 @@ Return a JSON object with this exact structure:
 For each **NEW category only** (not existing ones), provide:
 - **icon**: Font Awesome icon class (e.g., "fa fa-file-invoice")
 - **description**: 1 sentence describing what fields belong in this category (for UX tooltips)
+{% if isChildEntity %}
+- **inheritedFromEntityName**: (REQUIRED for inherited categories) The exact parent entity name this category's fields come from. Omit this property for the child entity's own categories.
+
+**Example for inherited category:**
+```json
+"Product Details": {
+  "icon": "fa fa-box",
+  "description": "Fields inherited from the Products entity",
+  "inheritedFromEntityName": "Products"
+}
+```
+{% endif %}
 
 {% if hasExistingCategories %}
 **IMPORTANT**: Do NOT include existing categories in `categoryInfo`. Only include categories you are creating for the first time.

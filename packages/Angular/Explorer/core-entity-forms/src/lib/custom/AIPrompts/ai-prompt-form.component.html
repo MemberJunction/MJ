@@ -3,7 +3,7 @@
   <div kendoDialogContainer></div>
   @if (record) {
     <form class="record-form" #form="ngForm" >
-      <mj-form-toolbar [form]="this"></mj-form-toolbar>
+      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <!-- Main Content Area - Template Editor and Configuration -->
       <div class="prompt-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
         <!-- Header Section -->
@@ -559,7 +559,7 @@
                 <!-- Left Column -->
                 <div>
                   <mj-form-field
-                    [record]="record"
+                    [Record]="record"
                     [ShowLabel]="true"
                     FieldName="ParallelizationMode"
                     Type="dropdownlist"
@@ -567,7 +567,7 @@
                   </mj-form-field>
                   @if (showParallelCount) {
                     <mj-form-field
-                      [record]="record"
+                      [Record]="record"
                       [ShowLabel]="true"
                       FieldName="ParallelCount"
                       Type="numerictextbox"
@@ -576,7 +576,7 @@
                   }
                   @if (showParallelConfigParam) {
                     <mj-form-field
-                      [record]="record"
+                      [Record]="record"
                       [ShowLabel]="true"
                       FieldName="ParallelConfigParam"
                       Type="textbox"
@@ -584,14 +584,14 @@
                     </mj-form-field>
                   }
                   <mj-form-field
-                    [record]="record"
+                    [Record]="record"
                     [ShowLabel]="true"
                     FieldName="OutputType"
                     Type="dropdownlist"
                     [EditMode]="EditMode">
                   </mj-form-field>
                   <mj-form-field
-                    [record]="record"
+                    [Record]="record"
                     [ShowLabel]="true"
                     FieldName="EffortLevel"
                     Type="numerictextbox"
@@ -603,14 +603,14 @@
                 <!-- Right Column -->
                 <div>
                   <mj-form-field
-                    [record]="record"
+                    [Record]="record"
                     [ShowLabel]="true"
                     FieldName="ValidationBehavior"
                     Type="dropdownlist"
                     [EditMode]="EditMode">
                   </mj-form-field>
                   <mj-form-field
-                    [record]="record"
+                    [Record]="record"
                     [ShowLabel]="true"
                     FieldName="EnableCaching"
                     Type="checkbox"

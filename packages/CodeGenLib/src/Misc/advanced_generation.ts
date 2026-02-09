@@ -1,5 +1,5 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
-import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -40,9 +40,31 @@ export type EntityImportanceInfo = {
     recommendedSequence?: number;
 }
 
-export type CategoryInfo = {
-    icon: string;
-    description: string;
+/**
+ * Result from LLM-assisted virtual entity field decoration.
+ * Identifies PKs, FKs, field descriptions, and category assignments for constraint-less views.
+ */
+export type VirtualEntityDecorationResult = {
+    primaryKeys: string[];
+    foreignKeys: Array<{
+        fieldName: string;
+        relatedEntityName: string;
+        relatedFieldName: string;
+        confidence: 'high' | 'medium' | 'low';
+    }>;
+    fieldDescriptions: Array<{
+        fieldName: string;
+        description: string;
+        extendedType: string | null;
+        category: string | null;
+        displayName: string | null;
+        codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
+    }>;
+    /** Font Awesome icon class for the entity (e.g. "fa-solid fa-chart-line") */
+    entityIcon?: string;
+    /** Per-category icon + description */
+    categoryInfo?: Record<string, FieldCategoryInfo>;
+    reasoning: string;
 }
 
 export type FormLayoutResult = {
@@ -55,8 +77,10 @@ export type FormLayoutResult = {
         extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
-    /** Category metadata: category name -> { icon, description } */
-    categoryInfo?: Record<string, CategoryInfo>;
+    /** @deprecated Use categoryInfo instead */
+    categoryIcons?: Record<string, string>;
+    /** New format: category name -> { icon, description } */
+    categoryInfo?: Record<string, FieldCategoryInfo>;
     entityImportance?: EntityImportanceInfo;
 }
 
@@ -114,7 +138,7 @@ export class AdvancedGeneration {
             const result = await this._promptRunner.ExecutePrompt<T>(params);
             return result;
         } catch (error) {
-            LogError('AdvancedGeneration', `Prompt execution failed: ${error}`);
+            LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
             throw error;
         }
     }
@@ -160,11 +184,11 @@ export class AdvancedGeneration {
             if (result.success && result.result) {
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Smart field identification failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Smart field identification failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in identifyFields: ${error}`);
+            LogError(`AdvancedGeneration:Error in identifyFields: ${error}`);
             return null; // Graceful fallback
         }
     }
@@ -211,11 +235,11 @@ export class AdvancedGeneration {
                 LogStatus(`Transitive join analysis for ${sourceEntity.Name} → ${targetEntity.Name}: Junction=${result.result.isJunctionTable}`);
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Transitive join analysis failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Transitive join analysis failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in analyzeTransitiveJoin: ${error}`);
+            LogError(`AdvancedGeneration:Error in analyzeTransitiveJoin: ${error}`);
             return null;
         }
     }
@@ -225,10 +249,10 @@ export class AdvancedGeneration {
      * This looks at ALL fields that have categories assigned, not just locked ones,
      * so the LLM can see and reuse existing categories when categorizing new fields
      */
-    private getExistingCategoryInfo(entity: any): {
+    private getExistingFieldCategoryInfo(entity: any): {
         categories: string[];
         fieldsByCategory: Record<string, string[]>;
-        categoryInfo: Record<string, CategoryInfo> | null;
+        categoryInfo: Record<string, FieldCategoryInfo> | null;
     } {
         // Get ALL fields that have categories assigned (not just locked ones)
         // This ensures the LLM sees existing categories and reuses them
@@ -254,18 +278,8 @@ export class AdvancedGeneration {
             fieldsByCategory[field.Category].push(field.Name);
         }
 
-        // Load category info (icons and descriptions) from EntitySettings
-        let categoryInfo: Record<string, CategoryInfo> | null = null;
-        const infoSetting = entity.Settings?.find(
-            (s: any) => s.Name === 'FieldCategoryInfo'
-        );
-        if (infoSetting?.Value) {
-            try {
-                categoryInfo = JSON.parse(infoSetting.Value);
-            } catch (e) {
-                // Invalid JSON, ignore
-            }
-        }
+        // Use the typed FieldCategories property (auto-populated from EntitySettings with legacy fallback)
+        const categoryInfo: Record<string, FieldCategoryInfo> | null = entity.FieldCategories ?? null;
 
         return { categories, fieldsByCategory, categoryInfo };
     }
@@ -318,8 +332,12 @@ export class AdvancedGeneration {
             const prompt = await this.getPromptEntity('CodeGen: Form Layout Generation', contextUser);
 
             // Extract existing category information
-            const existingInfo = this.getExistingCategoryInfo(entity);
+            const existingInfo = this.getExistingFieldCategoryInfo(entity);
             const hasExistingCategories = existingInfo.categories.length > 0;
+
+            // IS-A parent chain context (provided by manage-metadata for child entities)
+            const parentChain: Array<{ entityID: string; entityName: string }> = entity.ParentChain || [];
+            const isChildEntity = entity.IsChildEntity === true && parentChain.length > 0;
 
             // Map fields with FK flag for statistics calculation
             const mappedFields = entity.Fields.map((f: any) => ({
@@ -334,7 +352,10 @@ export class AdvancedGeneration {
                 ExistingCategory: f.Category || null,
                 // HasExistingCategory=true means locked (don't update), false means can update
                 HasExistingCategory: !f.AutoUpdateCategory && f.Category != null,
-                IsNewField: f.AutoUpdateCategory === true && !f.Category
+                IsNewField: f.AutoUpdateCategory === true && !f.Category,
+                // IS-A inheritance: which parent entity this field was inherited from (null if own field)
+                InheritedFromEntityName: f.InheritedFromEntityName || null,
+                InheritedFromEntityID: f.InheritedFromEntityID || null
             }));
 
             // Calculate FK statistics for entity importance analysis
@@ -358,9 +379,12 @@ export class AdvancedGeneration {
                 fieldsByCategory: existingInfo.fieldsByCategory,
                 hasExistingCategories: hasExistingCategories,
                 // Pass existing category info (icons + descriptions) so LLM can reference them
-                existingCategoryInfo: existingInfo.categoryInfo || {},
+                existingFieldCategoryInfo: existingInfo.categoryInfo || {},
                 // Flag to tell LLM whether to bother with entityImportance
-                isExistingEntity: !isNewEntity
+                isExistingEntity: !isNewEntity,
+                // IS-A entity inheritance context
+                isChildEntity,
+                parentChain
             };
             params.contextUser = contextUser;
 
@@ -369,9 +393,9 @@ export class AdvancedGeneration {
             if (result.success && result.result) {
                 // Merge category info - preserve ALL existing categories, only add new ones
                 if (existingInfo.categoryInfo) {
-                    const newCategoryInfo = result.result.categoryInfo || {};
+                    const newFieldCategoryInfo = result.result.categoryInfo || {};
                     result.result.categoryInfo = {
-                        ...newCategoryInfo  // Only new categories from LLM
+                        ...newFieldCategoryInfo  // Only new categories from LLM
                     };
                     // Preserve existing - don't let LLM overwrite
                     for (const [category, info] of Object.entries(existingInfo.categoryInfo)) {
@@ -379,13 +403,37 @@ export class AdvancedGeneration {
                     }
                 }
 
+                // Handle legacy categoryIcons format for backwards compatibility
+                if (result.result.categoryIcons && !result.result.categoryInfo) {
+                    // Convert legacy format to new format
+                    result.result.categoryInfo = {};
+                    for (const [category, icon] of Object.entries(result.result.categoryIcons)) {
+                        result.result.categoryInfo[category] = { icon, description: '' };
+                    }
+                }
+
+                // Stamp inheritedFromEntityID on categories that have inheritedFromEntityName
+                // The LLM provides the entity name; we resolve the ID from the parent chain
+                if (isChildEntity && result.result.categoryInfo) {
+                    for (const info of Object.values(result.result.categoryInfo)) {
+                        if (info.inheritedFromEntityName && !info.inheritedFromEntityID) {
+                            const matchingParent = parentChain.find(
+                                p => p.entityName === info.inheritedFromEntityName
+                            );
+                            if (matchingParent) {
+                                info.inheritedFromEntityID = matchingParent.entityID;
+                            }
+                        }
+                    }
+                }
+
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Form layout generation failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Form layout generation failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in generateFormLayout: ${error}`);
+            LogError(`AdvancedGeneration:Error in generateFormLayout: ${error}`);
             return null;
         }
     }
@@ -415,11 +463,11 @@ export class AdvancedGeneration {
                 LogStatus(`Entity name generated for ${tableName}: ${result.result.entityName}`);
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Entity name generation failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Entity name generation failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in generateEntityName: ${error}`);
+            LogError(`AdvancedGeneration:Error in generateEntityName: ${error}`);
             return null;
         }
     }
@@ -451,11 +499,11 @@ export class AdvancedGeneration {
                 LogStatus(`Entity description generated for ${entityName}`);
                 return result.result;
             } else {
-                LogError('AdvancedGeneration', `Entity description generation failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Entity description generation failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in generateEntityDescription: ${error}`);
+            LogError(`AdvancedGeneration:Error in generateEntityDescription: ${error}`);
             return null;
         }
     }
@@ -491,7 +539,7 @@ export class AdvancedGeneration {
                 const modelId = result.modelInfo?.modelId || result.modelSelectionInfo?.modelSelected?.ID;
                 if (!modelId) {
                     // shuoldn't ever happen.
-                    LogError('AdvancedGeneration', 'Model ID not found');
+                    LogError('AdvancedGeneration: Model ID not found');
                     return null;
                 }
                 else {
@@ -501,11 +549,98 @@ export class AdvancedGeneration {
                     };
                 }
             } else {
-                LogError('AdvancedGeneration', `CHECK constraint parsing failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:CHECK constraint parsing failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError('AdvancedGeneration', `Error in parseCheckConstraint: ${error}`);
+            LogError(`AdvancedGeneration:Error in parseCheckConstraint: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Decorates virtual entity fields using LLM analysis of the view definition.
+     * Identifies primary keys, foreign keys, generates field descriptions,
+     * assigns categories, and suggests entity icons for constraint-less views.
+     *
+     * @param entityName The virtual entity name
+     * @param schemaName The schema containing the view
+     * @param viewName The SQL view name
+     * @param viewDefinition The SQL view definition text
+     * @param entityDescription Optional entity description
+     * @param fields Array of field info objects with Name, Type, Length, AllowsNull, IsPrimaryKey, RelatedEntityName
+     * @param availableEntities Array of available entities for FK resolution
+     * @param sourceEntities Enriched context from source entities referenced in the view SQL
+     * @param contextUser The context user for AI operations
+     * @returns Decoration result or null if feature disabled or LLM call fails
+     */
+    public async decorateVirtualEntityFields(
+        entityName: string,
+        schemaName: string,
+        viewName: string,
+        viewDefinition: string,
+        entityDescription: string,
+        fields: Array<{
+            Name: string;
+            Type: string;
+            Length: number;
+            AllowsNull: boolean;
+            IsPrimaryKey: boolean;
+            RelatedEntityName: string | null;
+        }>,
+        availableEntities: Array<{
+            Name: string;
+            SchemaName: string;
+            BaseTable: string;
+            PrimaryKeyField: string;
+        }>,
+        sourceEntities: Array<{
+            Name: string;
+            Description: string;
+            Fields: Array<{
+                Name: string;
+                Type: string;
+                Description: string;
+                Category: string | null;
+                IsPrimaryKey: boolean;
+                IsForeignKey: boolean;
+            }>;
+        }>,
+        contextUser: UserInfo
+    ): Promise<VirtualEntityDecorationResult | null> {
+        if (!this.featureEnabled('VirtualEntityFieldDecoration')) {
+            return null;
+        }
+
+        try {
+            const prompt = await this.getPromptEntity('CodeGen: Virtual Entity Field Decoration', contextUser);
+
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = {
+                entityName,
+                schemaName,
+                viewName,
+                viewDefinition,
+                entityDescription: entityDescription || 'No description available',
+                fields,
+                availableEntities: availableEntities.slice(0, 200), // Limit to prevent token overflow
+                sourceEntities
+            };
+            params.contextUser = contextUser;
+
+            const result: AIPromptRunResult<VirtualEntityDecorationResult> =
+                await this._promptRunner.ExecutePrompt<VirtualEntityDecorationResult>(params);
+
+            if (result.success && result.result) {
+                LogStatus(`      ${entityName}: ${result.result.primaryKeys?.length || 0} PKs, ${result.result.foreignKeys?.length || 0} FKs identified`);
+                return result.result;
+            } else {
+                LogError(`AdvancedGeneration:Virtual entity field decoration failed for ${entityName}: ${result.errorMessage}`);
+                return null;
+            }
+        } catch (error) {
+            LogError(`AdvancedGeneration:Error in decorateVirtualEntityFields for ${entityName}: ${error}`);
             return null;
         }
     }

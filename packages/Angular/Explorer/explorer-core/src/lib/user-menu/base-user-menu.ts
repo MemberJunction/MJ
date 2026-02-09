@@ -40,7 +40,6 @@ import {
  * }
  * ```
  */
-@RegisterClass(BaseUserMenu)
 export class BaseUserMenu {
     protected _context: UserMenuContext | null = null;
     protected _options: UserMenuOptions;

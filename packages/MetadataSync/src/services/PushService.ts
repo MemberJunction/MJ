@@ -28,6 +28,7 @@ export interface PushOptions {
   parallelBatchSize?: number; // Number of records to process in parallel (default: 10)
   include?: string[]; // Only process these directories (whitelist, supports patterns)
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
+  deleteDbOnly?: boolean; // Delete database-only records that reference records being deleted
 }
 
 export interface PushCallbacks {
@@ -1213,7 +1214,8 @@ export class PushService {
     flattenedRecord: FlattenedRecord,
     _entityDir: string,
     options: PushOptions,
-    callbacks?: PushCallbacks
+    callbacks?: PushCallbacks,
+    isDbOnly: boolean = false
   ): Promise<{ status: 'deleted' | 'skipped' | 'unchanged'; isDuplicate?: boolean }> {
     const { record, entityName } = flattenedRecord;
     
@@ -1271,11 +1273,15 @@ export class PushService {
       }
     }
     
-    callbacks?.onLog?.(`🗑️  Deleting ${entityName} record:`);
+    if (isDbOnly) {
+      callbacks?.onLog?.(`🗑️  Deleting database-only ${entityName} record:`);
+    } else {
+      callbacks?.onLog?.(`🗑️  Deleting ${entityName} record:`);
+    }
     if (primaryKeyDisplay.length > 0) {
       callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
     }
-    
+
     // Additional info if available
     const recordName = existingEntity.Get('Name');
     if (recordName) {
@@ -1308,17 +1314,23 @@ export class PushService {
         throw new Error(`Failed to delete ${entityName} record: ${errorMessage}`);
       }
       
-      // Set deletedAt timestamp after successful deletion
-      if (!record.deleteRecord) {
-        record.deleteRecord = { delete: true };
-      }
-      record.deleteRecord.deletedAt = new Date().toISOString();
+      // Set deletedAt timestamp after successful deletion (only for metadata records)
+      if (!isDbOnly) {
+        if (!record.deleteRecord) {
+          record.deleteRecord = { delete: true };
+        }
+        record.deleteRecord.deletedAt = new Date().toISOString();
 
-      // Update the corresponding record in deferred file writes
-      this.updateDeferredFileRecord(flattenedRecord);
+        // Update the corresponding record in deferred file writes
+        this.updateDeferredFileRecord(flattenedRecord);
+      }
 
       if (options.verbose) {
-        callbacks?.onLog?.(`   ✓ Successfully deleted ${entityName} record`);
+        if (isDbOnly) {
+          callbacks?.onLog?.(`   ✓ Successfully deleted database-only ${entityName} record`);
+        } else {
+          callbacks?.onLog?.(`   ✓ Successfully deleted ${entityName} record`);
+        }
       }
 
       return { status: 'deleted', isDuplicate: false };
@@ -1359,10 +1371,18 @@ export class PushService {
     messages.push('  • Update existing records');
 
     if (deletionAudit) {
-      const totalDeletes = deletionAudit.explicitDeletes.size + deletionAudit.implicitDeletes.size;
-      messages.push(`  • Delete ${totalDeletes} record${totalDeletes > 1 ? 's' : ''} (${deletionAudit.explicitDeletes.size} explicit, ${deletionAudit.implicitDeletes.size} implicit)`);
+      const metadataDeletes = deletionAudit.explicitDeletes.size + deletionAudit.implicitDeletes.size;
+      const dbOnlyDeletes = deletionAudit.databaseOnlyDeletions?.length ?? 0;
+      const totalDeletes = metadataDeletes + dbOnlyDeletes;
 
-      if (deletionAudit.orphanedReferences.length > 0) {
+      if (dbOnlyDeletes > 0) {
+        messages.push(`  • Delete ${totalDeletes} record${totalDeletes > 1 ? 's' : ''} (${deletionAudit.explicitDeletes.size} explicit, ${deletionAudit.implicitDeletes.size} implicit, ${dbOnlyDeletes} database-only)`);
+      } else {
+        messages.push(`  • Delete ${metadataDeletes} record${metadataDeletes > 1 ? 's' : ''} (${deletionAudit.explicitDeletes.size} explicit, ${deletionAudit.implicitDeletes.size} implicit)`);
+      }
+
+      if (deletionAudit.orphanedReferences.length > 0 && dbOnlyDeletes === 0) {
+        // Only show warning if not deleting DB-only records
         messages.push(`  ⚠️  ${deletionAudit.orphanedReferences.length} database-only reference${deletionAudit.orphanedReferences.length > 1 ? 's' : ''} detected (may cause FK errors)`);
       }
     } else {
@@ -1454,9 +1474,15 @@ export class PushService {
     // Deletions exist - proceed with full audit
     callbacks?.onLog?.('\n🔍 Analyzing deletion operations...\n');
 
-    // Load all records from all entity directories
-    const allRecords: FlattenedRecord[] = [];
+    // Two-phase approach for cross-file dependency detection:
+    // Phase 1: Flatten all records from all files (no dependency analysis yet)
+    // Phase 2: Analyze dependencies globally across all records
+
     const analyzer = new RecordDependencyAnalyzer();
+    analyzer.reset(); // Ensure clean state before processing multiple files
+
+    // Phase 1: Flatten all records from all files
+    const allFlattenedRecords: FlattenedRecord[] = [];
 
     for (const entityDir of entityDirs) {
       const entityConfig = await loadEntityConfig(entityDir);
@@ -1474,7 +1500,7 @@ export class PushService {
         ignore: ['**/node_modules/**', '**/.mj-*.json']
       });
 
-      // Load and flatten records from each file
+      // Load and flatten records from each file (no dependency analysis yet)
       for (const filePath of files) {
         try {
           const rawFileData = await fs.readJson(filePath);
@@ -1491,15 +1517,25 @@ export class PushService {
 
           const records = Array.isArray(fileData) ? fileData : [fileData];
 
-          // Analyze and flatten records
-          const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
-          allRecords.push(...analysisResult.sortedRecords);
+          // Phase 1: Flatten only - accumulates into analyzer's internal state
+          const flattenedRecords = analyzer.flattenFileRecords(records, entityConfig.entity);
+          allFlattenedRecords.push(...flattenedRecords);
         } catch (error) {
           if (options.verbose) {
             callbacks?.onLog?.(`Warning: Could not load ${filePath}: ${error}`);
           }
         }
       }
+    }
+
+    // Phase 2: Analyze dependencies globally across ALL records
+    // This enables cross-file dependency detection (e.g., AIPromptModel -> AIConfiguration)
+    const analysisResult = analyzer.analyzeAllDependencies(allFlattenedRecords);
+    const allRecords = analysisResult.sortedRecords;
+
+    // Log any circular dependencies detected across files
+    if (analysisResult.circularDependencies.length > 0 && options.verbose) {
+      callbacks?.onWarn?.(`⚠️  Detected ${analysisResult.circularDependencies.length} circular dependencies across metadata files`);
     }
 
     // Perform comprehensive deletion audit
@@ -1509,7 +1545,7 @@ export class PushService {
       this.contextUser
     );
 
-    const audit = await auditor.auditDeletions(allRecords);
+    const audit = await auditor.auditDeletions(allRecords, options.deleteDbOnly ?? false);
 
     // Check if any records actually need deletion
     const totalMarkedForDeletion = audit.explicitDeletes.size + audit.implicitDeletes.size;
@@ -1537,13 +1573,20 @@ export class PushService {
       throw new Error(error);
     }
 
-    // Warn about database-only references (non-blocking)
-    // These may be handled by cascade delete rules at the database level
+    // Warn about database-only references
     if (audit.orphanedReferences.length > 0) {
-      callbacks?.onWarn?.(`⚠️  WARNING: ${audit.orphanedReferences.length} database-only reference${audit.orphanedReferences.length > 1 ? 's' : ''} found.`);
-      callbacks?.onWarn?.(`   These records exist in the database but not in metadata.`);
-      callbacks?.onWarn?.(`   If your database has cascade delete rules, these will be handled automatically.`);
-      callbacks?.onWarn?.(`   Otherwise, deletion may fail with FK constraint errors.\n`);
+      if (options.deleteDbOnly) {
+        // When deleteDbOnly is enabled, these will be deleted
+        callbacks?.onLog?.(`ℹ️  ${audit.databaseOnlyDeletions.length} database-only record${audit.databaseOnlyDeletions.length > 1 ? 's' : ''} will be deleted.`);
+        callbacks?.onLog?.(`   These records exist in the database but not in metadata files.`);
+        callbacks?.onLog?.(`   They reference records being deleted and will be removed first.\n`);
+      } else {
+        // When deleteDbOnly is NOT enabled, warn about potential FK errors
+        callbacks?.onWarn?.(`⚠️  WARNING: ${audit.orphanedReferences.length} database-only reference${audit.orphanedReferences.length > 1 ? 's' : ''} found.`);
+        callbacks?.onWarn?.(`   These records exist in the database but not in metadata.`);
+        callbacks?.onWarn?.(`   Deletion may fail with FK constraint errors.`);
+        callbacks?.onWarn?.(`   Use --delete-db-only flag to automatically delete these records first.\n`);
+      }
     }
 
     // Warn about implicit deletes
@@ -1569,20 +1612,39 @@ export class PushService {
 
     callbacks?.onLog?.('🗑️  Processing deletions in reverse dependency order...\n');
 
+    // Count database-only records for summary
+    const dbOnlyCount = audit.databaseOnlyDeletions?.length ?? 0;
+    let dbOnlyDeleted = 0;
+
     // Process deletion levels in order (highest dependency level first)
     for (let i = 0; i < audit.deletionLevels.length; i++) {
       const level = audit.deletionLevels[i];
       const levelNumber = audit.deletionLevels.length - i; // Reverse numbering for clarity
 
-      callbacks?.onLog?.(`   Level ${levelNumber}: Deleting ${level.length} record${level.length > 1 ? 's' : ''}...`);
+      // Count DB-only vs metadata records at this level
+      const dbOnlyAtLevel = level.filter(r => r.path === '<DATABASE>').length;
+      const metadataAtLevel = level.length - dbOnlyAtLevel;
+
+      if (dbOnlyAtLevel > 0 && metadataAtLevel > 0) {
+        callbacks?.onLog?.(`   Level ${levelNumber}: Deleting ${level.length} records (${dbOnlyAtLevel} database-only, ${metadataAtLevel} metadata)...`);
+      } else if (dbOnlyAtLevel > 0) {
+        callbacks?.onLog?.(`   Level ${levelNumber}: Deleting ${dbOnlyAtLevel} database-only record${dbOnlyAtLevel > 1 ? 's' : ''}...`);
+      } else {
+        callbacks?.onLog?.(`   Level ${levelNumber}: Deleting ${level.length} record${level.length > 1 ? 's' : ''}...`);
+      }
 
       // Process records within same level (can be done in parallel in the future)
       for (const record of level) {
+        const isDbOnly = record.path === '<DATABASE>';
+
         try {
-          const result = await this.processDeleteRecord(record, '', options, callbacks);
+          const result = await this.processDeleteRecord(record, '', options, callbacks, isDbOnly);
 
           if (result.status === 'deleted') {
             deleted++;
+            if (isDbOnly) {
+              dbOnlyDeleted++;
+            }
           } else if (result.status === 'skipped') {
             // Record not found, already handled in processDeleteRecord
           }

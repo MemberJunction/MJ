@@ -96,9 +96,11 @@ export class NewUserBase {
                         }
                     }
                 } else {
-                    // Fall back to DefaultForNewUser applications from metadata
+                    // Fall back to DefaultForNewUser applications from metadata, sorted by DefaultSequence
                     LogStatus(`No UserApplications configured, using DefaultForNewUser applications for new user ${user.Name}`);
-                    applicationsToCreate = md.Applications.filter(a => a.DefaultForNewUser);
+                    applicationsToCreate = md.Applications
+                        .filter(a => a.DefaultForNewUser)
+                        .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
                     LogStatus(`Found ${applicationsToCreate.length} applications with DefaultForNewUser=true`);
                 }
 
