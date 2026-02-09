@@ -1,5 +1,4 @@
-import { Component, ChangeDetectionStrategy, ElementRef, ChangeDetectorRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
@@ -59,16 +58,6 @@ import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFe
 })
 export class TestRunFeedbackFormComponentExtended extends TestRunFeedbackFormComponent {
   public override record!: TestRunFeedbackEntity;
-
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
 
   openTestRun() {
     if (this.record.TestRunID) {

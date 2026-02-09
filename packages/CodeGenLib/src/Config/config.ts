@@ -213,6 +213,12 @@ const advancedGenerationSchema = z.object({
         "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
       enabled: false,
     },
+    {
+      name: 'VirtualEntityFieldDecoration',
+      description:
+        'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions. Only runs for virtual entities that lack soft PK/FK annotations. Respects explicit config-defined PKs/FKs (from additionalSchemaInfo) — LLM fills in the gaps.',
+      enabled: true,
+    },
   ]),
 });
 
@@ -578,6 +584,11 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
       {
         name: 'ParseCheckConstraints',
         description: 'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
+        enabled: true,
+      },
+      {
+        name: 'VirtualEntityFieldDecoration',
+        description: 'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions.',
         enabled: true,
       },
     ],

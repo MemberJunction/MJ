@@ -1154,6 +1154,161 @@ This library is written in TypeScript and provides full type definitions. All ge
 
 ISC License - see LICENSE file for details.
 
+## Virtual Entities
+
+Virtual entities are **read-only entities backed by SQL views** rather than physical database tables. They appear in the metadata catalog alongside regular entities but have no underlying base table — only a base view. This makes them ideal for exposing aggregated data, cross-database views, or complex computed datasets as first-class entities.
+
+```mermaid
+flowchart LR
+    subgraph Regular["Regular Entity"]
+        RT[Base Table] --> RV[Base View]
+        RV --> RE[Entity Metadata]
+    end
+
+    subgraph Virtual["Virtual Entity"]
+        VV[SQL View Only] --> VE[Entity Metadata]
+    end
+
+    RE --> API[GraphQL API / RunView]
+    VE --> API
+
+    style Virtual fill:#e8d5f5,stroke:#7b2d8e
+    style Regular fill:#d5e8f5,stroke:#2d5f8e
+```
+
+### Key Properties
+
+| Property | Regular Entity | Virtual Entity |
+|----------|---------------|----------------|
+| `VirtualEntity` | `false` | `true` |
+| `BaseTable` | Physical table name | Same as `BaseView` |
+| `AllowCreateAPI` | Configurable | Always `false` |
+| `AllowUpdateAPI` | Configurable | Always `false` |
+| Stored procedures | Generated | None |
+
+### Read-Only Enforcement
+
+Virtual entities are enforced as read-only at multiple layers:
+
+1. **Runtime Guard** — `BaseEntity.CheckPermissions()` blocks Create, Update, and Delete:
+   ```typescript
+   if (this.EntityInfo.VirtualEntity &&
+       (type === EntityPermissionType.Create ||
+        type === EntityPermissionType.Update ||
+        type === EntityPermissionType.Delete)) {
+       throw new Error(
+           `Cannot ${type} on virtual entity '${this.EntityInfo.Name}' — virtual entities are read-only`
+       );
+   }
+   ```
+2. **API Flags** — `AllowCreateAPI`, `AllowUpdateAPI`, `AllowDeleteAPI` are all `false`
+3. **CodeGen** — No stored procedures are generated
+
+### Using Virtual Entities
+
+```typescript
+import { Metadata, RunView } from '@memberjunction/core';
+
+// Read operations work identically to regular entities
+const rv = new RunView();
+const result = await rv.RunView({
+    EntityName: 'Sales Summary',
+    ExtraFilter: `RegionID = '${regionId}'`,
+    ResultType: 'simple'
+});
+
+// Access metadata
+const md = new Metadata();
+const entity = md.EntityByName('Sales Summary');
+console.log(entity.VirtualEntity);  // true
+console.log(entity.BaseView);       // 'vwSalesSummary'
+
+// Save() and Delete() will throw — virtual entities are read-only
+```
+
+> **Full Guide**: See [Virtual Entities Guide](./docs/virtual-entities.md) for config-driven creation, LLM-assisted field decoration, field metadata, and troubleshooting.
+
+## IS-A Type Relationships (Type Inheritance)
+
+MemberJunction supports **IS-A type relationships** (also called Table-Per-Type / TPT) where a child entity shares its parent's primary key and inherits all parent fields. This enables type hierarchies like `Meeting IS-A Product` or `Webinar IS-A Meeting IS-A Product`.
+
+```mermaid
+erDiagram
+    Product ||--o{ Meeting : "IS-A"
+    Product ||--o{ Publication : "IS-A"
+    Meeting ||--o{ Webinar : "IS-A"
+
+    Product {
+        uuid ID PK
+        string Name
+        decimal Price
+    }
+    Meeting {
+        uuid ID PK,FK
+        datetime StartTime
+        int MaxAttendees
+    }
+    Webinar {
+        uuid ID PK,FK
+        string PlatformURL
+        boolean IsRecorded
+    }
+```
+
+### How It Works
+
+Child entities share the parent's primary key (same UUID). At runtime, `BaseEntity` uses **persistent composition** — each child instance holds a live reference to its parent entity through `_parentEntity`. All field access, dirty tracking, validation, and save/delete orchestration flow through this composition chain automatically.
+
+### EntityInfo IS-A Properties
+
+```typescript
+const md = new Metadata();
+const meeting = md.EntityByName('Meetings');
+
+meeting.IsChildType;        // true — has a ParentID
+meeting.ParentEntityInfo;   // EntityInfo for 'Products'
+meeting.ParentChain;        // [ProductsEntityInfo] — all ancestors
+meeting.AllParentFields;    // EntityFieldInfo[] — inherited fields (excludes PKs, timestamps)
+meeting.ParentEntityFieldNames; // Set<string> — cached for O(1) lookup
+
+const product = md.EntityByName('Products');
+product.IsParentType;       // true — has child entities
+product.ChildEntities;      // [MeetingsEntityInfo, PublicationsEntityInfo]
+```
+
+### BaseEntity Set/Get Routing
+
+For IS-A child entities, parent fields are automatically routed to the parent entity:
+
+```typescript
+const meetingEntity = await md.GetEntityObject<MeetingEntity>('Meetings');
+
+// Own field — stored locally
+meetingEntity.Set('StartTime', new Date());
+
+// Parent field — automatically routed to ProductEntity._parentEntity
+meetingEntity.Set('Name', 'Annual Conference');
+meetingEntity.Get('Name'); // Returns from _parentEntity (authoritative)
+
+// Dirty tracking spans the chain
+meetingEntity.Dirty; // true if ANY field in chain is modified
+```
+
+### Save & Delete Orchestration
+
+- **Save** — Parent entities are saved first (inner-to-outer), then the child. On server, a shared SQL transaction wraps the entire chain.
+- **Delete** — Child is deleted first, then parents (outer-to-inner). Disjoint subtype enforcement prevents a parent from being multiple child types simultaneously.
+
+> **Full Guide**: See [IS-A Relationships Guide](./docs/isa-relationships.md) for the complete data model, runtime object model, save/delete orchestration sequences, provider implementations, CodeGen integration, and troubleshooting.
+
+## Documentation
+
+For detailed guides on specific topics, see the [docs/](./docs/) folder:
+
+- [Virtual Entities](./docs/virtual-entities.md) — Config-driven creation, LLM decoration, read-only enforcement
+- [IS-A Relationships](./docs/isa-relationships.md) — Type inheritance, save/delete orchestration, provider integration
+- [RunQuery Pagination](./docs/runquery-pagination.md) — Parameterized queries with pagination support
+
 ## Support
 
 For support, documentation, and examples, visit [MemberJunction.com](https://www.memberjunction.com).

@@ -39,7 +39,8 @@
       <mj-app-nav
         class="desktop-nav"
         [app]="activeApp"
-        (navItemClick)="onNavItemClick($event)">
+        (navItemClick)="onNavItemClick($event)"
+        (navItemDismiss)="onNavItemDismiss($event)">
       </mj-app-nav>
     }
 
@@ -179,7 +180,8 @@
         <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
         <mj-app-nav
           [app]="activeApp"
-          (navItemClick)="onNavItemClick($event)">
+          (navItemClick)="onNavItemClick($event)"
+          (navItemDismiss)="onNavItemDismiss($event)">
         </mj-app-nav>
       </div>
     }

@@ -16,13 +16,9 @@ export class EmployeeRoleFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'entityKeys', sectionName: 'Entity Keys', isExpanded: true },
-            { sectionKey: 'employeeDetails', sectionName: 'Employee Details', isExpanded: true },
-            { sectionKey: 'roleAssignment', sectionName: 'Role Assignment', isExpanded: false },
+            { sectionKey: 'roleAssignment', sectionName: 'Role Assignment', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }
 
-export function LoadEmployeeRoleFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

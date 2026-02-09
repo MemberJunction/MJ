@@ -33,7 +33,8 @@
   },
   "files": [
     "/bin",
-    "/dist"
+    "/dist",
+    "/prompts"
   ],
   "scripts": {
     "start": "ts-node-dev src/cli/cli.ts",

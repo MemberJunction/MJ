@@ -25,6 +25,3 @@ export class GeneratedCodeCategoryFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadGeneratedCodeCategoryFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

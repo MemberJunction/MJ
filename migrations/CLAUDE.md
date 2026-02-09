@@ -4,6 +4,22 @@
 
 This directory contains SQL migration scripts for MemberJunction database schema changes. We use Flyway for migration management.
 
+## 🚨 IMPORTANT: Where to Create New Migrations
+
+**All new migrations MUST be created in the `migrations/v3/` directory.**
+
+The `migrations/v2/` directory is **frozen** and should not receive new migrations. It contains historical migrations up to v2.133.0.
+
+```
+migrations/
+├── v2/                    # ❌ FROZEN - Do NOT add new migrations here
+│   └── V202407171600...   # Historical migrations through v2.133.0
+├── v3/                    # ✅ CREATE NEW MIGRATIONS HERE
+│   ├── B202601122300...   # v3.0 Baseline (complete schema)
+│   └── V202601200000...   # All new v3.x migrations
+└── R__RefreshMetadata.sql # Repeatable migration (runs after all versioned)
+```
+
 ## Version 3.0 Baseline Migration
 
 Starting with v3.0, MemberJunction uses a **baseline migration** approach to streamline fresh installations:

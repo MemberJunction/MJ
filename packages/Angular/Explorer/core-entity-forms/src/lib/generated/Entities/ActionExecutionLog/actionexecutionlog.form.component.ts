@@ -23,6 +23,3 @@ export class ActionExecutionLogFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadActionExecutionLogFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

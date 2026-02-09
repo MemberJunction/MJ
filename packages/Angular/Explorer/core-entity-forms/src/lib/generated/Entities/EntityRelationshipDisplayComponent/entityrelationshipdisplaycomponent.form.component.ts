@@ -23,6 +23,3 @@ export class EntityRelationshipDisplayComponentFormComponent extends BaseFormCom
     }
 }
 
-export function LoadEntityRelationshipDisplayComponentFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

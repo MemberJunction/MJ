@@ -647,6 +647,99 @@ In server environments like MJAPI, a new `SQLServerDataProvider` instance is cre
 | Pool exhausted | Too many concurrent connections | Increase `pool.max`; check for leaked connections or long-running queries |
 | EREQINPROG error | Request reuse during transaction | This is handled automatically; the provider clears stale transaction references |
 
+## IS-A Type Relationship Transaction Support
+
+MemberJunction supports IS-A type relationships where child entities inherit from parent entities (e.g., `MeetingEntity IS-A ProductEntity`). The SQLServerDataProvider manages SQL transactions to ensure atomic save and delete operations across the entire entity hierarchy.
+
+### How IS-A Transactions Work
+
+When you save or delete an entity that participates in an IS-A hierarchy, SQLServerDataProvider automatically:
+
+1. **Creates a SQL Transaction**: The initiating (leaf) entity calls `BeginISATransaction()` to create a new `sql.Transaction` on the connection pool
+2. **Propagates the Transaction**: The transaction is stored in `BaseEntity.ProviderTransaction` and shared across all entities in the parent chain
+3. **Executes Operations in Order**:
+   - For **saves**: Parent entities are saved first, then the child entity uses the parent's ID
+   - For **deletes**: The child entity is deleted first, then parents are deleted in reverse order
+4. **Commits or Rolls Back**: `CommitISATransaction()` commits all changes, or `RollbackISATransaction()` reverts everything on failure
+
+### Transaction Lifecycle
+
+```typescript
+// Example: Saving a MeetingEntity (which IS-A ProductEntity)
+const meeting = await md.GetEntityObject<MeetingEntity>('Meetings');
+meeting.Name = 'Project Planning';
+meeting.MeetingDate = new Date();
+// ... set other fields
+
+// When you call Save(), the provider automatically:
+// 1. Begins a SQL transaction
+// 2. Saves the Product parent entity first
+// 3. Uses the Product ID to save the Meeting child entity
+// 4. Commits the transaction
+const result = await meeting.Save();
+
+// If any step fails, the entire transaction is rolled back
+```
+
+### Key Methods
+
+- `BeginISATransaction()`: Creates a new `sql.Transaction` on the connection pool and stores it in `BaseEntity.ProviderTransaction`
+- `CommitISATransaction()`: Commits the shared transaction across the entire IS-A chain
+- `RollbackISATransaction()`: Rolls back all changes if any operation in the chain fails
+
+### Benefits
+
+- **Atomicity**: All saves/deletes in the hierarchy succeed or fail together
+- **Consistency**: No orphaned child records or missing parent data
+- **Transparent**: The transaction management is automatic - no manual transaction handling required
+- **Shared State**: All entities in the chain use the same `sql.Transaction` instance via `BaseEntity.ProviderTransaction`
+
+For more details on IS-A relationships and how they work across MemberJunction, see [MJCore IS-A Relationships Documentation](../../MJCore/docs/isa-relationships.md).
+
+## Virtual Entity Support
+
+MemberJunction supports virtual entities that are backed by SQL views instead of physical tables. Virtual entities provide read-only access to data and are commonly used for reporting, aggregations, and denormalized views.
+
+### Read Operations
+
+Virtual entities work seamlessly with the SQLServerDataProvider for all read operations:
+
+- **RunView**: Execute queries against the virtual entity's underlying SQL view
+- **Get**: Load individual records by primary key (if the view supports it)
+- **Filtering, Sorting, Pagination**: All standard query operations work as expected
+
+```typescript
+// Example: Querying a virtual entity backed by a view
+const rv = new RunView();
+const result = await rv.RunView<UserSummaryEntity>({
+    EntityName: 'User Summary',  // Virtual entity backed by vwUserSummary
+    ExtraFilter: "Department = 'Engineering'",
+    OrderBy: 'LastLoginDate DESC',
+    ResultType: 'entity_object'
+});
+
+// result.Results contains fully-typed UserSummaryEntity objects
+const users = result.Results;
+```
+
+### Write Operations
+
+Write operations (Save, Delete) are **automatically blocked** for virtual entities at the BaseEntity level before they reach the data provider:
+
+- **BaseEntity.Save()**: Returns an error if called on a virtual entity
+- **BaseEntity.Delete()**: Returns an error if called on a virtual entity
+- **Why**: Virtual entities represent read-only views and cannot be modified directly
+
+### Use Cases for Virtual Entities
+
+- **Aggregated Data**: Summary views that combine data from multiple tables
+- **Denormalized Views**: Flattened representations of complex relationships
+- **Calculated Fields**: Views that include computed columns or transformations
+- **Security Views**: Row-level filtering applied at the database view level
+- **Reporting**: Pre-joined data optimized for reporting queries
+
+For comprehensive documentation on virtual entities, their configuration, and advanced usage patterns, see [MJCore Virtual Entities Documentation](../../MJCore/docs/virtual-entities.md).
+
 ## License
 
 ISC

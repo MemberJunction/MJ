@@ -1,0 +1,435 @@
+/**
+ * Mock Entity Data for Testing IS-A Relationships and Virtual Entities
+ *
+ * Provides pre-built EntityInfo init data representing a realistic IS-A hierarchy:
+ *   Products (root parent)
+ *     ├── Meetings (child of Products)
+ *     │     └── Webinars (child of Meetings — 3-level chain)
+ *     └── Publications (child of Products)
+ *
+ * Also includes a Virtual Entity (Sales Summary) for testing read-only enforcement.
+ */
+
+// ─── Shared role / permission scaffolding ──────────────────────────────────
+export const MOCK_ROLE_ID = 'role-admin-001';
+export const MOCK_USER_ID = 'user-test-001';
+
+function makePermission(entityID: string): Record<string, unknown> {
+    return {
+        ID: `perm-${entityID}`,
+        EntityID: entityID,
+        RoleID: MOCK_ROLE_ID,
+        CanCreate: true,
+        CanRead: true,
+        CanUpdate: true,
+        CanDelete: true,
+    };
+}
+
+// ─── Products (root parent) ────────────────────────────────────────────────
+export const PRODUCT_ENTITY_ID = 'entity-products-001';
+export const PRODUCT_FIELDS = [
+    {
+        ID: 'f-prod-id',
+        EntityID: PRODUCT_ENTITY_ID,
+        Name: 'ID',
+        Type: 'uniqueidentifier',
+        IsPrimaryKey: true,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: false,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: false,
+        ValueListType: 'None',
+        Sequence: 1,
+        Status: 'Active',
+        Entity: 'Products',
+        EntityFieldValues: [],
+    },
+    {
+        ID: 'f-prod-name',
+        EntityID: PRODUCT_ENTITY_ID,
+        Name: 'Name',
+        Type: 'nvarchar',
+        Length: 255,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: false,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: true,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 2,
+        Status: 'Active',
+        Entity: 'Products',
+        EntityFieldValues: [],
+    },
+    {
+        ID: 'f-prod-price',
+        EntityID: PRODUCT_ENTITY_ID,
+        Name: 'Price',
+        Type: 'decimal',
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 3,
+        Status: 'Active',
+        Entity: 'Products',
+        EntityFieldValues: [],
+    },
+];
+
+export const PRODUCT_ENTITY_DATA = {
+    ID: PRODUCT_ENTITY_ID,
+    Name: 'Products',
+    BaseTable: 'Product',
+    BaseView: 'vwProducts',
+    SchemaName: 'dbo',
+    VirtualEntity: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    IncludeInAPI: true,
+    ParentID: null,
+    Status: 'Active',
+    EntityFields: PRODUCT_FIELDS,
+    EntityPermissions: [makePermission(PRODUCT_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
+// ─── Meetings (child of Products) ──────────────────────────────────────────
+export const MEETING_ENTITY_ID = 'entity-meetings-001';
+export const MEETING_FIELDS = [
+    {
+        ID: 'f-meet-starttime',
+        EntityID: MEETING_ENTITY_ID,
+        Name: 'StartTime',
+        Type: 'datetime2',
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 2,
+        Status: 'Active',
+        Entity: 'Meetings',
+        EntityFieldValues: [],
+    },
+    {
+        ID: 'f-meet-maxattendees',
+        EntityID: MEETING_ENTITY_ID,
+        Name: 'MaxAttendees',
+        Type: 'int',
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 3,
+        Status: 'Active',
+        Entity: 'Meetings',
+        EntityFieldValues: [],
+    },
+];
+
+export const MEETING_ENTITY_DATA = {
+    ID: MEETING_ENTITY_ID,
+    Name: 'Meetings',
+    BaseTable: 'Meeting',
+    BaseView: 'vwMeetings',
+    SchemaName: 'dbo',
+    VirtualEntity: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    IncludeInAPI: true,
+    ParentID: PRODUCT_ENTITY_ID,
+    Status: 'Active',
+    EntityFields: MEETING_FIELDS,
+    EntityPermissions: [makePermission(MEETING_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
+// ─── Webinars (child of Meetings — 3-level IS-A chain) ────────────────────
+export const WEBINAR_ENTITY_ID = 'entity-webinars-001';
+export const WEBINAR_FIELDS = [
+    {
+        ID: 'f-web-platformurl',
+        EntityID: WEBINAR_ENTITY_ID,
+        Name: 'PlatformURL',
+        Type: 'nvarchar',
+        Length: 500,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 2,
+        Status: 'Active',
+        Entity: 'Webinars',
+        EntityFieldValues: [],
+    },
+    {
+        ID: 'f-web-isrecorded',
+        EntityID: WEBINAR_ENTITY_ID,
+        Name: 'IsRecorded',
+        Type: 'bit',
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: false,
+        DefaultValue: '0',
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 3,
+        Status: 'Active',
+        Entity: 'Webinars',
+        EntityFieldValues: [],
+    },
+];
+
+export const WEBINAR_ENTITY_DATA = {
+    ID: WEBINAR_ENTITY_ID,
+    Name: 'Webinars',
+    BaseTable: 'Webinar',
+    BaseView: 'vwWebinars',
+    SchemaName: 'dbo',
+    VirtualEntity: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    IncludeInAPI: true,
+    ParentID: MEETING_ENTITY_ID,
+    Status: 'Active',
+    EntityFields: WEBINAR_FIELDS,
+    EntityPermissions: [makePermission(WEBINAR_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
+// ─── Publications (child of Products) ──────────────────────────────────────
+export const PUBLICATION_ENTITY_ID = 'entity-publications-001';
+export const PUBLICATION_FIELDS = [
+    {
+        ID: 'f-pub-isbn',
+        EntityID: PUBLICATION_ENTITY_ID,
+        Name: 'ISBN',
+        Type: 'nvarchar',
+        Length: 20,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 2,
+        Status: 'Active',
+        Entity: 'Publications',
+        EntityFieldValues: [],
+    },
+];
+
+export const PUBLICATION_ENTITY_DATA = {
+    ID: PUBLICATION_ENTITY_ID,
+    Name: 'Publications',
+    BaseTable: 'Publication',
+    BaseView: 'vwPublications',
+    SchemaName: 'dbo',
+    VirtualEntity: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    IncludeInAPI: true,
+    ParentID: PRODUCT_ENTITY_ID,
+    Status: 'Active',
+    EntityFields: PUBLICATION_FIELDS,
+    EntityPermissions: [makePermission(PUBLICATION_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
+// ─── Virtual Entity: Sales Summary ─────────────────────────────────────────
+export const SALES_SUMMARY_ENTITY_ID = 'entity-sales-summary-001';
+export const SALES_SUMMARY_FIELDS = [
+    {
+        ID: 'f-ss-summaryid',
+        EntityID: SALES_SUMMARY_ENTITY_ID,
+        Name: 'SummaryID',
+        Type: 'uniqueidentifier',
+        IsPrimaryKey: true,
+        IsSoftPrimaryKey: true,
+        IsSoftForeignKey: false,
+        AllowsNull: false,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: false,
+        ValueListType: 'None',
+        Sequence: 1,
+        Status: 'Active',
+        Entity: 'Sales Summary',
+        EntityFieldValues: [],
+    },
+    {
+        ID: 'f-ss-regionname',
+        EntityID: SALES_SUMMARY_ENTITY_ID,
+        Name: 'RegionName',
+        Type: 'nvarchar',
+        Length: 100,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: true,
+        AllowUpdateAPI: false,
+        ValueListType: 'None',
+        Sequence: 2,
+        Status: 'Active',
+        Entity: 'Sales Summary',
+        EntityFieldValues: [],
+    },
+    {
+        ID: 'f-ss-totalsales',
+        EntityID: SALES_SUMMARY_ENTITY_ID,
+        Name: 'TotalSales',
+        Type: 'decimal',
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: false,
+        ValueListType: 'None',
+        Sequence: 3,
+        Status: 'Active',
+        Entity: 'Sales Summary',
+        EntityFieldValues: [],
+    },
+];
+
+export const SALES_SUMMARY_ENTITY_DATA = {
+    ID: SALES_SUMMARY_ENTITY_ID,
+    Name: 'Sales Summary',
+    BaseTable: 'vwSalesSummary',
+    BaseView: 'vwSalesSummary',
+    SchemaName: 'dbo',
+    VirtualEntity: true,
+    AllowCreateAPI: false,
+    AllowUpdateAPI: false,
+    AllowDeleteAPI: false,
+    IncludeInAPI: true,
+    ParentID: null,
+    Status: 'Active',
+    EntityFields: SALES_SUMMARY_FIELDS,
+    EntityPermissions: [makePermission(SALES_SUMMARY_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
+// ─── Standalone non-IS-A entity (for comparison tests) ────────────────────
+export const STANDALONE_ENTITY_ID = 'entity-standalone-001';
+export const STANDALONE_ENTITY_DATA = {
+    ID: STANDALONE_ENTITY_ID,
+    Name: 'Standalone Items',
+    BaseTable: 'StandaloneItem',
+    BaseView: 'vwStandaloneItems',
+    SchemaName: 'dbo',
+    VirtualEntity: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    IncludeInAPI: true,
+    ParentID: null,
+    Status: 'Active',
+    EntityFields: [
+        {
+            ID: 'f-sa-id',
+            EntityID: STANDALONE_ENTITY_ID,
+            Name: 'ID',
+            Type: 'uniqueidentifier',
+            IsPrimaryKey: true,
+            IsSoftPrimaryKey: false,
+            IsSoftForeignKey: false,
+            AllowsNull: false,
+            AutoIncrement: false,
+            IsVirtual: false,
+            IsNameField: false,
+            AllowUpdateAPI: false,
+            ValueListType: 'None',
+            Sequence: 1,
+            Status: 'Active',
+            Entity: 'Standalone Items',
+            EntityFieldValues: [],
+        },
+        {
+            ID: 'f-sa-name',
+            EntityID: STANDALONE_ENTITY_ID,
+            Name: 'Name',
+            Type: 'nvarchar',
+            Length: 255,
+            IsPrimaryKey: false,
+            IsSoftPrimaryKey: false,
+            IsSoftForeignKey: false,
+            AllowsNull: true,
+            AutoIncrement: false,
+            IsVirtual: false,
+            IsNameField: true,
+            AllowUpdateAPI: true,
+            ValueListType: 'None',
+            Sequence: 2,
+            Status: 'Active',
+            Entity: 'Standalone Items',
+            EntityFieldValues: [],
+        },
+    ],
+    EntityPermissions: [makePermission(STANDALONE_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
+/**
+ * All entity data arrays — use this to set up a mock Metadata.Provider.Entities
+ * that has the full hierarchy available for ParentEntityInfo / ChildEntities lookups.
+ */
+export const ALL_ENTITY_DATA = [
+    PRODUCT_ENTITY_DATA,
+    MEETING_ENTITY_DATA,
+    WEBINAR_ENTITY_DATA,
+    PUBLICATION_ENTITY_DATA,
+    SALES_SUMMARY_ENTITY_DATA,
+    STANDALONE_ENTITY_DATA,
+];

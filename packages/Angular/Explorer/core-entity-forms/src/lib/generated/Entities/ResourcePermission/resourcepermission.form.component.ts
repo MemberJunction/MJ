@@ -23,6 +23,3 @@ export class ResourcePermissionFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadResourcePermissionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

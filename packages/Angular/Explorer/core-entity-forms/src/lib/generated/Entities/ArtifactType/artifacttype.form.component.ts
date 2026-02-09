@@ -28,6 +28,3 @@ export class ArtifactTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadArtifactTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

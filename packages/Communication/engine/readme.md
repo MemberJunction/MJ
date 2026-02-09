@@ -1,16 +1,48 @@
 # @memberjunction/communication-engine
 
-The MemberJunction Communication Engine provides a robust framework for sending messages through various communication providers (email, SMS, etc.) with template support and comprehensive logging.
+Server-side communication engine for MemberJunction. This package extends `CommunicationEngineBase` from `@memberjunction/communication-types` to provide the concrete implementation for sending messages, creating drafts, and managing communication runs through registered providers.
 
-## Overview
+## Architecture
 
-This package serves as the core engine for the MemberJunction communication system, providing:
+```mermaid
+graph TD
+    subgraph engine["@memberjunction/communication-engine"]
+        CE["CommunicationEngine\n(Singleton)"]
+        PMS["ProcessedMessageServer"]
+    end
 
-- **Provider-agnostic message sending**: Support for multiple communication providers through a plugin architecture
-- **Template integration**: Seamless integration with the MemberJunction template system for dynamic message content
-- **Message processing**: Automatic template rendering with context data
-- **Communication runs**: Batch message sending with transaction-like run management
-- **Comprehensive logging**: Built-in logging of all communication attempts
+    subgraph base["@memberjunction/communication-types"]
+        CEB["CommunicationEngineBase"]
+        BCP["BaseCommunicationProvider"]
+        MSG["Message"]
+    end
+
+    subgraph providers["Registered Providers"]
+        SG["SendGrid"]
+        GM["Gmail"]
+        TW["Twilio"]
+        MSP["MS Graph"]
+    end
+
+    subgraph templates["@memberjunction/templates"]
+        TE["TemplateEngineServer"]
+    end
+
+    CEB --> CE
+    CE -->|GetProvider| BCP
+    CE -->|processes| MSG
+    MSG --> PMS
+    PMS -->|renders via| TE
+    BCP --> SG
+    BCP --> GM
+    BCP --> TW
+    BCP --> MSP
+
+    style engine fill:#7c5295,stroke:#563a6b,color:#fff
+    style base fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style providers fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style templates fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Installation
 
@@ -18,322 +50,149 @@ This package serves as the core engine for the MemberJunction communication syst
 npm install @memberjunction/communication-engine
 ```
 
-## Core Components
+## Key Classes
 
 ### CommunicationEngine
 
-The main class that orchestrates all communication operations. It follows a singleton pattern and manages providers, message sending, and logging.
-
-```typescript
-import { CommunicationEngine } from '@memberjunction/communication-engine';
-
-// Get the singleton instance
-const engine = CommunicationEngine.Instance;
-
-// Configuration must be called before use
-await engine.Config();
-```
-
-### ProcessedMessageServer
-
-Server-side message processor that handles template rendering for message bodies, HTML bodies, and subjects.
-
-## Usage Examples
-
-### Sending a Single Message
-
-```typescript
-import { CommunicationEngine } from '@memberjunction/communication-engine';
-import { Message } from '@memberjunction/communication-types';
-
-// Create a message
-const message = new Message();
-message.Subject = 'Welcome to MemberJunction';
-message.Body = 'Thank you for joining!';
-message.To = 'user@example.com';
-message.From = 'noreply@memberjunction.com';
-
-// Send using a specific provider
-const result = await CommunicationEngine.Instance.SendSingleMessage(
-    'SendGrid',          // Provider name
-    'Email',             // Provider message type
-    message
-);
-
-if (result.Success) {
-    console.log('Message sent successfully');
-} else {
-    console.error('Failed to send:', result.Error);
-}
-```
-
-### Sending Messages with Templates
-
-```typescript
-import { CommunicationEngine } from '@memberjunction/communication-engine';
-import { Message } from '@memberjunction/communication-types';
-import { Metadata } from '@memberjunction/core';
-
-// Get template from metadata
-const md = new Metadata();
-const template = await md.GetEntityObject('Templates');
-await template.LoadByName('Welcome Email');
-
-// Create message with template
-const message = new Message();
-message.BodyTemplate = template;
-message.To = 'user@example.com';
-message.From = 'noreply@memberjunction.com';
-message.ContextData = {
-    firstName: 'John',
-    accountType: 'Premium',
-    activationDate: new Date()
-};
-
-// Send the message - templates will be automatically processed
-const result = await CommunicationEngine.Instance.SendSingleMessage(
-    'SendGrid',
-    'Email',
-    message
-);
-```
-
-### Batch Message Sending
+Singleton engine that orchestrates message sending across all registered providers. Handles provider lookup via the MJGlobal class factory, message processing (template rendering), communication run lifecycle, and logging.
 
 ```typescript
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message, MessageRecipient } from '@memberjunction/communication-types';
 
-// Create base message
-const baseMessage = new Message();
-baseMessage.Subject = 'Monthly Newsletter';
-baseMessage.BodyTemplate = newsletterTemplate;
-baseMessage.From = 'newsletter@memberjunction.com';
-
-// Create recipient list with individual context data
-const recipients: MessageRecipient[] = [
-    {
-        To: 'user1@example.com',
-        ContextData: { name: 'Alice', memberSince: '2023' }
-    },
-    {
-        To: 'user2@example.com',
-        ContextData: { name: 'Bob', memberSince: '2022' }
-    }
-];
-
-// Send to all recipients
-const results = await CommunicationEngine.Instance.SendMessages(
-    'SendGrid',
-    'Email',
-    baseMessage,
-    recipients
-);
-
-// Check results
-results.forEach((result, index) => {
-    if (result.Success) {
-        console.log(`Sent to ${recipients[index].To}`);
-    } else {
-        console.error(`Failed for ${recipients[index].To}: ${result.Error}`);
-    }
-});
+const engine = CommunicationEngine.Instance;
+await engine.Config(false, contextUser);
 ```
 
-### Preview Mode
-
-You can preview processed messages without actually sending them:
+### Sending a Single Message
 
 ```typescript
-const result = await CommunicationEngine.Instance.SendSingleMessage(
-    'SendGrid',
-    'Email',
+const message = new Message();
+message.From = 'sender@example.com';
+message.To = 'recipient@example.com';
+message.Subject = 'Welcome';
+message.HTMLBody = '<h1>Hello</h1>';
+
+const result = await engine.SendSingleMessage(
+    'SendGrid',           // provider name
+    'Email',              // provider message type name
     message,
-    undefined,  // No communication run
-    true        // Preview only
+    undefined,            // optional CommunicationRunEntity
+    false                 // previewOnly
 );
 
 if (result.Success) {
-    const processedMessage = result.Message;
-    console.log('Subject:', processedMessage.ProcessedSubject);
-    console.log('Body:', processedMessage.ProcessedBody);
-    console.log('HTML Body:', processedMessage.ProcessedHTMLBody);
+    console.log('Message sent');
 }
 ```
 
-### Creating Draft Messages
-
-Create draft messages that can be edited and sent later (only supported by providers with mailbox access):
+### Sending to Multiple Recipients
 
 ```typescript
-import { CommunicationEngine } from '@memberjunction/communication-engine';
-import { Message } from '@memberjunction/communication-types';
+const recipients: MessageRecipient[] = [
+    { To: 'alice@example.com', FullName: 'Alice', ContextData: { role: 'admin' } },
+    { To: 'bob@example.com', FullName: 'Bob', ContextData: { role: 'user' } }
+];
 
-// Get the engine instance
-const engine = CommunicationEngine.Instance;
-await engine.Config();
-
-// Create a message
 const message = new Message();
-message.To = 'recipient@example.com';
-message.From = 'sender@example.com';
-message.Subject = 'Draft Message';
-message.Body = 'This is a draft message that can be edited later';
+message.From = 'noreply@example.com';
+message.BodyTemplate = templateEntity; // uses template for personalization
+message.Subject = 'Update';
 
-// Create draft using Gmail (or 'Microsoft Graph')
+const results = await engine.SendMessages(
+    'SendGrid',
+    'Email',
+    message,
+    recipients,
+    false // previewOnly
+);
+// results is MessageResult[] - one per recipient
+```
+
+### Creating a Draft
+
+```typescript
+const message = new Message();
+message.From = 'user@example.com';
+message.To = 'recipient@example.com';
+message.Subject = 'Draft Email';
+message.HTMLBody = '<p>Content here</p>';
+
 const result = await engine.CreateDraft(
     message,
-    'Gmail',
+    'Microsoft Graph', // only providers with SupportsDrafts
     contextUser
 );
 
 if (result.Success) {
-    console.log(`Draft created with ID: ${result.DraftID}`);
-    // Draft can now be edited or sent through the provider's native interface
-} else {
-    console.error(`Failed to create draft: ${result.ErrorMessage}`);
+    console.log(`Draft ID: ${result.DraftID}`);
 }
 ```
 
-**Providers Supporting Drafts**:
-- **Gmail**: Drafts created in Gmail drafts folder
-- **Microsoft Graph**: Drafts created in Outlook/Exchange drafts folder
+### Per-Request Credentials
 
-**Providers NOT Supporting Drafts**:
-- **SendGrid**: Service-based email, no mailbox
-- **Twilio**: SMS/messaging service, no draft concept
-
-### Working with Providers
+All send methods accept an optional `credentials` parameter for per-request credential overrides:
 
 ```typescript
-// Get a specific provider instance
-const provider = CommunicationEngine.Instance.GetProvider('SendGrid');
+import { SendGridCredentials } from '@memberjunction/communication-sendgrid';
 
-// List all available providers
-const providers = CommunicationEngine.Instance.Providers;
-providers.forEach(p => {
-    console.log(`Provider: ${p.Name}`);
-    p.MessageTypes.forEach(mt => {
-        console.log(`  - ${mt.Name}`);
-    });
-});
+const result = await engine.SendSingleMessage(
+    'SendGrid',
+    'Email',
+    message,
+    undefined,
+    false,
+    { apiKey: 'SG.customer-specific-key' } // per-request credentials
+);
+```
+
+### ProcessedMessageServer
+
+Server-side implementation of `ProcessedMessage` that renders templates using `TemplateEngineServer`. Automatically processes body, HTML body, and subject templates with the provided context data.
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant CE as CommunicationEngine
+    participant PMS as ProcessedMessageServer
+    participant TE as TemplateEngineServer
+    participant P as Provider
+
+    App->>CE: SendSingleMessage(providerName, messageType, message)
+    CE->>CE: GetProvider(providerName)
+    CE->>PMS: new ProcessedMessageServer(message)
+    CE->>PMS: Process()
+    PMS->>TE: RenderTemplate(bodyTemplate, contextData)
+    TE-->>PMS: rendered content
+    PMS-->>CE: ProcessResult
+    CE->>P: SendSingleMessage(processedMessage, credentials)
+    P-->>CE: MessageResult
+    CE-->>App: MessageResult
 ```
 
 ## API Reference
 
-### CommunicationEngine
-
-#### Properties
-
-- `Instance: CommunicationEngine` - Static singleton instance
-- `Providers: CommunicationProviderEntity[]` - List of configured providers
-- `Loaded: boolean` - Whether metadata has been loaded
-
-#### Methods
-
-##### `Config(contextUser?: UserInfo): Promise<void>`
-Initializes the engine with metadata. Must be called before using other methods.
-
-##### `GetProvider(providerName: string): BaseCommunicationProvider`
-Returns an instance of the specified communication provider.
-
-##### `SendSingleMessage(providerName: string, providerMessageTypeName: string, message: Message, run?: CommunicationRunEntity, previewOnly?: boolean): Promise<MessageResult>`
-Sends a single message using the specified provider.
-
-Parameters:
-- `providerName`: Name of the provider (e.g., 'SendGrid', 'Twilio')
-- `providerMessageTypeName`: Type of message for the provider (e.g., 'Email', 'SMS')
-- `message`: The message to send
-- `run`: Optional communication run for grouping messages
-- `previewOnly`: If true, processes templates but doesn't send
-
-##### `SendMessages(providerName: string, providerMessageTypeName: string, message: Message, recipients: MessageRecipient[], previewOnly?: boolean): Promise<MessageResult[]>`
-Sends messages to multiple recipients in a single run.
-
-##### `CreateDraft(message: Message, providerName: string, contextUser?: UserInfo): Promise<CreateDraftResult>`
-Creates a draft message using the specified provider.
-
-Parameters:
-- `message`: The message to save as a draft
-- `providerName`: Name of the provider (must support drafts, e.g., 'Gmail', 'Microsoft Graph')
-- `contextUser`: Optional user context for server-side operations
-
-Returns a `CreateDraftResult` with:
-- `Success`: Whether the draft was created successfully
-- `DraftID`: The provider-specific draft identifier (if successful)
-- `ErrorMessage`: Error details (if failed)
-
-**Note**: Only providers with mailbox access support drafts (Gmail, MS Graph). Service-based providers (SendGrid, Twilio) will return an error.
-
-### ProcessedMessageServer
-
-#### Methods
-
-##### `Process(forceTemplateRefresh?: boolean, contextUser?: UserInfo): Promise<{Success: boolean, Message?: string}>`
-Processes all templates in the message and populates the processed fields.
-
-## Template Processing
-
-The engine automatically processes templates in the following order:
-
-1. **Body Template**: 
-   - Renders 'Text' content type for `ProcessedBody`
-   - Renders 'HTML' content type for `ProcessedHTMLBody` (if no separate HTML template)
-
-2. **HTML Body Template**: 
-   - Renders 'HTML' content type for `ProcessedHTMLBody`
-
-3. **Subject Template**: 
-   - Renders 'HTML' content type for `ProcessedSubject`
-
-Context data passed in the message is available to all templates during rendering.
-
-## Error Handling
-
-The engine provides detailed error messages for common scenarios:
-
-- Provider not found
-- Provider message type not found
-- Template rendering failures
-- Communication run failures
-- Missing required template content types
-
-Always wrap communication calls in try-catch blocks:
-
-```typescript
-try {
-    const result = await CommunicationEngine.Instance.SendSingleMessage(...);
-    if (!result.Success) {
-        // Handle send failure
-        console.error(result.Error);
-    }
-} catch (error) {
-    // Handle engine errors
-    console.error('Engine error:', error.message);
-}
-```
+| Method | Description |
+|--------|-------------|
+| `Config(forceRefresh, contextUser, provider)` | Initialize the engine and load metadata |
+| `GetProvider(providerName)` | Retrieve a provider instance from the class factory |
+| `SendSingleMessage(provider, type, message, run?, preview?, credentials?)` | Send one message |
+| `SendMessages(provider, type, message, recipients, preview?, credentials?)` | Send to multiple recipients |
+| `CreateDraft(message, providerName, contextUser?, credentials?)` | Create a draft message |
 
 ## Dependencies
 
-- `@memberjunction/global`: Core MemberJunction utilities
-- `@memberjunction/core`: Core MemberJunction functionality
-- `@memberjunction/templates`: Template engine integration
-- `@memberjunction/core-entities`: Entity definitions
-- `@memberjunction/communication-types`: Type definitions
-- `rxjs`: Reactive Extensions for JavaScript
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/communication-types` | Base engine, provider, and message types |
+| `@memberjunction/core` | UserInfo, logging, metadata access |
+| `@memberjunction/core-entities` | CommunicationRunEntity and related entities |
+| `@memberjunction/global` | MJGlobal class factory for provider instantiation |
+| `@memberjunction/templates` | Server-side template rendering engine |
 
-## Integration with Other MJ Packages
+## Development
 
-This package integrates seamlessly with:
-
-- **@memberjunction/templates**: For dynamic content generation
-- **@memberjunction/core-entities**: For communication logging entities
-- **Provider packages**: Such as `@memberjunction/communication-sendgrid`, `@memberjunction/communication-twilio`
-
-## Provider Implementation
-
-To implement a custom provider, extend `BaseCommunicationProvider` from `@memberjunction/communication-types` and register it with the MemberJunction class factory using the `@RegisterClass` decorator.
-
-## License
-
-ISC
+```bash
+npm run build    # Compile TypeScript
+npm start        # Watch mode
+```
