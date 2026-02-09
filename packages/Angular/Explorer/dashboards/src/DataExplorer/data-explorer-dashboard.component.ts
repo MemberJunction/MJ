@@ -2249,21 +2249,50 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return 'fa-solid fa-table';
   }
 
+  // Cache for relative time strings to prevent recalculation during change detection
+  private relativeTimeCache = new Map<number, { formatted: string; cachedAt: number }>();
+
   /**
    * Format relative time for display (e.g., "2 hours ago")
+   * Cached to prevent ExpressionChangedAfterItHasBeenCheckedError
    */
   public formatRelativeTime(date: Date): string {
-    const now = new Date();
-    const diff = now.getTime() - new Date(date).getTime();
+    if (!date) return '';
+
+    const timestamp = new Date(date).getTime();
+    const now = Date.now();
+
+    // Check cache - use cached value if less than 10 seconds old
+    const cached = this.relativeTimeCache.get(timestamp);
+    if (cached && (now - cached.cachedAt) < 10000) {
+      return cached.formatted;
+    }
+
+    // Calculate new value
+    const diff = now - timestamp;
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return new Date(date).toLocaleDateString();
+    let formatted: string;
+    if (minutes < 1) formatted = 'Just now';
+    else if (minutes < 60) formatted = `${minutes}m ago`;
+    else if (hours < 24) formatted = `${hours}h ago`;
+    else if (days < 7) formatted = `${days}d ago`;
+    else formatted = new Date(date).toLocaleDateString();
+
+    // Cache the result
+    this.relativeTimeCache.set(timestamp, { formatted, cachedAt: now });
+
+    // Cleanup old cache entries (keep last 100)
+    if (this.relativeTimeCache.size > 100) {
+      const firstKey = this.relativeTimeCache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.relativeTimeCache.delete(firstKey);
+      }
+    }
+
+    return formatted;
   }
 
   /**

@@ -20,6 +20,3 @@ export class ResourceLinkFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadResourceLinkFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

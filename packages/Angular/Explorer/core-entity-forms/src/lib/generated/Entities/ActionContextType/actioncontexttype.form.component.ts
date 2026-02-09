@@ -23,6 +23,3 @@ export class ActionContextTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadActionContextTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

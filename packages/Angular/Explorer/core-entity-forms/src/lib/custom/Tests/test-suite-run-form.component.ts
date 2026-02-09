@@ -1,12 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, ViewContainerRef, inject } from '@angular/core';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TestSuiteRunEntity, TestSuiteEntity, TestRunEntity, TestRunFeedbackEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { TestSuiteRunFormComponent } from '../../generated/Entities/TestSuiteRun/testsuiterun.form.component';
 import {
@@ -87,19 +86,12 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
   evaluationMetrics: EvaluationMetrics | null = null;
   needsReviewItems: NeedsReviewItem[] = [];
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService,
-    private evalPrefsService: EvaluationPreferencesService,
-    private viewContainerRef: ViewContainerRef,
-    private appManager: ApplicationManager
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
+  // Service injections
+  private navigationService = inject(NavigationService);
+  private testingDialogService = inject(TestingDialogService);
+  private evalPrefsService = inject(EvaluationPreferencesService);
+  private viewContainerRef = inject(ViewContainerRef);
+  private appManager = inject(ApplicationManager);
 
   async ngOnInit() {
     await super.ngOnInit();

@@ -1,13 +1,34 @@
 # @memberjunction/ng-base-types
 
-Foundational types and base classes for Angular components in the MemberJunction ecosystem, providing common functionality and type definitions.
+Foundational types and base classes for Angular components in the MemberJunction ecosystem, providing standardized provider management and form event coordination.
 
 ## Overview
 
-This package provides essential building blocks for Angular applications using MemberJunction:
-- **BaseAngularComponent**: Abstract base class providing standardized provider management
-- **Event Types**: Common event definitions for form component coordination
-- **Type Safety**: Full TypeScript support with strict typing
+This package provides essential building blocks that other MemberJunction Angular packages depend on. It exports `BaseAngularComponent`, an abstract base class that standardizes data provider access across the component tree, and a set of form event types used for coordinating save/delete operations across form sub-components.
+
+```mermaid
+graph TD
+    A["@memberjunction/ng-base-types"] --> B[BaseAngularComponent]
+    A --> C[Form Event System]
+
+    B --> B1["ProviderToUse
+    (IMetadataProvider)"]
+    B --> B2["RunViewToUse
+    (IRunViewProvider)"]
+    B --> B3["RunQueryToUse
+    (IRunQueryProvider)"]
+    B --> B4["RunReportToUse
+    (IRunReportProvider)"]
+
+    C --> C1[BaseFormComponentEvent]
+    C --> C2[FormEditingCompleteEvent]
+    C --> C3[PendingRecordItem]
+    C --> C4[BaseFormComponentEventCodes]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 ## Installation
 
@@ -15,48 +36,30 @@ This package provides essential building blocks for Angular applications using M
 npm install @memberjunction/ng-base-types
 ```
 
-## Features
-
-### Abstract Base Component
-- Centralized provider management for data access
-- Automatic provider inheritance throughout component trees
-- Support for multiple concurrent API connections
-
-### Form Event System
-- Standardized event types for form component communication
-- Support for save/delete operations coordination
-- Pending changes management
-
-### TypeScript Support
-- Full type definitions for all exports
-- Strict mode compatible
-- Enhanced IDE intellisense
-
-## API Documentation
+## Usage
 
 ### BaseAngularComponent
 
-Abstract base class that all MemberJunction Angular components should extend:
+Abstract base class that all MemberJunction Angular components should extend for standardized provider management:
 
 ```typescript
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { Component, OnInit } from '@angular/core';
 
 @Component({
   selector: 'my-component',
   templateUrl: './my-component.html'
 })
-export class MyComponent extends BaseAngularComponent implements OnInit {
-  ngOnInit() {
+export class MyComponent extends BaseAngularComponent {
+  async loadData() {
     // Access the metadata provider
     const metadata = this.ProviderToUse;
-    
+
     // Use RunView functionality
     const viewProvider = this.RunViewToUse;
-    
+
     // Execute queries
     const queryProvider = this.RunQueryToUse;
-    
+
     // Run reports
     const reportProvider = this.RunReportToUse;
   }
@@ -73,12 +76,12 @@ export class MyComponent extends BaseAngularComponent implements OnInit {
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `ProviderToUse` | `IMetadataProvider` | Returns the Provider if specified, otherwise returns the default Metadata.Provider |
-| `RunViewToUse` | `IRunViewProvider` | Returns the provider cast as IRunViewProvider for running views |
-| `RunQueryToUse` | `IRunQueryProvider` | Returns the provider cast as IRunQueryProvider for executing queries |
-| `RunReportToUse` | `IRunReportProvider` | Returns the provider cast as IRunReportProvider for running reports |
+| `ProviderToUse` | `IMetadataProvider` | Returns the Provider if specified, otherwise returns Metadata.Provider |
+| `RunViewToUse` | `IRunViewProvider` | Provider cast as IRunViewProvider for running views |
+| `RunQueryToUse` | `IRunQueryProvider` | Provider cast as IRunQueryProvider for executing queries |
+| `RunReportToUse` | `IRunReportProvider` | Provider cast as IRunReportProvider for running reports |
 
-### Form Component Events
+### Form Event System
 
 #### BaseFormComponentEventCodes
 
@@ -95,228 +98,73 @@ const BaseFormComponentEventCodes = {
 
 #### Event Classes
 
-##### BaseFormComponentEvent
-
-Base class for all form component events:
-
 ```typescript
+// Base event for form component communication
 class BaseFormComponentEvent {
-  subEventCode: string;      // Event type identifier
-  elementRef: any;           // Reference to the emitting element
-  returnValue: any;          // Optional return value
+  subEventCode: string;
+  elementRef: unknown;
+  returnValue: unknown;
 }
-```
 
-##### FormEditingCompleteEvent
-
-Specialized event emitted when form editing is complete:
-
-```typescript
+// Emitted when form editing is complete, carrying pending changes
 class FormEditingCompleteEvent extends BaseFormComponentEvent {
   subEventCode: string = BaseFormComponentEventCodes.EDITING_COMPLETE;
   pendingChanges: PendingRecordItem[] = [];
 }
-```
 
-##### PendingRecordItem
-
-Represents a record pending save or delete:
-
-```typescript
+// Represents a record pending save or delete
 class PendingRecordItem {
-  entityObject: BaseEntity;           // The entity to be processed
-  action: 'save' | 'delete' = 'save'; // Action to perform
-}
-```
-
-## Usage Examples
-
-### Implementing a Component with Custom Provider
-
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-
-@Component({
-  selector: 'app-custom-provider',
-  template: `
-    <div>
-      <child-component [Provider]="customProvider"></child-component>
-    </div>
-  `
-})
-export class CustomProviderComponent extends BaseAngularComponent implements OnInit {
-  customProvider: GraphQLDataProvider;
-
-  ngOnInit() {
-    // Create a custom provider for a different API endpoint
-    this.customProvider = new GraphQLDataProvider({
-      endpoint: 'https://api.example.com/graphql',
-      headers: {
-        'Authorization': 'Bearer YOUR_TOKEN'
-      }
-    });
-  }
+  entityObject: BaseEntity;
+  action: 'save' | 'delete' = 'save';
 }
 ```
 
 ### Handling Form Events
 
 ```typescript
-import { Component, EventEmitter, Output } from '@angular/core';
-import { 
-  BaseAngularComponent,
+import {
   BaseFormComponentEvent,
   BaseFormComponentEventCodes,
   FormEditingCompleteEvent,
   PendingRecordItem
 } from '@memberjunction/ng-base-types';
 
-@Component({
-  selector: 'app-form-handler',
-  template: `...`
-})
-export class FormHandlerComponent extends BaseAngularComponent {
-  @Output() formEvent = new EventEmitter<BaseFormComponentEvent>();
-
-  async handleFormSubmit(entities: BaseEntity[]) {
-    // Create the event
-    const event = new FormEditingCompleteEvent();
-    
-    // Add pending changes
-    event.pendingChanges = entities.map(entity => ({
-      entityObject: entity,
-      action: 'save' as const
-    }));
-    
-    // Emit the event
-    this.formEvent.emit(event);
+onFormEvent(event: BaseFormComponentEvent) {
+  switch (event.subEventCode) {
+    case BaseFormComponentEventCodes.EDITING_COMPLETE:
+      const editEvent = event as FormEditingCompleteEvent;
+      this.processPendingChanges(editEvent.pendingChanges);
+      break;
+    case BaseFormComponentEventCodes.REVERT_PENDING_CHANGES:
+      this.revertChanges();
+      break;
+    case BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS:
+      this.populateRecords();
+      break;
   }
-
-  onFormEvent(event: BaseFormComponentEvent) {
-    switch (event.subEventCode) {
-      case BaseFormComponentEventCodes.EDITING_COMPLETE:
-        const editEvent = event as FormEditingCompleteEvent;
-        this.processPendingChanges(editEvent.pendingChanges);
-        break;
-        
-      case BaseFormComponentEventCodes.REVERT_PENDING_CHANGES:
-        this.revertChanges();
-        break;
-        
-      case BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS:
-        this.populateRecords();
-        break;
-    }
-  }
-
-  private async processPendingChanges(changes: PendingRecordItem[]) {
-    for (const item of changes) {
-      try {
-        if (item.action === 'save') {
-          await item.entityObject.Save();
-        } else if (item.action === 'delete') {
-          await item.entityObject.Delete();
-        }
-      } catch (error) {
-        console.error(`Failed to ${item.action} entity:`, error);
-      }
-    }
-  }
-}
-```
-
-### Using Multiple Providers in an Application
-
-```typescript
-import { Component } from '@angular/core';
-import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-
-@Component({
-  selector: 'app-multi-tenant',
-  template: `
-    <div class="tenant-a">
-      <user-list [Provider]="tenantAProvider"></user-list>
-    </div>
-    <div class="tenant-b">
-      <user-list [Provider]="tenantBProvider"></user-list>
-    </div>
-  `
-})
-export class MultiTenantComponent extends BaseAngularComponent {
-  tenantAProvider = new GraphQLDataProvider({
-    endpoint: 'https://tenant-a.example.com/graphql'
-  });
-  
-  tenantBProvider = new GraphQLDataProvider({
-    endpoint: 'https://tenant-b.example.com/graphql'
-  });
 }
 ```
 
 ## Dependencies
 
-### Runtime Dependencies
-- `@memberjunction/core`: Core MemberJunction functionality
-- `@memberjunction/core-entities`: Entity definitions
-- `@memberjunction/global`: Global utilities
-- `tslib`: TypeScript runtime helpers
+| Package | Description |
+|---------|-------------|
+| `@memberjunction/core` | Core MemberJunction framework |
+| `@memberjunction/core-entities` | Entity definitions |
+| `@memberjunction/global` | Global utilities |
+| `tslib` | TypeScript runtime helpers |
 
 ### Peer Dependencies
-- `@angular/common`: ^18.0.2
-- `@angular/core`: ^18.0.2
 
-## Build Configuration
+- `@angular/common` ^21.x
+- `@angular/core` ^21.x
 
-This package uses Angular's `ngc` compiler for building:
+## Build
 
 ```bash
+cd packages/Angular/Generic/base-types
 npm run build
 ```
-
-The package is configured with:
-- No side effects for better tree-shaking
-- Full TypeScript declarations
-- Angular Ivy compatibility
-
-## Integration with MemberJunction
-
-This package is designed to work seamlessly with other MemberJunction packages:
-
-- **@memberjunction/core**: Provides the entity and provider interfaces
-- **@memberjunction/graphql-dataprovider**: Default data provider implementation
-- **@memberjunction/ng-\***: Other Angular-specific packages that extend BaseAngularComponent
-
-## Best Practices
-
-1. **Always extend BaseAngularComponent** for MemberJunction Angular components
-2. **Use the provider getters** instead of directly accessing Metadata or RunView classes
-3. **Emit standardized events** using the provided event classes for better interoperability
-4. **Handle errors appropriately** when processing pending changes
-5. **Pass providers down the component tree** when working with multiple API endpoints
-
-## Migration Guide
-
-If upgrading from a previous version:
-
-1. Update all components to extend `BaseAngularComponent`
-2. Replace direct `Metadata` usage with `this.ProviderToUse`
-3. Update event handling to use the standardized event types
-4. Remove any custom provider management code in favor of the built-in system
-
-## Known Issues
-
-- The `RunQueryToUse` and `RunReportToUse` getters in the current implementation have incomplete type casting. Ensure your provider implements all required interfaces.
-
-## Contributing
-
-When contributing to this package:
-1. Maintain backward compatibility
-2. Add tests for new functionality
-3. Update this README with new features
-4. Follow the MemberJunction coding standards
 
 ## License
 

@@ -27,6 +27,3 @@ export class ProjectFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadProjectFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

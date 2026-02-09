@@ -10,8 +10,8 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { RegisterClass } from '@memberjunction/global';
-import * as env from 'env-var';
-import * as mime from 'mime-types';
+import env from 'env-var';
+import mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,

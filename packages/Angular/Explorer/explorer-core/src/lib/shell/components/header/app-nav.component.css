@@ -46,6 +46,44 @@
   text-align: center;
 }
 
+/* Dynamic nav items (recent orphan resources) — separator and dimming */
+.nav-list .nav-item:not(.dynamic) + .nav-item.dynamic {
+  margin-left: 4px;
+  padding-left: 16px;
+  border-left: 1px solid #e0e0e0;
+}
+.nav-list .nav-item.dynamic:not(.active) {
+  opacity: 0.7;
+}
+.nav-list .nav-item.dynamic:not(.active):hover {
+  opacity: 1;
+}
+
+/* Dismiss button for dynamic nav items */
+.nav-list .nav-item .dismiss-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #9e9e9e;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-left: -2px;
+}
+.nav-list .nav-item.dynamic:hover .dismiss-btn {
+  display: flex;
+}
+.nav-list .nav-item .dismiss-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #616161;
+}
+
 /* Mobile drawer vertical layout */
 :host-context(.mobile-nav-content) .nav-list {
   flex-direction: column;

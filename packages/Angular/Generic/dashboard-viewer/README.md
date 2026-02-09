@@ -1,104 +1,202 @@
 # @memberjunction/ng-dashboard-viewer
 
-Angular component for rendering configurable dashboards with draggable/resizable panels using Golden Layout 2.
+A pluggable Angular dashboard viewer for rendering and editing MemberJunction dashboards with configurable panels, multiple part types (Web URLs, Entity Views, Queries, Artifacts), and a dynamic plugin architecture.
 
-## Architecture
+## Overview
 
-This package uses a **single source of truth** design where Golden Layout's native `ResolvedLayoutConfig` stores both layout geometry AND panel configuration data.
+The `@memberjunction/ng-dashboard-viewer` package provides a complete dashboard rendering and editing system. Dashboards consist of panels containing parts, where each part type has a corresponding runtime renderer and configuration panel -- both loaded dynamically via MemberJunction's `ClassFactory` plugin system. The package includes a dashboard browser for navigating available dashboards, breadcrumb navigation, and built-in support for Web URL, Entity View, Query, and Artifact part types.
 
-### Key Design Principles
+```mermaid
+graph TD
+    A[DashboardViewerModule] --> B[Core Components]
+    A --> C[Config Panels]
+    A --> D[Runtime Parts]
+    A --> E[Dialogs]
 
-1. **No Redundancy**: Panel data is stored ONLY in Golden Layout's `componentState` within the layout tree. There is no separate `panels[]` array to keep in sync.
+    B --> B1[DashboardViewerComponent]
+    B --> B2[DashboardBrowserComponent]
+    B --> B3[DashboardBreadcrumbComponent]
 
-2. **Native GL Format**: We store Golden Layout's `ResolvedLayoutConfig` directly without conversion. This preserves all layout properties (widths, heights, positions, stacks) losslessly.
+    C --> C1["WebURLConfigPanel
+    (@RegisterClass)"]
+    C --> C2["ViewConfigPanel
+    (@RegisterClass)"]
+    C --> C3["QueryConfigPanel
+    (@RegisterClass)"]
+    C --> C4["ArtifactConfigPanel
+    (@RegisterClass)"]
 
-3. **Layout IS the Data**: The layout configuration contains everything needed to restore a dashboard - both the visual arrangement and the panel configurations.
+    D --> D1["WebURLPartComponent
+    (@RegisterClass)"]
+    D --> D2["ViewPartComponent
+    (@RegisterClass)"]
+    D --> D3["QueryPartComponent
+    (@RegisterClass)"]
+    D --> D4["ArtifactPartComponent
+    (@RegisterClass)"]
 
-## Data Model
+    E --> E1[AddPanelDialogComponent]
+    E --> E2[EditPartDialogComponent]
+    E --> E3[ConfirmDialogComponent]
 
-```typescript
-interface DashboardConfig {
-    /** Golden Layout configuration - THE SINGLE SOURCE OF TRUTH */
-    layout: ResolvedLayoutConfig | null;
-    /** Dashboard-level settings (not per-panel) */
-    settings: DashboardSettings;
-}
-
-interface DashboardPanel {
-    id: string;
-    title: string;
-    icon?: string;
-    partTypeId: string;
-    config: PanelConfig;
-    state?: Record<string, unknown>;
-}
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#b8762f,stroke:#8a5722,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
 ```
 
-Panel data is embedded in each component's `componentState` within the Golden Layout tree. To extract panels, use the utility function:
+## Installation
 
-```typescript
-import { extractPanelsFromLayout, findPanelInLayout } from '@memberjunction/ng-dashboard-viewer';
-
-const panels = extractPanelsFromLayout(config.layout);
-const panel = findPanelInLayout(config.layout, 'panel-id');
+```bash
+npm install @memberjunction/ng-dashboard-viewer
 ```
 
 ## Usage
 
-### Basic Usage
-
-```html
-<mj-dashboard-viewer
-    [dashboard]="dashboard"
-    [isEditing]="isEditMode"
-    (dashboardSaved)="onSaved($event)"
-    (panelInteraction)="onInteraction($event)">
-</mj-dashboard-viewer>
-```
-
-### Adding Panels
-
-```typescript
-@ViewChild(DashboardViewerComponent) viewer: DashboardViewerComponent;
-
-addPanel() {
-    this.viewer.addPanel(
-        'part-type-id',
-        { type: 'View', entityName: 'Customers', displayMode: 'grid', ... },
-        'Customer List',
-        'fa-solid fa-users'
-    );
-}
-```
-
-## Panel Types
-
-- **View**: Entity grid/card/timeline views
-- **Query**: Query results with parameters
-- **Artifact**: MJ artifact rendering
-- **WebURL**: Embedded iframe content
-- **Custom**: Custom components via `@RegisterClass`
-
-## Golden Layout Integration
-
-The `GoldenLayoutWrapperService` provides a clean Angular interface to Golden Layout 2.6.0's VirtualLayout API:
-
-- Initialize with saved layout or empty
-- Add/remove panels
-- Handle layout change events
-- Manage edit mode (drag/drop/resize/close)
-
-Layout is destroyed and recreated when toggling edit mode to ensure proper Golden Layout state.
-
-## Module
-
-Import the module to use the dashboard viewer:
+### Import the Module
 
 ```typescript
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 
 @NgModule({
-    imports: [DashboardViewerModule]
+  imports: [DashboardViewerModule]
 })
-export class MyModule {}
+export class YourModule { }
 ```
+
+### Dashboard Viewer
+
+Render a full dashboard by ID:
+
+```html
+<mj-dashboard-viewer
+  [dashboardId]="selectedDashboardId"
+  [editMode]="isEditing"
+  (dashboardSaved)="onDashboardSaved($event)"
+  (panelClicked)="onPanelClicked($event)">
+</mj-dashboard-viewer>
+```
+
+### Dashboard Browser
+
+Browse available dashboards with category filtering:
+
+```html
+<mj-dashboard-browser
+  [categoryId]="selectedCategoryId"
+  (dashboardSelected)="onDashboardSelected($event)">
+</mj-dashboard-browser>
+```
+
+### Dashboard Breadcrumb
+
+Navigation breadcrumb trail:
+
+```html
+<mj-dashboard-breadcrumb
+  [dashboardId]="currentDashboardId"
+  (navigate)="onBreadcrumbNavigate($event)">
+</mj-dashboard-breadcrumb>
+```
+
+## Architecture
+
+### Plugin System
+
+Both config panels and runtime parts are registered with `@RegisterClass` and loaded dynamically via ClassFactory. This allows custom part types to be added without modifying the dashboard viewer itself.
+
+#### Adding a Custom Part Type
+
+1. Create a config panel component:
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { BaseDashboardConfigPanel } from '@memberjunction/ng-dashboard-viewer';
+
+@RegisterClass(BaseDashboardConfigPanel, 'CustomChart')
+@Component({
+  selector: 'mj-custom-chart-config',
+  template: `<!-- chart configuration form -->`
+})
+export class CustomChartConfigComponent extends BaseDashboardConfigPanel {
+  // Configuration logic
+}
+```
+
+2. Create a runtime part component:
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { BaseDashboardPart } from '@memberjunction/ng-dashboard-viewer';
+
+@RegisterClass(BaseDashboardPart, 'CustomChart')
+@Component({
+  selector: 'mj-custom-chart-part',
+  template: `<!-- chart rendering -->`
+})
+export class CustomChartPartComponent extends BaseDashboardPart {
+  // Rendering logic
+}
+```
+
+### Built-in Part Types
+
+| Part Type | Config Panel | Runtime Part | Description |
+|-----------|-------------|-------------|-------------|
+| Web URL | `WebURLConfigPanelComponent` | `WebURLPartComponent` | Embedded web page via iframe |
+| View | `ViewConfigPanelComponent` | `ViewPartComponent` | MJ Entity View grid/cards |
+| Query | `QueryConfigPanelComponent` | `QueryPartComponent` | MJ Query results display |
+| Artifact | `ArtifactConfigPanelComponent` | `ArtifactPartComponent` | Conversation artifact viewer |
+
+## Component Reference
+
+### DashboardViewerComponent
+
+Main viewer component that renders a dashboard's panels and parts.
+
+### DashboardBrowserComponent
+
+Grid/list browser for navigating available dashboards with category tree sidebar.
+
+### DashboardBreadcrumbComponent
+
+Breadcrumb navigation showing the current dashboard path.
+
+### Dialog Components
+
+| Component | Description |
+|-----------|-------------|
+| `AddPanelDialogComponent` | Add a new panel to the dashboard |
+| `EditPartDialogComponent` | Edit a part's configuration |
+| `ConfirmDialogComponent` | Generic confirmation dialog |
+
+## Dependencies
+
+| Package | Description |
+|---------|-------------|
+| `@memberjunction/core` | Core framework |
+| `@memberjunction/core-entities` | Entity type definitions |
+| `@memberjunction/global` | Global utilities and ClassFactory |
+| `@memberjunction/ng-artifacts` | Artifact viewer components |
+| `@memberjunction/ng-entity-viewer` | Entity data grids |
+| `@memberjunction/ng-query-viewer` | Query result display |
+| `@memberjunction/ng-shared-generic` | Shared generic components |
+| `@memberjunction/ng-trees` | Tree view components |
+
+### Peer Dependencies
+
+- `@angular/common` ^21.x
+- `@angular/core` ^21.x
+- `@angular/forms` ^21.x
+
+## Build
+
+```bash
+cd packages/Angular/Generic/dashboard-viewer
+npm run build
+```
+
+## License
+
+ISC

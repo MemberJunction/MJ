@@ -5,7 +5,7 @@
   <div kendoWindowContainer></div>
   @if (record) {
     <form class="record-form" #form="ngForm">
-      <mj-form-toolbar [form]="this"></mj-form-toolbar>
+      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <!-- Agent Header — expanded view -->
       @if (!HeaderCollapsed) {
         <div class="agent-header">
@@ -907,7 +907,7 @@
                         Type="textbox"
                         Caption=""
                         [EditMode]="EditMode"
-                        [record]="record"
+                        [Record]="record"
                         style="width: 100%;">
                       </mj-form-field>
                       <div class="payload-field-example">
@@ -1054,7 +1054,7 @@
                           Type="dropdownlist"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record"
+                          [Record]="record"
                           style="width: 100%;">
                         </mj-form-field>
                       </div>
@@ -1066,7 +1066,7 @@
                           Type="numerictextbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record"
+                          [Record]="record"
                           style="width: 100%;">
                         </mj-form-field>
                       </div>
@@ -1114,7 +1114,7 @@
                     Caption="Max Cost ($)"
                     Description="Maximum cost per run"
                     [EditMode]="EditMode"
-                    [record]="record">
+                    [Record]="record">
                   </mj-form-field>
                   <mj-form-field
                     FieldName="MaxTokensPerRun"
@@ -1122,7 +1122,7 @@
                     Caption="Max Tokens"
                     Description="Maximum tokens per run"
                     [EditMode]="EditMode"
-                    [record]="record">
+                    [Record]="record">
                   </mj-form-field>
                   <mj-form-field
                     FieldName="MaxIterationsPerRun"
@@ -1130,7 +1130,7 @@
                     Caption="Max Iterations"
                     Description="Maximum prompt iterations"
                     [EditMode]="EditMode"
-                    [record]="record">
+                    [Record]="record">
                   </mj-form-field>
                   <mj-form-field
                     FieldName="MaxTimePerRun"
@@ -1138,7 +1138,7 @@
                     Caption="Max Time (seconds)"
                     Description="Maximum execution time"
                     [EditMode]="EditMode"
-                    [record]="record">
+                    [Record]="record">
                   </mj-form-field>
                 </div>
               </div>
@@ -1231,7 +1231,7 @@
                           Type="checkbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                       </div>
                     </div>
@@ -1251,7 +1251,7 @@
                           Type="textarea"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record"
+                          [Record]="record"
                           style="width: 100%;">
                         </mj-form-field>
                       </div>
@@ -1281,7 +1281,7 @@
                           Type="dropdownlist"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                       </div>
                     </div>
@@ -1301,7 +1301,7 @@
                           Type="numerictextbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                       </div>
                     </div>
@@ -1321,7 +1321,7 @@
                           Type="numerictextbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                         <div class="config-card-hint">
                           <i class="fa-solid fa-info-circle"></i>
@@ -1345,7 +1345,7 @@
                           Type="textbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                       </div>
                     </div>
@@ -1374,7 +1374,7 @@
                           Type="textbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                         <div class="config-card-hint">
                           <i class="fa-solid fa-info-circle"></i>
@@ -1398,7 +1398,7 @@
                           Type="textbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                         <div class="config-card-hint">
                           <i class="fa-solid fa-info-circle"></i>
@@ -1431,7 +1431,7 @@
                           Type="checkbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record"
+                          [Record]="record"
                           (valueChange)="onContextCompressionToggle($event)">
                         </mj-form-field>
                       </div>
@@ -1453,7 +1453,7 @@
                             Type="numerictextbox"
                             Caption=""
                             [EditMode]="EditMode"
-                            [record]="record">
+                            [Record]="record">
                           </mj-form-field>
                         </div>
                       </div>
@@ -1473,7 +1473,7 @@
                             Type="numerictextbox"
                             Caption=""
                             [EditMode]="EditMode"
-                            [record]="record">
+                            [Record]="record">
                           </mj-form-field>
                         </div>
                       </div>

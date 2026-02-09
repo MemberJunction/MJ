@@ -1,7 +1,7 @@
 <div class="record-form-container">
   @if (record) {
     <form class="record-form"  #form="ngForm" >
-      <mj-form-toolbar [form]="this"></mj-form-toolbar>
+      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <div #topArea class="record-form-group">
       </div>
       <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">

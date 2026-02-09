@@ -21,6 +21,3 @@ export class LibraryItemFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadLibraryItemFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

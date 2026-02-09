@@ -1,5 +1,5 @@
 import { cosmiconfigSync } from 'cosmiconfig';
-import { FlywayConfig } from 'node-flyway/dist/types/types';
+import type { FlywayConfig } from 'node-flyway/dist/types/types';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
@@ -170,6 +170,7 @@ export const getFlywayConfig = async (
   // Build advanced config - only include properties with defined values
   const advancedConfig: any = {
     schemas: [targetSchema],
+    createSchemas: true, // Auto-create schema if it doesn't exist (needed for --schema flag)
   };
 
   // Only add cleanDisabled if explicitly set to false

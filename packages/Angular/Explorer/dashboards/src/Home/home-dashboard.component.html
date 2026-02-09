@@ -24,35 +24,35 @@
           Your Applications
         </h2>
         <div class="apps-grid">
-          @for (app of apps; track app) {
+          @for (appData of appsDisplayData; track trackByApp($index, appData)) {
             <div
               class="app-card"
-              [style.--app-color]="app.GetColor()"
-              (click)="onAppClick(app)">
+              [style.--app-color]="appData.color"
+              (click)="onAppClick(appData.app)">
               <!-- App Icon -->
               <div class="app-icon-wrapper">
                 <div class="app-icon">
-                  <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
+                  <i [class]="appData.icon"></i>
                 </div>
               </div>
               <!-- App Info -->
               <div class="app-info">
-                <h3 class="app-name">{{ app.Name }}</h3>
-                @if (app.Description) {
-                  <p class="app-description">{{ app.Description }}</p>
+                <h3 class="app-name">{{ appData.app.Name }}</h3>
+                @if (appData.app.Description) {
+                  <p class="app-description">{{ appData.app.Description }}</p>
                 }
                 <!-- Nav Items Preview -->
-                @if (getNavItemsCount(app) > 0) {
+                @if (appData.navItemsCount > 0) {
                   <div class="nav-preview">
-                    @for (item of getNavItemsPreview(app); track item) {
+                    @for (item of appData.navItemsPreview; track trackByNavItem($index, item)) {
                       <div class="nav-item-chip">
                         <i [class]="item.Icon"></i>
                         <span>{{ item.Label }}</span>
                       </div>
                     }
-                    @if (getNavItemsCount(app) > 3) {
+                    @if (appData.showMoreItems) {
                       <span class="more-items">
-                        +{{ getNavItemsCount(app) - 3 }} more
+                        +{{ appData.moreItemsCount }} more
                       </span>
                     }
                   </div>
@@ -107,7 +107,7 @@
               <span class="section-badge">{{ unreadNotifications.length }}</span>
             </h4>
             <div class="sidebar-items">
-              @for (notification of unreadNotifications; track notification) {
+              @for (notification of unreadNotifications; track trackByNotification($index, notification)) {
                 <div
                   class="sidebar-item notification-item"
                   (click)="onNotificationClick(notification)">
@@ -132,7 +132,7 @@
             </h4>
             @if (!favoritesLoading) {
               <div class="sidebar-items">
-                @for (favorite of favorites; track favorite) {
+                @for (favorite of favorites; track trackByFavorite($index, favorite)) {
                   <div
                     class="sidebar-item favorite-item"
                     (click)="onFavoriteClick(favorite)">
@@ -164,7 +164,7 @@
             </h4>
             @if (!recentsLoading) {
               <div class="sidebar-items">
-                @for (item of recentItems; track item) {
+                @for (item of recentItems; track trackByRecent($index, item)) {
                   <div
                     class="sidebar-item recent-item"
                     (click)="onRecentClick(item)">

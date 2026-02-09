@@ -27,6 +27,3 @@ export class TaskFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadTaskFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -13,3 +13,4 @@ export * from './custom/ArtifactVersionExtended.server';
 export * from './custom/AIAgentNoteEntity.server';
 export * from './custom/AIAgentExampleEntity.server';
 export * from './custom/util';
+export * from './custom/sql-parser';

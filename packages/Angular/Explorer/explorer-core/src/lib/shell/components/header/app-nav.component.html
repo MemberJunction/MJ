@@ -1,8 +1,9 @@
 <nav class="nav-list" [style.--app-color]="appColor">
-  @for (item of navItems; track item) {
+  @for (item of navItems; track trackByNavItem($index, item)) {
     <div
       class="nav-item"
       [class.active]="isActive(item)"
+      [class.dynamic]="isDynamic(item)"
       [class.no-icon]="!item.Icon"
       (click)="onNavClick(item, $event)"
       (dblclick)="onNavDblClick(item, $event)">
@@ -12,6 +13,11 @@
       <span>{{ item.Label }}</span>
       @if (item.Badge) {
         <span class="badge">{{ item.Badge }}</span>
+      }
+      @if (isDynamic(item)) {
+        <button class="dismiss-btn" title="Remove" (click)="onDismiss(item, $event)">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       }
     </div>
   }

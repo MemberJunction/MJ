@@ -12,8 +12,6 @@
 
 import ora from 'ora';
 import chalk from 'chalk';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Metadata, DatabaseProviderBase, EntityInfo, LogStatus } from '@memberjunction/core';
 import { loadConfig } from '../config';
 import { getSystemUser } from '../../utils/user-helpers';
@@ -30,6 +28,9 @@ import { formatEntityMetadataForPrompt } from '../../utils/entity-helpers';
 import { extractErrorMessage } from '../../utils/error-handlers';
 import { buildQueryCategory, extractUniqueCategories } from '../../utils/category-builder';
 import { ValidatedQuery, GoldenQuery, EntityGroup, QueryCategoryInfo } from '../../data/schema';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Execute the generate command
@@ -73,10 +74,41 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     spinner.start('Filtering entities...');
     const md = new Metadata();
 
+    // DIAGNOSTIC: Log entity filtering context
+    if (config.verbose) {
+      LogStatus(`\n=== Entity Filtering Diagnostics ===`);
+      LogStatus(`Total entities in metadata: ${md.Entities.length}`);
+      LogStatus(`Excluded schemas: ${config.excludeSchemas.join(', ')}`);
+
+      // Show schema distribution BEFORE filtering
+      const schemasBefore = new Map<string, number>();
+      md.Entities.forEach(e => {
+        const schema = e.SchemaName || 'null';
+        schemasBefore.set(schema, (schemasBefore.get(schema) || 0) + 1);
+      });
+      LogStatus(`Schema distribution (before filtering):`);
+      Array.from(schemasBefore.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .forEach(([schema, count]) => {
+          const excluded = config.excludeSchemas.includes(schema) ? ' [EXCLUDED]' : '';
+          LogStatus(`  ${schema}: ${count} entities${excluded}`);
+        });
+    }
+
     // Apply entity filtering (includeEntities takes precedence over excludeEntities)
     let filteredEntities = md.Entities.filter(
       e => !config.excludeSchemas.includes(e.SchemaName || '')
     );
+
+    if (config.verbose) {
+      LogStatus(`\nAfter schema filtering: ${filteredEntities.length} entities remaining`);
+      if (filteredEntities.length > 0) {
+        LogStatus(`Sample entity names: ${filteredEntities.slice(0, 5).map(e => e.Name).join(', ')}`);
+        const schemasAfter = new Set(filteredEntities.map(e => e.SchemaName || 'null'));
+        LogStatus(`Remaining schemas: ${Array.from(schemasAfter).join(', ')}`);
+      }
+    }
 
     if (config.includeEntities.length > 0) {
       // Allowlist: only include specified entities
@@ -86,6 +118,11 @@ export async function generateCommand(options: Record<string, unknown>): Promise
       // Denylist: exclude specified entities
       filteredEntities = filteredEntities.filter(e => !config.excludeEntities.includes(e.Name));
       spinner.info(chalk.dim(`Excluded ${config.excludeEntities.length} entities`));
+    }
+
+    if (config.verbose) {
+      LogStatus(`Final filtered entities: ${filteredEntities.length}`);
+      LogStatus('====================================\n');
     }
 
     // 4. Group entities by schema and generate entity groups
@@ -282,36 +319,30 @@ export async function generateCommand(options: Record<string, unknown>): Promise
 }
 
 /**
- * Load golden queries from JSON file
+ * Load golden queries from compile-time imported JSON data
  *
  * Golden queries are example queries used for few-shot learning.
- * They are stored in the data/golden-queries.json file.
+ * They are imported at compile time from data/golden-queries.json.
+ *
+ * This approach is more efficient than runtime file I/O and provides
+ * type safety through TypeScript's resolveJsonModule feature.
  *
  * @param config - QueryGen configuration with verbose flag
- * @returns Array of golden queries, or empty array if file not found/invalid
+ * @returns Array of golden queries
  */
 async function loadGoldenQueries(config: { verbose: boolean }): Promise<GoldenQuery[]> {
   try {
-    // Resolve path to golden-queries.json in the data directory
-    // __dirname points to dist/cli/commands, so we go up to dist, then to data
-    const goldenQueriesPath = path.join(__dirname, '../../data/golden-queries.json');
-
-    // Check if file exists
-    if (!fs.existsSync(goldenQueriesPath)) {
-      if (config.verbose) {
-        LogStatus(`[Warning] Golden queries file not found at: ${goldenQueriesPath}`);
-      }
-      return [];
-    }
-
-    // Read and parse JSON file
-    const fileContent = fs.readFileSync(goldenQueriesPath, 'utf-8');
-    const goldenQueries = JSON.parse(fileContent) as GoldenQuery[];
+    // Load golden queries from JSON file using ES module compatible path resolution
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const goldenQueriesPath = join(__dirname, '../../data/golden-queries.json');
+    const goldenQueriesData = JSON.parse(readFileSync(goldenQueriesPath, 'utf-8'));
+    const goldenQueries = goldenQueriesData as GoldenQuery[];
 
     // Validate that it's an array
     if (!Array.isArray(goldenQueries)) {
       if (config.verbose) {
-        LogStatus('[Warning] Golden queries file does not contain an array');
+        LogStatus('[Warning] Golden queries data is not an array');
       }
       return [];
     }

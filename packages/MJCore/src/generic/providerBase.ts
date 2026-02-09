@@ -8,7 +8,7 @@ import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterIn
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
-import { LogError, LogStatus } from "./logging";
+import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
@@ -104,6 +104,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
     private _localMetadata: AllMetadata = new AllMetadata();
+    private _entityRecordNameCache = new Map<string, string>();
 
     private _refresh = false;
 
@@ -129,23 +130,156 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public abstract get DatabaseConnection(): any;
 
     /**
-     * Gets the display name for a single entity record.
+     * Helper to generate cache key for entity record names
+     */
+    private getCacheKey(entityName: string, compositeKey: CompositeKey): string {
+        return `${entityName}|${compositeKey.ToString()}`;
+    }
+
+    /**
+     * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param loadIfNeeded - If set to true, will load from database if not already cached
+     * @returns The cached display name, or undefined if not in cache
+     */
+    public async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
+        let cachedEntry = this._entityRecordNameCache.get(this.getCacheKey(entityName, compositeKey));
+        if (!cachedEntry && loadIfNeeded) {
+            cachedEntry = await this.GetEntityRecordName(entityName, compositeKey);
+        }
+        return cachedEntry
+    }
+
+    /**
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
+     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param recordName - The display name to cache
+     */
+    public SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
+        this._entityRecordNameCache.set(this.getCacheKey(entityName, compositeKey), recordName);
+    }
+
+    /**
+     * Gets the display name for a single entity record with caching.
      * Uses the entity's IsNameField or falls back to 'Name' field if available.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param contextUser - Optional user context for permissions
+     * @param forceRefresh - If true, bypasses cache and queries database
+     * @returns The display name of the record or null if not found
+     */
+    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
+        const cacheKey = this.getCacheKey(entityName, compositeKey);
+
+        // Check cache unless forceRefresh
+        if (!forceRefresh) {
+            const cached = this._entityRecordNameCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
+        // Fetch from database via provider-specific implementation
+        const name = await this.InternalGetEntityRecordName(entityName, compositeKey, contextUser);
+        if (name) {
+            this._entityRecordNameCache.set(cacheKey, name);
+        }
+        return name;
+    }
+
+    /**
+     * Gets display names for multiple entity records in a single operation with caching.
+     * More efficient than multiple GetEntityRecordName calls.
+     * @param info - Array of entity/key pairs to lookup
+     * @param contextUser - Optional user context for permissions
+     * @param forceRefresh - If true, bypasses cache and queries database for all records
+     * @returns Array of results with names and status for each requested record
+     */
+    public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
+        if (!forceRefresh) {
+            // Check cache for each item, collect uncached items
+            const results: EntityRecordNameResult[] = [];
+            const uncachedInfo: EntityRecordNameInput[] = [];
+            const uncachedIndexes: number[] = [];
+
+            for (let i = 0; i < info.length; i++) {
+                const item = info[i];
+                const cacheKey = this.getCacheKey(item.EntityName, item.CompositeKey);
+                const cached = this._entityRecordNameCache.get(cacheKey);
+
+                if (cached !== undefined) {
+                    // Cache hit
+                    results[i] = {
+                        EntityName: item.EntityName,
+                        CompositeKey: item.CompositeKey,
+                        Status: 'cached',
+                        Success: true,
+                        RecordName: cached
+                    };
+                } else {
+                    // Cache miss - need to fetch
+                    uncachedInfo.push(item);
+                    uncachedIndexes.push(i);
+                }
+            }
+
+            // Fetch uncached items from database
+            if (uncachedInfo.length > 0) {
+                const uncachedResults = await this.InternalGetEntityRecordNames(uncachedInfo, contextUser);
+
+                // Merge results and update cache
+                for (let i = 0; i < uncachedResults.length; i++) {
+                    const result = uncachedResults[i];
+                    const originalIndex = uncachedIndexes[i];
+                    results[originalIndex] = result;
+
+                    // Cache successful results
+                    if (result.Success && result.RecordName) {
+                        const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
+                        this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                    }
+                }
+            }
+
+            return results;
+        } else {
+            // Force refresh - bypass cache entirely
+            const results = await this.InternalGetEntityRecordNames(info, contextUser);
+
+            // Update cache with fresh results
+            for (const result of results) {
+                if (result.Success && result.RecordName) {
+                    const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
+                    this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                }
+            }
+
+            return results;
+        }
+    }
+
+    /**
+     * Internal provider-specific implementation to get a single entity record name from database.
+     * Subclasses must implement this to query the database.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param contextUser - Optional user context for permissions
      * @returns The display name of the record or null if not found
      */
-    public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>;
-    
+    protected abstract InternalGetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>;
+
     /**
-     * Gets display names for multiple entity records in a single operation.
-     * More efficient than multiple GetEntityRecordName calls.
+     * Internal provider-specific implementation to get multiple entity record names from database.
+     * Subclasses must implement this to query the database in batch.
      * @param info - Array of entity/key pairs to lookup
      * @param contextUser - Optional user context for permissions
      * @returns Array of results with names and status for each requested record
      */
-    public abstract GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>;
+    protected abstract InternalGetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>;
 
     /**
      * Checks if a specific record is marked as a favorite by the user.
@@ -1374,7 +1508,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const start = new Date().getTime();
             const res = await this.GetAllMetadata(providerToUse);
             const end = new Date().getTime();
-            LogStatus(`GetAllMetadata() took ${end - start} ms`);
+            LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
             if (res) {
                 // Atomic swap via UpdateLocalMetadata: single property assignment is atomic in JavaScript
                 // Readers now see new metadata instead of old
@@ -1776,9 +1910,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
-                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this); 
+                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this);
                     await newObject.Config(actualContextUser);
-                    
+
+                    // Initialize IS-A parent entity composition chain before any data operations
+                    await newObject.InitializeParentEntity();
+
                     if (actualLoadKey) {
                         // Load existing record
                         const loadResult = await newObject.InnerLoad(actualLoadKey);

@@ -540,6 +540,77 @@ const syncResult = await systemClient.SyncRolesAndUsers({
 });
 ```
 
+## IS-A Type Relationship Support
+
+The GraphQL data provider provides transparent handling of IS-A type relationships (entity inheritance) on the client side. When working with IS-A child entities, the provider seamlessly manages the complexity of parent-child field coordination.
+
+### How IS-A Relationships Work
+
+For IS-A child entities:
+- **GraphQL Input Types**: Include ALL fields (both parent and child fields) in a single mutation
+- **Client Simplicity**: The client sends one mutation with all fields combined
+- **Server Responsibility**: The GraphQL resolver on the server side handles:
+  - Splitting fields between parent and child entities
+  - Orchestrating parent saves before child saves
+  - Managing transaction boundaries
+  - Rolling back changes if any operation fails
+
+### Client-Side Behavior
+
+```typescript
+// Example: Saving an AIPrompt (child of Template)
+const aiPrompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
+aiPrompt.NewRecord();
+
+// Set both parent fields (from Template)
+aiPrompt.Name = 'Customer Analysis Prompt';
+aiPrompt.Description = 'Analyzes customer behavior patterns';
+
+// Set child fields (from AIPrompt)
+aiPrompt.AIModelID = 'gpt-4-model-id';
+aiPrompt.PromptRole = 'User';
+
+// Save - client sends all fields in one mutation
+await aiPrompt.Save();
+// The server handles splitting and saving parent first, then child
+```
+
+### Transaction Management
+
+Important aspects of transaction handling with IS-A relationships:
+
+- **No Client-Side Transactions**: `BaseEntity.ProviderTransaction` remains null on the client side
+- **Server-Side Orchestration**: The GraphQL resolver creates and manages transactions internally
+- **Automatic Rollback**: If either parent or child save fails, all changes are rolled back
+- **Transparent to Client**: The client code doesn't need to manage these complexities
+
+### Load Operations
+
+When loading IS-A child entities:
+- The GraphQL query returns a merged view with both parent and child fields
+- All fields appear as properties on the entity object
+- No special handling required in client code
+- Field access is seamless regardless of whether it's a parent or child field
+
+```typescript
+// Loading returns merged parent + child view
+const prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts', contextUser);
+await prompt.Load('prompt-id');
+
+// Access parent fields
+console.log(prompt.Name); // From Template
+
+// Access child fields
+console.log(prompt.PromptRole); // From AIPrompt
+
+// Both appear as regular properties with no distinction
+```
+
+### Related Documentation
+
+For comprehensive information about IS-A relationships in MemberJunction:
+- [IS-A Relationships Architecture](../../MJCore/docs/isa-relationships.md) - Server-side implementation details, entity structure, and transaction management
+
 ## Key Classes and Types
 
 | Class/Type | Description |

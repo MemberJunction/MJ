@@ -30,6 +30,3 @@ export class AIModalityFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIModalityFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}
