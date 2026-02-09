@@ -36,8 +36,8 @@ export interface RecordNavigationEvent {
   EntityName: string;
   /** The primary key of the target record */
   PrimaryKey: CompositeKey;
-  /** Whether the user requested opening in a new tab (ctrl/cmd+click) */
-  OpenInNewTab: boolean;
+  /** Whether to force opening in a new tab. When omitted, NavigationService uses its default behavior (shift-key detection). */
+  OpenInNewTab?: boolean;
 }
 
 /**
@@ -48,7 +48,7 @@ export interface ExternalLinkNavigationEvent {
   /** The URL to navigate to */
   Url: string;
   /** Whether to open in a new tab (default: true for external links) */
-  OpenInNewTab: boolean;
+  OpenInNewTab?: boolean;
 }
 
 /**

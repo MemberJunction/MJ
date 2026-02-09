@@ -81,8 +81,7 @@ export class ExplorerEntityDataGridComponent {
                 this.Navigate.emit({
                     Kind: 'record',
                     EntityName: entityName,
-                    PrimaryKey: pkey,
-                    OpenInNewTab: true
+                    PrimaryKey: pkey
                 });
             }
         }
