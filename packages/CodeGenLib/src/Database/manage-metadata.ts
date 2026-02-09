@@ -475,7 +475,10 @@ export class ManageMetadataBase {
       start = new Date();
       logStatus('   Managing entity fields...');
       // note that we skip Advanced Generation here because we do it again later when the manageSQLScriptsAndExecution occurs in SQLCodeGen class
-      if (! await this.manageEntityFields(pool, excludeSchemas, false, false, currentUser, true)) {
+      // Also skip deleting unneeded fields on this first pass — base views haven't been regenerated yet,
+      // so virtual fields (which come from view JOINs) would be incorrectly identified as orphaned and deleted.
+      // Deletion runs on the second pass (in sql_codegen.ts) after views are current.
+      if (! await this.manageEntityFields(pool, excludeSchemas, false, false, currentUser, true, true)) {
          logError('   Error managing entity fields');
          bSuccess = false;
       }
@@ -1514,7 +1517,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   public async manageEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean): Promise<boolean> {
+   public async manageEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
@@ -1528,11 +1531,15 @@ export class ManageMetadataBase {
       }
 
       const step1StartTime: Date = new Date();
-      if (! await this.deleteUnneededEntityFields(pool, excludeSchemas)) {
-         logError ('Error deleting unneeded entity fields');
-         bSuccess = false;
+      if (skipDeleteUnneededFields) {
+         logStatus(`      Skipping deletion of unneeded entity fields (deferred to post-SQL pass)`);
+      } else {
+         if (! await this.deleteUnneededEntityFields(pool, excludeSchemas)) {
+            logError ('Error deleting unneeded entity fields');
+            bSuccess = false;
+         }
+         logStatus(`      Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
       }
-      logStatus(`      Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
 
       // AN: 14-June-2025 - See note below about the new order of these steps, this must
       // happen before we update existing entity fields from schema.
@@ -3471,7 +3478,8 @@ NumberedRows AS (
 
       // Form Layout Generation
       // Only run if at least one field allows auto-update
-      if (fields.some((f: any) => f.AutoUpdateCategory)) {
+      const needsCategoryGeneration = fields.some((f: any) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''));
+      if (needsCategoryGeneration) {
          // Build IS-A parent chain context if this entity has a parent
          const parentChainContext = this.buildParentChainContext(entity, fields);
 
