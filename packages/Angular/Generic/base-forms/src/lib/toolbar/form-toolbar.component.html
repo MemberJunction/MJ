@@ -152,6 +152,11 @@
             <i class="fa-solid fa-arrow-rotate-left"></i>
           </button>
         }
+        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+          (click)="OnToggleWidthMode()"
+          [title]="WidthMode === 'centered' ? 'Expand to full width' : 'Center content'">
+          <i [class]="WidthMode === 'centered' ? 'fa-solid fa-arrows-left-right-to-line' : 'fa-solid fa-compress'"></i>
+        </button>
         <span class="mj-section-count-pill">{{ ExpandedSectionCount }}/{{ TotalSectionCount }}</span>
       </div>
     }

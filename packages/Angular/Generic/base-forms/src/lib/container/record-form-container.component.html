@@ -50,42 +50,44 @@
 </mj-form-toolbar>
 
 <!-- ============================================
-     PANELS CONTAINER
+     SCROLL AREA (full-width so mouse wheel works anywhere)
      ============================================ -->
-<div class="mj-forms-panels-container"
-     [class.mj-forms-panels--full-width]="EffectiveWidthMode === 'full-width'"
-     [class.mj-forms-panels--edit-mode]="EffectiveEditMode">
-  <!-- Before-panels slot (related entities displayed before fields) -->
-  <div class="mj-before-panels">
-    <ng-content select="[before-panels]"></ng-content>
-  </div>
+<div class="mj-forms-scroll-area">
+  <div class="mj-forms-panels-container"
+       [class.mj-forms-panels--full-width]="EffectiveWidthMode === 'full-width'"
+       [class.mj-forms-panels--edit-mode]="EffectiveEditMode">
+    <!-- Before-panels slot (related entities displayed before fields) -->
+    <div class="mj-before-panels">
+      <ng-content select="[before-panels]"></ng-content>
+    </div>
 
-  <!-- Field panels slot -->
-  <div class="mj-forms-field-panels">
-    <ng-content select="[field-panels]"></ng-content>
+    <!-- Field panels slot -->
+    <div class="mj-forms-field-panels">
+      <ng-content select="[field-panels]"></ng-content>
 
-    <!-- Empty state when no sections match search -->
-    @if (EffectiveSearchFilter && VisibleSectionCount === 0) {
-      <div class="mj-forms-empty-search-state">
-        <div class="mj-forms-empty-search-icon">
-          <i class="fa-solid fa-magnifying-glass"></i>
+      <!-- Empty state when no sections match search -->
+      @if (EffectiveSearchFilter && VisibleSectionCount === 0) {
+        <div class="mj-forms-empty-search-state">
+          <div class="mj-forms-empty-search-icon">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </div>
+          <h3 class="mj-forms-empty-search-title">No sections found</h3>
+          <p class="mj-forms-empty-search-message">
+            No sections match "<strong>{{ EffectiveSearchFilter }}</strong>".
+            <br>Try a different search term or <a href="#" (click)="OnFilterChange(''); $event.preventDefault()" class="mj-forms-empty-search-link">clear the search</a>.
+          </p>
         </div>
-        <h3 class="mj-forms-empty-search-title">No sections found</h3>
-        <p class="mj-forms-empty-search-message">
-          No sections match "<strong>{{ EffectiveSearchFilter }}</strong>".
-          <br>Try a different search term or <a href="#" (click)="OnFilterChange(''); $event.preventDefault()" class="mj-forms-empty-search-link">clear the search</a>.
-        </p>
-      </div>
-    }
-  </div>
+      }
+    </div>
 
-  <!-- After-panels slot (related entities displayed after fields) -->
-  <div class="mj-after-panels">
-    <ng-content select="[after-panels]"></ng-content>
-  </div>
+    <!-- After-panels slot (related entities displayed after fields) -->
+    <div class="mj-after-panels">
+      <ng-content select="[after-panels]"></ng-content>
+    </div>
 
-  <!-- Catch-all for any other projected content -->
-  <ng-content></ng-content>
+    <!-- Catch-all for any other projected content -->
+    <ng-content></ng-content>
+  </div>
 </div>
 
 <!-- ============================================

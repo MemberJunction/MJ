@@ -22,12 +22,18 @@ mj-record-form-container {
 }
 
 /* ============================================
-   PANELS CONTAINER
+   SCROLL AREA (full-width so mouse wheel works anywhere)
    ============================================ */
-.mj-forms-panels-container {
+.mj-forms-scroll-area {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+/* ============================================
+   PANELS CONTAINER (centered content within scroll area)
+   ============================================ */
+.mj-forms-panels-container {
   padding: 24px 32px 48px;
   max-width: 920px;
   margin: 0 auto;

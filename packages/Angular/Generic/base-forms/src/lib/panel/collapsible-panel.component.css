@@ -16,11 +16,11 @@ mj-collapsible-panel {
   display: block;
 }
 
-mj-collapsible-panel.mj-forms-search-hidden {
+mj-collapsible-panel.mj-search-hidden {
   display: none;
 }
 
-mj-collapsible-panel.mj-forms-drag-over {
+mj-collapsible-panel.mj-drag-over {
   border: 2px dashed var(--mj-accent);
   border-radius: var(--mj-card-radius);
 }
@@ -84,7 +84,7 @@ mj-collapsible-panel.mj-forms-drag-over {
   cursor: grabbing;
 }
 
-:host(.mj-forms-dragging) .mj-forms-drag-handle {
+mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
   width: 24px;
   opacity: 1;
   color: var(--mj-accent);
