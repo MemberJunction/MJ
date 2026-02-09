@@ -5,6 +5,10 @@
 
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { DatabaseConnection, Introspector, DataSampler } from '../database/Database.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
 import { TopologicalSorter } from '../database/TopologicalSorter.js';

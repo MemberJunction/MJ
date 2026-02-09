@@ -1,9 +1,9 @@
 import { confirm, input, select } from '@inquirer/prompts';
-import * as dotenv from 'dotenv';
-import * as recast from 'recast';
+import dotenv from 'dotenv';
+import recast from 'recast';
 import { Command, Flags } from '@oclif/core';
 import type { ParserOutput } from '@oclif/core/lib/interfaces/parser';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import { execSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';

@@ -1,6 +1,5 @@
 import { Command, Flags } from '@oclif/core';
 import { readFileSync, writeFileSync } from 'node:fs';
-import * as recast from 'recast';
 import { z } from 'zod';
 import fg from 'fast-glob';
 import ora from 'ora-classic';

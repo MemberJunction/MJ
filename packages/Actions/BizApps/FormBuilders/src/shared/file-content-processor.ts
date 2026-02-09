@@ -1,7 +1,7 @@
 import { LogStatus } from '@memberjunction/core';
 import pdfParse from 'pdf-parse';
-import * as ExcelJS from 'exceljs';
-import * as mammoth from 'mammoth';
+import ExcelJS from 'exceljs';
+import mammoth from 'mammoth';
 
 /**
  * File content processing options
