@@ -65,6 +65,8 @@ export class AppNavComponent implements OnInit, OnDestroy {
   set app(value: BaseApplication | null) {
     if (this._app !== value) {
       this._app = value;
+      this._cachedNavItems = []; // Clear stale items immediately so previous app's items don't flash
+      this.activeStateMap.clear();
       this._servicesInjected = false; // Reset injection flag
       this.updateCachedData();
       this.cdr.markForCheck();
