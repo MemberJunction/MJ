@@ -1628,6 +1628,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
+   * Handle dismiss of a dynamic nav item (remove from recent stack)
+   */
+  onNavItemDismiss(item: NavItem): void {
+    if (!this.activeApp) {
+      return;
+    }
+
+    // Delegate to HomeApplication's RemoveDynamicNavItem if available
+    const appWithRemove = this.activeApp as BaseApplication & {
+      RemoveDynamicNavItem?: (item: NavItem) => void;
+    };
+    if (typeof appWithRemove.RemoveDynamicNavItem === 'function') {
+      appWithRemove.RemoveDynamicNavItem(item);
+    }
+  }
+
+  /**
    * Toggle mobile navigation drawer
    */
   toggleMobileNav(): void {

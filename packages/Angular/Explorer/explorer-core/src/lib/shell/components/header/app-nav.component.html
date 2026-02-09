@@ -14,6 +14,11 @@
       @if (item.Badge) {
         <span class="badge">{{ item.Badge }}</span>
       }
+      @if (isDynamic(item)) {
+        <button class="dismiss-btn" title="Remove" (click)="onDismiss(item, $event)">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      }
     </div>
   }
 </nav>

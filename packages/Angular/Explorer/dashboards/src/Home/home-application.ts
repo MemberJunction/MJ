@@ -3,9 +3,13 @@ import { BaseApplication, DynamicNavItem, NavItem, WorkspaceStateManager, Worksp
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, FieldValueCollection } from '@memberjunction/core';
 
+/** Storage key and category for persisting the recent orphan stack */
+const STORAGE_KEY = 'HomeApp_RecentOrphanStack';
+const STORAGE_CATEGORY = 'HomeApplication';
+
 /**
  * Snapshot of an orphan resource tab for the recent navigation stack.
- * Stored in memory (session-only) to allow quick jump-back to recently viewed resources.
+ * Persisted to localStorage (via Provider) so it survives page reloads.
  */
 interface OrphanResourceSnapshot {
   /** URL-encoded composite key segment — primary dedup key */
@@ -16,11 +20,18 @@ interface OrphanResourceSnapshot {
   entityName?: string;
   /** Tab title at time of capture (fallback label) */
   title: string;
+  /** Resolved display label (cached record name). Persisted to avoid async lookups on reload. */
+  resolvedLabel: string;
   /** Full tab configuration (passed to DynamicNavItem for re-opening) */
   configuration: Record<string, unknown>;
   /** Tab ID for fallback matching when no resourceRecordId */
   tabId: string;
+  /** Timestamp (ms since epoch) when this snapshot was created or last promoted */
+  timestamp: number;
 }
+
+/** Max age for persisted snapshots — 7 days */
+const MAX_SNAPSHOT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Home Application - Provides dynamic navigation items for orphan resources.
@@ -30,6 +41,10 @@ interface OrphanResourceSnapshot {
  * appears as a dynamic nav item. When they navigate away (e.g., click Home), the
  * nav item persists so they can quickly jump back. Older items drop off as new ones
  * are added.
+ *
+ * The stack is persisted to localStorage (via Metadata.Provider.LocalStorageProvider)
+ * so it survives page reloads. Resolved record labels are stored alongside each
+ * snapshot to avoid async lookups when restoring from storage.
  *
  * @example
  * User opens "John Smith" contact, then "Acme Corp" company:
@@ -43,6 +58,7 @@ export class HomeApplication extends BaseApplication {
   private workspaceManager: WorkspaceStateManager | null = null;
   private sharedService: SharedService | null = null;
   private recentOrphanStack: OrphanResourceSnapshot[] = [];
+  private _storageLoadPromise: Promise<void> | null = null;
 
   /**
    * Fingerprint of the last-processed active tab state (tabId::resourceRecordId).
@@ -54,10 +70,14 @@ export class HomeApplication extends BaseApplication {
   private _lastSeenTabFingerprint: string | null = null;
 
   /**
-   * Inject WorkspaceStateManager for accessing current tab state
+   * Inject WorkspaceStateManager for accessing current tab state.
+   * Also triggers loading the persisted stack from storage on first call.
    */
   public SetWorkspaceManager(manager: WorkspaceStateManager): void {
     this.workspaceManager = manager;
+    if (!this._storageLoadPromise) {
+      this._storageLoadPromise = this.loadStackFromStorage();
+    }
   }
 
   /**
@@ -73,6 +93,13 @@ export class HomeApplication extends BaseApplication {
    * Dynamic items are generated from the recent orphan stack (up to 3).
    */
   override async GetNavItems(): Promise<NavItem[]> {
+    // Ensure persisted stack is loaded before building nav items.
+    // On first call after page load, this awaits the IndexedDB read;
+    // on subsequent calls the promise is already resolved (no-op await).
+    if (this._storageLoadPromise) {
+      await this._storageLoadPromise;
+    }
+
     const staticItems = await super.GetNavItems();
 
     // Update the recent stack based on current active tab
@@ -81,13 +108,33 @@ export class HomeApplication extends BaseApplication {
     await this.updateRecentStack();
 
     // Build dynamic nav items from the stack
-    const dynamicItems = await this.buildDynamicNavItems();
+    const dynamicItems = this.buildDynamicNavItems();
+    console.log('[HomeApp] GetNavItems: static=%d, dynamic=%d, stack=%d',
+      staticItems.length, dynamicItems.length, this.recentOrphanStack.length);
     if (dynamicItems.length > 0) {
       return [...staticItems, ...dynamicItems];
     }
 
     return staticItems;
   }
+
+  /**
+   * Removes a dynamic nav item from the recent stack by RecordID.
+   * Called by the shell when the user clicks the dismiss X button.
+   */
+  public RemoveDynamicNavItem(item: NavItem): void {
+    const index = this.recentOrphanStack.findIndex(
+      s => s.resourceRecordId === item.RecordID
+    );
+    if (index >= 0) {
+      this.recentOrphanStack.splice(index, 1);
+      this.saveStackToStorage();
+    }
+  }
+
+  // ========================================
+  // Icon Resolution
+  // ========================================
 
   /**
    * Resolves the best icon for a dynamic nav item.
@@ -112,6 +159,10 @@ export class HomeApplication extends BaseApplication {
     return 'fa-solid fa-file';
   }
 
+  // ========================================
+  // Recent Stack Management
+  // ========================================
+
   /**
    * Updates the recent orphan stack based on the currently active tab.
    * If the active tab is a new orphan resource (not already in the stack and not
@@ -119,7 +170,7 @@ export class HomeApplication extends BaseApplication {
    * stack keep their position to avoid visually jarring reordering when users click
    * between existing dynamic nav items.
    */
-  private async updateRecentStack() {
+  private async updateRecentStack(): Promise<void> {
     if (!this.workspaceManager) {
       return;
     }
@@ -165,6 +216,8 @@ export class HomeApplication extends BaseApplication {
     if (this.recentOrphanStack.length > HomeApplication.MAX_RECENT_ITEMS) {
       this.recentOrphanStack.length = HomeApplication.MAX_RECENT_ITEMS;
     }
+
+    this.saveStackToStorage();
   }
 
   /**
@@ -188,13 +241,19 @@ export class HomeApplication extends BaseApplication {
       return null;
     }
 
+    // Resolve the label now so it's stored with the snapshot
+    const entityName = tab.configuration?.['Entity'] as string | undefined;
+    const resolvedLabel = await this.resolveRecordLabel(entityName, tab.resourceRecordId, tab.title);
+
     return {
       resourceRecordId: tab.resourceRecordId,
       resourceType,
-      entityName: tab.configuration?.['Entity'] as string | undefined,
+      entityName,
       title: tab.title,
+      resolvedLabel,
       configuration: tab.configuration as Record<string, unknown>,
-      tabId: tab.id
+      tabId: tab.id,
+      timestamp: Date.now()
     };
   }
 
@@ -217,26 +276,25 @@ export class HomeApplication extends BaseApplication {
     });
   }
 
+  // ========================================
+  // Dynamic NavItem Building
+  // ========================================
+
   /**
    * Creates DynamicNavItem entries for each item in the recent orphan stack.
-   * The active tab's item will be highlighted via isActiveMatch.
+   * Uses the pre-resolved label from the snapshot (no async needed).
    */
-  private async buildDynamicNavItems(): Promise<DynamicNavItem[]> {
-    return Promise.all(this.recentOrphanStack.map(snapshot => this.createDynamicNavItem(snapshot)));
+  private buildDynamicNavItems(): DynamicNavItem[] {
+    return this.recentOrphanStack.map(snapshot => this.createDynamicNavItem(snapshot));
   }
 
   /**
    * Creates a single DynamicNavItem from an OrphanResourceSnapshot.
+   * Uses the snapshot's resolvedLabel directly — no async lookup needed.
    */
-  private async createDynamicNavItem(snapshot: OrphanResourceSnapshot): Promise<DynamicNavItem> {
-    const label = await this.resolveRecordLabel(
-      snapshot.entityName,
-      snapshot.resourceRecordId,
-      snapshot.title
-    );
-
+  private createDynamicNavItem(snapshot: OrphanResourceSnapshot): DynamicNavItem {
     return {
-      Label: label,
+      Label: snapshot.resolvedLabel,
       Icon: this.resolveIcon(snapshot.entityName, snapshot.resourceType),
       ResourceType: snapshot.resourceType,
       RecordID: snapshot.resourceRecordId,
@@ -251,6 +309,10 @@ export class HomeApplication extends BaseApplication {
       }
     };
   }
+
+  // ========================================
+  // Label Resolution
+  // ========================================
 
   /**
    * Resolves the best available display label for an entity record nav item.
@@ -325,5 +387,76 @@ export class HomeApplication extends BaseApplication {
     }
 
     return trimmed.substring(0, maxLength) + '...';
+  }
+
+  // ========================================
+  // Storage Persistence
+  // ========================================
+
+  /**
+   * Persists the current recentOrphanStack to localStorage via Provider.
+   * Fire-and-forget — errors are logged but don't affect the UX.
+   */
+  private saveStackToStorage(): void {
+    try {
+      const provider = Metadata.Provider.LocalStorageProvider;
+      if (!provider) {
+        return;
+      }
+
+      // Strip non-serializable fields (isActiveMatch closures are rebuilt on load)
+      const serializable = this.recentOrphanStack.map(s => ({
+        resourceRecordId: s.resourceRecordId,
+        resourceType: s.resourceType,
+        entityName: s.entityName,
+        title: s.title,
+        resolvedLabel: s.resolvedLabel,
+        configuration: s.configuration,
+        tabId: s.tabId,
+        timestamp: s.timestamp
+      }));
+
+      provider.SetItem(STORAGE_KEY, JSON.stringify(serializable), STORAGE_CATEGORY).catch(err => {
+        console.warn('Failed to persist recent nav stack:', err);
+      });
+    } catch (err) {
+      console.warn('Failed to persist recent nav stack:', err);
+    }
+  }
+
+  /**
+   * Loads the recent orphan stack from localStorage via Provider.
+   * Filters out stale entries (older than MAX_SNAPSHOT_AGE_MS).
+   */
+  private async loadStackFromStorage(): Promise<void> {
+    try {
+      const provider = Metadata.Provider.LocalStorageProvider;
+      if (!provider) {
+        console.log('[HomeApp] loadStackFromStorage: no provider');
+        return;
+      }
+
+      const raw = await provider.GetItem(STORAGE_KEY, STORAGE_CATEGORY);
+      console.log('[HomeApp] loadStackFromStorage: raw =', raw ? `${raw.length} chars` : 'null');
+      if (!raw) {
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as OrphanResourceSnapshot[];
+      if (!Array.isArray(parsed)) {
+        console.log('[HomeApp] loadStackFromStorage: parsed is not array');
+        return;
+      }
+
+      // Filter out stale snapshots
+      const now = Date.now();
+      this.recentOrphanStack = parsed
+        .filter(s => s.resourceRecordId && s.timestamp && (now - s.timestamp) < MAX_SNAPSHOT_AGE_MS)
+        .slice(0, HomeApplication.MAX_RECENT_ITEMS);
+      console.log('[HomeApp] loadStackFromStorage: loaded', this.recentOrphanStack.length, 'items',
+        this.recentOrphanStack.map(s => s.resolvedLabel));
+    } catch (err) {
+      console.warn('Failed to load recent nav stack from storage:', err);
+    }
   }
 }

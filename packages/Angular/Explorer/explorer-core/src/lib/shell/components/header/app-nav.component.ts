@@ -50,6 +50,7 @@ export class AppNavComponent implements OnInit, OnDestroy {
   private activeStateMap = new Map<string, boolean>();
 
   @Output() navItemClick = new EventEmitter<NavItemClickEvent>();
+  @Output() navItemDismiss = new EventEmitter<NavItem>();
 
   constructor(
     private workspaceManager: WorkspaceStateManager,
@@ -231,6 +232,28 @@ export class AppNavComponent implements OnInit, OnDestroy {
       shiftKey: event?.shiftKey || false,
       dblClick: false
     });
+  }
+
+  /**
+   * Handle dismiss click on a dynamic nav item.
+   * Removes from the app's recent stack and refreshes nav items immediately.
+   * Stops propagation so the nav click handler doesn't fire.
+   */
+  onDismiss(item: NavItem, event: MouseEvent): void {
+    event.stopPropagation();
+
+    // Remove from the app's recent stack directly so we can refresh immediately
+    if (this._app) {
+      const appWithRemove = this._app as BaseApplication & {
+        RemoveDynamicNavItem?: (navItem: NavItem) => void;
+      };
+      if (typeof appWithRemove.RemoveDynamicNavItem === 'function') {
+        appWithRemove.RemoveDynamicNavItem(item);
+        this.updateCachedData();
+      }
+    }
+
+    this.navItemDismiss.emit(item);
   }
 
   /**
