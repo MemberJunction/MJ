@@ -530,8 +530,9 @@ export class MemoryManagerAgent extends BaseAgent {
         params.prompt = prompt;
         params.data = promptData;
         params.contextUser = contextUser;
+        params.attemptJSONRepair = true;
 
-        const result = await this.executePromptWithRetry<{ notes: ExtractedNote[] }>(runner, params);
+        const result = await runner.ExecutePrompt<{ notes: ExtractedNote[] }>(params);
 
         // Finalize Step 3 after extraction
         await this.FinalizeRunStep(step3, result.success, {
@@ -709,7 +710,8 @@ export class MemoryManagerAgent extends BaseAgent {
                 };
                 dedupeParams.contextUser = contextUser;
 
-                const dedupeResult = await this.executePromptWithRetry<{ shouldAdd: boolean; reason: string }>(runner, dedupeParams);
+                dedupeParams.attemptJSONRepair = true;
+                const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
                 dedupeLlmCallCount++;
 
                 if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
@@ -814,8 +816,9 @@ export class MemoryManagerAgent extends BaseAgent {
         extractParams.prompt = extractPrompt;
         extractParams.data = { qaPairs };
         extractParams.contextUser = contextUser;
+        extractParams.attemptJSONRepair = true;
 
-        const extractResult = await this.executePromptWithRetry<{ examples: ExtractedExample[] }>(runner, extractParams);
+        const extractResult = await runner.ExecutePrompt<{ examples: ExtractedExample[] }>(extractParams);
 
         if (!extractResult.success || !extractResult.result) {
             await this.FinalizeRunStep(step5, false, {
@@ -893,7 +896,8 @@ export class MemoryManagerAgent extends BaseAgent {
                 };
                 dedupeParams.contextUser = contextUser;
 
-                const dedupeResult = await this.executePromptWithRetry<{ shouldAdd: boolean; reason: string }>(runner, dedupeParams);
+                dedupeParams.attemptJSONRepair = true;
+                const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
                 exampleDedupeLlmCallCount++;
 
                 if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
@@ -929,43 +933,6 @@ export class MemoryManagerAgent extends BaseAgent {
     private isValidUUID(str: string): boolean {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         return uuidRegex.test(str);
-    }
-
-    /**
-     * Wraps AIPromptRunner.ExecutePrompt with retry logic for transient network errors.
-     * Only retries on fetch/network failures (fetch failed, ECONNRESET, ETIMEDOUT, ENOTFOUND).
-     * Non-transient errors (validation, auth, etc.) are returned immediately without retry.
-     *
-     * NOTE: Checks errorMessage regardless of success flag because AIPromptRunner's
-     * "Warn mode" can return success=true with degraded output on fetch failures.
-     */
-    private async executePromptWithRetry<T>(
-        runner: AIPromptRunner,
-        params: AIPromptParams,
-        maxAttempts: number = 3,
-        baseDelayMs: number = 2000
-    ): Promise<AIPromptRunResult<T>> {
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const result = await runner.ExecutePrompt<T>(params);
-
-            // Check for transient network errors even when success=true (Warn mode)
-            const errMsg = result.errorMessage?.toLowerCase() ?? '';
-            const isTransient = errMsg.includes('fetch failed')
-                || errMsg.includes('econnreset')
-                || errMsg.includes('etimedout')
-                || errMsg.includes('enotfound');
-
-            if (!isTransient || attempt === maxAttempts) {
-                return result;
-            }
-
-            const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
-            LogStatus(`Memory Manager: Transient error on attempt ${attempt}/${maxAttempts}, retrying in ${delayMs}ms: ${result.errorMessage}`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-        }
-
-        // Unreachable — loop always returns — but TypeScript needs it
-        throw new Error('executePromptWithRetry: unexpected exit');
     }
 
     /**
@@ -1356,8 +1323,9 @@ export class MemoryManagerAgent extends BaseAgent {
                 params.prompt = consolidatePrompt;
                 params.data = promptData;
                 params.contextUser = contextUser;
+                params.attemptJSONRepair = true;
 
-                const result = await this.executePromptWithRetry<{
+                const result = await runner.ExecutePrompt<{
                     shouldConsolidate: boolean;
                     consolidatedNote?: {
                         type: string;
@@ -1367,7 +1335,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     };
                     sourceNoteIds?: string[];
                     reason: string;
-                }>(runner, params);
+                }>(params);
 
                 if (!result.success || !result.result) {
                     LogError(`Memory Manager: Consolidation prompt failed for cluster: ${result.errorMessage}`);
