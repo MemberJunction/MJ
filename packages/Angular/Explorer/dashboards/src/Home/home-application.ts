@@ -45,6 +45,13 @@ export class HomeApplication extends BaseApplication {
   private recentOrphanStack: OrphanResourceSnapshot[] = [];
 
   /**
+   * Guards against redundant stack mutations. updateRecentStack() only does work
+   * when the active tab actually changes, preventing a feedback loop where
+   * GetNavItems() → updateRecentStack() → config change → GetNavItems() → ...
+   */
+  private _lastSeenActiveTabId: string | null = null;
+
+  /**
    * Inject WorkspaceStateManager for accessing current tab state
    */
   public SetWorkspaceManager(manager: WorkspaceStateManager): void {
@@ -81,23 +88,34 @@ export class HomeApplication extends BaseApplication {
   }
 
   /**
-   * Gets the icon for a resource type from the ResourceTypes entity.
-   * Uses SharedService which caches ResourceTypes on app load.
+   * Resolves the best icon for a dynamic nav item.
+   * Priority: entity-specific icon from metadata → resource type icon → generic fallback.
    */
-  private getResourceTypeIcon(resourceTypeName: string): string {
-    if (!this.sharedService) {
-      return 'fa-solid fa-file';
+  private resolveIcon(entityName: string | undefined, resourceTypeName: string): string {
+    if (entityName) {
+      const md = new Metadata();
+      const entityIcon = md.EntityByName(entityName)?.Icon;
+      if (entityIcon) {
+        return entityIcon;
+      }
     }
 
-    const resourceType = this.sharedService.ResourceTypeByName(resourceTypeName);
-    return resourceType?.Icon || 'fa-solid fa-file';
+    if (this.sharedService) {
+      const resourceType = this.sharedService.ResourceTypeByName(resourceTypeName);
+      if (resourceType?.Icon) {
+        return resourceType.Icon;
+      }
+    }
+
+    return 'fa-solid fa-file';
   }
 
   /**
    * Updates the recent orphan stack based on the currently active tab.
-   * If the active tab is an orphan resource (not matching any static nav item),
-   * it gets pushed/promoted to the front of the stack. If the active tab is
-   * a static resource (e.g., Home dashboard), the stack is left unchanged.
+   * If the active tab is a new orphan resource (not already in the stack and not
+   * matching any static nav item), it gets added to the front. Items already in the
+   * stack keep their position to avoid visually jarring reordering when users click
+   * between existing dynamic nav items.
    */
   private async updateRecentStack() {
     if (!this.workspaceManager) {
@@ -108,6 +126,16 @@ export class HomeApplication extends BaseApplication {
     if (!config?.activeTabId) {
       return;
     }
+
+    // Skip if the active tab hasn't changed since last check.
+    // This prevents a feedback loop: GetNavItems() → updateRecentStack() → mutate stack
+    // → config change → GetNavItems() → updateRecentStack() → ...
+    // By bailing early when the tab is the same, GetNavItems() becomes a pure read
+    // on repeated calls, breaking the cycle.
+    if (config.activeTabId === this._lastSeenActiveTabId) {
+      return;
+    }
+    this._lastSeenActiveTabId = config.activeTabId;
 
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     if (!activeTab || activeTab.applicationId !== this.ID) {
@@ -121,15 +149,18 @@ export class HomeApplication extends BaseApplication {
       return;
     }
 
-    // Deduplicate: remove existing entry with same resourceRecordId
-    this.recentOrphanStack = this.recentOrphanStack.filter(
-      s => s.resourceRecordId !== snapshot.resourceRecordId
+    // If this item is already in the stack, leave the order unchanged.
+    // Reordering on every click is visually jarring — items shift around
+    // while the user is clicking between existing nav items.
+    const alreadyTracked = this.recentOrphanStack.some(
+      s => s.resourceRecordId === snapshot.resourceRecordId
     );
+    if (alreadyTracked) {
+      return;
+    }
 
-    // Push to front (most recent first)
+    // New orphan — push to front (most recent first) and trim oldest if needed
     this.recentOrphanStack.unshift(snapshot);
-
-    // Trim to max size
     if (this.recentOrphanStack.length > HomeApplication.MAX_RECENT_ITEMS) {
       this.recentOrphanStack.length = HomeApplication.MAX_RECENT_ITEMS;
     }
@@ -205,7 +236,7 @@ export class HomeApplication extends BaseApplication {
 
     return {
       Label: label,
-      Icon: this.getResourceTypeIcon(snapshot.resourceType),
+      Icon: this.resolveIcon(snapshot.entityName, snapshot.resourceType),
       ResourceType: snapshot.resourceType,
       RecordID: snapshot.resourceRecordId,
       Configuration: snapshot.configuration,

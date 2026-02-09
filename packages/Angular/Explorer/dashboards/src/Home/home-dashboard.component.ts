@@ -160,7 +160,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.recentAccessService.RecentItems
       .pipe(takeUntil(this.destroy$))
       .subscribe(items => {
-        this.recentItems = items.slice(0, 5);
+        this.recentItems = this.deduplicateRecents(items).slice(0, 5);
         this.recentsLoading = false;
         this.cdr.markForCheck();
       });
@@ -434,6 +434,21 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    */
   trackByFavorite(_index: number, item: UserFavoriteEntity): string {
     return item.ID;
+  }
+
+  /**
+   * Remove duplicate recent items (same entity + recordId). Keeps the first occurrence.
+   */
+  private deduplicateRecents(items: RecentAccessItem[]): RecentAccessItem[] {
+    const seen = new Set<string>();
+    return items.filter(item => {
+      const key = `${item.entityName}-${item.recordId}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
   }
 
   /**

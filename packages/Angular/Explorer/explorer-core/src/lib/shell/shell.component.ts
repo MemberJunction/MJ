@@ -1219,7 +1219,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private startLoadingAnimation(): void {
     // Select the appropriate theme based on date and locale
     this.activeTheme = getActiveTheme();
-    console.log(`🎨 Loading theme: ${this.activeTheme.name}`);
 
     // Reset state
     this.usedMessageIndices = [0]; // Mark first message as used
@@ -1856,8 +1855,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         configuration: defaultTabRequest.Configuration || {}
       }]
     };
-
-    console.log('🔄 Resetting layout to fresh state:', freshConfig);
 
     // Update workspace configuration
     this.workspaceManager.UpdateConfiguration(freshConfig);

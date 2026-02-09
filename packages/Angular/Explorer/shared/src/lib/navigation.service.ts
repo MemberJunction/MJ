@@ -286,14 +286,6 @@ export class NavigationService implements OnDestroy {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
 
-    console.log('NavigationService.OpenEntityRecord called:', {
-      entityName,
-      recordPkey: recordPkey.ToURLSegment(),
-      appId,
-      color: appColor,
-      options
-    });
-
     const forceNew = this.shouldForceNewTab(options);
 
     const recordId = recordPkey.ToURLSegment();
@@ -309,18 +301,14 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
-    console.log('NavigationService.OpenEntityRecord request:', request, 'forceNew:', forceNew);
-
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
     let tabId: string;
     if (forceNew) {
       tabId = this.workspaceManager.OpenTabForced(request, appColor);
-      console.log('NavigationService.OpenEntityRecord created new tab:', tabId);
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
-      console.log('NavigationService.OpenEntityRecord opened tab:', tabId);
     }
 
     return tabId;
@@ -554,13 +542,6 @@ export class NavigationService implements OnDestroy {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
 
-    console.log('NavigationService.OpenNewEntityRecord called:', {
-      entityName,
-      appId,
-      color: appColor,
-      options
-    });
-
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
@@ -577,19 +558,13 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
-    console.log('NavigationService.OpenNewEntityRecord request:', request, 'forceNew:', forceNew);
-
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
-      console.log('NavigationService.OpenNewEntityRecord created new tab:', tabId);
-      return tabId;
+      return this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      const tabId = this.workspaceManager.OpenTab(request, appColor);
-      console.log('NavigationService.OpenNewEntityRecord opened tab:', tabId);
-      return tabId;
+      return this.workspaceManager.OpenTab(request, appColor);
     }
   }
 
