@@ -78,7 +78,7 @@ export class BaseApplication {
    * Returns navigation items for this application.
    * Override in subclass for dynamic behavior based on permissions, context, etc.
    */
-  GetNavItems(): NavItem[] {
+  async GetNavItems(): Promise<NavItem[]> {
     if (this._defaultNavItems) {
       return this._defaultNavItems;
     }
@@ -110,7 +110,7 @@ export class BaseApplication {
    * Override in subclass for custom default tab logic.
    */
   async CreateDefaultTab(): Promise<TabRequest | null> {
-    const navItems = this.GetNavItems();
+    const navItems = await this.GetNavItems();
 
     if (navItems.length > 0) {
       const firstItem = navItems[0];

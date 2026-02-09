@@ -515,13 +515,14 @@ export interface IMetadataProvider {
     GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh?: boolean): Promise<EntityRecordNameResult[]>
 
     /**
-     * Synchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
-     * Cache is automatically populated by Load(), LoadFromData(), and Save() operations on BaseEntity.
+     * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
+     * @param loadIfNeeded - If set to true, will load from database if not already cached
      * @returns The cached display name, or undefined if not in cache
      */
-    GetCachedRecordName(entityName: string, compositeKey: CompositeKey): string | undefined
+    GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
 
     /**
      * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().

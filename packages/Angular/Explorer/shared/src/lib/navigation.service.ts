@@ -605,12 +605,12 @@ export class NavigationService implements OnDestroy {
    * @param options Navigation options
    * @returns The tab ID if successful, null if nav item not found
    */
-  public OpenNavItemByName(
+  public async OpenNavItemByName(
     navItemName: string,
     configuration?: Record<string, unknown>,
     appId?: string,
     options?: NavigationOptions
-  ): string | null {
+  ): Promise<string | null> {
     // Get app (use provided or current active)
     const targetAppId = appId || this.appManager.GetActiveApp()?.ID;
     if (!targetAppId) {
@@ -623,7 +623,7 @@ export class NavigationService implements OnDestroy {
     }
 
     // Find the nav item by name
-    const navItems = app.GetNavItems();
+    const navItems = await app.GetNavItems();
     const navItem = navItems.find(item => item.Label === navItemName);
     if (!navItem) {
       return null;
@@ -661,7 +661,7 @@ export class NavigationService implements OnDestroy {
 
     // If a specific nav item is requested
     if (navItemName) {
-      const navItems = app.GetNavItems();
+      const navItems = await app.GetNavItems();
       const navItem = navItems.find(item => item.Label === navItemName);
       if (navItem) {
         // Check if there's already a tab for this nav item

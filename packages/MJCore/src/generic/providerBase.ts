@@ -137,14 +137,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Synchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
      * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
+     * @param loadIfNeeded - If set to true, will load from database if not already cached
      * @returns The cached display name, or undefined if not in cache
      */
-    public GetCachedRecordName(entityName: string, compositeKey: CompositeKey): string | undefined {
-        return this._entityRecordNameCache.get(this.getCacheKey(entityName, compositeKey));
+    public async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
+        let cachedEntry = this._entityRecordNameCache.get(this.getCacheKey(entityName, compositeKey));
+        if (!cachedEntry && loadIfNeeded) {
+            cachedEntry = await this.GetEntityRecordName(entityName, compositeKey);
+        }
+        return cachedEntry
     }
 
     /**

@@ -30,6 +30,22 @@ export class AppNavComponent implements OnInit, OnDestroy {
   private _cachedAppColor: string = '#1976d2';
   private _servicesInjected = false;
 
+  /**
+   * Monotonically increasing counter used to detect and discard stale async results.
+   *
+   * Because GetNavItems() is async (HomeApplication does a DB lookup for record names),
+   * and RxJS subscribe() does NOT serialize async callbacks, multiple calls to
+   * updateCachedData() can overlap. Without this guard, a slow call (e.g., Home app
+   * doing a DB lookup) that started BEFORE a fast call (e.g., switching to App B)
+   * could resolve AFTER the fast call and overwrite the correct nav items with stale ones.
+   *
+   * How it works:
+   *   1. Each updateCachedData() call increments this counter and captures it as `gen`
+   *   2. After the await, it checks: does `gen` still match `_updateGeneration`?
+   *   3. If not, a newer call started while we were waiting — discard our stale results
+   */
+  private _updateGeneration = 0;
+
   // Map of nav item key (Route or Label) to active state
   private activeStateMap = new Map<string, boolean>();
 
@@ -66,9 +82,8 @@ export class AppNavComponent implements OnInit, OnDestroy {
     // changes and the dynamic nav item needs to reflect the new record.
     this.workspaceManager.Configuration
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.updateCachedData();
-        this.cdr.markForCheck();
+      .subscribe(async () => {
+        await this.updateCachedData();
       });
   }
 
@@ -80,7 +95,11 @@ export class AppNavComponent implements OnInit, OnDestroy {
   /**
    * Update cached nav items and app color when app changes
    */
-  private updateCachedData(): void {
+  private async updateCachedData(): Promise<void> {
+    // Capture the current generation before any async work.
+    // See _updateGeneration JSDoc for full explanation of the race condition this prevents.
+    const gen = ++this._updateGeneration;
+
     if (this._app) {
       // Inject services once for apps that need them (e.g., HomeApplication for dynamic nav items)
       if (!this._servicesInjected) {
@@ -98,7 +117,14 @@ export class AppNavComponent implements OnInit, OnDestroy {
         this._servicesInjected = true;
       }
 
-      const items = this._app.GetNavItems() || [];
+      const items = await this._app.GetNavItems() || [];
+
+      // If a newer call started while we were awaiting, our results are stale — bail out
+      // so we don't overwrite the newer call's (correct) results.
+      if (gen !== this._updateGeneration) {
+        return;
+      }
+
       // Only show items with Status 'Active' or undefined (default to Active)
       this._cachedNavItems = items.filter(item => !item.Status || item.Status === 'Active');
 
@@ -111,6 +137,7 @@ export class AppNavComponent implements OnInit, OnDestroy {
     // Update active states after nav items change
     const config = this.workspaceManager.GetConfiguration();
     this.updateActiveStates(config);
+    this.cdr.markForCheck();
   }
 
   /**

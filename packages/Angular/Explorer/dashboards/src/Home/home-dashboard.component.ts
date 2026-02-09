@@ -134,12 +134,12 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     // Subscribe to applications list, filtering out the Home app
     this.appManager.Applications
       .pipe(takeUntil(this.destroy$))
-      .subscribe(apps => {
+      .subscribe(async apps => {
         // Exclude the Home app from the list (users are already on Home)
         this.apps = apps.filter(app => app.Name !== 'Home');
 
         // Pre-compute display data for all apps
-        this.computeAppsDisplayData();
+        await this.computeAppsDisplayData();
 
         this.isLoading = false;
         this.NotifyLoadComplete();
@@ -229,9 +229,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Pre-compute display data for all apps to avoid repeated calculations during change detection
    */
-  private computeAppsDisplayData(): void {
-    this.appsDisplayData = this.apps.map(app => {
-      const navItems = app.GetNavItems();
+  private async computeAppsDisplayData(): Promise<void> {
+    this.appsDisplayData = await Promise.all(this.apps.map(async app => {
+      const navItems = await app.GetNavItems();
       const navItemsCount = navItems.length;
       const navItemsPreview = navItems.slice(0, 3).map(item => ({
         Label: item.Label,
@@ -247,7 +247,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         showMoreItems: navItemsCount > 3,
         moreItemsCount: navItemsCount - 3
       };
-    });
+    }));
   }
 
   /**

@@ -63,14 +63,16 @@ export class HomeApplication extends BaseApplication {
    * Static items come from DefaultNavItems in metadata.
    * Dynamic items are generated from the recent orphan stack (up to 3).
    */
-  override GetNavItems(): NavItem[] {
-    const staticItems = super.GetNavItems();
+  override async GetNavItems(): Promise<NavItem[]> {
+    const staticItems = await super.GetNavItems();
 
     // Update the recent stack based on current active tab
-    this.updateRecentStack();
+    // Must await — updateRecentStack is async (calls matchesStaticNavItem → super.GetNavItems())
+    // and buildDynamicNavItems reads recentOrphanStack, so the stack must be fully updated first.
+    await this.updateRecentStack();
 
     // Build dynamic nav items from the stack
-    const dynamicItems = this.buildDynamicNavItems();
+    const dynamicItems = await this.buildDynamicNavItems();
     if (dynamicItems.length > 0) {
       return [...staticItems, ...dynamicItems];
     }
@@ -97,7 +99,7 @@ export class HomeApplication extends BaseApplication {
    * it gets pushed/promoted to the front of the stack. If the active tab is
    * a static resource (e.g., Home dashboard), the stack is left unchanged.
    */
-  private updateRecentStack(): void {
+  private async updateRecentStack() {
     if (!this.workspaceManager) {
       return;
     }
@@ -113,7 +115,7 @@ export class HomeApplication extends BaseApplication {
     }
 
     // Check if active tab qualifies as an orphan resource
-    const snapshot = this.createSnapshotIfOrphan(activeTab);
+    const snapshot = await this.createSnapshotIfOrphan(activeTab);
     if (!snapshot) {
       // Active tab is a static resource (Home dashboard, etc.) — leave stack as-is
       return;
@@ -138,7 +140,7 @@ export class HomeApplication extends BaseApplication {
    * Returns null if the tab is a static nav item, has no resource type, or is an
    * app-level custom dashboard (no record ID).
    */
-  private createSnapshotIfOrphan(tab: WorkspaceTab): OrphanResourceSnapshot | null {
+  private async createSnapshotIfOrphan(tab: WorkspaceTab): Promise<OrphanResourceSnapshot | null> {
     const resourceType = tab.configuration?.['resourceType'] as string | undefined;
     if (!resourceType) {
       return null;
@@ -150,7 +152,7 @@ export class HomeApplication extends BaseApplication {
     }
 
     // Skip if it matches a static nav item
-    if (this.matchesStaticNavItem(tab)) {
+    if (await this.matchesStaticNavItem(tab)) {
       return null;
     }
 
@@ -167,8 +169,8 @@ export class HomeApplication extends BaseApplication {
   /**
    * Checks whether a tab matches any static nav item (by label, route, or driver class).
    */
-  private matchesStaticNavItem(tab: WorkspaceTab): boolean {
-    const staticItems = super.GetNavItems();
+  private async matchesStaticNavItem(tab: WorkspaceTab): Promise<boolean> {
+    const staticItems = await super.GetNavItems();
     return staticItems.some(item => {
       if (item.Label === tab.title) {
         return true;
@@ -187,15 +189,15 @@ export class HomeApplication extends BaseApplication {
    * Creates DynamicNavItem entries for each item in the recent orphan stack.
    * The active tab's item will be highlighted via isActiveMatch.
    */
-  private buildDynamicNavItems(): DynamicNavItem[] {
-    return this.recentOrphanStack.map(snapshot => this.createDynamicNavItem(snapshot));
+  private async buildDynamicNavItems(): Promise<DynamicNavItem[]> {
+    return Promise.all(this.recentOrphanStack.map(snapshot => this.createDynamicNavItem(snapshot)));
   }
 
   /**
    * Creates a single DynamicNavItem from an OrphanResourceSnapshot.
    */
-  private createDynamicNavItem(snapshot: OrphanResourceSnapshot): DynamicNavItem {
-    const label = this.resolveRecordLabel(
+  private async createDynamicNavItem(snapshot: OrphanResourceSnapshot): Promise<DynamicNavItem> {
+    const label = await this.resolveRecordLabel(
       snapshot.entityName,
       snapshot.resourceRecordId,
       snapshot.title
@@ -229,7 +231,7 @@ export class HomeApplication extends BaseApplication {
    * @param tabRecordId - URL-encoded composite key segment (e.g. "ID|abc-123" or "Field1|val1||Field2|val2")
    * @param tabTitle - Fallback title assigned by the workspace when the tab was opened
    */
-  private resolveRecordLabel(entityName: string | undefined, tabRecordId: string | undefined, tabTitle: string): string {
+  private async resolveRecordLabel(entityName: string | undefined, tabRecordId: string | undefined, tabTitle: string): Promise<string> {
     if (!entityName || !tabRecordId) {
       return tabTitle || '';
     }
@@ -241,7 +243,7 @@ export class HomeApplication extends BaseApplication {
 
     // Check the cache first
     try {
-      const cachedName = Metadata.Provider.GetCachedRecordName(entityName, compositeKey);
+      const cachedName = await Metadata.Provider.GetCachedRecordName(entityName, compositeKey, true);
       if (cachedName) {
         return cachedName;
       }
