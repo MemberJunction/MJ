@@ -17,16 +17,33 @@ interface TransformersModule {
 let pipeline: TransformersModule['pipeline'] | null = null;
 let env: TransformersEnv | null = null;
 let transformersLoaded = false;
+let transformersLoadingPromise: Promise<void> | null = null;
 let pendingSettings: Record<string, unknown> = {};
 
+/**
+ * Loads the @xenova/transformers ESM module with proper synchronization.
+ * Uses a loading promise to prevent multiple concurrent imports when
+ * parallel embedding requests occur during startup.
+ */
 async function loadTransformers(): Promise<void> {
-    if (!transformersLoaded) {
+    // Fast path: already loaded
+    if (transformersLoaded) {
+        return;
+    }
+
+    // If currently loading, wait for the same promise (prevents duplicate imports)
+    if (transformersLoadingPromise) {
+        return transformersLoadingPromise;
+    }
+
+    // Start loading and store the promise for concurrent callers to reuse
+    transformersLoadingPromise = (async () => {
         // Use dynamic import to load ESM module in CommonJS context
         // This approach is cleaner than Function constructor and TypeScript-friendly
         const transformers = await (eval('import("@xenova/transformers")') as Promise<TransformersModule>);
         pipeline = transformers.pipeline;
         env = transformers.env;
-        
+
         // Configure Transformers.js settings
         env.allowLocalModels = true;
         // Note: localURL might not be available in all versions of transformers.js
@@ -34,7 +51,7 @@ async function loadTransformers(): Promise<void> {
             env.localURL = process.env.TRANSFORMERS_LOCAL_URL || '';
         }
         env.cacheDir = process.env.TRANSFORMERS_CACHE_DIR || './.cache/transformers';
-        
+
         // Apply any pending settings that were set before transformers was loaded
         if (pendingSettings.cacheDir) {
             env.cacheDir = pendingSettings.cacheDir as string;
@@ -42,9 +59,11 @@ async function loadTransformers(): Promise<void> {
         if (pendingSettings.localURL && 'localURL' in env) {
             env.localURL = pendingSettings.localURL as string;
         }
-        
+
         transformersLoaded = true;
-    }
+    })();
+
+    return transformersLoadingPromise;
 }
 
 @RegisterClass(BaseEmbeddings, 'LocalEmbedding')
