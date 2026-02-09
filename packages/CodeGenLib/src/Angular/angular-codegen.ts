@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, FieldCategoryInfo } from '@memberjunction/core';
 import { logError, logStatus } from '../Misc/status_logging';
 import fs from 'fs';
 import path from 'path';
@@ -504,7 +504,7 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
        * @param categoryIcons Optional map of category names to Font Awesome icon classes
        * @returns Array of generated form sections
        */
-      protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number, categoryIcons?: Record<string, string>): AngularFormSectionInfo[] {
+      protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number, fieldCategories?: Record<string, FieldCategoryInfo> | null): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
           const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
@@ -519,7 +519,8 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
               }
           }
 
-          // Sort sections by minimum sequence (Top sections first, System sections last, then by MinSequence)
+          // Sort sections: Top first, then own categories, then inherited categories
+          // (nearest parent first), then System Metadata last
           sections.sort((a, b) => {
               // Top sections always first
               if (a.Type === GeneratedFormSectionType.Top) return -1;
@@ -530,6 +531,12 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
               const bIsSystem = b.Name.toLowerCase() === 'system' || b.Name.toLowerCase() === 'system metadata';
               if (aIsSystem && !bIsSystem) return 1;
               if (!aIsSystem && bIsSystem) return -1;
+
+              // Inherited sections come after own sections (but before System)
+              const aIsInherited = fieldCategories?.[a.Name]?.inheritedFromEntityName != null;
+              const bIsInherited = fieldCategories?.[b.Name]?.inheritedFromEntityName != null;
+              if (aIsInherited && !bIsInherited) return 1;
+              if (!aIsInherited && bIsInherited) return -1;
 
               // Otherwise sort by sequence
               const aSeq = a.MinSequence ?? Number.MAX_SAFE_INTEGER;
@@ -553,8 +560,9 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
 
                   // Generate collapsible panel HTML inline instead of using separate components
                   const formHTML = this.generateSectionHTMLForAngular(entity, section);
-                  // Use category-specific icon from LLM if available, otherwise fall back to keyword matching
-                  const icon = (categoryIcons && categoryIcons[section.Name]) || this.getIconForCategory(section.Name);
+                  // Use category-specific icon from metadata if available, otherwise fall back to keyword matching
+                  const categoryInfo = fieldCategories ? fieldCategories[section.Name] : undefined;
+                  const icon = categoryInfo?.icon || this.getIconForCategory(section.Name);
                   // NOTE: We'll set the UniqueKey later in generateSingleEntityTypeScriptForAngular()
                   // For now, just use a placeholder that will be replaced
                   const sectionKey = this.camelCase(section.Name);
@@ -571,11 +579,16 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
                   // No additional indentation needed - formHTML is already properly indented
                   const indentedFormHTML = formHTML;
 
+                  // Build inherited variant attributes if this category comes from a parent entity
+                  const inheritedAttrs = categoryInfo?.inheritedFromEntityName
+                      ? `\n        Variant="inherited"\n        InheritedFromEntity="${categoryInfo.inheritedFromEntityName}"`
+                      : '';
+
                   section.TabCode = `${sectionIndex > 0 ? '\n' : ''}    <!-- ${section.Name} Section -->
     <mj-collapsible-panel field-panels
         SectionKey="${sectionKey}"
         SectionName="${section.Name}"
-        Icon="${icon}"
+        Icon="${icon}"${inheritedAttrs}
         [Form]="this"
         [FormContext]="formContext">
 ${indentedFormHTML}
@@ -656,7 +669,7 @@ ${indentedFormHTML}
                     else if (field.TSType === EntityFieldTSType.Number)
                         editControl = `number`
                     else if (field.TSType === EntityFieldTSType.String) {
-                        if (field.Length < 0 || field.MaxLength > 100) // length < 0 means nvarchar(max) or similar, so use textarea
+                        if (field.Length < 0 || field.MaxLength > 1000) // length < 0 means nvarchar(max) or similar, so use textarea; nvarchar(1000) and below get single-line textbox
                             editControl = `textarea`
                         else
                             editControl = `textbox`
@@ -1006,18 +1019,11 @@ ${componentCodeWithIndent}
       protected async generateSingleEntityHTMLForAngular(entity: EntityInfo, contextUser: UserInfo): Promise<{htmlCode: string,
                                                                                                               additionalSections: AngularFormSectionInfo[],
                                                                                                               relatedEntitySections: AngularFormSectionInfo[]}> {
-          // Load category icons from the typed FieldCategories property
-          let categoryIcons: Record<string, string> | undefined;
+          // Load category metadata (icons + inheritance info) from the typed FieldCategories property
           const fieldCategories = entity.FieldCategories;
-          if (fieldCategories) {
-              categoryIcons = {};
-              for (const [category, info] of Object.entries(fieldCategories)) {
-                  categoryIcons[category] = info.icon;
-              }
-          }
 
           const topArea = this.generateTopAreaHTMLForAngular(entity);
-          const additionalSections = this.generateAngularAdditionalSections(entity, 0, categoryIcons);
+          const additionalSections = this.generateAngularAdditionalSections(entity, 0, fieldCategories);
           // calc ending index for additional sections so we can pass taht into the related entity tabs because they need to start incrementally up from there...
           const endingIndex = additionalSections && additionalSections.length ? (topArea && topArea.length > 0 ? additionalSections.length - 1 : additionalSections.length) : 0;
           const relatedEntitySections = await this.generateRelatedEntityTabs(entity, endingIndex, contextUser);

@@ -17,6 +17,7 @@ export class EntityActionFilterFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identifierKeys', sectionName: 'Identifier Keys', isExpanded: true },
             { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
+            { sectionKey: 'actionMapping', sectionName: 'Action Mapping', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

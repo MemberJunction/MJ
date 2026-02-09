@@ -3289,7 +3289,8 @@ NumberedRows AS (
                e.Name,
                e.Description,
                e.SchemaName,
-               e.BaseTable
+               e.BaseTable,
+               e.ParentID
             FROM
                [${mj_core_schema()}].vwEntities e
             WHERE
@@ -3325,7 +3326,9 @@ NumberedRows AS (
                ef.AutoUpdateCategory,
                ef.AutoUpdateDisplayName,
                ef.EntityIDFieldName,
-               ef.RelatedEntity
+               ef.RelatedEntity,
+               ef.IsVirtual,
+               ef.AllowUpdateAPI
             FROM
                [${mj_core_schema()}].vwEntityFields ef
             WHERE
@@ -3459,12 +3462,16 @@ NumberedRows AS (
       // Form Layout Generation
       // Only run if at least one field allows auto-update
       if (fields.some((f: any) => f.AutoUpdateCategory)) {
+         // Build IS-A parent chain context if this entity has a parent
+         const parentChainContext = this.buildParentChainContext(entity, fields);
+
          const layoutAnalysis = await ag.generateFormLayout({
             Name: entity.Name,
             Description: entity.Description,
             SchemaName: entity.SchemaName,
             Settings: entity.Settings,
-            Fields: fields
+            Fields: fields,
+            ...parentChainContext
          }, currentUser, isNewEntity);
 
          if (layoutAnalysis) {
@@ -3472,6 +3479,81 @@ NumberedRows AS (
             logStatus(`         Applied form layout for ${entity.Name}`);
          }
       }
+   }
+
+   /**
+    * Builds IS-A parent chain context for an entity, computing which parent each
+    * inherited field originates from. Used to provide the LLM with inheritance
+    * awareness during form layout generation.
+    *
+    * Returns an empty object for entities without parents, so it can be safely spread
+    * into the entity object passed to generateFormLayout().
+    */
+   protected buildParentChainContext(
+      entity: { ParentID?: string },
+      fields: Array<{ Name: string; IsVirtual?: boolean; AllowUpdateAPI?: boolean; IsPrimaryKey?: boolean }>
+   ): { ParentChain?: Array<{ entityID: string; entityName: string }>; IsChildEntity?: boolean } {
+      if (!entity.ParentID) {
+         return {};
+      }
+
+      // Walk the IS-A chain using in-memory metadata
+      const md = new Metadata();
+      const allEntities = md.Entities;
+      const parentChain: Array<{ entityID: string; entityName: string }> = [];
+      const visited = new Set<string>();
+      let currentParentID: string | null = entity.ParentID;
+
+      while (currentParentID) {
+         if (visited.has(currentParentID)) break; // circular reference guard
+         visited.add(currentParentID);
+
+         const parentEntity = allEntities.find(e => e.ID === currentParentID);
+         if (!parentEntity) break;
+
+         parentChain.push({ entityID: parentEntity.ID, entityName: parentEntity.Name });
+         currentParentID = parentEntity.ParentID ?? null;
+      }
+
+      if (parentChain.length === 0) {
+         return {};
+      }
+
+      // Annotate each field with its source parent (if inherited)
+      // An IS-A inherited field is: IsVirtual=true, AllowUpdateAPI=true, not PK, not __mj_
+      for (const field of fields) {
+         if (field.IsVirtual && field.AllowUpdateAPI && !field.IsPrimaryKey && !field.Name.startsWith('__mj_')) {
+            const sourceParent = this.findFieldSourceParent(field.Name, parentChain, allEntities);
+            if (sourceParent) {
+               (field as Record<string, unknown>).InheritedFromEntityID = sourceParent.entityID;
+               (field as Record<string, unknown>).InheritedFromEntityName = sourceParent.entityName;
+            }
+         }
+      }
+
+      return { ParentChain: parentChain, IsChildEntity: true };
+   }
+
+   /**
+    * For an inherited field, walks the parent chain to find which specific parent entity
+    * originally defines this field (by matching non-virtual fields on each parent).
+    */
+   protected findFieldSourceParent(
+      fieldName: string,
+      parentChain: Array<{ entityID: string; entityName: string }>,
+      allEntities: EntityInfo[]
+   ): { entityID: string; entityName: string } | null {
+      for (const parent of parentChain) {
+         const parentEntity = allEntities.find(e => e.ID === parent.entityID);
+         if (!parentEntity) continue;
+
+         // Check if this parent has a non-virtual field with this name
+         const hasField = parentEntity.Fields.some(f => f.Name === fieldName && !f.IsVirtual);
+         if (hasField) {
+            return parent;
+         }
+      }
+      return null;
    }
 
    /**

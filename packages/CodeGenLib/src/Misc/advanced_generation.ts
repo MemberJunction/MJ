@@ -335,6 +335,10 @@ export class AdvancedGeneration {
             const existingInfo = this.getExistingFieldCategoryInfo(entity);
             const hasExistingCategories = existingInfo.categories.length > 0;
 
+            // IS-A parent chain context (provided by manage-metadata for child entities)
+            const parentChain: Array<{ entityID: string; entityName: string }> = entity.ParentChain || [];
+            const isChildEntity = entity.IsChildEntity === true && parentChain.length > 0;
+
             // Map fields with FK flag for statistics calculation
             const mappedFields = entity.Fields.map((f: any) => ({
                 Name: f.Name,
@@ -348,7 +352,10 @@ export class AdvancedGeneration {
                 ExistingCategory: f.Category || null,
                 // HasExistingCategory=true means locked (don't update), false means can update
                 HasExistingCategory: !f.AutoUpdateCategory && f.Category != null,
-                IsNewField: f.AutoUpdateCategory === true && !f.Category
+                IsNewField: f.AutoUpdateCategory === true && !f.Category,
+                // IS-A inheritance: which parent entity this field was inherited from (null if own field)
+                InheritedFromEntityName: f.InheritedFromEntityName || null,
+                InheritedFromEntityID: f.InheritedFromEntityID || null
             }));
 
             // Calculate FK statistics for entity importance analysis
@@ -374,7 +381,10 @@ export class AdvancedGeneration {
                 // Pass existing category info (icons + descriptions) so LLM can reference them
                 existingFieldCategoryInfo: existingInfo.categoryInfo || {},
                 // Flag to tell LLM whether to bother with entityImportance
-                isExistingEntity: !isNewEntity
+                isExistingEntity: !isNewEntity,
+                // IS-A entity inheritance context
+                isChildEntity,
+                parentChain
             };
             params.contextUser = contextUser;
 
@@ -399,6 +409,21 @@ export class AdvancedGeneration {
                     result.result.categoryInfo = {};
                     for (const [category, icon] of Object.entries(result.result.categoryIcons)) {
                         result.result.categoryInfo[category] = { icon, description: '' };
+                    }
+                }
+
+                // Stamp inheritedFromEntityID on categories that have inheritedFromEntityName
+                // The LLM provides the entity name; we resolve the ID from the parent chain
+                if (isChildEntity && result.result.categoryInfo) {
+                    for (const info of Object.values(result.result.categoryInfo)) {
+                        if (info.inheritedFromEntityName && !info.inheritedFromEntityID) {
+                            const matchingParent = parentChain.find(
+                                p => p.entityName === info.inheritedFromEntityName
+                            );
+                            if (matchingParent) {
+                                info.inheritedFromEntityID = matchingParent.entityID;
+                            }
+                        }
                     }
                 }
 

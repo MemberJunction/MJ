@@ -16,7 +16,6 @@ export class EmployeeSkillFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'skillAssignment', sectionName: 'Skill Assignment', isExpanded: true },
-            { sectionKey: 'employeeInformation', sectionName: 'Employee Information', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
