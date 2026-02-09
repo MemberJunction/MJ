@@ -45,11 +45,13 @@ export class HomeApplication extends BaseApplication {
   private recentOrphanStack: OrphanResourceSnapshot[] = [];
 
   /**
-   * Guards against redundant stack mutations. updateRecentStack() only does work
-   * when the active tab actually changes, preventing a feedback loop where
-   * GetNavItems() → updateRecentStack() → config change → GetNavItems() → ...
+   * Fingerprint of the last-processed active tab state (tabId::resourceRecordId).
+   * Guards against redundant stack mutations while still detecting content changes.
+   * In single-resource mode the tab ID stays constant when navigating between records
+   * (OpenTab replaces the temp tab's content but keeps its ID), so we must also
+   * include the resourceRecordId to detect when the tab shows a different record.
    */
-  private _lastSeenActiveTabId: string | null = null;
+  private _lastSeenTabFingerprint: string | null = null;
 
   /**
    * Inject WorkspaceStateManager for accessing current tab state
@@ -127,20 +129,19 @@ export class HomeApplication extends BaseApplication {
       return;
     }
 
-    // Skip if the active tab hasn't changed since last check.
-    // This prevents a feedback loop: GetNavItems() → updateRecentStack() → mutate stack
-    // → config change → GetNavItems() → updateRecentStack() → ...
-    // By bailing early when the tab is the same, GetNavItems() becomes a pure read
-    // on repeated calls, breaking the cycle.
-    if (config.activeTabId === this._lastSeenActiveTabId) {
-      return;
-    }
-    this._lastSeenActiveTabId = config.activeTabId;
-
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     if (!activeTab || activeTab.applicationId !== this.ID) {
       return;
     }
+
+    // Build a fingerprint from tab ID + record content. In single-resource mode,
+    // OpenTab replaces the temp tab's content but keeps the same tab ID, so we
+    // need the resourceRecordId to detect when a different record is shown.
+    const fingerprint = `${activeTab.id}::${activeTab.resourceRecordId ?? ''}`;
+    if (fingerprint === this._lastSeenTabFingerprint) {
+      return;
+    }
+    this._lastSeenTabFingerprint = fingerprint;
 
     // Check if active tab qualifies as an orphan resource
     const snapshot = await this.createSnapshotIfOrphan(activeTab);
