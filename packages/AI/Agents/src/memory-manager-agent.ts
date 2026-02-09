@@ -126,10 +126,10 @@ interface ExtractedNote {
     /**
      * Scope level hint from LLM analysis.
      * - 'global': Applies to all users (e.g., "Always greet politely")
-     * - 'organization': Applies to all contacts in an org (e.g., "This org uses metric units")
-     * - 'contact': Specific to one contact (e.g., "John prefers email")
+     * - 'company': Applies to all users in a company (e.g., "This company uses metric units")
+     * - 'user': Specific to one user (e.g., "John prefers email")
      */
-    scopeLevel?: 'global' | 'organization' | 'contact';
+    scopeLevel?: 'global' | 'company' | 'user';
 }
 
 /**
@@ -150,10 +150,10 @@ interface ExtractedExample {
     /**
      * Scope level hint from LLM analysis.
      * - 'global': Applies to all users
-     * - 'organization': Applies to all contacts in an org
-     * - 'contact': Specific to one contact
+     * - 'company': Applies to all users in a company
+     * - 'user': Specific to one user
      */
-    scopeLevel?: 'global' | 'organization' | 'contact';
+    scopeLevel?: 'global' | 'company' | 'user';
 }
 
 /**
@@ -1076,14 +1076,14 @@ export class MemoryManagerAgent extends BaseAgent {
                     note.SourceConversationDetailID = isValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
                     note.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
 
-                    // Apply scope: Lean towards USER-specific memories by default
-                    const scopeLevel = extracted.scopeLevel || 'contact';
+                    // Apply scope: Lean towards user-specific memories by default
+                    const scopeLevel = extracted.scopeLevel || 'user';
 
                     if (scopeLevel === 'global') {
                         note.PrimaryScopeEntityID = null;
                         note.PrimaryScopeRecordID = null;
                         note.SecondaryScopes = null;
-                    } else if (scopeLevel === 'organization' && sourceRun?.PrimaryScopeEntityID) {
+                    } else if (scopeLevel === 'company' && sourceRun?.PrimaryScopeEntityID) {
                         note.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
                         note.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
                         note.SecondaryScopes = null;
@@ -1093,10 +1093,10 @@ export class MemoryManagerAgent extends BaseAgent {
                         note.SecondaryScopes = sourceRun.SecondaryScopes;
                     }
 
-                    // UserID: Only set for contact-scoped notes. Org/global notes belong to the
-                    // org, not a specific user. This also enables cross-user dedup — FindSimilarAgentNotes
-                    // filters by userId, so null UserID makes org notes visible to all users.
-                    note.UserID = scopeLevel === 'contact'
+                    // UserID: Only set for user-scoped notes. Company/global notes belong to the
+                    // company, not a specific user. This also enables cross-user dedup — FindSimilarAgentNotes
+                    // filters by userId, so null UserID makes company notes visible to all users.
+                    note.UserID = scopeLevel === 'user'
                         ? (isValidUUID(extracted.userId) ? extracted.userId! : null)
                         : null;
 
@@ -1411,17 +1411,17 @@ export class MemoryManagerAgent extends BaseAgent {
                 newNote.Comments = `Consolidated from ${cluster.length} notes: ${parsedResult.reason}`;
 
                 // Apply LLM's scope recommendation (mirrors CreateNoteRecords logic)
-                const scopeLevel = consolidatedNoteData.scopeLevel || 'contact';
+                const scopeLevel = consolidatedNoteData.scopeLevel || 'user';
                 if (scopeLevel === 'global') {
                     newNote.PrimaryScopeEntityID = null;
                     newNote.PrimaryScopeRecordID = null;
                     newNote.SecondaryScopes = null;
-                } else if (scopeLevel === 'organization' && templateNote.PrimaryScopeEntityID) {
+                } else if (scopeLevel === 'company' && templateNote.PrimaryScopeEntityID) {
                     newNote.PrimaryScopeEntityID = templateNote.PrimaryScopeEntityID;
                     newNote.PrimaryScopeRecordID = templateNote.PrimaryScopeRecordID;
                     newNote.SecondaryScopes = null;
                 } else {
-                    // contact (default) — inherit full scope
+                    // user (default) — inherit full scope
                     newNote.PrimaryScopeEntityID = templateNote.PrimaryScopeEntityID;
                     newNote.PrimaryScopeRecordID = templateNote.PrimaryScopeRecordID;
                     newNote.SecondaryScopes = templateNote.SecondaryScopes;
@@ -1527,20 +1527,20 @@ export class MemoryManagerAgent extends BaseAgent {
 
                 // Apply scope from source agent run based on scopeLevel hint
                 if (sourceRun && sourceRun.PrimaryScopeEntityID) {
-                    const scopeLevel = extracted.scopeLevel || 'contact'; // Default to most specific
+                    const scopeLevel = extracted.scopeLevel || 'user'; // Default to most specific
 
                     if (scopeLevel === 'global') {
                         // Global example - no scope fields set
                         example.PrimaryScopeEntityID = null;
                         example.PrimaryScopeRecordID = null;
                         example.SecondaryScopes = null;
-                    } else if (scopeLevel === 'organization') {
-                        // Org-level example - primary scope only, no secondary
+                    } else if (scopeLevel === 'company') {
+                        // Company-level example - primary scope only, no secondary
                         example.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
                         example.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
                         example.SecondaryScopes = null;
                     } else {
-                        // Fully-scoped example (contact level) - inherit full scope
+                        // Fully-scoped example (user level) - inherit full scope
                         example.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
                         example.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
                         example.SecondaryScopes = sourceRun.SecondaryScopes;

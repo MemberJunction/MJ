@@ -1,6 +1,6 @@
 # Agent Memory Scoping Architecture
 
-This guide explains how MemberJunction agents support multi-tenant scoping for memory (notes and examples), enabling SaaS applications to isolate agent memory by custom entity hierarchies.
+This guide explains how MemberJunction agents support multi-tenant scoping for memory (notes and examples), enabling multi-tenant applications to isolate agent memory by custom entity hierarchies.
 
 ## Overview
 

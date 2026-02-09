@@ -42,17 +42,17 @@ Analyze the cluster of semantically similar notes below and synthesize them into
 - Maximum 200 characters for consolidated content
 - Clear, actionable language
 - No redundant phrases
-- Preserve the original scope (global/organization/contact)
+- Preserve the original scope (global/company/user)
 
 ### 5. Scope Level
 Determine the appropriate scope for the consolidated note:
-- **global**: Applies to all users/organizations
-- **organization**: Applies to all users within a specific organization
-- **contact**: Applies to a specific individual user
+- **global**: Applies to all users/companies
+- **company**: Applies to all users within a specific company
+- **user**: Applies to a specific individual user
 
 Choose the LEAST restrictive scope that still accurately represents the consolidated information.
-If all source notes are contact-level, the result should be contact-level.
-If any note is organization-level and others are contact-level for the same org, use organization-level.
+If all source notes are user-level, the result should be user-level.
+If any note is company-level and others are user-level for the same company, use company-level.
 
 ## Output Format
 
@@ -64,7 +64,7 @@ Return your consolidation decision in this JSON structure:
   "consolidatedNote": {
     "type": "Preference",
     "content": "User prefers concise, structured responses with bullet points for technical content",
-    "scopeLevel": "contact",
+    "scopeLevel": "user",
     "confidence": 95
   },
   "sourceNoteIds": ["id-1", "id-2", "id-3"],

@@ -1244,10 +1244,10 @@ export class BaseAgent {
             return 'company-only';
         }
         if (hasPrimaryScope && !hasUser) {
-            return 'organization';
+            return 'company';
         }
         if (hasPrimaryScope && hasUser) {
-            return 'contact';
+            return 'user';
         }
         return 'combined';
     }
@@ -4407,7 +4407,7 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TestRunID = params.testRunId;
         }
 
-        // Set scope for multi-tenant SaaS deployments
+        // Set scope for multi-tenant deployments
         // Resolve from top-level params or data fallback (for GraphQL callers)
         const primaryScopeEntityName = params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
         const primaryScopeRecordID = params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined);

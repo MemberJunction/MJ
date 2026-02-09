@@ -97,76 +97,76 @@ Determine the appropriate scope for each note:
 - **Global** (all null): System-wide best practices or constraints
 - **Combined** (multiple IDs): More specific scoping (e.g., user + agent)
 
-### Multi-Tenant Scope Level (for SaaS deployments)
+### Multi-Tenant Scope Level
 
-When the agent is used in a multi-tenant SaaS context, determine the appropriate scope level using the `scopeLevel` field:
+When the agent is used in a multi-tenant context, determine the appropriate scope level using the `scopeLevel` field:
 
-- **"global"**: Applies to ALL users and organizations (e.g., "Always greet politely", "Use professional tone")
-- **"organization"**: Applies to all contacts within an organization (e.g., "This org uses metric units", "Company policy requires formal salutations")
-- **"contact"**: Specific to one individual contact (e.g., "John prefers email over phone", "Sarah is on vacation until Jan 15")
+- **"global"**: Applies to ALL users and companies (e.g., "Always greet politely", "Use professional tone")
+- **"company"**: Applies to all users within a company (e.g., "This company uses metric units", "Company policy requires formal salutations")
+- **"user"**: Specific to one individual user (e.g., "John prefers email over phone", "Sarah is on vacation until Jan 15")
 
 **Hints for determining scope level:**
 - Keywords like "always", "all customers", "everyone" → `global`
-- Keywords like "company", "organization", "all users here", "our policy" → `organization`
-- Specific person names, individual preferences, personal context → `contact`
+- Keywords like "company", "organization", "all users here", "our policy" → `company`
+- Specific person names, individual preferences, personal context → `user`
 
 If the conversation doesn't have clear multi-tenant context, omit the `scopeLevel` field (defaults to most specific).
 
 ### CRITICAL: "We" and "My Team" Disambiguation
 
-**These patterns indicate ORGANIZATION scope (not contact!):**
+**These patterns indicate COMPANY scope (not user!):**
 
 1. **"We" + tool/process/standard**: When "we" describes what a team uses, does, or follows
-   - "We use Jira" → organization (team tool)
-   - "We prefer TypeScript" → organization (team standard)
-   - "We require unit tests" → organization (team requirement)
-   - "We deploy on Thursdays" → organization (team process)
+   - "We use Jira" → company (team tool)
+   - "We prefer TypeScript" → company (team standard)
+   - "We require unit tests" → company (team requirement)
+   - "We deploy on Thursdays" → company (team process)
 
 2. **"My team" + action/process**: When "my team" describes team practices
-   - "My team uses Scrum" → organization (team process)
-   - "My team prefers dark mode" → organization (team preference)
-   - "My team follows TDD" → organization (team practice)
+   - "My team uses Scrum" → company (team process)
+   - "My team prefers dark mode" → company (team preference)
+   - "My team follows TDD" → company (team practice)
 
-3. **Implicit organization patterns** (no explicit markers needed):
-   - Technical infrastructure: "The database uses PostgreSQL" → organization
-   - Process statements: "Deployments happen on Thursdays" → organization
-   - System descriptions: "API rate limit is 1000/min" → organization
-   - Tool references: "Feature flags are in LaunchDarkly" → organization
-   - API specifications: "Error responses follow RFC 7807 format" → organization
-   - Data formats: "Logging follows structured JSON format" → organization
-   - Operational settings: "Database backups run every 6 hours" → organization
-   - Limits and quotas: "Batch operations have a maximum of 100 items" → organization
-   - File handling: "File uploads go through a pre-signed S3 URL workflow" → organization
-   - Security policies: "PII must be encrypted at rest and in transit" → organization
+3. **Implicit company patterns** (no explicit markers needed):
+   - Technical infrastructure: "The database uses PostgreSQL" → company
+   - Process statements: "Deployments happen on Thursdays" → company
+   - System descriptions: "API rate limit is 1000/min" → company
+   - Tool references: "Feature flags are in LaunchDarkly" → company
+   - API specifications: "Error responses follow RFC 7807 format" → company
+   - Data formats: "Logging follows structured JSON format" → company
+   - Operational settings: "Database backups run every 6 hours" → company
+   - Limits and quotas: "Batch operations have a maximum of 100 items" → company
+   - File handling: "File uploads go through a pre-signed S3 URL workflow" → company
+   - Security policies: "PII must be encrypted at rest and in transit" → company
 
-   **Key insight:** Statements about HOW a system is configured or operates are ORGANIZATION scope,
-   even if they sound like best practices. We're describing what THIS org does, not what everyone should do.
+   **Key insight:** Statements about HOW a system is configured or operates are COMPANY scope,
+   even if they sound like best practices. We're describing what THIS company does, not what everyone should do.
 
    **Example contrast:**
    - "Always use parameterized queries" → global (imperative best practice for all)
-   - "Our API uses parameterized queries" → organization (describing what this org does)
+   - "Our API uses parameterized queries" → company (describing what this company does)
    - "Never store passwords in plain text" → global (security rule for all)
-   - "Passwords are hashed with bcrypt" → organization (how this org implements it)
+   - "Passwords are hashed with bcrypt" → company (how this company implements it)
 
-**These patterns indicate CONTACT scope:**
+**These patterns indicate USER scope:**
 
-1. **"I think we should..." / "I recommend we..."**: Personal opinion about what org should do
-   - "I think we should use PostgreSQL" → contact (personal recommendation)
-   - "I recommend we adopt TypeScript" → contact (personal opinion)
+1. **"I think we should..." / "I recommend we..."**: Personal opinion about what company should do
+   - "I think we should use PostgreSQL" → user (personal recommendation)
+   - "I recommend we adopt TypeScript" → user (personal opinion)
 
 2. **"I'm on/in [team]" or "I work as..."**: Personal biographical info
-   - "I'm on the infrastructure team" → contact (biographical)
-   - "I'm a senior engineer" → contact (personal role)
+   - "I'm on the infrastructure team" → user (biographical)
+   - "I'm a senior engineer" → user (personal role)
 
 3. **"I prefer/like/want" without team context**: Personal preferences
-   - "I prefer bullet points" → contact (personal preference)
-   - "I like dark mode" → contact (personal preference)
+   - "I prefer bullet points" → user (personal preference)
+   - "I like dark mode" → user (personal preference)
 
-**Decision Shortcut**: If "we/our/team" appears with a tool, process, or standard → it's ORGANIZATION, not contact.
+**Decision Shortcut**: If "we/our/team" appears with a tool, process, or standard → it's COMPANY, not user.
 
 ### CRITICAL: Global Scope Detection
 
-**These patterns indicate GLOBAL scope (not contact!):**
+**These patterns indicate GLOBAL scope (not user!):**
 
 1. **Universal communication guidelines** (apply to any agent, any user, any org):
    - "Communicate clearly and avoid jargon" → global
@@ -199,18 +199,18 @@ If the conversation doesn't have clear multi-tenant context, omit the `scopeLeve
    - "Document actions and decisions for traceability" → global (imperative rule)
    - "Correct mistakes promptly when identified" → global (imperative rule)
 
-**IMPORTANT: Global vs Contact distinction:**
+**IMPORTANT: Global vs User distinction:**
 
 | Pattern | Scope | Why |
 |---------|-------|-----|
 | "Support accessibility" | global | Imperative rule for all |
-| "I need accessible format" | contact | Personal need |
+| "I need accessible format" | user | Personal need |
 | "Never use jargon" | global | Imperative rule |
-| "I prefer plain language" | contact | Personal preference |
+| "I prefer plain language" | user | Personal preference |
 | "Communicate clearly" | global | Universal guideline |
-| "I like clear communication" | contact | Personal preference |
+| "I like clear communication" | user | Personal preference |
 | "Respect users' time" | global | Universal principle |
-| "I'm busy, be brief" | contact | Personal context |
+| "I'm busy, be brief" | user | Personal context |
 
 **The key test:** Would violating this norm be wrong for ANY agent talking to ANY user? If yes → global.
 
@@ -228,28 +228,28 @@ If the conversation doesn't have clear multi-tenant context, omit the `scopeLeve
 - "Never share PII in responses" → 30+25+25+20 = 100 ✓
 - "Always cite sources when providing facts" → 30+25+25+0 = 80 ✓
 
-#### Organization Scope (100 points possible)
+#### Company Scope (100 points possible)
 - [ ] Contains "company", "organization", "we", "our", "our policy", "our team" (+30)
-- [ ] References organizational systems, tools, or processes (+25)
-- [ ] Would apply to ANY user within this organization (+25)
+- [ ] References company systems, tools, or processes (+25)
+- [ ] Would apply to ANY user within this company (+25)
 - [ ] Is domain knowledge about the business, not personal preference (+20)
 
-**Examples scoring Organization:**
+**Examples scoring Company:**
 - "We use Jira for project tracking" → 30+25+25+20 = 100 ✓
 - "Our API rate limit is 1000 requests per minute" → 30+25+25+20 = 100 ✓
 - "Company fiscal year starts April 1" → 30+0+25+20 = 75 ✓
 
-#### Contact Scope (100 points possible)
+#### User Scope (100 points possible)
 - [ ] References a specific person by name or uses "I", "my", "me" (+40)
 - [ ] Is a personal preference or biographical detail (+25)
-- [ ] Would NOT apply to other users in the same organization (+25)
+- [ ] Would NOT apply to other users in the same company (+25)
 - [ ] Is about individual style, taste, or personal history (+10)
 
-**Examples scoring Contact:**
+**Examples scoring User:**
 - "I prefer bullet points" → 40+25+25+10 = 100 ✓
 - "My name is Sarah" → 40+25+25+0 = 90 ✓
 - "I'm a software engineer" → 40+25+25+0 = 90 ✓
-- "User dislikes verbose responses" → 0+25+25+10 = 60 (implicit user → still contact)
+- "User dislikes verbose responses" → 0+25+25+10 = 60 (implicit user → still user scope)
 
 **Decision Rule (FOLLOW IN ORDER):**
 
@@ -260,59 +260,59 @@ If the conversation doesn't have clear multi-tenant context, omit the `scopeLeve
    - Examples: "Communicate clearly", "Support accessibility", "Never share PII" → global
 
 2. **Check for "We/Our/Team" patterns:**
-   - If statement contains "we", "our", "my team", or "the team" + tool/process/standard → **organization**
+   - If statement contains "we", "our", "my team", or "the team" + tool/process/standard → **company**
    - This OVERRIDES the presence of "I", "my", or "me" in the same statement
-   - Example: "My team uses Scrum" → organization (NOT contact despite "my")
+   - Example: "My team uses Scrum" → company (NOT user despite "my")
 
 3. **Check for personal opinion/biographical:**
-   - If "I think we...", "I recommend we...", "I suggest we..." → **contact** (personal opinion)
-   - If "I'm on/in [team]", "I work as...", "I'm a [role]" → **contact** (biographical)
-   - If "I prefer X", "I like Y", "I need Z" → **contact** (personal preference)
+   - If "I think we...", "I recommend we...", "I suggest we..." → **user** (personal opinion)
+   - If "I'm on/in [team]", "I work as...", "I'm a [role]" → **user** (biographical)
+   - If "I prefer X", "I like Y", "I need Z" → **user** (personal preference)
 
-4. **Check for implicit organization patterns:**
-   - Technical infrastructure without personal pronouns → **organization**
-   - Process statements without subject → **organization**
-   - System/tool descriptions → **organization**
-   - API/code standards → **organization**
-   - Operational configurations → **organization**
+4. **Check for implicit company patterns:**
+   - Technical infrastructure without personal pronouns → **company**
+   - Process statements without subject → **company**
+   - System/tool descriptions → **company**
+   - API/code standards → **company**
+   - Operational configurations → **company**
 
 5. **Default only if genuinely unclear:**
-   - Pure personal preferences → **contact**
+   - Pure personal preferences → **user**
 
 **CRITICAL DISTINCTION: "What we do" vs "What everyone should do"**
 
 | Statement Type | Scope | Reasoning |
 |----------------|-------|-----------|
 | "Never store passwords in plain text" | global | Universal security rule |
-| "Passwords are hashed with bcrypt" | organization | How THIS system is configured |
+| "Passwords are hashed with bcrypt" | company | How THIS system is configured |
 | "Always validate input" | global | Universal security practice |
-| "Input validation uses zod" | organization | How THIS system implements it |
+| "Input validation uses zod" | company | How THIS system implements it |
 | "Error responses should be helpful" | global | Universal UX principle |
-| "Error responses follow RFC 7807" | organization | How THIS API is designed |
+| "Error responses follow RFC 7807" | company | How THIS API is designed |
 | "Use consistent timestamp format" | global | Universal best practice |
-| "Timestamps use ISO 8601 UTC" | organization | This system's specific format |
+| "Timestamps use ISO 8601 UTC" | company | This system's specific format |
 
 **The key test:**
 - Global: "Would doing the opposite be WRONG for everyone?" → Yes = global
-- Organization: "Is this describing HOW a specific system works?" → Yes = organization
-- Contact: "Is this about ONE person's preferences/info?" → Yes = contact
+- Company: "Is this describing HOW a specific system works?" → Yes = company
+- User: "Is this about ONE person's preferences/info?" → Yes = user
 
 **IMPORTANT**:
-- Imperative rules about behavior → global (NOT contact)
-- Descriptive statements about a system → organization (NOT contact)
-- Technical implementation details → organization (NOT global)
-- Do NOT default to contact just because no explicit markers are present.
+- Imperative rules about behavior → global (NOT user)
+- Descriptive statements about a system → company (NOT user)
+- Technical implementation details → company (NOT global)
+- Do NOT default to user just because no explicit markers are present.
 
 ### Durable vs Ephemeral Detection
 
 Use these phrase patterns to determine appropriate scope level:
 
-**Ephemeral Indicators (→ contact scope or skip entirely):**
+**Ephemeral Indicators (→ user scope or skip entirely):**
 - "this time", "just for now", "today only", "for this call"
 - "temporarily", "one-time", "exception", "just once"
 - "this trip", "this session", "right now"
 
-**Durable Indicators (→ organization or global scope):**
+**Durable Indicators (→ company or global scope):**
 - "always", "never", "company policy", "all customers"
 - "standard practice", "we typically", "our preference"
 - "every time", "by default", "as a rule"
@@ -485,7 +485,7 @@ If the new information CONTRADICTS an existing note, you MUST:
     "content": "User prefers light mode",
     "mergeWithExistingId": "<ID of the dark mode note>",
     "confidence": 90,
-    "scopeLevel": "contact"
+    "scopeLevel": "user"
   }]
 }
 ```
@@ -536,7 +536,7 @@ Return **only high-confidence notes (≥80)** in this JSON structure:
       "type": "Preference",
       "content": "User prefers responses with bullet points and concise summaries",
       "confidence": 85,
-      "scopeLevel": "contact",
+      "scopeLevel": "user",
       "sourceConversationId": "<use the conversation ID from the header above>",
       "sourceConversationDetailId": "<use the message [ID: xxx] that triggered this note>",
       "mergeWithExistingId": null
@@ -549,7 +549,7 @@ Return **only high-confidence notes (≥80)** in this JSON structure:
 - The `type` field must be exactly one of: `Preference`, `Constraint`, `Context`, or `Issue`.
 - Use the ACTUAL IDs from the conversation data above - `sourceConversationId` from the conversation header, `sourceConversationDetailId` from the message's [ID: xxx].
 - Do NOT invent placeholder IDs - use null if you don't have the real ID.
-- The `scopeLevel` field is optional. Valid values: `"global"`, `"organization"`, `"contact"`. Defaults to "contact".
+- The `scopeLevel` field is optional. Valid values: `"global"`, `"company"`, `"user"`. Defaults to "user".
 
 ## Quality Standards
 
