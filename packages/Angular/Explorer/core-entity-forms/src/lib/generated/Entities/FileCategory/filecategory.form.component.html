@@ -107,6 +107,7 @@
                 [NewRecordValues]="NewRecordValues('File Categories')"
                 [AllowLoad]="IsSectionExpanded('fileCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('fileCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -131,6 +132,7 @@
                 [NewRecordValues]="NewRecordValues('Files')"
                 [AllowLoad]="IsSectionExpanded('files')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('files', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

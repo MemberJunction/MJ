@@ -256,6 +256,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Steps')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRunSteps')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunSteps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

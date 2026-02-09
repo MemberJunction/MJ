@@ -88,6 +88,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Action Invocations')"
                 [AllowLoad]="IsSectionExpanded('entityActionInvocations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityActionInvocations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

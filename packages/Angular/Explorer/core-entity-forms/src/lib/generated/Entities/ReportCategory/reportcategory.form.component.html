@@ -116,6 +116,7 @@
                 [NewRecordValues]="NewRecordValues('Report Categories')"
                 [AllowLoad]="IsSectionExpanded('reportCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('reportCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -140,6 +141,7 @@
                 [NewRecordValues]="NewRecordValues('Reports')"
                 [AllowLoad]="IsSectionExpanded('reports')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

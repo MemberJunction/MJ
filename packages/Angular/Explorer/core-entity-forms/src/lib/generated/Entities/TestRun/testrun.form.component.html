@@ -331,6 +331,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Test Run Feedbacks')"
                 [AllowLoad]="IsSectionExpanded('mJTestRunFeedbacks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRunFeedbacks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -355,6 +356,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -379,6 +381,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -403,6 +406,7 @@
                 [NewRecordValues]="NewRecordValues('Conversations')"
                 [AllowLoad]="IsSectionExpanded('conversations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('conversations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -427,6 +431,7 @@
                 [NewRecordValues]="NewRecordValues('Conversation Details')"
                 [AllowLoad]="IsSectionExpanded('conversationDetails')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

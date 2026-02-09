@@ -156,6 +156,7 @@
                 [NewRecordValues]="NewRecordValues('Communication Logs')"
                 [AllowLoad]="IsSectionExpanded('communicationLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('communicationLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -303,6 +303,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJComponentDependencies')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentDependencies', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -327,6 +328,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
                 [AllowLoad]="IsSectionExpanded('mJComponentLibraryLinks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentLibraryLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -351,6 +353,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJComponentDependencies')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentDependencies', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

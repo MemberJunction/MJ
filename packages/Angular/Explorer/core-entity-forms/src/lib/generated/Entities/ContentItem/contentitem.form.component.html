@@ -150,6 +150,7 @@
                 [NewRecordValues]="NewRecordValues('Content Item Attributes')"
                 [AllowLoad]="IsSectionExpanded('contentItemAttributes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('contentItemAttributes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -174,6 +175,7 @@
                 [NewRecordValues]="NewRecordValues('Content Item Tags')"
                 [AllowLoad]="IsSectionExpanded('contentItemTags')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('contentItemTags', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

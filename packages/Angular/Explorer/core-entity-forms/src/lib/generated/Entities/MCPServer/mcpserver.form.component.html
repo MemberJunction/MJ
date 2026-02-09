@@ -283,6 +283,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: O Auth Client Registrations')"
                 [AllowLoad]="IsSectionExpanded('mJOAuthClientRegistrations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOAuthClientRegistrations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -307,6 +308,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Connections')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnections')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnections', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -331,6 +333,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerTools')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerTools', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

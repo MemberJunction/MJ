@@ -122,6 +122,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
                 [AllowLoad]="IsSectionExpanded('mJScheduledJobs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJScheduledJobs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

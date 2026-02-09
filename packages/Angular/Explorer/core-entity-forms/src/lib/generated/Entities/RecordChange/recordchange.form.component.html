@@ -200,6 +200,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

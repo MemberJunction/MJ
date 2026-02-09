@@ -8,11 +8,14 @@ import { MjFormToolbarComponent } from './lib/toolbar/form-toolbar.component';
 import { MjFormFieldComponent } from './lib/field/form-field.component';
 import { MjCollapsiblePanelComponent } from './lib/panel/collapsible-panel.component';
 import { MjRecordFormContainerComponent } from './lib/container/record-form-container.component';
+import { SectionLoaderComponent } from './lib/section-loader-component';
+import { ExplorerEntityDataGridComponent } from './lib/explorer-entity-data-grid.component';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 
 /**
- * MjFormsModule - Modern form components for rendering and editing MemberJunction entity records.
+ * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
  *
  * Provides:
  * - **MjRecordFormContainerComponent** (`<mj-record-form-container>`): Top-level container
@@ -23,26 +26,21 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
  *   drag-to-reorder, search filtering, and inherited/related variants.
  * - **MjFormFieldComponent** (`<mj-form-field>`): Entity field renderer with clean read-only
  *   display and modern edit-mode inputs (native HTML + PrimeNG unstyled).
+ * - **SectionLoaderComponent** (`<mj-form-section>`): Dynamic section loader via ClassFactory.
+ * - **ExplorerEntityDataGridComponent** (`<mj-explorer-entity-data-grid>`): Data grid wrapper
+ *   for related entity sections with Navigate event support.
  *
  * All navigation actions are emitted as events via {@link FormNavigationEvent}.
  * The host application subscribes and maps to its own routing system.
- *
- * @example
- * ```typescript
- * import { MjFormsModule } from '@memberjunction/ng-forms';
- *
- * @NgModule({
- *   imports: [MjFormsModule]
- * })
- * export class AppModule { }
- * ```
  */
 @NgModule({
   declarations: [
     MjFormToolbarComponent,
     MjFormFieldComponent,
     MjCollapsiblePanelComponent,
-    MjRecordFormContainerComponent
+    MjRecordFormContainerComponent,
+    SectionLoaderComponent,
+    ExplorerEntityDataGridComponent
   ],
   imports: [
     CommonModule,
@@ -50,13 +48,16 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
     AutoComplete,
     Select,
     RecordChangesModule,
-    ListManagementModule
+    ListManagementModule,
+    EntityViewerModule
   ],
   exports: [
     MjFormToolbarComponent,
     MjFormFieldComponent,
     MjCollapsiblePanelComponent,
-    MjRecordFormContainerComponent
+    MjRecordFormContainerComponent,
+    SectionLoaderComponent,
+    ExplorerEntityDataGridComponent
   ]
 })
-export class MjFormsModule { }
+export class BaseFormsModule { }

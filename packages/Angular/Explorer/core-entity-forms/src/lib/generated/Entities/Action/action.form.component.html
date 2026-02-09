@@ -266,6 +266,7 @@
                 [NewRecordValues]="NewRecordValues('Action Params')"
                 [AllowLoad]="IsSectionExpanded('params')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('params', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -290,6 +291,7 @@
                 [NewRecordValues]="NewRecordValues('Action Libraries')"
                 [AllowLoad]="IsSectionExpanded('libraries')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('libraries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -314,6 +316,7 @@
                 [NewRecordValues]="NewRecordValues('Action Result Codes')"
                 [AllowLoad]="IsSectionExpanded('resultCodes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('resultCodes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -338,6 +341,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agent Actions')"
                 [AllowLoad]="IsSectionExpanded('aIAgentActions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -362,6 +366,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerTools')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerTools', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -386,6 +391,7 @@
                 [NewRecordValues]="NewRecordValues('Scheduled Actions')"
                 [AllowLoad]="IsSectionExpanded('scheduledActions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('scheduledActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -410,6 +416,7 @@
                 [NewRecordValues]="NewRecordValues('Action Contexts')"
                 [AllowLoad]="IsSectionExpanded('actionContexts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('actionContexts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -434,6 +441,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Actions')"
                 [AllowLoad]="IsSectionExpanded('entityActions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -458,6 +466,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSteps')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSteps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -482,6 +491,7 @@
                 [NewRecordValues]="NewRecordValues('Action Execution Logs')"
                 [AllowLoad]="IsSectionExpanded('executionLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('executionLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -506,6 +516,7 @@
                 [NewRecordValues]="NewRecordValues('Action Authorizations')"
                 [AllowLoad]="IsSectionExpanded('authorizations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('authorizations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -530,6 +541,7 @@
                 [NewRecordValues]="NewRecordValues('Actions')"
                 [AllowLoad]="IsSectionExpanded('actions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('actions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

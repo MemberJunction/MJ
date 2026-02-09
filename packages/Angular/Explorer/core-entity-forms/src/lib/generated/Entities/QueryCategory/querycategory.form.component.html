@@ -148,6 +148,7 @@
                 [NewRecordValues]="NewRecordValues('Queries')"
                 [AllowLoad]="IsSectionExpanded('queries')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -172,6 +173,7 @@
                 [NewRecordValues]="NewRecordValues('Query Categories')"
                 [AllowLoad]="IsSectionExpanded('queryCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

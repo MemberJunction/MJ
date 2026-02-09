@@ -115,6 +115,7 @@
                 [NewRecordValues]="NewRecordValues('Tagged Items')"
                 [AllowLoad]="IsSectionExpanded('taggedItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('taggedItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -139,6 +140,7 @@
                 [NewRecordValues]="NewRecordValues('Tags')"
                 [AllowLoad]="IsSectionExpanded('tags')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('tags', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

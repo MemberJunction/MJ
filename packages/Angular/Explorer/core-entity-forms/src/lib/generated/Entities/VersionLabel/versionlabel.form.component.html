@@ -183,6 +183,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelRestores')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestores', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -207,6 +208,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -231,6 +233,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelRestores')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestores', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -255,6 +258,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

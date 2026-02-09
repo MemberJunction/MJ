@@ -199,6 +199,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -134,6 +134,7 @@
                 [NewRecordValues]="NewRecordValues('Duplicate Runs')"
                 [AllowLoad]="IsSectionExpanded('duplicateRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('duplicateRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -158,6 +159,7 @@
                 [NewRecordValues]="NewRecordValues('List Details')"
                 [AllowLoad]="IsSectionExpanded('details')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('details', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -182,6 +184,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: List Invitations')"
                 [AllowLoad]="IsSectionExpanded('mJListInvitations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJListInvitations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -206,6 +209,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: List Shares')"
                 [AllowLoad]="IsSectionExpanded('mJListShares')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJListShares', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

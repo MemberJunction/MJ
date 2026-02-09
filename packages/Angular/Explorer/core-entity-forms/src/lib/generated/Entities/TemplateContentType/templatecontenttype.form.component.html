@@ -98,6 +98,7 @@
                 [NewRecordValues]="NewRecordValues('Template Contents')"
                 [AllowLoad]="IsSectionExpanded('templateContents')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('templateContents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

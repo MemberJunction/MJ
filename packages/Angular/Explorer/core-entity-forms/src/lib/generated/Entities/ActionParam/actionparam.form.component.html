@@ -147,6 +147,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Action Params')"
                 [AllowLoad]="IsSectionExpanded('entityActionParams')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityActionParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -171,6 +172,7 @@
                 [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
                 [AllowLoad]="IsSectionExpanded('scheduledActionParams')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

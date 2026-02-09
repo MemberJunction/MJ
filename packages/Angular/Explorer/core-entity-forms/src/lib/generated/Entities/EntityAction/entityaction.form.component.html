@@ -100,6 +100,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Action Filters')"
                 [AllowLoad]="IsSectionExpanded('entityActionFilters')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityActionFilters', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -124,6 +125,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Action Invocations')"
                 [AllowLoad]="IsSectionExpanded('entityActionInvocations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityActionInvocations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -148,6 +150,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Action Params')"
                 [AllowLoad]="IsSectionExpanded('entityActionParams')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityActionParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -104,6 +104,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Test Rubrics')"
                 [AllowLoad]="IsSectionExpanded('mJTestRubrics')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRubrics', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -128,6 +129,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Tests')"
                 [AllowLoad]="IsSectionExpanded('mJTests')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTests', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

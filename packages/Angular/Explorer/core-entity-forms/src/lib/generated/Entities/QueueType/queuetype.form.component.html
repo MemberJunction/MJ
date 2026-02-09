@@ -114,6 +114,7 @@
                 [NewRecordValues]="NewRecordValues('Queues')"
                 [AllowLoad]="IsSectionExpanded('queues')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queues', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -126,6 +126,7 @@
                 [NewRecordValues]="NewRecordValues('Template Categories')"
                 [AllowLoad]="IsSectionExpanded('templateCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('templateCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -150,6 +151,7 @@
                 [NewRecordValues]="NewRecordValues('Templates')"
                 [AllowLoad]="IsSectionExpanded('templates')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('templates', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

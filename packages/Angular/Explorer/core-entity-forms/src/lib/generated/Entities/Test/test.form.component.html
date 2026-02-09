@@ -197,6 +197,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Test Runs')"
                 [AllowLoad]="IsSectionExpanded('mJTestRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -221,6 +222,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Test Suite Tests')"
                 [AllowLoad]="IsSectionExpanded('mJTestSuiteTests')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestSuiteTests', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -168,6 +168,7 @@
                 [NewRecordValues]="NewRecordValues('Duplicate Run Details')"
                 [AllowLoad]="IsSectionExpanded('duplicateRunDetails')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('duplicateRunDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

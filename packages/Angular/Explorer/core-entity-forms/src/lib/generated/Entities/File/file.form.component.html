@@ -142,6 +142,7 @@
                 [NewRecordValues]="NewRecordValues('File Entity Record Links')"
                 [AllowLoad]="IsSectionExpanded('fileEntityRecordLinks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('fileEntityRecordLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -166,6 +167,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -190,6 +192,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -214,6 +217,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

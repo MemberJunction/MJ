@@ -258,6 +258,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentStepPaths')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPaths', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -282,6 +283,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentStepPaths')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPaths', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

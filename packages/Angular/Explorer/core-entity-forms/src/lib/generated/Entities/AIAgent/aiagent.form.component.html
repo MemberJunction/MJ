@@ -623,6 +623,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agent Actions')"
                 [AllowLoad]="IsSectionExpanded('aIAgentActions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -647,6 +648,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agent Learning Cycles')"
                 [AllowLoad]="IsSectionExpanded('aIAgentLearningCycles')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentLearningCycles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -671,6 +673,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agent Models')"
                 [AllowLoad]="IsSectionExpanded('aIAgentModels')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentModels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -695,6 +698,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agent Requests')"
                 [AllowLoad]="IsSectionExpanded('aIAgentRequests')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentRequests', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -719,6 +723,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -743,6 +748,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Data Sources')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentDataSources')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentDataSources', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -767,6 +773,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Modalities')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentModalities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentModalities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -791,6 +798,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -815,6 +823,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRelationships')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRelationships', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -839,6 +848,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSteps')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSteps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -863,6 +873,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agent Notes')"
                 [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -887,6 +898,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Configurations')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentConfigurations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentConfigurations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -911,6 +923,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -935,6 +948,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentPrompts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentPrompts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -959,6 +973,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRelationships')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRelationships', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -983,6 +998,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1007,6 +1023,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSteps')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSteps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1031,6 +1048,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Tasks')"
                 [AllowLoad]="IsSectionExpanded('mJTasks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1055,6 +1073,7 @@
                 [NewRecordValues]="NewRecordValues('AI Result Cache')"
                 [AllowLoad]="IsSectionExpanded('aIResultCache')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIResultCache', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1079,6 +1098,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1103,6 +1123,7 @@
                 [NewRecordValues]="NewRecordValues('Conversation Details')"
                 [AllowLoad]="IsSectionExpanded('conversationDetails')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1127,6 +1148,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agents')"
                 [AllowLoad]="IsSectionExpanded('aIAgents')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -99,6 +99,7 @@
                 [NewRecordValues]="NewRecordValues('Employee Skills')"
                 [AllowLoad]="IsSectionExpanded('employeeSkills')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('employeeSkills', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -123,6 +124,7 @@
                 [NewRecordValues]="NewRecordValues('Skills')"
                 [AllowLoad]="IsSectionExpanded('skills')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('skills', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -138,6 +138,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Modalities')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentModalities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentModalities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -162,6 +163,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Modalities')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelModalities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelModalities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -186,6 +188,7 @@
                 [NewRecordValues]="NewRecordValues('AI Model Types')"
                 [AllowLoad]="IsSectionExpanded('aIModelTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIModelTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -210,6 +213,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -234,6 +238,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -258,6 +263,7 @@
                 [NewRecordValues]="NewRecordValues('AI Model Types')"
                 [AllowLoad]="IsSectionExpanded('aIModelTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIModelTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -282,6 +288,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

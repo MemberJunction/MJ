@@ -131,6 +131,7 @@
                 [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
                 [AllowLoad]="IsSectionExpanded('duplicateRunDetailMatches')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('duplicateRunDetailMatches', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

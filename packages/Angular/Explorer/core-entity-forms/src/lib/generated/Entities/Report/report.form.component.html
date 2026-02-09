@@ -232,6 +232,7 @@
                 [NewRecordValues]="NewRecordValues('Report Snapshots')"
                 [AllowLoad]="IsSectionExpanded('reportSnapshots')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('reportSnapshots', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -256,6 +257,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Report Versions')"
                 [AllowLoad]="IsSectionExpanded('mJReportVersions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJReportVersions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -280,6 +282,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Report User States')"
                 [AllowLoad]="IsSectionExpanded('mJReportUserStates')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJReportUserStates', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

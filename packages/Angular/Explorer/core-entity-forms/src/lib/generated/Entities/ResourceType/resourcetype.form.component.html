@@ -152,6 +152,7 @@
                 [NewRecordValues]="NewRecordValues('Workspace Items')"
                 [AllowLoad]="IsSectionExpanded('workspaceItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('workspaceItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -176,6 +177,7 @@
                 [NewRecordValues]="NewRecordValues('User Notifications')"
                 [AllowLoad]="IsSectionExpanded('userNotifications')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userNotifications', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -200,6 +202,7 @@
                 [NewRecordValues]="NewRecordValues('Resource Links')"
                 [AllowLoad]="IsSectionExpanded('resourceLinks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('resourceLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -224,6 +227,7 @@
                 [NewRecordValues]="NewRecordValues('Resource Permissions')"
                 [AllowLoad]="IsSectionExpanded('resourcePermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

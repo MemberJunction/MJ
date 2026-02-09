@@ -80,6 +80,7 @@
                 [NewRecordValues]="NewRecordValues('Action Contexts')"
                 [AllowLoad]="IsSectionExpanded('actionContexts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('actionContexts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

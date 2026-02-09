@@ -180,6 +180,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
                 [AllowLoad]="IsSectionExpanded('mJComponentLibraryLinks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentLibraryLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

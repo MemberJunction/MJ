@@ -117,6 +117,7 @@
                 [NewRecordValues]="NewRecordValues('Content Items')"
                 [AllowLoad]="IsSectionExpanded('contentItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('contentItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -141,6 +142,7 @@
                 [NewRecordValues]="NewRecordValues('Content Process Runs')"
                 [AllowLoad]="IsSectionExpanded('contentProcessRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('contentProcessRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -165,6 +167,7 @@
                 [NewRecordValues]="NewRecordValues('Content Source Params')"
                 [AllowLoad]="IsSectionExpanded('contentSourceParams')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('contentSourceParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

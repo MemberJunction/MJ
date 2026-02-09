@@ -107,6 +107,7 @@
                 [NewRecordValues]="NewRecordValues('Data Context Items')"
                 [AllowLoad]="IsSectionExpanded('dataContextItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('dataContextItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -131,6 +132,7 @@
                 [NewRecordValues]="NewRecordValues('Reports')"
                 [AllowLoad]="IsSectionExpanded('reports')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -155,6 +157,7 @@
                 [NewRecordValues]="NewRecordValues('Conversations')"
                 [AllowLoad]="IsSectionExpanded('conversations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('conversations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

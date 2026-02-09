@@ -122,6 +122,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Components')"
                 [AllowLoad]="IsSectionExpanded('mJComponents')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

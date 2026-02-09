@@ -115,6 +115,7 @@
                 [NewRecordValues]="NewRecordValues('Action Categories')"
                 [AllowLoad]="IsSectionExpanded('actionCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('actionCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -139,6 +140,7 @@
                 [NewRecordValues]="NewRecordValues('Actions')"
                 [AllowLoad]="IsSectionExpanded('actions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('actions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -163,6 +165,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerTools')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerTools', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

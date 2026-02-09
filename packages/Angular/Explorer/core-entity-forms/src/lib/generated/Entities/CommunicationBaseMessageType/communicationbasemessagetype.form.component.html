@@ -114,6 +114,7 @@
                 [NewRecordValues]="NewRecordValues('Communication Provider Message Types')"
                 [AllowLoad]="IsSectionExpanded('communicationProviderMessageTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('communicationProviderMessageTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -138,6 +139,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
                 [AllowLoad]="IsSectionExpanded('entityCommunicationMessageTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityCommunicationMessageTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

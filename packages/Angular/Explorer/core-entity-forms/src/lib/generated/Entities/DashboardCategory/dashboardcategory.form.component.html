@@ -116,6 +116,7 @@
                 [NewRecordValues]="NewRecordValues('Dashboard Categories')"
                 [AllowLoad]="IsSectionExpanded('dashboardCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('dashboardCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -140,6 +141,7 @@
                 [NewRecordValues]="NewRecordValues('Dashboards')"
                 [AllowLoad]="IsSectionExpanded('dashboards')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('dashboards', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -164,6 +166,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Links')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardCategoryLinks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -188,6 +191,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardCategoryPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

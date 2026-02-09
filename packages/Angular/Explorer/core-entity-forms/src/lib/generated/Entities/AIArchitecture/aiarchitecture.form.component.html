@@ -150,6 +150,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Architectures')"
                 [AllowLoad]="IsSectionExpanded('mJAIArchitectures')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIArchitectures', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -174,6 +175,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Architectures')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelArchitectures')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelArchitectures', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

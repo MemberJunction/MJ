@@ -150,6 +150,7 @@
                 [NewRecordValues]="NewRecordValues('Error Logs')"
                 [AllowLoad]="IsSectionExpanded('errorLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('errorLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

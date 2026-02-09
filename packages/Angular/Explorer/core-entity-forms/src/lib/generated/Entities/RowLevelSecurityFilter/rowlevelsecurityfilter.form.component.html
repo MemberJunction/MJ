@@ -98,6 +98,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Permissions')"
                 [AllowLoad]="IsSectionExpanded('entityPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

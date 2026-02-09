@@ -114,6 +114,7 @@
                 [NewRecordValues]="NewRecordValues('Action Libraries')"
                 [AllowLoad]="IsSectionExpanded('actions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('actions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -138,6 +139,7 @@
                 [NewRecordValues]="NewRecordValues('Library Items')"
                 [AllowLoad]="IsSectionExpanded('items')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('items', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

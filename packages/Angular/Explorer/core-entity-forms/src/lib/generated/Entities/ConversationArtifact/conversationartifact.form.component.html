@@ -124,6 +124,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifactPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifactPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -148,6 +149,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Versions')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifactVersions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifactVersions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -172,6 +174,7 @@
                 [NewRecordValues]="NewRecordValues('Conversation Details')"
                 [AllowLoad]="IsSectionExpanded('conversationDetails')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

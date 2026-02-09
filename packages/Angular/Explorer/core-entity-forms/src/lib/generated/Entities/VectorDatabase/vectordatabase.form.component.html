@@ -96,6 +96,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Documents')"
                 [AllowLoad]="IsSectionExpanded('entityDocuments')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityDocuments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -120,6 +121,7 @@
                 [NewRecordValues]="NewRecordValues('Vector Indexes')"
                 [AllowLoad]="IsSectionExpanded('vectorIndexes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('vectorIndexes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

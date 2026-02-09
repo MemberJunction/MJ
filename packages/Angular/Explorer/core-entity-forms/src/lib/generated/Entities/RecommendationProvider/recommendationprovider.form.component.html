@@ -80,6 +80,7 @@
                 [NewRecordValues]="NewRecordValues('Recommendation Runs')"
                 [AllowLoad]="IsSectionExpanded('recommendationRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('recommendationRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

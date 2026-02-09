@@ -108,6 +108,7 @@
                 [NewRecordValues]="NewRecordValues('User Application Entities')"
                 [AllowLoad]="IsSectionExpanded('entities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

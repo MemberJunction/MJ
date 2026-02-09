@@ -9,7 +9,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { FormContext, FormWidthMode } from '../types/form-types';
+import { FormWidthMode } from '../types/form-types';
 import { MjCollapsiblePanelComponent } from '../panel/collapsible-panel.component';
 import {
   BeforeSaveEventArgs,
@@ -19,50 +19,7 @@ import {
   BeforeListManagementEventArgs,
   CustomToolbarButtonClickEventArgs
 } from '../types/form-events';
-
-/**
- * Duck-typed interface for the form component reference.
- * Structurally compatible with BaseFormComponent from `@memberjunction/ng-base-forms`
- * without requiring a direct import (keeps ng-forms Explorer-independent).
- */
-interface FormComponentRef {
-  record: BaseEntity;
-  EditMode: boolean;
-  UserCanEdit: boolean;
-  UserCanDelete: boolean;
-  IsFavorite: boolean;
-  FavoriteInitDone: boolean;
-  EntityInfo: EntityInfo | undefined;
-  searchFilter: string;
-  showEmptyFields: boolean;
-  formContext: FormContext;
-
-  // Section management
-  IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean;
-  SetSectionExpanded(sectionKey: string, expanded: boolean): void;
-  getSectionOrder(): string[];
-  setSectionOrder(order: string[]): void;
-  getSectionDisplayOrder(sectionKey: string): number;
-  GetSectionRowCount(sectionKey: string): number | undefined;
-  getVisibleSectionCount(): number;
-  getTotalSectionCount(): number;
-  getExpandedCount(): number;
-  hasCustomSectionOrder(): boolean;
-  getFormWidthMode(): FormWidthMode;
-
-  // Actions
-  SaveRecord(validate: boolean): Promise<boolean>;
-  CancelEdit(): void;
-  StartEditMode(): void;
-  EndEditMode(): void;
-  expandAllSections(): void;
-  collapseAllSections(): void;
-  onFilterChange(searchTerm: string): void;
-  setFormWidthMode(mode: FormWidthMode): void;
-  resetSectionOrder(): void;
-  SetFavoriteStatus(isFavorite: boolean): Promise<void>;
-  ShowChanges(): void;
-}
+import { BaseFormComponent } from '../base-form-component';
 
 /**
  * Top-level container that composes the toolbar, content slots, and sticky behavior.
@@ -125,7 +82,7 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
    * When provided, the container derives toolbar state from this reference and
    * handles Save/Cancel/Edit internally by calling its methods.
    */
-  @Input() FormComponent: unknown;
+  @Input() FormComponent: BaseFormComponent | null = null;
 
   // ---- Fallback Inputs (used when FormComponent is NOT provided) ----
 
@@ -196,9 +153,9 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
   // ---- FormComponent accessor ----
 
-  /** Safely cast FormComponent to the duck-typed interface */
-  private get fc(): FormComponentRef | null {
-    return this.FormComponent as FormComponentRef | null;
+  /** Typed accessor for the form component reference */
+  private get fc(): BaseFormComponent | null {
+    return this.FormComponent;
   }
 
   // ---- Effective state (bridges FormComponent → toolbar inputs) ----

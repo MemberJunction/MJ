@@ -150,6 +150,7 @@
                 [NewRecordValues]="NewRecordValues('Template Contents')"
                 [AllowLoad]="IsSectionExpanded('templateContents')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('templateContents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -174,6 +175,7 @@
                 [NewRecordValues]="NewRecordValues('Template Params')"
                 [AllowLoad]="IsSectionExpanded('templateParams')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('templateParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -198,6 +200,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
                 [AllowLoad]="IsSectionExpanded('mJUserNotificationTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -222,6 +225,7 @@
                 [NewRecordValues]="NewRecordValues('AI Prompts')"
                 [AllowLoad]="IsSectionExpanded('aIPrompts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -246,6 +250,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
                 [AllowLoad]="IsSectionExpanded('mJUserNotificationTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -270,6 +275,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Documents')"
                 [AllowLoad]="IsSectionExpanded('entityDocuments')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityDocuments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

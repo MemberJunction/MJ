@@ -2,7 +2,8 @@ import {
     Component,
     OnInit,
     OnDestroy,
-    ChangeDetectionStrategy
+    ChangeDetectionStrategy,
+    inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
@@ -19,6 +20,7 @@ import { EntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { SharedService } from '@memberjunction/ng-shared';
 import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form.component';
 
 export type ExplorerSection =
@@ -126,6 +128,8 @@ export interface GroupedIncomingRelationship {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class EntityFormComponentExtended extends EntityFormComponent implements OnInit, OnDestroy {
+    private sharedService = inject(SharedService);
+
     /** The Entity record being displayed */
     public record!: EntityEntity;
 

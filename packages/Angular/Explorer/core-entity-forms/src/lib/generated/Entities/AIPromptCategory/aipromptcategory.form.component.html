@@ -107,6 +107,7 @@
                 [NewRecordValues]="NewRecordValues('AI Prompts')"
                 [AllowLoad]="IsSectionExpanded('aIPrompts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -131,6 +132,7 @@
                 [NewRecordValues]="NewRecordValues('AI Prompt Categories')"
                 [AllowLoad]="IsSectionExpanded('aIPromptCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIPromptCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

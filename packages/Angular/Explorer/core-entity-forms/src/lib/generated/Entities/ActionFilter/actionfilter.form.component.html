@@ -96,6 +96,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Action Filters')"
                 [AllowLoad]="IsSectionExpanded('entityActionFilters')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityActionFilters', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

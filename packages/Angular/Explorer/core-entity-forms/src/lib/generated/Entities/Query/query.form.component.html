@@ -248,6 +248,7 @@
                 [NewRecordValues]="NewRecordValues('Data Context Items')"
                 [AllowLoad]="IsSectionExpanded('dataContextItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('dataContextItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -272,6 +273,7 @@
                 [NewRecordValues]="NewRecordValues('Query Fields')"
                 [AllowLoad]="IsSectionExpanded('queryFields')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryFields', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -296,6 +298,7 @@
                 [NewRecordValues]="NewRecordValues('Query Permissions')"
                 [AllowLoad]="IsSectionExpanded('queryPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -320,6 +323,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Query Parameters')"
                 [AllowLoad]="IsSectionExpanded('mJQueryParameters')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueryParameters', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -344,6 +348,7 @@
                 [NewRecordValues]="NewRecordValues('Query Entities')"
                 [AllowLoad]="IsSectionExpanded('queryEntities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

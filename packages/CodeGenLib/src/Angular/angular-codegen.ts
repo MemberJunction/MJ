@@ -216,7 +216,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
-import { MjFormsModule } from '@memberjunction/ng-forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
@@ -333,10 +332,9 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    MjFormsModule,
+    BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
-    BaseFormsModule,
     MJTabStripModule,
     ContainerDirectivesModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
 ],

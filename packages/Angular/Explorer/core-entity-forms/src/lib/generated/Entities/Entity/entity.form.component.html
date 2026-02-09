@@ -595,6 +595,7 @@
                 [NewRecordValues]="NewRecordValues('Application Entities')"
                 [AllowLoad]="IsSectionExpanded('applicationEntities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('applicationEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -619,6 +620,7 @@
                 [NewRecordValues]="NewRecordValues('Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('auditLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('auditLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -643,6 +645,7 @@
                 [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrationRecordMaps')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('companyIntegrationRecordMaps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -667,6 +670,7 @@
                 [NewRecordValues]="NewRecordValues('Company Integration Run Details')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrationRunDetails')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('companyIntegrationRunDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -691,6 +695,7 @@
                 [NewRecordValues]="NewRecordValues('Conversations')"
                 [AllowLoad]="IsSectionExpanded('conversations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('conversations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -715,6 +720,7 @@
                 [NewRecordValues]="NewRecordValues('Data Context Items')"
                 [AllowLoad]="IsSectionExpanded('dataContextItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('dataContextItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -739,6 +745,7 @@
                 [NewRecordValues]="NewRecordValues('Dataset Items')"
                 [AllowLoad]="IsSectionExpanded('datasetItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('datasetItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -763,6 +770,7 @@
                 [NewRecordValues]="NewRecordValues('Duplicate Runs')"
                 [AllowLoad]="IsSectionExpanded('duplicateRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('duplicateRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -787,6 +795,7 @@
                 [NewRecordValues]="NewRecordValues('Entities')"
                 [AllowLoad]="IsSectionExpanded('entities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -811,6 +820,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Actions')"
                 [AllowLoad]="IsSectionExpanded('entityActions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -835,6 +845,7 @@
                 [NewRecordValues]="NewRecordValues('Entity AI Actions')"
                 [AllowLoad]="IsSectionExpanded('aIActions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -859,6 +870,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
                 [AllowLoad]="IsSectionExpanded('entityCommunicationMessageTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityCommunicationMessageTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -883,6 +895,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Documents')"
                 [AllowLoad]="IsSectionExpanded('entityDocuments')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityDocuments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -907,6 +920,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Fields')"
                 [AllowLoad]="IsSectionExpanded('fields')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('fields', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -931,6 +945,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Permissions')"
                 [AllowLoad]="IsSectionExpanded('permissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('permissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -955,6 +970,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Record Documents')"
                 [AllowLoad]="IsSectionExpanded('entityRecordDocuments')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityRecordDocuments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -979,6 +995,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Relationships')"
                 [AllowLoad]="IsSectionExpanded('relationships')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('relationships', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1003,6 +1020,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Settings')"
                 [AllowLoad]="IsSectionExpanded('entitySettings')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entitySettings', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1027,6 +1045,7 @@
                 [NewRecordValues]="NewRecordValues('File Entity Record Links')"
                 [AllowLoad]="IsSectionExpanded('fileEntityRecordLinks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('fileEntityRecordLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1051,6 +1070,7 @@
                 [NewRecordValues]="NewRecordValues('Integration URL Formats')"
                 [AllowLoad]="IsSectionExpanded('integrationURLFormats')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('integrationURLFormats', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1075,6 +1095,7 @@
                 [NewRecordValues]="NewRecordValues('Lists')"
                 [AllowLoad]="IsSectionExpanded('lists')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('lists', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1099,6 +1120,7 @@
                 [NewRecordValues]="NewRecordValues('Query Fields')"
                 [AllowLoad]="IsSectionExpanded('queryFields')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryFields', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1123,6 +1145,7 @@
                 [NewRecordValues]="NewRecordValues('Recommendation Items')"
                 [AllowLoad]="IsSectionExpanded('recommendationItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('recommendationItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1147,6 +1170,7 @@
                 [NewRecordValues]="NewRecordValues('Recommendations')"
                 [AllowLoad]="IsSectionExpanded('recommendations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('recommendations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1171,6 +1195,7 @@
                 [NewRecordValues]="NewRecordValues('Record Changes')"
                 [AllowLoad]="IsSectionExpanded('recordChanges')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('recordChanges', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1195,6 +1220,7 @@
                 [NewRecordValues]="NewRecordValues('Record Merge Logs')"
                 [AllowLoad]="IsSectionExpanded('recordMergeLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('recordMergeLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1219,6 +1245,7 @@
                 [NewRecordValues]="NewRecordValues('Resource Types')"
                 [AllowLoad]="IsSectionExpanded('resourceTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('resourceTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1243,6 +1270,7 @@
                 [NewRecordValues]="NewRecordValues('Tagged Items')"
                 [AllowLoad]="IsSectionExpanded('taggedItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('taggedItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1267,6 +1295,7 @@
                 [NewRecordValues]="NewRecordValues('Template Params')"
                 [AllowLoad]="IsSectionExpanded('templateParams')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('templateParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1291,6 +1320,7 @@
                 [NewRecordValues]="NewRecordValues('User Application Entities')"
                 [AllowLoad]="IsSectionExpanded('userApplicationEntities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userApplicationEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1315,6 +1345,7 @@
                 [NewRecordValues]="NewRecordValues('User Favorites')"
                 [AllowLoad]="IsSectionExpanded('userFavorites')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userFavorites', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1339,6 +1370,7 @@
                 [NewRecordValues]="NewRecordValues('User Record Logs')"
                 [AllowLoad]="IsSectionExpanded('userRecordLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userRecordLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1363,6 +1395,7 @@
                 [NewRecordValues]="NewRecordValues('User View Categories')"
                 [AllowLoad]="IsSectionExpanded('userViewCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userViewCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1387,6 +1420,7 @@
                 [NewRecordValues]="NewRecordValues('User Views')"
                 [AllowLoad]="IsSectionExpanded('userViews')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userViews', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1411,6 +1445,7 @@
                 [NewRecordValues]="NewRecordValues('Users')"
                 [AllowLoad]="IsSectionExpanded('users')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('users', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1435,6 +1470,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agent Notes')"
                 [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1459,6 +1495,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Access Control Rules')"
                 [AllowLoad]="IsSectionExpanded('mJAccessControlRules')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAccessControlRules', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1483,6 +1520,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1507,6 +1545,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Record Links')"
                 [AllowLoad]="IsSectionExpanded('mJRecordLinks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1531,6 +1570,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1555,6 +1595,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1579,6 +1620,7 @@
                 [NewRecordValues]="NewRecordValues('Query Entities')"
                 [AllowLoad]="IsSectionExpanded('queryEntities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1603,6 +1645,7 @@
                 [NewRecordValues]="NewRecordValues('Generated Codes')"
                 [AllowLoad]="IsSectionExpanded('generatedCodes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('generatedCodes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1627,6 +1670,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Record Links')"
                 [AllowLoad]="IsSectionExpanded('mJRecordLinks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1651,6 +1695,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -1675,6 +1720,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Test Runs')"
                 [AllowLoad]="IsSectionExpanded('mJTestRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

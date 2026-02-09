@@ -102,3 +102,56 @@ export interface RecordDeletedEvent {
   EntityName: string;
   RecordId: string;
 }
+
+/**
+ * Event emitted when a record save fails.
+ */
+export interface RecordSaveFailedEvent {
+  EntityName: string;
+  ErrorMessage: string;
+}
+
+/**
+ * Event emitted when a record delete fails.
+ */
+export interface RecordDeleteFailedEvent {
+  EntityName: string;
+  ErrorMessage: string;
+}
+
+/**
+ * Event emitted when validation fails before save.
+ */
+export interface ValidationFailedEvent {
+  EntityName: string;
+  Errors: string[];
+}
+
+/**
+ * Notification event emitted by BaseFormComponent.
+ * The host application subscribes and maps to its own notification system (toasts, snackbars, etc.).
+ */
+export interface FormNotificationEvent {
+  /** The notification message text */
+  Message: string;
+  /** Notification severity */
+  Type: 'success' | 'error' | 'warning' | 'info';
+  /** Duration in milliseconds the notification should display */
+  Duration: number;
+}
+
+/**
+ * Backward-compatible alias for FormContext.
+ * Explorer's BaseFormComponent used this name; new code should use FormContext.
+ */
+export type BaseFormContext = FormContext;
+
+/**
+ * Creates a default FormContext with sensible defaults.
+ */
+export function createDefaultFormContext(): FormContext {
+  return {
+    sectionFilter: '',
+    showEmptyFields: false
+  };
+}

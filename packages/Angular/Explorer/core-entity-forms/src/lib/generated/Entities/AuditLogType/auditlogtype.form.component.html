@@ -116,6 +116,7 @@
                 [NewRecordValues]="NewRecordValues('Audit Log Types')"
                 [AllowLoad]="IsSectionExpanded('auditLogTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('auditLogTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -140,6 +141,7 @@
                 [NewRecordValues]="NewRecordValues('Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('auditLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('auditLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

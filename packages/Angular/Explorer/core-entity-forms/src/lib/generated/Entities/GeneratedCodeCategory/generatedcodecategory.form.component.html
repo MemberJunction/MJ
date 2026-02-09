@@ -107,6 +107,7 @@
                 [NewRecordValues]="NewRecordValues('Generated Code Categories')"
                 [AllowLoad]="IsSectionExpanded('generatedCodeCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('generatedCodeCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -131,6 +132,7 @@
                 [NewRecordValues]="NewRecordValues('Generated Codes')"
                 [AllowLoad]="IsSectionExpanded('generatedCodes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('generatedCodes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

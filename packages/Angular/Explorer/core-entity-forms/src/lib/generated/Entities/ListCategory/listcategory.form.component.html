@@ -126,6 +126,7 @@
                 [NewRecordValues]="NewRecordValues('List Categories')"
                 [AllowLoad]="IsSectionExpanded('listCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('listCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -150,6 +151,7 @@
                 [NewRecordValues]="NewRecordValues('Lists')"
                 [AllowLoad]="IsSectionExpanded('lists')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('lists', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -147,6 +147,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -171,6 +172,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifacts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifacts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -195,6 +197,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
                 [AllowLoad]="IsSectionExpanded('mJArtifactTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifactTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -219,6 +222,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJArtifacts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -243,6 +247,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agents')"
                 [AllowLoad]="IsSectionExpanded('aIAgents')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

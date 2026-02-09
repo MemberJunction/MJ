@@ -191,6 +191,7 @@
                 [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
                 [AllowLoad]="IsSectionExpanded('employeeCompanyIntegrations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('employeeCompanyIntegrations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -215,6 +216,7 @@
                 [NewRecordValues]="NewRecordValues('Employee Roles')"
                 [AllowLoad]="IsSectionExpanded('employeeRoles')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('employeeRoles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -239,6 +241,7 @@
                 [NewRecordValues]="NewRecordValues('Employee Skills')"
                 [AllowLoad]="IsSectionExpanded('employeeSkills')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('employeeSkills', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -263,6 +266,7 @@
                 [NewRecordValues]="NewRecordValues('Employees')"
                 [AllowLoad]="IsSectionExpanded('directReports')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('directReports', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -287,6 +291,7 @@
                 [NewRecordValues]="NewRecordValues('Users')"
                 [AllowLoad]="IsSectionExpanded('users')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('users', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

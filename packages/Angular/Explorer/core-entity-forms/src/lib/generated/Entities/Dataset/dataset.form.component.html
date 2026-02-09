@@ -80,6 +80,7 @@
                 [NewRecordValues]="NewRecordValues('Dataset Items')"
                 [AllowLoad]="IsSectionExpanded('datasetItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('datasetItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

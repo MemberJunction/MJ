@@ -96,6 +96,7 @@
                 [NewRecordValues]="NewRecordValues('Workflows')"
                 [AllowLoad]="IsSectionExpanded('workflows')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('workflows', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -240,6 +240,7 @@
                 [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrationRecordMaps')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('companyIntegrationRecordMaps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -264,6 +265,7 @@
                 [NewRecordValues]="NewRecordValues('Company Integration Runs')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrationRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('companyIntegrationRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -288,6 +290,7 @@
                 [NewRecordValues]="NewRecordValues('Employee Company Integrations')"
                 [AllowLoad]="IsSectionExpanded('employeeCompanyIntegrations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('employeeCompanyIntegrations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -312,6 +315,7 @@
                 [NewRecordValues]="NewRecordValues('Lists')"
                 [AllowLoad]="IsSectionExpanded('lists')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('lists', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

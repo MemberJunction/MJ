@@ -115,6 +115,7 @@
                 [NewRecordValues]="NewRecordValues('AI Model Actions')"
                 [AllowLoad]="IsSectionExpanded('aIModelActions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIModelActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -139,6 +140,7 @@
                 [NewRecordValues]="NewRecordValues('Entity AI Actions')"
                 [AllowLoad]="IsSectionExpanded('entityAIActions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityAIActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

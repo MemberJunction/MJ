@@ -211,6 +211,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJTaskDependencies')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTaskDependencies', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -235,6 +236,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJTaskDependencies')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTaskDependencies', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -259,6 +261,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Tasks')"
                 [AllowLoad]="IsSectionExpanded('mJTasks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

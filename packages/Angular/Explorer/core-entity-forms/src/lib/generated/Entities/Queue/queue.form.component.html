@@ -213,6 +213,7 @@
                 [NewRecordValues]="NewRecordValues('Queue Tasks')"
                 [AllowLoad]="IsSectionExpanded('queueTasks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queueTasks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

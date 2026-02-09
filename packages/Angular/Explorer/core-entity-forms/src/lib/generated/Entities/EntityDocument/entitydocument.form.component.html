@@ -161,6 +161,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Document Runs')"
                 [AllowLoad]="IsSectionExpanded('entityDocumentRuns')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityDocumentRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -185,6 +186,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Document Settings')"
                 [AllowLoad]="IsSectionExpanded('entityDocumentSettings')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityDocumentSettings', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -209,6 +211,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Record Documents')"
                 [AllowLoad]="IsSectionExpanded('entityRecordDocuments')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityRecordDocuments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

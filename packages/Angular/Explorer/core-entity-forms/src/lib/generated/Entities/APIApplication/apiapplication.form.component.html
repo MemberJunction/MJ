@@ -98,6 +98,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: API Application Scopes')"
                 [AllowLoad]="IsSectionExpanded('mJAPIApplicationScopes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIApplicationScopes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -122,6 +123,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: API Key Usage Logs')"
                 [AllowLoad]="IsSectionExpanded('mJAPIKeyUsageLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyUsageLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -146,6 +148,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: API Key Applications')"
                 [AllowLoad]="IsSectionExpanded('mJAPIKeyApplications')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyApplications', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

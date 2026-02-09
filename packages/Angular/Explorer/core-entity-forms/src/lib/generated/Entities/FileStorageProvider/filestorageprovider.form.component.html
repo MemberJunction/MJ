@@ -166,6 +166,7 @@
                 [NewRecordValues]="NewRecordValues('Files')"
                 [AllowLoad]="IsSectionExpanded('files')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('files', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -190,6 +191,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: File Storage Accounts')"
                 [AllowLoad]="IsSectionExpanded('mJFileStorageAccounts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJFileStorageAccounts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -214,6 +216,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
                 [AllowLoad]="IsSectionExpanded('mJAIConfigurations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIConfigurations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -238,6 +241,7 @@
                 [NewRecordValues]="NewRecordValues('AI Agents')"
                 [AllowLoad]="IsSectionExpanded('aIAgents')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

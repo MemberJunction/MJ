@@ -80,6 +80,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelVendors')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelVendors', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -104,6 +105,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Vendor Types')"
                 [AllowLoad]="IsSectionExpanded('mJAIVendorTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIVendorTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

@@ -183,6 +183,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Tools')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnectionTools')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnectionTools', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -207,6 +208,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: MCP Tool Execution Logs')"
                 [AllowLoad]="IsSectionExpanded('mJMCPToolExecutionLogs')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPToolExecutionLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

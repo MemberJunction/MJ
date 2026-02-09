@@ -1,5 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, ElementRef, inject, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, inject, ViewContainerRef } from '@angular/core';
 import { ActionEntity, ActionParamEntity, ActionResultCodeEntity, ActionCategoryEntity, ActionExecutionLogEntity, ActionLibraryEntity, LibraryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -70,16 +69,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     
     private dialogService = inject(DialogService);
     private viewContainerRef = inject(ViewContainerRef);
-    
-    constructor(
-        elementRef: ElementRef,
-        sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        public cdr: ChangeDetectorRef
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-    }
+    private sharedService = inject(SharedService);
 
     async ngOnInit() {
         await super.ngOnInit();

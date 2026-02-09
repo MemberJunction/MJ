@@ -135,6 +135,7 @@
                 [NewRecordValues]="NewRecordValues('User View Categories')"
                 [AllowLoad]="IsSectionExpanded('userViewCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userViewCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -159,6 +160,7 @@
                 [NewRecordValues]="NewRecordValues('User Views')"
                 [AllowLoad]="IsSectionExpanded('userViews')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userViews', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

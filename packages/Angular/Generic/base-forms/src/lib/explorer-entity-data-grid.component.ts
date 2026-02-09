@@ -1,6 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
-import { RunViewParams } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared';
+import { RunViewParams, CompositeKey } from '@memberjunction/core';
 import {
     EntityDataGridComponent,
     AfterRowDoubleClickEventArgs,
@@ -9,11 +8,11 @@ import {
     GridToolbarConfig,
     GridSelectionMode
 } from '@memberjunction/ng-entity-viewer';
+import { FormNavigationEvent } from './types/navigation-events';
 
 /**
- * MJ Explorer wrapper for EntityDataGridComponent that provides Explorer-specific
- * navigation behavior. Double-clicking a row opens the record in a new tab using
- * SharedService.OpenEntityRecord.
+ * Wrapper for EntityDataGridComponent that emits navigation events on row double-click.
+ * The host application subscribes to Navigate events and maps them to its routing system.
  *
  * This component is used by CodeGen for related entity grids in forms.
  */
@@ -56,7 +55,7 @@ export class ExplorerEntityDataGridComponent {
     @Input() SelectionMode: GridSelectionMode = 'single';
 
     /**
-     * When true, double-clicking a row opens the record in MJ Explorer.
+     * When true, double-clicking a row emits a Navigate event.
      * Defaults to true.
      */
     @Input() NavigateOnDoubleClick: boolean = true;
@@ -66,17 +65,25 @@ export class ExplorerEntityDataGridComponent {
     @Output() AfterRowClick = new EventEmitter<AfterRowClickEventArgs>();
     @Output() AfterDataLoad = new EventEmitter<AfterDataLoadEventArgs>();
 
+    /** Emitted when a row is double-clicked and NavigateOnDoubleClick is true */
+    @Output() Navigate = new EventEmitter<FormNavigationEvent>();
+
     onRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
         // Re-emit the event for any consumers
         this.AfterRowDoubleClick.emit(event);
 
-        // Navigate to the record if enabled
+        // Emit navigation event if enabled
         if (this.NavigateOnDoubleClick && event.row) {
             const entity = event.row;
             const entityName = entity.EntityInfo?.Name;
             if (entityName) {
-                const pkey = entity.PrimaryKey;
-                SharedService.Instance.OpenEntityRecord(entityName, pkey);
+                const pkey: CompositeKey = entity.PrimaryKey;
+                this.Navigate.emit({
+                    Kind: 'record',
+                    EntityName: entityName,
+                    PrimaryKey: pkey,
+                    OpenInNewTab: true
+                });
             }
         }
     }
@@ -91,4 +98,3 @@ export class ExplorerEntityDataGridComponent {
         this.AfterDataLoad.emit(event);
     }
 }
-

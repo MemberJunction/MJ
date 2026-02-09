@@ -131,6 +131,7 @@
                 [NewRecordValues]="NewRecordValues('Company Integrations')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('companyIntegrations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -155,6 +156,7 @@
                 [NewRecordValues]="NewRecordValues('Integration URL Formats')"
                 [AllowLoad]="IsSectionExpanded('uRLFormats')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('uRLFormats', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -179,6 +181,7 @@
                 [NewRecordValues]="NewRecordValues('Record Changes')"
                 [AllowLoad]="IsSectionExpanded('recordChanges')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('recordChanges', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

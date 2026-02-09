@@ -194,6 +194,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Credential Bindings')"
                 [AllowLoad]="IsSectionExpanded('mJAICredentialBindings')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAICredentialBindings', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

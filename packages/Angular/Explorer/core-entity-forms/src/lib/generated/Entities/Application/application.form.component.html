@@ -204,6 +204,7 @@
                 [NewRecordValues]="NewRecordValues('Application Entities')"
                 [AllowLoad]="IsSectionExpanded('entities')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -228,6 +229,7 @@
                 [NewRecordValues]="NewRecordValues('Application Settings')"
                 [AllowLoad]="IsSectionExpanded('applicationSettings')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('applicationSettings', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -252,6 +254,7 @@
                 [NewRecordValues]="NewRecordValues('User Applications')"
                 [AllowLoad]="IsSectionExpanded('userApplications')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userApplications', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -276,6 +279,7 @@
                 [NewRecordValues]="NewRecordValues('Dashboards')"
                 [AllowLoad]="IsSectionExpanded('dashboards')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('dashboards', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -300,6 +304,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardUserPreferences')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboardUserPreferences', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

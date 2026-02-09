@@ -159,6 +159,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Collection Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJCollectionArtifacts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCollectionArtifacts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -183,6 +184,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Collection Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJCollectionPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCollectionPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -207,6 +209,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Collections')"
                 [AllowLoad]="IsSectionExpanded('mJCollections')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCollections', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

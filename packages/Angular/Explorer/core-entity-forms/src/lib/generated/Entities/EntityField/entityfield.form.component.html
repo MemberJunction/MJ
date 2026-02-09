@@ -629,6 +629,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Field Values')"
                 [AllowLoad]="IsSectionExpanded('entityFieldValues')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityFieldValues', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

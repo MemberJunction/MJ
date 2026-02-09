@@ -96,6 +96,7 @@
                 [NewRecordValues]="NewRecordValues('Authorization Roles')"
                 [AllowLoad]="IsSectionExpanded('authorizationRoles')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('authorizationRoles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -120,6 +121,7 @@
                 [NewRecordValues]="NewRecordValues('Employee Roles')"
                 [AllowLoad]="IsSectionExpanded('employeeRoles')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('employeeRoles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -144,6 +146,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Permissions')"
                 [AllowLoad]="IsSectionExpanded('entityPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -168,6 +171,7 @@
                 [NewRecordValues]="NewRecordValues('Query Permissions')"
                 [AllowLoad]="IsSectionExpanded('queryPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -192,6 +196,7 @@
                 [NewRecordValues]="NewRecordValues('User Roles')"
                 [AllowLoad]="IsSectionExpanded('userRoles')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userRoles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -216,6 +221,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnectionPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnectionPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -240,6 +246,7 @@
                 [NewRecordValues]="NewRecordValues('Resource Permissions')"
                 [AllowLoad]="IsSectionExpanded('resourcePermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -264,6 +271,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
