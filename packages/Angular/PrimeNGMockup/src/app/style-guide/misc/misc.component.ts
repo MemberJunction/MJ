@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AvatarModule } from 'primeng/avatar';
@@ -21,6 +21,12 @@ import { AutoFocusModule } from 'primeng/autofocus';
 import { DragDropModule } from 'primeng/dragdrop';
 import { ButtonModule } from 'primeng/button';
 import { PanelModule } from 'primeng/panel';
+import { ImageCompareModule } from 'primeng/imagecompare';
+import { OverlayBadgeModule } from 'primeng/overlaybadge';
+import { TerminalModule, TerminalService } from 'primeng/terminal';
+import { StyleClassModule } from 'primeng/styleclass';
+import { AnimateOnScrollModule } from 'primeng/animateonscroll';
+import { Subscription } from 'rxjs';
 
 interface CarouselItem {
     title: string;
@@ -64,8 +70,14 @@ interface MeterValue {
         AutoFocusModule,
         DragDropModule,
         ButtonModule,
-        PanelModule
+        PanelModule,
+        ImageCompareModule,
+        OverlayBadgeModule,
+        TerminalModule,
+        StyleClassModule,
+        AnimateOnScrollModule
     ],
+    providers: [TerminalService],
     template: `
     <div class="misc-page">
         <!-- Avatar & AvatarGroup -->
@@ -137,12 +149,12 @@ interface MeterValue {
             <h2>Inplace</h2>
             <p class="section-desc">Click-to-edit inline content. Displays a read-only view that switches to an editable form on activation.</p>
 
-            <p-inplace closable="closable">
+            <p-inplace [closable]="true">
                 <ng-template pTemplate="display">
                     <span class="inplace-display">Click here to edit this text</span>
                 </ng-template>
                 <ng-template pTemplate="content">
-                    <input type="text" pInputText value="Click here to edit this text" pAutoFocus [autofocus]="true" />
+                    <input type="text" pInputText value="Click here to edit this text" [pAutoFocus]="true" />
                 </ng-template>
             </p-inplace>
         </section>
@@ -284,7 +296,7 @@ interface MeterValue {
             <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <p-badge value="4"></p-badge>
                 <p-badge value="8" severity="success"></p-badge>
-                <p-badge value="2" severity="warning"></p-badge>
+                <p-badge value="2" severity="warn"></p-badge>
                 <p-badge value="1" severity="danger"></p-badge>
                 <p-badge value="99+" severity="info"></p-badge>
             </div>
@@ -335,7 +347,7 @@ interface MeterValue {
             </div>
             @if (ShowAutoFocusInput) {
                 <div class="autofocus-demo">
-                    <input type="text" pInputText placeholder="I am auto-focused!" pAutoFocus [autofocus]="true" />
+                    <input type="text" pInputText placeholder="I am auto-focused!" [pAutoFocus]="true" />
                 </div>
             }
         </section>
@@ -374,6 +386,98 @@ interface MeterValue {
                     @if (SelectedItems.length === 0) {
                         <div class="dragdrop-empty">Drop items here</div>
                     }
+                </div>
+            </div>
+        </section>
+
+        <!-- ImageCompare -->
+        <section class="token-section">
+            <h2>ImageCompare</h2>
+            <p class="section-desc">Before/after image comparison slider. Drag the handle to compare two overlapping images or content panels.</p>
+            <p class="token-mapping">Slider handle: --mj-brand-primary | Container: --mj-border-default</p>
+
+            <div class="component-row image-compare-demo">
+                <p-imageCompare>
+                    <ng-template pTemplate="left">
+                        <div class="compare-panel compare-left">
+                            <span>Before</span>
+                        </div>
+                    </ng-template>
+                    <ng-template pTemplate="right">
+                        <div class="compare-panel compare-right">
+                            <span>After</span>
+                        </div>
+                    </ng-template>
+                </p-imageCompare>
+            </div>
+        </section>
+
+        <!-- OverlayBadge -->
+        <section class="token-section">
+            <h2>OverlayBadge</h2>
+            <p class="section-desc">Overlays a badge on any child content, such as icons or avatars, to indicate counts or status.</p>
+            <p class="token-mapping">Badge: --mj-brand-primary | Severity variants: --mj-status-*</p>
+
+            <div class="mj-grid mj-gap-5 mj-align-center component-row">
+                <p-overlayBadge value="3">
+                    <i class="pi pi-bell" style="font-size: 1.75rem; color: var(--mj-text-primary);"></i>
+                </p-overlayBadge>
+                <p-overlayBadge value="7" severity="danger">
+                    <i class="pi pi-envelope" style="font-size: 1.75rem; color: var(--mj-text-primary);"></i>
+                </p-overlayBadge>
+                <p-overlayBadge value="2" severity="success">
+                    <p-avatar label="MJ" shape="circle" size="large" [style]="{'background-color': 'var(--mj-brand-primary)', 'color': 'var(--mj-brand-on-primary)'}"></p-avatar>
+                </p-overlayBadge>
+                <p-overlayBadge value="99+" severity="warn">
+                    <i class="pi pi-inbox" style="font-size: 1.75rem; color: var(--mj-text-primary);"></i>
+                </p-overlayBadge>
+            </div>
+        </section>
+
+        <!-- Terminal -->
+        <section class="token-section">
+            <h2>Terminal</h2>
+            <p class="section-desc">Terminal-style text interface. Accepts typed commands and displays responses via TerminalService.</p>
+            <p class="token-mapping">Background: --mj-bg-surface-sunken | Text: --mj-text-primary | Prompt: --mj-brand-primary</p>
+
+            <div class="component-row terminal-demo">
+                <p-terminal welcomeMessage="Welcome to MJ Terminal. Type 'help' for available commands." prompt="mj $"></p-terminal>
+            </div>
+        </section>
+
+        <!-- StyleClass -->
+        <section class="token-section">
+            <h2>StyleClass</h2>
+            <p class="section-desc">Directive for declarative CSS class toggling. Useful for show/hide animations without component state management.</p>
+            <p class="token-mapping">Uses toggleClass to add/remove CSS classes on a target element</p>
+
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
+                <button pButton label="Toggle Panel" icon="pi pi-eye" class="p-button-outlined" [pStyleClass]="'@next'" toggleClass="styleclass-hidden"></button>
+                <div class="styleclass-panel">
+                    <div class="styleclass-panel-content">
+                        <i class="pi pi-check-circle"></i>
+                        <span>This panel is toggled using the <strong>pStyleClass</strong> directive. No component property binding needed.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- AnimateOnScroll -->
+        <section class="token-section">
+            <h2>AnimateOnScroll</h2>
+            <p class="section-desc">Directive that applies CSS animations when an element enters the viewport during scrolling.</p>
+            <p class="token-mapping">Uses IntersectionObserver | enterClass/leaveClass for CSS animation classes</p>
+
+            <div class="animate-scroll-demo">
+                <p class="animate-scroll-hint">Scroll down inside this container to see the animation trigger.</p>
+                <div class="animate-scroll-container">
+                    <div class="animate-scroll-spacer"></div>
+                    <div pAnimateOnScroll enterClass="animate-fade-in" [once]="false" class="animate-scroll-target">
+                        <i class="pi pi-sparkles" style="font-size: 1.5rem;"></i>
+                        <h4>Animated Content</h4>
+                        <p>This element fades in when it enters the viewport during scrolling.</p>
+                    </div>
+                    <div class="animate-scroll-spacer"></div>
                 </div>
             </div>
         </section>
@@ -690,6 +794,133 @@ interface MeterValue {
         font-style: italic;
     }
 
+    /* ImageCompare */
+    .image-compare-demo {
+        max-width: 600px;
+    }
+
+    .compare-panel {
+        width: 600px;
+        height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--mj-radius-md);
+
+        span {
+            font-size: var(--mj-text-2xl);
+            font-weight: var(--mj-font-bold);
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+    }
+
+    .compare-left {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    }
+
+    .compare-right {
+        background: linear-gradient(135deg, #059669 0%, #0ea5e9 100%);
+    }
+
+    /* Terminal */
+    .terminal-demo {
+        max-width: 600px;
+    }
+
+    /* StyleClass */
+    .styleclass-panel {
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+
+    .styleclass-hidden {
+        display: none !important;
+    }
+
+    .styleclass-panel-content {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-3);
+        padding: var(--mj-space-4);
+        background: color-mix(in srgb, var(--mj-status-success-bg) 60%, transparent);
+        border: 1px solid var(--mj-status-success-text);
+        border-radius: var(--mj-radius-md);
+        font-size: var(--mj-text-sm);
+        color: var(--mj-status-success-text);
+
+        i {
+            font-size: var(--mj-text-xl);
+            flex-shrink: 0;
+        }
+    }
+
+    /* AnimateOnScroll */
+    .animate-scroll-demo {
+    }
+
+    .animate-scroll-hint {
+        font-size: var(--mj-text-sm);
+        color: var(--mj-text-muted);
+        font-style: italic;
+        margin: 0 0 var(--mj-space-3) 0;
+    }
+
+    .animate-scroll-container {
+        height: 250px;
+        overflow-y: auto;
+        padding: var(--mj-space-4);
+        background: var(--mj-bg-surface-elevated);
+        border: 1px solid var(--mj-border-subtle);
+        border-radius: var(--mj-radius-md);
+        position: relative;
+    }
+
+    .animate-scroll-spacer {
+        height: 300px;
+    }
+
+    .animate-scroll-target {
+        text-align: center;
+        padding: var(--mj-space-6);
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-default);
+        border-radius: var(--mj-radius-lg);
+        opacity: 0;
+
+        h4 {
+            margin: var(--mj-space-2) 0 var(--mj-space-1) 0;
+            font-size: var(--mj-text-base);
+            font-weight: var(--mj-font-semibold);
+            color: var(--mj-text-primary);
+        }
+
+        p {
+            margin: 0;
+            font-size: var(--mj-text-sm);
+            color: var(--mj-text-secondary);
+        }
+
+        i {
+            color: var(--mj-brand-primary);
+        }
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    :host ::ng-deep .animate-fade-in {
+        animation: fadeInUp 0.6s ease forwards;
+    }
+
     code {
         font-family: var(--mj-font-family-mono);
         font-size: var(--mj-text-xs);
@@ -700,7 +931,10 @@ interface MeterValue {
     }
   `]
 })
-export class MiscComponent {
+export class MiscComponent implements OnInit, OnDestroy {
+    private terminalService = inject(TerminalService);
+    private terminalSubscription: Subscription | null = null;
+
     BlockPanel = false;
     ShowAutoFocusInput = false;
 
@@ -735,6 +969,39 @@ export class MiscComponent {
     AvailableItems: string[] = ['Entities', 'Actions', 'Queries', 'Reports', 'Dashboards'];
     SelectedItems: string[] = [];
     DraggedItem: string | null = null;
+
+    ngOnInit() {
+        this.terminalSubscription = this.terminalService.commandHandler.subscribe(command => {
+            this.HandleTerminalCommand(command);
+        });
+    }
+
+    ngOnDestroy() {
+        if (this.terminalSubscription) {
+            this.terminalSubscription.unsubscribe();
+        }
+    }
+
+    HandleTerminalCommand(command: string) {
+        const cmd = command.trim().toLowerCase();
+        switch (cmd) {
+            case 'help':
+                this.terminalService.sendResponse('Available commands: help, version, date, clear, echo <text>');
+                break;
+            case 'version':
+                this.terminalService.sendResponse('MJ Style Guide v1.0 | PrimeNG v21');
+                break;
+            case 'date':
+                this.terminalService.sendResponse(new Date().toLocaleString());
+                break;
+            default:
+                if (cmd.startsWith('echo ')) {
+                    this.terminalService.sendResponse(command.substring(5));
+                } else {
+                    this.terminalService.sendResponse(`Unknown command: ${command}. Type 'help' for available commands.`);
+                }
+        }
+    }
 
     OnChipRemove(chip: string) {
         this.removableChips = this.removableChips.filter(c => c !== chip);

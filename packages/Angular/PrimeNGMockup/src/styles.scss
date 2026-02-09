@@ -1,20 +1,16 @@
 /* MemberJunction PrimeNG Styleguide - Global Styles */
 
 /* Layer 0: MJ Design Tokens (source of truth) */
-@import "styles/tokens";
-
-/* Layer 1: PrimeNG base theme (provides structural styles + default CSS vars) */
-@import "primeng/resources/themes/lara-light-blue/theme.css";
-@import "primeng/resources/primeng.min.css";
+@use "styles/tokens";
 
 /* Layer 2: MJ -> PrimeNG bridge (overrides PrimeNG vars with MJ tokens) */
-@import "styles/primeng-theme";
+@use "styles/primeng-theme";
 
 /* Layer 3: MJ Layout Utilities (grid, flex, gap, alignment) */
-@import "styles/grid";
+@use "styles/grid";
 
 /* Icons */
-@import "primeicons/primeicons.css";
+@use "primeicons/primeicons.css";
 
 /* Quill Editor styles (required by PrimeNG Editor component) */
 @import "quill/dist/quill.snow.css";

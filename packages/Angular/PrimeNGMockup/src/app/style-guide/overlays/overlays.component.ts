@@ -1,13 +1,42 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DialogModule } from 'primeng/dialog';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmPopupModule } from 'primeng/confirmpopup';
-import { OverlayPanelModule } from 'primeng/overlaypanel';
-import { SidebarModule } from 'primeng/sidebar';
+import { PopoverModule } from 'primeng/popover';
+import { DrawerModule } from 'primeng/drawer';
 import { TooltipModule } from 'primeng/tooltip';
 import { ButtonModule } from 'primeng/button';
+import { DynamicDialogModule, DynamicDialogRef, DynamicDialogConfig, DialogService } from 'primeng/dynamicdialog';
 import { ConfirmationService } from 'primeng/api';
+
+@Component({
+    selector: 'app-dynamic-dialog-content',
+    standalone: true,
+    template: `
+        <div style="padding: var(--mj-space-4);">
+            <p style="color: var(--mj-text-secondary); font-size: var(--mj-text-sm); line-height: var(--mj-leading-relaxed); margin: 0 0 var(--mj-space-3) 0;">
+                This content was loaded dynamically via <code style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-xs); color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent); padding: 2px 6px; border-radius: 4px;">DialogService.open()</code>.
+                Any Angular component can be rendered inside a DynamicDialog.
+            </p>
+            <p style="color: var(--mj-text-muted); font-size: var(--mj-text-xs); margin: 0;">
+                Data passed: {{ Config.data?.message || 'No data' }}
+            </p>
+            <div style="margin-top: var(--mj-space-4);">
+                <button pButton label="Close" class="p-button-primary p-button-sm" (click)="Close()"></button>
+            </div>
+        </div>
+    `,
+    imports: [ButtonModule]
+})
+export class DynamicDialogContentComponent {
+    Ref = inject(DynamicDialogRef);
+    Config = inject(DynamicDialogConfig);
+
+    Close() {
+        this.Ref.close();
+    }
+}
 
 @Component({
     selector: 'app-overlays',
@@ -17,10 +46,11 @@ import { ConfirmationService } from 'primeng/api';
         DialogModule,
         ConfirmDialogModule,
         ConfirmPopupModule,
-        OverlayPanelModule,
-        SidebarModule,
+        PopoverModule,
+        DrawerModule,
         TooltipModule,
-        ButtonModule
+        ButtonModule,
+        DynamicDialogModule
     ],
     providers: [ConfirmationService],
     template: `
@@ -86,7 +116,7 @@ import { ConfirmationService } from 'primeng/api';
                 <button pButton label="Archive Item" icon="pi pi-inbox" class="p-button-warning" (click)="ConfirmPopup($event)"></button>
             </div>
 
-            <p-confirmPopup></p-confirmPopup>
+            <p-confirmpopup></p-confirmpopup>
 
             @if (LastPopupResult) {
                 <div class="result-message">
@@ -107,7 +137,7 @@ import { ConfirmationService } from 'primeng/api';
                 <button pButton label="Quick Actions" icon="pi pi-bolt" class="p-button-secondary" (click)="opActions.toggle($event)"></button>
             </div>
 
-            <p-overlayPanel #op>
+            <p-popover #op>
                 <div class="overlay-content">
                     <h4>Record Details</h4>
                     <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center overlay-detail-row">
@@ -127,16 +157,16 @@ import { ConfirmationService } from 'primeng/api';
                         <span class="overlay-value">Admin User</span>
                     </div>
                 </div>
-            </p-overlayPanel>
+            </p-popover>
 
-            <p-overlayPanel #opActions>
+            <p-popover #opActions>
                 <div class="mj-grid mj-flex-column overlay-actions">
                     <button pButton label="Edit" icon="pi pi-pencil" class="p-button-text p-button-sm" (click)="opActions.hide()"></button>
                     <button pButton label="Duplicate" icon="pi pi-copy" class="p-button-text p-button-sm" (click)="opActions.hide()"></button>
                     <button pButton label="Export" icon="pi pi-download" class="p-button-text p-button-sm" (click)="opActions.hide()"></button>
                     <button pButton label="Delete" icon="pi pi-trash" class="p-button-text p-button-danger p-button-sm" (click)="opActions.hide()"></button>
                 </div>
-            </p-overlayPanel>
+            </p-popover>
         </section>
 
         <!-- Sidebar Section -->
@@ -150,7 +180,7 @@ import { ConfirmationService } from 'primeng/api';
                 <button pButton label="Right Sidebar" icon="pi pi-arrow-left" class="p-button-secondary" (click)="ShowSidebarRight = true"></button>
             </div>
 
-            <p-sidebar [(visible)]="ShowSidebarLeft" [modal]="true" header="Navigation">
+            <p-drawer [(visible)]="ShowSidebarLeft" [modal]="true" header="Navigation">
                 <div class="mj-grid mj-flex-column mj-gap-4 sidebar-content">
                     <p class="sidebar-text">This sidebar slides in from the left. It uses <code>--mj-bg-surface</code> for the background and
                     <code>--mj-border-default</code> for the edge border.</p>
@@ -177,9 +207,9 @@ import { ConfirmationService } from 'primeng/api';
                         </div>
                     </div>
                 </div>
-            </p-sidebar>
+            </p-drawer>
 
-            <p-sidebar [(visible)]="ShowSidebarRight" position="right" [modal]="true" header="Record Details">
+            <p-drawer [(visible)]="ShowSidebarRight" position="right" [modal]="true" header="Record Details">
                 <div class="mj-grid mj-flex-column mj-gap-4 sidebar-content">
                     <p class="sidebar-text">Right-positioned sidebar for detail views and contextual information.</p>
                     <div class="sidebar-detail-card">
@@ -206,7 +236,7 @@ import { ConfirmationService } from 'primeng/api';
                         <button pButton label="Close" class="p-button-text p-button-sm" (click)="ShowSidebarRight = false"></button>
                     </div>
                 </div>
-            </p-sidebar>
+            </p-drawer>
         </section>
 
         <!-- Tooltip Section -->
@@ -246,6 +276,22 @@ import { ConfirmationService } from 'primeng/api';
                 <button pButton icon="pi pi-copy" class="p-button-rounded p-button-text" pTooltip="Duplicate" tooltipPosition="top"></button>
                 <button pButton icon="pi pi-download" class="p-button-rounded p-button-text" pTooltip="Export" tooltipPosition="top"></button>
                 <button pButton icon="pi pi-refresh" class="p-button-rounded p-button-text" pTooltip="Refresh Data" tooltipPosition="top"></button>
+            </div>
+        </section>
+
+        <!-- DynamicDialog Section -->
+        <section class="token-section">
+            <h2>DynamicDialog</h2>
+            <p class="section-desc">Programmatically opened dialog via DialogService. Any component can be loaded as content at runtime, making it ideal for reusable dialog patterns.</p>
+            <p class="token-mapping">Uses Dialog styling tokens | Opened via DialogService.open() (provided in app.config.ts)</p>
+
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
+                <button pButton label="Open Dynamic Dialog" icon="pi pi-external-link" class="p-button-primary" (click)="OpenDynamicDialog()"></button>
+            </div>
+
+            <div class="dynamic-dialog-note">
+                <i class="pi pi-info-circle"></i>
+                <span>DynamicDialog uses <code>DialogService.open(ComponentType, config)</code> to render any component inside a dialog at runtime. The child component can inject <code>DynamicDialogRef</code> and <code>DynamicDialogConfig</code> for communication.</span>
             </div>
         </section>
     </div>
@@ -468,6 +514,27 @@ import { ConfirmationService } from 'primeng/api';
         }
     }
 
+    /* DynamicDialog */
+    .dynamic-dialog-note {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-3) var(--mj-space-4);
+        background: color-mix(in srgb, var(--mj-status-info-bg) 60%, transparent);
+        border: 1px solid var(--mj-status-info-text);
+        border-radius: var(--mj-radius-md);
+        font-size: var(--mj-text-sm);
+        color: var(--mj-status-info-text);
+        line-height: var(--mj-leading-relaxed);
+        margin-top: var(--mj-space-2);
+
+        i {
+            font-size: var(--mj-text-base);
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+    }
+
     code {
         font-family: var(--mj-font-family-mono);
         font-size: var(--mj-text-xs);
@@ -484,6 +551,8 @@ export class OverlaysComponent {
     ShowSidebarRight = false;
     LastConfirmResult: string | null = null;
     LastPopupResult: string | null = null;
+
+    private dialogService = inject(DialogService);
 
     constructor(private confirmationService: ConfirmationService) {}
 
@@ -531,6 +600,17 @@ export class OverlaysComponent {
             },
             reject: () => {
                 this.LastPopupResult = 'Archive cancelled.';
+            }
+        });
+    }
+
+    OpenDynamicDialog() {
+        this.dialogService.open(DynamicDialogContentComponent, {
+            header: 'Dynamic Dialog Demo',
+            width: '420px',
+            modal: true,
+            data: {
+                message: 'Hello from the style guide!'
             }
         });
     }

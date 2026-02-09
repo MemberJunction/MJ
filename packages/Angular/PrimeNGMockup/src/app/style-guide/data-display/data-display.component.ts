@@ -17,7 +17,7 @@ interface TableRow {
     id: number;
     name: string;
     status: string;
-    severity: 'success' | 'warning' | 'danger' | 'info';
+    severity: 'success' | 'warn' | 'danger' | 'info' | 'secondary' | 'contrast';
     category: string;
     date: string;
 }
@@ -228,7 +228,7 @@ interface PaginatorPageEvent {
             <p class="token-mapping">success: --mj-status-success-* | warning: --mj-status-warning-* | danger: --mj-status-error-* | info: --mj-status-info-*</p>
             <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <p-tag value="Success" severity="success"></p-tag>
-                <p-tag value="Warning" severity="warning"></p-tag>
+                <p-tag value="Warning" severity="warn"></p-tag>
                 <p-tag value="Danger" severity="danger"></p-tag>
                 <p-tag value="Info" severity="info"></p-tag>
                 <p-tag value="Default"></p-tag>
@@ -237,7 +237,7 @@ interface PaginatorPageEvent {
             <h3 class="subsection-title">Tags with Icons</h3>
             <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <p-tag value="Active" severity="success" icon="pi pi-check"></p-tag>
-                <p-tag value="Pending" severity="warning" icon="pi pi-clock"></p-tag>
+                <p-tag value="Pending" severity="warn" icon="pi pi-clock"></p-tag>
                 <p-tag value="Failed" severity="danger" icon="pi pi-times"></p-tag>
                 <p-tag value="Processing" severity="info" icon="pi pi-spin pi-spinner"></p-tag>
             </div>
@@ -376,12 +376,12 @@ interface PaginatorPageEvent {
 export class DataDisplayComponent {
     tableData: TableRow[] = [
         { id: 1, name: 'Sync CRM Contacts', status: 'Active', severity: 'success', category: 'Integration', date: '2026-02-03' },
-        { id: 2, name: 'Weekly Report Generator', status: 'Pending', severity: 'warning', category: 'Reporting', date: '2026-02-03' },
+        { id: 2, name: 'Weekly Report Generator', status: 'Pending', severity: 'warn', category: 'Reporting', date: '2026-02-03' },
         { id: 3, name: 'Inventory Updater', status: 'Failed', severity: 'danger', category: 'Data', date: '2026-02-02' },
         { id: 4, name: 'AI Sentiment Analysis', status: 'Active', severity: 'success', category: 'AI/ML', date: '2026-02-02' },
         { id: 5, name: 'Email Campaign Dispatch', status: 'Queued', severity: 'info', category: 'Marketing', date: '2026-02-01' },
         { id: 6, name: 'Database Backup', status: 'Active', severity: 'success', category: 'Operations', date: '2026-02-01' },
-        { id: 7, name: 'User Session Cleanup', status: 'Disabled', severity: 'warning', category: 'Maintenance', date: '2026-01-31' },
+        { id: 7, name: 'User Session Cleanup', status: 'Disabled', severity: 'warn', category: 'Maintenance', date: '2026-01-31' },
     ];
 
     selectedRow: TableRow | null = null;

@@ -5,12 +5,10 @@ import { MenubarModule } from 'primeng/menubar';
 import { BreadcrumbModule } from 'primeng/breadcrumb';
 import { ContextMenuModule, ContextMenu } from 'primeng/contextmenu';
 import { TieredMenuModule } from 'primeng/tieredmenu';
-import { SlideMenuModule } from 'primeng/slidemenu';
 import { PanelMenuModule } from 'primeng/panelmenu';
 import { MegaMenuModule } from 'primeng/megamenu';
 import { DockModule } from 'primeng/dock';
 import { StepsModule } from 'primeng/steps';
-import { TabMenuModule } from 'primeng/tabmenu';
 import { ButtonModule } from 'primeng/button';
 import { MenuItem, MegaMenuItem } from 'primeng/api';
 
@@ -24,12 +22,10 @@ import { MenuItem, MegaMenuItem } from 'primeng/api';
         BreadcrumbModule,
         ContextMenuModule,
         TieredMenuModule,
-        SlideMenuModule,
         PanelMenuModule,
         MegaMenuModule,
         DockModule,
         StepsModule,
-        TabMenuModule,
         ButtonModule
     ],
     template: `
@@ -81,14 +77,6 @@ import { MenuItem, MegaMenuItem } from 'primeng/api';
             <p-tieredMenu [model]="tieredMenuItems"></p-tieredMenu>
         </section>
 
-        <!-- SlideMenu Section -->
-        <section class="token-section">
-            <h2>SlideMenu</h2>
-            <p class="section-desc">Menu with sliding animation for navigating through nested submenus. Provides a back button to return to parent menus.</p>
-            <p class="token-mapping">Panel bg: --mj-bg-surface-elevated | Back button: --mj-brand-primary | Transition: --mj-transition-base</p>
-            <p-slideMenu [model]="tieredMenuItems" [menuWidth]="280" [viewportHeight]="220"></p-slideMenu>
-        </section>
-
         <!-- PanelMenu Section -->
         <section class="token-section">
             <h2>PanelMenu</h2>
@@ -126,16 +114,6 @@ import { MenuItem, MegaMenuItem } from 'primeng/api';
             <p class="steps-status">Current step: <strong>{{ stepsItems[activeStepIndex].label }}</strong></p>
         </section>
 
-        <!-- TabMenu Section -->
-        <section class="token-section">
-            <h2>TabMenu</h2>
-            <p class="section-desc">Tab-based navigation for switching between content sections. Active tab uses the brand primary color with an underline indicator.</p>
-            <p class="token-mapping">Active tab: --mj-brand-primary | Inactive: --mj-text-secondary | Indicator: --mj-brand-primary | Hover: --mj-bg-surface-hover</p>
-            <p-tabMenu [model]="tabMenuItems" [activeItem]="activeTabItem" (activeItemChange)="OnActiveTabChange($event)"></p-tabMenu>
-            <div class="tab-content-area">
-                <p>Selected tab: <strong>{{ activeTabItem.label }}</strong></p>
-            </div>
-        </section>
     </div>
     `,
     styles: [`
@@ -512,17 +490,6 @@ export class MenusComponent {
 
     activeStepIndex = 1;
 
-    // TabMenu Items
-    tabMenuItems: MenuItem[] = [
-        { label: 'Overview', icon: 'pi pi-home' },
-        { label: 'Activity', icon: 'pi pi-chart-line' },
-        { label: 'Members', icon: 'pi pi-users' },
-        { label: 'Messages', icon: 'pi pi-envelope' },
-        { label: 'Settings', icon: 'pi pi-cog' }
-    ];
-
-    activeTabItem: MenuItem = this.tabMenuItems[0];
-
     OnContextMenu(event: MouseEvent) {
         event.preventDefault();
         this.contextMenu.show(event);
@@ -532,7 +499,4 @@ export class MenusComponent {
         this.activeStepIndex = index;
     }
 
-    OnActiveTabChange(item: MenuItem) {
-        this.activeTabItem = item;
-    }
 }

@@ -1,13 +1,13 @@
 /* MemberJunction Angular Material Styleguide - Global Styles */
 
 /* Layer 0: MJ Design Tokens (source of truth) */
-@import "styles/tokens";
+@use "styles/tokens";
 
 /* Layer 2: MJ -> Angular Material bridge (overrides Material vars with MJ tokens) */
-@import "styles/material-theme";
+@use "styles/material-theme";
 
 /* Layer 3: MJ Layout Utilities (grid, flex, gap, alignment) */
-@import "styles/grid";
+@use "styles/grid";
 
 /* ========================================
    BASE STYLES

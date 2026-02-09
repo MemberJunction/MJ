@@ -428,12 +428,12 @@ export class DataHierarchyComponent {
         }
     ];
 
-    GetTypeSeverity(type: string): 'success' | 'warning' | 'danger' | 'info' {
+    GetTypeSeverity(type: string): 'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast' {
         switch (type) {
             case 'Department':
                 return 'info';
             case 'Team':
-                return 'warning';
+                return 'warn';
             case 'Project':
                 return 'success';
             default:

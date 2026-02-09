@@ -1,11 +1,16 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MessageModule } from 'primeng/message';
-import { MessagesModule } from 'primeng/messages';
 import { ToastModule } from 'primeng/toast';
 import { FileUploadModule } from 'primeng/fileupload';
 import { ButtonModule } from 'primeng/button';
-import { MessageService, Message } from 'primeng/api';
+import { MessageService } from 'primeng/api';
+
+interface MessageItem {
+    severity: 'success' | 'info' | 'warn' | 'error' | 'secondary' | 'contrast';
+    summary: string;
+    detail: string;
+}
 
 @Component({
     selector: 'app-messages',
@@ -13,7 +18,6 @@ import { MessageService, Message } from 'primeng/api';
     imports: [
         CommonModule,
         MessageModule,
-        MessagesModule,
         ToastModule,
         FileUploadModule,
         ButtonModule
@@ -43,7 +47,11 @@ import { MessageService, Message } from 'primeng/api';
             <h2>Messages (Closeable List)</h2>
             <p class="section-desc">A list of closeable messages. Users can dismiss individual items. Useful for validation summaries or batch operation results.</p>
 
-            <p-messages [value]="Messages" [closable]="true"></p-messages>
+            <div class="mj-grid mj-flex-column mj-gap-3">
+                @for (msg of Messages; track msg.detail) {
+                    <p-message [severity]="msg.severity" [text]="msg.detail" [closable]="true"></p-message>
+                }
+            </div>
 
             <div class="mj-grid mj-gap-3 mj-align-center component-row" style="margin-top: var(--mj-space-3);">
                 <button pButton label="Reset Messages" icon="pi pi-refresh" class="p-button-outlined p-button-sm" (click)="ResetMessages()"></button>
@@ -184,14 +192,14 @@ import { MessageService, Message } from 'primeng/api';
   `]
 })
 export class MessagesComponent {
-    Messages: Message[] = [
+    Messages: MessageItem[] = [
         { severity: 'success', summary: 'Confirmed', detail: 'Record saved successfully' },
         { severity: 'info', summary: 'Info', detail: 'New version available for deployment' },
         { severity: 'warn', summary: 'Warning', detail: '3 fields require attention before publishing' },
         { severity: 'error', summary: 'Error', detail: 'Unable to connect to the database server' }
     ];
 
-    private defaultMessages: Message[] = [...this.Messages];
+    private defaultMessages: MessageItem[] = [...this.Messages];
 
     constructor(private messageService: MessageService) {}
 

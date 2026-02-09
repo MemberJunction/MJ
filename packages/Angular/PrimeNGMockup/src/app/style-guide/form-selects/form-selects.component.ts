@@ -7,12 +7,11 @@ import { CascadeSelectModule } from 'primeng/cascadeselect';
 import { TreeSelectModule } from 'primeng/treeselect';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ToggleButtonModule } from 'primeng/togglebutton';
-import { TriStateCheckboxModule } from 'primeng/tristatecheckbox';
 import { RatingModule } from 'primeng/rating';
 import { SliderModule } from 'primeng/slider';
 import { KnobModule } from 'primeng/knob';
 import { ColorPickerModule } from 'primeng/colorpicker';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { EditorModule } from 'primeng/editor';
 import { TreeNode } from 'primeng/api';
 
@@ -39,12 +38,11 @@ interface CascadeOption {
         TreeSelectModule,
         SelectButtonModule,
         ToggleButtonModule,
-        TriStateCheckboxModule,
         RatingModule,
         SliderModule,
         KnobModule,
         ColorPickerModule,
-        CalendarModule,
+        DatePickerModule,
         EditorModule
     ],
     template: `
@@ -188,20 +186,6 @@ interface CascadeOption {
             </div>
         </section>
 
-        <!-- TriStateCheckbox Section -->
-        <section class="token-section">
-            <h2>TriStateCheckbox</h2>
-            <p class="section-desc">A checkbox with three states: checked, unchecked, and indeterminate (null). Useful for partial selections.</p>
-            <div class="component-row mj-grid mj-gap-3">
-                <div class="selection-row mj-grid mj-flex-nowrap mj-gap-2 mj-align-center">
-                    <p-triStateCheckbox [(ngModel)]="triStateValue" inputId="tri-state"></p-triStateCheckbox>
-                    <label for="tri-state">
-                        {{ triStateValue === null ? 'Indeterminate' : (triStateValue ? 'Checked' : 'Unchecked') }}
-                    </label>
-                </div>
-            </div>
-        </section>
-
         <!-- Rating Section -->
         <section class="token-section">
             <h2>Rating</h2>
@@ -214,7 +198,7 @@ interface CascadeOption {
                 </div>
                 <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Read-Only</label>
-                    <p-rating [(ngModel)]="ratingReadOnly" [readonly]="true" [cancel]="false"></p-rating>
+                    <p-rating [(ngModel)]="ratingReadOnly" [readonly]="true"></p-rating>
                 </div>
             </div>
         </section>
@@ -267,19 +251,19 @@ interface CascadeOption {
             <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
                 <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Basic Date</label>
-                    <p-calendar [(ngModel)]="calendarDate" [style]="{'width': '100%'}" placeholder="Select a date"></p-calendar>
+                    <p-datepicker [(ngModel)]="calendarDate" [style]="{'width': '100%'}" placeholder="Select a date"></p-datepicker>
                 </div>
                 <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Date &amp; Time</label>
-                    <p-calendar [(ngModel)]="calendarDateTime" [showTime]="true" [hourFormat]="'12'" [style]="{'width': '100%'}" placeholder="Date and time"></p-calendar>
+                    <p-datepicker [(ngModel)]="calendarDateTime" [showTime]="true" [hourFormat]="'12'" [style]="{'width': '100%'}" placeholder="Date and time"></p-datepicker>
                 </div>
                 <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Date Range</label>
-                    <p-calendar [(ngModel)]="calendarRange" selectionMode="range" [style]="{'width': '100%'}" placeholder="Select range"></p-calendar>
+                    <p-datepicker [(ngModel)]="calendarRange" selectionMode="range" [style]="{'width': '100%'}" placeholder="Select range"></p-datepicker>
                 </div>
                 <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Month Picker</label>
-                    <p-calendar [(ngModel)]="calendarMonth" view="month" dateFormat="mm/yy" [style]="{'width': '100%'}" placeholder="Select month"></p-calendar>
+                    <p-datepicker [(ngModel)]="calendarMonth" view="month" dateFormat="mm/yy" [style]="{'width': '100%'}" placeholder="Select month"></p-datepicker>
                 </div>
             </div>
         </section>
@@ -497,9 +481,6 @@ export class FormSelectsComponent {
     // ToggleButton
     toggleValue1 = true;
     toggleValue2 = false;
-
-    // TriStateCheckbox
-    triStateValue: boolean | null = null;
 
     // Rating
     ratingValue: number = 3;

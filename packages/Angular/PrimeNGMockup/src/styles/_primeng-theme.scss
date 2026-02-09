@@ -1,9 +1,16 @@
 /**
  * PrimeNG Theme Bridge (Layer 2)
  * ==============================
- * Maps PrimeNG CSS variables to MJ Design Tokens.
- * This file MUST be imported AFTER the PrimeNG base theme CSS
- * so that MJ token values override PrimeNG's defaults.
+ * Provides fine-tuning overrides for PrimeNG v21 components using MJ Design Tokens.
+ *
+ * PrimeNG v21 uses programmatic theming via definePreset() in app.config.ts
+ * which sets the primary palette (MJ brand blue) and surface colors (slate).
+ * This bridge adds custom spacing, border-radius, shadows, and typography.
+ *
+ * Dark mode is handled automatically:
+ * - PrimeNG v21 preset uses darkModeSelector: '[data-theme="dark"]'
+ * - MJ tokens in _tokens.scss switch under [data-theme="dark"]
+ * - All var(--mj-*) references cascade automatically — no explicit dark overrides needed
  */
 
 :root {
@@ -203,7 +210,7 @@
 }
 
 /* Textarea */
-.p-inputtextarea {
+.p-textarea {
   border-radius: var(--mj-radius-md);
   border: 1px solid var(--mj-border-default);
   padding: var(--mj-space-2) var(--mj-space-3);
@@ -218,8 +225,8 @@
   }
 }
 
-/* Dropdown */
-.p-dropdown {
+/* Select (was Dropdown) */
+.p-select {
   border-radius: var(--mj-radius-md);
   border: 1px solid var(--mj-border-default);
 
@@ -233,20 +240,20 @@
   }
 }
 
-/* Dropdown Panel */
-.p-dropdown-panel {
+/* Select Overlay (was Dropdown Panel) */
+.p-select-overlay {
   background: var(--mj-bg-surface-elevated);
   border-radius: var(--mj-radius-md);
   box-shadow: var(--mj-shadow-lg);
   border: 1px solid var(--mj-border-default);
 
-  .p-dropdown-header {
+  .p-select-header {
     background: var(--mj-bg-surface-elevated);
     border-color: var(--mj-border-default);
     color: var(--mj-text-primary);
   }
 
-  .p-dropdown-items .p-dropdown-item {
+  .p-select-list .p-select-option {
     color: var(--mj-text-primary);
 
     &:not(.p-highlight):not(.p-disabled):hover {
@@ -263,7 +270,7 @@
     }
   }
 
-  .p-dropdown-empty-message {
+  .p-select-empty-message {
     color: var(--mj-text-muted);
   }
 }
@@ -488,7 +495,7 @@
   border-radius: var(--mj-radius-md);
 }
 
-.p-autocomplete-panel {
+.p-autocomplete-overlay {
   background: var(--mj-bg-surface-elevated);
   border-radius: var(--mj-radius-md);
   box-shadow: var(--mj-shadow-lg);
@@ -529,32 +536,8 @@
   padding: var(--mj-space-3);
 }
 
-/* Chips */
-.p-chips {
-  .p-chips-multiple-container {
-    border-radius: var(--mj-radius-md);
-    border: 1px solid var(--mj-border-default);
-    padding: var(--mj-space-1) var(--mj-space-2);
-
-    &:not(.p-disabled):hover {
-      border-color: var(--mj-border-strong);
-    }
-
-    &:not(.p-disabled).p-focus {
-      border-color: var(--mj-border-focus);
-      box-shadow: var(--mj-focus-ring);
-    }
-  }
-
-  .p-chips-token {
-    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-    color: var(--mj-brand-primary);
-    border-radius: var(--mj-radius-full);
-  }
-}
-
 /* FloatLabel */
-.p-float-label label {
+.p-floatlabel label {
   color: var(--mj-text-muted);
 }
 
@@ -608,11 +591,7 @@
   border: 1px solid var(--mj-border-default);
 }
 
-/* Calendar */
-.p-calendar .p-inputtext {
-  border-radius: var(--mj-radius-md);
-}
-
+/* DatePicker (was Calendar) */
 .p-datepicker {
   background: var(--mj-bg-surface-elevated);
   border-radius: var(--mj-radius-lg);
@@ -646,8 +625,8 @@
     color: var(--mj-text-disabled);
   }
 
-  .p-datepicker-prev,
-  .p-datepicker-next {
+  .p-datepicker-prev-button,
+  .p-datepicker-next-button {
     color: var(--mj-text-primary);
 
     &:hover {
@@ -702,24 +681,14 @@
   }
 }
 
-/* TriStateCheckbox */
-.p-tristatecheckbox .p-checkbox-box {
-  border: 2px solid var(--mj-border-default);
-
-  &.p-highlight {
-    background: var(--mj-brand-primary);
-    border-color: var(--mj-brand-primary);
-  }
-}
-
-/* InputSwitch */
-.p-inputswitch {
-  .p-inputswitch-slider {
+/* ToggleSwitch (was InputSwitch) */
+.p-toggleswitch {
+  .p-toggleswitch-slider {
     background: var(--mj-border-strong);
     transition: background-color var(--mj-transition-fast);
   }
 
-  &.p-inputswitch-checked .p-inputswitch-slider {
+  &.p-toggleswitch-checked .p-toggleswitch-slider {
     background: var(--mj-brand-primary);
   }
 }
@@ -939,9 +908,9 @@
   }
 }
 
-/* Accordion */
+/* Accordion (v21 class names) */
 .p-accordion {
-  .p-accordion-header-link {
+  .p-accordionheader {
     background: var(--mj-bg-surface-elevated);
     border-color: var(--mj-border-default);
     color: var(--mj-text-primary);
@@ -953,54 +922,52 @@
     }
   }
 
-  .p-accordion-content {
+  .p-accordioncontent {
     background: var(--mj-bg-surface);
     border-color: var(--mj-border-default);
     color: var(--mj-text-primary);
   }
 
-  .p-accordion-header:not(.p-disabled).p-highlight .p-accordion-header-link {
+  .p-accordionpanel-active .p-accordionheader {
     background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-elevated));
     color: var(--mj-brand-primary);
   }
 }
 
-/* TabView */
-.p-tabview {
-  .p-tabview-nav {
+/* Tabs (was TabView, v21 class names) */
+.p-tabs {
+  .p-tablist {
     background: var(--mj-bg-surface);
     border-color: var(--mj-border-default);
+  }
 
-    li {
-      .p-tabview-nav-link {
-        background: var(--mj-bg-surface);
-        color: var(--mj-text-secondary);
-        border-color: transparent transparent var(--mj-border-default) transparent;
-        transition: color var(--mj-transition-fast),
-                    border-color var(--mj-transition-fast),
-                    background-color var(--mj-transition-fast);
+  .p-tab {
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    border-color: transparent transparent var(--mj-border-default) transparent;
+    transition: color var(--mj-transition-fast),
+                border-color var(--mj-transition-fast),
+                background-color var(--mj-transition-fast);
 
-        &:hover {
-          background: var(--mj-bg-surface-hover);
-          color: var(--mj-text-primary);
-          border-color: transparent transparent var(--mj-border-strong) transparent;
-        }
-      }
+    &:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+      border-color: transparent transparent var(--mj-border-strong) transparent;
+    }
 
-      &.p-highlight .p-tabview-nav-link {
-        background: var(--mj-bg-surface);
-        color: var(--mj-brand-primary);
-        border-color: transparent transparent var(--mj-brand-primary) transparent;
-      }
+    &[data-p-active="true"] {
+      background: var(--mj-bg-surface);
+      color: var(--mj-brand-primary);
+      border-color: transparent transparent var(--mj-brand-primary) transparent;
     }
   }
 
-  .p-tabview-nav-btn.p-link {
+  .p-tablist-nav-button {
     background: var(--mj-bg-surface);
     color: var(--mj-brand-primary);
   }
 
-  .p-tabview-panels {
+  .p-tabpanels {
     background: var(--mj-bg-surface);
     color: var(--mj-text-primary);
   }
@@ -1207,25 +1174,25 @@
   color: var(--mj-text-primary);
 }
 
-/* OverlayPanel */
-.p-overlaypanel {
+/* Popover (was OverlayPanel) */
+.p-popover {
   background: var(--mj-bg-surface-elevated);
   border-radius: var(--mj-radius-lg);
   box-shadow: var(--mj-shadow-lg);
   color: var(--mj-text-primary);
 }
 
-/* Sidebar */
-.p-sidebar {
+/* Drawer (was Sidebar) */
+.p-drawer {
   background: var(--mj-bg-surface);
   box-shadow: var(--mj-shadow-xl);
   color: var(--mj-text-primary);
 
-  .p-sidebar-header {
+  .p-drawer-header {
     padding: var(--mj-space-4);
   }
 
-  .p-sidebar-content {
+  .p-drawer-content {
     padding: var(--mj-space-4);
   }
 }
@@ -1244,129 +1211,135 @@
 
 /* ----------------------------------------
    MENUS
+   PrimeNG v21 uses component-prefixed class names for menu items
+   (e.g. .p-tieredmenu-item instead of shared .p-menuitem).
+   State classes: .p-tieredmenu-item-active, .p-focus, .p-disabled.
+   Layout/sizing is handled by PrimeNG's base styles — we only
+   override colours, backgrounds, borders, and shadows here.
    ---------------------------------------- */
 
-/* Menu (shared base styles) */
-.p-menu,
-.p-tieredmenu,
-.p-slidemenu,
-.p-contextmenu {
-  background: var(--mj-bg-surface-elevated);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md);
-  box-shadow: var(--mj-shadow-lg);
-  color: var(--mj-text-primary);
-
-  .p-menuitem > .p-menuitem-content {
+/**
+ * Shared mixin: colour-only overrides for the common
+ * item → item-content / item-link / item-label / item-icon pattern.
+ */
+@mixin menu-item-styles($prefix) {
+  .#{$prefix}-item-content {
     color: var(--mj-text-primary);
-    transition: background-color var(--mj-transition-fast);
-
-    .p-menuitem-link {
-      color: var(--mj-text-primary);
-
-      .p-menuitem-text {
-        color: var(--mj-text-primary);
-      }
-
-      .p-menuitem-icon {
-        color: var(--mj-text-secondary);
-      }
-
-      .p-submenu-icon {
-        color: var(--mj-text-muted);
-      }
-    }
   }
 
-  .p-menuitem:not(.p-highlight):not(.p-disabled) > .p-menuitem-content:hover {
+  .#{$prefix}-item-link {
+    color: inherit;
+  }
+
+  .#{$prefix}-item-label {
+    color: var(--mj-text-primary);
+  }
+
+  .#{$prefix}-item-icon {
+    color: var(--mj-text-secondary);
+  }
+
+  /* Hover */
+  .#{$prefix}-item:not(.p-disabled) > .#{$prefix}-item-content:hover {
     background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
   }
 
-  .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus > .p-menuitem-content {
+  /* Focus */
+  .#{$prefix}-item.p-focus > .#{$prefix}-item-content {
     background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
   }
 
-  .p-menuitem.p-highlight > .p-menuitem-content {
+  /* Active / highlighted */
+  .#{$prefix}-item-active > .#{$prefix}-item-content {
     background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
     color: var(--mj-brand-primary);
-
-    .p-menuitem-link .p-menuitem-text,
-    .p-menuitem-link .p-menuitem-icon {
-      color: var(--mj-brand-primary);
-    }
   }
 
-  .p-submenu-list {
-    background: var(--mj-bg-surface-elevated);
-    border: 1px solid var(--mj-border-default);
-    border-radius: var(--mj-radius-md);
-    box-shadow: var(--mj-shadow-lg);
+  .#{$prefix}-item-active > .#{$prefix}-item-content .#{$prefix}-item-icon {
+    color: var(--mj-brand-primary);
   }
+}
 
-  .p-menu-separator,
-  .p-menuitem-separator {
+/* Shared submenu-icon colour */
+@mixin menu-submenu-icon-color($prefix) {
+  .#{$prefix}-submenu-icon {
+    color: var(--mj-text-muted);
+  }
+}
+
+/* Menu */
+.p-menu {
+  width: fit-content;
+  background: var(--mj-bg-surface-elevated);
+  border-color: var(--mj-border-default);
+  color: var(--mj-text-primary);
+  box-shadow: var(--mj-shadow-lg);
+
+  @include menu-item-styles('p-menu');
+
+  .p-menu-separator {
     border-color: var(--mj-border-subtle);
   }
 }
 
-/* SlideMenu back button */
-.p-slidemenu {
-  .p-slidemenu-backward {
+/* TieredMenu */
+.p-tieredmenu {
+  width: fit-content;
+  background: var(--mj-bg-surface-elevated);
+  border-color: var(--mj-border-default);
+  color: var(--mj-text-primary);
+  box-shadow: var(--mj-shadow-lg);
+
+  @include menu-item-styles('p-tieredmenu');
+  @include menu-submenu-icon-color('p-tieredmenu');
+
+  .p-tieredmenu-submenu {
     background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
     border-color: var(--mj-border-default);
+    box-shadow: var(--mj-shadow-lg);
+  }
+
+  .p-tieredmenu-separator {
+    border-color: var(--mj-border-subtle);
+  }
+}
+
+/* ContextMenu */
+.p-contextmenu {
+  width: fit-content;
+  background: var(--mj-bg-surface-elevated);
+  border-color: var(--mj-border-default);
+  color: var(--mj-text-primary);
+  box-shadow: var(--mj-shadow-lg);
+
+  @include menu-item-styles('p-contextmenu');
+  @include menu-submenu-icon-color('p-contextmenu');
+
+  .p-contextmenu-submenu {
+    background: var(--mj-bg-surface-elevated);
+    border-color: var(--mj-border-default);
+    box-shadow: var(--mj-shadow-lg);
+  }
+
+  .p-contextmenu-separator {
+    border-color: var(--mj-border-subtle);
   }
 }
 
 /* Menubar */
 .p-menubar {
   background: var(--mj-bg-surface-elevated);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md);
+  border-color: var(--mj-border-default);
   color: var(--mj-text-primary);
 
-  .p-menuitem > .p-menuitem-content {
-    color: var(--mj-text-primary);
+  @include menu-item-styles('p-menubar');
+  @include menu-submenu-icon-color('p-menubar');
 
-    .p-menuitem-link {
-      color: var(--mj-text-primary);
-
-      .p-menuitem-text {
-        color: var(--mj-text-primary);
-      }
-
-      .p-menuitem-icon {
-        color: var(--mj-text-secondary);
-      }
-
-      .p-submenu-icon {
-        color: var(--mj-text-muted);
-      }
-    }
-  }
-
-  .p-menuitem:not(.p-highlight):not(.p-disabled) > .p-menuitem-content:hover {
-    background: var(--mj-bg-surface-hover);
-  }
-
-  .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus > .p-menuitem-content {
-    background: var(--mj-bg-surface-hover);
-  }
-
-  .p-menuitem.p-highlight > .p-menuitem-content {
-    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-    color: var(--mj-brand-primary);
-
-    .p-menuitem-link .p-menuitem-text,
-    .p-menuitem-link .p-menuitem-icon {
-      color: var(--mj-brand-primary);
-    }
-  }
-
-  .p-submenu-list {
+  .p-menubar-submenu {
     background: var(--mj-bg-surface-elevated);
-    border: 1px solid var(--mj-border-default);
-    border-radius: var(--mj-radius-md);
+    border-color: var(--mj-border-default);
     box-shadow: var(--mj-shadow-lg);
   }
 }
@@ -1374,148 +1347,70 @@
 /* Breadcrumb */
 .p-breadcrumb {
   background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md);
-  padding: var(--mj-space-2) var(--mj-space-4);
+  border-color: var(--mj-border-default);
   color: var(--mj-text-primary);
 
-  .p-breadcrumb-list li .p-menuitem-link {
+  .p-breadcrumb-item-link {
     color: var(--mj-text-secondary);
-
-    .p-menuitem-text {
-      color: var(--mj-text-secondary);
-    }
-
-    .p-menuitem-icon {
-      color: var(--mj-text-secondary);
-    }
 
     &:hover {
       color: var(--mj-brand-primary);
-
-      .p-menuitem-text,
-      .p-menuitem-icon {
-        color: var(--mj-brand-primary);
-      }
     }
   }
 
-  .p-breadcrumb-chevron {
+  .p-breadcrumb-separator {
     color: var(--mj-text-muted);
   }
 }
 
 /* PanelMenu */
 .p-panelmenu {
-  .p-panelmenu-header-content {
+  .p-panelmenu-header {
     background: var(--mj-bg-surface-elevated);
-    border: 1px solid var(--mj-border-default);
-  }
-
-  .p-panelmenu-header-link,
-  .p-panelmenu-header-action {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    font-weight: var(--mj-font-semibold);
-  }
-
-  .p-panelmenu-header:not(.p-disabled):hover .p-panelmenu-header-content {
-    background: var(--mj-bg-surface-hover);
-  }
-
-  .p-panelmenu-header.p-highlight .p-panelmenu-header-content {
-    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-elevated));
     border-color: var(--mj-border-default);
+    color: var(--mj-text-primary);
+
+    &:not(.p-disabled):hover {
+      background: var(--mj-bg-surface-hover);
+    }
+
+    &.p-panelmenu-header-active {
+      background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-elevated));
+    }
   }
 
   .p-panelmenu-content {
     background: var(--mj-bg-surface);
     border-color: var(--mj-border-default);
-
-    .p-menuitem > .p-menuitem-content {
-      color: var(--mj-text-primary);
-
-      .p-menuitem-link {
-        color: var(--mj-text-primary);
-
-        .p-menuitem-text {
-          color: var(--mj-text-primary);
-        }
-
-        .p-menuitem-icon {
-          color: var(--mj-text-secondary);
-        }
-      }
-    }
-
-    .p-menuitem:not(.p-highlight):not(.p-disabled) > .p-menuitem-content:hover {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    .p-menuitem.p-highlight > .p-menuitem-content {
-      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-      color: var(--mj-brand-primary);
-
-      .p-menuitem-link .p-menuitem-text,
-      .p-menuitem-link .p-menuitem-icon {
-        color: var(--mj-brand-primary);
-      }
-    }
   }
+
+  @include menu-item-styles('p-panelmenu');
 }
 
 /* MegaMenu */
 .p-megamenu {
   background: var(--mj-bg-surface-elevated);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md);
+  border-color: var(--mj-border-default);
   color: var(--mj-text-primary);
 
-  .p-menuitem > .p-menuitem-content {
-    color: var(--mj-text-primary);
+  @include menu-item-styles('p-megamenu');
+  @include menu-submenu-icon-color('p-megamenu');
 
-    .p-menuitem-link {
-      color: var(--mj-text-primary);
-
-      .p-menuitem-text {
-        color: var(--mj-text-primary);
-      }
-
-      .p-menuitem-icon {
-        color: var(--mj-text-secondary);
-      }
-    }
-  }
-
-  .p-menuitem:not(.p-highlight):not(.p-disabled) > .p-menuitem-content:hover {
-    background: var(--mj-bg-surface-hover);
-  }
-
-  .p-menuitem.p-highlight > .p-menuitem-content {
-    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-    color: var(--mj-brand-primary);
-  }
-
-  .p-megamenu-panel {
+  .p-megamenu-overlay {
     background: var(--mj-bg-surface-elevated);
     box-shadow: var(--mj-shadow-lg);
   }
 
-  .p-megamenu-submenu-header {
-    background: var(--mj-bg-surface-elevated);
+  .p-megamenu-submenu-label {
     color: var(--mj-text-muted);
-    font-weight: var(--mj-font-bold);
-    text-transform: uppercase;
-    font-size: var(--mj-text-xs);
   }
 }
 
 /* Dock */
 .p-dock {
-  .p-dock-list-container {
+  .p-dock-list {
     background: color-mix(in srgb, var(--mj-bg-surface-elevated) 90%, transparent);
-    border: 1px solid var(--mj-border-default);
-    border-radius: var(--mj-radius-xl);
+    border-color: var(--mj-border-default);
     box-shadow: var(--mj-shadow-lg);
   }
 
@@ -1526,70 +1421,23 @@
 
 /* Steps */
 .p-steps {
-  .p-steps-item {
-    .p-menuitem-link {
-      background: transparent;
-
-      .p-steps-number {
-        background: var(--mj-bg-surface-sunken);
-        color: var(--mj-text-secondary);
-        border: 2px solid var(--mj-border-default);
-      }
-
-      .p-steps-title {
-        color: var(--mj-text-secondary);
-      }
-    }
-
-    &.p-highlight .p-menuitem-link {
-      background: transparent;
-
-      .p-steps-number {
-        background: var(--mj-brand-primary);
-        color: var(--mj-brand-on-primary);
-        border-color: var(--mj-brand-primary);
-      }
-
-      .p-steps-title {
-        color: var(--mj-brand-primary);
-        font-weight: var(--mj-font-semibold);
-      }
-    }
-  }
-}
-
-/* TabMenu */
-.p-tabmenu {
-  .p-tabmenu-nav {
-    background: var(--mj-bg-surface);
+  .p-steps-item-number {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
     border-color: var(--mj-border-default);
-
-    .p-tabmenuitem {
-      .p-menuitem-link {
-        background: var(--mj-bg-surface);
-        color: var(--mj-text-secondary);
-        border-color: transparent transparent var(--mj-border-default) transparent;
-        transition: color var(--mj-transition-fast),
-                    border-color var(--mj-transition-fast),
-                    background-color var(--mj-transition-fast);
-
-        &:hover {
-          background: var(--mj-bg-surface-hover);
-          color: var(--mj-text-primary);
-          border-color: transparent transparent var(--mj-border-strong) transparent;
-        }
-      }
-
-      &.p-highlight .p-menuitem-link {
-        background: var(--mj-bg-surface);
-        color: var(--mj-brand-primary);
-        border-color: transparent transparent var(--mj-brand-primary) transparent;
-      }
-    }
   }
 
-  .p-tabmenu-nav-btn.p-link {
-    background: var(--mj-bg-surface);
+  .p-steps-item-label {
+    color: var(--mj-text-secondary);
+  }
+
+  .p-steps-item-active .p-steps-item-number {
+    background: var(--mj-brand-primary);
+    color: var(--mj-brand-on-primary);
+    border-color: var(--mj-brand-primary);
+  }
+
+  .p-steps-item-active .p-steps-item-label {
     color: var(--mj-brand-primary);
   }
 }
@@ -1887,1125 +1735,3 @@
   background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
-/* ========================================
-   DARK MODE BRIDGE
-   Since MJ tokens change under [data-theme="dark"],
-   the bridge vars cascade automatically via var().
-   But PrimeNG theme CSS may have hard-coded colors
-   that need explicit dark-mode overrides.
-   ======================================== */
-
-[data-theme="dark"] {
-  /* Re-assert surface scale for dark mode */
-  --surface-ground: var(--mj-bg-page);
-  --surface-section: var(--mj-bg-surface);
-  --surface-card: var(--mj-bg-surface-elevated);
-  --surface-overlay: var(--mj-bg-overlay);
-  --surface-border: var(--mj-border-default);
-  --surface-hover: var(--mj-bg-surface-hover);
-
-  --text-color: var(--mj-text-primary);
-  --text-color-secondary: var(--mj-text-secondary);
-
-  --primary-color: var(--mj-brand-primary);
-  --primary-color-text: var(--mj-brand-on-primary);
-
-  --maskbg: rgba(0, 0, 0, 0.6);
-
-  /* Override PrimeNG components that use hard-coded colors */
-  .p-card {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-  }
-
-  .p-datatable {
-    .p-datatable-thead > tr > th {
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-secondary);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-datatable-tbody > tr {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-
-      > td {
-        border-color: var(--mj-border-subtle);
-      }
-
-      &:hover {
-        background: var(--mj-bg-surface-hover);
-      }
-    }
-  }
-
-  .p-panel {
-    .p-panel-header {
-      background: var(--mj-bg-surface-elevated);
-      color: var(--mj-text-primary);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-panel-content {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-      border-color: var(--mj-border-default);
-    }
-  }
-
-  .p-inputtext {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    &:enabled:hover {
-      border-color: var(--mj-border-strong);
-    }
-
-    &:enabled:focus {
-      border-color: var(--mj-border-focus);
-    }
-  }
-
-  .p-dropdown {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-  }
-
-  .p-dropdown-panel {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-dropdown-items .p-dropdown-item {
-      color: var(--mj-text-primary);
-
-      &:hover {
-        background: var(--mj-bg-surface-hover);
-      }
-
-      &.p-highlight {
-        background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-        color: var(--mj-brand-primary);
-      }
-    }
-  }
-
-  /* Dark mode overrides for new components */
-  .p-multiselect {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-  }
-
-  .p-multiselect-panel {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-multiselect-header {
-      background: var(--mj-bg-surface-elevated);
-      border-color: var(--mj-border-default);
-      color: var(--mj-text-primary);
-    }
-
-    .p-multiselect-items .p-multiselect-item {
-      color: var(--mj-text-primary);
-
-      &:not(.p-highlight):not(.p-disabled):hover {
-        background: var(--mj-bg-surface-hover);
-      }
-
-      &.p-highlight {
-        background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-        color: var(--mj-brand-primary);
-      }
-    }
-  }
-
-  .p-listbox {
-    background: var(--mj-bg-surface);
-    border-color: var(--mj-border-default);
-
-    .p-listbox-header {
-      background: var(--mj-bg-surface);
-      border-color: var(--mj-border-default);
-      color: var(--mj-text-primary);
-    }
-
-    .p-listbox-item {
-      color: var(--mj-text-primary);
-
-      &:hover {
-        background: var(--mj-bg-surface-hover);
-      }
-
-      &.p-highlight {
-        background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-        color: var(--mj-brand-primary);
-      }
-    }
-  }
-
-  .p-cascadeselect {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-cascadeselect-label {
-      color: var(--mj-text-primary);
-    }
-
-    .p-cascadeselect-trigger {
-      color: var(--mj-text-secondary);
-    }
-  }
-
-  .p-cascadeselect-panel {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-cascadeselect-items .p-cascadeselect-item {
-      .p-cascadeselect-item-content {
-        color: var(--mj-text-primary);
-      }
-
-      &:not(.p-highlight):not(.p-disabled) > .p-cascadeselect-item-content:hover {
-        background: var(--mj-bg-surface-hover);
-      }
-
-      &.p-highlight > .p-cascadeselect-item-content {
-        background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-        color: var(--mj-brand-primary);
-      }
-    }
-
-    .p-cascadeselect-group-icon {
-      color: var(--mj-text-muted);
-    }
-  }
-
-  .p-treeselect {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-treeselect-label {
-      color: var(--mj-text-primary);
-    }
-
-    .p-treeselect-trigger {
-      color: var(--mj-text-secondary);
-    }
-  }
-
-  .p-treeselect-panel {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-  }
-
-  .p-autocomplete-panel {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-  }
-
-  .p-tree {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-  }
-
-  .p-treetable {
-    .p-treetable-thead > tr > th {
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-secondary);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-treetable-tbody > tr {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-
-      > td {
-        border-color: var(--mj-border-subtle);
-      }
-    }
-  }
-
-  .p-accordion {
-    .p-accordion-header-link {
-      background: var(--mj-bg-surface-elevated);
-      color: var(--mj-text-primary);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-accordion-content {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-      border-color: var(--mj-border-default);
-    }
-  }
-
-  .p-tabview {
-    .p-tabview-nav {
-      background: var(--mj-bg-surface);
-      border-color: var(--mj-border-default);
-
-      li {
-        .p-tabview-nav-link {
-          background: var(--mj-bg-surface);
-          color: var(--mj-text-secondary);
-          border-color: transparent transparent var(--mj-border-default) transparent;
-        }
-
-        &:not(.p-highlight):not(.p-disabled):hover .p-tabview-nav-link {
-          background: var(--mj-bg-surface-hover);
-          color: var(--mj-text-primary);
-          border-color: transparent transparent var(--mj-border-strong) transparent;
-        }
-
-        &.p-highlight .p-tabview-nav-link {
-          background: var(--mj-bg-surface);
-          color: var(--mj-brand-primary);
-          border-color: transparent transparent var(--mj-brand-primary) transparent;
-        }
-      }
-    }
-
-    .p-tabview-nav-btn.p-link {
-      background: var(--mj-bg-surface);
-      color: var(--mj-brand-primary);
-    }
-
-    .p-tabview-panels {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-    }
-  }
-
-  .p-stepper {
-    .p-stepper-header {
-      .p-stepper-action {
-        background: transparent;
-
-        .p-stepper-number {
-          background: var(--mj-bg-surface-sunken);
-          color: var(--mj-text-secondary);
-          border-color: var(--mj-border-default);
-        }
-
-        .p-stepper-title {
-          color: var(--mj-text-secondary);
-        }
-      }
-
-      &.p-highlight .p-stepper-action {
-        .p-stepper-number {
-          background: var(--mj-brand-primary);
-          color: var(--mj-brand-on-primary);
-          border-color: var(--mj-brand-primary);
-        }
-
-        .p-stepper-title {
-          color: var(--mj-brand-primary);
-        }
-      }
-    }
-
-    .p-stepper-separator {
-      background-color: var(--mj-border-default);
-    }
-
-    .p-stepper-header:has(~ .p-highlight) .p-stepper-separator {
-      background-color: var(--mj-brand-primary);
-    }
-
-    .p-stepper-panels {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-    }
-
-    &.p-stepper-vertical .p-stepper-toggleable-content {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-    }
-  }
-
-  .p-fieldset {
-    background: var(--mj-bg-surface);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-primary);
-
-    .p-fieldset-legend {
-      background: var(--mj-bg-surface-elevated);
-      border-color: var(--mj-border-default);
-      color: var(--mj-text-primary);
-    }
-
-    &.p-fieldset-toggleable .p-fieldset-legend {
-      a {
-        color: var(--mj-text-primary);
-
-        .p-fieldset-toggler {
-          color: var(--mj-text-secondary);
-        }
-
-        &:focus-visible {
-          box-shadow: var(--mj-focus-ring);
-        }
-      }
-
-      &:hover {
-        background: var(--mj-bg-surface-hover);
-        border-color: var(--mj-border-default);
-        color: var(--mj-text-primary);
-      }
-    }
-
-    .p-fieldset-content {
-      color: var(--mj-text-primary);
-    }
-  }
-
-  .p-toolbar {
-    background: var(--mj-bg-surface-elevated);
-    border-color: var(--mj-border-default);
-  }
-
-  .p-dialog {
-    .p-dialog-header {
-      background: var(--mj-bg-surface-elevated);
-      color: var(--mj-text-primary);
-    }
-
-    .p-dialog-content {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-    }
-
-    .p-dialog-footer {
-      background: var(--mj-bg-surface);
-    }
-  }
-
-  .p-sidebar {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-  }
-
-  .p-overlaypanel {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-  }
-
-  .p-confirm-popup {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-  }
-
-  .p-menu,
-  .p-tieredmenu,
-  .p-slidemenu,
-  .p-contextmenu {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-menuitem > .p-menuitem-content {
-      color: var(--mj-text-primary);
-
-      .p-menuitem-link {
-        color: var(--mj-text-primary);
-
-        .p-menuitem-text {
-          color: var(--mj-text-primary);
-        }
-
-        .p-menuitem-icon {
-          color: var(--mj-text-secondary);
-        }
-
-        .p-submenu-icon {
-          color: var(--mj-text-muted);
-        }
-      }
-    }
-
-    .p-menuitem:not(.p-highlight):not(.p-disabled) > .p-menuitem-content:hover {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus > .p-menuitem-content {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    .p-menuitem.p-highlight > .p-menuitem-content {
-      background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-      color: var(--mj-brand-primary);
-
-      .p-menuitem-link .p-menuitem-text,
-      .p-menuitem-link .p-menuitem-icon {
-        color: var(--mj-brand-primary);
-      }
-    }
-
-    .p-submenu-list {
-      background: var(--mj-bg-surface-elevated);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-menu-separator,
-    .p-menuitem-separator {
-      border-color: var(--mj-border-subtle);
-    }
-  }
-
-  .p-slidemenu .p-slidemenu-backward {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-  }
-
-  .p-menubar {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-menuitem > .p-menuitem-content {
-      color: var(--mj-text-primary);
-
-      .p-menuitem-link {
-        color: var(--mj-text-primary);
-
-        .p-menuitem-text {
-          color: var(--mj-text-primary);
-        }
-
-        .p-menuitem-icon {
-          color: var(--mj-text-secondary);
-        }
-
-        .p-submenu-icon {
-          color: var(--mj-text-muted);
-        }
-      }
-    }
-
-    .p-menuitem:not(.p-highlight):not(.p-disabled) > .p-menuitem-content:hover {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    .p-menuitem.p-highlight > .p-menuitem-content {
-      background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-      color: var(--mj-brand-primary);
-    }
-
-    .p-submenu-list {
-      background: var(--mj-bg-surface-elevated);
-      border-color: var(--mj-border-default);
-    }
-  }
-
-  .p-breadcrumb {
-    background: var(--mj-bg-surface);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-primary);
-
-    .p-breadcrumb-list li .p-menuitem-link {
-      color: var(--mj-text-secondary);
-
-      .p-menuitem-text {
-        color: var(--mj-text-secondary);
-      }
-
-      .p-menuitem-icon {
-        color: var(--mj-text-secondary);
-      }
-    }
-
-    .p-breadcrumb-chevron {
-      color: var(--mj-text-muted);
-    }
-  }
-
-  .p-panelmenu {
-    .p-panelmenu-header-content {
-      background: var(--mj-bg-surface-elevated);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-panelmenu-header-link,
-    .p-panelmenu-header-action {
-      background: var(--mj-bg-surface-elevated);
-      color: var(--mj-text-primary);
-    }
-
-    .p-panelmenu-header:not(.p-disabled):hover .p-panelmenu-header-content {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    .p-panelmenu-header.p-highlight .p-panelmenu-header-content {
-      background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-elevated));
-    }
-
-    .p-panelmenu-content {
-      background: var(--mj-bg-surface);
-      border-color: var(--mj-border-default);
-
-      .p-menuitem > .p-menuitem-content {
-        color: var(--mj-text-primary);
-
-        .p-menuitem-link .p-menuitem-text {
-          color: var(--mj-text-primary);
-        }
-
-        .p-menuitem-link .p-menuitem-icon {
-          color: var(--mj-text-secondary);
-        }
-      }
-
-      .p-menuitem:not(.p-highlight):not(.p-disabled) > .p-menuitem-content:hover {
-        background: var(--mj-bg-surface-hover);
-      }
-
-      .p-menuitem.p-highlight > .p-menuitem-content {
-        background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-        color: var(--mj-brand-primary);
-
-        .p-menuitem-link .p-menuitem-text,
-        .p-menuitem-link .p-menuitem-icon {
-          color: var(--mj-brand-primary);
-        }
-      }
-    }
-  }
-
-  .p-megamenu {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-menuitem > .p-menuitem-content {
-      color: var(--mj-text-primary);
-
-      .p-menuitem-link {
-        color: var(--mj-text-primary);
-
-        .p-menuitem-text {
-          color: var(--mj-text-primary);
-        }
-
-        .p-menuitem-icon {
-          color: var(--mj-text-secondary);
-        }
-      }
-    }
-
-    .p-menuitem:not(.p-highlight):not(.p-disabled) > .p-menuitem-content:hover {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    .p-megamenu-panel {
-      background: var(--mj-bg-surface-elevated);
-    }
-
-    .p-megamenu-submenu-header {
-      background: var(--mj-bg-surface-elevated);
-      color: var(--mj-text-muted);
-    }
-  }
-
-  .p-dock {
-    .p-dock-list-container {
-      background: color-mix(in srgb, var(--mj-bg-surface-elevated) 90%, transparent);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-dock-item-link {
-      color: var(--mj-text-primary);
-    }
-  }
-
-  .p-steps {
-    .p-steps-item .p-menuitem-link {
-      background: transparent;
-
-      .p-steps-number {
-        background: var(--mj-bg-surface-sunken);
-        color: var(--mj-text-secondary);
-        border-color: var(--mj-border-default);
-      }
-
-      .p-steps-title {
-        color: var(--mj-text-secondary);
-      }
-    }
-
-    .p-steps-item.p-highlight .p-menuitem-link {
-      background: transparent;
-
-      .p-steps-number {
-        background: var(--mj-brand-primary);
-        color: var(--mj-brand-on-primary);
-        border-color: var(--mj-brand-primary);
-      }
-
-      .p-steps-title {
-        color: var(--mj-brand-primary);
-      }
-    }
-  }
-
-  .p-tabmenu {
-    .p-tabmenu-nav {
-      background: var(--mj-bg-surface);
-      border-color: var(--mj-border-default);
-
-      .p-tabmenuitem {
-        .p-menuitem-link {
-          background: var(--mj-bg-surface);
-          color: var(--mj-text-secondary);
-          border-color: transparent transparent var(--mj-border-default) transparent;
-        }
-
-        &:not(.p-highlight):not(.p-disabled):hover .p-menuitem-link {
-          background: var(--mj-bg-surface-hover);
-          color: var(--mj-text-primary);
-          border-color: transparent transparent var(--mj-border-strong) transparent;
-        }
-
-        &.p-highlight .p-menuitem-link {
-          background: var(--mj-bg-surface);
-          color: var(--mj-brand-primary);
-          border-color: transparent transparent var(--mj-brand-primary) transparent;
-        }
-      }
-    }
-
-    .p-tabmenu-nav-btn.p-link {
-      background: var(--mj-bg-surface);
-      color: var(--mj-brand-primary);
-    }
-  }
-
-  .p-paginator {
-    background: var(--mj-bg-surface);
-    border-color: var(--mj-border-default);
-  }
-
-  .p-datepicker {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-
-    .p-datepicker-header {
-      background: var(--mj-bg-surface-elevated);
-      color: var(--mj-text-primary);
-    }
-  }
-
-  .p-editor-container {
-    border-color: var(--mj-border-default);
-
-    .p-editor-toolbar {
-      background: var(--mj-bg-surface-sunken);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-editor-content {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-
-      .ql-editor {
-        background: var(--mj-bg-surface);
-        color: var(--mj-text-primary);
-      }
-    }
-  }
-
-  .p-password-panel {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-  }
-
-  .p-chips .p-chips-multiple-container {
-    background: var(--mj-bg-surface);
-    border-color: var(--mj-border-default);
-  }
-
-  .p-inputgroup-addon {
-    background: var(--mj-bg-surface-sunken);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-secondary);
-  }
-
-  .p-orderlist,
-  .p-picklist {
-    .p-orderlist-header,
-    .p-picklist-header {
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-primary);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-orderlist-list,
-    .p-picklist-list {
-      background: var(--mj-bg-surface);
-      border-color: var(--mj-border-default);
-    }
-  }
-
-  .p-organizationchart .p-organizationchart-node-content {
-    background: var(--mj-bg-surface-elevated);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-primary);
-  }
-
-  .p-fileupload {
-    border-color: var(--mj-border-default);
-
-    .p-fileupload-buttonbar {
-      background: var(--mj-bg-surface-sunken);
-      border-color: var(--mj-border-default);
-    }
-
-    .p-fileupload-content {
-      background: var(--mj-bg-surface);
-    }
-  }
-
-  .p-skeleton {
-    background: var(--mj-bg-surface-sunken);
-  }
-
-  .p-chip {
-    background: var(--mj-bg-surface-sunken);
-    color: var(--mj-text-primary);
-  }
-
-  .p-avatar {
-    background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
-    color: var(--mj-brand-primary);
-  }
-
-  .p-inplace .p-inplace-display:hover {
-    background: var(--mj-bg-surface-hover);
-  }
-
-  .p-tooltip .p-tooltip-text {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-  }
-
-  .p-splitter {
-    border-color: var(--mj-border-default);
-
-    .p-splitter-gutter {
-      background: var(--mj-bg-surface-sunken);
-    }
-
-    .p-splitter-panel {
-      background: var(--mj-bg-surface);
-    }
-  }
-
-  .p-colorpicker-preview {
-    border-color: var(--mj-border-default);
-  }
-
-  .p-selectbutton .p-button {
-    background: var(--mj-bg-surface);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-primary);
-
-    &:not(.p-highlight):not(.p-disabled):hover {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    &.p-highlight {
-      background: var(--mj-brand-primary);
-      border-color: var(--mj-brand-primary);
-      color: var(--mj-brand-on-primary);
-    }
-  }
-
-  .p-togglebutton.p-button {
-    background: var(--mj-bg-surface);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-primary);
-
-    &:not(.p-highlight):not(.p-disabled):hover {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    &.p-highlight {
-      background: var(--mj-brand-primary);
-      border-color: var(--mj-brand-primary);
-      color: var(--mj-brand-on-primary);
-    }
-  }
-
-  .p-tristatecheckbox .p-checkbox-box {
-    border-color: var(--mj-border-default);
-    background: var(--mj-bg-surface);
-
-    &.p-highlight {
-      background: var(--mj-brand-primary);
-      border-color: var(--mj-brand-primary);
-    }
-  }
-
-  .p-slider {
-    background: var(--mj-border-default);
-
-    .p-slider-handle {
-      background: var(--mj-bg-surface);
-      border-color: var(--mj-brand-primary);
-    }
-  }
-
-  .p-rating .p-rating-item .p-rating-icon {
-    color: var(--mj-border-default);
-  }
-
-  .p-rating .p-rating-item.p-rating-item-active .p-rating-icon {
-    color: var(--mj-status-warning);
-  }
-
-  .p-knob-text {
-    fill: var(--mj-text-primary);
-  }
-
-  .p-message {
-    &.p-message-success {
-      background: var(--mj-status-success-bg);
-      color: var(--mj-status-success-text);
-      border-color: var(--mj-status-success);
-
-      .p-message-icon { color: var(--mj-status-success-text); }
-      .p-message-close { color: var(--mj-status-success-text); }
-    }
-
-    &.p-message-info {
-      background: var(--mj-status-info-bg);
-      color: var(--mj-status-info-text);
-      border-color: var(--mj-status-info);
-
-      .p-message-icon { color: var(--mj-status-info-text); }
-      .p-message-close { color: var(--mj-status-info-text); }
-    }
-
-    &.p-message-warn {
-      background: var(--mj-status-warning-bg);
-      color: var(--mj-status-warning-text);
-      border-color: var(--mj-status-warning);
-
-      .p-message-icon { color: var(--mj-status-warning-text); }
-      .p-message-close { color: var(--mj-status-warning-text); }
-    }
-
-    &.p-message-error {
-      background: var(--mj-status-error-bg);
-      color: var(--mj-status-error-text);
-      border-color: var(--mj-status-error);
-
-      .p-message-icon { color: var(--mj-status-error-text); }
-      .p-message-close { color: var(--mj-status-error-text); }
-    }
-
-    .p-message-close:focus-visible {
-      box-shadow: var(--mj-focus-ring);
-    }
-  }
-
-  .p-toast {
-    .p-toast-message-success {
-      background: var(--mj-status-success-bg);
-      color: var(--mj-status-success-text);
-      border-color: var(--mj-status-success);
-    }
-
-    .p-toast-message-info {
-      background: var(--mj-status-info-bg);
-      color: var(--mj-status-info-text);
-      border-color: var(--mj-status-info);
-    }
-
-    .p-toast-message-warn {
-      background: var(--mj-status-warning-bg);
-      color: var(--mj-status-warning-text);
-      border-color: var(--mj-status-warning);
-    }
-
-    .p-toast-message-error {
-      background: var(--mj-status-error-bg);
-      color: var(--mj-status-error-text);
-      border-color: var(--mj-status-error);
-    }
-  }
-
-  /* Checkbox & Radio — override PrimeNG hardcoded #ffffff background */
-  .p-checkbox .p-checkbox-box,
-  .p-radiobutton .p-radiobutton-box {
-    background: var(--mj-bg-surface);
-
-    &.p-highlight {
-      background: var(--mj-brand-primary);
-      border-color: var(--mj-brand-primary);
-    }
-  }
-
-  /* InputSwitch — override PrimeNG hardcoded #ced4da unchecked track */
-  .p-inputswitch .p-inputswitch-slider {
-    background: var(--mj-border-strong);
-  }
-
-  .p-inputswitch.p-inputswitch-checked .p-inputswitch-slider {
-    background: var(--mj-brand-primary);
-  }
-
-  /* Badge severity variants */
-  .p-badge {
-    &.p-badge-success {
-      background: var(--mj-status-success);
-      color: var(--mj-text-inverse);
-    }
-
-    &.p-badge-warning {
-      background: var(--mj-status-warning);
-      color: var(--mj-text-inverse);
-    }
-
-    &.p-badge-danger {
-      background: var(--mj-status-error);
-      color: var(--mj-text-inverse);
-    }
-
-    &.p-badge-info {
-      background: var(--mj-status-info);
-      color: var(--mj-text-inverse);
-    }
-  }
-
-  /* ProgressBar — dark track background */
-  .p-progressbar {
-    background: var(--mj-bg-surface-sunken);
-  }
-
-  /* MeterGroup — dark track background */
-  .p-metergroup .p-metergroup-meter {
-    background: var(--mj-bg-surface-sunken);
-  }
-
-  /* DataView — dark header & content */
-  .p-dataview {
-    .p-dataview-header {
-      background: var(--mj-bg-surface-sunken);
-      border-color: var(--mj-border-default);
-      color: var(--mj-text-primary);
-    }
-
-    .p-dataview-content {
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-    }
-  }
-
-  /* Carousel — dark nav buttons & indicators */
-  .p-carousel {
-    .p-carousel-prev,
-    .p-carousel-next {
-      color: var(--mj-text-primary);
-      background: var(--mj-bg-surface-elevated);
-      border-color: var(--mj-border-default);
-
-      &:hover {
-        background: var(--mj-bg-surface-hover);
-      }
-    }
-
-    .p-carousel-indicators .p-carousel-indicator button {
-      background: var(--mj-border-strong);
-
-      &.p-highlight {
-        background: var(--mj-brand-primary);
-      }
-    }
-  }
-
-  /* Galleria — dark indicators */
-  .p-galleria {
-    .p-galleria-indicators .p-galleria-indicator button {
-      background: var(--mj-border-strong);
-
-      &.p-highlight {
-        background: var(--mj-brand-primary);
-      }
-    }
-  }
-
-  /* ScrollPanel — dark scrollbar */
-  .p-scrollpanel .p-scrollpanel-bar {
-    background: var(--mj-border-strong);
-
-    &:hover {
-      background: var(--mj-border-default);
-    }
-  }
-
-  /* Datepicker — dark day states & nav */
-  .p-datepicker {
-    table td > span:not(.p-highlight):not(.p-disabled):hover {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    table td.p-datepicker-other-month > span {
-      color: var(--mj-text-disabled);
-    }
-
-    .p-datepicker-prev,
-    .p-datepicker-next {
-      color: var(--mj-text-primary);
-
-      &:hover {
-        background: var(--mj-bg-surface-hover);
-      }
-    }
-  }
-
-  /* Dropdown Panel — dark item colors, hover, highlight */
-  .p-dropdown-panel {
-    background: var(--mj-bg-surface-elevated);
-    color: var(--mj-text-primary);
-    border-color: var(--mj-border-default);
-
-    .p-dropdown-header {
-      background: var(--mj-bg-surface-elevated);
-      border-color: var(--mj-border-default);
-      color: var(--mj-text-primary);
-    }
-
-    .p-dropdown-items .p-dropdown-item {
-      color: var(--mj-text-primary);
-
-      &:not(.p-highlight):not(.p-disabled):hover {
-        background: var(--mj-bg-surface-hover);
-      }
-
-      &:not(.p-highlight):not(.p-disabled).p-focus {
-        background: var(--mj-bg-surface-hover);
-      }
-
-      &.p-highlight {
-        background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-        color: var(--mj-brand-primary);
-      }
-    }
-
-    .p-dropdown-empty-message {
-      color: var(--mj-text-muted);
-    }
-  }
-}

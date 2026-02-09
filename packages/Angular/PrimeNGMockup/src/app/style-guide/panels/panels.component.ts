@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AccordionModule } from 'primeng/accordion';
-import { TabViewModule } from 'primeng/tabview';
+import { TabsModule } from 'primeng/tabs';
 import { FieldsetModule } from 'primeng/fieldset';
 import { ToolbarModule } from 'primeng/toolbar';
 import { SplitterModule } from 'primeng/splitter';
@@ -16,7 +16,7 @@ import { ButtonModule } from 'primeng/button';
     imports: [
         CommonModule,
         AccordionModule,
-        TabViewModule,
+        TabsModule,
         FieldsetModule,
         ToolbarModule,
         SplitterModule,
@@ -33,25 +33,34 @@ import { ButtonModule } from 'primeng/button';
             <p class="section-desc">Expandable content panels that allow users to show and hide sections of related content. Uses MJ surface and border tokens for consistent styling.</p>
             <p class="token-mapping">Header bg: --mj-bg-surface | Active: --mj-brand-primary | Border: --mj-border-default</p>
 
-            <p-accordion [multiple]="true" [activeIndex]="[0]">
-                <p-accordionTab header="Account Information">
-                    <p>Manage your account details including name, email address, and profile picture.
-                    All changes are saved automatically and synced across your devices.</p>
-                    <p>Last updated: February 3, 2026</p>
-                </p-accordionTab>
-                <p-accordionTab header="Security Settings">
-                    <p>Configure two-factor authentication, manage active sessions, and review
-                    recent login activity. We recommend enabling 2FA for enhanced account security.</p>
-                    <ul class="demo-list">
-                        <li>Two-factor authentication: Enabled</li>
-                        <li>Active sessions: 3 devices</li>
-                        <li>Last password change: 14 days ago</li>
-                    </ul>
-                </p-accordionTab>
-                <p-accordionTab header="Notification Preferences">
-                    <p>Customize which notifications you receive and how they are delivered.
-                    Choose between email, push notifications, or in-app alerts for each category.</p>
-                </p-accordionTab>
+            <p-accordion [multiple]="true" [value]="['0']">
+                <p-accordion-panel value="0">
+                    <p-accordion-header>Account Information</p-accordion-header>
+                    <p-accordion-content>
+                        <p>Manage your account details including name, email address, and profile picture.
+                        All changes are saved automatically and synced across your devices.</p>
+                        <p>Last updated: February 3, 2026</p>
+                    </p-accordion-content>
+                </p-accordion-panel>
+                <p-accordion-panel value="1">
+                    <p-accordion-header>Security Settings</p-accordion-header>
+                    <p-accordion-content>
+                        <p>Configure two-factor authentication, manage active sessions, and review
+                        recent login activity. We recommend enabling 2FA for enhanced account security.</p>
+                        <ul class="demo-list">
+                            <li>Two-factor authentication: Enabled</li>
+                            <li>Active sessions: 3 devices</li>
+                            <li>Last password change: 14 days ago</li>
+                        </ul>
+                    </p-accordion-content>
+                </p-accordion-panel>
+                <p-accordion-panel value="2">
+                    <p-accordion-header>Notification Preferences</p-accordion-header>
+                    <p-accordion-content>
+                        <p>Customize which notifications you receive and how they are delivered.
+                        Choose between email, push notifications, or in-app alerts for each category.</p>
+                    </p-accordion-content>
+                </p-accordion-panel>
             </p-accordion>
         </section>
 
@@ -61,51 +70,58 @@ import { ButtonModule } from 'primeng/button';
             <p class="section-desc">Tabbed navigation for organizing content into separate views. Active tab uses brand primary color for the indicator.</p>
             <p class="token-mapping">Active tab: --mj-brand-primary | Inactive: --mj-text-secondary | Content bg: --mj-bg-surface</p>
 
-            <p-tabView>
-                <p-tabPanel header="Overview">
-                    <div class="tab-content">
-                        <h3 class="subsection-title">Project Overview</h3>
-                        <p>This project is currently in the development phase with 12 active contributors.
-                        The sprint deadline is set for February 15, 2026. All milestones are on track.</p>
-                        <div class="stat-row mj-grid mj-gap-6">
-                            <div class="mj-grid mj-flex-column mj-gap-1">
-                                <span class="stat-value">87%</span>
-                                <span class="stat-label">Complete</span>
-                            </div>
-                            <div class="mj-grid mj-flex-column mj-gap-1">
-                                <span class="stat-value">24</span>
-                                <span class="stat-label">Open Tasks</span>
-                            </div>
-                            <div class="mj-grid mj-flex-column mj-gap-1">
-                                <span class="stat-value">3</span>
-                                <span class="stat-label">Blockers</span>
+            <p-tabs [value]="0">
+                <p-tablist>
+                    <p-tab [value]="0">Overview</p-tab>
+                    <p-tab [value]="1">Details</p-tab>
+                    <p-tab [value]="2">Settings</p-tab>
+                </p-tablist>
+                <p-tabpanels>
+                    <p-tabpanel [value]="0">
+                        <div class="tab-content">
+                            <h3 class="subsection-title">Project Overview</h3>
+                            <p>This project is currently in the development phase with 12 active contributors.
+                            The sprint deadline is set for February 15, 2026. All milestones are on track.</p>
+                            <div class="stat-row mj-grid mj-gap-6">
+                                <div class="mj-grid mj-flex-column mj-gap-1">
+                                    <span class="stat-value">87%</span>
+                                    <span class="stat-label">Complete</span>
+                                </div>
+                                <div class="mj-grid mj-flex-column mj-gap-1">
+                                    <span class="stat-value">24</span>
+                                    <span class="stat-label">Open Tasks</span>
+                                </div>
+                                <div class="mj-grid mj-flex-column mj-gap-1">
+                                    <span class="stat-value">3</span>
+                                    <span class="stat-label">Blockers</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </p-tabPanel>
-                <p-tabPanel header="Details">
-                    <div class="tab-content">
-                        <h3 class="subsection-title">Technical Details</h3>
-                        <p>Built with Angular 18 and PrimeNG v17. The application uses a modular architecture
-                        with lazy-loaded routes for optimal performance. Design tokens ensure visual consistency
-                        across all components.</p>
-                        <p><strong>Stack:</strong> Angular, PrimeNG, TypeScript, SCSS</p>
-                        <p><strong>Repository:</strong> github.com/memberjunction/mj</p>
-                    </div>
-                </p-tabPanel>
-                <p-tabPanel header="Settings">
-                    <div class="tab-content">
-                        <h3 class="subsection-title">Configuration</h3>
-                        <p>Adjust build settings, environment variables, and deployment targets from this panel.
-                        Changes take effect on the next build cycle.</p>
-                        <ul class="demo-list">
-                            <li>Build mode: Production</li>
-                            <li>Source maps: Disabled</li>
-                            <li>AOT compilation: Enabled</li>
-                        </ul>
-                    </div>
-                </p-tabPanel>
-            </p-tabView>
+                    </p-tabpanel>
+                    <p-tabpanel [value]="1">
+                        <div class="tab-content">
+                            <h3 class="subsection-title">Technical Details</h3>
+                            <p>Built with Angular 21 and PrimeNG v21. The application uses a modular architecture
+                            with lazy-loaded routes for optimal performance. Design tokens ensure visual consistency
+                            across all components.</p>
+                            <p><strong>Stack:</strong> Angular, PrimeNG, TypeScript, SCSS</p>
+                            <p><strong>Repository:</strong> github.com/memberjunction/mj</p>
+                        </div>
+                    </p-tabpanel>
+                    <p-tabpanel [value]="2">
+                        <div class="tab-content">
+                            <h3 class="subsection-title">Configuration</h3>
+                            <p>Adjust build settings, environment variables, and deployment targets from this panel.
+                            Changes take effect on the next build cycle.</p>
+                            <ul class="demo-list">
+                                <li>Build mode: Production</li>
+                                <li>Source maps: Disabled</li>
+                                <li>AOT compilation: Enabled</li>
+                            </ul>
+                        </div>
+                    </p-tabpanel>
+                </p-tabpanels>
+            </p-tabs>
         </section>
 
         <!-- Fieldset Section -->
@@ -266,86 +282,93 @@ import { ButtonModule } from 'primeng/button';
             <p class="section-desc">A multi-step wizard component for guiding users through a sequential process. Active step uses brand primary for visual emphasis.</p>
             <p class="token-mapping">Active step: --mj-brand-primary | Inactive: --mj-text-muted | Completed: --mj-status-success</p>
 
-            <p-stepper [activeStep]="activeStep">
-                <p-stepperPanel header="Data Source">
-                    <ng-template pTemplate="content" let-nextCallback="nextCallback">
-                        <div class="stepper-content">
-                            <h4>Step 1: Select Data Source</h4>
-                            <p>Choose the data source you want to import from. Supported sources include
-                            SQL Server, PostgreSQL, MySQL, and CSV files.</p>
-                            <ul class="demo-list">
-                                <li>SQL Server - Production database</li>
-                                <li>PostgreSQL - Analytics warehouse</li>
-                                <li>CSV Upload - Manual data import</li>
-                            </ul>
-                            <div class="stepper-actions mj-grid mj-gap-3">
-                                <button pButton label="Next" icon="pi pi-arrow-right" iconPos="right"
-                                    class="p-button-primary p-button-sm" (click)="nextCallback.emit()"></button>
-                            </div>
-                        </div>
-                    </ng-template>
-                </p-stepperPanel>
-                <p-stepperPanel header="Mapping">
-                    <ng-template pTemplate="content" let-prevCallback="prevCallback" let-nextCallback="nextCallback">
-                        <div class="stepper-content">
-                            <h4>Step 2: Configure Field Mapping</h4>
-                            <p>Map source fields to destination entity fields. The system will attempt
-                            to auto-match fields based on name similarity.</p>
-                            <div class="mapping-preview">
-                                <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
-                                    <span class="mapping-source">source.first_name</span>
-                                    <i class="pi pi-arrow-right mapping-arrow"></i>
-                                    <span class="mapping-target">FirstName</span>
-                                </div>
-                                <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
-                                    <span class="mapping-source">source.last_name</span>
-                                    <i class="pi pi-arrow-right mapping-arrow"></i>
-                                    <span class="mapping-target">LastName</span>
-                                </div>
-                                <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
-                                    <span class="mapping-source">source.email</span>
-                                    <i class="pi pi-arrow-right mapping-arrow"></i>
-                                    <span class="mapping-target">Email</span>
+            <p-stepper [value]="activeStep">
+                <p-step-list>
+                    <p-step [value]="0">Data Source</p-step>
+                    <p-step [value]="1">Mapping</p-step>
+                    <p-step [value]="2">Review &amp; Import</p-step>
+                </p-step-list>
+                <p-step-panels>
+                    <p-step-panel [value]="0">
+                        <ng-template pTemplate="content" let-activateCallback="activateCallback">
+                            <div class="stepper-content">
+                                <h4>Step 1: Select Data Source</h4>
+                                <p>Choose the data source you want to import from. Supported sources include
+                                SQL Server, PostgreSQL, MySQL, and CSV files.</p>
+                                <ul class="demo-list">
+                                    <li>SQL Server - Production database</li>
+                                    <li>PostgreSQL - Analytics warehouse</li>
+                                    <li>CSV Upload - Manual data import</li>
+                                </ul>
+                                <div class="stepper-actions mj-grid mj-gap-3">
+                                    <button pButton label="Next" icon="pi pi-arrow-right" iconPos="right"
+                                        class="p-button-primary p-button-sm" (click)="activateCallback(1)"></button>
                                 </div>
                             </div>
-                            <div class="stepper-actions mj-grid mj-gap-3">
-                                <button pButton label="Back" icon="pi pi-arrow-left"
-                                    class="p-button-secondary p-button-sm" (click)="prevCallback.emit()"></button>
-                                <button pButton label="Next" icon="pi pi-arrow-right" iconPos="right"
-                                    class="p-button-primary p-button-sm" (click)="nextCallback.emit()"></button>
-                            </div>
-                        </div>
-                    </ng-template>
-                </p-stepperPanel>
-                <p-stepperPanel header="Review & Import">
-                    <ng-template pTemplate="content" let-prevCallback="prevCallback">
-                        <div class="stepper-content">
-                            <h4>Step 3: Review and Import</h4>
-                            <p>Review the import configuration below before proceeding. Once started,
-                            the import process cannot be cancelled.</p>
-                            <div class="review-summary">
-                                <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
-                                    <span class="review-label">Source:</span>
-                                    <span class="review-value">SQL Server - Production</span>
+                        </ng-template>
+                    </p-step-panel>
+                    <p-step-panel [value]="1">
+                        <ng-template pTemplate="content" let-activateCallback="activateCallback">
+                            <div class="stepper-content">
+                                <h4>Step 2: Configure Field Mapping</h4>
+                                <p>Map source fields to destination entity fields. The system will attempt
+                                to auto-match fields based on name similarity.</p>
+                                <div class="mapping-preview">
+                                    <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
+                                        <span class="mapping-source">source.first_name</span>
+                                        <i class="pi pi-arrow-right mapping-arrow"></i>
+                                        <span class="mapping-target">FirstName</span>
+                                    </div>
+                                    <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
+                                        <span class="mapping-source">source.last_name</span>
+                                        <i class="pi pi-arrow-right mapping-arrow"></i>
+                                        <span class="mapping-target">LastName</span>
+                                    </div>
+                                    <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
+                                        <span class="mapping-source">source.email</span>
+                                        <i class="pi pi-arrow-right mapping-arrow"></i>
+                                        <span class="mapping-target">Email</span>
+                                    </div>
                                 </div>
-                                <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
-                                    <span class="review-label">Records:</span>
-                                    <span class="review-value">2,847 rows</span>
-                                </div>
-                                <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
-                                    <span class="review-label">Mapped Fields:</span>
-                                    <span class="review-value">3 of 3</span>
+                                <div class="stepper-actions mj-grid mj-gap-3">
+                                    <button pButton label="Back" icon="pi pi-arrow-left"
+                                        class="p-button-secondary p-button-sm" (click)="activateCallback(0)"></button>
+                                    <button pButton label="Next" icon="pi pi-arrow-right" iconPos="right"
+                                        class="p-button-primary p-button-sm" (click)="activateCallback(2)"></button>
                                 </div>
                             </div>
-                            <div class="stepper-actions mj-grid mj-gap-3">
-                                <button pButton label="Back" icon="pi pi-arrow-left"
-                                    class="p-button-secondary p-button-sm" (click)="prevCallback.emit()"></button>
-                                <button pButton label="Start Import" icon="pi pi-check"
-                                    class="p-button-success p-button-sm"></button>
+                        </ng-template>
+                    </p-step-panel>
+                    <p-step-panel [value]="2">
+                        <ng-template pTemplate="content" let-activateCallback="activateCallback">
+                            <div class="stepper-content">
+                                <h4>Step 3: Review and Import</h4>
+                                <p>Review the import configuration below before proceeding. Once started,
+                                the import process cannot be cancelled.</p>
+                                <div class="review-summary">
+                                    <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
+                                        <span class="review-label">Source:</span>
+                                        <span class="review-value">SQL Server - Production</span>
+                                    </div>
+                                    <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
+                                        <span class="review-label">Records:</span>
+                                        <span class="review-value">2,847 rows</span>
+                                    </div>
+                                    <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
+                                        <span class="review-label">Mapped Fields:</span>
+                                        <span class="review-value">3 of 3</span>
+                                    </div>
+                                </div>
+                                <div class="stepper-actions mj-grid mj-gap-3">
+                                    <button pButton label="Back" icon="pi pi-arrow-left"
+                                        class="p-button-secondary p-button-sm" (click)="activateCallback(1)"></button>
+                                    <button pButton label="Start Import" icon="pi pi-check"
+                                        class="p-button-success p-button-sm"></button>
+                                </div>
                             </div>
-                        </div>
-                    </ng-template>
-                </p-stepperPanel>
+                        </ng-template>
+                    </p-step-panel>
+                </p-step-panels>
             </p-stepper>
         </section>
     </div>

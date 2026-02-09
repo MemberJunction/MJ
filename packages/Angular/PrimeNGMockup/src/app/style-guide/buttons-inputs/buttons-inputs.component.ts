@@ -3,11 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
-import { DropdownModule } from 'primeng/dropdown';
+import { SelectModule } from 'primeng/select';
 import { CheckboxModule } from 'primeng/checkbox';
 import { RadioButtonModule } from 'primeng/radiobutton';
-import { InputSwitchModule } from 'primeng/inputswitch';
-import { InputTextareaModule } from 'primeng/inputtextarea';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { TextareaModule } from 'primeng/textarea';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { SpeedDialModule } from 'primeng/speeddial';
 import { AutoCompleteModule } from 'primeng/autocomplete';
@@ -15,13 +15,16 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { InputMaskModule } from 'primeng/inputmask';
 import { InputOtpModule } from 'primeng/inputotp';
 import { PasswordModule } from 'primeng/password';
-import { ChipsModule } from 'primeng/chips';
+import { ChipModule } from 'primeng/chip';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { KeyFilterModule } from 'primeng/keyfilter';
+import { ButtonGroupModule } from 'primeng/buttongroup';
+import { IftaLabelModule } from 'primeng/iftalabel';
+import { FluidModule } from 'primeng/fluid';
 import { MenuItem } from 'primeng/api';
 
 interface DropdownOption {
@@ -41,11 +44,11 @@ interface AutoCompleteEvent {
         FormsModule,
         ButtonModule,
         InputTextModule,
-        DropdownModule,
+        SelectModule,
         CheckboxModule,
         RadioButtonModule,
-        InputSwitchModule,
-        InputTextareaModule,
+        ToggleSwitchModule,
+        TextareaModule,
         SplitButtonModule,
         SpeedDialModule,
         AutoCompleteModule,
@@ -53,13 +56,16 @@ interface AutoCompleteEvent {
         InputMaskModule,
         InputOtpModule,
         PasswordModule,
-        ChipsModule,
+        ChipModule,
         FloatLabelModule,
         IconFieldModule,
         InputIconModule,
         InputGroupModule,
         InputGroupAddonModule,
-        KeyFilterModule
+        KeyFilterModule,
+        ButtonGroupModule,
+        IftaLabelModule,
+        FluidModule
     ],
     template: `
     <div class="buttons-inputs-page">
@@ -128,6 +134,26 @@ interface AutoCompleteEvent {
                 <p-splitButton label="Save" icon="pi pi-check" [model]="splitItems" styleClass="p-button-primary"></p-splitButton>
                 <p-splitButton label="Actions" icon="pi pi-cog" [model]="splitItems" styleClass="p-button-secondary"></p-splitButton>
                 <p-splitButton label="Outlined" icon="pi pi-download" [model]="splitItems" styleClass="p-button-outlined"></p-splitButton>
+            </div>
+        </section>
+
+        <!-- ButtonGroup Section -->
+        <section class="token-section">
+            <h2>ButtonGroup</h2>
+            <p class="section-desc">Groups related buttons visually into a single unit with shared borders. Uses MJ brand tokens for consistent styling.</p>
+            <p class="token-mapping">Background: --mj-brand-primary | Border shared between grouped buttons</p>
+
+            <div class="component-row mj-grid mj-gap-5 mj-align-center">
+                <p-buttonGroup>
+                    <button pButton label="Save" icon="pi pi-check" class="p-button-primary"></button>
+                    <button pButton label="Edit" icon="pi pi-pencil" class="p-button-primary"></button>
+                    <button pButton label="Delete" icon="pi pi-trash" class="p-button-primary"></button>
+                </p-buttonGroup>
+                <p-buttonGroup>
+                    <button pButton label="Left" icon="pi pi-align-left" class="p-button-outlined"></button>
+                    <button pButton label="Center" icon="pi pi-align-center" class="p-button-outlined"></button>
+                    <button pButton label="Right" icon="pi pi-align-right" class="p-button-outlined"></button>
+                </p-buttonGroup>
             </div>
         </section>
 
@@ -248,12 +274,11 @@ interface AutoCompleteEvent {
         <!-- Chips Section -->
         <section class="token-section">
             <h2>Chips</h2>
-            <p class="section-desc">Tag-style input for entering multiple values.</p>
-            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
-                <div class="input-group mj-grid mj-flex-column mj-gap-2">
-                    <label>Enter tags</label>
-                    <p-chips [(ngModel)]="chipValues" placeholder="Type and press Enter"></p-chips>
-                </div>
+            <p class="section-desc">Chip components for displaying tags and labels. Supports icons and removable chips.</p>
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
+                @for (chip of chipValues; track chip) {
+                    <p-chip [label]="chip" [removable]="true" (onRemove)="OnChipRemove(chip)"></p-chip>
+                }
             </div>
         </section>
 
@@ -274,6 +299,45 @@ interface AutoCompleteEvent {
                         <label for="float-email">Email Address</label>
                     </p-floatLabel>
                 </div>
+            </div>
+        </section>
+
+        <!-- IftaLabel Section -->
+        <section class="token-section">
+            <h2>IftaLabel</h2>
+            <p class="section-desc">Inline floating top-aligned label. An alternative to FloatLabel that keeps the label inside the field border at the top edge.</p>
+            <p class="token-mapping">Label: --mj-text-muted (inactive) &#8594; --mj-brand-primary (focused) | Border: --mj-border-default</p>
+
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
+                    <p-iftalabel>
+                        <input pInputText id="ifta-username" [(ngModel)]="iftaUsername" />
+                        <label for="ifta-username">Username</label>
+                    </p-iftalabel>
+                </div>
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
+                    <p-iftalabel>
+                        <input pInputText id="ifta-email" [(ngModel)]="iftaEmail" />
+                        <label for="ifta-email">Email Address</label>
+                    </p-iftalabel>
+                </div>
+            </div>
+        </section>
+
+        <!-- Fluid Section -->
+        <section class="token-section">
+            <h2>Fluid</h2>
+            <p class="section-desc">Responsive layout wrapper that makes descendant form components span the full width of their container.</p>
+            <p class="token-mapping">Applies width: 100% to PrimeNG form components via the p-fluid CSS scope</p>
+
+            <div class="fluid-demo">
+                <p-fluid>
+                    <div class="mj-grid mj-flex-column mj-gap-4">
+                        <input pInputText placeholder="Full-width input inside p-fluid" />
+                        <p-select [options]="dropdownOptions" placeholder="Full-width dropdown" [style]="{'width': '100%'}"></p-select>
+                        <textarea pInputTextarea rows="3" placeholder="Full-width textarea"></textarea>
+                    </div>
+                </p-fluid>
             </div>
         </section>
 
@@ -369,12 +433,12 @@ interface AutoCompleteEvent {
             <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
                 <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Basic Dropdown</label>
-                    <p-dropdown
+                    <p-select
                         [options]="dropdownOptions"
                         [(ngModel)]="selectedDropdown"
                         placeholder="Select an option"
                         [style]="{'width': '100%'}">
-                    </p-dropdown>
+                    </p-select>
                     <span class="token-hint">Panel bg: --mj-bg-surface-elevated</span>
                 </div>
             </div>
@@ -428,11 +492,11 @@ interface AutoCompleteEvent {
             <p class="section-desc">Toggle switch with MJ brand primary color when active.</p>
             <div class="component-row mj-grid mj-gap-8 mj-align-center">
                 <div class="switch-group mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
-                    <p-inputSwitch [(ngModel)]="switchA"></p-inputSwitch>
+                    <p-toggleswitch [(ngModel)]="switchA"></p-toggleswitch>
                     <span>{{ switchA ? 'On' : 'Off' }}</span>
                 </div>
                 <div class="switch-group mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
-                    <p-inputSwitch [(ngModel)]="switchB"></p-inputSwitch>
+                    <p-toggleswitch [(ngModel)]="switchB"></p-toggleswitch>
                     <span>{{ switchB ? 'Enabled' : 'Disabled' }}</span>
                 </div>
             </div>
@@ -519,6 +583,20 @@ interface AutoCompleteEvent {
         }
     }
 
+    .token-mapping {
+        font-family: var(--mj-font-family-mono);
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        margin: 0 0 var(--mj-space-5) 0;
+    }
+
+    .fluid-demo {
+        padding: var(--mj-space-4);
+        background: var(--mj-bg-surface-elevated);
+        border: 1px solid var(--mj-border-subtle);
+        border-radius: var(--mj-radius-lg);
+    }
+
     .speed-dial-container {
         height: 80px;
         position: relative;
@@ -567,8 +645,14 @@ export class ButtonsInputsComponent {
     passwordStrength: string | null = null;
     chipValues: string[] = ['Angular', 'PrimeNG', 'TypeScript'];
 
+    OnChipRemove(chip: string) {
+        this.chipValues = this.chipValues.filter(c => c !== chip);
+    }
+
     floatName: string | null = null;
     floatEmail: string | null = null;
+    iftaUsername: string | null = null;
+    iftaEmail: string | null = null;
 
     selectedDropdown: string | null = null;
     checkA = true;
