@@ -171,7 +171,7 @@ export class RecordChangesComponent implements OnInit {
     this.LoadRecordLabels();
     this.mjNotificationService.CreateSimpleNotification(
       `Version label created with ${event.ItemCount} snapshot${event.ItemCount !== 1 ? 's' : ''}`,
-      'info'
+      'info', 2000
     );
   }
 
