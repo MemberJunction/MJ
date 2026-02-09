@@ -6,10 +6,7 @@
  * IS-A inheritance support, and event-driven navigation.
  *
  * Zero Explorer dependencies - usable in any Angular application.
- *
- * **PrimeNG dependency**: This package uses PrimeNG in unstyled mode for advanced
- * widgets (AutoComplete, Select, DatePicker). Add `primeng: 21.1.1` to your
- * project's dependencies and configure unstyled mode in your app config.
+ * Uses only native HTML elements with custom styling (no PrimeNG dependency).
  */
 
 // Module

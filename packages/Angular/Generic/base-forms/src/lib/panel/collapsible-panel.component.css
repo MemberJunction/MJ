@@ -1,7 +1,7 @@
 mj-collapsible-panel {
   --mj-card-bg: #ffffff;
   --mj-card-radius: 8px;
-  --mj-card-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --mj-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
   --mj-accent: #667eea;
   --mj-accent-light: rgba(102, 126, 234, 0.08);
   --mj-text-primary: #1f2937;
@@ -32,6 +32,7 @@ mj-collapsible-panel.mj-drag-over {
   background: var(--mj-card-bg);
   border-radius: var(--mj-card-radius);
   box-shadow: var(--mj-card-shadow);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   overflow: hidden;
   transition: all 0.3s ease;
 }

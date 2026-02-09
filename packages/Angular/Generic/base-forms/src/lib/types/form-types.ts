@@ -1,3 +1,5 @@
+import { ValidationErrorInfo } from '@memberjunction/global';
+
 /**
  * Width mode for the form panels container.
  * - 'centered': Max-width constrained and centered (default, good for readability)
@@ -70,6 +72,16 @@ export interface FormContext {
   sectionFilter?: string;
   /** Whether to show fields that have empty values in read-only mode */
   showEmptyFields?: boolean;
+  /**
+   * When true, all fields show their validation errors regardless of touched state.
+   * Set to true after a failed save attempt; reset on successful save or cancel.
+   */
+  showValidation?: boolean;
+  /**
+   * Validation errors from the most recent full-record Validate() call.
+   * Fields filter by `ValidationErrorInfo.Source === FieldName` to find their errors.
+   */
+  validationErrors?: ValidationErrorInfo[];
 }
 
 /**
@@ -152,6 +164,8 @@ export type BaseFormContext = FormContext;
 export function createDefaultFormContext(): FormContext {
   return {
     sectionFilter: '',
-    showEmptyFields: false
+    showEmptyFields: false,
+    showValidation: false,
+    validationErrors: []
   };
 }

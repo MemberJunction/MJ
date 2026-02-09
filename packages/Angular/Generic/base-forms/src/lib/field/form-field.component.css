@@ -1,7 +1,7 @@
 /* ============================================
    FORM FIELD - Shared styles for read and edit
    ============================================ */
-mj-form-field {
+:host {
   --mj-accent: #667eea;
   --mj-accent-light: rgba(102, 126, 234, 0.08);
   --mj-text-primary: #1f2937;
@@ -10,6 +10,7 @@ mj-form-field {
   --mj-border: #e5e7eb;
   --mj-error: #ef4444;
   --mj-warning: #f59e0b;
+  --mj-card-bg: #ffffff;
   --mj-forms-field-label-width: 200px;
   --mj-forms-field-gap: 12px;
   --mj-transition: 200ms;
@@ -55,21 +56,43 @@ mj-form-field {
   min-width: 0;
 }
 
-.mj-forms-field-control > :not(.mj-forms-dirty-dot) {
+.mj-forms-field-control > * {
   flex: 1;
   min-width: 0;
 }
 
 /* ============================================
-   DIRTY INDICATOR (amber dot next to field)
+   DIRTY INDICATOR (solid amber dot after label)
    ============================================ */
-.mj-forms-dirty-dot {
-  width: 7px;
-  height: 7px;
+.mj-forms-field--dirty .mj-forms-field-label::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--mj-warning);
-  flex-shrink: 0;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ============================================
+   REQUIRED FIELD - red underline when empty
+   ============================================ */
+.mj-forms-field--required-empty .mj-forms-field-input {
+  border-bottom-color: var(--mj-error);
+}
+
+.mj-forms-field--required-empty .mj-forms-field-input:focus {
+  background: #fef2f2;
+  border-bottom-color: var(--mj-error);
+}
+
+.mj-forms-field--required-empty .mj-custom-select-trigger {
+  border-bottom-color: var(--mj-error);
+}
+
+.mj-forms-field--required-empty .mj-fk-search .mj-forms-field-input {
+  border-bottom-color: var(--mj-error);
 }
 
 /* ============================================
@@ -128,14 +151,14 @@ mj-form-field {
   opacity: 1;
 }
 
-/* FK fields showing entity name instead of raw ID — regular size link */
+/* FK fields showing entity name instead of raw ID */
 .mj-forms-field-link--fk {
   font-size: 14px;
   font-weight: 400;
 }
 
 /* ============================================
-   EDIT MODE INPUTS - The clean underline style
+   EDIT MODE INPUTS - Clean underline style
    ============================================ */
 .mj-forms-field-input {
   font-size: 14px;
@@ -236,215 +259,152 @@ mj-form-field {
 }
 
 /* ============================================
-   PrimeNG AUTOCOMPLETE (FK search)
+   CUSTOM SELECT DROPDOWN (replaces native <select>)
    ============================================ */
-.mj-fk-autocomplete {
-  width: 100%;
-}
-
-/* Style the PrimeNG autocomplete to match our underline form style */
-mj-form-field ::ng-deep .mj-fk-autocomplete .p-autocomplete-input {
+.mj-custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 14px;
   font-family: inherit;
   color: var(--mj-text-primary);
   background: transparent;
   border: none;
   border-bottom: 1.5px solid var(--mj-border);
-  border-radius: 0;
   padding: 4px 0;
   width: 100%;
+  cursor: pointer;
   outline: none;
-  box-shadow: none;
   transition: border-color var(--mj-transition) ease,
               background var(--mj-transition) ease;
 }
 
-mj-form-field ::ng-deep .mj-fk-autocomplete .p-autocomplete-input:focus {
+.mj-custom-select-trigger:focus {
   border-bottom-color: var(--mj-accent);
   background: var(--mj-accent-light);
   border-radius: 4px 4px 0 0;
   padding: 4px 6px;
-  box-shadow: none;
 }
 
-mj-form-field ::ng-deep .mj-fk-autocomplete .p-autocomplete-input::placeholder {
+.mj-custom-select-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-custom-select-value--placeholder {
   color: var(--mj-text-muted);
   font-style: italic;
 }
 
-/* Remove PrimeNG container border */
-mj-form-field ::ng-deep .mj-fk-autocomplete .p-autocomplete {
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
-
-/* Matched state: solid accent underline */
-mj-form-field ::ng-deep .mj-fk-matched .p-autocomplete-input {
-  border-bottom: 2px solid var(--mj-accent);
-}
-
-/* Dropdown overlay panel - clean white card with shadow */
-mj-form-field ::ng-deep .p-autocomplete-overlay {
-  background: var(--mj-card-bg);
-  border: 1px solid var(--mj-border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  margin-top: 4px;
-  overflow: hidden;
-}
-
-/* Remove any default PrimeNG panel styling */
-mj-form-field ::ng-deep .p-autocomplete-overlay .p-autocomplete-items {
-  background: transparent;
-  padding: 0;
-}
-
-/* Options styling - clean and minimal */
-mj-form-field ::ng-deep .p-autocomplete-option {
-  padding: 10px 14px;
-  font-size: 14px;
-  color: var(--mj-text-primary);
-  background: transparent;
-  border: none;
-  transition: background var(--mj-transition);
-  cursor: pointer;
-}
-
-mj-form-field ::ng-deep .p-autocomplete-option:hover {
-  background: var(--mj-accent-light);
-}
-
-mj-form-field ::ng-deep .p-autocomplete-option-selected {
-  background: rgba(102, 126, 234, 0.12);
-  color: var(--mj-accent);
-  font-weight: 500;
-}
-
-mj-form-field ::ng-deep .p-autocomplete-option:focus {
-  outline: none;
-  background: var(--mj-accent-light);
-}
-
-/* Clear button - force to right side of input */
-mj-form-field ::ng-deep .mj-fk-autocomplete .p-autocomplete-clear-icon {
+.mj-custom-select-chevron {
+  font-size: 11px;
   color: var(--mj-text-muted);
-  font-size: 12px;
-  order: 10;
-  margin-left: auto;
+  transition: transform var(--mj-transition) ease;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.mj-custom-select-chevron--open {
+  transform: rotate(180deg);
 }
 
 /* ============================================
-   PrimeNG SELECT (value list dropdown)
+   FK SEARCH (custom autocomplete)
    ============================================ */
-.mj-p-select {
+.mj-fk-search {
+  position: relative;
+  display: flex;
+  align-items: center;
   width: 100%;
 }
 
-/* Style PrimeNG select to match prototype underline style */
-mj-form-field ::ng-deep .mj-p-select .p-select-label {
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--mj-text-primary);
-  background: transparent;
-  border: none;
-  border-bottom: 1.5px solid var(--mj-border);
-  border-radius: 0;
-  padding: 4px 20px 4px 0;
-  box-shadow: none;
-  transition: border-color var(--mj-transition) ease;
-  min-height: 24px;
+.mj-fk-search .mj-forms-field-input {
+  padding-right: 28px;
 }
 
-mj-form-field ::ng-deep .mj-p-select:hover .p-select-label,
-mj-form-field ::ng-deep .mj-p-select.p-select-open .p-select-label {
-  border-bottom-color: var(--mj-accent);
-}
-
-/* Custom SVG dropdown arrow matching prototype */
-mj-form-field ::ng-deep .mj-p-select .p-select-trigger {
-  color: var(--mj-text-muted);
-  width: 16px;
-  height: 16px;
+.mj-fk-search-icon {
   position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 4px;
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  pointer-events: none;
 }
 
-mj-form-field ::ng-deep .mj-p-select .p-select-trigger .p-select-dropdown-icon {
-  width: 16px;
-  height: 16px;
-}
-
-/* Remove PrimeNG container border and background */
-mj-form-field ::ng-deep .mj-p-select .p-select {
+.mj-fk-clear {
+  position: absolute;
+  right: 2px;
+  background: none;
   border: none;
-  background: transparent;
-  box-shadow: none;
-  position: relative;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 6px;
+  line-height: 1;
+  border-radius: 3px;
+  transition: all var(--mj-transition);
 }
 
-/* Dropdown overlay panel - clean white card with shadow */
-mj-form-field ::ng-deep .p-select-overlay {
+.mj-fk-clear:hover {
+  color: var(--mj-error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* Matched state: solid accent underline */
+.mj-fk-search--matched .mj-forms-field-input {
+  border-bottom: 2px solid var(--mj-accent);
+}
+
+/* ============================================
+   FLOATING DROPDOWN PANEL (position: fixed via ngStyle)
+   ============================================ */
+.mj-fk-dropdown {
   background: var(--mj-card-bg);
   border: 1px solid var(--mj-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  margin-top: 4px;
-  overflow: hidden;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  animation: mj-dropdown-in 150ms ease;
 }
 
-/* Remove any default PrimeNG panel styling */
-mj-form-field ::ng-deep .p-select-overlay .p-select-items-wrapper {
-  background: transparent;
+.mj-fk-dropdown--above {
+  animation: mj-dropdown-in-above 150ms ease;
 }
 
-/* Options styling - clean and minimal */
-mj-form-field ::ng-deep .p-select-option {
+.mj-fk-option {
   padding: 10px 14px;
   font-size: 14px;
   color: var(--mj-text-primary);
-  background: transparent;
-  border: none;
-  transition: background var(--mj-transition);
   cursor: pointer;
-}
-
-mj-form-field ::ng-deep .p-select-option:hover {
-  background: var(--mj-accent-light);
-}
-
-mj-form-field ::ng-deep .p-select-option-selected {
-  background: rgba(102, 126, 234, 0.12);
-  color: var(--mj-accent);
-  font-weight: 500;
-}
-
-mj-form-field ::ng-deep .p-select-option:focus {
-  outline: none;
-  background: var(--mj-accent-light);
-}
-
-/* Filter input in select */
-mj-form-field ::ng-deep .p-select-filter-container {
-  padding: 8px;
-  border-bottom: 1px solid var(--mj-border);
-  background: var(--mj-card-bg);
-}
-
-mj-form-field ::ng-deep .p-select-filter-container .p-select-filter {
-  font-size: 13px;
-  padding: 6px 8px;
-  border: 1px solid var(--mj-border);
+  transition: background var(--mj-transition);
   border-radius: 6px;
-  width: 100%;
 }
 
-mj-form-field ::ng-deep .p-select-filter-container .p-select-filter:focus {
-  border-color: var(--mj-accent);
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
-  outline: none;
+.mj-fk-option:hover {
+  background: var(--mj-accent-light);
+}
+
+.mj-fk-option--selected {
+  background: var(--mj-accent-light);
+  font-weight: 600;
+  color: var(--mj-accent);
+}
+
+.mj-fk-option--selected:hover {
+  background: rgba(102, 126, 234, 0.15);
+}
+
+@keyframes mj-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes mj-dropdown-in-above {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ============================================
@@ -457,4 +417,145 @@ mj-form-field ::ng-deep .p-select-filter-container .p-select-filter:focus {
   border-radius: 2px;
   font-weight: 700;
   box-shadow: 0 0 0 2px #fef08a;
+}
+
+/* ============================================
+   VALIDATION ERROR STATE
+   ============================================ */
+.mj-forms-field--has-error .mj-forms-field-input {
+  border-bottom-color: var(--mj-error);
+  border-bottom-width: 2px;
+}
+
+.mj-forms-field--has-error .mj-forms-field-input:focus {
+  background: #fef2f2;
+  border-bottom-color: var(--mj-error);
+}
+
+.mj-forms-field--has-error .mj-forms-field-input--textarea {
+  border-color: var(--mj-error);
+}
+
+.mj-forms-field--has-error .mj-forms-field-input--textarea:focus {
+  border-color: var(--mj-error);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+}
+
+.mj-forms-field--has-error .mj-custom-select-trigger {
+  border-bottom-color: var(--mj-error);
+  border-bottom-width: 2px;
+}
+
+.mj-forms-field--has-error .mj-fk-search .mj-forms-field-input {
+  border-bottom-color: var(--mj-error);
+  border-bottom-width: 2px;
+}
+
+/* ============================================
+   VALIDATION WARNING STATE
+   ============================================ */
+.mj-forms-field--has-warning .mj-forms-field-input {
+  border-bottom-color: var(--mj-warning);
+  border-bottom-width: 2px;
+}
+
+.mj-forms-field--has-warning .mj-forms-field-input:focus {
+  background: #fffbeb;
+  border-bottom-color: var(--mj-warning);
+}
+
+.mj-forms-field--has-warning .mj-forms-field-input--textarea {
+  border-color: var(--mj-warning);
+}
+
+.mj-forms-field--has-warning .mj-forms-field-input--textarea:focus {
+  border-color: var(--mj-warning);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.08);
+}
+
+.mj-forms-field--has-warning .mj-custom-select-trigger {
+  border-bottom-color: var(--mj-warning);
+  border-bottom-width: 2px;
+}
+
+.mj-forms-field--has-warning .mj-fk-search .mj-forms-field-input {
+  border-bottom-color: var(--mj-warning);
+  border-bottom-width: 2px;
+}
+
+/* ============================================
+   VALIDATION MESSAGE AREA
+   ============================================ */
+.mj-forms-field-validation {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: -2px;
+  overflow: hidden;
+  animation: mj-validation-slide-in 200ms ease-out;
+}
+
+.mj-forms-field-validation-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 3px 0 1px;
+}
+
+.mj-forms-field-validation-item i {
+  font-size: 11px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* Error message colors */
+.mj-forms-field-validation--error .mj-forms-field-validation-item {
+  color: var(--mj-error);
+}
+
+.mj-forms-field-validation--error .mj-forms-field-validation-item i {
+  color: var(--mj-error);
+}
+
+/* Warning message colors */
+.mj-forms-field-validation--warning .mj-forms-field-validation-item {
+  color: #b45309;
+}
+
+.mj-forms-field-validation--warning .mj-forms-field-validation-item i {
+  color: var(--mj-warning);
+}
+
+@keyframes mj-validation-slide-in {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    max-height: 100px;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 640px) {
+  .mj-forms-field {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .mj-forms-field-label {
+    font-size: 12px;
+  }
+
+  .mj-forms-field-validation {
+    grid-column: 1;
+  }
 }

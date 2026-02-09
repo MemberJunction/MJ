@@ -26,7 +26,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 16px;
+  padding: 16px 16px;
   background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
   border-bottom: 2px solid var(--mj-accent);
   font-size: 13px;
@@ -69,7 +69,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 22px 16px;
   background: var(--mj-forms-toolbar-bg);
   border-bottom: 2px solid var(--mj-border);
   flex-wrap: wrap;
@@ -110,7 +110,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  padding: 8px 16px;
   font-size: 13px;
   font-weight: 500;
   border: 1px solid var(--mj-border);
@@ -141,7 +141,7 @@
 }
 
 .mj-forms-btn i {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1;
 }
 
@@ -295,57 +295,6 @@
 .mj-hierarchy-arrow {
   color: var(--mj-text-muted);
   font-size: 10px;
-}
-
-/* Child entities dropdown */
-.mj-children-dropdown {
-  position: relative;
-  display: inline-flex;
-}
-
-.mj-children-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 220px;
-  background: var(--mj-card-bg);
-  border: 1px solid var(--mj-border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  z-index: 100;
-  padding: 4px;
-  display: none;
-}
-
-.mj-children-dropdown:hover .mj-children-menu {
-  display: block;
-}
-
-.mj-children-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--mj-text-primary);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background var(--mj-transition);
-  text-decoration: none;
-  border: none;
-  background: none;
-  width: 100%;
-  font-family: inherit;
-}
-
-.mj-children-menu-item:hover {
-  background: var(--mj-accent-light);
-}
-
-.mj-children-menu-item i {
-  color: var(--mj-isa-child);
-  width: 16px;
-  text-align: center;
 }
 
 /* (dirty summary removed — now inline in edit banner) */

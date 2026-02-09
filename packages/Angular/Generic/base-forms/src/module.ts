@@ -1,8 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AutoComplete } from 'primeng/autocomplete';
-import { Select } from 'primeng/select';
 
 import { MjFormToolbarComponent } from './lib/toolbar/form-toolbar.component';
 import { MjFormFieldComponent } from './lib/field/form-field.component';
@@ -25,7 +23,7 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
  * - **MjCollapsiblePanelComponent** (`<mj-collapsible-panel>`): Collapsible section with
  *   drag-to-reorder, search filtering, and inherited/related variants.
  * - **MjFormFieldComponent** (`<mj-form-field>`): Entity field renderer with clean read-only
- *   display and modern edit-mode inputs (native HTML + PrimeNG unstyled).
+ *   display and modern edit-mode inputs (native HTML with custom select and autocomplete).
  * - **SectionLoaderComponent** (`<mj-form-section>`): Dynamic section loader via ClassFactory.
  * - **ExplorerEntityDataGridComponent** (`<mj-explorer-entity-data-grid>`): Data grid wrapper
  *   for related entity sections with Navigate event support.
@@ -45,8 +43,6 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
   imports: [
     CommonModule,
     FormsModule,
-    AutoComplete,
-    Select,
     RecordChangesModule,
     ListManagementModule,
     EntityViewerModule

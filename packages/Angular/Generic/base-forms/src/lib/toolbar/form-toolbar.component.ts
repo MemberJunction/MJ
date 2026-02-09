@@ -167,6 +167,7 @@ export class MjFormToolbarComponent implements DoCheck {
 
   // ---- Internal state ----
   ShowDeleteDialog = false;
+  ShowDiscardDialog = false;
 
   // ---- Lifecycle ----
 
@@ -292,6 +293,28 @@ export class MjFormToolbarComponent implements DoCheck {
   }
 
   OnCancel(): void {
+    // If there are unsaved changes, show confirmation dialog
+    if (this.IsDirty) {
+      this.ShowDiscardDialog = true;
+      this.cdr.markForCheck();
+      return;
+    }
+    // No changes - cancel immediately
+    this.EmitCancel();
+  }
+
+  OnDiscardConfirm(): void {
+    this.ShowDiscardDialog = false;
+    this.EmitCancel();
+    this.cdr.markForCheck();
+  }
+
+  OnDiscardCancel(): void {
+    this.ShowDiscardDialog = false;
+    this.cdr.markForCheck();
+  }
+
+  private EmitCancel(): void {
     // Emit Before event - handler can cancel by setting event.Cancel = true
     const beforeEvent = new BeforeCancelEventArgs();
     this.BeforeCancel.emit(beforeEvent);

@@ -10,7 +10,7 @@ import {
   EntityRelationshipInfo, Metadata, RunViewParams, LogError,
   RecordDependency, BaseEntityEvent, CompositeKey, RunView, RunViewResult
 } from '@memberjunction/core';
-import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
 import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
 import { ListEntity } from '@memberjunction/core-entities';
 
@@ -132,6 +132,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       .pipe(debounceTime(100))
       .subscribe(searchTerm => {
         this.searchFilter = searchTerm;
+        // After change detection propagates FormContext to panels and they update
+        // their IsVisible state, expand any visible (matching) sections that are collapsed
+        if (searchTerm) {
+          Promise.resolve().then(() => this.expandMatchingSections());
+        }
       });
   }
 
@@ -197,6 +202,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public EndEditMode(): void {
     this.EditMode = false;
+    this.clearValidationState();
   }
 
   public handleHistoryDialog(): void {
@@ -251,6 +257,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           const result = await this.InternalSaveRecord();
           if (result) {
             this._pendingRecords = [];
+            this.clearValidationState();
             if (StopEditModeAfterSave)
               this.EndEditMode();
 
@@ -262,11 +269,17 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
             });
             return true;
           } else {
-            const errorMsg = 'Error saving record';
+            const serverMsg = this.record.LatestResult?.Message || '';
+            const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
             this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
             this.RecordSaveFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
           }
         } else {
+          // Broadcast validation errors to all fields via FormContext
+          this._showValidation = true;
+          this._validationErrors = valResults.Errors;
+          this.cdr.markForCheck();
+
           const errorMessages = valResults.Errors.map(x => x.Message);
           this.Notification.emit({
             Message: 'Validation Errors\n' + errorMessages.join('\n'),
@@ -293,9 +306,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.record) {
       const r = <BaseEntity>this.record;
       if (r.Dirty || this.PendingRecordsDirty()) {
-        if (!confirm('Are you sure you want to cancel your changes?')) {
-          return;
-        }
+        // Revert is safe here — the toolbar's discard dialog already confirmed with the user
         r.Revert();
 
         const pendingRecords = this.PendingRecords;
@@ -552,11 +563,24 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public searchFilter: string = '';
   public showEmptyFields: boolean = false;
 
+  /** Whether to show all validation errors on fields (set after save failure) */
+  private _showValidation = false;
+  /** Validation errors from the most recent failed save attempt */
+  private _validationErrors: ValidationErrorInfo[] = [];
+
   public get formContext(): FormContext {
     return {
       sectionFilter: this.searchFilter,
-      showEmptyFields: this.showEmptyFields
+      showEmptyFields: this.showEmptyFields,
+      showValidation: this._showValidation,
+      validationErrors: this._validationErrors
     };
+  }
+
+  /** Clears all validation display state (called on save success, cancel, end edit) */
+  private clearValidationState(): void {
+    this._showValidation = false;
+    this._validationErrors = [];
   }
 
   private filterSubject = new Subject<string>();
@@ -634,6 +658,19 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (section) {
       section.isExpanded = !section.isExpanded;
     }
+  }
+
+  /**
+   * Expand any sections that are visible (match the current filter) but currently collapsed.
+   * Called after filter changes so the user can immediately see matching content.
+   */
+  private expandMatchingSections(): void {
+    if (!this.collapsiblePanels) return;
+    this.collapsiblePanels.forEach(panel => {
+      if (panel.IsVisible && !panel.Expanded) {
+        this.SetSectionExpanded(panel.SectionKey, true);
+      }
+    });
   }
 
   public expandAllSections(): void {

@@ -16,11 +16,11 @@
     }
     <div class="mj-forms-toolbar-spacer"></div>
     <div class="mj-forms-edit-banner-actions">
-      <button class="mj-forms-btn mj-forms-btn--primary mj-forms-btn--sm" (click)="OnSave()" [disabled]="IsSaving" title="Save Changes">
+      <button class="mj-forms-btn mj-forms-btn--primary" (click)="OnSave()" [disabled]="IsSaving" title="Save Changes">
         <i class="fa-solid fa-floppy-disk"></i>
         <span class="mj-forms-btn-text">Save Changes</span>
       </button>
-      <button class="mj-forms-btn mj-forms-btn--sm" (click)="OnCancel()" [disabled]="IsSaving" title="Discard Changes">
+      <button class="mj-forms-btn" (click)="OnCancel()" [disabled]="IsSaving" title="Discard Changes">
         <i class="fa-solid fa-rotate-left"></i>
         <span class="mj-forms-btn-text">Discard</span>
       </button>
@@ -29,12 +29,12 @@
 }
 
 <!-- ============================================
-     MAIN TOOLBAR (hidden in edit mode — banner handles everything)
+     MAIN TOOLBAR (read mode only — hidden in edit mode)
      ============================================ -->
 @if (!EditMode) {
-  <div class="mj-forms-toolbar" [class.mj-forms-toolbar--sticky]="Config.StickyToolbar" [class.mj-forms-toolbar--disabled]="IsSaving">
+  <div class="mj-forms-toolbar" [class.mj-forms-toolbar--sticky]="Config.StickyToolbar">
 
-    <!-- Read-mode action buttons -->
+    <!-- Action buttons -->
     <div class="mj-forms-toolbar-group">
       @if (Config.ShowEditButton && UserCanEdit) {
         <button class="mj-forms-btn" (click)="OnEdit()" title="Edit this Record">
@@ -81,14 +81,13 @@
     </div>
 
     <!-- Separator before hierarchy -->
-    @if (Config.ShowEntityHierarchy && (HasParentEntities || HasChildEntities)) {
+    @if (Config.ShowEntityHierarchy && HasParentEntities) {
       <div class="mj-forms-toolbar-separator"></div>
     }
 
     <!-- IS-A Entity Hierarchy Breadcrumb -->
-    @if (Config.ShowEntityHierarchy && (HasParentEntities || HasChildEntities)) {
+    @if (Config.ShowEntityHierarchy && HasParentEntities) {
       <div class="mj-entity-hierarchy">
-        <!-- Parent chain (grandparent > parent > current) -->
         @for (parent of ParentChain; track parent.ID) {
           <a class="mj-entity-badge mj-entity-badge--parent"
              [title]="'View parent: ' + parent.Name"
@@ -98,28 +97,7 @@
           </a>
           <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
         }
-
-        <!-- Current entity name -->
         <span class="mj-entity-badge mj-entity-badge--current">{{ EntityInfo?.Name }}</span>
-
-        <!-- Child entity types dropdown -->
-        @if (HasChildEntities) {
-          <div class="mj-children-dropdown">
-            <a class="mj-entity-badge mj-entity-badge--child" title="View child entity types">
-              <i class="fa-solid fa-arrow-down"></i>
-              Subtypes
-              <span class="mj-child-count">{{ ChildEntities.length }}</span>
-            </a>
-            <div class="mj-children-menu">
-              @for (child of ChildEntities; track child.ID) {
-                <a class="mj-children-menu-item" (click)="OnChildEntityClick(child)">
-                  <i [class]="child.Icon || 'fa-solid fa-cube'"></i>
-                  {{ child.Name }}
-                </a>
-              }
-            </div>
-          </div>
-        }
       </div>
     }
 
@@ -141,10 +119,14 @@
             </button>
           }
         </div>
-        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only" (click)="OnExpandAll()" title="Expand all sections">
+        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+          [disabled]="ExpandedSectionCount >= VisibleSectionCount"
+          (click)="OnExpandAll()" title="Expand all sections">
           <i class="fa-solid fa-angles-down"></i>
         </button>
-        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only" (click)="OnCollapseAll()" title="Collapse all sections">
+        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+          [disabled]="ExpandedSectionCount === 0"
+          (click)="OnCollapseAll()" title="Collapse all sections">
           <i class="fa-solid fa-angles-up"></i>
         </button>
         @if (HasCustomSectionOrder) {
@@ -166,6 +148,34 @@
       <ng-container [ngTemplateOutlet]="AdditionalActionsTemplate"></ng-container>
     }
     <ng-content select="[toolbar-additional-controls]"></ng-content>
+  </div>
+}
+
+<!-- ============================================
+     DISCARD CHANGES CONFIRMATION DIALOG
+     ============================================ -->
+@if (ShowDiscardDialog) {
+  <div class="mj-dialog-overlay" (click)="OnDiscardCancel()">
+    <div class="mj-dialog" (click)="$event.stopPropagation()">
+      <div class="mj-dialog-header">
+        <h3>Discard Changes?</h3>
+        <button class="mj-dialog-close" (click)="OnDiscardCancel()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-dialog-body">
+        <p>You have <strong>{{ DirtyFieldDisplayNames.length }}</strong> unsaved change{{ DirtyFieldDisplayNames.length === 1 ? '' : 's' }}. Are you sure you want to discard {{ DirtyFieldDisplayNames.length === 1 ? 'it' : 'them' }}?</p>
+      </div>
+      <div class="mj-dialog-footer">
+        <button class="mj-forms-btn mj-forms-btn--danger" (click)="OnDiscardConfirm()">
+          <i class="fa-solid fa-rotate-left"></i>
+          Discard Changes
+        </button>
+        <button class="mj-forms-btn" (click)="OnDiscardCancel()">
+          Keep Editing
+        </button>
+      </div>
+    </div>
   </div>
 }
 
