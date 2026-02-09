@@ -109,8 +109,6 @@ export class HomeApplication extends BaseApplication {
 
     // Build dynamic nav items from the stack
     const dynamicItems = this.buildDynamicNavItems();
-    console.log('[HomeApp] GetNavItems: static=%d, dynamic=%d, stack=%d',
-      staticItems.length, dynamicItems.length, this.recentOrphanStack.length);
     if (dynamicItems.length > 0) {
       return [...staticItems, ...dynamicItems];
     }
@@ -120,16 +118,56 @@ export class HomeApplication extends BaseApplication {
 
   /**
    * Removes a dynamic nav item from the recent stack by RecordID.
-   * Called by the shell when the user clicks the dismiss X button.
+   * Called by AppNavComponent when the user clicks the dismiss X button.
+   * If the dismissed item is currently active, navigates back to the app's default tab.
    */
   public RemoveDynamicNavItem(item: NavItem): void {
     const index = this.recentOrphanStack.findIndex(
       s => s.resourceRecordId === item.RecordID
     );
-    if (index >= 0) {
-      this.recentOrphanStack.splice(index, 1);
-      this.saveStackToStorage();
+    if (index < 0) {
+      return;
     }
+
+    const wasActive = this.isDismissedItemActive(item);
+    this.recentOrphanStack.splice(index, 1);
+    this.saveStackToStorage();
+
+    if (wasActive) {
+      this.navigateToDefault();
+    }
+  }
+
+  /**
+   * Checks whether the dismissed nav item matches the currently active tab.
+   */
+  private isDismissedItemActive(item: NavItem): boolean {
+    if (!this.workspaceManager) {
+      return false;
+    }
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config?.activeTabId) {
+      return false;
+    }
+    const activeTab = config.tabs.find(t => t.id === config.activeTabId);
+    if (!activeTab) {
+      return false;
+    }
+    return activeTab.resourceRecordId === item.RecordID;
+  }
+
+  /**
+   * Navigates back to the app's default tab (first static nav item / Home dashboard).
+   */
+  private navigateToDefault(): void {
+    if (!this.workspaceManager) {
+      return;
+    }
+    this.CreateDefaultTab().then(tabRequest => {
+      if (tabRequest && this.workspaceManager) {
+        this.workspaceManager.OpenTab(tabRequest, this.GetColor());
+      }
+    });
   }
 
   // ========================================
@@ -432,19 +470,16 @@ export class HomeApplication extends BaseApplication {
     try {
       const provider = Metadata.Provider.LocalStorageProvider;
       if (!provider) {
-        console.log('[HomeApp] loadStackFromStorage: no provider');
         return;
       }
 
       const raw = await provider.GetItem(STORAGE_KEY, STORAGE_CATEGORY);
-      console.log('[HomeApp] loadStackFromStorage: raw =', raw ? `${raw.length} chars` : 'null');
       if (!raw) {
         return;
       }
 
       const parsed = JSON.parse(raw) as OrphanResourceSnapshot[];
       if (!Array.isArray(parsed)) {
-        console.log('[HomeApp] loadStackFromStorage: parsed is not array');
         return;
       }
 
@@ -453,8 +488,6 @@ export class HomeApplication extends BaseApplication {
       this.recentOrphanStack = parsed
         .filter(s => s.resourceRecordId && s.timestamp && (now - s.timestamp) < MAX_SNAPSHOT_AGE_MS)
         .slice(0, HomeApplication.MAX_RECENT_ITEMS);
-      console.log('[HomeApp] loadStackFromStorage: loaded', this.recentOrphanStack.length, 'items',
-        this.recentOrphanStack.map(s => s.resolvedLabel));
     } catch (err) {
       console.warn('Failed to load recent nav stack from storage:', err);
     }
