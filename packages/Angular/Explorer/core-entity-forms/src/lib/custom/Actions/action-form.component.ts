@@ -240,7 +240,6 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             this._outputParams = [];
         } finally {
             this.isLoadingParams = false;
-            this.cdr.detectChanges(); // Force change detection
         }
     }
 
