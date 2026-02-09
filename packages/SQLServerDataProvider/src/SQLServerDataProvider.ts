@@ -3446,10 +3446,12 @@ export class SQLServerDataProvider
             } else {
               try {
                 // Execute SQL with optional simple SQL fallback for loggers
+                // IS-A: use entity's ProviderTransaction when available for shared transaction
                 const rawResult = await this.ExecuteSQL(sSQL, null, {
                   isMutation: true,
                   description: `Save ${entity.EntityInfo.Name}`,
-                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
+                  connectionSource: entity.ProviderTransaction as sql.Transaction ?? undefined
                 }, user);
                 // Process rows with user context for decryption
                 result = await this.ProcessEntityRows(rawResult, entity.EntityInfo, user);
@@ -4296,10 +4298,12 @@ export class SQLServerDataProvider
         if (bReplay) {
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
         } else {
-          d = await this.ExecuteSQL(sSQL, null, { 
-            isMutation: true, 
+          // IS-A: use entity's ProviderTransaction when available for shared transaction
+          d = await this.ExecuteSQL(sSQL, null, {
+            isMutation: true,
             description: `Delete ${entity.EntityInfo.Name}`,
-            simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+            simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
+            connectionSource: entity.ProviderTransaction as sql.Transaction ?? undefined
           }, user);
         }
 
@@ -5071,7 +5075,8 @@ export class SQLServerDataProvider
   ): Promise<any> {
     try {
       // Use internal method with logging options
-      const result = await this._internalExecuteSQL(query, parameters, undefined, {
+      // Pass connectionSource if provided (used by IS-A chain orchestration for shared transactions)
+      const result = await this._internalExecuteSQL(query, parameters, options?.connectionSource, {
         description: options?.description,
         ignoreLogging: options?.ignoreLogging,
         isMutation: options?.isMutation,
@@ -5417,10 +5422,42 @@ export class SQLServerDataProvider
     }
   }
 
+  /**
+   * Begin an independent transaction for IS-A chain orchestration.
+   * Returns a new sql.Transaction object that is NOT linked to the provider's
+   * internal transaction state (used by TransactionGroup). Each IS-A chain
+   * gets its own transaction to avoid interference with other operations.
+   */
+  public async BeginISATransaction(): Promise<unknown> {
+    const transaction = new sql.Transaction(this._pool);
+    await transaction.begin();
+    return transaction;
+  }
+
+  /**
+   * Commit an IS-A chain transaction.
+   * @param txn The sql.Transaction object returned from BeginISATransaction()
+   */
+  public async CommitISATransaction(txn: unknown): Promise<void> {
+    if (txn && txn instanceof sql.Transaction) {
+      await txn.commit();
+    }
+  }
+
+  /**
+   * Rollback an IS-A chain transaction.
+   * @param txn The sql.Transaction object returned from BeginISATransaction()
+   */
+  public async RollbackISATransaction(txn: unknown): Promise<void> {
+    if (txn && txn instanceof sql.Transaction) {
+      await txn.rollback();
+    }
+  }
+
   public async BeginTransaction() {
     try {
       this._transactionDepth++;
-      
+
       if (this._transactionDepth === 1) {
         // First transaction - actually begin using mssql Transaction object
         this._transaction = new sql.Transaction(this._pool);
@@ -5600,9 +5637,9 @@ export class SQLServerDataProvider
     return this._fileSystemProvider;
   }
 
-  public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
+  protected async InternalGetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
     const promises = info.map(async (item) => {
-      const r = await this.GetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
+      const r = await this.InternalGetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
       return {
         EntityName: item.EntityName,
         CompositeKey: item.CompositeKey,
@@ -5614,7 +5651,7 @@ export class SQLServerDataProvider
     return Promise.all(promises);
   }
 
-  public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
+  protected async InternalGetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
     try {
       const sql = this.GetEntityRecordNameSQL(entityName, CompositeKey);
       if (sql) {

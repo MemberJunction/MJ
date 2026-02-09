@@ -23,6 +23,3 @@ export class AccessControlRuleFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAccessControlRuleFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -1,90 +1,95 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Message Type Details Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="messageTypeDetails"
-        sectionName="Message Type Details"
-        icon="fa fa-info-circle"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="messageTypeDetails"
+        SectionName="Message Type Details"
+        Icon="fa fa-info-circle"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Type"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="MaxBytes"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Supported Features Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="supportedFeatures"
-        sectionName="Supported Features"
-        icon="fa fa-sliders-h"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="supportedFeatures"
+        SectionName="Supported Features"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="SupportsAttachments"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="SupportsSubjectLine"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="SupportsHtml"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-database"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -93,15 +98,15 @@
          ======================================== -->
 
     <!-- Communication Provider Message Types Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="communicationProviderMessageTypes"
-        sectionName="Communication Provider Message Types"
-        icon="fa fa-comment"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('communicationProviderMessageTypes')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="communicationProviderMessageTypes"
+        SectionName="Communication Provider Message Types"
+        Icon="fa fa-comment"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('communicationProviderMessageTypes')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -109,6 +114,7 @@
                 [NewRecordValues]="NewRecordValues('Communication Provider Message Types')"
                 [AllowLoad]="IsSectionExpanded('communicationProviderMessageTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('communicationProviderMessageTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -117,15 +123,15 @@
     </mj-collapsible-panel>
 
     <!-- Entity Communication Message Types Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="entityCommunicationMessageTypes"
-        sectionName="Entity Communication Message Types"
-        icon="fa fa-comment-dots"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityCommunicationMessageTypes')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="entityCommunicationMessageTypes"
+        SectionName="Entity Communication Message Types"
+        Icon="fa fa-comment-dots"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('entityCommunicationMessageTypes')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -133,6 +139,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
                 [AllowLoad]="IsSectionExpanded('entityCommunicationMessageTypes')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityCommunicationMessageTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

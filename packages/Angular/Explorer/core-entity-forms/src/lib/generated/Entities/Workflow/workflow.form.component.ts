@@ -25,6 +25,3 @@ export class WorkflowFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadWorkflowFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

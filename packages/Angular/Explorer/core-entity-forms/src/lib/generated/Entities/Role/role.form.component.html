@@ -1,72 +1,77 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Core Role Details Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="coreRoleDetails"
-        sectionName="Core Role Details"
-        icon="fa fa-shield-alt"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="coreRoleDetails"
+        SectionName="Core Role Details"
+        Icon="fa fa-shield-alt"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="DirectoryID"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="SQLName"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -75,15 +80,15 @@
          ======================================== -->
 
     <!-- Authorization Roles Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="authorizationRoles"
-        sectionName="Authorization Roles"
-        icon="fa fa-user-shield"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('authorizationRoles')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="authorizationRoles"
+        SectionName="Authorization Roles"
+        Icon="fa fa-user-shield"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('authorizationRoles')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -91,6 +96,7 @@
                 [NewRecordValues]="NewRecordValues('Authorization Roles')"
                 [AllowLoad]="IsSectionExpanded('authorizationRoles')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('authorizationRoles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -99,15 +105,15 @@
     </mj-collapsible-panel>
 
     <!-- Employee Roles Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="employeeRoles"
-        sectionName="Employee Roles"
-        icon="fa fa-user-tag"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('employeeRoles')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="employeeRoles"
+        SectionName="Employee Roles"
+        Icon="fa fa-user-tag"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('employeeRoles')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -115,6 +121,7 @@
                 [NewRecordValues]="NewRecordValues('Employee Roles')"
                 [AllowLoad]="IsSectionExpanded('employeeRoles')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('employeeRoles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -123,15 +130,15 @@
     </mj-collapsible-panel>
 
     <!-- Entity Permissions Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="entityPermissions"
-        sectionName="Entity Permissions"
-        icon="fa fa-shield-alt"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityPermissions')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="entityPermissions"
+        SectionName="Entity Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('entityPermissions')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -139,6 +146,7 @@
                 [NewRecordValues]="NewRecordValues('Entity Permissions')"
                 [AllowLoad]="IsSectionExpanded('entityPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('entityPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -147,15 +155,15 @@
     </mj-collapsible-panel>
 
     <!-- Query Permissions Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="queryPermissions"
-        sectionName="Query Permissions"
-        icon="fa fa-shield-alt"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queryPermissions')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="queryPermissions"
+        SectionName="Query Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('queryPermissions')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -163,6 +171,7 @@
                 [NewRecordValues]="NewRecordValues('Query Permissions')"
                 [AllowLoad]="IsSectionExpanded('queryPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -171,15 +180,15 @@
     </mj-collapsible-panel>
 
     <!-- User Roles Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="userRoles"
-        sectionName="User Roles"
-        icon="fa fa-user-shield"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('userRoles')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="userRoles"
+        SectionName="User Roles"
+        Icon="fa fa-user-shield"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('userRoles')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -187,6 +196,7 @@
                 [NewRecordValues]="NewRecordValues('User Roles')"
                 [AllowLoad]="IsSectionExpanded('userRoles')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('userRoles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -195,15 +205,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: MCP Server Connection Permissions Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJMCPServerConnectionPermissions"
-        sectionName="MJ: MCP Server Connection Permissions"
-        icon="fa fa-server"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJMCPServerConnectionPermissions')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJMCPServerConnectionPermissions"
+        SectionName="MJ: MCP Server Connection Permissions"
+        Icon="fa fa-server"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMCPServerConnectionPermissions')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -211,6 +221,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnectionPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnectionPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -219,15 +230,15 @@
     </mj-collapsible-panel>
 
     <!-- Resource Permissions Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="resourcePermissions"
-        sectionName="Resource Permissions"
-        icon="fa fa-lock"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('resourcePermissions')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="resourcePermissions"
+        SectionName="Resource Permissions"
+        Icon="fa fa-lock"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('resourcePermissions')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -235,6 +246,7 @@
                 [NewRecordValues]="NewRecordValues('Resource Permissions')"
                 [AllowLoad]="IsSectionExpanded('resourcePermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -243,15 +255,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Permissions Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIAgentPermissions"
-        sectionName="MJ: AI Agent Permissions"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIAgentPermissions')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIAgentPermissions"
+        SectionName="MJ: AI Agent Permissions"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentPermissions')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -259,6 +271,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentPermissions')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

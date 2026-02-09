@@ -22,6 +22,3 @@ export class MCPServerConnectionToolFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadMCPServerConnectionToolFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

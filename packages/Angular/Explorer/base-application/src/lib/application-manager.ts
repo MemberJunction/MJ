@@ -208,28 +208,39 @@ export class ApplicationManager {
           continue;
         }
 
-        const app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
-          BaseApplication,
-          appInfo.ClassName,
-          {
-            ID: appInfo.ID,
-            Name: appInfo.Name,
-            Description: appInfo.Description || '',
-            Icon: appInfo.Icon || '',
-            Color: appInfo.Color,
-            DefaultNavItems: appInfo.DefaultNavItems,
-            ClassName: appInfo.ClassName,
-            DefaultSequence: appInfo.DefaultSequence,
-            Status: appInfo.Status,
-            NavigationStyle: appInfo.NavigationStyle,
-            TopNavLocation: appInfo.TopNavLocation,
-            HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive,
-            Path: appInfo.Path || '',
-            AutoUpdatePath: appInfo.AutoUpdatePath
-          }
-        );
+        const args = {
+          ID: appInfo.ID,
+          Name: appInfo.Name,
+          Description: appInfo.Description || '',
+          Icon: appInfo.Icon || '',
+          Color: appInfo.Color,
+          DefaultNavItems: appInfo.DefaultNavItems,
+          ClassName: appInfo.ClassName,
+          DefaultSequence: appInfo.DefaultSequence,
+          Status: appInfo.Status,
+          NavigationStyle: appInfo.NavigationStyle,
+          TopNavLocation: appInfo.TopNavLocation,
+          HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive,
+          Path: appInfo.Path || '',
+          AutoUpdatePath: appInfo.AutoUpdatePath
+        };
+
+        let app: BaseApplication | null;
+        if (appInfo.ClassName && appInfo.ClassName.trim().length > 0) {
+          app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
+            BaseApplication,
+            appInfo.ClassName,
+            args          
+          );
+        }
+        else {
+          // no class provided in app definition.
+          app = new BaseApplication(args)
+        }
 
         if (app) {
+          // should always get here unless failure to load registered sub-class but CreateInstance has
+          // fallback to base class anyway so should always get here 
           allApps.push(app);
         }
       }

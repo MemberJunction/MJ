@@ -14,7 +14,7 @@ interface CategoryTreeNode {
     items?: CategoryTreeNode[];
 }
 
-@RegisterClass(BaseFormComponent, 'Queries') 
+@RegisterClass(BaseFormComponent, 'Queries')
 @Component({
   standalone: false,
     selector: 'mj-query-form',
@@ -22,7 +22,6 @@ interface CategoryTreeNode {
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
 })
 export class QueryFormExtendedComponent extends QueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
-    public override cdr!: ChangeDetectorRef;
     public record!: QueryEntity;
     public queryParameters: QueryParameterEntity[] = [];
     public queryFields: QueryFieldEntity[] = [];

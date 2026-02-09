@@ -554,8 +554,8 @@ export class SQLCodeGenBase {
 
             let sRet: string = ''
             let permissionsSQL: string = ''
-            // Indexes for Fkeys for the table
-            if (!options.onlyPermissions){
+            // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
+            if (!options.onlyPermissions && !options.entity.VirtualEntity){
                 const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
                 const indexSQL = shouldGenerateIndexes ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
                 const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
@@ -1172,6 +1172,68 @@ GO
         return this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity);
     }
 
+    /**
+     * Generates SELECT field expressions for IS-A parent entity columns.
+     * Walks the ParentID chain upward, joining to each parent's base table, and includes
+     * non-PK, non-timestamp, non-virtual fields from each parent table.
+     * Returns a string starting with ',\n' if there are parent fields, or '' if none.
+     */
+    protected generateParentEntityFieldSelects(entity: EntityInfo): string {
+        if (!entity.IsChildType) return '';
+
+        const parentChain = entity.ParentChain;
+        if (parentChain.length === 0) return '';
+
+        const fieldExpressions: string[] = [];
+
+        for (let i = 0; i < parentChain.length; i++) {
+            const parent = parentChain[i];
+            const alias = `__mj_isa_p${i + 1}`;
+
+            for (const field of parent.Fields) {
+                // Skip PKs (shared with child), timestamps, and virtual fields (view-computed)
+                if (field.IsPrimaryKey || field.Name.startsWith('__mj_') || field.IsVirtual) continue;
+
+                fieldExpressions.push(`    ${alias}.[${field.Name}]`);
+            }
+        }
+
+        if (fieldExpressions.length === 0) return '';
+        return ',\n' + fieldExpressions.join(',\n');
+    }
+
+    /**
+     * Generates INNER JOIN clauses for IS-A parent entity base tables.
+     * Chains joins from child -> parent -> grandparent using PK-to-PK conditions.
+     * Each parent is joined via its base table (not view) to avoid view dependency ordering issues.
+     */
+    protected generateParentEntityJoins(entity: EntityInfo, classNameFirstChar: string): string {
+        if (!entity.IsChildType) return '';
+
+        const parentChain = entity.ParentChain;
+        if (parentChain.length === 0) return '';
+
+        const joins: string[] = [];
+
+        for (let i = 0; i < parentChain.length; i++) {
+            const parent = parentChain[i];
+            const parentAlias = `__mj_isa_p${i + 1}`;
+            // First parent joins to child table alias; deeper parents chain to previous parent alias
+            const sourceAlias = i === 0 ? classNameFirstChar : `__mj_isa_p${i}`;
+
+            // Build PK-to-PK join condition (supports composite keys)
+            const joinConditions = entity.PrimaryKeys.map(pk =>
+                `[${sourceAlias}].[${pk.Name}] = ${parentAlias}.[${pk.Name}]`
+            ).join(' AND ');
+
+            joins.push(
+                `INNER JOIN\n    [${parent.SchemaName}].[${parent.BaseTable}] AS ${parentAlias}\n  ON\n    ${joinConditions}`
+            );
+        }
+
+        return joins.join('\n');
+    }
+
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
@@ -1187,6 +1249,10 @@ GO
         const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
         const rootJoins = recursiveFKs.length > 0 ? this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity) : '';
 
+        // IS-A parent entity JOINs — walk ParentID chain, JOIN to each parent's base table
+        const parentFieldsString: string = this.generateParentEntityFieldSelects(entity);
+        const parentJoinsString: string = this.generateParentEntityJoins(entity, classNameFirstChar);
+
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -1201,9 +1267,9 @@ GO
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
+    ${classNameFirstChar}.*${parentFieldsString}${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${parentJoinsString ? '\n' + parentJoinsString : ''}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
 ${whereClause}GO${permissions}
     `
     }

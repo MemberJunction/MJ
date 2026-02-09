@@ -1,5 +1,4 @@
-import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, ViewChild, ChangeDetectorRef, ViewContainerRef, inject } from '@angular/core';
 import { TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIVendorEntity, AIModelVendorEntity, AIPromptTypeEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -21,6 +20,10 @@ import { AIModelEntityExtended, AIPromptCategoryEntityExtended, AIPromptEntityEx
     styleUrls: ['./ai-prompt-form.component.css']
 })
 export class AIPromptFormComponentExtended extends AIPromptFormComponent implements OnInit {
+    private testHarnessService = inject(AITestHarnessDialogService);
+    private viewContainerRef = inject(ViewContainerRef);
+    private promptManagementService = inject(AIPromptManagementService);
+
     public record!: AIPromptEntityExtended;
     public template: TemplateEntity | null = null;
     public templateContent: TemplateContentEntity | null = null;
@@ -190,19 +193,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     private __InferenceProvider_VendorTypeDefinitionID: string = '';
 
     @ViewChild('templateEditor') templateEditor: TemplateEditorComponent | undefined;
-
-    constructor(
-        elementRef: ElementRef,
-        sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        public cdr: ChangeDetectorRef,
-        private testHarnessService: AITestHarnessDialogService,
-        private viewContainerRef: ViewContainerRef,
-        private promptManagementService: AIPromptManagementService
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-    }
 
     async ngOnInit() {
         await super.ngOnInit();

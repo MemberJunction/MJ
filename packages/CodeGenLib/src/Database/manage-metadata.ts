@@ -1,10 +1,11 @@
 import sql from 'mssql';
 import { configInfo, currentWorkingDirectory, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { ApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { SQLParser } from "@memberjunction/core-entities-server";
 import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -31,6 +32,72 @@ export class ValidatorResult {
    public aiModelID: string = "";
    public wasGenerated: boolean = true;
    public success: boolean = false;
+}
+
+/**
+ * Configuration for a soft primary key field in the additionalSchemaInfo config file.
+ * Uses PascalCase property names to match MemberJunction naming conventions.
+ */
+export interface SoftPKFieldConfig {
+   FieldName: string;
+   Description?: string;
+}
+
+/**
+ * Configuration for a soft foreign key field in the additionalSchemaInfo config file.
+ * Uses PascalCase property names to match MemberJunction naming conventions.
+ */
+export interface SoftFKFieldConfig {
+   FieldName: string;
+   SchemaName?: string;
+   RelatedTable: string;
+   RelatedField: string;
+   Description?: string;
+}
+
+/**
+ * Normalized table configuration extracted from the additionalSchemaInfo config file.
+ * Uses PascalCase property names to match MemberJunction naming conventions.
+ */
+export interface SoftPKFKTableConfig {
+   SchemaName: string;
+   TableName: string;
+   Description?: string;
+   PrimaryKey: SoftPKFieldConfig[];
+   ForeignKeys: SoftFKFieldConfig[];
+}
+
+/**
+ * Configuration for a virtual entity in the additionalSchemaInfo config file.
+ * Virtual entities are backed by SQL views with no physical table.
+ */
+export interface VirtualEntityConfig {
+   /** The name of the SQL view backing this virtual entity */
+   ViewName: string;
+   /** The schema containing the view */
+   SchemaName?: string;
+   /** The display name for the entity. If not provided, derived from ViewName */
+   EntityName?: string;
+   /** Optional description for the entity */
+   Description?: string;
+   /** Primary key field name(s). If not provided, defaults to 'ID' */
+   PrimaryKey?: string[];
+   /** Optional soft foreign key definitions for the virtual entity */
+   ForeignKeys?: SoftFKFieldConfig[];
+}
+
+/**
+ * Configuration for an IS-A (Table-Per-Type) relationship in the additionalSchemaInfo config file.
+ * Declares that a child entity inherits from a parent entity. CodeGen sets Entity.ParentID
+ * automatically, then manages virtual field records and view JOINs for the inheritance chain.
+ */
+export interface ISARelationshipConfig {
+   /** The entity name of the child (e.g., "AE Meetings"). Can also be the table name if entity names haven't been created yet. */
+   ChildEntity: string;
+   /** The entity name of the parent (e.g., "AE Products"). Can also be the table name. */
+   ParentEntity: string;
+   /** Optional schema name for table-name lookups (defaults to MJ core schema if not provided) */
+   SchemaName?: string;
 }
 
 /**
@@ -101,6 +168,263 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Extracts a flat array of table configs from the config file, handling both formats:
+    *   1. Schema-as-key (template format): { "dbo": [{ "TableName": "Orders", ... }] }
+    *   2. Flat tables array (legacy format): { "Tables": [{ "SchemaName": "dbo", "TableName": "Orders", ... }] }
+    * Returns a normalized array where each entry has SchemaName, TableName, PrimaryKey[], and ForeignKeys[].
+    */
+   protected extractTablesFromConfig(config: Record<string, unknown>): SoftPKFKTableConfig[] {
+      const results: SoftPKFKTableConfig[] = [];
+
+      // Check for flat "Tables" array format first
+      if (Array.isArray(config.Tables)) {
+         for (const table of config.Tables) {
+            const t = table as Record<string, unknown>;
+            results.push({
+               SchemaName: (t.SchemaName as string) || 'dbo',
+               TableName: t.TableName as string,
+               PrimaryKey: (t.PrimaryKey as SoftPKFieldConfig[]) || [],
+               ForeignKeys: (t.ForeignKeys as SoftFKFieldConfig[]) || [],
+            });
+         }
+         return results;
+      }
+
+      // Schema-as-key format: iterate over keys, skip metadata and special section keys
+      const metadataKeys = new Set(['$schema', 'description', 'version', 'VirtualEntities', 'ISARelationships', 'Tables']);
+      for (const key of Object.keys(config)) {
+         if (metadataKeys.has(key)) continue;
+
+         const schemaName = key;
+         const tables = config[key];
+         if (!Array.isArray(tables)) continue;
+
+         for (const table of tables) {
+            const t = table as Record<string, unknown>;
+            results.push({
+               SchemaName: schemaName,
+               TableName: t.TableName as string,
+               PrimaryKey: (t.PrimaryKey as SoftPKFieldConfig[]) || [],
+               ForeignKeys: (t.ForeignKeys as SoftFKFieldConfig[]) || [],
+            });
+         }
+      }
+
+      return results;
+   }
+
+   /**
+    * Extracts VirtualEntities array from the additionalSchemaInfo config file.
+    * The config may contain a top-level "VirtualEntities" key with an array of
+    * virtual entity definitions.
+    */
+   protected extractVirtualEntitiesFromConfig(config: Record<string, unknown>): VirtualEntityConfig[] {
+      const virtualEntities = config.VirtualEntities;
+      if (!Array.isArray(virtualEntities)) return [];
+
+      return virtualEntities.map((ve: Record<string, unknown>) => ({
+         ViewName: ve.ViewName as string,
+         SchemaName: (ve.SchemaName as string) || undefined,
+         EntityName: (ve.EntityName as string) || undefined,
+         Description: (ve.Description as string) || undefined,
+         PrimaryKey: Array.isArray(ve.PrimaryKey) ? (ve.PrimaryKey as string[]) : undefined,
+         ForeignKeys: Array.isArray(ve.ForeignKeys) ? (ve.ForeignKeys as SoftFKFieldConfig[]) : undefined,
+      }));
+   }
+
+   /**
+    * Extracts ISARelationships array from the additionalSchemaInfo config file.
+    * The config may contain a top-level "ISARelationships" key with an array of
+    * parent-child relationship definitions.
+    */
+   protected extractISARelationshipsFromConfig(config: Record<string, unknown>): ISARelationshipConfig[] {
+      const relationships = config.ISARelationships;
+      if (!Array.isArray(relationships)) return [];
+
+      return relationships.map((rel: Record<string, unknown>) => ({
+         ChildEntity: rel.ChildEntity as string,
+         ParentEntity: rel.ParentEntity as string,
+         SchemaName: (rel.SchemaName as string) || undefined,
+      }));
+   }
+
+   /**
+    * Processes IS-A relationship configurations from the additionalSchemaInfo config.
+    * For each configured relationship, looks up both entities by name (or by table name
+    * within the given schema) and sets Entity.ParentID on the child entity.
+    * Must run AFTER entities are created but BEFORE manageParentEntityFields().
+    */
+   protected async processISARelationshipConfig(pool: sql.ConnectionPool): Promise<{ success: boolean; updatedCount: number }> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return { success: true, updatedCount: 0 };
+
+      const relationships = this.extractISARelationshipsFromConfig(config as Record<string, unknown>);
+      if (relationships.length === 0) return { success: true, updatedCount: 0 };
+
+      let updatedCount = 0;
+      const schema = mj_core_schema();
+
+      for (const rel of relationships) {
+         try {
+            // Look up the parent entity — try by Name first, then by BaseTable within the given schema
+            const parentResult = await pool.request()
+               .input('ParentName', rel.ParentEntity)
+               .input('SchemaName', rel.SchemaName || null)
+               .query(`
+                  SELECT TOP 1 ID, Name
+                  FROM [${schema}].vwEntities
+                  WHERE Name = @ParentName
+                     OR (BaseTable = @ParentName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))
+                  ORDER BY CASE WHEN Name = @ParentName THEN 0 ELSE 1 END
+               `);
+
+            if (parentResult.recordset.length === 0) {
+               logError(`    > IS-A config: parent entity "${rel.ParentEntity}" not found — skipping`);
+               continue;
+            }
+
+            const parentId = parentResult.recordset[0].ID;
+            const parentName = parentResult.recordset[0].Name;
+
+            // Look up the child entity — same strategy
+            const childResult = await pool.request()
+               .input('ChildName', rel.ChildEntity)
+               .input('SchemaName', rel.SchemaName || null)
+               .query(`
+                  SELECT TOP 1 ID, Name, ParentID
+                  FROM [${schema}].vwEntities
+                  WHERE Name = @ChildName
+                     OR (BaseTable = @ChildName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))
+                  ORDER BY CASE WHEN Name = @ChildName THEN 0 ELSE 1 END
+               `);
+
+            if (childResult.recordset.length === 0) {
+               logError(`    > IS-A config: child entity "${rel.ChildEntity}" not found — skipping`);
+               continue;
+            }
+
+            const childId = childResult.recordset[0].ID;
+            const childName = childResult.recordset[0].Name;
+            const existingParentId = childResult.recordset[0].ParentID;
+
+            // Skip if already set correctly
+            if (existingParentId === parentId) {
+               logStatus(`    > IS-A: "${childName}" already has ParentID set to "${parentName}", skipping`);
+               continue;
+            }
+
+            // Set ParentID on the child entity
+            await pool.request()
+               .input('ParentID', parentId)
+               .input('ChildID', childId)
+               .query(`UPDATE [${schema}].Entity SET ParentID = @ParentID WHERE ID = @ChildID`);
+
+            if (existingParentId) {
+               logStatus(`    > IS-A: Updated "${childName}" ParentID from previous value to "${parentName}"`);
+            } else {
+               logStatus(`    > IS-A: Set "${childName}" ParentID to "${parentName}"`);
+            }
+            updatedCount++;
+         } catch (err) {
+            const errMessage = err instanceof Error ? err.message : String(err);
+            logError(`    > IS-A config: Failed to set ParentID for "${rel.ChildEntity}": ${errMessage}`);
+         }
+      }
+
+      return { success: true, updatedCount };
+   }
+
+   /**
+    * Processes virtual entity configurations from the additionalSchemaInfo config.
+    * For each configured virtual entity, checks if it already exists and creates
+    * it if not. Uses the spCreateVirtualEntity stored procedure.
+    * Must run BEFORE manageVirtualEntities() so newly created entities get field-synced.
+    */
+   protected async processVirtualEntityConfig(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<{ success: boolean; createdCount: number }> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return { success: true, createdCount: 0 };
+
+      const virtualEntities = this.extractVirtualEntitiesFromConfig(config as Record<string, unknown>);
+      if (virtualEntities.length === 0) return { success: true, createdCount: 0 };
+
+      let createdCount = 0;
+      const schema = mj_core_schema();
+
+      for (const ve of virtualEntities) {
+         const viewSchema = ve.SchemaName || schema;
+         const viewName = ve.ViewName;
+         const entityName = ve.EntityName || this.deriveEntityNameFromView(viewName);
+         const pkField = ve.PrimaryKey?.[0] || 'ID';
+
+         // Check if entity already exists for this view
+         const existsResult = await pool.request()
+            .input('ViewName', viewName)
+            .input('SchemaName', viewSchema)
+            .query(`SELECT ID FROM [${schema}].vwEntities WHERE BaseView = @ViewName AND SchemaName = @SchemaName`);
+
+         if (existsResult.recordset.length > 0) {
+            logStatus(`    > Virtual entity "${entityName}" already exists for view [${viewSchema}].[${viewName}], skipping creation`);
+            continue;
+         }
+
+         // Verify the view actually exists in the database
+         const viewExistsResult = await pool.request()
+            .input('ViewName', viewName)
+            .input('SchemaName', viewSchema)
+            .query(`SELECT 1 FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = @ViewName AND TABLE_SCHEMA = @SchemaName`);
+
+         if (viewExistsResult.recordset.length === 0) {
+            logError(`    > View [${viewSchema}].[${viewName}] does not exist — skipping virtual entity creation for "${entityName}"`);
+            continue;
+         }
+
+         // Create the virtual entity via the stored procedure
+         try {
+            const createResult = await pool.request()
+               .input('Name', entityName)
+               .input('BaseView', viewName)
+               .input('SchemaName', viewSchema)
+               .input('PrimaryKeyFieldName', pkField)
+               .input('Description', ve.Description || null)
+               .execute(`[${schema}].spCreateVirtualEntity`);
+
+            const newEntityId = createResult.recordset?.[0]?.['']
+               || createResult.recordset?.[0]?.ID
+               || createResult.recordset?.[0]?.Column0;
+
+            logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${viewName}]`);
+            createdCount++;
+
+            // Add virtual entity to the application for its schema and set default permissions
+            // (same logic as table-backed entities)
+            if (newEntityId) {
+               await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
+               await this.addDefaultPermissionsForEntity(pool, newEntityId, entityName);
+            }
+         } catch (err) {
+            const errMessage = err instanceof Error ? err.message : String(err);
+            logError(`    > Failed to create virtual entity "${entityName}": ${errMessage}`);
+         }
+      }
+
+      return { success: true, createdCount };
+   }
+
+   /**
+    * Derives an entity name from a view name by removing common prefixes (vw, v_)
+    * and converting to a human-friendly format.
+    */
+   protected deriveEntityNameFromView(viewName: string): string {
+      let name = viewName;
+      // Remove common view prefixes
+      if (name.startsWith('vw')) name = name.substring(2);
+      else if (name.startsWith('v_')) name = name.substring(2);
+      // Add spaces before capital letters (PascalCase → "Pascal Case")
+      name = name.replace(/([a-z])([A-Z])/g, '$1 $2');
+      return name.trim();
+   }
+
+   /**
     * Primary function to manage metadata within the CodeGen system. This function will call a series of sub-functions to manage the metadata.
     * @param pool - the ConnectionPool object to use for querying and updating the database
     * @returns
@@ -168,10 +492,31 @@ export class ManageMetadataBase {
          await this.generateNewEntityDescriptions(pool, md, currentUser); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
       }
 
+      // Config-driven virtual entity creation — run BEFORE manageVirtualEntities
+      // so newly created entities get their fields synced in the next step
+      const vecResult = await this.processVirtualEntityConfig(pool, currentUser);
+      if (vecResult.createdCount > 0) {
+         logStatus(`    > Created ${vecResult.createdCount} virtual entit${vecResult.createdCount === 1 ? 'y' : 'ies'} from config`);
+         // Refresh metadata so manageVirtualEntities can find the newly-created entities
+         // in the cache — otherwise EntityByName() returns null and field sync is silently skipped
+         const md = new Metadata();
+         await md.Refresh();
+      }
+
       const veResult = await this.manageVirtualEntities(pool)
       if (! veResult.success) {
          logError('   Error managing virtual entities');
          bSuccess = false;
+      }
+
+      // LLM-assisted virtual entity field decoration — identify PKs, FKs, and descriptions
+      await this.decorateVirtualEntitiesWithLLM(pool, currentUser);
+
+      // Config-driven IS-A relationship setup — set ParentID on child entities
+      // Must run AFTER entities exist but BEFORE manageEntityFields() which calls manageParentEntityFields()
+      const isaConfigResult = await this.processISARelationshipConfig(pool);
+      if (isaConfigResult.updatedCount > 0) {
+         logStatus(`    > Set ParentID on ${isaConfigResult.updatedCount} IS-A child entit${isaConfigResult.updatedCount === 1 ? 'y' : 'ies'} from config`);
       }
 
       start = new Date();
@@ -333,6 +678,629 @@ export class ManageMetadataBase {
          }
       }
       return {success: true, updatedField: didUpdate, newFieldID: newEntityFieldUUID};
+   }
+
+   /**
+    * Iterates over all virtual entities and applies LLM-assisted field decoration
+    * to identify primary keys, foreign keys, and field descriptions.
+    * Only runs if the VirtualEntityFieldDecoration advanced generation feature is enabled.
+    * Idempotent: skips entities that already have soft PK/FK annotations.
+    */
+   protected async decorateVirtualEntitiesWithLLM(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<void> {
+      const ag = new AdvancedGeneration();
+      if (!ag.featureEnabled('VirtualEntityFieldDecoration')) {
+         return; // Feature not enabled, nothing to do
+      }
+
+      const md = new Metadata();
+      const virtualEntities = md.Entities.filter(e => e.VirtualEntity);
+      if (virtualEntities.length === 0) {
+         return;
+      }
+
+      // Pre-build available entities list once (shared across all virtual entity decorations)
+      const availableEntities = md.Entities
+         .filter(e => !e.VirtualEntity && e.PrimaryKeys.length > 0)
+         .map(e => ({
+            Name: e.Name,
+            SchemaName: e.SchemaName,
+            BaseTable: e.BaseTable,
+            PrimaryKeyField: e.PrimaryKeys[0]?.Name || 'ID'
+         }));
+
+      logStatus(`   Decorating virtual entity fields with LLM (${virtualEntities.length} entities)...`);
+      let decoratedCount = 0;
+      let skippedCount = 0;
+
+      // Process in batches of up to 5 in parallel for better throughput
+      const batchSize = 5;
+      for (let i = 0; i < virtualEntities.length; i += batchSize) {
+         const batch = virtualEntities.slice(i, i + batchSize);
+         const results = await Promise.all(
+            batch.map(entity => this.decorateSingleVirtualEntityWithLLM(pool, entity, ag, currentUser, availableEntities))
+         );
+         for (const result of results) {
+            if (result.decorated) {
+               decoratedCount++;
+            } else if (result.skipped) {
+               skippedCount++;
+            }
+         }
+      }
+
+      if (decoratedCount > 0 || skippedCount > 0) {
+         logStatus(`    > LLM field decoration: ${decoratedCount} decorated, ${skippedCount} skipped (already annotated)`);
+      }
+   }
+
+   /**
+    * Applies LLM-assisted field decoration to a single virtual entity.
+    * Parses the view SQL to identify source entities, enriches the LLM prompt with their
+    * field metadata (descriptions, categories), then applies PKs, FKs, descriptions, and categories.
+    * @returns Whether the entity was decorated, skipped, or encountered an error.
+    */
+   protected async decorateSingleVirtualEntityWithLLM(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      ag: AdvancedGeneration,
+      currentUser: UserInfo,
+      availableEntities: Array<{ Name: string; SchemaName: string; BaseTable: string; PrimaryKeyField: string }>
+   ): Promise<{ decorated: boolean; skipped: boolean }> {
+      try {
+         // Idempotency check: if entity already has soft PK or soft FK annotations, skip
+         // unless forceRegenerate option is enabled on this feature
+         const feature = ag.getFeature('VirtualEntityFieldDecoration');
+         const forceRegenerate = feature?.options?.find(o => o.name === 'forceRegenerate')?.value === true;
+         const hasSoftAnnotations = entity.Fields.some(f => f.IsSoftPrimaryKey || f.IsSoftForeignKey);
+         if (hasSoftAnnotations && !forceRegenerate) {
+            return { decorated: false, skipped: true };
+         }
+
+         // Get view definition from SQL Server
+         const viewDefSQL = `SELECT OBJECT_DEFINITION(OBJECT_ID('[${entity.SchemaName}].[${entity.BaseView}]')) AS ViewDef`;
+         const viewDefResult = await pool.request().query(viewDefSQL);
+         const viewDefinition = viewDefResult.recordset[0]?.ViewDef;
+         if (!viewDefinition) {
+            logStatus(`         Could not get view definition for ${entity.SchemaName}.${entity.BaseView} — skipping LLM decoration`);
+            return { decorated: false, skipped: false };
+         }
+
+         // Parse the view SQL to identify referenced tables, then resolve to entities
+         const sourceEntities = this.buildSourceEntityContext(viewDefinition);
+
+         // Build field info for the prompt
+         const fields = entity.Fields.map(f => ({
+            Name: f.Name,
+            Type: f.Type,
+            Length: f.Length,
+            AllowsNull: f.AllowsNull,
+            IsPrimaryKey: f.IsPrimaryKey,
+            RelatedEntityName: f.RelatedEntity || null
+         }));
+
+         // Call the LLM with enriched source entity context
+         const result = await ag.decorateVirtualEntityFields(
+            entity.Name,
+            entity.SchemaName,
+            entity.BaseView,
+            viewDefinition,
+            entity.Description || '',
+            fields,
+            availableEntities,
+            sourceEntities,
+            currentUser
+         );
+
+         if (!result) {
+            return { decorated: false, skipped: false };
+         }
+
+         // Apply results to EntityField records
+         const schema = mj_core_schema();
+         let anyUpdated = false;
+
+         // Apply primary keys
+         anyUpdated = await this.applyLLMPrimaryKeys(pool, entity, result.primaryKeys, schema) || anyUpdated;
+
+         // Apply foreign keys
+         anyUpdated = await this.applyLLMForeignKeys(pool, entity, result.foreignKeys, schema) || anyUpdated;
+
+         // Apply field descriptions
+         anyUpdated = await this.applyLLMFieldDescriptions(pool, entity, result.fieldDescriptions, schema) || anyUpdated;
+
+         // Apply categories using the shared methods (same stability rules as regular entities)
+         anyUpdated = await this.applyVEFieldCategories(pool, entity, result) || anyUpdated;
+
+         if (anyUpdated) {
+            const sqlUpdate = `UPDATE [${schema}].Entity SET [${EntityInfo.UpdatedAtFieldName}]=GETUTCDATE() WHERE ID='${entity.ID}'`;
+            await this.LogSQLAndExecute(pool, sqlUpdate, `Update entity timestamp for ${entity.Name} after LLM decoration`);
+         }
+
+         return { decorated: anyUpdated, skipped: false };
+      } catch (e) {
+         logError(`   Error decorating virtual entity ${entity.Name} with LLM: ${e}`);
+         return { decorated: false, skipped: false };
+      }
+   }
+
+   /**
+    * Parses a view definition SQL and resolves referenced tables to MJ entities.
+    * Returns enriched source entity context (all fields with descriptions and categories)
+    * for the LLM to use when decorating virtual entity fields.
+    */
+   protected buildSourceEntityContext(viewDefinition: string): Array<{
+      Name: string;
+      Description: string;
+      Fields: Array<{
+         Name: string;
+         Type: string;
+         Description: string;
+         Category: string | null;
+         IsPrimaryKey: boolean;
+         IsForeignKey: boolean;
+      }>;
+   }> {
+      const parseResult = SQLParser.Parse(viewDefinition);
+      const md = new Metadata();
+      const sourceEntities: Array<{
+         Name: string;
+         Description: string;
+         Fields: Array<{
+            Name: string;
+            Type: string;
+            Description: string;
+            Category: string | null;
+            IsPrimaryKey: boolean;
+            IsForeignKey: boolean;
+         }>;
+      }> = [];
+
+      const seen = new Set<string>();
+
+      for (const tableRef of parseResult.Tables) {
+         // Match against MJ entities by BaseTable/BaseView + SchemaName
+         const matchingEntity = md.Entities.find(e =>
+            (e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase() ||
+             e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase()) &&
+            e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
+         );
+
+         if (matchingEntity && !seen.has(matchingEntity.ID)) {
+            seen.add(matchingEntity.ID);
+            sourceEntities.push({
+               Name: matchingEntity.Name,
+               Description: matchingEntity.Description || '',
+               Fields: matchingEntity.Fields.map(f => ({
+                  Name: f.Name,
+                  Type: f.Type,
+                  Description: f.Description || '',
+                  Category: f.Category || null,
+                  IsPrimaryKey: f.IsPrimaryKey,
+                  IsForeignKey: !!(f.RelatedEntityID)
+               }))
+            });
+         }
+      }
+
+      return sourceEntities;
+   }
+
+   /**
+    * Applies category assignments from VE decoration results using the shared category methods.
+    * Loads field records from DB (needs ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName)
+    * then delegates to the shared methods.
+    */
+   protected async applyVEFieldCategories(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      result: VirtualEntityDecorationResult
+   ): Promise<boolean> {
+      // Check if the LLM returned any category data
+      const hasCategories = result.fieldDescriptions?.some(fd => fd.category);
+      if (!hasCategories) {
+         return false;
+      }
+
+      // Load VE EntityField rows from DB (we need the ID and auto-update flags)
+      const schema = mj_core_schema();
+      const fieldsSQL = `
+         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName
+         FROM [${schema}].EntityField
+         WHERE EntityID = '${entity.ID}'
+      `;
+      const fieldsResult = await pool.request().query(fieldsSQL);
+      const dbFields = fieldsResult.recordset as Array<{
+         ID: string; Name: string; Category: string | null;
+         AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean;
+      }>;
+
+      if (dbFields.length === 0) return false;
+
+      // Convert VE decoration field descriptions into the format expected by applyFieldCategories
+      const fieldCategories = result.fieldDescriptions
+         .filter(fd => fd.category)
+         .map(fd => ({
+            fieldName: fd.fieldName,
+            category: fd.category!,
+            displayName: fd.displayName || undefined,
+            extendedType: fd.extendedType,
+            codeType: fd.codeType
+         }));
+
+      if (fieldCategories.length === 0) return false;
+
+      const existingCategories = this.buildExistingCategorySet(dbFields);
+      await this.applyFieldCategories(pool, entity.ID, dbFields, fieldCategories, existingCategories);
+
+      // Apply entity icon if provided
+      if (result.entityIcon) {
+         await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
+      }
+
+      // Apply category info settings if provided
+      if (result.categoryInfo && Object.keys(result.categoryInfo).length > 0) {
+         await this.applyCategoryInfoSettings(pool, entity.ID, result.categoryInfo);
+      }
+
+      logStatus(`         Applied categories for VE ${entity.Name} (${fieldCategories.length} fields)`);
+      return true;
+   }
+
+   /**
+    * Applies LLM-identified primary keys to entity fields.
+    * Sets IsPrimaryKey=1 and IsSoftPrimaryKey=1 for identified fields.
+    * First clears any default PK that was set by field-sync (field #1 fallback).
+    * All SQL updates are batched into a single execution for performance.
+    */
+   protected async applyLLMPrimaryKeys(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      primaryKeys: string[],
+      schema: string
+   ): Promise<boolean> {
+      if (!primaryKeys || primaryKeys.length === 0) {
+         return false;
+      }
+
+      // Validate that all identified PK fields exist on the entity
+      const validPKs = primaryKeys.filter(pk =>
+         entity.Fields.some(f => f.Name.toLowerCase() === pk.toLowerCase())
+      );
+      if (validPKs.length === 0) {
+         return false;
+      }
+
+      // Build batched SQL: clear default PK + set all LLM-identified PKs
+      const sqlStatements: string[] = [];
+
+      // Clear existing default PK (field #1 fallback) before applying LLM-identified PKs
+      sqlStatements.push(`UPDATE [${schema}].[EntityField]
+                        SET IsPrimaryKey=0, IsUnique=0
+                        WHERE EntityID='${entity.ID}' AND IsPrimaryKey=1 AND IsSoftPrimaryKey=0`);
+
+      // Set LLM-identified PKs
+      for (const pk of validPKs) {
+         sqlStatements.push(`UPDATE [${schema}].[EntityField]
+                         SET IsPrimaryKey=1, IsUnique=1, IsSoftPrimaryKey=1
+                         WHERE EntityID='${entity.ID}' AND Name='${pk}'`);
+         logStatus(`         ✓ Set PK for ${entity.Name}.${pk} (LLM-identified)`);
+      }
+
+      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-identified PKs for ${entity.Name}: ${validPKs.join(', ')}`);
+      return true;
+   }
+
+   /**
+    * Applies LLM-identified foreign keys to entity fields.
+    * Sets RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey=1.
+    * Only applies high and medium confidence FKs.
+    * All SQL updates are batched into a single execution for performance.
+    */
+   protected async applyLLMForeignKeys(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      foreignKeys: VirtualEntityDecorationResult['foreignKeys'],
+      schema: string
+   ): Promise<boolean> {
+      if (!foreignKeys || foreignKeys.length === 0) {
+         return false;
+      }
+
+      const md = new Metadata();
+      const sqlStatements: string[] = [];
+
+      for (const fk of foreignKeys) {
+         // Only apply high/medium confidence
+         if (fk.confidence !== 'high' && fk.confidence !== 'medium') {
+            continue;
+         }
+
+         // Validate that the field exists on this entity
+         const field = entity.Fields.find(f => f.Name.toLowerCase() === fk.fieldName.toLowerCase());
+         if (!field) {
+            continue;
+         }
+
+         // Skip if field already has a FK set (config-defined takes precedence)
+         if (field.RelatedEntityID) {
+            continue;
+         }
+
+         // Look up the related entity by name
+         const relatedEntity = md.EntityByName(fk.relatedEntityName);
+         if (!relatedEntity) {
+            logStatus(`         ⚠️  LLM FK: related entity '${fk.relatedEntityName}' not found for ${entity.Name}.${fk.fieldName}`);
+            continue;
+         }
+
+         sqlStatements.push(`UPDATE [${schema}].[EntityField]
+                         SET RelatedEntityID='${relatedEntity.ID}',
+                             RelatedEntityFieldName='${fk.relatedFieldName}',
+                             IsSoftForeignKey=1
+                         WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`);
+         logStatus(`         ✓ Set FK for ${entity.Name}.${field.Name} → ${fk.relatedEntityName}.${fk.relatedFieldName} (${fk.confidence}, LLM)`);
+      }
+
+      if (sqlStatements.length === 0) {
+         return false;
+      }
+
+      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-identified FKs for ${entity.Name}`);
+      return true;
+   }
+
+   /**
+    * Applies LLM-generated field descriptions to entity fields that lack descriptions.
+    * All SQL updates are batched into a single execution for performance.
+    */
+   protected async applyLLMFieldDescriptions(
+      pool: sql.ConnectionPool,
+      entity: EntityInfo,
+      fieldDescriptions: VirtualEntityDecorationResult['fieldDescriptions'],
+      schema: string
+   ): Promise<boolean> {
+      if (!fieldDescriptions || fieldDescriptions.length === 0) {
+         return false;
+      }
+
+      const sqlStatements: string[] = [];
+
+      for (const fd of fieldDescriptions) {
+         const field = entity.Fields.find(f => f.Name.toLowerCase() === fd.fieldName.toLowerCase());
+         if (!field) {
+            continue;
+         }
+
+         // Only apply if field doesn't already have a description
+         if (field.Description && field.Description.trim().length > 0) {
+            continue;
+         }
+
+         const escapedDescription = fd.description.replace(/'/g, "''");
+         let setClauses = `Description='${escapedDescription}'`;
+
+         // Apply extended type if provided and valid
+         if (fd.extendedType) {
+            const validExtendedType = this.validateExtendedType(fd.extendedType);
+            if (validExtendedType) {
+               setClauses += `, ExtendedType='${validExtendedType}'`;
+            }
+         }
+
+         sqlStatements.push(`UPDATE [${schema}].[EntityField]
+                         SET ${setClauses}
+                         WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`);
+      }
+
+      if (sqlStatements.length === 0) {
+         return false;
+      }
+
+      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-generated descriptions for ${entity.Name} (${sqlStatements.length} fields)`);
+      return true;
+   }
+
+   /**
+    * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
+    */
+   private static readonly VALID_EXTENDED_TYPES = new Set([
+      'Code', 'Email', 'FaceTime', 'Geo', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
+   ]);
+
+   private static readonly EXTENDED_TYPE_ALIASES: Record<string, string> = {
+      'phone': 'Tel',
+      'telephone': 'Tel',
+      'website': 'URL',
+      'link': 'URL',
+      'hyperlink': 'URL',
+      'mail': 'Email',
+      'e-mail': 'Email',
+      'text': 'SMS',
+      'location': 'Geo',
+      'address': 'Geo',
+      'teams': 'MSTeams',
+      'facetime': 'FaceTime',
+      'zoom': 'ZoomMtg',
+      'whatsapp': 'WhatsApp',
+      'skype': 'Skype',
+   };
+
+   /**
+    * Validates an LLM-suggested ExtendedType against the allowed values in EntityField.
+    * Returns the valid value (case-corrected) or null if invalid.
+    */
+   protected validateExtendedType(suggested: string): string | null {
+      // Direct match (case-insensitive)
+      for (const valid of ManageMetadataBase.VALID_EXTENDED_TYPES) {
+         if (valid.toLowerCase() === suggested.toLowerCase()) {
+            return valid;
+         }
+      }
+      // Check aliases
+      const alias = ManageMetadataBase.EXTENDED_TYPE_ALIASES[suggested.toLowerCase()];
+      if (alias) {
+         return alias;
+      }
+      return null;
+   }
+
+   /**
+    * Manages virtual EntityField records for IS-A parent entity fields.
+    * For each entity with ParentID set (IS-A child), creates/updates virtual field records
+    * that mirror the parent entity's base table fields (excluding PKs, timestamps, and virtual fields).
+    * Runs collision detection to prevent child table columns from shadowing parent fields.
+    */
+   protected async manageParentEntityFields(pool: sql.ConnectionPool): Promise<{success: boolean, anyUpdates: boolean}> {
+      let bSuccess = true;
+      let anyUpdates = false;
+
+      const md = new Metadata();
+      const childEntities = md.Entities.filter(e => e.IsChildType);
+
+      if (childEntities.length === 0) {
+         return { success: true, anyUpdates: false };
+      }
+
+      logStatus(`   Processing IS-A parent fields for ${childEntities.length} child entit${childEntities.length === 1 ? 'y' : 'ies'}...`);
+
+      for (const childEntity of childEntities) {
+         try {
+            const { success, updated } = await this.manageSingleEntityParentFields(pool, childEntity);
+            anyUpdates = anyUpdates || updated;
+            if (!success) {
+               logError(`   Error managing IS-A parent fields for ${childEntity.Name}`);
+               bSuccess = false;
+            }
+         } catch (e) {
+            logError(`   Exception managing IS-A parent fields for ${childEntity.Name}: ${e}`);
+            bSuccess = false;
+         }
+      }
+
+      return { success: bSuccess, anyUpdates };
+   }
+
+   /**
+    * Creates/updates virtual EntityField records for a single child entity's parent fields.
+    * Detects field name collisions between child's own base table columns and parent fields.
+    */
+   protected async manageSingleEntityParentFields(pool: sql.ConnectionPool, childEntity: EntityInfo): Promise<{success: boolean, updated: boolean}> {
+      let bUpdated = false;
+
+      // Get all parent fields: non-PK, non-__mj_, non-virtual from each parent in chain
+      const parentFields = childEntity.AllParentFields;
+      if (parentFields.length === 0) {
+         return { success: true, updated: false };
+      }
+
+      // Get child's own (non-virtual) field names for collision detection
+      const childOwnFieldNames = new Set(
+         childEntity.Fields.filter(f => !f.IsVirtual).map(f => f.Name.toLowerCase())
+      );
+
+      for (const parentField of parentFields) {
+         // Collision detection: child's own base table column has same name as parent field.
+         // This uses in-memory metadata which filters to non-virtual (base table) fields only.
+         if (childOwnFieldNames.has(parentField.Name.toLowerCase())) {
+            logError(
+               `   FIELD COLLISION: Entity '${childEntity.Name}' has its own column '${parentField.Name}' ` +
+               `that conflicts with IS-A parent field '${parentField.Name}' from '${parentField.Entity}'. ` +
+               `Rename the child column to resolve this collision. Skipping IS-A field sync for this entity.`
+            );
+            return { success: false, updated: false };
+         }
+
+         // Check the DATABASE for existing field record — in-memory metadata may be stale
+         // (e.g. createNewEntityFieldsFromSchema may have already added this field from the view)
+         const existsResult = await pool.request()
+            .input('EntityID', childEntity.ID)
+            .input('FieldName', parentField.Name)
+            .query(`SELECT ID, IsVirtual, Type, Length, Precision, Scale, AllowsNull, AllowUpdateAPI
+                    FROM [${mj_core_schema()}].EntityField
+                    WHERE EntityID = @EntityID AND Name = @FieldName`);
+
+         if (existsResult.recordset.length > 0) {
+            // Field already exists — update it to ensure it's marked as a virtual IS-A field
+            const existingRow = existsResult.recordset[0];
+            const needsUpdate = !existingRow.IsVirtual ||
+               existingRow.Type?.trim().toLowerCase() !== parentField.Type.trim().toLowerCase() ||
+               existingRow.Length !== parentField.Length ||
+               existingRow.Precision !== parentField.Precision ||
+               existingRow.Scale !== parentField.Scale ||
+               existingRow.AllowsNull !== parentField.AllowsNull ||
+               !existingRow.AllowUpdateAPI;
+
+            if (needsUpdate) {
+               const sqlUpdate = `UPDATE [${mj_core_schema()}].EntityField
+                  SET IsVirtual=1,
+                      Type='${parentField.Type}',
+                      Length=${parentField.Length},
+                      Precision=${parentField.Precision},
+                      Scale=${parentField.Scale},
+                      AllowsNull=${parentField.AllowsNull ? 1 : 0},
+                      AllowUpdateAPI=1
+                  WHERE ID='${existingRow.ID}'`;
+               await this.LogSQLAndExecute(pool, sqlUpdate,
+                  `Update IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
+               bUpdated = true;
+            }
+         } else {
+            // Create new virtual field record for this parent field
+            const newFieldID = this.createNewUUID();
+            // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema
+            const sequence = 100000 + parentFields.indexOf(parentField);
+
+            const sqlInsert = `INSERT INTO [${mj_core_schema()}].EntityField (
+                  ID, EntityID, Name, Type, AllowsNull,
+                  Length, Precision, Scale,
+                  Sequence, IsVirtual, AllowUpdateAPI,
+                  IsPrimaryKey, IsUnique)
+               VALUES (
+                  '${newFieldID}', '${childEntity.ID}', '${parentField.Name}',
+                  '${parentField.Type}', ${parentField.AllowsNull ? 1 : 0},
+                  ${parentField.Length}, ${parentField.Precision}, ${parentField.Scale},
+                  ${sequence}, 1, 1, 0, 0)`;
+            await this.LogSQLAndExecute(pool, sqlInsert,
+               `Create IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
+            bUpdated = true;
+         }
+      }
+
+      // Remove stale IS-A parent virtual fields no longer in the parent chain.
+      // IS-A parent fields are identified by IsVirtual=true AND AllowUpdateAPI=true.
+      const currentParentFieldNames = new Set(parentFields.map(f => f.Name.toLowerCase()));
+      const staleFields = childEntity.Fields.filter(f =>
+         f.IsVirtual && f.AllowUpdateAPI &&
+         !f.IsPrimaryKey && !f.Name.startsWith('__mj_') &&
+         !currentParentFieldNames.has(f.Name.toLowerCase())
+      );
+
+      for (const staleField of staleFields) {
+         const sqlDelete = `DELETE FROM [${mj_core_schema()}].EntityField WHERE ID='${staleField.ID}'`;
+         await this.LogSQLAndExecute(pool, sqlDelete,
+            `Remove stale IS-A parent field ${staleField.Name} from ${childEntity.Name}`);
+         bUpdated = true;
+      }
+
+      if (bUpdated) {
+         const sqlUpdate = `UPDATE [${mj_core_schema()}].Entity SET [${EntityInfo.UpdatedAtFieldName}]=GETUTCDATE() WHERE ID='${childEntity.ID}'`;
+         await this.LogSQLAndExecute(pool, sqlUpdate,
+            `Update entity timestamp for ${childEntity.Name} after IS-A field sync`);
+      }
+
+      return { success: true, updated: bUpdated };
+   }
+
+   /**
+    * Checks if an existing virtual parent field record needs to be updated to match the parent field.
+    */
+   protected parentFieldNeedsUpdate(existing: EntityFieldInfo, parentField: EntityFieldInfo): boolean {
+      return existing.Type.trim().toLowerCase() !== parentField.Type.trim().toLowerCase() ||
+         existing.Length !== parentField.Length ||
+         existing.Precision !== parentField.Precision ||
+         existing.Scale !== parentField.Scale ||
+         existing.AllowsNull !== parentField.AllowsNull ||
+         !existing.AllowUpdateAPI;
    }
 
 
@@ -593,6 +1561,15 @@ export class ManageMetadataBase {
       }
       logStatus(`      Applied soft PK/FK configuration in ${(new Date().getTime() - stepConfigStartTime.getTime()) / 1000} seconds`);
 
+      // IS-A parent field sync: create/update virtual EntityField records for parent chain fields
+      const stepISAStartTime: Date = new Date();
+      const isaResult = await this.manageParentEntityFields(pool);
+      if (!isaResult.success) {
+         logError('Error managing IS-A parent entity fields');
+         bSuccess = false;
+      }
+      logStatus(`      Managed IS-A parent entity fields in ${(new Date().getTime() - stepISAStartTime.getTime()) / 1000} seconds`);
+
       const step4StartTime: Date = new Date();
       if (! await this.setDefaultColumnWidthWhereNeeded(pool, excludeSchemas)) {
          logError ('Error setting default column width where needed')
@@ -706,13 +1683,22 @@ export class ManageMetadataBase {
          let totalFKs = 0;
          const schema = mj_core_schema();
 
-         for (const table of config.tables || []) {
+         // Config supports two formats:
+         //   1. Schema-as-key (template format): { "dbo": [{ "TableName": "Orders", ... }] }
+         //   2. Flat tables array (legacy format): { "tables": [{ "SchemaName": "dbo", "TableName": "Orders", ... }] }
+         // Both use PascalCase property names.
+         const tables = this.extractTablesFromConfig(config);
+
+         for (const table of tables) {
+            const tableSchema = table.SchemaName;
+            const tableName = table.TableName;
+
             // Look up entity ID (SELECT query - no need to log to migration file)
-            const entityLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${table.schemaName}' AND BaseTable = '${table.tableName}'`;
+            const entityLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${tableSchema}' AND BaseTable = '${tableName}'`;
             const entityResult = await pool.request().query(entityLookupSQL);
 
             if (entityResult.recordset.length === 0) {
-               logStatus(`         ⚠️  Entity not found for ${table.schemaName}.${table.tableName} - skipping`);
+               logStatus(`         ⚠️  Entity not found for ${tableSchema}.${tableName} - skipping`);
                continue;
             }
 
@@ -720,31 +1706,34 @@ export class ManageMetadataBase {
 
             // Process primary keys - set BOTH IsPrimaryKey = 1 AND IsSoftPrimaryKey = 1
             // IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync
-            if (table.primaryKeys && table.primaryKeys.length > 0) {
-               for (const pk of table.primaryKeys) {
+            const primaryKeys = table.PrimaryKey || [];
+            if (primaryKeys.length > 0) {
+               for (const pk of primaryKeys) {
                   const sSQL = `UPDATE [${schema}].[EntityField]
                                 SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(),
                                     [IsPrimaryKey] = 1,
                                     [IsSoftPrimaryKey] = 1
-                                WHERE [EntityID] = '${entityId}' AND [Name] = '${pk.fieldName}'`;
-                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${table.schemaName}.${table.tableName}.${pk.fieldName}`);
+                                WHERE [EntityID] = '${entityId}' AND [Name] = '${pk.FieldName}'`;
+                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${tableSchema}.${tableName}.${pk.FieldName}`);
 
                   if (result !== null) {
-                     logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${table.tableName}.${pk.fieldName}`);
+                     logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${tableName}.${pk.FieldName}`);
                      totalPKs++;
                   }
                }
             }
 
             // Process foreign keys - set RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey = 1
-            if (table.foreignKeys && table.foreignKeys.length > 0) {
-               for (const fk of table.foreignKeys) {
+            const foreignKeys = table.ForeignKeys || [];
+            if (foreignKeys.length > 0) {
+               for (const fk of foreignKeys) {
+                  const fkSchema = fk.SchemaName || tableSchema;
                   // Look up related entity ID (SELECT query - no need to log to migration file)
-                  const relatedLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${fk.relatedSchema}' AND BaseTable = '${fk.relatedTable}'`;
+                  const relatedLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${fkSchema}' AND BaseTable = '${fk.RelatedTable}'`;
                   const relatedEntityResult = await pool.request().query(relatedLookupSQL);
 
                   if (relatedEntityResult.recordset.length === 0) {
-                     logStatus(`         ⚠️  Related entity not found for ${fk.relatedSchema}.${fk.relatedTable} - skipping FK ${fk.fieldName}`);
+                     logStatus(`         ⚠️  Related entity not found for ${fkSchema}.${fk.RelatedTable} - skipping FK ${fk.FieldName}`);
                      continue;
                   }
 
@@ -753,13 +1742,13 @@ export class ManageMetadataBase {
                   const sSQL = `UPDATE [${schema}].[EntityField]
                                 SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(),
                                     [RelatedEntityID] = '${relatedEntityId}',
-                                    [RelatedEntityFieldName] = '${fk.relatedField}',
+                                    [RelatedEntityFieldName] = '${fk.RelatedField}',
                                     [IsSoftForeignKey] = 1
-                                WHERE [EntityID] = '${entityId}' AND [Name] = '${fk.fieldName}'`;
-                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${table.schemaName}.${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
+                                WHERE [EntityID] = '${entityId}' AND [Name] = '${fk.FieldName}'`;
+                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${tableSchema}.${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
 
                   if (result !== null) {
-                     logStatus(`         ✓ Set soft FK for ${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
+                     logStatus(`         ✓ Set soft FK for ${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
                      totalFKs++;
                   }
                }
@@ -2129,6 +3118,75 @@ NumberedRows AS (
       }
    }
 
+   /**
+    * Adds a newly created entity to the application(s) that match its schema name.
+    * If no application exists for the schema and config allows it, creates one.
+    * Shared by both table-backed entity creation and virtual entity creation.
+    */
+   protected async addEntityToApplicationForSchema(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      entityName: string,
+      schemaName: string,
+      currentUser: UserInfo
+   ): Promise<void> {
+      let apps = await this.getApplicationIDForSchema(pool, schemaName);
+
+      // If no app exists and config says to create one for new schemas, create it
+      if ((!apps || apps.length === 0) && configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
+         const appUUID = this.createNewUUID();
+         const newAppID = await this.createNewApplication(pool, appUUID, schemaName, schemaName, currentUser);
+         if (newAppID) {
+            apps = [newAppID];
+            const md = new Metadata();
+            await md.Refresh();
+         } else {
+            LogError(`   >>>> ERROR: Unable to create new application for schema ${schemaName}`);
+         }
+      }
+
+      if (apps && apps.length > 0) {
+         if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
+            for (const appUUID of apps) {
+               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
+                                    (ApplicationID, EntityID, Sequence) VALUES
+                                    ('${appUUID}', '${entityId}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+               await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
+            }
+         }
+      } else {
+         LogError(`   >>>> WARNING: No application found for schema ${schemaName} to add entity ${entityName}`);
+      }
+   }
+
+   /**
+    * Adds default permissions for a newly created entity based on config settings.
+    * Shared by both table-backed entity creation and virtual entity creation.
+    */
+   protected async addDefaultPermissionsForEntity(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      entityName: string
+   ): Promise<void> {
+      if (!configInfo.newEntityDefaults.PermissionDefaults?.AutoAddPermissionsForNewEntities) {
+         return;
+      }
+
+      const md = new Metadata();
+      const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
+      for (const p of permissions) {
+         const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
+         if (RoleID) {
+            const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityPermission
+                                 (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                 ('${entityId}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
+            await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
+         } else {
+            LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
+         }
+      }
+   }
+
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
@@ -2231,7 +3289,8 @@ NumberedRows AS (
                e.Name,
                e.Description,
                e.SchemaName,
-               e.BaseTable
+               e.BaseTable,
+               e.ParentID
             FROM
                [${mj_core_schema()}].vwEntities e
             WHERE
@@ -2267,7 +3326,9 @@ NumberedRows AS (
                ef.AutoUpdateCategory,
                ef.AutoUpdateDisplayName,
                ef.EntityIDFieldName,
-               ef.RelatedEntity
+               ef.RelatedEntity,
+               ef.IsVirtual,
+               ef.AllowUpdateAPI
             FROM
                [${mj_core_schema()}].vwEntityFields ef
             WHERE
@@ -2401,12 +3462,16 @@ NumberedRows AS (
       // Form Layout Generation
       // Only run if at least one field allows auto-update
       if (fields.some((f: any) => f.AutoUpdateCategory)) {
+         // Build IS-A parent chain context if this entity has a parent
+         const parentChainContext = this.buildParentChainContext(entity, fields);
+
          const layoutAnalysis = await ag.generateFormLayout({
             Name: entity.Name,
             Description: entity.Description,
             SchemaName: entity.SchemaName,
             Settings: entity.Settings,
-            Fields: fields
+            Fields: fields,
+            ...parentChainContext
          }, currentUser, isNewEntity);
 
          if (layoutAnalysis) {
@@ -2414,6 +3479,81 @@ NumberedRows AS (
             logStatus(`         Applied form layout for ${entity.Name}`);
          }
       }
+   }
+
+   /**
+    * Builds IS-A parent chain context for an entity, computing which parent each
+    * inherited field originates from. Used to provide the LLM with inheritance
+    * awareness during form layout generation.
+    *
+    * Returns an empty object for entities without parents, so it can be safely spread
+    * into the entity object passed to generateFormLayout().
+    */
+   protected buildParentChainContext(
+      entity: { ParentID?: string },
+      fields: Array<{ Name: string; IsVirtual?: boolean; AllowUpdateAPI?: boolean; IsPrimaryKey?: boolean }>
+   ): { ParentChain?: Array<{ entityID: string; entityName: string }>; IsChildEntity?: boolean } {
+      if (!entity.ParentID) {
+         return {};
+      }
+
+      // Walk the IS-A chain using in-memory metadata
+      const md = new Metadata();
+      const allEntities = md.Entities;
+      const parentChain: Array<{ entityID: string; entityName: string }> = [];
+      const visited = new Set<string>();
+      let currentParentID: string | null = entity.ParentID;
+
+      while (currentParentID) {
+         if (visited.has(currentParentID)) break; // circular reference guard
+         visited.add(currentParentID);
+
+         const parentEntity = allEntities.find(e => e.ID === currentParentID);
+         if (!parentEntity) break;
+
+         parentChain.push({ entityID: parentEntity.ID, entityName: parentEntity.Name });
+         currentParentID = parentEntity.ParentID ?? null;
+      }
+
+      if (parentChain.length === 0) {
+         return {};
+      }
+
+      // Annotate each field with its source parent (if inherited)
+      // An IS-A inherited field is: IsVirtual=true, AllowUpdateAPI=true, not PK, not __mj_
+      for (const field of fields) {
+         if (field.IsVirtual && field.AllowUpdateAPI && !field.IsPrimaryKey && !field.Name.startsWith('__mj_')) {
+            const sourceParent = this.findFieldSourceParent(field.Name, parentChain, allEntities);
+            if (sourceParent) {
+               (field as Record<string, unknown>).InheritedFromEntityID = sourceParent.entityID;
+               (field as Record<string, unknown>).InheritedFromEntityName = sourceParent.entityName;
+            }
+         }
+      }
+
+      return { ParentChain: parentChain, IsChildEntity: true };
+   }
+
+   /**
+    * For an inherited field, walks the parent chain to find which specific parent entity
+    * originally defines this field (by matching non-virtual fields on each parent).
+    */
+   protected findFieldSourceParent(
+      fieldName: string,
+      parentChain: Array<{ entityID: string; entityName: string }>,
+      allEntities: EntityInfo[]
+   ): { entityID: string; entityName: string } | null {
+      for (const parent of parentChain) {
+         const parentEntity = allEntities.find(e => e.ID === parent.entityID);
+         if (!parentEntity) continue;
+
+         // Check if this parent has a non-virtual field with this name
+         const hasField = parentEntity.Fields.some(f => f.Name === fieldName && !f.IsVirtual);
+         if (hasField) {
+            return parent;
+         }
+      }
+      return null;
    }
 
    /**
@@ -2497,7 +3637,8 @@ NumberedRows AS (
    }
 
    /**
-    * Apply form layout generation results to set category on entity fields
+    * Apply form layout generation results to set category on entity fields.
+    * Delegates to shared methods for category assignment, icon, and category info persistence.
     * @param pool Database connection pool
     * @param entityId Entity ID to update
     * @param fields Entity fields
@@ -2507,23 +3648,75 @@ NumberedRows AS (
    protected async applyFormLayout(
       pool: sql.ConnectionPool,
       entityId: string,
-      fields: any[],
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean }>,
       result: FormLayoutResult,
       isNewEntity: boolean = false
    ): Promise<void> {
-      // Collect all SQL statements for batch execution
-      const sqlStatements: string[] = [];
+      const existingCategories = this.buildExistingCategorySet(fields);
 
-      // Build set of existing categories from fields for enforcement
+      await this.applyFieldCategories(pool, entityId, fields, result.fieldCategories, existingCategories);
+
+      if (result.entityIcon) {
+         await this.applyEntityIcon(pool, entityId, result.entityIcon);
+      }
+
+      // Resolve categoryInfo from new or legacy format
+      const categoryInfoToStore = result.categoryInfo ||
+         (result.categoryIcons ?
+            Object.fromEntries(
+               Object.entries(result.categoryIcons).map(([cat, icon]) => [cat, { icon, description: '' }])
+            ) as Record<string, FieldCategoryInfo> : null);
+
+      if (categoryInfoToStore) {
+         await this.applyCategoryInfoSettings(pool, entityId, categoryInfoToStore);
+      }
+
+      if (isNewEntity && result.entityImportance) {
+         await this.applyEntityImportance(pool, entityId, result.entityImportance);
+      }
+   }
+
+   // ─────────────────────────────────────────────────────────────────
+   // Shared category / icon / settings persistence methods
+   // Used by both the regular entity pipeline and VE decoration pipeline
+   // ─────────────────────────────────────────────────────────────────
+
+   /**
+    * Builds a set of existing category names from entity fields.
+    * Used to enforce category stability (prevent renaming).
+    */
+   protected buildExistingCategorySet(fields: Array<{ Category: string | null }>): Set<string> {
       const existingCategories = new Set<string>();
       for (const field of fields) {
          if (field.Category && field.Category.trim() !== '') {
             existingCategories.add(field.Category);
          }
       }
+      return existingCategories;
+   }
 
-      // Assign category to each field
-      for (const fieldCategory of result.fieldCategories) {
+   /**
+    * Applies category, display name, extended type, and code type to entity fields.
+    * Enforces stability rules: fields with existing categories cannot move to NEW categories.
+    * All SQL updates are batched into a single execution for performance.
+    */
+   protected async applyFieldCategories(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean }>,
+      fieldCategories: Array<{
+         fieldName: string;
+         category: string;
+         displayName?: string;
+         extendedType?: string | null;
+         codeType?: string | null;
+         reason?: string;
+      }>,
+      existingCategories: Set<string>
+   ): Promise<void> {
+      const sqlStatements: string[] = [];
+
+      for (const fieldCategory of fieldCategories) {
          const field = fields.find(f => f.Name === fieldCategory.fieldName);
 
          if (field && field.AutoUpdateCategory && field.ID) {
@@ -2534,176 +3727,152 @@ NumberedRows AS (
             }
 
             // ENFORCEMENT: Prevent category renaming
-            // If field already has a category, only allow:
-            // 1. Keeping the same category
-            // 2. Moving to another EXISTING category
-            // New categories are only allowed for fields that don't already have a category
-            const fieldHasExistingCategory = field.Category && field.Category.trim() !== '';
-            const categoryIsExisting = existingCategories.has(category);
-            const categoryIsNew = !categoryIsExisting;
+            const fieldHasExistingCategory = field.Category != null && field.Category.trim() !== '';
+            const categoryIsNew = !existingCategories.has(category);
 
             if (fieldHasExistingCategory && categoryIsNew) {
-               // LLM is trying to move an existing field to a brand new category
-               // This could be an attempt to rename a category - reject it
                logStatus(`         Rejected category change for field '${field.Name}': cannot move from existing category '${field.Category}' to new category '${category}'. Keeping original category.`);
-               category = field.Category; // Keep the original category
+               category = field.Category!;
             }
 
-            // Build SET clause with all available metadata
             const setClauses: string[] = [
                `Category = '${category.replace(/'/g, "''")}'`,
                `GeneratedFormSection = 'Category'`
             ];
 
-            // Add DisplayName if provided and field allows auto-update
             if (fieldCategory.displayName && field.AutoUpdateDisplayName) {
                setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
             }
 
-            // Add ExtendedType if provided
             if (fieldCategory.extendedType !== undefined) {
-               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${fieldCategory.extendedType.replace(/'/g, "''")}'`;
+               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${String(fieldCategory.extendedType).replace(/'/g, "''")}'`;
                setClauses.push(`ExtendedType = ${extendedType}`);
             }
 
-            // Add CodeType if provided
             if (fieldCategory.codeType !== undefined) {
-               const codeType = fieldCategory.codeType === null ? 'NULL' : `'${fieldCategory.codeType.replace(/'/g, "''")}'`;
+               const codeType = fieldCategory.codeType === null ? 'NULL' : `'${String(fieldCategory.codeType).replace(/'/g, "''")}'`;
                setClauses.push(`CodeType = ${codeType}`);
             }
 
-            const updateSQL = `UPDATE [${mj_core_schema()}].EntityField
+            sqlStatements.push(`UPDATE [${mj_core_schema()}].EntityField
    SET ${setClauses.join(',\n       ')}
    WHERE ID = '${field.ID}'
-   AND AutoUpdateCategory = 1`;
-
-            sqlStatements.push(updateSQL);
+   AND AutoUpdateCategory = 1`);
          } else if (!field) {
-            logError(`Form layout generation returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
+            logError(`Form layout returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
          }
       }
 
-      // Execute all field updates in one batch
       if (sqlStatements.length > 0) {
-         const combinedSQL = sqlStatements.join('\n');
-         await this.LogSQLAndExecute(pool, combinedSQL, `Set categories for ${sqlStatements.length} fields`, false);
+         await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set categories for ${sqlStatements.length} fields`, false);
       }
+   }
 
-      // Store entity icon if provided and entity doesn't already have one
-      if (result.entityIcon && result.entityIcon.trim().length > 0) {
-         // Check if entity already has an icon
-         const checkEntitySQL = `
-            SELECT Icon FROM [${mj_core_schema()}].Entity
-            WHERE ID = '${entityId}'
-         `;
-         const entityCheck = await pool.request().query(checkEntitySQL);
+   /**
+    * Sets the entity icon if the entity doesn't already have one.
+    */
+   protected async applyEntityIcon(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      entityIcon: string
+   ): Promise<void> {
+      if (!entityIcon || entityIcon.trim().length === 0) return;
 
-         if (entityCheck.recordset.length > 0) {
-            const currentIcon = entityCheck.recordset[0].Icon;
-            // Only update if entity doesn't have an icon set
-            if (!currentIcon || currentIcon.trim().length === 0) {
-               const escapedIcon = result.entityIcon.replace(/'/g, "''");
-               const updateEntitySQL = `
-                  UPDATE [${mj_core_schema()}].Entity
-                  SET Icon = '${escapedIcon}',
-                      __mj_UpdatedAt = GETUTCDATE()
-                  WHERE ID = '${entityId}'
-               `;
-               await this.LogSQLAndExecute(pool, updateEntitySQL, `Set entity icon to ${result.entityIcon}`, false);
-               logStatus(`  ✓ Set entity icon: ${result.entityIcon}`);
-            }
+      const checkSQL = `SELECT Icon FROM [${mj_core_schema()}].Entity WHERE ID = '${entityId}'`;
+      const entityCheck = await pool.request().query(checkSQL);
+
+      if (entityCheck.recordset.length > 0) {
+         const currentIcon = entityCheck.recordset[0].Icon;
+         if (!currentIcon || currentIcon.trim().length === 0) {
+            const escapedIcon = entityIcon.replace(/'/g, "''");
+            const updateSQL = `
+               UPDATE [${mj_core_schema()}].Entity
+               SET Icon = '${escapedIcon}', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = '${entityId}'
+            `;
+            await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
+            logStatus(`  Set entity icon: ${entityIcon}`);
          }
       }
+   }
 
-      // Store category info (icons + descriptions) in EntitySetting if provided
-      // Use the new categoryInfo format, with backwards compatibility for categoryIcons
-      const categoryInfoToStore = result.categoryInfo ||
-         (result.categoryIcons ?
-            // Convert legacy format: { icon: string } -> { icon, description: '' }
-            Object.fromEntries(
-               Object.entries(result.categoryIcons).map(([cat, icon]) => [cat, { icon, description: '' }])
-            ) : null);
+   /**
+    * Upserts FieldCategoryInfo (new format) and FieldCategoryIcons (legacy format) in EntitySetting.
+    */
+   protected async applyCategoryInfoSettings(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      categoryInfo: Record<string, FieldCategoryInfo>
+   ): Promise<void> {
+      if (!categoryInfo || Object.keys(categoryInfo).length === 0) return;
 
-      if (categoryInfoToStore && Object.keys(categoryInfoToStore).length > 0) {
-         const infoJSON = JSON.stringify(categoryInfoToStore).replace(/'/g, "''");
+      const infoJSON = JSON.stringify(categoryInfo).replace(/'/g, "''");
 
-         // First check if new format setting already exists
-         const checkNewSQL = `
-            SELECT ID FROM [${mj_core_schema()}].EntitySetting
+      // Upsert FieldCategoryInfo (new format)
+      const checkNewSQL = `SELECT ID FROM [${mj_core_schema()}].EntitySetting WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'`;
+      const existingNew = await pool.request().query(checkNewSQL);
+
+      if (existingNew.recordset.length > 0) {
+         await this.LogSQLAndExecute(pool, `
+            UPDATE [${mj_core_schema()}].EntitySetting
+            SET Value = '${infoJSON}', __mj_UpdatedAt = GETUTCDATE()
             WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
-         `;
-         const existingNew = await pool.request().query(checkNewSQL);
+         `, `Update FieldCategoryInfo setting for entity`, false);
+      } else {
+         const newId = uuidv4();
+         await this.LogSQLAndExecute(pool, `
+            INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
+         `, `Insert FieldCategoryInfo setting for entity`, false);
+      }
 
-         if (existingNew.recordset.length > 0) {
-            // Update existing setting
-            const updateSQL = `
-               UPDATE [${mj_core_schema()}].EntitySetting
-               SET Value = '${infoJSON}',
-                   __mj_UpdatedAt = GETUTCDATE()
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
-            `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryInfo setting for entity`, false);
-         } else {
-            // Insert new setting
-            const newId = uuidv4();
-            const insertSQL = `
-               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
-            `;
-            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryInfo setting for entity`, false);
+      // Also upsert legacy FieldCategoryIcons for backwards compatibility
+      const iconsOnly: Record<string, string> = {};
+      for (const [category, info] of Object.entries(categoryInfo)) {
+         if (info && typeof info === 'object' && 'icon' in info) {
+            iconsOnly[category] = info.icon;
          }
+      }
+      const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
 
-         // Also update legacy FieldCategoryIcons for backwards compatibility
-         // Extract just icons from categoryInfo
-         const iconsOnly: Record<string, string> = {};
-         for (const [category, info] of Object.entries(categoryInfoToStore)) {
-            if (info && typeof info === 'object' && 'icon' in info) {
-               iconsOnly[category] = (info as { icon: string }).icon;
-            }
-         }
-         const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
+      const checkLegacySQL = `SELECT ID FROM [${mj_core_schema()}].EntitySetting WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'`;
+      const existingLegacy = await pool.request().query(checkLegacySQL);
 
-         const checkLegacySQL = `
-            SELECT ID FROM [${mj_core_schema()}].EntitySetting
+      if (existingLegacy.recordset.length > 0) {
+         await this.LogSQLAndExecute(pool, `
+            UPDATE [${mj_core_schema()}].EntitySetting
+            SET Value = '${iconsJSON}', __mj_UpdatedAt = GETUTCDATE()
             WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
-         `;
-         const existingLegacy = await pool.request().query(checkLegacySQL);
-
-         if (existingLegacy.recordset.length > 0) {
-            const updateSQL = `
-               UPDATE [${mj_core_schema()}].EntitySetting
-               SET Value = '${iconsJSON}',
-                   __mj_UpdatedAt = GETUTCDATE()
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
-            `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Update FieldCategoryIcons setting for entity (legacy format)`, false);
-         } else {
-            const newId = uuidv4();
-            const insertSQL = `
-               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
-            `;
-            await this.LogSQLAndExecute(pool, insertSQL, `Insert FieldCategoryIcons setting for entity (legacy format)`, false);
-         }
+         `, `Update FieldCategoryIcons setting (legacy)`, false);
+      } else {
+         const newId = uuidv4();
+         await this.LogSQLAndExecute(pool, `
+            INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
+         `, `Insert FieldCategoryIcons setting (legacy)`, false);
       }
+   }
 
-      // Apply entity importance analysis to ApplicationEntity records ONLY for NEW entities
-      // For existing entities, preserve admin's decision
-      if (isNewEntity && result.entityImportance) {
-         const defaultForNewUser = result.entityImportance.defaultForNewUser ? 1 : 0;
+   /**
+    * Applies entity importance analysis to ApplicationEntity records.
+    * Only called for NEW entities to set DefaultForNewUser.
+    */
+   protected async applyEntityImportance(
+      pool: sql.ConnectionPool,
+      entityId: string,
+      importance: { defaultForNewUser: boolean; entityCategory: string; confidence: string; reasoning: string }
+   ): Promise<void> {
+      const defaultForNewUser = importance.defaultForNewUser ? 1 : 0;
+      const updateSQL = `
+         UPDATE [${mj_core_schema()}].ApplicationEntity
+         SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = '${entityId}'
+      `;
+      await this.LogSQLAndExecute(pool, updateSQL,
+         `Set DefaultForNewUser=${defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
 
-         // Update all ApplicationEntity records for this entity
-         const updateAppEntitySQL = `
-            UPDATE [${mj_core_schema()}].ApplicationEntity
-            SET DefaultForNewUser = ${defaultForNewUser},
-                __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '${entityId}'
-         `;
-         await this.LogSQLAndExecute(pool, updateAppEntitySQL, `Set DefaultForNewUser=${defaultForNewUser} for NEW entity based on AI analysis (category: ${result.entityImportance.entityCategory}, confidence: ${result.entityImportance.confidence})`, false);
-
-         logStatus(`  ✓ Entity importance (NEW Entity): ${result.entityImportance.entityCategory} (defaultForNewUser: ${result.entityImportance.defaultForNewUser}, confidence: ${result.entityImportance.confidence})`);
-         logStatus(`    Reasoning: ${result.entityImportance.reasoning}`);
-      }
+      logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
+      logStatus(`    Reasoning: ${importance.reasoning}`);
    }
 
    /**

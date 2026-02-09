@@ -159,13 +159,33 @@ export class PotentialDuplicateResponse {
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
+    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>
 
-    Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
+    Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>
 
     Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean>
 
     GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
+
+    /**
+     * Begin an independent provider-level transaction for IS-A chain orchestration.
+     * Returns a provider-specific transaction object (e.g., sql.Transaction for SQLServer).
+     * Separate from the provider's internal transaction management (TransactionGroup system).
+     * Optional — client-side providers (GraphQL) do not implement this.
+     */
+    BeginISATransaction?(): Promise<unknown>;
+
+    /**
+     * Commit an IS-A chain transaction.
+     * @param txn The transaction object returned from BeginISATransaction()
+     */
+    CommitISATransaction?(txn: unknown): Promise<void>;
+
+    /**
+     * Rollback an IS-A chain transaction.
+     * @param txn The transaction object returned from BeginISATransaction()
+     */
+    RollbackISATransaction?(txn: unknown): Promise<void>;
 }
 
 /**
@@ -202,11 +222,19 @@ export class EntitySaveOptions {
     /**
      * When set to true, the entity will skip the asynchronous ValidateAsync() method during save.
      * This is an advanced setting and should only be used when you are sure the async validation is not needed.
-     * The default behavior is to run the async validation and the default value is undefined. 
+     * The default behavior is to run the async validation and the default value is undefined.
      * Also, you can set an Entity level default in a BaseEntity subclass by overriding the DefaultSkipAsyncValidation() getter property.
      * @see BaseEntity.DefaultSkipAsyncValidation
      */
     SkipAsyncValidation?: boolean = undefined;
+
+    /**
+     * When true, this entity is being saved as part of an IS-A parent chain
+     * initiated by a child entity. Provider behavior:
+     * - GraphQLDataProvider: full ORM pipeline runs, skip network call
+     * - SQLServerDataProvider: real save using shared ProviderTransaction
+     */
+    IsParentEntitySave?: boolean = false;
 }
 
 /**
@@ -230,6 +258,13 @@ export class EntityDeleteOptions {
      * Subclasses can also override the Delete() method to provide custom logic that will be invoked when ReplayOnly is set to true
      */
     ReplayOnly?: boolean = false;
+
+    /**
+     * When true, this entity is being deleted as part of an IS-A parent chain
+     * initiated by a child entity. The child deletes itself first (FK constraint),
+     * then cascades deletion to its parent.
+     */
+    IsParentEntityDelete?: boolean = false;
 }
 
 /**
@@ -459,21 +494,44 @@ export interface IMetadataProvider {
 
 
     /**
-     * Returns the Name of the specific recordId for a given entityName. This is done by 
-     * looking for the IsNameField within the EntityFields collection for a given entity. 
-     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
-     * @param entityName 
-     * @param CompositeKey 
+     * Returns the Name of the specific recordId for a given entityName. This is done by
+     * looking for the IsNameField within the EntityFields collection for a given entity.
+     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned
+     * @param entityName
+     * @param CompositeKey
+     * @param contextUser - optional user context for permissions
+     * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>
+    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh?: boolean): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
-     * @param info 
+     * @param info
+     * @param contextUser - optional user context for permissions
+     * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns an array of EntityRecordNameResult objects
      */
-    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>
+    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh?: boolean): Promise<EntityRecordNameResult[]>
+
+    /**
+     * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param loadIfNeeded - If set to true, will load from database if not already cached
+     * @returns The cached display name, or undefined if not in cache
+     */
+    GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
+
+    /**
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
+     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param recordName - The display name to cache
+     */
+    SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void
 
     GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean>
 

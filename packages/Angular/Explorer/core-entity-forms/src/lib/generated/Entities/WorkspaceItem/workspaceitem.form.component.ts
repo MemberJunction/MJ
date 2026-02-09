@@ -23,6 +23,3 @@ export class WorkspaceItemFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadWorkspaceItemFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}
