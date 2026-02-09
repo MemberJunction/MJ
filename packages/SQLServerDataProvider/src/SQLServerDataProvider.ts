@@ -3941,6 +3941,11 @@ export class SQLServerDataProvider
       return obj.map(item => this.escapeQuotesInProperties(item, quoteToEscape));
     }
     
+    // Handle Date objects - convert to ISO string before they lose their value
+    if (obj instanceof Date) {
+      return obj.toISOString();
+    }
+
     // Handle objects recursively
     if (typeof obj === 'object') {
       const sRet: any = {};

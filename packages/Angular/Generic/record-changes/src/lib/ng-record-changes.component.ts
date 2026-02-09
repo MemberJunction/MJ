@@ -356,22 +356,23 @@ export class RecordChangesComponent implements OnInit {
         );
 
         const isBooleanField = field?.TSType === EntityFieldTSType.Boolean;
+        const isDateField = field?.TSType === EntityFieldTSType.Date;
         let diffHtml: SafeHtml | undefined;
 
-        if (!isBooleanField) {
-          const oldStr = String(changeInfo.oldValue ?? '');
-          const newStr = String(changeInfo.newValue ?? '');
+        const formattedOld = this.formatChangeValue(changeInfo.oldValue, isDateField);
+        const formattedNew = this.formatChangeValue(changeInfo.newValue, isDateField);
 
-          if (oldStr !== newStr) {
-            diffHtml = this.generateDiffHtml(oldStr, newStr);
+        if (!isBooleanField) {
+          if (formattedOld !== formattedNew) {
+            diffHtml = this.generateDiffHtml(formattedOld, formattedNew);
           }
         }
 
         return {
           field: changeInfo.field,
           displayName: field?.DisplayNameOrName || changeInfo.field,
-          oldValue: changeInfo.oldValue,
-          newValue: changeInfo.newValue,
+          oldValue: formattedOld,
+          newValue: formattedNew,
           isBooleanField,
           diffHtml
         };
@@ -393,11 +394,36 @@ export class RecordChangesComponent implements OnInit {
         .map((field: EntityFieldInfo) => ({
           name: field.Name,
           displayName: field.DisplayNameOrName,
-          value: record[field.Name]
+          value: this.formatChangeValue(record[field.Name], field.TSType === EntityFieldTSType.Date)
         }));
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Formats a change value for display. Handles corrupted date values (stored as empty objects)
+   * and formats ISO date strings into a human-readable format.
+   */
+  private formatChangeValue(value: unknown, isDateField: boolean): string {
+    if (value == null) return '';
+
+    // Handle object values (e.g., Date objects that were incorrectly serialized as {})
+    if (typeof value === 'object') {
+      const keys = Object.keys(value as Record<string, unknown>);
+      if (keys.length === 0) return ''; // Empty object from corrupted date serialization
+      return JSON.stringify(value);
+    }
+
+    // Format ISO date strings into a readable format
+    if (isDateField && typeof value === 'string') {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleString();
+      }
+    }
+
+    return String(value);
   }
 
   private generateDiffHtml(oldValue: string, newValue: string): SafeHtml {
