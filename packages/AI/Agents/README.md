@@ -294,6 +294,10 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+## Architecture Documentation
+
+For multi-tenant memory scoping (notes/examples), see [AGENT_MEMORY_SCOPING.md](./AGENT_MEMORY_SCOPING.md).
+
 ## Re-exports
 
 For backward compatibility, this package re-exports the following from `@memberjunction/ai-reranker`:

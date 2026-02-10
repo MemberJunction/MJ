@@ -1,5 +1,5 @@
 import { BaseAgent } from './base-agent';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, CleanAndParseJSON } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView, RunQuery, LogError, LogStatus } from '@memberjunction/core';
 import {
     ConversationDetailEntity,
@@ -10,7 +10,7 @@ import {
     AIAgentRunStepEntity
 } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**
@@ -24,6 +24,25 @@ const EXTRACTION_CONFIG = {
     minContentLength: 10,          // Minimum note content length (lowered from 20 to allow short names)
     cooldownHours: 24              // Don't re-extract from same conversation within 24h
 };
+
+/**
+ * Configuration for note consolidation.
+ * Consolidation finds clusters of similar notes and synthesizes them into single comprehensive notes.
+ */
+const CONSOLIDATION_CONFIG = {
+    /**
+     * How often to run consolidation:
+     * - 'disabled': Do not run consolidation
+     * - 'every-run': Run on every memory manager execution
+     * - 'hourly': Run once per hour (based on last run time)
+     * - 'daily': Run once per day
+     * - number: Run every N executions (e.g., 4 = every 4th run)
+     */
+    frequency: 'disabled' as 'disabled' | 'every-run' | 'hourly' | 'daily' | number,
+    minClusterSize: 3,             // Minimum notes in a cluster to trigger consolidation
+    similarityThreshold: 0.60      // Semantic similarity threshold — 60% captures topically related notes while excluding dissimilar ones
+};
+
 
 /**
  * Message with rating data for extraction
@@ -91,14 +110,15 @@ interface ExtractedNote {
     sourceConversationId?: string;
     sourceConversationDetailId?: string;
     sourceAgentRunId?: string;
-    mergeWithExistingId?: string; // If should update existing note
+    mergeWithExistingIds?: string[]; // IDs of existing notes to revoke and replace (contradiction merge)
+    mergeWithExistingId?: string; // Legacy singular form from LLM — normalized to plural below
     /**
      * Scope level hint from LLM analysis.
      * - 'global': Applies to all users (e.g., "Always greet politely")
-     * - 'organization': Applies to all contacts in an org (e.g., "This org uses metric units")
-     * - 'contact': Specific to one contact (e.g., "John prefers email")
+     * - 'company': Applies to all users in a company (e.g., "This company uses metric units")
+     * - 'user': Specific to one user (e.g., "John prefers email")
      */
-    scopeLevel?: 'global' | 'organization' | 'contact';
+    scopeLevel?: 'global' | 'company' | 'user';
 }
 
 /**
@@ -119,10 +139,10 @@ interface ExtractedExample {
     /**
      * Scope level hint from LLM analysis.
      * - 'global': Applies to all users
-     * - 'organization': Applies to all contacts in an org
-     * - 'contact': Specific to one contact
+     * - 'company': Applies to all users in a company
+     * - 'user': Specific to one user
      */
-    scopeLevel?: 'global' | 'organization' | 'contact';
+    scopeLevel?: 'global' | 'company' | 'user';
 }
 
 /**
@@ -499,6 +519,7 @@ export class MemoryManagerAgent extends BaseAgent {
         params.prompt = prompt;
         params.data = promptData;
         params.contextUser = contextUser;
+        params.attemptJSONRepair = true;
 
         const result = await runner.ExecutePrompt<{ notes: ExtractedNote[] }>(params);
 
@@ -524,26 +545,38 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Parse result if it's a string (AI sometimes returns JSON as string)
+        // Some models (e.g., Gemini) wrap JSON in ```json fences
         let parsedResult: { notes: ExtractedNote[] };
         if (typeof result.result === 'string') {
-            try {
-                parsedResult = JSON.parse(result.result);
-                if (this._verbose) {
-                    LogStatus(`Memory Manager: Parsed string result into object with ${parsedResult.notes?.length || 0} notes`);
-                }
-            } catch (e) {
-                LogError('Failed to parse extraction result as JSON:', e);
+            const parsed = CleanAndParseJSON<{ notes: ExtractedNote[] }>(result.result, true);
+            if (!parsed) {
+                LogError('Failed to parse extraction result as JSON');
                 return [];
+            }
+            parsedResult = parsed;
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Parsed string result into object with ${parsedResult.notes?.length || 0} notes`);
             }
         } else {
             parsedResult = result.result;
+        }
+
+        // Normalize singular mergeWithExistingId → plural mergeWithExistingIds
+        // The LLM still outputs the singular field; we convert it here.
+        // Notes are plain objects from JSON.parse, so the runtime cast is safe.
+        if (parsedResult.notes) {
+            for (const note of parsedResult.notes) {
+                if (note.mergeWithExistingId && !note.mergeWithExistingIds) {
+                    note.mergeWithExistingIds = [note.mergeWithExistingId];
+                }
+            }
         }
 
         // Log raw notes before filtering (for debugging)
         if (this._verbose && parsedResult.notes) {
             LogStatus(`Memory Manager: LLM returned ${parsedResult.notes.length} raw notes before filtering`);
             for (const note of parsedResult.notes) {
-                LogStatus(`Memory Manager: Raw note: [${note.type}] "${note.content}" (confidence: ${note.confidence})`);
+                LogStatus(`Memory Manager: Raw note: [${note.type}] "${note.content}" (confidence: ${note.confidence})${note.mergeWithExistingIds?.length ? ` mergeWith: ${note.mergeWithExistingIds.join(', ')}` : ''}`);
             }
         }
 
@@ -599,9 +632,16 @@ export class MemoryManagerAgent extends BaseAgent {
             LogStatus(`Memory Manager: ${sparseCandidates.length} candidates after sparsity filter`);
         }
 
+        // Collapse merge candidates with identical content into single candidates
+        const collapsedCandidates = this.collapseMergeCandidates(sparseCandidates);
+
+        if (this._verbose && collapsedCandidates.length < sparseCandidates.length) {
+            LogStatus(`Memory Manager: Collapsed ${sparseCandidates.length} candidates to ${collapsedCandidates.length} after merging duplicate merge targets`);
+        }
+
         // Step 4: Apply deduplication (summary step)
         const step4 = await this.CreateRunStep('Decision', 'Deduplicate Note Candidates', {
-            candidateCount: sparseCandidates.length,
+            candidateCount: collapsedCandidates.length,
             existingNoteCount: existingNotes.length
         });
 
@@ -614,13 +654,24 @@ export class MemoryManagerAgent extends BaseAgent {
             p.Name === 'Memory Manager - Deduplicate Note' && p.Category === 'MJ: System'
         );
 
-        for (const candidate of sparseCandidates) {
+        for (const candidate of collapsedCandidates) {
             // Check global max notes per run
             if (approvedNotes.length >= EXTRACTION_CONFIG.maxNotesPerRun) {
                 if (this._verbose) {
                     LogStatus(`Memory Manager: Stopping - max notes per run (${EXTRACTION_CONFIG.maxNotesPerRun}) reached`);
                 }
                 break;
+            }
+
+            // Notes with mergeWithExistingIds are intentional replacements —
+            // the extraction LLM already determined this is a contradiction.
+            // Dedup would reject them as "too similar" to the note they're replacing.
+            if (candidate.mergeWithExistingIds?.length) {
+                approvedNotes.push(candidate);
+                if (this._verbose) {
+                    LogStatus(`Memory Manager: Auto-approved merge note targeting ${candidate.mergeWithExistingIds.join(', ')}: "${candidate.content.substring(0, 50)}..."`);
+                }
+                continue;
             }
 
             // Step 1: Check for exact content match FIRST (case-insensitive, trimmed)
@@ -636,7 +687,9 @@ export class MemoryManagerAgent extends BaseAgent {
                 continue;
             }
 
-            // Step 2: Find similar existing notes using semantic search with tighter threshold
+            // Step 2: Find similar existing notes using semantic search with tighter threshold.
+            // Cross-user dedup for org/global notes works naturally because those notes have
+            // UserID=null, so FindSimilarAgentNotes won't filter them out for any user.
             const similarNotes = await AIEngine.Instance.FindSimilarAgentNotes(
                 candidate.content,
                 candidate.agentId,
@@ -663,6 +716,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 };
                 dedupeParams.contextUser = contextUser;
 
+                dedupeParams.attemptJSONRepair = true;
                 const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
                 dedupeLlmCallCount++;
 
@@ -768,6 +822,7 @@ export class MemoryManagerAgent extends BaseAgent {
         extractParams.prompt = extractPrompt;
         extractParams.data = { qaPairs };
         extractParams.contextUser = contextUser;
+        extractParams.attemptJSONRepair = true;
 
         const extractResult = await runner.ExecutePrompt<{ examples: ExtractedExample[] }>(extractParams);
 
@@ -780,14 +835,15 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Parse result if it's a string (AI sometimes returns JSON as string)
+        // Some models (e.g., Gemini) wrap JSON in ```json fences
         let parsedResult: { examples: ExtractedExample[] };
         if (typeof extractResult.result === 'string') {
-            try {
-                parsedResult = JSON.parse(extractResult.result);
-            } catch (e) {
-                LogError('Failed to parse example extraction result as JSON:', e);
+            const parsed = CleanAndParseJSON<{ examples: ExtractedExample[] }>(extractResult.result, true);
+            if (!parsed) {
+                LogError('Failed to parse example extraction result as JSON');
                 return [];
             }
+            parsedResult = parsed;
         } else {
             parsedResult = extractResult.result;
         }
@@ -845,6 +901,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 };
                 dedupeParams.contextUser = contextUser;
 
+                dedupeParams.attemptJSONRepair = true;
                 const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
                 exampleDedupeLlmCallCount++;
 
@@ -932,23 +989,29 @@ export class MemoryManagerAgent extends BaseAgent {
                     sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
                 }
 
-                // Check if we should merge with existing
-                if (extracted.mergeWithExistingId) {
-                    const existingNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
-                    if (await existingNote.Load(extracted.mergeWithExistingId)) {
-                        // Update existing note
-                        existingNote.Note = extracted.content;
-                        existingNote.Type = extracted.type;
-                        existingNote.AgentNoteTypeID = aiNoteTypeId;
-                        if (await existingNote.Save()) {
-                            merged++;
+                // Check if we should merge with existing (revoke all targets, create one replacement)
+                let createNewNote = !extracted.mergeWithExistingIds?.length;
+
+                if (extracted.mergeWithExistingIds?.length) {
+                    for (const mergeTargetId of extracted.mergeWithExistingIds) {
+                        const existingNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
+                        if (await existingNote.Load(mergeTargetId)) {
+                            existingNote.Status = 'Revoked';
+                            existingNote.Comments = `Superseded: contradiction detected, replaced by new note from conversation ${extracted.sourceConversationId || 'unknown'}`;
+                            if (await existingNote.Save()) {
+                                merged++;
+                            } else {
+                                LogError(`Memory Manager: Failed to revoke note ${existingNote.ID} during merge`);
+                                failed++;
+                            }
                         } else {
-                            failed++;
+                            LogStatus(`Memory Manager: Merge target ${mergeTargetId} not found, skipping revocation`);
                         }
-                    } else {
-                        failed++;
                     }
-                } else {
+                    createNewNote = true;
+                }
+
+                if (createNewNote) {
                     // Create new note
                     const note = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
                     // Only use valid UUIDs, filter out placeholders like "user-uuid-here"
@@ -963,7 +1026,6 @@ export class MemoryManagerAgent extends BaseAgent {
                         agentId = sourceRun.AgentID;
                     }
                     note.AgentID = agentId;
-                    note.UserID = isValidUUID(extracted.userId) ? extracted.userId! : null;
                     note.CompanyID = isValidUUID(extracted.companyId) ? extracted.companyId! : null;
                     note.AgentNoteTypeID = aiNoteTypeId;  // "AI" type for AI-generated notes
                     note.Type = extracted.type;  // Category: Preference, Constraint, Context, Issue, Example
@@ -976,14 +1038,14 @@ export class MemoryManagerAgent extends BaseAgent {
                     note.SourceConversationDetailID = isValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
                     note.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
 
-                    // Apply scope: Lean towards USER-specific memories by default
-                    const scopeLevel = extracted.scopeLevel || 'contact';
+                    // Apply scope: Lean towards user-specific memories by default
+                    const scopeLevel = extracted.scopeLevel || 'user';
 
                     if (scopeLevel === 'global') {
                         note.PrimaryScopeEntityID = null;
                         note.PrimaryScopeRecordID = null;
                         note.SecondaryScopes = null;
-                    } else if (scopeLevel === 'organization' && sourceRun?.PrimaryScopeEntityID) {
+                    } else if (scopeLevel === 'company' && sourceRun?.PrimaryScopeEntityID) {
                         note.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
                         note.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
                         note.SecondaryScopes = null;
@@ -992,6 +1054,13 @@ export class MemoryManagerAgent extends BaseAgent {
                         note.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
                         note.SecondaryScopes = sourceRun.SecondaryScopes;
                     }
+
+                    // UserID: Only set for user-scoped notes. Company/global notes belong to the
+                    // company, not a specific user. This also enables cross-user dedup — FindSimilarAgentNotes
+                    // filters by userId, so null UserID makes company notes visible to all users.
+                    note.UserID = scopeLevel === 'user'
+                        ? (isValidUUID(extracted.userId) ? extracted.userId! : null)
+                        : null;
 
                     const saveResult = await note.Save();
                     if (saveResult) {
@@ -1015,6 +1084,347 @@ export class MemoryManagerAgent extends BaseAgent {
         });
 
         return created + merged;
+    }
+
+    /**
+     * Collapse merge candidates with identical content into a single candidate
+     * carrying all merge target IDs. This prevents duplicate active notes when
+     * a contradiction invalidates multiple existing notes (e.g., "I hate pizza"
+     * replacing both a pepperoni note and a mushrooms note).
+     */
+    private collapseMergeCandidates(candidates: ExtractedNote[]): ExtractedNote[] {
+        const mergeGroups = new Map<string, ExtractedNote>();
+        const result: ExtractedNote[] = [];
+
+        for (const candidate of candidates) {
+            if (candidate.mergeWithExistingIds?.length) {
+                const key = candidate.content.toLowerCase().trim();
+                const existing = mergeGroups.get(key);
+                if (existing) {
+                    existing.mergeWithExistingIds!.push(...candidate.mergeWithExistingIds);
+                } else {
+                    mergeGroups.set(key, candidate);
+                    result.push(candidate);
+                }
+            } else {
+                result.push(candidate);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Determine whether consolidation should run based on CONSOLIDATION_CONFIG.frequency.
+     * Uses AIAgentRun history instead of static in-memory state so that timing
+     * survives process restarts and works correctly across clustered instances.
+     *
+     * Supports:
+     * - 'every-run': Always run
+     * - 'hourly': Run if 1+ hour since last completed MM run
+     * - 'daily': Run if 24+ hours since last completed MM run
+     * - number: Run every N completed MM runs
+     */
+    private async shouldRunConsolidation(agentId: string, contextUser: UserInfo): Promise<boolean> {
+        const freq = CONSOLIDATION_CONFIG.frequency;
+
+        if (freq === 'disabled') {
+            return false;
+        }
+
+        if (freq === 'every-run') {
+            return true;
+        }
+
+        if (freq === 'hourly' || freq === 'daily') {
+            const thresholdHours = freq === 'hourly' ? 1 : 24;
+            const lastRun = await this.GetLastRunTime(agentId, contextUser);
+            if (!lastRun) {
+                return true; // First run — consolidate
+            }
+            const hoursSinceLast = (Date.now() - lastRun.getTime()) / (1000 * 60 * 60);
+            return hoursSinceLast >= thresholdHours;
+        }
+
+        // Numeric frequency: run every N completed executions
+        if (typeof freq === 'number') {
+            const rv = new RunView();
+            const countResult = await rv.RunView({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
+                ResultType: 'count_only'
+            }, contextUser);
+            const completedCount = countResult.Success ? (countResult.TotalRowCount || 0) : 0;
+            return completedCount > 0 && completedCount % freq === 0;
+        }
+
+        // Default: run every time
+        return true;
+    }
+
+    /**
+     * Consolidate related notes into single, comprehensive notes.
+     * This method finds clusters of similar notes and synthesizes them.
+     *
+     * @param agentId Optional - consolidate notes for a specific agent only
+     * @param contextUser The context user for database operations
+     * @returns Number of notes consolidated (archived)
+     */
+    public async consolidateRelatedNotes(
+        agentId: string | null,
+        contextUser: UserInfo
+    ): Promise<{ consolidated: number; archived: number }> {
+        const allNotes = AIEngine.Instance.AgentNotes;
+
+        // Filter to active, auto-generated notes (optionally for specific agent)
+        const activeNotes = allNotes.filter(n =>
+            n.Status === 'Active' &&
+            n.IsAutoGenerated &&
+            (agentId === null || n.AgentID === agentId)
+        );
+
+        if (activeNotes.length < CONSOLIDATION_CONFIG.minClusterSize) {
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Only ${activeNotes.length} active notes - need at least ${CONSOLIDATION_CONFIG.minClusterSize} to consolidate`);
+            }
+            return { consolidated: 0, archived: 0 };
+        }
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Analyzing ${activeNotes.length} active notes for consolidation`);
+        }
+
+        const clusters = await this.findConsolidationClusters(activeNotes);
+
+        if (clusters.length === 0) {
+            if (this._verbose) {
+                LogStatus(`Memory Manager: No clusters found with ${CONSOLIDATION_CONFIG.minClusterSize}+ similar notes`);
+            }
+            return { consolidated: 0, archived: 0 };
+        }
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Found ${clusters.length} clusters to consolidate`);
+        }
+
+        // Find consolidation prompt
+        const consolidatePrompt = AIEngine.Instance.Prompts.find(p =>
+            p.Name === 'Memory Manager - Consolidate Notes' && p.Category === 'MJ: System'
+        );
+
+        if (!consolidatePrompt) {
+            LogError('Memory Manager: Consolidation prompt not found');
+            return { consolidated: 0, archived: 0 };
+        }
+
+        const aiNoteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName('AI');
+        if (!aiNoteTypeId) {
+            LogError('Memory Manager: Could not find "AI" note type');
+            return { consolidated: 0, archived: 0 };
+        }
+
+        let consolidated = 0;
+        let archived = 0;
+        const runner = new AIPromptRunner();
+        const md = new Metadata();
+
+        for (const cluster of clusters) {
+            try {
+                const result = await this.processConsolidationCluster(
+                    cluster, consolidatePrompt, aiNoteTypeId, runner, md, contextUser
+                );
+                consolidated += result.consolidated;
+                archived += result.archived;
+            } catch (error) {
+                LogError('Memory Manager: Exception during consolidation:', error);
+            }
+        }
+
+        return { consolidated, archived };
+    }
+
+    /**
+     * Find clusters of semantically similar notes suitable for consolidation.
+     * Each cluster contains notes that exceed the similarity threshold and meet the minimum cluster size.
+     */
+    private async findConsolidationClusters(activeNotes: AIAgentNoteEntity[]): Promise<AIAgentNoteEntity[][]> {
+        const clusters: AIAgentNoteEntity[][] = [];
+        const processedIds = new Set<string>();
+
+        for (const note of activeNotes) {
+            if (processedIds.has(note.ID)) {
+                continue;
+            }
+
+            const similarNotes = await AIEngine.Instance.FindSimilarAgentNotes(
+                note.Note || '',
+                note.AgentID,
+                note.UserID,
+                note.CompanyID,
+                10,
+                CONSOLIDATION_CONFIG.similarityThreshold
+            );
+
+            const cluster: AIAgentNoteEntity[] = [note];
+            processedIds.add(note.ID);
+
+            for (const similar of similarNotes) {
+                if (!processedIds.has(similar.note.ID)) {
+                    cluster.push(similar.note);
+                    processedIds.add(similar.note.ID);
+                }
+            }
+
+            if (cluster.length >= CONSOLIDATION_CONFIG.minClusterSize) {
+                clusters.push(cluster);
+            }
+        }
+
+        return clusters;
+    }
+
+    /**
+     * Process a single consolidation cluster: run the LLM prompt, create the consolidated note,
+     * and revoke source notes.
+     */
+    private async processConsolidationCluster(
+        cluster: AIAgentNoteEntity[],
+        consolidatePrompt: AIPromptEntityExtended,
+        aiNoteTypeId: string,
+        runner: AIPromptRunner,
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<{ consolidated: number; archived: number }> {
+        const promptData = {
+            notesToConsolidate: cluster.map(n => ({
+                id: n.ID,
+                type: n.Type,
+                content: n.Note,
+                createdAt: n.__mj_CreatedAt,
+                accessCount: n.AccessCount,
+                agentId: n.AgentID,
+                userId: n.UserID,
+                companyId: n.CompanyID
+            }))
+        };
+
+        const params = new AIPromptParams();
+        params.prompt = consolidatePrompt;
+        params.data = promptData;
+        params.contextUser = contextUser;
+        params.attemptJSONRepair = true;
+
+        const result = await runner.ExecutePrompt<{
+            shouldConsolidate: boolean;
+            consolidatedNote?: {
+                type: string;
+                content: string;
+                scopeLevel: string;
+                confidence: number;
+            };
+            sourceNoteIds?: string[];
+            reason: string;
+        }>(params);
+
+        if (!result.success || !result.result) {
+            LogError(`Memory Manager: Consolidation prompt failed for cluster: ${result.errorMessage}`);
+            return { consolidated: 0, archived: 0 };
+        }
+
+        // Parse result if string (some models wrap JSON in ```json fences)
+        let parsedResult = result.result;
+        if (typeof result.result === 'string') {
+            const parsed = CleanAndParseJSON<typeof result.result>(result.result, true);
+            if (!parsed) {
+                LogError('Memory Manager: Failed to parse consolidation result');
+                return { consolidated: 0, archived: 0 };
+            }
+            parsedResult = parsed;
+        }
+
+        if (!parsedResult.shouldConsolidate) {
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Skipping cluster consolidation - ${parsedResult.reason}`);
+            }
+            return { consolidated: 0, archived: 0 };
+        }
+
+        // Create consolidated note
+        const consolidatedNoteData = parsedResult.consolidatedNote!;
+        const newNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
+        const templateNote = cluster[0];
+
+        newNote.AgentID = templateNote.AgentID;
+        newNote.UserID = templateNote.UserID;
+        newNote.CompanyID = templateNote.CompanyID;
+        newNote.AgentNoteTypeID = aiNoteTypeId;
+        newNote.Type = consolidatedNoteData.type as 'Preference' | 'Constraint' | 'Context' | 'Issue';
+        newNote.Note = consolidatedNoteData.content;
+        newNote.IsAutoGenerated = true;
+        newNote.Status = 'Active';
+        newNote.AccessCount = cluster.reduce((sum, n) => sum + (n.AccessCount || 0), 0);
+        newNote.Comments = `Consolidated from ${cluster.length} notes: ${parsedResult.reason}`;
+
+        this.applyScopeToConsolidatedNote(newNote, templateNote, consolidatedNoteData.scopeLevel);
+
+        const saveResult = await newNote.Save();
+        if (!saveResult) {
+            LogError(`Memory Manager: Failed to save consolidated note: ${JSON.stringify(newNote.LatestResult)}`);
+            return { consolidated: 0, archived: 0 };
+        }
+
+        // Revoke source notes in parallel
+        // TODO: When a ConsolidatedIntoNoteID FK column is added to AI Agent Notes,
+        // set it here so decomposition can properly restore source notes.
+        const revokeResults = await Promise.all(
+            cluster.map(async (sourceNote) => {
+                const noteToRevoke = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
+                if (await noteToRevoke.Load(sourceNote.ID)) {
+                    noteToRevoke.Status = 'Revoked';
+                    noteToRevoke.Comments = 'Revoked during note consolidation';
+                    if (await noteToRevoke.Save()) {
+                        return true;
+                    } else {
+                        LogError(`Memory Manager: Failed to revoke source note ${sourceNote.ID}`);
+                    }
+                }
+                return false;
+            })
+        );
+        const archived = revokeResults.filter(Boolean).length;
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Consolidated ${cluster.length} notes into: "${consolidatedNoteData.content.substring(0, 50)}..."`);
+        }
+
+        return { consolidated: 1, archived };
+    }
+
+    /**
+     * Apply scope fields to a consolidated note based on the LLM's scope recommendation.
+     * Mirrors the scoping logic in CreateNoteRecords.
+     */
+    private applyScopeToConsolidatedNote(
+        newNote: AIAgentNoteEntity,
+        templateNote: AIAgentNoteEntity,
+        scopeLevel: string | undefined
+    ): void {
+        const level = scopeLevel || 'user';
+
+        if (level === 'global') {
+            newNote.PrimaryScopeEntityID = null;
+            newNote.PrimaryScopeRecordID = null;
+            newNote.SecondaryScopes = null;
+        } else if (level === 'company' && templateNote.PrimaryScopeEntityID) {
+            newNote.PrimaryScopeEntityID = templateNote.PrimaryScopeEntityID;
+            newNote.PrimaryScopeRecordID = templateNote.PrimaryScopeRecordID;
+            newNote.SecondaryScopes = null;
+        } else {
+            // user (default) — inherit full scope
+            newNote.PrimaryScopeEntityID = templateNote.PrimaryScopeEntityID;
+            newNote.PrimaryScopeRecordID = templateNote.PrimaryScopeRecordID;
+            newNote.SecondaryScopes = templateNote.SecondaryScopes;
+        }
     }
 
     /**
@@ -1079,20 +1489,20 @@ export class MemoryManagerAgent extends BaseAgent {
 
                 // Apply scope from source agent run based on scopeLevel hint
                 if (sourceRun && sourceRun.PrimaryScopeEntityID) {
-                    const scopeLevel = extracted.scopeLevel || 'contact'; // Default to most specific
+                    const scopeLevel = extracted.scopeLevel || 'user'; // Default to most specific
 
                     if (scopeLevel === 'global') {
                         // Global example - no scope fields set
                         example.PrimaryScopeEntityID = null;
                         example.PrimaryScopeRecordID = null;
                         example.SecondaryScopes = null;
-                    } else if (scopeLevel === 'organization') {
-                        // Org-level example - primary scope only, no secondary
+                    } else if (scopeLevel === 'company') {
+                        // Company-level example - primary scope only, no secondary
                         example.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
                         example.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
                         example.SecondaryScopes = null;
                     } else {
-                        // Fully-scoped example (contact level) - inherit full scope
+                        // Fully-scoped example (user level) - inherit full scope
                         example.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
                         example.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
                         example.SecondaryScopes = sourceRun.SecondaryScopes;
@@ -1129,8 +1539,8 @@ export class MemoryManagerAgent extends BaseAgent {
         config: AgentConfiguration
     ): Promise<{finalStep: BaseAgentNextStep<P>, stepCount: number}> {
         try {
-            // Use verbose flag from agent execution params
-            this._verbose = params.verbose ?? false;
+            // Use verbose flag from agent execution params or data payload (UI passes it via data)
+            this._verbose = params.verbose ?? params.data?.verbose ?? false;
 
             // Initialize observability state for this run
             this._agentRunID = this.AgentRun?.ID || null;
@@ -1202,6 +1612,13 @@ export class MemoryManagerAgent extends BaseAgent {
                 return { finalStep, stepCount: 1 };
             }
 
+            // Initialization guard: ensure vector services exist for semantic dedup.
+            // If no notes existed at server startup, _noteVectorService is null and
+            // AddOrUpdateSingleNoteEmbedding will throw when saving new notes.
+            // The two post-creation/post-consolidation Config(true) calls were removed
+            // because entity save hooks now update vectors incrementally.
+            await AIEngine.Instance.Config(true, params.contextUser);
+
             // Extract notes from conversations (with rating context)
             const extractedNotes = await this.ExtractNotesFromConversations(conversations, params.contextUser!);
             if (this._verbose) {
@@ -1270,24 +1687,35 @@ export class MemoryManagerAgent extends BaseAgent {
 
             LogStatus(`Memory Manager: Created ${notesCreated} notes and ${examplesCreated} examples`);
 
-            // Refresh AIEngine memory cache if any new memories were created
-            // This ensures subsequent agent runs can find the new notes/examples via semantic search
-            if (notesCreated > 0 || examplesCreated > 0) {
-                LogStatus(`Memory Manager: Refreshing AIEngine memory cache...`);
-                await AIEngine.Instance.Config(true, params.contextUser);
-                LogStatus(`Memory Manager: Memory cache refreshed`);
+            // Step 9: Consolidate related notes
+            // This finds clusters of similar notes and synthesizes them into single comprehensive notes
+            let consolidatedCount = 0;
+            let archivedCount = 0;
+            if (await this.shouldRunConsolidation(params.agent.ID, params.contextUser!)) {
+                LogStatus(`Memory Manager: Running note consolidation...`);
+                const consolidationResult = await this.consolidateRelatedNotes(null, params.contextUser!);
+                consolidatedCount = consolidationResult.consolidated;
+                archivedCount = consolidationResult.archived;
+                if (consolidatedCount > 0 || archivedCount > 0) {
+                    LogStatus(`Memory Manager: Consolidated ${consolidatedCount} note clusters, archived ${archivedCount} source notes`);
+                } else {
+                    LogStatus(`Memory Manager: No notes to consolidate`);
+                }
             }
 
+            const consolidationSummary = consolidatedCount > 0 ? ` Consolidated ${consolidatedCount} clusters (${archivedCount} notes archived).` : '';
             const finalStep: BaseAgentNextStep<P> = {
                 terminate: true,
                 step: 'Success',
-                message: `Processed ${conversations.length} conversations (${totalMessages} messages) and ${agentRuns.length} agent runs. Created ${notesCreated} notes and ${examplesCreated} examples.`,
+                message: `Processed ${conversations.length} conversations (${totalMessages} messages) and ${agentRuns.length} agent runs. Created ${notesCreated} notes and ${examplesCreated} examples.${consolidationSummary}`,
                 newPayload: {
                     notesCreated,
                     examplesCreated,
                     conversationsProcessed: conversations.length,
                     messagesProcessed: totalMessages,
-                    agentRunsProcessed: agentRuns.length
+                    agentRunsProcessed: agentRuns.length,
+                    notesConsolidated: consolidatedCount,
+                    notesArchived: archivedCount
                 } as unknown as P
             };
 
