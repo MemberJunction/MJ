@@ -17,7 +17,6 @@ export class EntityActionParamFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identifierRelationships', sectionName: 'Identifier & Relationships', isExpanded: true },
             { sectionKey: 'parameterDefinition', sectionName: 'Parameter Definition', isExpanded: true },
-            { sectionKey: 'actionDetails', sectionName: 'Action Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

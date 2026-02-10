@@ -209,13 +209,19 @@ export class SQLCodeGenBase {
                 executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
             }
 
+            let overallSuccess = true;
             if (!executionSuccess) {
                 failSpinner('Failed to execute entity SQL files');
                 TempBatchFile.cleanup(); // Cleanup on error
-                return false;
+                overallSuccess = false;
+                // Continue to manage entity fields metadata even after SQL execution failure.
+                // This prevents virtual fields from being incorrectly dropped when sqlcmd fails
+                // (e.g., SSL certificate errors) but the mssql connection still works.
             }
-            const step2eEndTime: Date = new Date();
-            succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
+            else {
+                const step2eEndTime: Date = new Date();
+                succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
+            }
 
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
@@ -224,9 +230,11 @@ export class SQLCodeGenBase {
             startSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false)) {
                 failSpinner('Failed to manage entity fields');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner('Entity fields metadata updated');
+            else {
+                succeedSpinner('Entity fields metadata updated');
+            }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
             // STEP 4- Apply permissions, executing all .permissions files
@@ -234,26 +242,32 @@ export class SQLCodeGenBase {
             const step4StartTime: Date = new Date();
             if (! await this.applyPermissions(pool, directory, baselineEntities)) {
                 failSpinner('Failed to apply permissions');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
-            
+            else {
+                succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
+            }
+
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             startSpinner('Running post-generation SQL scripts...');
             const step5StartTime: Date = new Date();
             if (! await this.runCustomSQLScripts(pool, 'after-sql')) {
                 failSpinner('Failed to run post-generation SQL scripts');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
+            else {
+                succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
+            }
 
-            succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            if (overallSuccess) {
+                succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            }
 
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata();
             await md.Refresh();
 
-            return true;
+            return overallSuccess;
         }
         catch (err) {
             logError(err as string);

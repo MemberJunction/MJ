@@ -12,7 +12,7 @@
     <mj-collapsible-panel field-panels
         SectionKey="identifierRelationships"
         SectionName="Identifier & Relationships"
-        Icon="fa fa-truck"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -40,7 +40,7 @@
     <mj-collapsible-panel field-panels
         SectionKey="parameterDefinition"
         SectionName="Parameter Definition"
-        Icon="fa fa-info-circle"
+        Icon="fa fa-key"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -55,7 +55,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Value"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -67,16 +67,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Action Details Section -->
-    <mj-collapsible-panel field-panels
-        SectionKey="actionDetails"
-        SectionName="Action Details"
-        Icon="fa fa-bolt"
-        [Form]="this"
-        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 
