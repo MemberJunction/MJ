@@ -1032,7 +1032,7 @@ export class BaseAgent {
             const inputText = lastUserMessage?.content || '';
 
             // Parse agent-level scope config for note/example filtering
-            const scopeConfigJson = params.agent.Get('ScopeConfig') as string | null;
+            const scopeConfigJson = params.agent.ScopeConfig;
             let scopeConfig: SecondaryScopeConfig | null = null;
             if (scopeConfigJson) {
                 try { scopeConfig = JSON.parse(scopeConfigJson); } catch { /* ignore bad JSON */ }

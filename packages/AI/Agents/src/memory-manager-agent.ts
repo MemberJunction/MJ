@@ -1,5 +1,5 @@
 import { BaseAgent } from './base-agent';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, CleanAndParseJSON } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView, RunQuery, LogError, LogStatus } from '@memberjunction/core';
 import {
     ConversationDetailEntity,
@@ -43,18 +43,6 @@ const CONSOLIDATION_CONFIG = {
     similarityThreshold: 0.60      // Semantic similarity threshold — 60% captures topically related notes while excluding dissimilar ones
 };
 
-/**
- * Strip markdown code fences from LLM output.
- * Some models (e.g., Gemini) wrap JSON responses in ```json ... ``` blocks
- * even when the prompt requests raw JSON.
- */
-function stripMarkdownFences(text: string): string {
-    if (!text) return text;
-    return text
-        .replace(/^```(?:json)?\s*\n?/i, '')
-        .replace(/\n?```\s*$/i, '')
-        .trim();
-}
 
 /**
  * Message with rating data for extraction
@@ -123,6 +111,7 @@ interface ExtractedNote {
     sourceConversationDetailId?: string;
     sourceAgentRunId?: string;
     mergeWithExistingIds?: string[]; // IDs of existing notes to revoke and replace (contradiction merge)
+    mergeWithExistingId?: string; // Legacy singular form from LLM — normalized to plural below
     /**
      * Scope level hint from LLM analysis.
      * - 'global': Applies to all users (e.g., "Always greet politely")
@@ -559,15 +548,14 @@ export class MemoryManagerAgent extends BaseAgent {
         // Some models (e.g., Gemini) wrap JSON in ```json fences
         let parsedResult: { notes: ExtractedNote[] };
         if (typeof result.result === 'string') {
-            try {
-                const cleaned = stripMarkdownFences(result.result);
-                parsedResult = JSON.parse(cleaned);
-                if (this._verbose) {
-                    LogStatus(`Memory Manager: Parsed string result into object with ${parsedResult.notes?.length || 0} notes`);
-                }
-            } catch (e) {
-                LogError('Failed to parse extraction result as JSON:', e);
+            const parsed = CleanAndParseJSON<{ notes: ExtractedNote[] }>(result.result, true);
+            if (!parsed) {
+                LogError('Failed to parse extraction result as JSON');
                 return [];
+            }
+            parsedResult = parsed;
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Parsed string result into object with ${parsedResult.notes?.length || 0} notes`);
             }
         } else {
             parsedResult = result.result;
@@ -578,12 +566,9 @@ export class MemoryManagerAgent extends BaseAgent {
         // Notes are plain objects from JSON.parse, so the runtime cast is safe.
         if (parsedResult.notes) {
             for (const note of parsedResult.notes) {
-                const raw = note as unknown as Record<string, unknown>;
-                const singularId = raw.mergeWithExistingId as string | undefined;
-                if (singularId && !note.mergeWithExistingIds) {
-                    note.mergeWithExistingIds = [singularId];
+                if (note.mergeWithExistingId && !note.mergeWithExistingIds) {
+                    note.mergeWithExistingIds = [note.mergeWithExistingId];
                 }
-                delete raw.mergeWithExistingId;
             }
         }
 
@@ -853,13 +838,12 @@ export class MemoryManagerAgent extends BaseAgent {
         // Some models (e.g., Gemini) wrap JSON in ```json fences
         let parsedResult: { examples: ExtractedExample[] };
         if (typeof extractResult.result === 'string') {
-            try {
-                const cleaned = stripMarkdownFences(extractResult.result);
-                parsedResult = JSON.parse(cleaned);
-            } catch (e) {
-                LogError('Failed to parse example extraction result as JSON:', e);
+            const parsed = CleanAndParseJSON<{ examples: ExtractedExample[] }>(extractResult.result, true);
+            if (!parsed) {
+                LogError('Failed to parse example extraction result as JSON');
                 return [];
             }
+            parsedResult = parsed;
         } else {
             parsedResult = extractResult.result;
         }
@@ -1165,14 +1149,12 @@ export class MemoryManagerAgent extends BaseAgent {
         // Numeric frequency: run every N completed executions
         if (typeof freq === 'number') {
             const rv = new RunView();
-            const countResult = await rv.RunView<{ TotalCount: number }>({
+            const countResult = await rv.RunView({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
-                Fields: ['ID'],
-                ResultType: 'simple',
-                MaxRows: freq // Only need up to freq rows to check
+                ResultType: 'count_only'
             }, contextUser);
-            const completedCount = countResult.Success ? (countResult.Results?.length || 0) : 0;
+            const completedCount = countResult.Success ? (countResult.TotalRowCount || 0) : 0;
             return completedCount > 0 && completedCount % freq === 0;
         }
 
@@ -1352,13 +1334,12 @@ export class MemoryManagerAgent extends BaseAgent {
         // Parse result if string (some models wrap JSON in ```json fences)
         let parsedResult = result.result;
         if (typeof result.result === 'string') {
-            try {
-                const cleaned = stripMarkdownFences(result.result);
-                parsedResult = JSON.parse(cleaned);
-            } catch (e) {
-                LogError('Memory Manager: Failed to parse consolidation result:', e);
+            const parsed = CleanAndParseJSON<typeof result.result>(result.result, true);
+            if (!parsed) {
+                LogError('Memory Manager: Failed to parse consolidation result');
                 return { consolidated: 0, archived: 0 };
             }
+            parsedResult = parsed;
         }
 
         if (!parsedResult.shouldConsolidate) {
