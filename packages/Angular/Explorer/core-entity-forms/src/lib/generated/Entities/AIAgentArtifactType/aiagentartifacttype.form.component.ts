@@ -22,6 +22,3 @@ export class AIAgentArtifactTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIAgentArtifactTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

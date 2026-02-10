@@ -337,12 +337,12 @@ const result = validator.validate("Status = 'Active' AND Total > 100", {
 });
 // result.valid === true
 
-// Dangerous input is rejected
-const bad = validator.validate("1=1; DROP TABLE Users", {
+// Unsafe input is rejected
+const bad = validator.validate("Name = 'test'; 1=1", {
     context: 'where_clause'
 });
 // bad.valid === false
-// bad.error === "Dangerous SQL keyword detected: DROP"
+// bad.error === "Semicolons are not allowed in SQL expressions"
 ```
 
 ### ClassUtils -- Reflection Helpers

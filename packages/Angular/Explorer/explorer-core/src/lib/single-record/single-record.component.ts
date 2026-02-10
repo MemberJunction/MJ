@@ -1,11 +1,11 @@
-import { AfterViewInit, Component, ComponentRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ComponentRef, EventEmitter, inject, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
 import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType } from '@memberjunction/core';
 import { Subscription } from 'rxjs';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { RecentAccessService } from '@memberjunction/ng-shared';
+import { BaseFormComponent, FormNavigationEvent, FormNotificationEvent } from '@memberjunction/ng-base-forms';
+import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
 
 
 @Component({
@@ -24,6 +24,8 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
 
   private recentAccessService: RecentAccessService;
+  private navigationService = inject(NavigationService);
+  private sharedService = inject(SharedService);
 
   constructor (private route: ActivatedRoute) {
     this.recentAccessService = new RecentAccessService();
@@ -34,9 +36,10 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   public loading: boolean = true;
 
   // Track dynamically created components and entities for cleanup
-  private _formComponentRef: ComponentRef<any> | null = null;
+  private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
   private _currentRecord: BaseEntity | null = null;
   private _eventHandlerSubscription: Subscription | null = null;
+  private _formEventSubscriptions: Subscription[] = [];
 
   ngOnInit(): void {
   }
@@ -101,6 +104,9 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
         componentRef.instance.record = record
         componentRef.instance.userPermissions = permissions
         componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
+
+        // Subscribe to form @Output events and map them to Explorer services
+        this.subscribeToFormEvents(componentRef.instance);
 
         this.useGenericForm = false;
         this.loadComplete.emit();
@@ -190,13 +196,57 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  /**
+   * Subscribe to BaseFormComponent @Output events and map them to Explorer services.
+   */
+  private subscribeToFormEvents(form: BaseFormComponent): void {
+    this.cleanupFormSubscriptions();
+
+    this._formEventSubscriptions.push(
+      form.Navigate.subscribe((event: FormNavigationEvent) => this.handleNavigation(event)),
+      form.Notification.subscribe((event: FormNotificationEvent) => {
+        this.sharedService.CreateSimpleNotification(event.Message, event.Type, event.Duration);
+      })
+    );
+  }
+
+  private handleNavigation(event: FormNavigationEvent): void {
+    switch (event.Kind) {
+      case 'record':
+        this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
+        break;
+      case 'new-record':
+        this.navigationService.OpenNewEntityRecord(event.EntityName, { newRecordValues: event.DefaultValues });
+        break;
+      case 'entity-hierarchy':
+        this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey);
+        break;
+      case 'external-link':
+        window.open(event.Url, '_blank');
+        break;
+      case 'email':
+        window.open(`mailto:${event.EmailAddress}`, '_self');
+        break;
+    }
+  }
+
+  private cleanupFormSubscriptions(): void {
+    for (const sub of this._formEventSubscriptions) {
+      sub.unsubscribe();
+    }
+    this._formEventSubscriptions = [];
+  }
+
   ngOnDestroy(): void {
+    // CRITICAL: Clean up form event subscriptions first
+    this.cleanupFormSubscriptions();
+
     // CRITICAL: Clean up dynamically created form component to prevent zombie components
     if (this._formComponentRef) {
       this._formComponentRef.destroy();
       this._formComponentRef = null;
     }
-    
+
     // CRITICAL: Unsubscribe from event handler to prevent memory leaks
     if (this._eventHandlerSubscription) {
       this._eventHandlerSubscription.unsubscribe();

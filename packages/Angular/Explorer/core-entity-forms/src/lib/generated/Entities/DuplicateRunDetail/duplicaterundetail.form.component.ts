@@ -24,6 +24,3 @@ export class DuplicateRunDetailFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDuplicateRunDetailFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

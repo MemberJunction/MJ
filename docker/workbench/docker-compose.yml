@@ -1,0 +1,63 @@
+services:
+  sql-claude:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    container_name: sql-claude
+    user: root
+    environment:
+      SA_PASSWORD: "${SA_PASSWORD:-Claude2Sql99}"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_MEMORY_LIMIT_MB: "2048"
+    ports:
+      - "1444:1433"
+    volumes:
+      - sql-claude-data:/var/opt/mssql
+    deploy:
+      resources:
+        limits:
+          memory: 2560m
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  claude-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claude-dev
+    env_file:
+      - .env.database
+    environment:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      IS_SANDBOX: "1"
+    ports:
+      - "4100:4000"    # MJAPI (offset from local :4000)
+      - "4300:4200"    # Explorer (offset from local :4200)
+    depends_on:
+      sql-claude:
+        condition: service_healthy
+    volumes:
+      - ./workspace:/workspace
+      - ./.env.database:/workspace/.env.database:ro
+      - claude-settings:/root/.claude
+      - gh-config:/root/.config/gh
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+        reservations:
+          memory: 512m
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+
+volumes:
+  sql-claude-data:
+  claude-settings:
+  gh-config:

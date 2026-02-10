@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 4.1.0
+
+### Minor Changes
+
+- 2ea241f: metadata
+
+### Patch Changes
+
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/ng-record-changes@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/ng-base-application@4.1.0
+  - @memberjunction/ng-dashboards@4.1.0
+  - @memberjunction/ng-explorer-settings@4.1.0
+  - @memberjunction/ng-base-forms@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ai-engine-base@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/ng-auth-services@4.1.0
+  - @memberjunction/ng-entity-form-dialog@4.1.0
+  - @memberjunction/ng-entity-permissions@4.1.0
+  - @memberjunction/ng-list-detail-grid@4.1.0
+  - @memberjunction/ng-shared@4.1.0
+  - @memberjunction/ng-ai-test-harness@4.1.0
+  - @memberjunction/ng-artifacts@4.1.0
+  - @memberjunction/ng-container-directives@4.1.0
+  - @memberjunction/ng-conversations@4.1.0
+  - @memberjunction/ng-dashboard-viewer@4.1.0
+  - @memberjunction/ng-entity-viewer@4.1.0
+  - @memberjunction/ng-file-storage@4.1.0
+  - @memberjunction/ng-notifications@4.1.0
+  - @memberjunction/ng-query-grid@4.1.0
+  - @memberjunction/ng-record-selector@4.1.0
+  - @memberjunction/ng-resource-permissions@4.1.0
+  - @memberjunction/ng-shared-generic@4.1.0
+  - @memberjunction/ng-user-avatar@4.1.0
+  - @memberjunction/communication-types@4.1.0
+  - @memberjunction/entity-communications-client@4.1.0
+  - @memberjunction/graphql-dataprovider@4.1.0
+  - @memberjunction/templates-base-types@4.1.0
+  - @memberjunction/ng-tabstrip@4.1.0
+  - @memberjunction/ng-generic-dialog@4.1.0
+  - @memberjunction/global@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

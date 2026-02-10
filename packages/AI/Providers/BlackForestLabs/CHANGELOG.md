@@ -1,5 +1,12 @@
 # @memberjunction/ai-blackforestlabs
 
+## 4.1.0
+
+### Patch Changes
+
+- @memberjunction/ai@4.1.0
+- @memberjunction/global@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

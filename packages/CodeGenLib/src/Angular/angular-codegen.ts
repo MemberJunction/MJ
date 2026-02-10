@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, FieldCategoryInfo } from '@memberjunction/core';
 import { logError, logStatus } from '../Misc/status_logging';
 import fs from 'fs';
 import path from 'path';
@@ -217,19 +217,11 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
-import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
-
-// Kendo Imports
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
-import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 ${componentImports.join('\n')}
@@ -340,17 +332,11 @@ imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
-    BaseFormsModule,
-    FormToolbarModule,
     MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
+    ContainerDirectivesModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
 ],
 exports: [
 ]
@@ -518,7 +504,7 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
        * @param categoryIcons Optional map of category names to Font Awesome icon classes
        * @returns Array of generated form sections
        */
-      protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number, categoryIcons?: Record<string, string>): AngularFormSectionInfo[] {
+      protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number, fieldCategories?: Record<string, FieldCategoryInfo> | null): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
           const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
@@ -533,7 +519,8 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
               }
           }
 
-          // Sort sections by minimum sequence (Top sections first, System sections last, then by MinSequence)
+          // Sort sections: Top first, then own categories, then inherited categories
+          // (nearest parent first), then System Metadata last
           sections.sort((a, b) => {
               // Top sections always first
               if (a.Type === GeneratedFormSectionType.Top) return -1;
@@ -544,6 +531,12 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
               const bIsSystem = b.Name.toLowerCase() === 'system' || b.Name.toLowerCase() === 'system metadata';
               if (aIsSystem && !bIsSystem) return 1;
               if (!aIsSystem && bIsSystem) return -1;
+
+              // Inherited sections come after own sections (but before System)
+              const aIsInherited = fieldCategories?.[a.Name]?.inheritedFromEntityName != null;
+              const bIsInherited = fieldCategories?.[b.Name]?.inheritedFromEntityName != null;
+              if (aIsInherited && !bIsInherited) return 1;
+              if (!aIsInherited && bIsInherited) return -1;
 
               // Otherwise sort by sequence
               const aSeq = a.MinSequence ?? Number.MAX_SAFE_INTEGER;
@@ -567,8 +560,9 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
 
                   // Generate collapsible panel HTML inline instead of using separate components
                   const formHTML = this.generateSectionHTMLForAngular(entity, section);
-                  // Use category-specific icon from LLM if available, otherwise fall back to keyword matching
-                  const icon = (categoryIcons && categoryIcons[section.Name]) || this.getIconForCategory(section.Name);
+                  // Use category-specific icon from metadata if available, otherwise fall back to keyword matching
+                  const categoryInfo = fieldCategories ? fieldCategories[section.Name] : undefined;
+                  const icon = categoryInfo?.icon || this.getIconForCategory(section.Name);
                   // NOTE: We'll set the UniqueKey later in generateSingleEntityTypeScriptForAngular()
                   // For now, just use a placeholder that will be replaced
                   const sectionKey = this.camelCase(section.Name);
@@ -585,13 +579,18 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
                   // No additional indentation needed - formHTML is already properly indented
                   const indentedFormHTML = formHTML;
 
+                  // Build inherited variant attributes if this category comes from a parent entity
+                  const inheritedAttrs = categoryInfo?.inheritedFromEntityName
+                      ? `\n        Variant="inherited"\n        InheritedFromEntity="${categoryInfo.inheritedFromEntityName}"`
+                      : '';
+
                   section.TabCode = `${sectionIndex > 0 ? '\n' : ''}    <!-- ${section.Name} Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="${sectionKey}"
-        sectionName="${section.Name}"
-        icon="${icon}"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="${sectionKey}"
+        SectionName="${section.Name}"
+        Icon="${icon}"${inheritedAttrs}
+        [Form]="this"
+        [FormContext]="formContext">
 ${indentedFormHTML}
     </mj-collapsible-panel>`
 
@@ -633,6 +632,12 @@ ${indentedFormHTML}
                       bMatch = true;
                   }
                   if (bMatch && field.Name.toLowerCase() !== 'id') {
+                      // Skip virtual fields that are the name-field-map of an FK field.
+                      // The FK field itself will display the name via RelatedEntityNameFieldMap
+                      // at runtime, so emitting the virtual field would be redundant.
+                      if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) {
+                          continue;
+                      }
                       section.Fields.push(field) // add the field to the section fields array
                   }
               }
@@ -647,12 +652,12 @@ ${indentedFormHTML}
                 if (field.ValueListTypeEnum !== EntityFieldValueListType.None) {
                     // build the possible values list
                     if (field.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
-                        // combo box
-                        editControl = `combobox`  
+                        // autocomplete (allows user-entered values)
+                        editControl = `autocomplete`
                     }
                     else if (field.ValueListTypeEnum === EntityFieldValueListType.List) {
-                        // dropdown
-                        editControl = `dropdownlist`  
+                        // select (fixed list)
+                        editControl = `select`
                     }
                 }
                 else {
@@ -662,9 +667,9 @@ ${indentedFormHTML}
                     else if (field.TSType === EntityFieldTSType.Date)
                         editControl = `datepicker`  
                     else if (field.TSType === EntityFieldTSType.Number)
-                        editControl = `numerictextbox`
+                        editControl = `number`
                     else if (field.TSType === EntityFieldTSType.String) {
-                        if (field.Length < 0 || field.MaxLength > 100) // length < 0 means nvarchar(max) or similar, so use textarea
+                        if (field.Length < 0 || field.MaxLength > 1000) // length < 0 means nvarchar(max) or similar, so use textarea; nvarchar(1000) and below get single-line textbox
                             editControl = `textarea`
                         else
                             editControl = `textbox`
@@ -676,12 +681,10 @@ ${indentedFormHTML}
             }
 
             let linkType = null;
-            let linkComponentType = null;
             if (field.RelatedEntity && field.RelatedEntity.length > 0) {
                 linkType = 'Record'
-                linkComponentType = `\n            LinkComponentType="${field.RelatedEntityDisplayType}"`
             }
-            else if (field.ExtendedType && field.ExtendedType.length > 0) { 
+            else if (field.ExtendedType && field.ExtendedType.length > 0) {
                 switch (field.ExtendedType.trim().toLowerCase()) {
                     case 'url':
                         linkType = 'URL'
@@ -690,15 +693,15 @@ ${indentedFormHTML}
                         linkType = 'Email'
                         break;
                 }
-            } 
+            }
             // next, generate HTML for the field, use fillContainer if we have just one field
             html += `        <mj-form-field ${section.Fields.length === 1 ? '' : ''}
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="${ section.Fields.length > 1 ? 'true' : 'false'}"
             FieldName="${field.CodeName}"
             Type="${editControl}"
             [EditMode]="EditMode"
-            [formContext]="formContext"${linkType ? `\n            LinkType="${linkType}"` : ''}${linkComponentType ? linkComponentType : ''}
+            [FormContext]="formContext"${linkType ? `\n            LinkType="${linkType}"` : ''}
         ></mj-form-field>
 `
           }
@@ -707,7 +710,29 @@ ${indentedFormHTML}
       }
 
       /**
-       * Generates the tab name for a related entity tab. Appends the field's display name to the tab name 
+       * Checks whether a virtual field is the name-field-map target of an FK field on the same entity.
+       * For example, if entity has `ParentID` (FK) with `RelatedEntityNameFieldMap = 'Parent'`,
+       * then the virtual `Parent` field is redundant on the form since the FK field will display
+       * the name at runtime.
+       */
+      protected isVirtualNameFieldForFK(entity: EntityInfo, virtualField: EntityFieldInfo): boolean {
+          const vNameLower = virtualField.Name.toLowerCase();
+          return entity.Fields.some(f => {
+              if (f === virtualField || !f.RelatedEntity) return false;
+
+              // 1. Exact match via RelatedEntityNameFieldMap
+              if (f.RelatedEntityNameFieldMap === virtualField.Name) return true;
+
+              // 2. Case-insensitive convention: virtual "Foo" matches FK "FooID"
+              const fkLower = f.Name.toLowerCase();
+              if (fkLower === vNameLower + 'id') return true;
+
+              return false;
+          });
+      }
+
+      /**
+       * Generates the tab name for a related entity tab. Appends the field's display name to the tab name
        * if there are multiple tabs for the same related entity to differentiate them.
        * @param relatedEntity The relationship information for the related entity
        * @param sortedRelatedEntities All related entities sorted by sequence
@@ -806,15 +831,15 @@ ${indentedFormHTML}
             const slot = relatedEntity.DisplayLocation === 'Before Field Tabs' ? 'before-panels' : 'after-panels';
 
             const tabCode = `${index > 0 ? '\n' : ''}    <!-- ${tabName} Section -->
-    <mj-collapsible-panel slot="${slot}"
-        sectionKey="${sectionKey}"
-        sectionName="${tabName}"
-        icon="${iconClass}"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('${sectionKey}')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel ${slot}
+        SectionKey="${sectionKey}"
+        SectionName="${tabName}"
+        Icon="${iconClass}"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('${sectionKey}')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
 ${componentCodeWithIndent}
@@ -994,22 +1019,11 @@ ${componentCodeWithIndent}
       protected async generateSingleEntityHTMLForAngular(entity: EntityInfo, contextUser: UserInfo): Promise<{htmlCode: string,
                                                                                                               additionalSections: AngularFormSectionInfo[],
                                                                                                               relatedEntitySections: AngularFormSectionInfo[]}> {
-          // Load category icons from EntitySetting if available
-          let categoryIcons: Record<string, string> | undefined;
-          const entitySettings = entity.Settings;
-          if (entitySettings) {
-              const iconSetting = entitySettings.find((s: any) => s.Name === 'FieldCategoryIcons');
-              if (iconSetting && iconSetting.Value) {
-                  try {
-                      categoryIcons = JSON.parse(iconSetting.Value);
-                  } catch (e) {
-                      // Invalid JSON, ignore and fall back to keyword matching
-                  }
-              }
-          }
+          // Load category metadata (icons + inheritance info) from the typed FieldCategories property
+          const fieldCategories = entity.FieldCategories;
 
           const topArea = this.generateTopAreaHTMLForAngular(entity);
-          const additionalSections = this.generateAngularAdditionalSections(entity, 0, categoryIcons);
+          const additionalSections = this.generateAngularAdditionalSections(entity, 0, fieldCategories);
           // calc ending index for additional sections so we can pass taht into the related entity tabs because they need to start incrementally up from there...
           const endingIndex = additionalSections && additionalSections.length ? (topArea && topArea.length > 0 ? additionalSections.length - 1 : additionalSections.length) : 0;
           const relatedEntitySections = await this.generateRelatedEntityTabs(entity, endingIndex, contextUser);
@@ -1027,7 +1041,12 @@ ${componentCodeWithIndent}
        * @returns Generated HTML with splitter layout
        */
       protected generateSingleEntityHTMLWithSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const htmlCode: string =  `<mj-record-form-container [record]="record" [formComponent]="this">
+          const htmlCode: string =  `<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
         <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
 ${this.innerTopAreaHTML(topArea)}
@@ -1126,7 +1145,12 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
        * @returns Generated HTML without splitter layout
        */
       protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea: string, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-          const htmlCode: string =  `<mj-record-form-container [record]="record" [formComponent]="this">
+          const htmlCode: string =  `<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 ${this.innerTopAreaHTML(topArea)}
 ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
 </mj-record-form-container>

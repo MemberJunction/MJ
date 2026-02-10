@@ -32,6 +32,3 @@ export class AIConfigurationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIConfigurationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -206,6 +206,14 @@ describe('ClassName', () => {
 - **Every release** runs the full-stack regression suite via Docker Compose
 - Tests are cached by Turborepo — unchanged packages skip test execution
 
+## Docker Environments
+
+See **[docker/CLAUDE.md](docker/CLAUDE.md)** for full details on Docker configurations.
+
+- **`docker/MJAPI/`** — Production MJAPI container, published with each release
+- **`docker/workbench/`** — Claude Code workbench with dedicated SQL Server for autonomous dev/testing
+- Use `/docker-workbench` slash command to start, stop, rebuild, or exec into the workbench
+
 ## Build Commands
 - Build all packages: `npm run build` - from repo root
 - Build specific packages: `cd packagedirectory && npm run build`

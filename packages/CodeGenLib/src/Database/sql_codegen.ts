@@ -209,13 +209,19 @@ export class SQLCodeGenBase {
                 executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
             }
 
+            let overallSuccess = true;
             if (!executionSuccess) {
                 failSpinner('Failed to execute entity SQL files');
                 TempBatchFile.cleanup(); // Cleanup on error
-                return false;
+                overallSuccess = false;
+                // Continue to manage entity fields metadata even after SQL execution failure.
+                // This prevents virtual fields from being incorrectly dropped when sqlcmd fails
+                // (e.g., SSL certificate errors) but the mssql connection still works.
             }
-            const step2eEndTime: Date = new Date();
-            succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
+            else {
+                const step2eEndTime: Date = new Date();
+                succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
+            }
 
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
@@ -224,9 +230,11 @@ export class SQLCodeGenBase {
             startSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false)) {
                 failSpinner('Failed to manage entity fields');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner('Entity fields metadata updated');
+            else {
+                succeedSpinner('Entity fields metadata updated');
+            }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
             // STEP 4- Apply permissions, executing all .permissions files
@@ -234,26 +242,32 @@ export class SQLCodeGenBase {
             const step4StartTime: Date = new Date();
             if (! await this.applyPermissions(pool, directory, baselineEntities)) {
                 failSpinner('Failed to apply permissions');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
-            
+            else {
+                succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
+            }
+
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             startSpinner('Running post-generation SQL scripts...');
             const step5StartTime: Date = new Date();
             if (! await this.runCustomSQLScripts(pool, 'after-sql')) {
                 failSpinner('Failed to run post-generation SQL scripts');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
+            else {
+                succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
+            }
 
-            succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            if (overallSuccess) {
+                succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            }
 
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata();
             await md.Refresh();
 
-            return true;
+            return overallSuccess;
         }
         catch (err) {
             logError(err as string);
@@ -365,7 +379,7 @@ export class SQLCodeGenBase {
                 const promises = batch.map(async (e) => {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
-                        logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have a primary key field defined. A table must have a primary key defined to quality to be a MemberJunction entity`);
+                        logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
                         return {Success: false, Files: []};
                     }
                     return this.generateAndExecuteSingleEntitySQLToSeparateFiles({
@@ -554,8 +568,8 @@ export class SQLCodeGenBase {
 
             let sRet: string = ''
             let permissionsSQL: string = ''
-            // Indexes for Fkeys for the table
-            if (!options.onlyPermissions){
+            // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
+            if (!options.onlyPermissions && !options.entity.VirtualEntity){
                 const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
                 const indexSQL = shouldGenerateIndexes ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
                 const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
@@ -1172,6 +1186,68 @@ GO
         return this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity);
     }
 
+    /**
+     * Generates SELECT field expressions for IS-A parent entity columns.
+     * Walks the ParentID chain upward, joining to each parent's base table, and includes
+     * non-PK, non-timestamp, non-virtual fields from each parent table.
+     * Returns a string starting with ',\n' if there are parent fields, or '' if none.
+     */
+    protected generateParentEntityFieldSelects(entity: EntityInfo): string {
+        if (!entity.IsChildType) return '';
+
+        const parentChain = entity.ParentChain;
+        if (parentChain.length === 0) return '';
+
+        const fieldExpressions: string[] = [];
+
+        for (let i = 0; i < parentChain.length; i++) {
+            const parent = parentChain[i];
+            const alias = `__mj_isa_p${i + 1}`;
+
+            for (const field of parent.Fields) {
+                // Skip PKs (shared with child), timestamps, and virtual fields (view-computed)
+                if (field.IsPrimaryKey || field.Name.startsWith('__mj_') || field.IsVirtual) continue;
+
+                fieldExpressions.push(`    ${alias}.[${field.Name}]`);
+            }
+        }
+
+        if (fieldExpressions.length === 0) return '';
+        return ',\n' + fieldExpressions.join(',\n');
+    }
+
+    /**
+     * Generates INNER JOIN clauses for IS-A parent entity base tables.
+     * Chains joins from child -> parent -> grandparent using PK-to-PK conditions.
+     * Each parent is joined via its base table (not view) to avoid view dependency ordering issues.
+     */
+    protected generateParentEntityJoins(entity: EntityInfo, classNameFirstChar: string): string {
+        if (!entity.IsChildType) return '';
+
+        const parentChain = entity.ParentChain;
+        if (parentChain.length === 0) return '';
+
+        const joins: string[] = [];
+
+        for (let i = 0; i < parentChain.length; i++) {
+            const parent = parentChain[i];
+            const parentAlias = `__mj_isa_p${i + 1}`;
+            // First parent joins to child table alias; deeper parents chain to previous parent alias
+            const sourceAlias = i === 0 ? classNameFirstChar : `__mj_isa_p${i}`;
+
+            // Build PK-to-PK join condition (supports composite keys)
+            const joinConditions = entity.PrimaryKeys.map(pk =>
+                `[${sourceAlias}].[${pk.Name}] = ${parentAlias}.[${pk.Name}]`
+            ).join(' AND ');
+
+            joins.push(
+                `INNER JOIN\n    [${parent.SchemaName}].[${parent.BaseTable}] AS ${parentAlias}\n  ON\n    ${joinConditions}`
+            );
+        }
+
+        return joins.join('\n');
+    }
+
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
@@ -1187,6 +1263,10 @@ GO
         const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
         const rootJoins = recursiveFKs.length > 0 ? this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity) : '';
 
+        // IS-A parent entity JOINs — walk ParentID chain, JOIN to each parent's base table
+        const parentFieldsString: string = this.generateParentEntityFieldSelects(entity);
+        const parentJoinsString: string = this.generateParentEntityJoins(entity, classNameFirstChar);
+
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -1201,9 +1281,9 @@ GO
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
+    ${classNameFirstChar}.*${parentFieldsString}${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${parentJoinsString ? '\n' + parentJoinsString : ''}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
 ${whereClause}GO${permissions}
     `
     }
@@ -1935,48 +2015,53 @@ GO${permissions}
         // Build the WHERE clause for matching foreign key(s)
         // TODO: Future enhancement to support composite foreign keys
         const whereClause = `[${fkField.CodeName}] = @${parentEntity.FirstPrimaryKey.CodeName}`;
-        
-        // Generate unique cursor name using entity code names
-        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_cursor`;
-        
+
+        // Generate unique cursor name using entity code name AND FK field name
+        // This ensures uniqueness when an entity has multiple FKs pointing to the same parent
+        // (e.g., AIPromptRun.ParentID and AIPromptRun.RerunFromPromptRunID both reference AIPromptRun)
+        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_${fkField.CodeName}_cursor`;
+
+        // Use a combined prefix that includes both entity name and FK field name to ensure unique variable names
+        const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
+
         // Determine which SP to call
         const spType = operation === 'delete' ? SPType.Delete : SPType.Update;
         const spName = this.getSPName(relatedEntity, spType);
-        
+
         if (operation === 'update') {
             // For update, we need to include all updateable fields
-            // Use the related entity's code name as prefix to ensure uniqueness
-            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, relatedEntity.CodeName);
+            // Use the combined prefix to ensure uniqueness across multiple FKs to same entity
+            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, variablePrefix);
             const spCallParams = updateParams.allParams;
-            
+
             return `
     -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}
     ${updateParams.declarations}
-    DECLARE ${cursorName} CURSOR FOR 
+    DECLARE ${cursorName} CURSOR FOR
         SELECT ${updateParams.selectFields}
         FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
         WHERE ${whereClause}
-    
+
     OPEN ${cursorName}
     FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
-    
+
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Set the FK field to NULL
-        SET @${relatedEntity.CodeName}_${fkField.CodeName} = NULL
-        
+        SET @${variablePrefix}_${fkField.CodeName} = NULL
+
         -- Call the update SP for the related entity
         EXEC [${relatedEntity.SchemaName}].[${spName}] ${spCallParams}
-        
+
         FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
     END
-    
+
     CLOSE ${cursorName}
     DEALLOCATE ${cursorName}`;
         }
-        
+
         // For delete operation, use a simpler prefix for primary keys only
-        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, relatedEntity.CodeName);
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, variablePrefix);
         
         return `
     -- Cascade delete from ${relatedEntity.BaseTable} using cursor to call ${spName}

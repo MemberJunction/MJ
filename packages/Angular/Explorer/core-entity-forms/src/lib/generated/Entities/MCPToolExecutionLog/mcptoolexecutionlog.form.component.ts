@@ -24,6 +24,3 @@ export class MCPToolExecutionLogFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadMCPToolExecutionLogFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -1,5 +1,23 @@
 # @memberjunction/ng-explorer-modules
 
+## 4.1.0
+
+### Minor Changes
+
+- 2ea241f: metadata
+
+### Patch Changes
+
+- Updated dependencies [2ea241f]
+  - @memberjunction/ng-core-entity-forms@4.1.0
+  - @memberjunction/ng-explorer-core@4.1.0
+  - @memberjunction/ng-explorer-settings@4.1.0
+  - @memberjunction/ng-link-directives@4.1.0
+  - @memberjunction/ng-shared@4.1.0
+  - @memberjunction/ng-workspace-initializer@4.1.0
+  - @memberjunction/ng-container-directives@4.1.0
+  - @memberjunction/ng-kendo-modules@4.1.0
+
 ## 4.0.0
 
 ### Major Changes
