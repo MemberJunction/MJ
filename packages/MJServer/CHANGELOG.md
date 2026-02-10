@@ -1,5 +1,66 @@
 # Change Log - @memberjunction/server
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/actions-bizapps-formbuilders@4.1.0
+  - @memberjunction/core-entities-server@4.1.0
+  - @memberjunction/core-actions@4.1.0
+  - @memberjunction/data-context-server@4.1.0
+  - @memberjunction/templates@4.1.0
+  - @memberjunction/storage@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/notifications@4.1.0
+  - @memberjunction/communication-ms-graph@4.1.0
+  - @memberjunction/external-change-detection@4.1.0
+  - @memberjunction/scheduling-engine@4.1.0
+  - @memberjunction/ai-agent-manager-actions@4.1.0
+  - @memberjunction/ai-agent-manager@4.1.0
+  - @memberjunction/ai-agents@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/aiengine@4.1.0
+  - @memberjunction/ai-mcp-client@4.1.0
+  - @memberjunction/ai-prompts@4.1.0
+  - @memberjunction/ai-vectors-pinecone@4.1.0
+  - @memberjunction/api-keys@4.1.0
+  - @memberjunction/actions-apollo@4.1.0
+  - @memberjunction/actions-base@4.1.0
+  - @memberjunction/actions-bizapps-accounting@4.1.0
+  - @memberjunction/actions-bizapps-crm@4.1.0
+  - @memberjunction/actions-bizapps-lms@4.1.0
+  - @memberjunction/actions-bizapps-social@4.1.0
+  - @memberjunction/actions@4.1.0
+  - @memberjunction/communication-types@4.1.0
+  - @memberjunction/entity-communications-base@4.1.0
+  - @memberjunction/entity-communications-server@4.1.0
+  - @memberjunction/communication-sendgrid@4.1.0
+  - @memberjunction/component-registry-client-sdk@4.1.0
+  - @memberjunction/doc-utils@4.1.0
+  - @memberjunction/encryption@4.1.0
+  - @memberjunction/graphql-dataprovider@4.1.0
+  - @memberjunction/interactive-component-types@4.1.0
+  - @memberjunction/data-context@4.1.0
+  - @memberjunction/queue@4.1.0
+  - @memberjunction/scheduling-actions@4.1.0
+  - @memberjunction/scheduling-engine-base@4.1.0
+  - @memberjunction/skip-types@4.1.0
+  - @memberjunction/testing-engine@4.1.0
+  - @memberjunction/testing-engine-base@4.1.0
+  - @memberjunction/version-history@4.1.0
+  - @memberjunction/ai-provider-bundle@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/config@4.1.0
+  - @memberjunction/global@4.1.0
+  - @memberjunction/scheduling-base-types@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

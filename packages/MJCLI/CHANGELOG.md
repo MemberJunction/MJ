@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/cli
 
+## 4.1.0
+
+### Patch Changes
+
+- 77839a9: Enable cascade deletes for AI Agent and Prompt entities, add cross-file dependency detection and --delete-db-only flag to MetadataSync for proper deletion ordering, fix CodeGen duplicate variable names for self-referential FKs, add requireConnectivity config to QueryGen, and add Gemini JSON parser support to DBAutoDoc.
+- 9fab8ca: ESM Compatibility
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/codegen-lib@4.1.0
+  - @memberjunction/db-auto-doc@4.1.0
+  - @memberjunction/metadata-sync@4.1.0
+  - @memberjunction/query-gen@4.1.0
+  - @memberjunction/server-bootstrap-lite@4.1.0
+  - @memberjunction/ai-cli@4.1.0
+  - @memberjunction/testing-cli@4.1.0
+  - @memberjunction/config@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

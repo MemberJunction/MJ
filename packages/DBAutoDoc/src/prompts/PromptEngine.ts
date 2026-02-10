@@ -2,7 +2,7 @@
  * Prompt execution engine combining Nunjucks templating with AI/Core
  */
 
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig } from '../types/config.js';

@@ -1,6 +1,6 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { TemplateContentEntity, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'

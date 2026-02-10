@@ -1,5 +1,12 @@
 # @memberjunction/ng-export-service
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [9fab8ca]
+  - @memberjunction/export-engine@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

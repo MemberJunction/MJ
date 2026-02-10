@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 4.1.0
+
+### Patch Changes
+
+- 9fab8ca: ESM Compatibility
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/templates@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/aiengine@4.1.0
+  - @memberjunction/ai-vectors-pinecone@4.1.0
+  - @memberjunction/ai-vectors@4.1.0
+  - @memberjunction/ai-vectordb@4.1.0
+  - @memberjunction/templates-base-types@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/global@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 4.1.0
+
+### Patch Changes
+
+- 9fab8ca: ESM Compatibility
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/ai-vector-sync@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/scheduled-actions@4.1.0
+  - @memberjunction/ai-vectors-pinecone@4.1.0
+  - @memberjunction/actions-apollo@4.1.0
+  - @memberjunction/actions-content-autotag@4.1.0
+  - @memberjunction/actions@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/ai-mistral@4.1.0
+  - @memberjunction/ai-openai@4.1.0
+
 ## 4.0.0
 
 ### Major Changes
