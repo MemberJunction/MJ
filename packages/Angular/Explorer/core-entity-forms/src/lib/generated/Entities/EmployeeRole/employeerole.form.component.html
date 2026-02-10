@@ -12,7 +12,7 @@
     <mj-collapsible-panel field-panels
         SectionKey="entityKeys"
         SectionName="Entity Keys"
-        Icon="fa fa-key"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -36,11 +36,21 @@
 
     </mj-collapsible-panel>
 
+    <!-- Employee Info Section -->
+    <mj-collapsible-panel field-panels
+        SectionKey="employeeInfo"
+        SectionName="Employee Info"
+        Icon="fa fa-id-card"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- Role Assignment Section -->
     <mj-collapsible-panel field-panels
         SectionKey="roleAssignment"
         SectionName="Role Assignment"
-        Icon="fa fa-id-badge"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
 

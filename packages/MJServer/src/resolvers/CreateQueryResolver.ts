@@ -816,7 +816,9 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             // Provide default options if none provided
             const deleteOptions = options || {
                 SkipEntityAIActions: false,
-                SkipEntityActions: false
+                SkipEntityActions: false,
+                ReplayOnly: false,
+                IsParentEntityDelete: false
             };
             
             // Use inherited DeleteRecord method from ResolverBase
