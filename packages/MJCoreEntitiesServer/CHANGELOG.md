@@ -1,5 +1,24 @@
 # @memberjunction/core-entities-server
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@4.2.0
+- @memberjunction/ai@4.2.0
+- @memberjunction/ai-core-plus@4.2.0
+- @memberjunction/aiengine@4.2.0
+- @memberjunction/ai-prompts@4.2.0
+- @memberjunction/ai-provider-bundle@4.2.0
+- @memberjunction/ai-vector-dupe@4.2.0
+- @memberjunction/actions-base@4.2.0
+- @memberjunction/doc-utils@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+- @memberjunction/sqlserver-dataprovider@4.2.0
+- @memberjunction/skip-types@4.2.0
+
 ## 4.1.0
 
 ### Minor Changes

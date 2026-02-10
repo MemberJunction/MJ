@@ -1,5 +1,18 @@
 # @memberjunction/ng-explorer-modules
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-explorer-core@4.2.0
+- @memberjunction/ng-workspace-initializer@4.2.0
+- @memberjunction/ng-core-entity-forms@4.2.0
+- @memberjunction/ng-explorer-settings@4.2.0
+- @memberjunction/ng-kendo-modules@4.2.0
+- @memberjunction/ng-link-directives@4.2.0
+- @memberjunction/ng-shared@4.2.0
+- @memberjunction/ng-container-directives@4.2.0
+
 ## 4.1.0
 
 ### Minor Changes

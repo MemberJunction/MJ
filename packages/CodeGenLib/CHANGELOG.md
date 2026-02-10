@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 4.2.0
+
+### Minor Changes
+
+- 65ac988: mgration
+
+### Patch Changes
+
+- @memberjunction/ai@4.2.0
+- @memberjunction/ai-core-plus@4.2.0
+- @memberjunction/aiengine@4.2.0
+- @memberjunction/ai-prompts@4.2.0
+- @memberjunction/ai-provider-bundle@4.2.0
+- @memberjunction/actions-base@4.2.0
+- @memberjunction/actions@4.2.0
+- @memberjunction/config@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/core-entities-server@4.2.0
+- @memberjunction/global@4.2.0
+- @memberjunction/sqlserver-dataprovider@4.2.0
+- @memberjunction/server-bootstrap-lite@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes
