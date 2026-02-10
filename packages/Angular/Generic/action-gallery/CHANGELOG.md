@@ -1,5 +1,15 @@
 # @memberjunction/ng-action-gallery
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-ai-test-harness@4.2.0
+- @memberjunction/ng-container-directives@4.2.0
+- @memberjunction/ng-shared-generic@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

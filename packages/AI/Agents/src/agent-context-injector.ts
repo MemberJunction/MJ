@@ -1,7 +1,7 @@
 import { LogError, LogStatus, RunView, UserInfo } from "@memberjunction/core";
 import { AIAgentNoteEntity, AIAgentExampleEntity, AIAgentNoteTypeEntity } from "@memberjunction/core-entities";
-import { AIEngine } from "@memberjunction/aiengine";
-import { UserScope } from "@memberjunction/ai-core-plus";
+import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata } from "@memberjunction/aiengine";
+import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
 
 /**
@@ -33,23 +33,23 @@ export interface GetNotesParams {
     strategy: 'Relevant' | 'Recent' | 'All';
     maxNotes: number;
     contextUser: UserInfo;
+    /** Primary scope entity ID for multi-tenant filtering (FK to Entity table). */
+    primaryScopeEntityId?: string;
+    /** Primary scope record ID for multi-tenant filtering. */
+    primaryScopeRecordId?: string;
+    /** Arbitrary secondary scope dimensions for multi-tenant filtering. */
+    secondaryScopes?: Record<string, SecondaryScopeValue>;
     /**
-     * Optional user scope for multi-tenant SaaS deployments.
-     * When provided, enables hierarchical scope filtering:
-     * - Global notes (no scope)
-     * - Primary-scope notes (e.g., org-level)
-     * - Fully-scoped notes (e.g., contact-level)
+     * Optional secondary scope configuration from the agent.
+     * Defines per-dimension inheritance modes and validation rules.
      */
-    userScope?: UserScope;
+    secondaryScopeConfig?: SecondaryScopeConfig | null;
     /**
      * Optional reranker configuration for two-stage retrieval.
-     * When enabled, fetches more candidates via vector search,
-     * then reranks them using a semantic reranker for better relevance.
      */
     rerankerConfig?: RerankerConfiguration | null;
     /**
      * Optional observability context for tracing reranking operations.
-     * When provided, reranking will create an AIAgentRunStep record.
      */
     observability?: NotesObservabilityOptions;
 }
@@ -65,11 +65,17 @@ export interface GetExamplesParams {
     strategy: 'Semantic' | 'Recent' | 'Rated';
     maxExamples: number;
     contextUser: UserInfo;
+    /** Primary scope entity ID for multi-tenant filtering (FK to Entity table). */
+    primaryScopeEntityId?: string;
+    /** Primary scope record ID for multi-tenant filtering. */
+    primaryScopeRecordId?: string;
+    /** Arbitrary secondary scope dimensions for multi-tenant filtering. */
+    secondaryScopes?: Record<string, SecondaryScopeValue>;
     /**
-     * Optional user scope for multi-tenant SaaS deployments.
-     * When provided, enables hierarchical scope filtering.
+     * Optional secondary scope configuration from the agent.
+     * Defines per-dimension inheritance modes and validation rules.
      */
-    userScope?: UserScope;
+    secondaryScopeConfig?: SecondaryScopeConfig | null;
 }
 
 /**
@@ -126,14 +132,22 @@ export class AgentContextInjector {
             ? params.maxNotes * config.retrievalMultiplier
             : params.maxNotes;
 
-        // Stage 1: Vector search
+        // Build scope pre-filter so FindNearest only returns scope-valid candidates
+        const scopePreFilter = this.buildScopePreFilter<NoteEmbeddingMetadata>(params, m => m.noteEntity);
+        LogStatus(`AgentContextInjector: primaryScopeEntityId=${params.primaryScopeEntityId}, primaryScopeRecordId=${params.primaryScopeRecordId}, secondaryScopes=${JSON.stringify(params.secondaryScopes)}, secondaryScopeConfig=${JSON.stringify(params.secondaryScopeConfig)}, hasPreFilter=${!!scopePreFilter}`);
+
+        // Stage 1: Vector search (scope filtering happens inside FindNearest)
         const matches = await AIEngine.Instance.FindSimilarAgentNotes(
             params.currentInput!,
             params.agentId,
             params.userId,
             params.companyId,
-            fetchCount
+            fetchCount,
+            0.5,
+            scopePreFilter
         );
+
+        LogStatus(`AgentContextInjector: FindSimilarAgentNotes returned ${matches.length} matches: ${matches.map(m => m.note.SecondaryScopes || 'GLOBAL').join(', ')}`);
 
         // If no reranker config or disabled, return vector results directly
         if (!config?.enabled) {
@@ -167,7 +181,7 @@ export class AgentContextInjector {
             const message = error instanceof Error ? error.message : String(error);
 
             if (config.fallbackOnError) {
-                // Graceful fallback to vector search results
+                // Graceful fallback to vector search results (already scope-filtered)
                 LogStatus(`AgentContextInjector: Reranking failed (${message}), falling back to vector search results`);
                 return matches.slice(0, params.maxNotes).map(m => m.note);
             }
@@ -182,16 +196,37 @@ export class AgentContextInjector {
      * Get examples using semantic search via AIEngine
      */
     private async getExamplesViaSemanticSearch(params: GetExamplesParams): Promise<AIAgentExampleEntity[]> {
+        // Build scope pre-filter so FindNearest only returns scope-valid candidates
+        const scopePreFilter = this.buildScopePreFilter<ExampleEmbeddingMetadata>(params, m => m.exampleEntity);
+
         const matches = await AIEngine.Instance.FindSimilarAgentExamples(
             params.currentInput!,
             params.agentId,
             params.userId,
             params.companyId,
-            params.maxExamples
+            params.maxExamples,
+            0.5,
+            scopePreFilter
         );
 
         // Return entities directly from vector service (no database round-trip)
         return matches.map(m => m.example);
+    }
+
+    /**
+     * Build a pre-filter callback for vector search that enforces secondary scope rules.
+     * Returns undefined when no scope params are provided (no filtering needed).
+     *
+     * @param params - Note or example params containing scope and secondaryScopeConfig
+     * @param entityExtractor - Function to extract the scoped entity from the embedding metadata
+     */
+    private buildScopePreFilter<TMetadata>(
+        params: GetNotesParams | GetExamplesParams,
+        entityExtractor: (metadata: TMetadata) => { PrimaryScopeEntityID: string | null; PrimaryScopeRecordID: string | null; SecondaryScopes: string | null }
+    ): ((metadata: TMetadata) => boolean) | undefined {
+        if (!params.primaryScopeRecordId && !params.secondaryScopes) return undefined;
+        return (metadata: TMetadata): boolean =>
+            this.matchesSecondaryScope(entityExtractor(metadata), params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
     }
 
     /**
@@ -241,7 +276,7 @@ export class AgentContextInjector {
     /**
      * Build filter with 8-level scoping priority for notes.
      * Combines MJ-internal scoping (AgentID, UserID, CompanyID) with
-     * multi-tenant SaaS scoping (PrimaryScopeEntityID, PrimaryScopeRecordID, SecondaryScopes).
+     * multi-tenant scoping (PrimaryScopeEntityID, PrimaryScopeRecordID, SecondaryScopes).
      */
     private buildNotesScopingFilter(params: GetNotesParams): string {
         const filters: string[] = ['Status = \'Active\''];
@@ -291,52 +326,134 @@ export class AgentContextInjector {
             filters.push(`(${scopeConditions.join(' OR ')})`);
         }
 
-        // Add multi-tenant SaaS scoping if userScope is provided
-        if (params.userScope) {
-            const saasScopes = this.buildSaasScopeFilter(params.userScope);
-            filters.push(`(${saasScopes})`);
+        // Add multi-tenant secondary scoping if primary or secondary scopes are provided
+        if (params.primaryScopeRecordId || params.secondaryScopes) {
+            const scopeFilter = this.buildSecondaryScopeFilter(params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
+            filters.push(`(${scopeFilter})`);
         }
 
         return filters.join(' AND ');
     }
 
     /**
-     * Build filter for multi-tenant SaaS scoping with hierarchical inheritance.
-     * Returns notes at all applicable scope levels (global → primary → full).
+     * Build filter for multi-tenant secondary scoping with per-dimension inheritance.
+     * Returns notes at all applicable scope levels (global -> primary -> full).
+     *
+     * Inheritance modes per dimension:
+     * - 'cascading': Notes without this dimension match queries with it (broader retrieval)
+     * - 'strict': Notes must exactly match the dimension value
      */
-    private buildSaasScopeFilter(userScope: UserScope): string {
+    private buildSecondaryScopeFilter(
+        primaryScopeEntityId: string | undefined,
+        primaryScopeRecordId: string | undefined,
+        secondaryScopes: Record<string, SecondaryScopeValue> | undefined,
+        scopeConfig?: SecondaryScopeConfig | null
+    ): string {
         const conditions: string[] = [];
 
-        // Always include global notes (no scope set)
-        conditions.push('PrimaryScopeRecordID IS NULL');
+        // Always include global notes (no scope set at all)
+        conditions.push('(PrimaryScopeRecordID IS NULL AND (SecondaryScopes IS NULL OR SecondaryScopes = \'{}\'))');
 
-        if (userScope.primaryRecordId) {
+        const hasSecondary = secondaryScopes && Object.keys(secondaryScopes).length > 0;
+        const allowSecondaryOnly = scopeConfig?.allowSecondaryOnly ?? false;
+
+        // Build primary scope match clause: both entity ID and record ID must match
+        const primaryMatchClause = primaryScopeEntityId
+            ? `PrimaryScopeEntityID = '${primaryScopeEntityId}' AND PrimaryScopeRecordID = '${primaryScopeRecordId}'`
+            : `PrimaryScopeRecordID = '${primaryScopeRecordId}'`;
+
+        if (primaryScopeRecordId) {
             // Include primary-scope-only notes (matches org, no secondary scopes)
             conditions.push(`(
-                PrimaryScopeRecordID = '${userScope.primaryRecordId}'
+                ${primaryMatchClause}
                 AND (SecondaryScopes IS NULL OR SecondaryScopes = '{}')
             )`);
 
             // Include fully-scoped notes if secondary scopes are provided
-            if (userScope.secondary && Object.keys(userScope.secondary).length > 0) {
-                const secondaryConditions = Object.entries(userScope.secondary)
-                    .map(([key, val]) => `JSON_VALUE(SecondaryScopes, '$.${key}') = '${val}'`)
-                    .join(' AND ');
+            if (hasSecondary) {
+                const secondaryCondition = this.buildPerDimensionFilter(
+                    secondaryScopes!,
+                    scopeConfig
+                );
 
                 conditions.push(`(
-                    PrimaryScopeRecordID = '${userScope.primaryRecordId}'
-                    AND ${secondaryConditions}
+                    ${primaryMatchClause}
+                    AND ${secondaryCondition}
                 )`);
             }
+        } else if (allowSecondaryOnly && hasSecondary) {
+            // Secondary-only scoping: no primary required
+            const secondaryCondition = this.buildPerDimensionFilter(
+                secondaryScopes!,
+                scopeConfig
+            );
+
+            conditions.push(`(
+                PrimaryScopeRecordID IS NULL
+                AND SecondaryScopes IS NOT NULL
+                AND SecondaryScopes != '{}'
+                AND ${secondaryCondition}
+            )`);
         }
 
         return conditions.join(' OR ');
     }
 
     /**
+     * Build SQL filter conditions for secondary dimensions with per-dimension inheritance.
+     *
+     * For each dimension in the runtime scope:
+     * - 'cascading' mode: Match if dimension value matches OR dimension is absent in note
+     * - 'strict' mode: Match only if dimension value matches exactly
+     */
+    private buildPerDimensionFilter(
+        secondary: Record<string, SecondaryScopeValue>,
+        scopeConfig?: SecondaryScopeConfig | null
+    ): string {
+        const dimensionConditions: string[] = [];
+        const defaultMode = scopeConfig?.defaultInheritanceMode ?? 'cascading';
+
+        // Build a map of dimension configs for quick lookup
+        const dimConfigMap = new Map<string, SecondaryDimension>();
+        if (scopeConfig?.dimensions) {
+            for (const dim of scopeConfig.dimensions) {
+                dimConfigMap.set(dim.name, dim);
+            }
+        }
+
+        for (const [key, rawValue] of Object.entries(secondary)) {
+            const dimConfig = dimConfigMap.get(key);
+            const inheritanceMode = dimConfig?.inheritanceMode ?? defaultMode;
+            // Stringify all values (numbers, booleans) for SQL comparison via JSON_VALUE
+            const values = Array.isArray(rawValue) ? rawValue.map(String) : [String(rawValue)];
+
+            // Escape single quotes in values to prevent SQL injection
+            const escapedValues = values.map(v => v.replace(/'/g, "''"));
+
+            if (inheritanceMode === 'strict') {
+                const matchClause = escapedValues.length === 1
+                    ? `JSON_VALUE(SecondaryScopes, '$.${key}') = '${escapedValues[0]}'`
+                    : `JSON_VALUE(SecondaryScopes, '$.${key}') IN (${escapedValues.map(v => `'${v}'`).join(', ')})`;
+                dimensionConditions.push(matchClause);
+            } else {
+                const matchClause = escapedValues.length === 1
+                    ? `JSON_VALUE(SecondaryScopes, '$.${key}') = '${escapedValues[0]}'`
+                    : `JSON_VALUE(SecondaryScopes, '$.${key}') IN (${escapedValues.map(v => `'${v}'`).join(', ')})`;
+                dimensionConditions.push(
+                    `(JSON_VALUE(SecondaryScopes, '$.${key}') IS NULL OR ${matchClause})`
+                );
+            }
+        }
+
+        return dimensionConditions.length > 0
+            ? `(${dimensionConditions.join(' AND ')})`
+            : '1=1';
+    }
+
+    /**
      * Filter examples using multi-dimensional scoping priority.
      * Implements 4-level scoping hierarchy for examples (examples are always agent-specific).
-     * Also handles multi-tenant SaaS scoping when userScope is provided.
+     * Also handles multi-tenant secondary scoping when scope params are provided.
      */
     private filterExamplesByScoping(examples: AIAgentExampleEntity[], params: GetExamplesParams): AIAgentExampleEntity[] {
         return examples.filter(example => {
@@ -367,9 +484,9 @@ export class AgentContextInjector {
                 return false;
             }
 
-            // Check multi-tenant SaaS scoping if userScope is provided
-            if (params.userScope) {
-                return this.matchesSaasScope(example, params.userScope);
+            // Check multi-tenant secondary scoping if scope params are provided
+            if (params.primaryScopeRecordId || params.secondaryScopes) {
+                return this.matchesSecondaryScope(example, params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
             }
 
             return true;
@@ -377,46 +494,136 @@ export class AgentContextInjector {
     }
 
     /**
-     * Check if an example matches the SaaS scope criteria (hierarchical).
-     * Returns true for: global, primary-only, or fully-scoped matches.
+     * Check if a scoped entity (note or example) matches the secondary scope criteria
+     * with per-dimension inheritance.
+     * Returns true for: global, primary-only, secondary-only, or fully-scoped matches.
      */
-    private matchesSaasScope(example: AIAgentExampleEntity, userScope: UserScope): boolean {
-        // Global examples (no scope) always match
-        if (!example.PrimaryScopeRecordID) {
+    private matchesSecondaryScope(
+        entity: { PrimaryScopeEntityID: string | null; PrimaryScopeRecordID: string | null; SecondaryScopes: string | null },
+        primaryScopeEntityId: string | undefined,
+        primaryScopeRecordId: string | undefined,
+        secondaryScopes: Record<string, SecondaryScopeValue> | undefined,
+        scopeConfig?: SecondaryScopeConfig | null
+    ): boolean {
+        const hasSecondary = secondaryScopes && Object.keys(secondaryScopes).length > 0;
+        const allowSecondaryOnly = scopeConfig?.allowSecondaryOnly ?? false;
+
+        // Global entities (no scope at all) always match
+        const exampleSecondary = entity.SecondaryScopes;
+        const hasExampleSecondary = exampleSecondary && exampleSecondary !== '{}';
+
+        if (!entity.PrimaryScopeRecordID && !hasExampleSecondary) {
             return true;
         }
 
-        // No primary scope provided - only global examples match
-        if (!userScope.primaryRecordId) {
+        // Handle secondary-only mode
+        if (allowSecondaryOnly && !primaryScopeRecordId && hasSecondary) {
+            if (!entity.PrimaryScopeRecordID && !hasExampleSecondary) {
+                return true;
+            }
+            if (!entity.PrimaryScopeRecordID && hasExampleSecondary) {
+                return this.matchSecondaryScopes(exampleSecondary!, secondaryScopes!, scopeConfig);
+            }
             return false;
         }
 
-        // Primary scope must match
-        if (example.PrimaryScopeRecordID !== userScope.primaryRecordId) {
+        // No primary scope provided - only global entities match
+        if (!primaryScopeRecordId) {
+            return !entity.PrimaryScopeRecordID && !hasExampleSecondary;
+        }
+
+        // Primary scope must match (both entity ID and record ID)
+        if (entity.PrimaryScopeRecordID !== primaryScopeRecordId) {
+            return false;
+        }
+        if (primaryScopeEntityId && entity.PrimaryScopeEntityID && entity.PrimaryScopeEntityID !== primaryScopeEntityId) {
             return false;
         }
 
-        // If example has no secondary scopes, it's an org-level example - matches
-        const exampleSecondary = example.SecondaryScopes;
-        if (!exampleSecondary || exampleSecondary === '{}') {
+        // If entity has no secondary scopes, it's an org-level entity - matches
+        if (!hasExampleSecondary) {
             return true;
         }
 
-        // Example has secondary scopes - check if they match
-        if (!userScope.secondary || Object.keys(userScope.secondary).length === 0) {
-            // User has no secondary scope but example does - no match
+        // Entity has secondary scopes - check with per-dimension inheritance
+        if (!hasSecondary) {
             return false;
         }
 
-        // Parse and match secondary scopes
+        return this.matchSecondaryScopes(exampleSecondary!, secondaryScopes!, scopeConfig);
+    }
+
+    /**
+     * Match secondary scopes with per-dimension inheritance mode.
+     *
+     * For each dimension in the example's secondary scopes:
+     * - 'cascading': Match if user has the same value OR user doesn't have the dimension
+     * - 'strict': Match only if user has the exact same value
+     */
+    private matchSecondaryScopes(
+        exampleSecondaryJson: string,
+        userSecondary: Record<string, SecondaryScopeValue>,
+        scopeConfig?: SecondaryScopeConfig | null
+    ): boolean {
+        const defaultMode = scopeConfig?.defaultInheritanceMode ?? 'cascading';
+
+        // Build dimension config map for quick lookup
+        const dimConfigMap = new Map<string, SecondaryDimension>();
+        if (scopeConfig?.dimensions) {
+            for (const dim of scopeConfig.dimensions) {
+                dimConfigMap.set(dim.name, dim);
+            }
+        }
+
         try {
-            const parsedSecondary = JSON.parse(exampleSecondary);
-            return Object.entries(parsedSecondary).every(([key, val]) =>
-                userScope.secondary?.[key] === val
-            );
+            const exampleScopes = JSON.parse(exampleSecondaryJson) as Record<string, string>;
+
+            // Check each dimension in the example
+            for (const [key, exampleValue] of Object.entries(exampleScopes)) {
+                const dimConfig = dimConfigMap.get(key);
+                const inheritanceMode = dimConfig?.inheritanceMode ?? defaultMode;
+
+                if (inheritanceMode === 'strict') {
+                    if (!this.userDimensionMatches(userSecondary[key], exampleValue)) {
+                        return false;
+                    }
+                } else {
+                    // Cascading: match if user doesn't have this dimension, or values match
+                    const rawValue = userSecondary[key];
+                    if (rawValue !== undefined && !this.userDimensionMatches(rawValue, exampleValue)) {
+                        return false;
+                    }
+                }
+            }
+
+            // Also check user dimensions for strict mode requirements
+            // (ensures user's strict dimensions are present in example if required)
+            for (const [key] of Object.entries(userSecondary)) {
+                const dimConfig = dimConfigMap.get(key);
+                const inheritanceMode = dimConfig?.inheritanceMode ?? defaultMode;
+
+                if (inheritanceMode === 'strict') {
+                    const exampleValue = exampleScopes[key];
+                    if (exampleValue === undefined) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         } catch {
             return false;
         }
+    }
+
+    /**
+     * Check if a user's dimension value matches an example's value.
+     * Compares as strings to handle mixed types (numbers, booleans stored as JSON strings).
+     */
+    private userDimensionMatches(userValue: SecondaryScopeValue | undefined, exampleValue: string): boolean {
+        if (userValue === undefined) return false;
+        if (Array.isArray(userValue)) return userValue.map(String).includes(exampleValue);
+        return String(userValue) === exampleValue;
     }
 
     /**
@@ -521,8 +728,8 @@ export class AgentContextInjector {
             lines.push('<memory_policy>');
             lines.push('Precedence (highest to lowest):');
             lines.push('1) Current user message overrides all stored memory');
-            lines.push('2) Contact-specific notes override organization-level');
-            lines.push('3) Organization notes override global defaults');
+            lines.push('2) User-specific notes override company-level');
+            lines.push('3) Company notes override global defaults');
             lines.push('4) When same scope, prefer most recent by date');
             lines.push('');
             lines.push('Conflict resolution:');
@@ -539,10 +746,10 @@ export class AgentContextInjector {
             lines.push(`[${note.Type}] ${note.Note}`);
 
             const scope = this.determineNoteScope(note);
-            const saasScope = this.determineSaaSScope(note);
+            const secondaryScope = this.determineSecondaryScope(note);
 
-            if (saasScope) {
-                lines.push(`  Scope: ${saasScope}`);
+            if (secondaryScope) {
+                lines.push(`  Scope: ${secondaryScope}`);
             } else if (scope) {
                 lines.push(`  Scope: ${scope}`);
             }
@@ -555,21 +762,21 @@ export class AgentContextInjector {
     }
 
     /**
-     * Determine multi-tenant SaaS scope description for a note
+     * Determine multi-tenant secondary scope description for a note
      */
-    private determineSaaSScope(note: AIAgentNoteEntity): string | null {
-        // Check for SaaS scoping (takes precedence over MJ scoping)
+    private determineSecondaryScope(note: AIAgentNoteEntity): string | null {
+        // Check for secondary scoping (takes precedence over MJ scoping)
         if (!note.PrimaryScopeRecordID) {
-            return null; // No SaaS scope, fall back to MJ scope
+            return null; // No secondary scope, fall back to MJ scope
         }
 
         const hasSecondary = note.SecondaryScopes && note.SecondaryScopes !== '{}';
 
         if (hasSecondary) {
-            return 'Contact-specific (most specific)';
+            return 'User-specific (most specific)';
         }
 
-        return 'Organization-level';
+        return 'Company-level';
     }
 
     /**

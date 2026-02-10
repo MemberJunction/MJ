@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai-recommendations-rex
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai@4.2.0
+- @memberjunction/ai-recommendations@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

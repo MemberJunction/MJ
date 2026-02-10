@@ -80,20 +80,20 @@ function determineNoteScope(note: MockNote): string {
 }
 
 /**
- * Determine SaaS scope description for a note (new multi-tenant feature)
+ * Determine secondary scope description for a note (multi-tenant feature)
  */
-function determineSaaSScope(note: MockNote): string | null {
+function determineSecondaryScope(note: MockNote): string | null {
     if (!note.PrimaryScopeRecordID) {
-        return null; // No SaaS scope
+        return null; // No secondary scope
     }
 
     const hasSecondary = note.SecondaryScopes && note.SecondaryScopes !== '{}';
 
     if (hasSecondary) {
-        return 'Contact-specific (most specific)';
+        return 'User-specific (most specific)';
     }
 
-    return 'Organization-level';
+    return 'Company-level';
 }
 
 /**
@@ -108,8 +108,8 @@ function formatNotesForInjection(notes: MockNote[], includeMemoryPolicy: boolean
         lines.push('<memory_policy>');
         lines.push('Precedence (highest to lowest):');
         lines.push('1) Current user message overrides all stored memory');
-        lines.push('2) Contact-specific notes override organization-level');
-        lines.push('3) Organization notes override global defaults');
+        lines.push('2) User-specific notes override company-level');
+        lines.push('3) Company notes override global defaults');
         lines.push('4) When same scope, prefer most recent by date');
         lines.push('');
         lines.push('Conflict resolution:');
@@ -126,10 +126,10 @@ function formatNotesForInjection(notes: MockNote[], includeMemoryPolicy: boolean
         lines.push(`[${note.Type}] ${note.Note}`);
 
         const scope = determineNoteScope(note);
-        const saasScope = determineSaaSScope(note);
+        const secondaryScope = determineSecondaryScope(note);
 
-        if (saasScope) {
-            lines.push(`  Scope: ${saasScope}`);
+        if (secondaryScope) {
+            lines.push(`  Scope: ${secondaryScope}`);
         } else if (scope) {
             lines.push(`  Scope: ${scope}`);
         }

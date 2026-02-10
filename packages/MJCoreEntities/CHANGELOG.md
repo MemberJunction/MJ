@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/core-entities
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai@4.2.0
+- @memberjunction/interactive-component-types@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/global@4.2.0
+
 ## 4.1.0
 
 ### Minor Changes

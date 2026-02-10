@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-notifications",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "MemberJunction: Simple Angular library for displaying user notifications",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -26,10 +26,10 @@
     "@progress/kendo-angular-notification": "22.0.1"
   },
   "dependencies": {
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/global": "4.1.0",
-    "@memberjunction/graphql-dataprovider": "4.1.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/global": "4.2.0",
+    "@memberjunction/graphql-dataprovider": "4.2.0",
     "tslib": "^2.8.1",
     "rxjs": "^7.8.2"
   },

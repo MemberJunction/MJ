@@ -1,5 +1,18 @@
 # @memberjunction/ai-agent-manager
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai-agents@4.2.0
+- @memberjunction/ai-engine-base@4.2.0
+- @memberjunction/ai-core-plus@4.2.0
+- @memberjunction/aiengine@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+- @memberjunction/templates@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes
