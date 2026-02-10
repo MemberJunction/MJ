@@ -127,7 +127,7 @@ describe('NotificationEngine', () => {
     vi.clearAllMocks();
     engine = new NotificationEngine();
     // Override internal _loaded state
-    (engine as Record<string, boolean>)['_loaded'] = true;
+    (engine as unknown as Record<string, boolean>)['_loaded'] = true;
 
     // Set up default notification types
     mockUserInfoEngineInstance.NotificationTypes = [

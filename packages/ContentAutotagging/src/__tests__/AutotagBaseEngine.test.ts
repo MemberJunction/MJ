@@ -117,9 +117,11 @@ vi.mock('pdf-parse', () => ({
 }));
 
 vi.mock('officeparser', () => ({
-  parseOffice: vi.fn().mockResolvedValue({
-    toText: vi.fn().mockReturnValue('DOCX text content'),
-  }),
+  default: {
+    parseOffice: vi.fn().mockResolvedValue({
+      toText: vi.fn().mockReturnValue('DOCX text content'),
+    }),
+  }
 }));
 
 vi.mock('cheerio', () => ({

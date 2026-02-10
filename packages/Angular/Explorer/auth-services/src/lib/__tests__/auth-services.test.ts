@@ -5,6 +5,7 @@
  * - MJAuthBase (via dynamic import)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AuthErrorType } from '../auth-types';
 
 // Mock Angular
 vi.mock('@angular/core', () => ({
@@ -83,12 +84,12 @@ describe('MJAuthBase', () => {
       protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
       protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
       protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as const, message: 'err' }; }
+      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'err' }; }
       protected async getProfilePictureUrlInternal() { return null; }
       protected async handleSessionExpiryInternal() {}
     }
 
-    const provider = new TestProvider({ type: 'test', clientId: 'test-client' });
+    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
     expect(provider.initialPath).toBe('/test');
     expect(provider.initialSearch).toBe('?q=1');
   });
@@ -104,12 +105,12 @@ describe('MJAuthBase', () => {
       protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
       protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
       protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as const, message: 'err' }; }
+      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'err' }; }
       protected async getProfilePictureUrlInternal() { return null; }
       protected async handleSessionExpiryInternal() {}
     }
 
-    const provider = new TestProvider({ type: 'test', clientId: 'test-client' });
+    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
     expect(provider.validateConfig({ clientId: 'my-client' })).toBe(true);
     expect(provider.validateConfig({})).toBe(false);
     expect(provider.validateConfig({ clientId: '' })).toBe(false);
@@ -126,12 +127,12 @@ describe('MJAuthBase', () => {
       protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
       protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
       protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as const, message: 'err' }; }
+      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'err' }; }
       protected async getProfilePictureUrlInternal() { return null; }
       protected async handleSessionExpiryInternal() {}
     }
 
-    const provider = new TestProvider({ type: 'test', clientId: 'test-client' });
+    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
     expect(provider.getRequiredConfig()).toEqual(['clientId']);
   });
 
@@ -146,12 +147,12 @@ describe('MJAuthBase', () => {
       protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
       protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
       protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as const, message: 'err' }; }
+      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'err' }; }
       protected async getProfilePictureUrlInternal() { return null; }
       protected async handleSessionExpiryInternal() {}
     }
 
-    const provider = new TestProvider({ type: 'test', clientId: 'test-client' });
+    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
     let value: boolean | undefined;
     provider.isAuthenticated().subscribe(v => value = v);
     expect(value).toBe(false);
@@ -168,12 +169,12 @@ describe('MJAuthBase', () => {
       protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
       protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
       protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as const, message: 'err' }; }
+      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'err' }; }
       protected async getProfilePictureUrlInternal() { return null; }
       protected async handleSessionExpiryInternal() {}
     }
 
-    const provider = new TestProvider({ type: 'test', clientId: 'test-client' });
+    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
     let value: unknown = 'not-null';
     provider.getUserInfo().subscribe(v => value = v);
     expect(value).toBeNull();
@@ -190,12 +191,12 @@ describe('MJAuthBase', () => {
       protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
       protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
       protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as const, message: 'Custom error msg' }; }
+      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'Custom error msg' }; }
       protected async getProfilePictureUrlInternal() { return null; }
       protected async handleSessionExpiryInternal() {}
     }
 
-    const provider = new TestProvider({ type: 'test', clientId: 'test-client' });
+    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
     const result = provider.classifyError(new Error('test'));
     expect(result.type).toBe('UNKNOWN_ERROR');
     expect(result.message).toBe('Custom error msg');
@@ -212,12 +213,12 @@ describe('MJAuthBase', () => {
       protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
       protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
       protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as const, message: 'err' }; }
+      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'err' }; }
       protected async getProfilePictureUrlInternal() { return null; }
       protected async handleSessionExpiryInternal() {}
     }
 
-    const provider = new TestProvider({ type: 'test', clientId: 'test-client' });
+    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
     const token = await provider.getIdToken();
     expect(token).toBe('my-test-token');
   });
@@ -233,12 +234,12 @@ describe('MJAuthBase', () => {
       protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
       protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
       protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as const, message: 'err' }; }
+      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'err' }; }
       protected async getProfilePictureUrlInternal() { return null; }
       protected async handleSessionExpiryInternal() {}
     }
 
-    const provider = new TestProvider({ type: 'test', clientId: 'test-client' });
+    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
     const result = provider.login();
     expect(result).toBeDefined();
     expect(typeof result.subscribe).toBe('function');

@@ -191,7 +191,7 @@ describe('BaseCRMAction', () => {
 
     describe('getParamValue', () => {
         it('should find param by name', () => {
-            const params = [{ Name: 'ContactId', Value: '42', Type: 'Input' }];
+            const params = [{ Name: 'ContactId', Value: '42', Type: 'Input' as const }];
             expect(action['getParamValue'](params, 'ContactId')).toBe('42');
         });
 

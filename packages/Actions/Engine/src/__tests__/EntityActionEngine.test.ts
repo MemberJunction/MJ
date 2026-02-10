@@ -130,14 +130,14 @@ describe('EntityActionEngineServer', () => {
             const engine = new EntityActionEngineServer();
             const params = { EntityAction: null, InvocationType: { Name: 'Read' } };
 
-            await expect(engine.RunEntityAction(params as never)).rejects.toThrow('EntityAction is required');
+            await expect(engine.RunEntityAction(params as unknown as Record<string, Function>)).rejects.toThrow('EntityAction is required');
         });
 
         it('should throw when InvocationType is not provided', async () => {
             const engine = new EntityActionEngineServer();
             const params = { EntityAction: { ID: 'ea-1' }, InvocationType: null };
 
-            await expect(engine.RunEntityAction(params as never)).rejects.toThrow('Invalid invocation type');
+            await expect(engine.RunEntityAction(params as unknown as Record<string, Function>)).rejects.toThrow('Invalid invocation type');
         });
 
         it('should throw when ClassFactory fails to create invocation instance', async () => {
@@ -149,7 +149,7 @@ describe('EntityActionEngineServer', () => {
                 InvocationType: { Name: 'Read' },
             };
 
-            await expect(engine.RunEntityAction(params as never)).rejects.toThrow('Error creating instance');
+            await expect(engine.RunEntityAction(params as unknown as Record<string, Function>)).rejects.toThrow('Error creating instance');
         });
 
         it('should invoke action on the created instance', async () => {
@@ -164,7 +164,7 @@ describe('EntityActionEngineServer', () => {
                 InvocationType: { Name: 'SingleRecord' },
             };
 
-            const result = await engine.RunEntityAction(params as never);
+            const result = await engine.RunEntityAction(params as unknown as Record<string, Function>);
 
             expect(mockInvocation.InvokeAction).toHaveBeenCalledWith(params);
             expect(result.Success).toBe(true);
@@ -208,7 +208,7 @@ describe('EntityActionInvocationBase', () => {
                 LogEntry: { ID: 'log-1' },
             };
 
-            const result = invocation.MapActionResultToEntityActionResult(actionResult as never);
+            const result = invocation.MapActionResultToEntityActionResult(actionResult as unknown as Record<string, Function>);
 
             expect(result.Success).toBe(true);
             expect(result.Message).toBe('Done');
@@ -226,7 +226,7 @@ describe('EntityActionInvocationBase', () => {
                 { ActionParamID: 'p1', ValueType: 'Static', Value: '{"key":"val"}' },
             ];
 
-            const result = await invocation.MapParams(params as never, entityActionParams as never, {} as never);
+            const result = await invocation.MapParams(params as never, entityActionParams as never, {} as unknown as Record<string, Function>);
 
             expect(result).toHaveLength(1);
             expect(result[0].Name).toBe('param1');
@@ -241,7 +241,7 @@ describe('EntityActionInvocationBase', () => {
                 { ActionParamID: 'p1', ValueType: 'Static', Value: 'plain-string' },
             ];
 
-            const result = await invocation.MapParams(params as never, entityActionParams as never, {} as never);
+            const result = await invocation.MapParams(params as never, entityActionParams as never, {} as unknown as Record<string, Function>);
 
             expect(result[0].Value).toBe('plain-string');
         });
@@ -255,7 +255,7 @@ describe('EntityActionInvocationBase', () => {
                 { ActionParamID: 'p1', ValueType: 'Entity Object', Value: '' },
             ];
 
-            const result = await invocation.MapParams(params as never, entityActionParams as never, entityObject as never);
+            const result = await invocation.MapParams(params as never, entityActionParams as never, entityObject as unknown as Record<string, Function>);
 
             expect(result[0].Value).toBe(entityObject);
         });
@@ -269,7 +269,7 @@ describe('EntityActionInvocationBase', () => {
                 { ActionParamID: 'p1', ValueType: 'Entity Field', Value: 'Status' },
             ];
 
-            const result = await invocation.MapParams(params as never, entityActionParams as never, entityObject as never);
+            const result = await invocation.MapParams(params as never, entityActionParams as never, entityObject as unknown as Record<string, Function>);
 
             expect(result[0].Value).toBe('Active');
         });
@@ -284,7 +284,7 @@ describe('EntityActionInvocationBase', () => {
                 { ActionParamID: 'p1', ValueType: 'Script', Value: 'return 42', ID: 'eap-1' },
             ];
 
-            const result = await invocation.MapParams(params as never, entityActionParams as never, {} as never);
+            const result = await invocation.MapParams(params as never, entityActionParams as never, {} as unknown as Record<string, Function>);
 
             expect(result[0].Value).toBe('script-result');
         });
@@ -318,11 +318,11 @@ describe('EntityActionInvocationBase', () => {
         it('should cache compiled scripts by EntityActionID', async () => {
             const invocation = new EntityActionInvocationSingleRecord();
 
-            await invocation.SafeEvalScript('cache-test', 'EntityActionContext.result = 1;', {} as never);
-            await invocation.SafeEvalScript('cache-test', 'EntityActionContext.result = 2;', {} as never);
+            await invocation.SafeEvalScript('cache-test', 'EntityActionContext.result = 1;', {} as unknown as Record<string, Function>);
+            await invocation.SafeEvalScript('cache-test', 'EntityActionContext.result = 2;', {} as unknown as Record<string, Function>);
 
             // Second call should use cached version (same ID), so result stays 1
-            const result = await invocation.SafeEvalScript('cache-test', 'EntityActionContext.result = 3;', {} as never);
+            const result = await invocation.SafeEvalScript('cache-test', 'EntityActionContext.result = 3;', {} as unknown as Record<string, Function>);
             expect(result).toBe(1); // The cached first script
         });
 
@@ -347,7 +347,7 @@ describe('EntityActionInvocationSingleRecord', () => {
             const invocation = new EntityActionInvocationSingleRecord();
             const params = { EntityObject: null };
 
-            await expect(invocation.ValidateParams(params as never)).rejects.toThrow(
+            await expect(invocation.ValidateParams(params as unknown as Record<string, Function>)).rejects.toThrow(
                 'EntityObject is required'
             );
         });
@@ -356,7 +356,7 @@ describe('EntityActionInvocationSingleRecord', () => {
             const invocation = new EntityActionInvocationSingleRecord();
             const params = { EntityObject: { ID: 'e-1' } };
 
-            const result = await invocation.ValidateParams(params as never);
+            const result = await invocation.ValidateParams(params as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
     });
@@ -371,7 +371,7 @@ describe('EntityActionInvocationMultipleRecords', () => {
                 ListID: null,
             };
 
-            await expect(invocation.ValidateParams(params as never)).rejects.toThrow(
+            await expect(invocation.ValidateParams(params as unknown as Record<string, Function>)).rejects.toThrow(
                 'ListID is required'
             );
         });
@@ -383,7 +383,7 @@ describe('EntityActionInvocationMultipleRecords', () => {
                 ViewID: null,
             };
 
-            await expect(invocation.ValidateParams(params as never)).rejects.toThrow(
+            await expect(invocation.ValidateParams(params as unknown as Record<string, Function>)).rejects.toThrow(
                 'ViewID is required'
             );
         });
@@ -394,7 +394,7 @@ describe('EntityActionInvocationMultipleRecords', () => {
                 InvocationType: { Name: 'Unknown' },
             };
 
-            await expect(invocation.ValidateParams(params as never)).rejects.toThrow(
+            await expect(invocation.ValidateParams(params as unknown as Record<string, Function>)).rejects.toThrow(
                 'only supports invocation types of List or View'
             );
         });
@@ -406,7 +406,7 @@ describe('EntityActionInvocationMultipleRecords', () => {
                 ListID: 'list-1',
             };
 
-            const result = await invocation.ValidateParams(params as never);
+            const result = await invocation.ValidateParams(params as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
 
@@ -417,7 +417,7 @@ describe('EntityActionInvocationMultipleRecords', () => {
                 ViewID: 'view-1',
             };
 
-            const result = await invocation.ValidateParams(params as never);
+            const result = await invocation.ValidateParams(params as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
 
@@ -428,7 +428,7 @@ describe('EntityActionInvocationMultipleRecords', () => {
                 ListID: 'list-1',
             };
 
-            const result = await invocation.ValidateParams(params as never);
+            const result = await invocation.ValidateParams(params as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
     });
@@ -436,7 +436,7 @@ describe('EntityActionInvocationMultipleRecords', () => {
     describe('GetRecordList', () => {
         it('should return empty array by default', async () => {
             const invocation = new EntityActionInvocationMultipleRecords();
-            const result = await (invocation as never)['GetRecordList']();
+            const result = await (invocation as unknown as Record<string, Function>)['GetRecordList']();
             expect(result).toEqual([]);
         });
     });

@@ -106,7 +106,7 @@ describe('CommunicationEngineBase', () => {
             );
 
             // Call AdditionalLoading (it's protected, so we access it via bracket notation)
-            await (engine as never)['AdditionalLoading']();
+            await (engine as unknown as Record<string, Function>)['AdditionalLoading']();
 
             expect((provider1 as { MessageTypes: unknown[] }).MessageTypes).toHaveLength(2);
             expect((provider2 as { MessageTypes: unknown[] }).MessageTypes).toHaveLength(1);
@@ -124,7 +124,7 @@ describe('CommunicationEngineBase', () => {
             };
             mockGetEntityObject.mockResolvedValue(mockRun);
 
-            const result = await (engine as never)['StartRun']();
+            const result = await (engine as unknown as Record<string, Function>)['StartRun']();
 
             expect(mockGetEntityObject).toHaveBeenCalledWith('Communication Runs', expect.anything());
             expect(result).toBe(mockRun);
@@ -145,7 +145,7 @@ describe('CommunicationEngineBase', () => {
             mockGetEntityObject.mockResolvedValue(mockRun);
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-            const result = await (engine as never)['StartRun']();
+            const result = await (engine as unknown as Record<string, Function>)['StartRun']();
 
             expect(result).toBeNull();
             expect(consoleSpy).toHaveBeenCalled();
@@ -164,7 +164,7 @@ describe('CommunicationEngineBase', () => {
             mockGetEntityObject.mockResolvedValue(mockRun);
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-            const result = await (engine as never)['StartRun']();
+            const result = await (engine as unknown as Record<string, Function>)['StartRun']();
 
             expect(result).toBeNull();
             expect(consoleSpy).toHaveBeenCalledWith('Failed to save communication run: No error details available');
@@ -180,7 +180,7 @@ describe('CommunicationEngineBase', () => {
                 Save: mockSave.mockResolvedValue(true),
             };
 
-            const result = await (engine as never)['EndRun'](mockRun);
+            const result = await (engine as unknown as Record<string, Function>)['EndRun'](mockRun);
 
             expect(result).toBe(true);
             expect(mockRun.Status).toBe('Complete');
@@ -212,7 +212,7 @@ describe('CommunicationEngineBase', () => {
             };
 
             const mockRun = { ID: 'run-1' };
-            const result = await (engine as never)['StartLog'](processedMessage, mockRun);
+            const result = await (engine as unknown as Record<string, Function>)['StartLog'](processedMessage, mockRun);
 
             expect(result).toBe(mockLog);
             expect(mockLog.CommunicationRunID).toBe('run-1');
@@ -251,7 +251,7 @@ describe('CommunicationEngineBase', () => {
                 ProcessedBody: 'Hello',
             };
 
-            const result = await (engine as never)['StartLog'](processedMessage);
+            const result = await (engine as unknown as Record<string, Function>)['StartLog'](processedMessage);
 
             expect(result).toBe(mockLog);
             expect(mockLog.CommunicationRunID).toBeUndefined();
@@ -281,7 +281,7 @@ describe('CommunicationEngineBase', () => {
                 ProcessedBody: '',
             };
 
-            const result = await (engine as never)['StartLog'](processedMessage);
+            const result = await (engine as unknown as Record<string, Function>)['StartLog'](processedMessage);
 
             expect(result).toBeNull();
             consoleSpy.mockRestore();

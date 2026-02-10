@@ -5,7 +5,7 @@ describe('ReactDebugConfig', () => {
   beforeEach(() => {
     ReactDebugConfig.DEBUG_MODE = false;
     if (typeof window !== 'undefined') {
-      delete (window as Record<string, unknown>).__MJ_REACT_DEBUG_MODE__;
+      delete (window as unknown as Record<string, unknown>).__MJ_REACT_DEBUG_MODE__;
     }
   });
 

@@ -99,7 +99,7 @@ describe('MSGraphProvider', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    provider = new MSGraphProvider();
+    provider = new MSGraphProvider() as unknown as Record<string, Function>;
   });
 
   describe('getSupportedOperations', () => {

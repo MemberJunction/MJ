@@ -14,6 +14,20 @@ const { mockMessagesCreate, mockMessagesList, mockMessageFetch } = vi.hoisted(()
   mockMessageFetch: vi.fn(),
 }));
 
+// Mock dotenv
+vi.mock('dotenv', () => ({
+  default: { config: vi.fn() },
+}));
+
+// Mock config.ts directly to avoid dotenv import issues
+vi.mock('../config', () => ({
+  TWILIO_ACCOUNT_SID: 'test-account-sid',
+  TWILIO_AUTH_TOKEN: 'test-auth-token',
+  TWILIO_PHONE_NUMBER: '+15551234567',
+  TWILIO_WHATSAPP_NUMBER: '+15559876543',  // Provider adds whatsapp: prefix
+  TWILIO_FACEBOOK_PAGE_ID: 'fb-page-123',  // Provider adds messenger: prefix
+}));
+
 vi.mock('twilio', () => ({
   default: vi.fn().mockReturnValue({
     messages: {
@@ -49,26 +63,7 @@ vi.mock('@memberjunction/core', () => ({
   LogStatus: vi.fn(),
 }));
 
-vi.mock('env-var', () => {
-  const envMap: Record<string, string> = {
-    TWILIO_ACCOUNT_SID: 'env-sid',
-    TWILIO_AUTH_TOKEN: 'env-token',
-    TWILIO_PHONE_NUMBER: '+15551234567',
-    TWILIO_WHATSAPP_NUMBER: '+15559876543',
-    TWILIO_FACEBOOK_PAGE_ID: 'fb-page-123',
-  };
-  return {
-    get: (key: string) => ({
-      default: (def: string) => ({
-        asString: () => envMap[key] ?? def,
-      }),
-    }),
-  };
-});
-
-vi.mock('dotenv', () => ({
-  config: vi.fn(),
-}));
+// env-var not needed since we're mocking config.ts directly
 
 // ---------------------------------------------------------------------------
 // Import after mocks

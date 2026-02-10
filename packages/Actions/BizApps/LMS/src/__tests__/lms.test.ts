@@ -161,7 +161,7 @@ describe('BaseLMSAction', () => {
 
     describe('getParamValue', () => {
         it('should find param by name', () => {
-            const params = [{ Name: 'CourseID', Value: 'c1', Type: 'Input' }];
+            const params = [{ Name: 'CourseID', Value: 'c1', Type: 'Input' as const }];
             expect(action['getParamValue'](params, 'CourseID')).toBe('c1');
         });
 

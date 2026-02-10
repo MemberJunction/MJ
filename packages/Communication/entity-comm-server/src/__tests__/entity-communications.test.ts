@@ -111,7 +111,7 @@ describe('EntityCommunicationsEngine', () => {
                 HTMLBodyTemplate: null,
                 SubjectTemplate: null,
             };
-            const result = (engine as never)['ValidateTemplateContextParamAlignment'](message);
+            const result = (engine as unknown as Record<string, Function>)['ValidateTemplateContextParamAlignment'](message);
             expect(result).toBe(true);
         });
 
@@ -121,7 +121,7 @@ describe('EntityCommunicationsEngine', () => {
                 HTMLBodyTemplate: { Params: [{ Name: 'email', Type: 'Record' }] },
                 SubjectTemplate: null,
             };
-            const result = (engine as never)['ValidateTemplateContextParamAlignment'](message);
+            const result = (engine as unknown as Record<string, Function>)['ValidateTemplateContextParamAlignment'](message);
             expect(result).toBe(true);
         });
 
@@ -134,7 +134,7 @@ describe('EntityCommunicationsEngine', () => {
             // Note: ValidateTemplateContextParamAlignment pushes full param objects into
             // paramNames but calls paramNames.includes(p.Name) comparing a string against
             // objects, so duplicates are never detected and the method always returns true.
-            const result = (engine as never)['ValidateTemplateContextParamAlignment'](message);
+            const result = (engine as unknown as Record<string, Function>)['ValidateTemplateContextParamAlignment'](message);
             expect(result).toBe(true);
         });
     });
@@ -144,7 +144,7 @@ describe('EntityCommunicationsEngine', () => {
             const record = { ID: 'rec-1', Name: 'Test' };
             const params = [{ Name: 'currentRecord', Type: 'Record' }];
 
-            const result = await (engine as never)['PopulateSingleRecipientContextData'](
+            const result = await (engine as unknown as Record<string, Function>)['PopulateSingleRecipientContextData'](
                 record, [], 'rec-1', params
             );
 
@@ -164,7 +164,7 @@ describe('EntityCommunicationsEngine', () => {
             ];
             const params = [{ Name: 'orders', Type: 'Entity', LinkedParameterField: 'CustomerID' }];
 
-            const result = await (engine as never)['PopulateSingleRecipientContextData'](
+            const result = await (engine as unknown as Record<string, Function>)['PopulateSingleRecipientContextData'](
                 record, relatedData, 'rec-1', params
             );
 
@@ -180,7 +180,7 @@ describe('EntityCommunicationsEngine', () => {
                 { Name: 'obj', Type: 'Object' },
             ];
 
-            const result = await (engine as never)['PopulateSingleRecipientContextData'](
+            const result = await (engine as unknown as Record<string, Function>)['PopulateSingleRecipientContextData'](
                 record, [], 'rec-1', params
             );
 
@@ -196,7 +196,7 @@ describe('EntityCommunicationsEngine', () => {
                 { Name: 'data', Type: 'Record' }, // duplicate
             ];
 
-            const result = await (engine as never)['PopulateSingleRecipientContextData'](
+            const result = await (engine as unknown as Record<string, Function>)['PopulateSingleRecipientContextData'](
                 record, [], 'rec-1', params
             );
 

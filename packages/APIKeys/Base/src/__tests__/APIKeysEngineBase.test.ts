@@ -112,11 +112,11 @@ describe('APIKeysEngineBase', () => {
       { APIKeyID: 'key-2', ScopeID: 'scope-1' },
     ];
 
-    (engine as Record<string, unknown>)['_scopes'] = scopes;
-    (engine as Record<string, unknown>)['_applications'] = apps;
-    (engine as Record<string, unknown>)['_applicationScopes'] = appScopes;
-    (engine as Record<string, unknown>)['_keyApplications'] = keyApps;
-    (engine as Record<string, unknown>)['_keyScopes'] = keyScopes;
+    (engine as unknown as Record<string, unknown>)['_scopes'] = scopes;
+    (engine as unknown as Record<string, unknown>)['_applications'] = apps;
+    (engine as unknown as Record<string, unknown>)['_applicationScopes'] = appScopes;
+    (engine as unknown as Record<string, unknown>)['_keyApplications'] = keyApps;
+    (engine as unknown as Record<string, unknown>)['_keyScopes'] = keyScopes;
 
     // Build lookup maps
     const scopesByPath = new Map<string, unknown>();
@@ -125,8 +125,8 @@ describe('APIKeysEngineBase', () => {
       if (s.IsActive) scopesByPath.set(s.FullPath, s);
       scopesById.set(s.ID, s);
     }
-    (engine as Record<string, unknown>)['_scopesByPath'] = scopesByPath;
-    (engine as Record<string, unknown>)['_scopesById'] = scopesById;
+    (engine as unknown as Record<string, unknown>)['_scopesByPath'] = scopesByPath;
+    (engine as unknown as Record<string, unknown>)['_scopesById'] = scopesById;
 
     const appsByName = new Map<string, unknown>();
     const appsById = new Map<string, unknown>();
@@ -134,8 +134,8 @@ describe('APIKeysEngineBase', () => {
       appsByName.set(a.Name.toLowerCase(), a);
       appsById.set(a.ID, a);
     }
-    (engine as Record<string, unknown>)['_applicationsByName'] = appsByName;
-    (engine as Record<string, unknown>)['_applicationsById'] = appsById;
+    (engine as unknown as Record<string, unknown>)['_applicationsByName'] = appsByName;
+    (engine as unknown as Record<string, unknown>)['_applicationsById'] = appsById;
   });
 
   describe('Scopes', () => {
@@ -152,7 +152,7 @@ describe('APIKeysEngineBase', () => {
     it('should find scope by path', () => {
       const scope = engine.GetScopeByPath('entity:read');
       expect(scope).toBeDefined();
-      expect((scope as Record<string, unknown>).ID).toBe('scope-1');
+      expect((scope as unknown as Record<string, unknown>).ID).toBe('scope-1');
     });
 
     it('should return undefined for inactive scope path', () => {

@@ -93,12 +93,12 @@ describe('EntityCommunicationsEngineClient', () => {
 
     describe('getMessageTypeValues', () => {
         it('should return undefined for null messageType', () => {
-            const result = (client as never)['getMessageTypeValues'](null);
+            const result = (client as unknown as Record<string, Function>)['getMessageTypeValues'](null);
             expect(result).toBeUndefined();
         });
 
         it('should return undefined for undefined messageType', () => {
-            const result = (client as never)['getMessageTypeValues'](undefined);
+            const result = (client as unknown as Record<string, Function>)['getMessageTypeValues'](undefined);
             expect(result).toBeUndefined();
         });
 
@@ -116,7 +116,7 @@ describe('EntityCommunicationsEngineClient', () => {
                 CommunicationBaseMessageType: 'Email',
             };
 
-            const result = (client as never)['getMessageTypeValues'](messageType);
+            const result = (client as unknown as Record<string, Function>)['getMessageTypeValues'](messageType);
             expect(result.ID).toBe('mt-1');
             expect(result.CommunicationProviderID).toBe('prov-1');
             expect(result.Name).toBe('Email');
@@ -138,19 +138,19 @@ describe('EntityCommunicationsEngineClient', () => {
                 CommunicationBaseMessageType: 'Email',
             };
 
-            const result = (client as never)['getMessageTypeValues'](messageType);
+            const result = (client as unknown as Record<string, Function>)['getMessageTypeValues'](messageType);
             expect(result.AdditionalAttributes).toBe('');
         });
     });
 
     describe('getTemplateValues', () => {
         it('should return undefined for null template', () => {
-            const result = (client as never)['getTemplateValues'](null);
+            const result = (client as unknown as Record<string, Function>)['getTemplateValues'](null);
             expect(result).toBeUndefined();
         });
 
         it('should return undefined for undefined template', () => {
-            const result = (client as never)['getTemplateValues'](undefined);
+            const result = (client as unknown as Record<string, Function>)['getTemplateValues'](undefined);
             expect(result).toBeUndefined();
         });
 
@@ -171,7 +171,7 @@ describe('EntityCommunicationsEngineClient', () => {
                 User: 'Admin',
             };
 
-            const result = (client as never)['getTemplateValues'](template);
+            const result = (client as unknown as Record<string, Function>)['getTemplateValues'](template);
             expect(result.ID).toBe('tmpl-1');
             expect(result.Name).toBe('Welcome Email');
             expect(result.Description).toBe('Welcome template');
@@ -195,7 +195,7 @@ describe('EntityCommunicationsEngineClient', () => {
                 User: 'Admin',
             };
 
-            const result = (client as never)['getTemplateValues'](template);
+            const result = (client as unknown as Record<string, Function>)['getTemplateValues'](template);
             expect(result.Description).toBe('');
             expect(result.UserPrompt).toBe('');
             expect(result.Category).toBe('');

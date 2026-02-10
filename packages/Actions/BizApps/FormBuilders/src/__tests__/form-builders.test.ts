@@ -208,7 +208,7 @@ describe('BaseFormBuilderAction', () => {
 
     describe('getParamValue', () => {
         it('should find param by name', () => {
-            const params = [{ Name: 'FormID', Value: 'abc', Type: 'Input' }];
+            const params = [{ Name: 'FormID', Value: 'abc', Type: 'Input' as const }];
             expect(action['getParamValue'](params, 'FormID')).toBe('abc');
         });
     });

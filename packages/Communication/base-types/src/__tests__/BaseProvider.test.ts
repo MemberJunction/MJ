@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock external dependencies
 vi.mock('@memberjunction/core', () => ({
@@ -220,7 +220,7 @@ describe('BaseCommunicationProvider', () => {
 
 describe('CommunicationProviderEntityExtended', () => {
     it('should get and set MessageTypes', () => {
-        const entity = new CommunicationProviderEntityExtended();
+        const entity = new (CommunicationProviderEntityExtended as unknown as { new(): CommunicationProviderEntityExtended })();
         expect(entity.MessageTypes).toBeUndefined();
 
         const mockTypes = [{ ID: '1', Name: 'Email' }];

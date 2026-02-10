@@ -208,7 +208,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            const result = await engine.RunAction(params as never);
+            const result = await engine.RunAction(params as unknown as Record<string, Function>);
 
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('Input validation failed');
@@ -217,7 +217,7 @@ describe('ActionEngineServer', () => {
 
         it('should log when SkipActionLog is false and validation fails', async () => {
             vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(false as never);
-            const startAndEndSpy = vi.spyOn(engine as never, 'StartAndEndActionLog' as never).mockResolvedValue({} as never);
+            const startAndEndSpy = vi.spyOn(engine as never, 'StartAndEndActionLog' as never).mockResolvedValue({} as unknown as Record<string, Function>);
 
             const params = {
                 Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestDriver' },
@@ -227,7 +227,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: false,
             };
 
-            const result = await engine.RunAction(params as never);
+            const result = await engine.RunAction(params as unknown as Record<string, Function>);
 
             expect(result.Success).toBe(false);
             expect(startAndEndSpy).toHaveBeenCalled();
@@ -245,7 +245,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            await engine.RunAction(params as never);
+            await engine.RunAction(params as unknown as Record<string, Function>);
 
             expect(startAndEndSpy).not.toHaveBeenCalled();
         });
@@ -258,7 +258,7 @@ describe('ActionEngineServer', () => {
                 Message: 'Done',
                 Params: [],
                 RunParams: {},
-            } as never);
+            } as unknown as Record<string, Function>);
 
             const params = {
                 Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestDriver' },
@@ -268,7 +268,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            const result = await engine.RunAction(params as never);
+            const result = await engine.RunAction(params as unknown as Record<string, Function>);
 
             expect(internalSpy).toHaveBeenCalledWith(params);
             expect(result.Success).toBe(true);
@@ -277,7 +277,7 @@ describe('ActionEngineServer', () => {
 
     describe('ValidateInputs', () => {
         it('should return true by default', async () => {
-            const result = await (engine as never)['ValidateInputs']({} as never);
+            const result = await (engine as unknown as Record<string, Function>)['ValidateInputs']({} as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
     });
@@ -285,13 +285,13 @@ describe('ActionEngineServer', () => {
     describe('RunFilters', () => {
         it('should return true when no filters are provided', async () => {
             const params = { Filters: undefined };
-            const result = await (engine as never)['RunFilters'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['RunFilters'](params as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
 
         it('should return true when filters array is empty', async () => {
             const params = { Filters: [] };
-            const result = await (engine as never)['RunFilters'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['RunFilters'](params as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
 
@@ -299,7 +299,7 @@ describe('ActionEngineServer', () => {
             vi.spyOn(engine as never, 'RunSingleFilter' as never).mockResolvedValue(true as never);
 
             const params = { Filters: [{ ID: 'f1' }, { ID: 'f2' }] };
-            const result = await (engine as never)['RunFilters'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['RunFilters'](params as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
 
@@ -309,7 +309,7 @@ describe('ActionEngineServer', () => {
                 .mockResolvedValueOnce(false as never);
 
             const params = { Filters: [{ ID: 'f1' }, { ID: 'f2' }] };
-            const result = await (engine as never)['RunFilters'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['RunFilters'](params as unknown as Record<string, Function>);
             expect(result).toBe(false);
         });
 
@@ -318,14 +318,14 @@ describe('ActionEngineServer', () => {
                 .mockResolvedValueOnce(false as never);
 
             const params = { Filters: [{ ID: 'f1' }, { ID: 'f2' }, { ID: 'f3' }] };
-            await (engine as never)['RunFilters'](params as never);
+            await (engine as unknown as Record<string, Function>)['RunFilters'](params as unknown as Record<string, Function>);
             expect(singleFilterSpy).toHaveBeenCalledTimes(1);
         });
     });
 
     describe('RunSingleFilter', () => {
         it('should return true (stub implementation)', async () => {
-            const result = await (engine as never)['RunSingleFilter']({} as never, {} as never);
+            const result = await (engine as unknown as Record<string, Function>)['RunSingleFilter']({} as never, {} as unknown as Record<string, Function>);
             expect(result).toBe(true);
         });
     });
@@ -337,7 +337,7 @@ describe('ActionEngineServer', () => {
                 Params: [{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }],
             };
 
-            const result = (engine as never)['GetActionParamsForAction'](action as never);
+            const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([{ Name: 'param1', Value: 'hello', Type: 'Input' }]);
         });
 
@@ -347,7 +347,7 @@ describe('ActionEngineServer', () => {
                 Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }],
             };
 
-            const result = (engine as never)['GetActionParamsForAction'](action as never);
+            const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([{ Name: 'param1', Value: { key: 'val' }, Type: 'Input' }]);
         });
 
@@ -357,7 +357,7 @@ describe('ActionEngineServer', () => {
                 Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }],
             };
 
-            const result = (engine as never)['GetActionParamsForAction'](action as never);
+            const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([{ Name: 'param1', Value: 'not-json', Type: 'Input' }]);
         });
 
@@ -367,7 +367,7 @@ describe('ActionEngineServer', () => {
                 Params: [{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }],
             };
 
-            const result = (engine as never)['GetActionParamsForAction'](action as never);
+            const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([{ Name: 'param1', Value: 'entity-ref', Type: 'Input' }]);
         });
 
@@ -377,7 +377,7 @@ describe('ActionEngineServer', () => {
                 Params: [{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }],
             };
 
-            const result = (engine as never)['GetActionParamsForAction'](action as never);
+            const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([{ Name: 'param1', Value: 'other-val', Type: 'Both' }]);
         });
 
@@ -387,7 +387,7 @@ describe('ActionEngineServer', () => {
                 Params: [{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }],
             };
 
-            const result = (engine as never)['GetActionParamsForAction'](action as never);
+            const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([{ Name: 'param1', Value: 'fallback', Type: 'Output' }]);
             expect(LogError).toHaveBeenCalledWith(expect.stringContaining('Unknown ValueType'));
         });
@@ -401,7 +401,7 @@ describe('ActionEngineServer', () => {
                 ],
             };
 
-            const result = (engine as never)['GetActionParamsForAction'](action as never);
+            const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toHaveLength(2);
             expect(result[0].Name).toBe('p1');
             expect(result[1].Name).toBe('p2');
@@ -409,7 +409,7 @@ describe('ActionEngineServer', () => {
 
         it('should handle empty params array', () => {
             const action = { Name: 'TestAction', Params: [] };
-            const result = (engine as never)['GetActionParamsForAction'](action as never);
+            const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([]);
         });
     });
@@ -432,7 +432,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            const result = await (engine as never)['InternalRunAction'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
 
             expect(result.Success).toBe(true);
             expect(mockClassFactory.CreateInstance).toHaveBeenCalledWith(
@@ -451,7 +451,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            const result = await (engine as never)['InternalRunAction'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('Could not find a class for action');
         });
@@ -470,7 +470,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            const result = await (engine as never)['InternalRunAction'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('Could not find a class');
         });
@@ -487,7 +487,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            const result = await (engine as never)['InternalRunAction'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('Action blew up');
             expect(LogError).toHaveBeenCalled();
@@ -507,7 +507,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            await (engine as never)['InternalRunAction'](params as never);
+            await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
             expect(mockClassFactory.CreateInstance).toHaveBeenCalledWith(
                 BaseAction, 'FallbackName', expect.anything()
             );
@@ -530,7 +530,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: true,
             };
 
-            const result = await (engine as never)['InternalRunAction'](params as never);
+            const result = await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
             expect(result.Result).toBeDefined();
             expect(result.Result.ResultCode).toBe('  SUCCESS  ');
         });
@@ -542,7 +542,7 @@ describe('ActionEngineServer', () => {
 
             const startSpy = vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({
                 Save: vi.fn().mockResolvedValue(true),
-            } as never);
+            } as unknown as Record<string, Function>);
             const endSpy = vi.spyOn(engine as never, 'EndActionLog' as never).mockResolvedValue(undefined as never);
 
             const params = {
@@ -553,7 +553,7 @@ describe('ActionEngineServer', () => {
                 SkipActionLog: false,
             };
 
-            await (engine as never)['InternalRunAction'](params as never);
+            await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
             expect(startSpy).toHaveBeenCalled();
             expect(endSpy).toHaveBeenCalled();
         });
@@ -578,7 +578,7 @@ describe('ActionEngineServer', () => {
                 Params: [{ Name: 'p1', Value: 'v1' }],
             };
 
-            const logEntry = await (engine as never)['StartActionLog'](params as never, true);
+            const logEntry = await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
 
             expect(mockEntity.NewRecord).toHaveBeenCalled();
             expect(mockEntity.Save).toHaveBeenCalled();
@@ -603,7 +603,7 @@ describe('ActionEngineServer', () => {
                 Params: [],
             };
 
-            await (engine as never)['StartActionLog'](params as never, false);
+            await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, false);
 
             expect(mockEntity.NewRecord).toHaveBeenCalled();
             expect(mockEntity.Save).not.toHaveBeenCalled();
@@ -624,7 +624,7 @@ describe('ActionEngineServer', () => {
             });
 
             const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [] };
-            await (engine as never)['StartActionLog'](params as never, true);
+            await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
 
             expect(LogError).toHaveBeenCalled();
         });
@@ -643,7 +643,7 @@ describe('ActionEngineServer', () => {
             const params = { Params: [{ Name: 'p1', Value: 'v1' }] };
             const result = { Result: { ResultCode: 'OK' }, Message: 'Done' };
 
-            await (engine as never)['EndActionLog'](logEntity as never, params as never, result as never);
+            await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
 
             expect(logEntity.Save).toHaveBeenCalled();
         });
@@ -661,7 +661,7 @@ describe('ActionEngineServer', () => {
             const params = { Action: { Name: 'Test' }, Params: [] };
             const result = { Result: undefined, Message: 'fail' };
 
-            await (engine as never)['EndActionLog'](logEntity as never, params as never, result as never);
+            await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
 
             expect(LogError).toHaveBeenCalled();
         });
@@ -670,13 +670,13 @@ describe('ActionEngineServer', () => {
     describe('StartAndEndActionLog', () => {
         it('should call StartActionLog with saveRecord=false then EndActionLog', async () => {
             const mockLogEntity = { Save: vi.fn().mockResolvedValue(true) };
-            const startSpy = vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue(mockLogEntity as never);
+            const startSpy = vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue(mockLogEntity as unknown as Record<string, Function>);
             const endSpy = vi.spyOn(engine as never, 'EndActionLog' as never).mockResolvedValue(undefined as never);
 
             const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [] };
             const result = { Message: 'ok' };
 
-            const logEntry = await (engine as never)['StartAndEndActionLog'](params as never, result as never);
+            const logEntry = await (engine as unknown as Record<string, Function>)['StartAndEndActionLog'](params as never, result as unknown as Record<string, Function>);
 
             expect(startSpy).toHaveBeenCalledWith(params, false);
             expect(endSpy).toHaveBeenCalledWith(mockLogEntity, params, result);

@@ -1,8 +1,8 @@
 {
-  "name": "@memberjunction/test-utils",
+  "name": "@memberjunction/unit-testing",
   "type": "module",
   "version": "3.4.0",
-  "description": "MemberJunction: Shared test utilities and mock infrastructure for Vitest unit testing",
+  "description": "MemberJunction: Unit testing utilities and mock infrastructure for Vitest",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": ["/dist"],

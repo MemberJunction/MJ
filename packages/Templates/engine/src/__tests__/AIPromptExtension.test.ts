@@ -69,7 +69,7 @@ describe('AIPromptExtension', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        extension = new AIPromptExtension(contextUser as never);
+        extension = new AIPromptExtension(contextUser as unknown as Record<string, Function>);
     });
 
     describe('constructor', () => {
@@ -378,7 +378,7 @@ describe('AIPromptExtension', () => {
 
             (AIEngine.Instance as Record<string, unknown>).Models = models;
 
-            const result = await (extension as never)['GetAIModel']('OpenAI', contextUser);
+            const result = await (extension as unknown as Record<string, Function>)['GetAIModel']('OpenAI', contextUser);
 
             expect(result).toBeDefined();
             expect(result.Name).toBe('model-B'); // Highest PowerRank among LLMs

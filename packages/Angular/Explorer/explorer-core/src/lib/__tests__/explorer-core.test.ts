@@ -30,7 +30,7 @@ vi.mock('@memberjunction/core', () => ({
       ID: 'user-1',
       UserRoles: [{ RoleName: 'Admin' }],
     };
-    Entities: [];
+    Entities = [];
   },
   EntityPermissionType: { Create: 'Create', Read: 'Read', Update: 'Update', Delete: 'Delete' },
   LogError: vi.fn(),

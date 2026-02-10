@@ -44,16 +44,18 @@ vi.mock('env-var', () => {
     GMAIL_SERVICE_ACCOUNT_EMAIL: 'service@example.com',
   };
   return {
-    get: (key: string) => ({
-      default: (def: string) => ({
-        asString: () => envMap[key] ?? def,
+    default: {
+      get: (key: string) => ({
+        default: (def: string) => ({
+          asString: () => envMap[key] ?? def,
+        }),
       }),
-    }),
+    },
   };
 });
 
 vi.mock('dotenv', () => ({
-  config: vi.fn(),
+  default: { config: vi.fn() },
 }));
 
 const { mockSend, mockMessagesList, mockMessagesGet } = vi.hoisted(() => ({
@@ -67,29 +69,31 @@ vi.mock('googleapis', () => {
     setCredentials = vi.fn();
   }
   return {
-    google: {
-      auth: {
-        OAuth2: FakeOAuth2,
-      },
-      gmail: vi.fn().mockReturnValue({
-        users: {
-          getProfile: vi.fn().mockResolvedValue({ data: { emailAddress: 'test@gmail.com' } }),
-          messages: {
-            send: mockSend,
-            list: mockMessagesList,
-            get: mockMessagesGet,
-            modify: vi.fn().mockResolvedValue({}),
-            trash: vi.fn().mockResolvedValue({}),
-            delete: vi.fn().mockResolvedValue({}),
-          },
-          labels: {
-            list: vi.fn().mockResolvedValue({ data: { labels: [] } }),
-          },
-          drafts: {
-            create: vi.fn().mockResolvedValue({ status: 200, data: { id: 'draft-1' } }),
-          },
+    default: {
+      google: {
+        auth: {
+          OAuth2: FakeOAuth2,
         },
-      }),
+        gmail: vi.fn().mockReturnValue({
+          users: {
+            getProfile: vi.fn().mockResolvedValue({ data: { emailAddress: 'test@gmail.com' } }),
+            messages: {
+              send: mockSend,
+              list: mockMessagesList,
+              get: mockMessagesGet,
+              modify: vi.fn().mockResolvedValue({}),
+              trash: vi.fn().mockResolvedValue({}),
+              delete: vi.fn().mockResolvedValue({}),
+            },
+            labels: {
+              list: vi.fn().mockResolvedValue({ data: { labels: [] } }),
+            },
+            drafts: {
+              create: vi.fn().mockResolvedValue({ status: 200, data: { id: 'draft-1' } }),
+            },
+          },
+        }),
+      },
     },
   };
 });

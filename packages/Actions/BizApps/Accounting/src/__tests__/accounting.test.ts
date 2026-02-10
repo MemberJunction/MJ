@@ -152,12 +152,12 @@ describe('BaseAccountingAction', () => {
 
     describe('getParamValue', () => {
         it('should return param value by name', () => {
-            const params = [{ Name: 'CompanyID', Value: '123', Type: 'Input' }];
+            const params = [{ Name: 'CompanyID', Value: '123', Type: 'Input' as const }];
             expect(action['getParamValue'](params, 'CompanyID')).toBe('123');
         });
 
         it('should return undefined for missing param', () => {
-            const params = [{ Name: 'CompanyID', Value: '123', Type: 'Input' }];
+            const params = [{ Name: 'CompanyID', Value: '123', Type: 'Input' as const }];
             expect(action['getParamValue'](params, 'NonExistent')).toBeUndefined();
         });
     });

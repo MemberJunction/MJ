@@ -59,12 +59,12 @@ import {
 
 describe('EntityCommunicationMessageTypeExtended', () => {
     it('should have CommunicationFields default to empty array', () => {
-        const ext = new EntityCommunicationMessageTypeExtended();
+        const ext = new (EntityCommunicationMessageTypeExtended as unknown as { new(): EntityCommunicationMessageTypeExtended })();
         expect(ext.CommunicationFields).toEqual([]);
     });
 
     it('should allow setting CommunicationFields', () => {
-        const ext = new EntityCommunicationMessageTypeExtended();
+        const ext = new (EntityCommunicationMessageTypeExtended as unknown as { new(): EntityCommunicationMessageTypeExtended })();
         const fields = [{ FieldName: 'Email' }];
         ext.CommunicationFields = fields as never;
         expect(ext.CommunicationFields).toBe(fields);

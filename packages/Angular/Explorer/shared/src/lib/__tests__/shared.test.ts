@@ -175,7 +175,7 @@ describe('TitleService', () => {
   beforeEach(async () => {
     const mod = await import('../title.service');
     const { Title } = await import('@angular/platform-browser');
-    service = new mod.TitleService(new Title());
+    service = new mod.TitleService(new Title(document));
   });
 
   it('should have default base title of MemberJunction', () => {

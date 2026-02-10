@@ -18,7 +18,7 @@ vi.mock('@angular/core', () => ({
 vi.mock('@memberjunction/core', () => ({
   Metadata: class {
     CurrentUser = { ID: 'user-123', Name: 'Test User' };
-    Applications: [];
+    Applications = [];
   },
   LogError: vi.fn(),
   LogStatus: vi.fn(),

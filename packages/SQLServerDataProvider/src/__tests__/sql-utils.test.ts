@@ -83,20 +83,23 @@ vi.mock('sql-formatter', () => ({
 }));
 
 // Mock nunjucks — keep a lightweight render implementation
-vi.mock('nunjucks', () => {
-  class Environment {
-    constructor() {}
-    addFilter() {}
-    renderString(template: string, context: Record<string, unknown>) {
-      // Very naive Nunjucks substitute: replace {{ key }} with context[key]
-      return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, key) => {
-        const val = context[key];
-        return val !== undefined ? String(val) : '';
-      });
+// Note: Code imports as `import nunjucks from 'nunjucks'` (default import)
+// so we must wrap in a default object
+vi.mock('nunjucks', () => ({
+  default: {
+    Environment: class Environment {
+      constructor() {}
+      addFilter() {}
+      renderString(template: string, context: Record<string, unknown>) {
+        // Very naive Nunjucks substitute: replace {{ key }} with context[key]
+        return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, key) => {
+          const val = context[key];
+          return val !== undefined ? String(val) : '';
+        });
+      }
     }
   }
-  return { Environment };
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Import the classes under test AFTER mocks are set up

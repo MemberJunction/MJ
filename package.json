@@ -75,7 +75,10 @@
     "commitpush": "node ci/commit_push.mjs",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:analytics": "node unit-testing/tools/run-all-tests.js",
+    "test:aggregate": "node unit-testing/tools/aggregate-results.js ",
+    "test:markdown": "node unit-testing/tools/generate-markdown.js "
   },
   "repository": {
     "type": "git",

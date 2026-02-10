@@ -93,6 +93,8 @@ class TestSocialAction extends BaseSocialMediaAction {
         };
     }
 
+    protected async refreshAccessToken(): Promise<void> {}
+
     protected async InternalRunAction(): Promise<{ Success: boolean; ResultCode: string }> {
         return { Success: true, ResultCode: 'SUCCESS' };
     }
@@ -244,7 +246,7 @@ describe('BaseSocialMediaAction', () => {
 
     describe('getParamValue', () => {
         it('should find param by name', () => {
-            const params = [{ Name: 'ProfileID', Value: 'p1', Type: 'Input' }];
+            const params = [{ Name: 'ProfileID', Value: 'p1', Type: 'Input' as const }];
             expect(action['getParamValue'](params, 'ProfileID')).toBe('p1');
         });
 

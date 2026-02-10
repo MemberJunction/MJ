@@ -59,9 +59,9 @@ describe('RecordChangesComponent utility methods', () => {
     const { MJNotificationService } = await import('@memberjunction/ng-notifications');
     const { DomSanitizer } = await import('@angular/platform-browser');
     component = new mod.RecordChangesComponent(
-      new ChangeDetectorRef() as never,
-      new MJNotificationService() as never,
-      new DomSanitizer() as never,
+      { detectChanges: vi.fn(), markForCheck: vi.fn() } as unknown as InstanceType<typeof ChangeDetectorRef>,
+      {} as InstanceType<typeof MJNotificationService>,
+      { bypassSecurityTrustHtml: (v: string) => v } as unknown as InstanceType<typeof DomSanitizer>,
     );
   });
 

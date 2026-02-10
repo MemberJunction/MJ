@@ -5,6 +5,8 @@ import {
     resolveCredentials,
 } from '../CredentialUtils';
 
+type TestCreds = Record<string, string>;
+
 describe('resolveCredentialValue', () => {
     it('should return request value when provided', () => {
         const result = resolveCredentialValue('request-val', 'env-val', false);
@@ -120,7 +122,7 @@ describe('validateRequiredCredentials', () => {
 
 describe('resolveCredentials', () => {
     it('should resolve all fields from request credentials', () => {
-        const result = resolveCredentials(
+        const result = resolveCredentials<TestCreds>(
             { apiKey: 'req-key', secret: 'req-secret' },
             { apiKey: 'env-key', secret: 'env-secret' },
             ['apiKey', 'secret'],
@@ -135,7 +137,7 @@ describe('resolveCredentials', () => {
     });
 
     it('should resolve all fields from environment when no request credentials', () => {
-        const result = resolveCredentials(
+        const result = resolveCredentials<TestCreds>(
             undefined,
             { apiKey: 'env-key', secret: 'env-secret' },
             ['apiKey', 'secret'],
@@ -150,7 +152,7 @@ describe('resolveCredentials', () => {
     });
 
     it('should return mixed source when some from request and some from env', () => {
-        const result = resolveCredentials(
+        const result = resolveCredentials<TestCreds>(
             { apiKey: 'req-key' },
             { apiKey: 'env-key', secret: 'env-secret' },
             ['apiKey', 'secret'],
@@ -165,7 +167,7 @@ describe('resolveCredentials', () => {
     });
 
     it('should not use env values when fallback disabled', () => {
-        const result = resolveCredentials(
+        const result = resolveCredentials<TestCreds>(
             { apiKey: 'req-key' },
             { apiKey: 'env-key', secret: 'env-secret' },
             ['apiKey', 'secret'],
@@ -178,7 +180,7 @@ describe('resolveCredentials', () => {
     });
 
     it('should skip empty request values and fall back to env', () => {
-        const result = resolveCredentials(
+        const result = resolveCredentials<TestCreds>(
             { apiKey: '', secret: 'req-secret' },
             { apiKey: 'env-key', secret: 'env-secret' },
             ['apiKey', 'secret'],
@@ -191,7 +193,7 @@ describe('resolveCredentials', () => {
     });
 
     it('should handle empty env and empty request', () => {
-        const result = resolveCredentials(
+        const result = resolveCredentials<TestCreds>(
             {},
             {},
             ['apiKey'],

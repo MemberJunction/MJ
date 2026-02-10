@@ -8,9 +8,10 @@ import { GetGlobalObjectStore } from '@memberjunction/global';
 export function resetMJSingletons(): void {
   const store = GetGlobalObjectStore();
   if (store) {
-    const singletonKeys = Object.keys(store).filter(k => k.startsWith('___SINGLETON__'));
+    const indexableStore = store as Record<string, unknown>;
+    const singletonKeys = Object.keys(indexableStore).filter(k => k.startsWith('___SINGLETON__'));
     for (const key of singletonKeys) {
-      delete store[key];
+      delete indexableStore[key];
     }
   }
 }
