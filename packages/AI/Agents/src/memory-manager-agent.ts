@@ -122,7 +122,7 @@ interface ExtractedNote {
     sourceConversationId?: string;
     sourceConversationDetailId?: string;
     sourceAgentRunId?: string;
-    mergeWithExistingId?: string; // If should update existing note
+    mergeWithExistingIds?: string[]; // IDs of existing notes to revoke and replace (contradiction merge)
     /**
      * Scope level hint from LLM analysis.
      * - 'global': Applies to all users (e.g., "Always greet politely")
@@ -573,11 +573,25 @@ export class MemoryManagerAgent extends BaseAgent {
             parsedResult = result.result;
         }
 
+        // Normalize singular mergeWithExistingId → plural mergeWithExistingIds
+        // The LLM still outputs the singular field; we convert it here.
+        // Notes are plain objects from JSON.parse, so the runtime cast is safe.
+        if (parsedResult.notes) {
+            for (const note of parsedResult.notes) {
+                const raw = note as unknown as Record<string, unknown>;
+                const singularId = raw.mergeWithExistingId as string | undefined;
+                if (singularId && !note.mergeWithExistingIds) {
+                    note.mergeWithExistingIds = [singularId];
+                }
+                delete raw.mergeWithExistingId;
+            }
+        }
+
         // Log raw notes before filtering (for debugging)
         if (this._verbose && parsedResult.notes) {
             LogStatus(`Memory Manager: LLM returned ${parsedResult.notes.length} raw notes before filtering`);
             for (const note of parsedResult.notes) {
-                LogStatus(`Memory Manager: Raw note: [${note.type}] "${note.content}" (confidence: ${note.confidence})`);
+                LogStatus(`Memory Manager: Raw note: [${note.type}] "${note.content}" (confidence: ${note.confidence})${note.mergeWithExistingIds?.length ? ` mergeWith: ${note.mergeWithExistingIds.join(', ')}` : ''}`);
             }
         }
 
@@ -633,9 +647,16 @@ export class MemoryManagerAgent extends BaseAgent {
             LogStatus(`Memory Manager: ${sparseCandidates.length} candidates after sparsity filter`);
         }
 
+        // Collapse merge candidates with identical content into single candidates
+        const collapsedCandidates = this.collapseMergeCandidates(sparseCandidates);
+
+        if (this._verbose && collapsedCandidates.length < sparseCandidates.length) {
+            LogStatus(`Memory Manager: Collapsed ${sparseCandidates.length} candidates to ${collapsedCandidates.length} after merging duplicate merge targets`);
+        }
+
         // Step 4: Apply deduplication (summary step)
         const step4 = await this.CreateRunStep('Decision', 'Deduplicate Note Candidates', {
-            candidateCount: sparseCandidates.length,
+            candidateCount: collapsedCandidates.length,
             existingNoteCount: existingNotes.length
         });
 
@@ -648,7 +669,7 @@ export class MemoryManagerAgent extends BaseAgent {
             p.Name === 'Memory Manager - Deduplicate Note' && p.Category === 'MJ: System'
         );
 
-        for (const candidate of sparseCandidates) {
+        for (const candidate of collapsedCandidates) {
             // Check global max notes per run
             if (approvedNotes.length >= EXTRACTION_CONFIG.maxNotesPerRun) {
                 if (this._verbose) {
@@ -657,13 +678,13 @@ export class MemoryManagerAgent extends BaseAgent {
                 break;
             }
 
-            // Notes with mergeWithExistingId are intentional replacements —
+            // Notes with mergeWithExistingIds are intentional replacements —
             // the extraction LLM already determined this is a contradiction.
             // Dedup would reject them as "too similar" to the note they're replacing.
-            if (candidate.mergeWithExistingId) {
+            if (candidate.mergeWithExistingIds?.length) {
                 approvedNotes.push(candidate);
                 if (this._verbose) {
-                    LogStatus(`Memory Manager: Auto-approved merge note targeting ${candidate.mergeWithExistingId}: "${candidate.content.substring(0, 50)}..."`);
+                    LogStatus(`Memory Manager: Auto-approved merge note targeting ${candidate.mergeWithExistingIds.join(', ')}: "${candidate.content.substring(0, 50)}..."`);
                 }
                 continue;
             }
@@ -984,20 +1005,13 @@ export class MemoryManagerAgent extends BaseAgent {
                     sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
                 }
 
-                // Check if we should merge with existing
-                let createNewNote = !extracted.mergeWithExistingId;
+                // Check if we should merge with existing (revoke all targets, create one replacement)
+                let createNewNote = !extracted.mergeWithExistingIds?.length;
 
-                if (extracted.mergeWithExistingId) {
-                    const existingNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
-                    if (await existingNote.Load(extracted.mergeWithExistingId)) {
-                        if (existingNote.Comments?.startsWith('Consolidated from')) {
-                            // Consolidated compound note — decompose and create new note instead.
-                            // This lets the consolidation cycle re-synthesize with conflict resolution,
-                            // preserving all non-conflicting facts while updating the contradicted one.
-                            await this.DecomposeConsolidatedNote(existingNote, contextUser);
-                            createNewNote = true;
-                        } else {
-                            // Revoke the old note and create a new one to preserve history
+                if (extracted.mergeWithExistingIds?.length) {
+                    for (const mergeTargetId of extracted.mergeWithExistingIds) {
+                        const existingNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
+                        if (await existingNote.Load(mergeTargetId)) {
                             existingNote.Status = 'Revoked';
                             existingNote.Comments = `Superseded: contradiction detected, replaced by new note from conversation ${extracted.sourceConversationId || 'unknown'}`;
                             if (await existingNote.Save()) {
@@ -1006,14 +1020,11 @@ export class MemoryManagerAgent extends BaseAgent {
                                 LogError(`Memory Manager: Failed to revoke note ${existingNote.ID} during merge`);
                                 failed++;
                             }
-                            createNewNote = true;
+                        } else {
+                            LogStatus(`Memory Manager: Merge target ${mergeTargetId} not found, skipping revocation`);
                         }
-                    } else {
-                        // Merge target not found — fall back to creating a new note
-                        // rather than silently losing the extracted information
-                        LogStatus(`Memory Manager: Merge target ${extracted.mergeWithExistingId} not found, creating new note instead`);
-                        createNewNote = true;
                     }
+                    createNewNote = true;
                 }
 
                 if (createNewNote) {
@@ -1092,26 +1103,31 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Decompose a consolidated note by revoking it.
-     * When a contradiction targets a compound consolidated note, we revoke it so the
-     * consolidation cycle can re-synthesize from the remaining active notes.
-     *
-     * TODO: To properly track source→consolidated relationships, add a
-     * ConsolidatedIntoNoteID FK column on AI Agent Notes via a database migration.
-     * This would allow un-revoking the original source notes when a consolidated
-     * note is decomposed, rather than relying on re-consolidation.
+     * Collapse merge candidates with identical content into a single candidate
+     * carrying all merge target IDs. This prevents duplicate active notes when
+     * a contradiction invalidates multiple existing notes (e.g., "I hate pizza"
+     * replacing both a pepperoni note and a mushrooms note).
      */
-    private async DecomposeConsolidatedNote(
-        consolidatedNote: AIAgentNoteEntity,
-        _contextUser: UserInfo
-    ): Promise<void> {
-        consolidatedNote.Status = 'Revoked';
-        consolidatedNote.Comments = 'Decomposed: contradiction detected in consolidated note';
-        await consolidatedNote.Save();
+    private collapseMergeCandidates(candidates: ExtractedNote[]): ExtractedNote[] {
+        const mergeGroups = new Map<string, ExtractedNote>();
+        const result: ExtractedNote[] = [];
 
-        if (this._verbose) {
-            LogStatus(`Memory Manager: Decomposed consolidated note ${consolidatedNote.ID}`);
+        for (const candidate of candidates) {
+            if (candidate.mergeWithExistingIds?.length) {
+                const key = candidate.content.toLowerCase().trim();
+                const existing = mergeGroups.get(key);
+                if (existing) {
+                    existing.mergeWithExistingIds!.push(...candidate.mergeWithExistingIds);
+                } else {
+                    mergeGroups.set(key, candidate);
+                    result.push(candidate);
+                }
+            } else {
+                result.push(candidate);
+            }
         }
+
+        return result;
     }
 
     /**
