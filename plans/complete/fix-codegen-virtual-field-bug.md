@@ -1,188 +1,99 @@
-# Fix CodeGen Virtual Fields Bug
-
 ## Problem Statement
 
-Three related bugs in MemberJunction CodeGen:
-
-### Bug 1: Virtual Fields Dropped on First Run
-After `mj migrate` + first `mj codegen` on a fresh database, virtual fields (IsVirtual=1) are incorrectly identified as "gone" and removed from generated TypeScript. A second `mj codegen` run restores them.
-
-### Bug 2: Display Name Flip-Flop
-Display names at the Entity Field level get tweaked back and forth between CodeGen runs.
-
-### Bug 3: Field Categories Regenerated
-Even for entities with existing saved Field Categories, they get regenerated. Legacy back-compat field category icon system should potentially be removed.
-
----
+Running `mj codegen` multiple times against the same database produced different
+output each time. Virtual fields were dropped, display names flip-flopped between
+values, the LLM was called unnecessarily on every run to regenerate form layouts,
+and field categories were rewritten non-deterministically. This made it impossible
+to trust codegen output or achieve a stable baseline.
 
 ## Root Cause Analysis
 
-### Pipeline Order of Operations
+Four interconnected bugs were identified through systematic investigation against
+clean 4.0 databases (MJ_4_0_TEST_1 through MJ_4_0_TEST_4):
 
-The CodeGen pipeline in `runCodeGen.ts` runs these steps:
+### Bug 1: Virtual fields dropped due to sqlcmd SSL failure (sql.ts)
 
-1. **`manageMetadata()`** (`manage-metadata.ts`)
-   - Calls `recompileAllBaseViews()` — only runs `sp_refreshview` on existing views, does NOT regenerate view SQL
-   - Calls `manageEntityFields()` → `deleteUnneededEntityFields()` → `spDeleteUnneededEntityFields`
-   - The stored proc compares EntityField metadata against `vwSQLColumnsAndEntityFields` (actual SQL view columns)
-   - **If a view hasn't been regenerated yet to include virtual columns, those fields get deleted**
+When connecting to SQL Server with `trustServerCertificate: true`, the `sqlcmd`
+utility requires the `-C` flag to trust the server certificate. Without this flag,
+sqlcmd silently fails when executing view-regeneration scripts. The base views are
+never updated, so virtual fields (IsVirtual=1 EntityField records that come from
+VIEW JOINs, not physical table columns) appear absent from `vwSQLColumnsAndEntityFields`.
 
-2. **`provider.Refresh()`** — reloads metadata (now missing virtual fields)
+The downstream effect: `spDeleteUnneededEntityFields` compares EntityField metadata
+against `vwSQLColumnsAndEntityFields` (which uses `COALESCE(e.view_object_id,
+e.object_id)` to read from base views). When views are stale, virtual columns
+don't appear, and the SP deletes their EntityField records.
 
-3. **`manageSQLScriptsAndExecution()`** (`sql_codegen.ts`)
-   - Generates SQL including view definitions (now including virtual columns)
-   - Executes the SQL files via `sqlcmd`
-   - **If SQL execution fails, the function returns `false` at line 215 and the second `manageEntityFields` call at line 225 NEVER runs**
-   - Calls `manageEntityFields()` a **SECOND** time — this restores virtual fields
-   - TypeScript generation uses metadata from AFTER step 3 (line 253 in sql_codegen.ts calls `md.Refresh()`)
+**Fix**: Added `-C` flag to sqlcmd args when `trustServerCertificate` is enabled
+(sql.ts lines 423-426).
 
-4. **TypeScript code generation** — uses whatever metadata state exists after step 3
+### Bug 2: Display name flip-flop due to contradictory WHERE clause (manage-metadata.ts)
 
-### Key Stored Procedure: `spDeleteUnneededEntityFields`
+The `updateEntityFieldDisplayNameWhereNull` function had a WHERE clause:
+`ef.DisplayName IS NULL AND ef.DisplayName <> ef.Name`. This is logically
+impossible — a NULL value can never be `<> something`. The function never
+executed, so display names set by the LLM on one run would be overwritten
+by a different LLM response on the next run.
 
-```sql
--- Gets EntityFields that are NOT in actual SQL view/table columns
-SELECT ef.* INTO #ef FROM vwEntityFields ef
-INNER JOIN vwEntities e ON ef.EntityID = e.ID
-WHERE e.VirtualEntity = 0 AND excludedSchemas.value IS NULL
--- LEFT JOIN against actual columns — if no match, field gets deleted
-LEFT JOIN #actual actual ON ef.EntityID=actual.EntityID AND ef.Name = actual.EntityFieldName
-WHERE actual.column_id IS NULL
-```
+**Fix**: Removed the contradictory `ef.DisplayName <> ef.Name` condition,
+leaving just `ef.DisplayName IS NULL` (manage-metadata.ts line 2001). Now
+the deterministic function correctly sets display names for NULL fields on
+the first run, and subsequent runs skip them since they're no longer NULL.
 
-### Critical Failure Path: SQL Execution Failure
+### Bug 3: LLM form layout generation triggered unnecessarily (manage-metadata.ts)
 
-In `sql_codegen.ts` lines 212-215:
-```typescript
-if (!executionSuccess) {
-    failSpinner('Failed to execute entity SQL files');
-    TempBatchFile.cleanup();
-    return false;  // <-- EARLY RETURN: second manageEntityFields NEVER runs
-}
-```
+The `applyAdvancedGeneration` function's guard condition was:
+`fields.some((f) => f.AutoUpdateCategory)` — this checked whether ANY field
+on the entity allows category auto-update, but NOT whether it actually NEEDS
+a category. Since most fields have `AutoUpdateCategory=1` by default, the LLM
+was called for virtually every entity on every codegen run.
 
-When `sqlcmd` fails (e.g., SSL certificate errors), the method returns early. The second `manageEntityFields` pass (line 225) which would restore virtual fields is NEVER executed. But `runCodeGen.ts` continues and generates TypeScript with stale metadata.
+The LLM produces non-deterministic output: different category names, different
+display names (via `AutoUpdateDisplayName`), different section icons. This caused
+~315 category UPDATEs and ~30 display name changes on every run, plus cascading
+form component regeneration (HTML templates, section groupings, icons).
 
-### Bug 2: Display Name SQL Logic Error
+**Fix**: Changed the guard to:
+`fields.some((f) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''))`
+Now the LLM is only called when there are fields that both allow auto-update AND
+have empty/null categories. Once categories are set (either by migration or by a
+single codegen run), subsequent runs skip the LLM entirely.
 
-The `updateEntityFieldDisplayNameWhereNull` function at `manage-metadata.ts:983` had a contradictory SQL WHERE clause:
-```sql
-WHERE ef.DisplayName IS NULL AND ef.DisplayName <> ef.Name
-```
-- `ef.DisplayName IS NULL` can never coexist with `ef.DisplayName <> ef.Name` — in SQL, NULL compared with `<>` always yields UNKNOWN (not TRUE)
-- This means the query **never returns any rows**, so display names are never populated by this function
-- The LLM-based form layout generation (advanced_generation.ts) then sets display names via a different path, potentially with different values than the deterministic camelCase-to-spaces conversion
-- On subsequent runs, the function still returns no rows (due to the bug), but the LLM may produce different display names, causing flip-flop
+### Bug 4: Pipeline timing — field deletion before view regeneration (manage-metadata.ts)
 
-### Bug 3: Field Category Unnecessary Regeneration
+The codegen pipeline calls `manageEntityFields` twice:
+  - **First pass** (in `manageMetadata()`): before SQL scripts execute
+  - **Second pass** (in `manageSQLScriptsAndExecution()`): after views are regenerated
 
-The `applyAdvancedGeneration` function at `manage-metadata.ts:2402` triggered LLM-based form layout generation whenever ANY field had `AutoUpdateCategory=true`:
-```typescript
-if (fields.some((f: any) => f.AutoUpdateCategory))
-```
-- This condition is true even when all auto-updatable fields already have categories assigned
-- The LLM was called unnecessarily for every entity on every codegen run
-- While the SQL guard `AND AutoUpdateCategory = 1` prevented updates to locked fields, the LLM could still reassign unlocked fields to different categories each run
-- This wasted LLM API calls and could cause unlocked field categories to flip-flop
+Both passes called `spDeleteUnneededEntityFields`, which compares EntityField
+metadata against live view columns. On the first pass, base views haven't been
+regenerated yet (that happens during SQL execution between the passes). Virtual
+fields from VIEW JOINs appear absent, so the SP deletes their EntityField records
+— including their Category, DisplayName, FieldCategoryInfo, and other metadata.
 
----
+The second pass re-inserts these fields (views are now current), but the metadata
+is lost. On the NEXT codegen run, those fields have NULL categories, triggering
+the LLM (Bug 3), which produces different values, creating the appearance of
+flip-flopping.
 
-## Investigation Results
+**Fix**: Added `skipDeleteUnneededFields` parameter to `manageEntityFields`
+(default: false). The first pass call now passes `true`, deferring deletion to
+the second pass when views are current and virtual fields are correctly visible.
 
-### Iteration 1: Clean Database Test (with SSL fix)
+## Verification
 
-**Database**: MJ_4_ITERATION_1 (fresh)
-**Baseline**: 272 entities, 3686 entity fields, 600 virtual fields
+Tested against 4 clean 4.0 database restores (MJ_4_0_TEST_1 through _4):
+  1. Clean 4.0 DB → apply 4.2 migration → run codegen → produces expected
+     first-run output (field property updates, CascadeDelete methods)
+  2. Run codegen again on same DB → **zero output**, no CodeGen_Run SQL
+     file generated, no file modifications whatsoever
+  3. Restored clean DB, repeated steps 1-2 → identical results
 
-**Fix Applied First**: Added `-C` flag to `sqlcmd` in `sql.ts:424` when `trustServerCertificate` is configured. This was needed because the globally-installed `mj` CLI at `/usr/local/lib/node_modules/@memberjunction/cli/` uses its own bundled `codegen-lib`, not the local workspace version.
+Full idempotency confirmed: N consecutive codegen runs produce identical output.
 
-**Run 1 Result**:
-- SQL execution completed successfully (8.31s)
-- No SSL errors
-- EntityFields: 3686 → 3712 (26 new fields added)
-- Virtual fields: 600 → 626 (26 new virtual fields added)
-- `entity_subclasses.ts`: **26 virtual fields ADDED** (PromptRun, TestRun, DuplicateRun, Employee, EntityAction, ActionFilter, CompanyIntegrationRun, etc.)
-- **No display name flip-flop detected**
-- **No fields removed**
+## Migration Note
 
-**Run 2 Result**:
-- Zero diff from Run 1 output
-- Database counts unchanged (3712 EntityFields, 626 virtual)
-- **Completely idempotent**
-
-### Key Finding
-
-The checked-in `entity_subclasses.ts` on the `next` branch was **already missing 26 virtual fields**. Our clean codegen run on a fresh database **restored them correctly**. This means:
-
-1. The codegen logic is **correct** when SQL execution succeeds
-2. Someone previously ran codegen in a situation where SQL execution failed (likely SSL or similar), committed the incomplete output
-3. The virtual field "bug" was actually caused by sqlcmd not having the `-C` flag for SSL certificate trust
-
----
-
-## All Fixes Applied
-
-### Fix 1: SSL Certificate Trust for sqlcmd (DONE)
-**File**: `packages/CodeGenLib/src/Database/sql.ts` (line 423-426)
-```typescript
-// Add -C flag to trust server certificate when configured
-if (sqlConfig.options?.trustServerCertificate) {
-    args.push('-C');
-}
-```
-This ensures sqlcmd uses the same certificate trust setting as the mssql Node.js connection.
-
-### Fix 2: Defensive continuation in sql_codegen.ts (DONE)
-**File**: `packages/CodeGenLib/src/Database/sql_codegen.ts` (lines 212-260)
-
-Instead of returning early when SQL execution fails, the code now continues to run manageEntityFields, applyPermissions, and post-generation scripts. An `overallSuccess` flag tracks whether any step failed and is returned at the end. This prevents virtual fields from being incorrectly dropped when sqlcmd fails but the mssql connection still works.
-
-### Fix 3: Updated entity_subclasses.ts (DONE)
-The clean codegen run on a fresh database produced the correct file with all 626 virtual fields present.
-
-### Fix 4: Display name WHERE NULL query (DONE)
-**File**: `packages/CodeGenLib/src/Database/manage-metadata.ts` (line 994)
-
-Removed the contradictory `ef.DisplayName <> ef.Name` condition from the WHERE clause. The function now correctly finds fields with NULL display names. The JavaScript code at line 1004 already handles the "display name same as field name" case by comparing the generated display name against the original field name before updating.
-
-**Before:**
-```sql
-WHERE ef.DisplayName IS NULL AND ef.DisplayName <> ef.Name AND ef.Name <> 'ID'
-```
-
-**After:**
-```sql
-WHERE ef.DisplayName IS NULL AND ef.Name <> 'ID'
-```
-
-### Fix 5: Skip unnecessary LLM form layout generation (DONE)
-**File**: `packages/CodeGenLib/src/Database/manage-metadata.ts` (line 2402)
-
-Changed the guard condition to only trigger LLM-based form layout generation when there are auto-updatable fields that still need categories. This prevents unnecessary LLM API calls and eliminates category flip-flop for entities where all categories are already set.
-
-**Before:**
-```typescript
-if (fields.some((f: any) => f.AutoUpdateCategory))
-```
-
-**After:**
-```typescript
-const needsCategoryGeneration = fields.some((f: any) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''));
-if (needsCategoryGeneration)
-```
-
----
-
-## Summary of Changes by File
-
-| File | Fix | Description |
-|------|-----|-------------|
-| `packages/CodeGenLib/src/Database/sql.ts` | Fix 1 | Added `-C` flag to sqlcmd for SSL certificate trust |
-| `packages/CodeGenLib/src/Database/sql_codegen.ts` | Fix 2 | Don't return early on SQL execution failure |
-| `packages/MJCoreEntities/src/generated/entity_subclasses.ts` | Fix 3 | 26 virtual fields restored by clean codegen |
-| `packages/CodeGenLib/src/Database/manage-metadata.ts` | Fix 4 | Removed contradictory WHERE clause for display names |
-| `packages/CodeGenLib/src/Database/manage-metadata.ts` | Fix 5 | Skip LLM when all auto-updatable fields have categories |
-
-## Legacy Field Category Icons
-
-The system maintains both `FieldCategoryInfo` (modern) and `FieldCategoryIcons` (legacy) formats for backwards compatibility. Both are read and written in parallel. Removal of the legacy format was mentioned in the original bug report but is not addressed here as it would require coordination with any consumers still using the legacy format.
+Renamed migration from v4.1.x to v4.2.x since 4.1 has already shipped.
+The migration contains the one-time metadata fix (field property updates for
+IsNameField, DefaultInView, IncludeInUserSearchAPI) that brings a clean 4.0
+database in sync with the corrected codegen output.
