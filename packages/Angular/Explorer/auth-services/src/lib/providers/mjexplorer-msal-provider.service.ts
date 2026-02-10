@@ -128,6 +128,14 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         const userInfo = this.mapMSALAccountToStandard(accounts[0]);
         this.updateUserInfo(userInfo);
 
+        // Proactively refresh tokens to extend the interaction-free period
+        // This uses refreshTokenExpirationOffsetSeconds to ensure tokens remain valid
+        // for at least 2 hours without requiring user interaction
+        this.performProactiveRefresh(accounts[0]).catch((err: unknown) => {
+          // Log but don't fail initialization - cached tokens may still be valid
+          console.warn('[MSAL] Proactive token refresh failed during init:', err);
+        });
+
         this._initializationCompleted$.next(true);
         console.log('[MSAL] Initialization completed (cached session restored)');
       } else {
@@ -307,7 +315,10 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   /**
    * Refresh token using MSAL's silent token acquisition
    *
-   * Uses acquireTokenSilent with forceRefresh to get new tokens
+   * MSAL 5.x Best Practices:
+   * - Pass account parameter for reliable silent acquisition
+   * - Use CacheLookupPolicy.Default for efficient cache → refresh token → iframe chain
+   * - Handle MSAL 5.x specific error codes (timed_out, no_tokens_found, etc.)
    */
   protected async refreshTokenInternal(): Promise<TokenRefreshResult> {
     try {
@@ -325,12 +336,12 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         };
       }
 
-      // IMPORTANT: Match original code exactly - no account parameter, no offline_access
-      // This allows MSAL to use lenient matching and successfully refresh tokens
+      // MSAL 5.x: Pass account for reliable silent acquisition
+      // Use Default policy for efficient cache → refresh token → iframe chain
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
-        cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
-        // NOTE: Intentionally NOT passing account or offline_access to match original working code
+        account: account,
+        cacheLookupPolicy: CacheLookupPolicy.Default
       });
 
       if (!response.idToken) {
@@ -358,15 +369,29 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     } catch (error) {
       console.error('[MSAL] Token refresh failed:', error);
 
-      // Check if this is an iframe timeout or interaction required error
-      const errorCode = (error as any)?.errorCode;
-      if (errorCode === 'monitor_window_timeout' || error instanceof InteractionRequiredAuthError) {
+      // Handle MSAL 5.x error codes that require user interaction
+      // - timed_out: MSAL 5.x iframe timeout (replaces monitor_window_timeout from 3.x)
+      // - monitor_window_timeout: Legacy MSAL 3.x iframe timeout
+      // - no_tokens_found: No cached tokens available
+      // - no_account_error: Account not found in cache
+      // - InteractionRequiredAuthError: Server requires user interaction
+      const errorCode = (error as Record<string, unknown>)?.errorCode as string | undefined;
+      const interactionRequiredCodes = [
+        'monitor_window_timeout',
+        'timed_out',
+        'no_tokens_found',
+        'no_account_error',
+        'login_required',
+        'consent_required'
+      ];
+
+      if (interactionRequiredCodes.includes(errorCode || '') || error instanceof InteractionRequiredAuthError) {
         // Return INTERACTION_REQUIRED error - base class will call handleSessionExpiryInternal
         return {
           success: false,
           error: {
             type: AuthErrorType.INTERACTION_REQUIRED,
-            message: 'Silent token refresh failed - interaction required',
+            message: `Silent token refresh failed - interaction required (${errorCode || 'unknown'})`,
             userMessage: 'Your session has expired. Redirecting to login...',
             originalError: error
           }
@@ -383,7 +408,8 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   /**
    * Classify MSAL-specific errors into semantic types
    *
-   * Maps MSAL error classes to AuthErrorType enum
+   * Maps MSAL error classes to AuthErrorType enum.
+   * Updated for MSAL 5.x error codes.
    */
   protected classifyErrorInternal(error: unknown): StandardAuthError {
     const errorObj = error as Record<string, unknown>;
@@ -401,13 +427,31 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     }
 
     if (error instanceof BrowserAuthError) {
-      // Check specific error codes
+      // Check specific error codes - MSAL 5.x codes
       if (errorCode === 'user_cancelled' || message.includes('user cancelled')) {
         return {
           type: AuthErrorType.USER_CANCELLED,
           message,
           originalError: error,
           userMessage: 'Login was cancelled.'
+        };
+      }
+
+      // MSAL 5.x timeout and session errors that require interaction
+      const interactionRequiredCodes = [
+        'timed_out',
+        'monitor_window_timeout',
+        'no_tokens_found',
+        'no_account_error',
+        'login_required',
+        'consent_required'
+      ];
+      if (interactionRequiredCodes.includes(errorCode)) {
+        return {
+          type: AuthErrorType.INTERACTION_REQUIRED,
+          message,
+          originalError: error,
+          userMessage: 'Your session has expired. Please log in again.'
         };
       }
 
@@ -465,6 +509,39 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       await this.initialize();
     } else if (!this._initializationCompleted$.value) {
       await this._initPromise;
+    }
+  }
+
+  /**
+   * Proactively refresh tokens to extend the interaction-free period
+   *
+   * MSAL 5.x Best Practice: Use refreshTokenExpirationOffsetSeconds to get tokens
+   * that will remain valid for a specified duration. This is called:
+   * - On initialization (to ensure fresh tokens at app startup)
+   * - Can be called manually before important operations
+   *
+   * @param account - The account to refresh tokens for
+   * @param offsetSeconds - How long tokens should remain valid (default: 2 hours)
+   */
+  private async performProactiveRefresh(account: AccountInfo, offsetSeconds: number = 7200): Promise<void> {
+    try {
+      console.log(`[MSAL] Performing proactive token refresh (offset: ${offsetSeconds}s)...`);
+
+      // Use forceRefresh with refreshTokenExpirationOffsetSeconds to get fresh tokens
+      // that will be valid for at least the specified offset period
+      await this.auth.instance.acquireTokenSilent({
+        scopes: ['User.Read', 'email', 'profile'],
+        account: account,
+        forceRefresh: true,
+        refreshTokenExpirationOffsetSeconds: offsetSeconds
+      });
+
+      console.log('[MSAL] Proactive token refresh successful');
+    } catch (error) {
+      // Don't treat proactive refresh failures as critical - the app can still
+      // function with existing cached tokens until they expire
+      console.warn('[MSAL] Proactive token refresh failed (will use cached tokens):', error);
+      throw error; // Re-throw so caller can decide how to handle
     }
   }
 
