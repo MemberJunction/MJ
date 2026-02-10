@@ -1,5 +1,69 @@
 # Change Log - @memberjunction/server
 
+## 4.2.0
+
+### Patch Changes
+
+- d2938db: Update auth providers for latest SDK compatibility:
+  - MSAL: Fix v5.x error codes (timed_out replaces monitor_window_timeout), add proactive token refresh with refreshTokenExpirationOffsetSeconds, use CacheLookupPolicy.Default
+  - Okta: Replace deprecated handleLoginRedirect() with handleRedirect(), add error handling for invalid_grant, access_denied, and user_canceled_request OAuth errors
+
+  Fix GraphQL DeleteOptionsInput schema mismatch:
+  - Add missing ReplayOnly and IsParentEntityDelete fields to DeleteOptionsInput GraphQL type
+  - These fields were added to EntityDeleteOptions in MJCore but not synced to the GraphQL schema
+  - Fixes "Field is not defined by type DeleteOptionsInput" errors when deleting entities
+  - @memberjunction/ai-agent-manager-actions@4.2.0
+  - @memberjunction/ai-agent-manager@4.2.0
+  - @memberjunction/ai-agents@4.2.0
+  - @memberjunction/ai@4.2.0
+  - @memberjunction/ai-core-plus@4.2.0
+  - @memberjunction/aiengine@4.2.0
+  - @memberjunction/ai-mcp-client@4.2.0
+  - @memberjunction/ai-prompts@4.2.0
+  - @memberjunction/ai-provider-bundle@4.2.0
+  - @memberjunction/ai-vectors-pinecone@4.2.0
+  - @memberjunction/api-keys@4.2.0
+  - @memberjunction/actions-apollo@4.2.0
+  - @memberjunction/actions-base@4.2.0
+  - @memberjunction/actions-bizapps-accounting@4.2.0
+  - @memberjunction/actions-bizapps-crm@4.2.0
+  - @memberjunction/actions-bizapps-formbuilders@4.2.0
+  - @memberjunction/actions-bizapps-lms@4.2.0
+  - @memberjunction/actions-bizapps-social@4.2.0
+  - @memberjunction/core-actions@4.2.0
+  - @memberjunction/actions@4.2.0
+  - @memberjunction/communication-types@4.2.0
+  - @memberjunction/entity-communications-base@4.2.0
+  - @memberjunction/entity-communications-server@4.2.0
+  - @memberjunction/notifications@4.2.0
+  - @memberjunction/communication-ms-graph@4.2.0
+  - @memberjunction/communication-sendgrid@4.2.0
+  - @memberjunction/component-registry-client-sdk@4.2.0
+  - @memberjunction/config@4.2.0
+  - @memberjunction/doc-utils@4.2.0
+  - @memberjunction/encryption@4.2.0
+  - @memberjunction/external-change-detection@4.2.0
+  - @memberjunction/graphql-dataprovider@4.2.0
+  - @memberjunction/interactive-component-types@4.2.0
+  - @memberjunction/core@4.2.0
+  - @memberjunction/core-entities@4.2.0
+  - @memberjunction/core-entities-server@4.2.0
+  - @memberjunction/data-context@4.2.0
+  - @memberjunction/data-context-server@4.2.0
+  - @memberjunction/global@4.2.0
+  - @memberjunction/queue@4.2.0
+  - @memberjunction/storage@4.2.0
+  - @memberjunction/sqlserver-dataprovider@4.2.0
+  - @memberjunction/scheduling-actions@4.2.0
+  - @memberjunction/scheduling-engine-base@4.2.0
+  - @memberjunction/scheduling-base-types@4.2.0
+  - @memberjunction/scheduling-engine@4.2.0
+  - @memberjunction/skip-types@4.2.0
+  - @memberjunction/templates@4.2.0
+  - @memberjunction/testing-engine@4.2.0
+  - @memberjunction/testing-engine-base@4.2.0
+  - @memberjunction/version-history@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

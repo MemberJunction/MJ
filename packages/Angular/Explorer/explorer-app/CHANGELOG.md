@@ -1,5 +1,16 @@
 # @memberjunction/ng-explorer-app
 
+## 4.2.0
+
+### Patch Changes
+
+- Updated dependencies [d2938db]
+  - @memberjunction/ng-auth-services@4.2.0
+  - @memberjunction/ng-bootstrap@4.2.0
+  - @memberjunction/ng-explorer-core@4.2.0
+  - @memberjunction/ng-workspace-initializer@4.2.0
+  - @memberjunction/core@4.2.0
+
 ## 4.1.0
 
 ### Minor Changes

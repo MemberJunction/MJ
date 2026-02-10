@@ -1,5 +1,20 @@
 # @memberjunction/ai-prompts
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@4.2.0
+- @memberjunction/ai@4.2.0
+- @memberjunction/ai-core-plus@4.2.0
+- @memberjunction/aiengine@4.2.0
+- @memberjunction/credentials@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+- @memberjunction/templates-base-types@4.2.0
+- @memberjunction/templates@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

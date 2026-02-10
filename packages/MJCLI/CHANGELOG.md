@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/cli
 
+## 4.2.0
+
+### Patch Changes
+
+- Updated dependencies [65ac988]
+  - @memberjunction/codegen-lib@4.2.0
+  - @memberjunction/ai-cli@4.2.0
+  - @memberjunction/config@4.2.0
+  - @memberjunction/db-auto-doc@4.2.0
+  - @memberjunction/core@4.2.0
+  - @memberjunction/metadata-sync@4.2.0
+  - @memberjunction/query-gen@4.2.0
+  - @memberjunction/sqlserver-dataprovider@4.2.0
+  - @memberjunction/server-bootstrap-lite@4.2.0
+  - @memberjunction/testing-cli@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

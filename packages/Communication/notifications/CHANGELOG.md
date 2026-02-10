@@ -1,5 +1,17 @@
 # @memberjunction/notifications
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/communication-types@4.2.0
+- @memberjunction/communication-engine@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+- @memberjunction/sqlserver-dataprovider@4.2.0
+- @memberjunction/templates@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

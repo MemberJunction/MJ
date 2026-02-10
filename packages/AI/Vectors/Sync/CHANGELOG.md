@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai@4.2.0
+- @memberjunction/aiengine@4.2.0
+- @memberjunction/ai-vectors-pinecone@4.2.0
+- @memberjunction/ai-vectors@4.2.0
+- @memberjunction/ai-vectordb@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+- @memberjunction/templates-base-types@4.2.0
+- @memberjunction/templates@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

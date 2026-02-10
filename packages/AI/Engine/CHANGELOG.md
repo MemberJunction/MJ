@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/aiengine
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@4.2.0
+- @memberjunction/ai@4.2.0
+- @memberjunction/ai-core-plus@4.2.0
+- @memberjunction/ai-vectors-memory@4.2.0
+- @memberjunction/actions-base@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+- @memberjunction/storage@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes
