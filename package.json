@@ -85,7 +85,6 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/cli": "4.0.0",
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
     "simple-git": "^3.30.0"
