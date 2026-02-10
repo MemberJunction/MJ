@@ -32,6 +32,10 @@ export default class Push extends Command {
     ci: Flags.boolean({ description: 'CI mode - no prompts, fail on issues' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed field-level output' }),
     'no-validate': Flags.boolean({ description: 'Skip validation before push' }),
+    'delete-db-only': Flags.boolean({
+      description: 'Delete database-only records that reference records being deleted (prevents FK errors)',
+      default: false
+    }),
     'parallel-batch-size': Flags.integer({
       description: 'Number of records to process in parallel (default: 10)',
       default: 10,
@@ -135,6 +139,7 @@ export default class Push extends Command {
           dryRun: flags['dry-run'],
           verbose: flags.verbose,
           noValidate: flags['no-validate'],
+          deleteDbOnly: flags['delete-db-only'],
           parallelBatchSize: flags['parallel-batch-size'],
           include: includeFilter,
           exclude: excludeFilter,

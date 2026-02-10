@@ -24,6 +24,3 @@ export class AIModelVendorFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIModelVendorFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

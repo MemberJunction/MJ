@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-app",
-  "version": "3.4.0",
+  "version": "4.1.0",
   "description": "MemberJunction Explorer Application Shell - Complete branded entry point for Explorer-style applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,11 +20,11 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/ng-auth-services": "3.4.0",
-    "@memberjunction/ng-bootstrap": "3.4.0",
-    "@memberjunction/ng-explorer-core": "3.4.0",
-    "@memberjunction/ng-workspace-initializer": "3.4.0"
+    "@memberjunction/core": "4.1.0",
+    "@memberjunction/ng-auth-services": "4.1.0",
+    "@memberjunction/ng-bootstrap": "4.1.0",
+    "@memberjunction/ng-explorer-core": "4.1.0",
+    "@memberjunction/ng-workspace-initializer": "4.1.0"
   },
   "peerDependencies": {
     "@angular/common": "^21.0.0",

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-openai",
   "type": "module",
-  "version": "3.4.0",
+  "version": "4.1.0",
   "description": "MemberJunction Wrapper for OpenAI AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,8 +20,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "3.4.0",
-    "@memberjunction/global": "3.4.0",
+    "@memberjunction/ai": "4.1.0",
+    "@memberjunction/global": "4.1.0",
     "openai": "6.18.0"
   },
   "repository": {

@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { JSONPath } from "jsonpath-plus";
-import * as jmespath from "jmespath";
+import jmespath from "jmespath";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**

@@ -1,0 +1,119 @@
+<!-- ============================================
+     BEFORE-TOOLBAR SLOT
+     ============================================ -->
+<ng-content select="[before-toolbar]"></ng-content>
+
+<!-- ============================================
+     TOOLBAR (bridges FormComponent state → toolbar inputs)
+     ============================================ -->
+<mj-form-toolbar
+  [Record]="EffectiveRecord"
+  [EditMode]="EffectiveEditMode"
+  [UserCanEdit]="EffectiveUserCanEdit"
+  [UserCanDelete]="EffectiveUserCanDelete"
+  [IsFavorite]="EffectiveIsFavorite"
+  [FavoriteInitDone]="EffectiveFavoriteInitDone"
+  [IsDirty]="EffectiveIsDirty"
+  [DirtyFieldNames]="EffectiveDirtyFieldNames"
+  [ListCount]="ListCount"
+  [EntityInfo]="EffectiveEntityInfo"
+  [Config]="ToolbarConfig"
+  [IsSaving]="EffectiveIsSaving"
+  [VisibleSectionCount]="VisibleSectionCount"
+  [TotalSectionCount]="TotalSectionCount"
+  [ExpandedSectionCount]="ExpandedSectionCount"
+  [SearchFilter]="EffectiveSearchFilter"
+  [ShowEmptyFields]="EffectiveShowEmptyFields"
+  [WidthMode]="EffectiveWidthMode"
+  [HasCustomSectionOrder]="EffectiveHasCustomSectionOrder"
+  (Navigate)="OnNavigate($event)"
+  (EditModeChange)="OnEditModeChange($event)"
+  (BeforeSave)="BeforeSave.emit($event)"
+  (SaveRequested)="OnSaveRequested()"
+  (BeforeCancel)="BeforeCancel.emit($event)"
+  (CancelRequested)="OnCancelRequested()"
+  (BeforeDelete)="BeforeDelete.emit($event)"
+  (DeleteRequested)="OnDeleteRequested()"
+  (FavoriteToggled)="OnFavoriteToggled()"
+  (BeforeHistoryView)="BeforeHistoryView.emit($event)"
+  (HistoryRequested)="OnHistoryRequested()"
+  (BeforeListManagement)="BeforeListManagement.emit($event)"
+  (ListManagementRequested)="OnListManagementRequested()"
+  (ShowChangesRequested)="OnShowChangesRequested()"
+  (CustomButtonClick)="CustomButtonClick.emit($event)"
+  (FilterChange)="OnFilterChange($event)"
+  (ExpandAllRequested)="OnExpandAll()"
+  (CollapseAllRequested)="OnCollapseAll()"
+  (ShowEmptyFieldsChange)="OnShowEmptyFieldsChange($event)"
+  (WidthModeChange)="OnWidthModeChange($event)"
+  (ResetSectionOrderRequested)="OnResetSectionOrder()">
+</mj-form-toolbar>
+
+<!-- ============================================
+     SCROLL AREA (full-width so mouse wheel works anywhere)
+     ============================================ -->
+<div class="mj-forms-scroll-area">
+  <div class="mj-forms-panels-container"
+       [class.mj-forms-panels--full-width]="EffectiveWidthMode === 'full-width'"
+       [class.mj-forms-panels--edit-mode]="EffectiveEditMode">
+    <!-- Before-panels slot (related entities displayed before fields) -->
+    <div class="mj-before-panels">
+      <ng-content select="[before-panels]"></ng-content>
+    </div>
+
+    <!-- Field panels slot -->
+    <div class="mj-forms-field-panels">
+      <ng-content select="[field-panels]"></ng-content>
+
+      <!-- Empty state when no sections match search -->
+      @if (EffectiveSearchFilter && VisibleSectionCount === 0) {
+        <div class="mj-forms-empty-search-state">
+          <div class="mj-forms-empty-search-icon">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </div>
+          <h3 class="mj-forms-empty-search-title">No sections found</h3>
+          <p class="mj-forms-empty-search-message">
+            No sections match "<strong>{{ EffectiveSearchFilter }}</strong>".
+            <br>Try a different search term or <a href="#" (click)="OnFilterChange(''); $event.preventDefault()" class="mj-forms-empty-search-link">clear the search</a>.
+          </p>
+        </div>
+      }
+    </div>
+
+    <!-- After-panels slot (related entities displayed after fields) -->
+    <div class="mj-after-panels">
+      <ng-content select="[after-panels]"></ng-content>
+    </div>
+
+    <!-- Catch-all for any other projected content -->
+    <ng-content></ng-content>
+  </div>
+</div>
+
+<!-- ============================================
+     RECORD CHANGES DRAWER (shown when history button clicked)
+     ============================================ -->
+@if (ShowRecordChanges && EffectiveRecord) {
+  <mj-record-changes
+    [record]="EffectiveRecord"
+    (dialogClosed)="OnRecordChangesClosed()">
+  </mj-record-changes>
+}
+
+<!-- ============================================
+     LIST MANAGEMENT DIALOG (shown when lists button clicked)
+     ============================================ -->
+@if (ShowListManagement && EffectiveRecord) {
+  <mj-list-management-dialog
+    [visible]="ShowListManagement"
+    [config]="{
+      mode: 'manage',
+      entityId: EffectiveRecord.EntityInfo.ID,
+      entityName: EffectiveRecord.EntityInfo.Name,
+      recordIds: [EffectiveRecord.PrimaryKey.Values()[0]],
+      allowCreate: true
+    }"
+    (complete)="OnListManagementClosed()"
+    (cancel)="OnListManagementClosed()">
+  </mj-list-management-dialog>
+}

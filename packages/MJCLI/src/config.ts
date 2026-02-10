@@ -1,5 +1,5 @@
 import { cosmiconfigSync } from 'cosmiconfig';
-import { FlywayConfig } from 'node-flyway/dist/types/types';
+import type { FlywayConfig } from 'node-flyway/dist/types/types';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
@@ -23,7 +23,7 @@ const DEFAULT_CLI_CONFIG = {
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   coreSchema: '__mj',
   cleanDisabled: true,
-  baselineVersion: '202601122300',
+  baselineVersion: '202602061600',
   baselineOnMigrate: true,
   mjRepoUrl: MJ_REPO_URL,
   migrationsLocation: 'filesystem:./migrations',
@@ -61,7 +61,7 @@ const mjConfigSchema = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202601122300'),
+  baselineVersion: z.string().optional().default('202602061600'),
   baselineOnMigrate: z.boolean().optional().default(true),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
@@ -80,7 +80,7 @@ const mjConfigSchemaOptional = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202601122300'),
+  baselineVersion: z.string().optional().default('202602061600'),
   baselineOnMigrate: z.boolean().optional().default(true),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
@@ -170,6 +170,7 @@ export const getFlywayConfig = async (
   // Build advanced config - only include properties with defined values
   const advancedConfig: any = {
     schemas: [targetSchema],
+    createSchemas: true, // Auto-create schema if it doesn't exist (needed for --schema flag)
   };
 
   // Only add cleanDisabled if explicitly set to false

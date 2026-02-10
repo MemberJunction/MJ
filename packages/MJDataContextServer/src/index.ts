@@ -1,7 +1,7 @@
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, UserInfo } from "@memberjunction/core";
 import { DataContextItem } from "@memberjunction/data-context";
-import * as sql from "mssql";
+import sql from "mssql";
 
 @RegisterClass(DataContextItem, undefined, undefined, true) 
 export class DataContextItemServer extends DataContextItem {

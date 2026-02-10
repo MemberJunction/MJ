@@ -402,13 +402,13 @@ export class Metadata {
      * @param primaryKey
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
+    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
         let result = primaryKey.Validate();
         if(!result.IsValid){
             throw new Error(result.ErrorMessage);
         }
-        
-        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey, contextUser);
+
+        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey, contextUser, forceRefresh);
     }
 
     /**
@@ -416,7 +416,7 @@ export class Metadata {
      * @param info 
      * @returns an array of EntityRecordNameResult objects
      */
-    public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
+    public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
         // valiate to make sure we don't have any null primary keys being sent in
         for (let i = 0; i < info.length; i++) {
             if (!info[i].CompositeKey.KeyValuePairs || info[i].CompositeKey.KeyValuePairs.length == 0) {
@@ -432,7 +432,7 @@ export class Metadata {
             }
 
         }
-        return await Metadata.Provider.GetEntityRecordNames(info, contextUser);          
+        return await Metadata.Provider.GetEntityRecordNames(info, contextUser, forceRefresh);
     }
 
     /**

@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
@@ -10,9 +10,23 @@ import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
+ * Cached app data with pre-computed values for optimal rendering performance
+ */
+interface AppDisplayData {
+  app: BaseApplication;
+  color: string;
+  icon: string;
+  navItemsCount: number;
+  navItemsPreview: { Label: string; Icon: string }[];
+  showMoreItems: boolean;
+  moreItemsCount: number;
+}
+
+/**
  * Home Dashboard - Personalized home screen showing all available applications
  * with quick access navigation and configuration options.
  *
+ * Uses OnPush change detection and cached computed values for optimal performance.
  * Registered as a BaseResourceComponent so it can be used as a Custom resource type
  * in nav items, allowing users to return to the Home dashboard after viewing orphan resources.
  */
@@ -20,7 +34,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   standalone: false,
   selector: 'mj-home-dashboard',
   templateUrl: './home-dashboard.component.html',
-  styleUrls: ['./home-dashboard.component.css']
+  styleUrls: ['./home-dashboard.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 @RegisterClass(BaseResourceComponent, 'HomeDashboard')
 export class HomeDashboardComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
@@ -32,6 +47,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   // State
   public isLoading = true;
   public apps: BaseApplication[] = [];
+  public appsDisplayData: AppDisplayData[] = []; // Pre-computed display data
   public currentUser: { Name: string; Email: string } | null = null;
   public showConfigDialog = false;
 
@@ -49,6 +65,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   // Sidebar state - default closed on all screen sizes
   public sidebarOpen = false;
+
+  // Cached icon lookups to avoid repeated method calls
+  private favoriteIconCache = new Map<string, string>();
+  private resourceIconCache = new Map<string, string>();
 
   /**
    * Check if sidebar has any content to show
@@ -107,21 +127,24 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         // (we start with isLoading=true and only set to false when we have apps)
         if (loading) {
           this.isLoading = true;
-          this.cdr.detectChanges();
+          this.cdr.markForCheck();
         }
       });
 
     // Subscribe to applications list, filtering out the Home app
     this.appManager.Applications
       .pipe(takeUntil(this.destroy$))
-      .subscribe(apps => {
+      .subscribe(async apps => {
         // Exclude the Home app from the list (users are already on Home)
         this.apps = apps.filter(app => app.Name !== 'Home');
+
+        // Pre-compute display data for all apps
+        await this.computeAppsDisplayData();
 
         this.isLoading = false;
         this.NotifyLoadComplete();
 
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
       });
 
     // Subscribe to unread notifications
@@ -130,16 +153,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .subscribe(notifications => {
         this.unreadNotifications = notifications.filter(n => n.Unread).slice(0, 5);
         this.notificationsLoading = false;
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
       });
 
     // Subscribe to recent items
     this.recentAccessService.RecentItems
       .pipe(takeUntil(this.destroy$))
       .subscribe(items => {
-        this.recentItems = items.slice(0, 5);
+        this.recentItems = this.deduplicateRecents(items).slice(0, 5);
         this.recentsLoading = false;
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
       });
 
     // Favorites and recents load asynchronously in the sidebar
@@ -204,20 +227,41 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Get nav items count for an app
+   * Pre-compute display data for all apps to avoid repeated calculations during change detection
    */
-  getNavItemsCount(app: BaseApplication): number {
-    return app.GetNavItems().length;
+  private async computeAppsDisplayData(): Promise<void> {
+    this.appsDisplayData = await Promise.all(this.apps.map(async app => {
+      const navItems = await app.GetNavItems();
+      const navItemsCount = navItems.length;
+      const navItemsPreview = navItems.slice(0, 3).map(item => ({
+        Label: item.Label,
+        Icon: item.Icon || 'fa-solid fa-circle'
+      }));
+
+      return {
+        app,
+        color: app.GetColor() || '#1976d2',
+        icon: app.Icon || 'fa-solid fa-cube',
+        navItemsCount,
+        navItemsPreview,
+        showMoreItems: navItemsCount > 3,
+        moreItemsCount: navItemsCount - 3
+      };
+    }));
   }
 
   /**
-   * Get first few nav items for preview
+   * Track function for apps loop
    */
-  getNavItemsPreview(app: BaseApplication): { Label: string; Icon: string }[] {
-    return app.GetNavItems().slice(0, 3).map(item => ({
-      Label: item.Label,
-      Icon: item.Icon || 'fa-solid fa-circle'
-    }));
+  trackByApp(_index: number, item: AppDisplayData): string {
+    return item.app.ID;
+  }
+
+  /**
+   * Track function for nav items preview
+   */
+  trackByNavItem(_index: number, item: { Label: string; Icon: string }): string {
+    return item.Label;
   }
 
   /**
@@ -233,7 +277,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       console.error('Error loading favorites:', error);
     } finally {
       this.favoritesLoading = false;
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     }
   }
 
@@ -243,13 +287,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   private async loadRecents(): Promise<void> {
     try {
       this.recentsLoading = true;
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
       await this.recentAccessService.loadRecentItems(10);
     } catch (error) {
       console.error('Error loading recents:', error);
     } finally {
       this.recentsLoading = false;
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     }
   }
 
@@ -314,37 +358,64 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Get icon for a resource type
+   * Get icon for a resource type (cached)
    */
   getResourceIcon(resourceType: string): string {
+    if (this.resourceIconCache.has(resourceType)) {
+      return this.resourceIconCache.get(resourceType)!;
+    }
+
+    let icon: string;
     switch (resourceType) {
       case 'view':
-        return 'fa-solid fa-table';
+        icon = 'fa-solid fa-table';
+        break;
       case 'dashboard':
-        return 'fa-solid fa-gauge-high';
+        icon = 'fa-solid fa-gauge-high';
+        break;
       case 'artifact':
-        return 'fa-solid fa-cube';
+        icon = 'fa-solid fa-cube';
+        break;
       case 'report':
-        return 'fa-solid fa-chart-bar';
+        icon = 'fa-solid fa-chart-bar';
+        break;
       default:
-        return 'fa-solid fa-file';
+        icon = 'fa-solid fa-file';
     }
+
+    this.resourceIconCache.set(resourceType, icon);
+    return icon;
   }
 
   /**
-   * Get icon for a favorite based on its entity type
+   * Get icon for a favorite based on its entity type (cached)
    */
   getFavoriteIcon(favorite: UserFavoriteEntity): string {
+    const cacheKey = favorite.ID;
+    if (this.favoriteIconCache.has(cacheKey)) {
+      return this.favoriteIconCache.get(cacheKey)!;
+    }
+
+    let icon: string;
     const entityName = favorite.Entity?.toLowerCase();
-    if (entityName === 'dashboards') return 'fa-solid fa-gauge-high';
-    if (entityName === 'user views') return 'fa-solid fa-table';
-    if (entityName === 'reports') return 'fa-solid fa-chart-bar';
-    if (entityName?.includes('artifact')) return 'fa-solid fa-cube';
-    return 'fa-solid fa-star';
+    if (entityName === 'dashboards') {
+      icon = 'fa-solid fa-gauge-high';
+    } else if (entityName === 'user views') {
+      icon = 'fa-solid fa-table';
+    } else if (entityName === 'reports') {
+      icon = 'fa-solid fa-chart-bar';
+    } else if (entityName?.includes('artifact')) {
+      icon = 'fa-solid fa-cube';
+    } else {
+      icon = 'fa-solid fa-star';
+    }
+
+    this.favoriteIconCache.set(cacheKey, icon);
+    return icon;
   }
 
   /**
-   * Format a date for display
+   * Format a date for display (pure function, safe to call in template)
    */
   formatDate(date: Date): string {
     if (!date) return '';
@@ -356,5 +427,41 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (days === 1) return 'Yesterday';
     if (days < 7) return `${days} days ago`;
     return new Date(date).toLocaleDateString();
+  }
+
+  /**
+   * Track function for favorites
+   */
+  trackByFavorite(_index: number, item: UserFavoriteEntity): string {
+    return item.ID;
+  }
+
+  /**
+   * Remove duplicate recent items (same entity + recordId). Keeps the first occurrence.
+   */
+  private deduplicateRecents(items: RecentAccessItem[]): RecentAccessItem[] {
+    const seen = new Set<string>();
+    return items.filter(item => {
+      const key = `${item.entityName}-${item.recordId}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+
+  /**
+   * Track function for recent items
+   */
+  trackByRecent(_index: number, item: RecentAccessItem): string {
+    return `${item.entityName}-${item.recordId}`;
+  }
+
+  /**
+   * Track function for notifications
+   */
+  trackByNotification(_index: number, item: UserNotificationEntity): string {
+    return item.ID;
   }
 }

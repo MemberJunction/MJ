@@ -1,10 +1,33 @@
-# MemberJunction External Change Detection
+# @memberjunction/external-change-detection
 
-A powerful library for detecting and reconciling changes made to entities by external systems or integrations in MemberJunction applications.
+Detects and reconciles changes made to MemberJunction entities by external systems, third-party integrations, or direct database modifications that bypass the MemberJunction application layer.
 
 ## Overview
 
-The `@memberjunction/external-change-detection` package provides functionality to detect when records in your MemberJunction entities have been modified by external systems, third-party integrations, or direct database changes that bypass the MemberJunction application logic. This helps maintain data integrity and ensures that your application can react appropriately to external modifications.
+The `@memberjunction/external-change-detection` package detects when records have been modified outside of MemberJunction, generates detailed change reports with field-level differences, and can replay those changes through the MemberJunction entity system to trigger all business logic, validations, and audit tracking.
+
+```mermaid
+graph TD
+    A["ExternalChangeDetectorEngine<br/>(Singleton)"] --> B["Create Detection"]
+    A --> C["Update Detection"]
+    A --> D["Delete Detection"]
+
+    B --> E["Records without<br/>Create in RecordChanges"]
+    C --> F["__mj_UpdatedAt newer than<br/>latest RecordChange"]
+    D --> G["RecordChanges entries<br/>with no matching record"]
+
+    A --> H["ReplayChanges"]
+    H --> I["Load Entity via MJ"]
+    I --> J["Save/Delete with ReplayOnly"]
+    J --> K["Business Logic<br/>Audit Trail<br/>Triggers"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style H fill:#7c5295,stroke:#563a6b,color:#fff
+    style K fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Key Features
 

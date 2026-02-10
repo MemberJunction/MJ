@@ -20,6 +20,3 @@ export class AICredentialBindingFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAICredentialBindingFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

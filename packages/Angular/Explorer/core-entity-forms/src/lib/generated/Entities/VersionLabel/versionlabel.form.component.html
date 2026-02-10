@@ -1,186 +1,164 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Label Definition Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="labelDefinition"
-        sectionName="Label Definition"
-        icon="fa fa-tag"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="labelDefinition"
+        SectionName="Label Definition"
+        Icon="fa fa-tag"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Scope"
-            Type="dropdownlist"
+            Type="select"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Status"
-            Type="dropdownlist"
+            Type="select"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Scope Targets Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="scopeTargets"
-        sectionName="Scope Targets"
-        icon="fa fa-sitemap"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="scopeTargets"
+        SectionName="Scope Targets"
+        Icon="fa fa-sitemap"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="RecordID"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Entity"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Parent"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Creation Metrics Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="creationMetrics"
-        sectionName="Creation Metrics"
-        icon="fa fa-chart-line"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="creationMetrics"
+        SectionName="Creation Metrics"
+        Icon="fa fa-chart-line"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="CreatedByUserID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ExternalSystemID"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ItemCount"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CreationDurationMS"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CreatedByUser"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ItemCount"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CreationDurationMS"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -189,15 +167,15 @@
          ======================================== -->
 
     <!-- MJ: Version Label Restores Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJVersionLabelRestores"
-        sectionName="MJ: Version Label Restores"
-        icon="fa fa-undo"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJVersionLabelRestores')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJVersionLabelRestores"
+        SectionName="MJ: Version Label Restores"
+        Icon="fa fa-undo"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabelRestores')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -205,6 +183,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelRestores')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestores', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -213,15 +192,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: Version Label Items Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJVersionLabelItems"
-        sectionName="MJ: Version Label Items"
-        icon="fa fa-history"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJVersionLabelItems')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJVersionLabelItems"
+        SectionName="MJ: Version Label Items"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabelItems')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -229,6 +208,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -237,15 +217,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: Version Label Restores Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJVersionLabelRestores"
-        sectionName="MJ: Version Label Restores"
-        icon="fa fa-undo"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJVersionLabelRestores')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJVersionLabelRestores"
+        SectionName="MJ: Version Label Restores"
+        Icon="fa fa-undo"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabelRestores')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -253,6 +233,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelRestores')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestores', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -261,15 +242,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: Version Labels Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJVersionLabels"
-        sectionName="MJ: Version Labels"
-        icon="fa fa-tag"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJVersionLabels')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJVersionLabels"
+        SectionName="MJ: Version Labels"
+        Icon="fa fa-tag"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabels')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -277,6 +258,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

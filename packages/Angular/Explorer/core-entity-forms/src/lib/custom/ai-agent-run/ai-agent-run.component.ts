@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, ElementRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
 import { AIAgentRunEntityExtended, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -54,21 +53,13 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
   @ViewChild(AIAgentRunVisualizationComponent) visualizationComponent?: AIAgentRunVisualizationComponent;
 
-  // Instance of data helper per component
-  public dataHelper: AIAgentRunDataHelper;
+  // Field injections
+  private navigationService = inject(NavigationService);
+  private costService = inject(AIAgentRunCostService);
+  private appManager = inject(ApplicationManager);
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    cdr: ChangeDetectorRef,
-    private costService: AIAgentRunCostService,
-    private appManager: ApplicationManager
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-    this.dataHelper = new AIAgentRunDataHelper();
-  }
+  // Instance of data helper per component
+  public dataHelper = new AIAgentRunDataHelper();
   
   async ngOnInit() {
     await super.ngOnInit();

@@ -1,160 +1,138 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Restore Overview Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="restoreOverview"
-        sectionName="Restore Overview"
-        icon="fa fa-history"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="restoreOverview"
+        SectionName="Restore Overview"
+        Icon="fa fa-history"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="VersionLabelID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Status"
-            Type="dropdownlist"
+            Type="select"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="StartedAt"
             Type="datepicker"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="EndedAt"
             Type="datepicker"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="PreRestoreLabelID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="VersionLabel"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="User"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PreRestoreLabel"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Progress Metrics Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="progressMetrics"
-        sectionName="Progress Metrics"
-        icon="fa fa-chart-line"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="progressMetrics"
+        SectionName="Progress Metrics"
+        Icon="fa fa-chart-line"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="TotalItems"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="CompletedItems"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="FailedItems"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ErrorLog"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>

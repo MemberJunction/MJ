@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const packageJson = require('../../package.json') as { version: string };
 
 @ObjectType()
-export class Info {
+export class ServerInfo {
   @Public()
   @Field()
   Version: string;
@@ -33,11 +33,11 @@ export class Info {
   Hostname: string;
 }
 
-@Resolver(Info)
-export class InfoResolver { 
+@Resolver(ServerInfo)
+export class InfoResolver {
   @Public()
-  @Query(() => Info)
-  Info(@Ctx() context: AppContext): Info {
+  @Query(() => ServerInfo)
+  Info(@Ctx() context: AppContext): ServerInfo {
     return {
       Version: packageJson.version,
       IsSystemUser: Boolean(context.userPayload.isSystemUser),

@@ -1,5 +1,74 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 4.1.0
+
+### Minor Changes
+
+- 2ea241f: metadata
+
+### Patch Changes
+
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/ng-base-application@4.1.0
+  - @memberjunction/ng-base-forms@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ng-entity-form-dialog@4.1.0
+  - @memberjunction/ng-entity-permissions@4.1.0
+  - @memberjunction/ng-shared@4.1.0
+  - @memberjunction/ng-simple-record-list@4.1.0
+  - @memberjunction/ng-code-editor@4.1.0
+  - @memberjunction/ng-container-directives@4.1.0
+  - @memberjunction/ng-join-grid@4.1.0
+  - @memberjunction/ng-notifications@4.1.0
+  - @memberjunction/ng-shared-generic@4.1.0
+  - @memberjunction/ng-user-avatar@4.1.0
+  - @memberjunction/graphql-dataprovider@4.1.0
+  - @memberjunction/ng-tabstrip@4.1.0
+  - @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [65b4274]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/graphql-dataprovider@4.0.0
+  - @memberjunction/ng-base-application@4.0.0
+  - @memberjunction/ng-base-forms@4.0.0
+  - @memberjunction/ng-entity-form-dialog@4.0.0
+  - @memberjunction/ng-entity-permissions@4.0.0
+  - @memberjunction/ng-shared@4.0.0
+  - @memberjunction/ng-simple-record-list@4.0.0
+  - @memberjunction/ng-code-editor@4.0.0
+  - @memberjunction/ng-container-directives@4.0.0
+  - @memberjunction/ng-join-grid@4.0.0
+  - @memberjunction/ng-notifications@4.0.0
+  - @memberjunction/ng-shared-generic@4.0.0
+  - @memberjunction/ng-tabstrip@4.0.0
+  - @memberjunction/ng-user-avatar@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+  - @memberjunction/global@4.0.0
+
 ## 3.4.0
 
 ### Patch Changes

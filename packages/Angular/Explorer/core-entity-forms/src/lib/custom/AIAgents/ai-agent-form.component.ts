@@ -1,5 +1,4 @@
-import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { ActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentTypeEntity, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
@@ -530,21 +529,13 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         executionHistoryCount: number;
     } | null = null;
 
-    constructor(
-        elementRef: ElementRef,
-        protected override sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        cdr: ChangeDetectorRef,
-        private dialogService: DialogService,
-        private viewContainerRef: ViewContainerRef,
-        private agentManagementService: AIAgentManagementService,
-        private testHarnessService: AITestHarnessDialogService,
-        private createAgentService: CreateAgentService
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-        // Note: navigationService is inherited from BaseFormComponent
-    }
+    // Dependency injection using inject() function
+    private sharedService = inject(SharedService);
+    private dialogService = inject(DialogService);
+    private viewContainerRef = inject(ViewContainerRef);
+    private agentManagementService = inject(AIAgentManagementService);
+    private testHarnessService = inject(AITestHarnessDialogService);
+    private createAgentService = inject(CreateAgentService);
     
     /**
      * After view initialization, load any custom form section if defined

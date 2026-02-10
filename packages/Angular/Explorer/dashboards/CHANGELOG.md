@@ -1,5 +1,122 @@
 # @memberjunction/ng-dashboards
 
+## 4.1.0
+
+### Minor Changes
+
+- 2ea241f: metadata
+
+### Patch Changes
+
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/export-engine@4.1.0
+  - @memberjunction/ng-base-application@4.1.0
+  - @memberjunction/ng-core-entity-forms@4.1.0
+  - @memberjunction/ng-explorer-settings@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ai-engine-base@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/api-keys-base@4.1.0
+  - @memberjunction/actions-base@4.1.0
+  - @memberjunction/ng-shared@4.1.0
+  - @memberjunction/ng-testing@4.1.0
+  - @memberjunction/ng-action-gallery@4.1.0
+  - @memberjunction/ng-actions@4.1.0
+  - @memberjunction/ng-agents@4.1.0
+  - @memberjunction/ng-ai-test-harness@4.1.0
+  - @memberjunction/ng-code-editor@4.1.0
+  - @memberjunction/ng-container-directives@4.1.0
+  - @memberjunction/ng-credentials@4.1.0
+  - @memberjunction/ng-dashboard-viewer@4.1.0
+  - @memberjunction/ng-entity-relationship-diagram@4.1.0
+  - @memberjunction/ng-entity-viewer@4.1.0
+  - @memberjunction/ng-filter-builder@4.1.0
+  - @memberjunction/ng-list-management@4.1.0
+  - @memberjunction/ng-notifications@4.1.0
+  - @memberjunction/ng-query-viewer@4.1.0
+  - @memberjunction/ng-react@4.1.0
+  - @memberjunction/ng-shared-generic@4.1.0
+  - @memberjunction/ng-versions@4.1.0
+  - @memberjunction/graphql-dataprovider@4.1.0
+  - @memberjunction/interactive-component-types@4.1.0
+  - @memberjunction/skip-types@4.1.0
+  - @memberjunction/templates-base-types@4.1.0
+  - @memberjunction/testing-engine-base@4.1.0
+  - @memberjunction/ng-export-service@4.1.0
+  - @memberjunction/ng-markdown@4.1.0
+  - @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- 65b4274: migration
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- 2f86270: no migration
+- 4723079: no migration
+- 0a0cda1: no migration
+- Updated dependencies [4723079]
+- Updated dependencies [65b4274]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [b503400]
+- Updated dependencies [fe73344]
+- Updated dependencies [0a0cda1]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/ng-core-entity-forms@4.0.0
+  - @memberjunction/graphql-dataprovider@4.0.0
+  - @memberjunction/ai-engine-base@4.0.0
+  - @memberjunction/ai-core-plus@4.0.0
+  - @memberjunction/api-keys-base@4.0.0
+  - @memberjunction/actions-base@4.0.0
+  - @memberjunction/ng-base-application@4.0.0
+  - @memberjunction/ng-explorer-settings@4.0.0
+  - @memberjunction/ng-shared@4.0.0
+  - @memberjunction/ng-testing@4.0.0
+  - @memberjunction/ng-action-gallery@4.0.0
+  - @memberjunction/ng-actions@4.0.0
+  - @memberjunction/ng-agents@4.0.0
+  - @memberjunction/ng-ai-test-harness@4.0.0
+  - @memberjunction/ng-code-editor@4.0.0
+  - @memberjunction/ng-container-directives@4.0.0
+  - @memberjunction/ng-credentials@4.0.0
+  - @memberjunction/ng-dashboard-viewer@4.0.0
+  - @memberjunction/ng-entity-relationship-diagram@4.0.0
+  - @memberjunction/ng-entity-viewer@4.0.0
+  - @memberjunction/ng-export-service@4.0.0
+  - @memberjunction/ng-filter-builder@4.0.0
+  - @memberjunction/ng-list-management@4.0.0
+  - @memberjunction/ng-markdown@4.0.0
+  - @memberjunction/ng-notifications@4.0.0
+  - @memberjunction/ng-query-viewer@4.0.0
+  - @memberjunction/ng-react@4.0.0
+  - @memberjunction/ng-shared-generic@4.0.0
+  - @memberjunction/ng-versions@4.0.0
+  - @memberjunction/interactive-component-types@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+  - @memberjunction/export-engine@4.0.0
+  - @memberjunction/global@4.0.0
+  - @memberjunction/skip-types@4.0.0
+  - @memberjunction/templates-base-types@4.0.0
+  - @memberjunction/testing-engine-base@4.0.0
+
 ## 3.4.0
 
 ### Minor Changes

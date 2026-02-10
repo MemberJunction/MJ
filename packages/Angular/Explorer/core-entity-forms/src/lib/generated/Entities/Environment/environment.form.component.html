@@ -1,92 +1,97 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Technical Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="technicalMetadata"
-        sectionName="Technical Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="technicalMetadata"
+        SectionName="Technical Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 
     <!-- Environment Definition Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="environmentDefinition"
-        sectionName="Environment Definition"
-        icon="fa fa-cubes"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="environmentDefinition"
+        SectionName="Environment Definition"
+        Icon="fa fa-cubes"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="IsDefault"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Environment Settings Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="environmentSettings"
-        sectionName="Environment Settings"
-        icon="fa fa-sliders-h"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="environmentSettings"
+        SectionName="Environment Settings"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="false"
             FieldName="Settings"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -95,15 +100,15 @@
          ======================================== -->
 
     <!-- MJ: Artifacts Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJArtifacts"
-        sectionName="MJ: Artifacts"
-        icon="fa fa-file"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJArtifacts')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJArtifacts"
+        SectionName="MJ: Artifacts"
+        Icon="fa fa-file"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArtifacts')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -111,6 +116,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJArtifacts')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -119,15 +125,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: Collections Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJCollections"
-        sectionName="MJ: Collections"
-        icon="fa fa-folder-open"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJCollections')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJCollections"
+        SectionName="MJ: Collections"
+        Icon="fa fa-folder-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCollections')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -135,6 +141,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Collections')"
                 [AllowLoad]="IsSectionExpanded('mJCollections')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCollections', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -143,15 +150,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: Projects Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJProjects"
-        sectionName="MJ: Projects"
-        icon="fa fa-project-diagram"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJProjects')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJProjects"
+        SectionName="MJ: Projects"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJProjects')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -159,6 +166,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Projects')"
                 [AllowLoad]="IsSectionExpanded('mJProjects')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJProjects', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -167,15 +175,15 @@
     </mj-collapsible-panel>
 
     <!-- Dashboards Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="dashboards"
-        sectionName="Dashboards"
-        icon="fa-solid fa-table-columns"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('dashboards')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="dashboards"
+        SectionName="Dashboards"
+        Icon="fa-solid fa-table-columns"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('dashboards')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -183,6 +191,7 @@
                 [NewRecordValues]="NewRecordValues('Dashboards')"
                 [AllowLoad]="IsSectionExpanded('dashboards')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('dashboards', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -191,15 +200,15 @@
     </mj-collapsible-panel>
 
     <!-- MJ: Tasks Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJTasks"
-        sectionName="MJ: Tasks"
-        icon="fa fa-tasks"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJTasks')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJTasks"
+        SectionName="MJ: Tasks"
+        Icon="fa fa-tasks"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTasks')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -207,6 +216,7 @@
                 [NewRecordValues]="NewRecordValues('MJ: Tasks')"
                 [AllowLoad]="IsSectionExpanded('mJTasks')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -215,15 +225,15 @@
     </mj-collapsible-panel>
 
     <!-- Reports Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="reports"
-        sectionName="Reports"
-        icon="fa-solid fa-chart-line"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('reports')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="reports"
+        SectionName="Reports"
+        Icon="fa-solid fa-chart-line"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('reports')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -231,6 +241,7 @@
                 [NewRecordValues]="NewRecordValues('Reports')"
                 [AllowLoad]="IsSectionExpanded('reports')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
@@ -239,15 +250,15 @@
     </mj-collapsible-panel>
 
     <!-- Conversations Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="conversations"
-        sectionName="Conversations"
-        icon="fa-regular fa-comments"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('conversations')"
-        [defaultExpanded]="false">
+    <mj-collapsible-panel after-panels
+        SectionKey="conversations"
+        SectionName="Conversations"
+        Icon="fa-regular fa-comments"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('conversations')"
+        [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
@@ -255,6 +266,7 @@
                 [NewRecordValues]="NewRecordValues('Conversations')"
                 [AllowLoad]="IsSectionExpanded('conversations')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('conversations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>

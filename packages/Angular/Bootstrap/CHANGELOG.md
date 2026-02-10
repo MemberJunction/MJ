@@ -1,5 +1,74 @@
 # @memberjunction/ng-bootstrap
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/ng-core-entity-forms@4.1.0
+  - @memberjunction/ng-dashboards@4.1.0
+  - @memberjunction/ng-explorer-core@4.1.0
+  - @memberjunction/ng-explorer-settings@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ai-engine-base@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/actions-base@4.1.0
+  - @memberjunction/ng-auth-services@4.1.0
+  - @memberjunction/ng-shared@4.1.0
+  - @memberjunction/ng-artifacts@4.1.0
+  - @memberjunction/ng-dashboard-viewer@4.1.0
+  - @memberjunction/ng-file-storage@4.1.0
+  - @memberjunction/communication-types@4.1.0
+  - @memberjunction/entity-communications-base@4.1.0
+  - @memberjunction/graphql-dataprovider@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 7aa23e7: 4.0
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [2f86270]
+- Updated dependencies [4723079]
+- Updated dependencies [65b4274]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [0a0cda1]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/ng-dashboards@4.0.0
+  - @memberjunction/ng-core-entity-forms@4.0.0
+  - @memberjunction/graphql-dataprovider@4.0.0
+  - @memberjunction/ai-engine-base@4.0.0
+  - @memberjunction/ai-core-plus@4.0.0
+  - @memberjunction/actions-base@4.0.0
+  - @memberjunction/ng-auth-services@4.0.0
+  - @memberjunction/ng-explorer-core@4.0.0
+  - @memberjunction/ng-explorer-settings@4.0.0
+  - @memberjunction/ng-shared@4.0.0
+  - @memberjunction/ng-artifacts@4.0.0
+  - @memberjunction/ng-dashboard-viewer@4.0.0
+  - @memberjunction/ng-file-storage@4.0.0
+  - @memberjunction/communication-types@4.0.0
+  - @memberjunction/entity-communications-base@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+
 ## 3.4.0
 
 ### Patch Changes

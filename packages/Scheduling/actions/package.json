@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/scheduling-actions",
   "type": "module",
-  "version": "3.4.0",
+  "version": "4.1.0",
   "description": "MemberJunction: Scheduling Actions - agentic tools for managing scheduled jobs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,12 +15,12 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/actions": "3.4.0",
-    "@memberjunction/actions-base": "3.4.0",
-    "@memberjunction/scheduling-base-types": "3.4.0",
+    "@memberjunction/global": "4.1.0",
+    "@memberjunction/core": "4.1.0",
+    "@memberjunction/core-entities": "4.1.0",
+    "@memberjunction/actions": "4.1.0",
+    "@memberjunction/actions-base": "4.1.0",
+    "@memberjunction/scheduling-base-types": "4.1.0",
     "cron-parser": "^4.9.0"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions-apollo",
   "type": "module",
-  "version": "3.4.0",
+  "version": "4.1.0",
   "description": "Action classes that wrap the Apollo.io data enrichment API for contacts and accounts",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,11 +20,11 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/actions": "3.4.0",
-    "@memberjunction/actions-base": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/global": "3.4.0",
+    "@memberjunction/actions": "4.1.0",
+    "@memberjunction/actions-base": "4.1.0",
+    "@memberjunction/core": "4.1.0",
+    "@memberjunction/core-entities": "4.1.0",
+    "@memberjunction/global": "4.1.0",
     "axios": "^1.13.4"
   },
   "repository": {

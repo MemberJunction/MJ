@@ -1,410 +1,222 @@
 # @memberjunction/ai-core-plus
 
-Core type definitions and shared interfaces for MemberJunction's AI subsystem. This package provides enhanced types that extend the base AI functionality with advanced features for agents and prompts.
+Shared type definitions and extended entity classes for the MemberJunction AI Framework. This package bridges the gap between the standalone `@memberjunction/ai` core and the full MJ entity system, providing types that are usable on both server and client. It defines prompt execution result types, agent execution types, system placeholder management, conversation utilities, and extended entity classes with additional computed properties.
 
-## Key Types
+## Architecture
 
-### AIPromptRunResult
+```mermaid
+graph TD
+    AI["@memberjunction/ai"]
+    style AI fill:#2d6a9f,stroke:#1a4971,color:#fff
 
-The `AIPromptRunResult<T>` interface represents the result of executing an AI prompt with comprehensive tracking and debugging information.
+    CORE["@memberjunction/core"]
+    style CORE fill:#2d6a9f,stroke:#1a4971,color:#fff
 
-#### Model Selection Information (v2.78+)
+    CE["@memberjunction/core-entities"]
+    style CE fill:#2d6a9f,stroke:#1a4971,color:#fff
 
-The `modelSelectionInfo` property provides detailed insights into how models were selected for execution:
+    ACP["@memberjunction/ai-core-plus"]
+    style ACP fill:#2d8659,stroke:#1a5c3a,color:#fff
 
-```typescript
-modelSelectionInfo?: {
-  // The AI Configuration entity that was used
-  aiConfiguration?: AIConfigurationEntity;
-  
-  // All models that were considered during selection
-  modelsConsidered: Array<{
-    model: AIModelEntityExtended;    // Full model entity
-    vendor?: AIVendorEntity;         // Vendor entity if specific vendor was used
-    priority: number;                // Priority ranking
-    available: boolean;              // Whether API key was available
-    unavailableReason?: string;      // Why model wasn't available
-  }>;
-  
-  // The selected model and vendor
-  modelSelected: AIModelEntityExtended;
-  vendorSelected?: AIVendorEntity;
-  
-  // Selection details
-  selectionReason: string;           // Human-readable selection reason
-  fallbackUsed: boolean;             // Whether a fallback model was used
-  selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
-}
+    subgraph "ai-core-plus Modules"
+        PT["Prompt Types<br/>AIPromptParams, AIPromptRunResult"]
+        style PT fill:#7c5295,stroke:#563a6b,color:#fff
+
+        AT["Agent Types<br/>ExecuteAgentParams, ExecuteAgentResult"]
+        style AT fill:#7c5295,stroke:#563a6b,color:#fff
+
+        SP["System Placeholders<br/>Date/Time, User Context"]
+        style SP fill:#b8762f,stroke:#8a5722,color:#fff
+
+        EXT["Extended Entities<br/>AIPrompt, AIModel, AIAgent"]
+        style EXT fill:#2d6a9f,stroke:#1a4971,color:#fff
+
+        CU["ConversationUtility"]
+        style CU fill:#b8762f,stroke:#8a5722,color:#fff
+
+        RF["Response Forms<br/>& UI Commands"]
+        style RF fill:#7c5295,stroke:#563a6b,color:#fff
+    end
+
+    AI --> ACP
+    CORE --> ACP
+    CE --> ACP
+    ACP --> PT
+    ACP --> AT
+    ACP --> SP
+    ACP --> EXT
+    ACP --> CU
+    ACP --> RF
 ```
 
-#### Execution Status
+## Installation
 
-The `status` field uses the `ExecutionStatus` type with values:
-- `'Pending'` - Execution not yet started
-- `'Running'` - Currently executing
-- `'Completed'` - Successfully completed
-- `'Failed'` - Execution failed
-- `'Cancelled'` - Execution was cancelled
-
-#### Token Usage
-
-Token tracking includes both individual and hierarchical (combined) usage:
-- `promptTokens` / `completionTokens` - Tokens for this execution
-- `combinedPromptTokens` / `combinedCompletionTokens` - Total including child prompts
-
-## Agent Types
-
-### ExecuteAgentParams
-
-Parameters for executing AI agents with support for:
-- Hierarchical agent execution
-- Configuration-based model selection
-- Conversation context
-- Progress and streaming callbacks
-- Cancellation support
-- **Effort level control** - Override agent and prompt effort levels
-- **Agent type-specific parameters** - Generic support for custom execution params
-
-#### Agent Type Parameters (v2.127+)
-
-`ExecuteAgentParams` supports a third generic parameter `TAgentTypeParams` for passing agent type-specific execution parameters:
-
-```typescript
-type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unknown> = {
-    // ... existing properties ...
-
-    /**
-     * Agent type-specific execution parameters.
-     * Different agent types can define their own parameter interfaces
-     * for customizing execution behavior.
-     */
-    agentTypeParams?: TAgentTypeParams;
-}
+```bash
+npm install @memberjunction/ai-core-plus
 ```
 
-This enables type-safe customization of how specific agent types execute:
+## Key Exports
 
-```typescript
-import { FlowAgentExecuteParams } from '@memberjunction/ai-agents';
+### Prompt Types (`prompt.types.ts`)
 
-// Type-safe Flow Agent parameters
-const params: ExecuteAgentParams<unknown, unknown, FlowAgentExecuteParams> = {
-    agent: myFlowAgent,
-    conversationMessages: messages,
-    agentTypeParams: {
-        startAtStep: specificStep,  // Start at a specific step
-        skipSteps: [step1, step2]   // Skip these steps
-    }
-};
-```
+| Type / Class | Purpose |
+|---|---|
+| `AIPromptParams` | Full parameter set for prompt execution: prompt reference, data context, configuration, child prompts, streaming callbacks, cancellation, credential overrides, effort level, and more |
+| `AIPromptRunResult<T>` | Generic result from prompt execution including raw/parsed output, token usage, cost, validation attempts, model selection info, and media references |
+| `ChildPromptParam` | Links a child prompt to a placeholder in a parent template for hierarchical composition |
+| `AIModelSelectionInfo` | Debugging info about which models were considered and why one was selected |
+| `ExecutionProgressCallback` | Callback for real-time execution progress (template rendering, model selection, execution, validation) |
+| `ExecutionStreamingCallback` | Callback for streaming content chunks during execution |
+| `ValidationAttempt` | Detailed record of each validation attempt with attempt number, errors, and raw/parsed output |
+| `PromptRunMediaReference` | Reference to generated media (image, audio, video) with metadata |
+| `ExecutionStatus` | Status enum: `'Pending'`, `'Running'`, `'Completed'`, `'Failed'`, `'Cancelled'` |
 
-See [@memberjunction/ai-agents](../Agents/README.md#flow-agent-execution-parameters) for `FlowAgentExecuteParams` documentation.
+### Agent Types (`agent-types.ts`)
 
-### ExecuteAgentResult
+| Type / Class | Purpose |
+|---|---|
+| `ExecuteAgentParams` | Parameters for agent execution: agent reference, messages, conversation context, user scope, configuration presets, effort level, action changes, and callbacks |
+| `ExecuteAgentResult` | Agent execution result with success status, output messages, actions performed, sub-agent requests, and model selection info |
+| `AgentContextData` | Contextual data injected into agent prompts (notes, examples, data sources) |
+| `AgentConfiguration` | Runtime configuration for an agent run (model overrides, effort level, max iterations) |
+| `UserScope` | Multi-tenant scoping for agent memory with primary/secondary dimensions |
+| `AgentAction` | Description of an action an agent wants to execute |
+| `AgentSubAgentRequest` | Request from one agent to delegate work to a sub-agent |
+| `AgentChatMessage` / `AgentChatMessageMetadata` | Chat messages with lifecycle metadata (expiration, compaction) |
+| `MediaOutput` | Media generated by an agent (modality, MIME type, data) |
+| `ActionChange` / `ActionChangeScope` | Runtime action customization for multi-tenant scenarios |
 
-Result of agent execution including:
-- Success/failure status
-- Agent run tracking entity
-- Execution metadata
-- Error information
+### System Placeholders (`prompt.system-placeholders.ts`)
 
-### Iteration Types (v2.112+)
+The `SystemPlaceholderManager` automatically injects common values into all prompt templates:
 
-Support for ForEach and While loops in both Flow and Loop agents:
+- `{{CurrentDate}}`, `{{CurrentTime}}`, `{{CurrentDateTime}}` -- Current date/time in user's timezone
+- `{{CurrentTimezone}}` -- User's timezone identifier
+- `{{UserName}}`, `{{UserEmail}}`, `{{UserFirstName}}`, `{{UserLastName}}` -- User context
+- Custom placeholders can be registered at runtime
 
-#### ForEachOperation
-```typescript
-interface ForEachOperation {
-    collectionPath: string;        // Path to array in payload
-    itemVariable?: string;         // Variable name (default: "item")
-    indexVariable?: string;        // Index variable (default: "index")
-    maxIterations?: number;        // Limit (undefined=1000, 0=unlimited)
-    continueOnError?: boolean;     // Continue if iteration fails
-    action?: { name: string; params: Record<string, unknown> };
-    subAgent?: { name: string; message: string; templateParameters?: Record<string, unknown> };
-}
-```
+### Extended Entity Classes
 
-#### WhileOperation
-```typescript
-interface WhileOperation {
-    condition: string;             // Boolean expression
-    itemVariable?: string;         // Variable name (default: "attempt")
-    maxIterations?: number;        // Limit (undefined=100, 0=unlimited)
-    continueOnError?: boolean;     // Continue if iteration fails
-    action?: { name: string; params: Record<string, unknown> };
-    subAgent?: { name: string; message: string; templateParameters?: Record<string, unknown> };
-}
-```
+| Class | Extends | Additional Properties |
+|---|---|---|
+| `AIPromptEntityExtended` | `AIPromptEntity` | Prompt category associations, template relationships |
+| `AIPromptCategoryEntityExtended` | `AIPromptCategoryEntity` | `Prompts` array of child prompts |
+| `AIModelEntityExtended` | `AIModelEntity` | `ModelVendors` array, vendor association helpers |
+| `AIAgentEntityExtended` | `AIAgentEntity` | `Actions`, `Notes` arrays, agent relationships |
+| `AIAgentRunEntityExtended` | `AIAgentRunEntity` | Extended run tracking |
+| `AIAgentRunStepEntityExtended` | `AIAgentRunStepEntity` | Extended step tracking |
+| `AIPromptRunEntityExtended` | `AIPromptRunEntity` | Extended prompt run tracking |
 
-**See:** [@memberjunction/ai-agents Guide](../Agents/guide-to-iterative-operations-in-agents.md) for complete documentation and examples.
+### Other Exports
 
-## Effort Level Control
-
-MemberJunction supports granular control over AI model reasoning effort through a 1-100 integer scale. Higher values request more thorough reasoning and analysis from AI models that support effort levels.
-
-### Effort Level Hierarchy
-
-The effort level is resolved using the following precedence (highest to lowest priority):
-
-1. **`ExecuteAgentParams.effortLevel`** - Runtime override (highest priority)
-2. **`AIAgent.DefaultPromptEffortLevel`** - Agent default setting
-3. **`AIPrompt.EffortLevel`** - Individual prompt setting
-4. **Provider default** - Model's natural behavior (lowest priority)
-
-### Provider Support
-
-Different AI providers map the 1-100 scale to their specific parameters:
-
-- **OpenAI**: Maps to `reasoning_effort` (1-33=low, 34-66=medium, 67-100=high)
-- **Anthropic**: Maps to thinking mode with token budgets (1-100 → 25K-2M tokens)
-- **Groq**: Maps to experimental `reasoning_effort` parameter
-- **Gemini**: Controls reasoning mode intensity
-
-### Usage Examples
-
-```typescript
-// Agent execution with effort level override
-const params: ExecuteAgentParams = {
-  agent: myAgent,
-  conversationMessages: messages,
-  effortLevel: 85, // High effort for thorough analysis
-  contextUser: user
-};
-
-// Prompt execution with effort level
-const promptParams = new AIPromptParams();
-promptParams.prompt = myPrompt;
-promptParams.effortLevel = 50; // Medium effort level
-```
-
-## System Placeholders
-
-The `SystemPlaceholderManager` provides built-in placeholders for templates:
-- `{{CURRENT_DATE}}` - Current date in ISO format
-- `{{CURRENT_USER}}` - Current user's name
-- `{{CURRENT_USER_EMAIL}}` - Current user's email
-- Custom placeholder support
+| Export | Purpose |
+|---|---|
+| `ConversationUtility` | Helper for creating, loading, and managing conversation records |
+| `AgentResponseForm` | Structured response format definitions for agent outputs |
+| `ActionableCommand` / `AutomaticCommand` | UI command types for agent-driven interfaces |
+| `AgentPayloadChangeRequest` | Request to modify agent payload data during execution |
+| `ForEachOperation` / `WhileOperation` | Loop operation definitions for flow-based agents |
 
 ## Usage
 
-```typescript
-import { 
-  AIPromptRunResult, 
-  ExecuteAgentParams,
-  ExecutionStatus 
-} from '@memberjunction/ai-core-plus';
-
-// Access model selection information
-if (result.modelSelectionInfo) {
-  console.log(`Selected: ${result.modelSelectionInfo.modelSelected.Name}`);
-  console.log(`Strategy: ${result.modelSelectionInfo.selectionStrategy}`);
-  console.log(`Considered ${result.modelSelectionInfo.modelsConsidered.length} models`);
-}
-
-// Check execution status
-if (result.status === 'Completed') {
-  // Handle success
-} else if (result.status === 'Failed') {
-  console.error(result.errorMessage);
-}
-```
-
-## Agent Message Lifecycle Types
-
-### AgentChatMessage and Metadata
-
-The package provides specialized types for agent conversation message lifecycle management:
+### Prompt Execution Parameters
 
 ```typescript
-// Typed metadata for agent messages
-type AgentChatMessageMetadata = {
-  // Expiration tracking
-  turnAdded?: number;
-  expirationTurns?: number;
-  expirationMode?: 'None' | 'Remove' | 'Compact';
+import { AIPromptParams, ChildPromptParam } from '@memberjunction/ai-core-plus';
 
-  // Compaction configuration
-  compactMode?: 'First N Chars' | 'AI Summary';
-  compactLength?: number;
-  compactPromptId?: string;
+const params = new AIPromptParams();
+params.prompt = myPromptEntity;
+params.data = { customerName: 'Acme Corp', orderCount: 42 };
+params.contextUser = currentUser;
+params.effortLevel = 75;
 
-  // Compaction state
-  wasCompacted?: boolean;
-  originalContent?: ChatMessage['content'];
-  originalLength?: number;
-  tokensSaved?: number;
-  canExpand?: boolean;
-  isExpired?: boolean;
+// Hierarchical prompt composition
+params.childPrompts = [
+    new ChildPromptParam(analysisParams, 'analysis'),
+    new ChildPromptParam(summaryParams, 'summary')
+];
 
-  // Classification
-  messageType?: 'action-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
-}
-
-// Agent message with typed metadata
-type AgentChatMessage = ChatMessage<AgentChatMessageMetadata>;
-```
-
-### Message Lifecycle Events
-
-Track message expiration, compaction, removal, and expansion:
-
-```typescript
-type MessageLifecycleEventType =
-  | 'message-expired'
-  | 'message-compacted'
-  | 'message-removed'
-  | 'message-expanded';
-
-type MessageLifecycleEvent = {
-  type: MessageLifecycleEventType;
-  turn: number;
-  messageIndex: number;
-  message: AgentChatMessage;
-  reason: string;
-  tokensSaved?: number; // For compaction events
-}
-
-type MessageLifecycleCallback = (event: MessageLifecycleEvent) => void;
-```
-
-### Runtime Overrides
-
-Configure message expiration behavior at runtime:
-
-```typescript
-type MessageExpirationOverride = {
-  expirationTurns?: number;
-  expirationMode?: 'None' | 'Remove' | 'Compact';
-  compactMode?: 'First N Chars' | 'AI Summary';
-  compactLength?: number;
-  compactPromptId?: string;
-  preserveOriginalContent?: boolean; // Default: true
-}
-
-// Use in ExecuteAgentParams
-const params: ExecuteAgentParams = {
-  agent: myAgent,
-  conversationMessages: messages,
-  contextUser: user,
-  messageExpirationOverride: {
-    expirationTurns: 2,
-    expirationMode: 'Compact',
-    compactMode: 'First N Chars',
-    compactLength: 500
-  },
-  onMessageLifecycle: (event) => {
-    console.log(`[Turn ${event.turn}] ${event.type}: ${event.reason}`);
-  }
+// Model override at runtime
+params.override = {
+    modelId: 'specific-model-id',
+    vendorId: 'specific-vendor-id'
 };
 ```
 
-### Message Expansion
-
-Agents can request expansion of compacted messages:
+### Agent Execution Parameters
 
 ```typescript
-// In BaseAgentNextStep
-type BaseAgentNextStep = {
-  step: 'Retry' | 'Actions' | 'Chat' | ...,
-  messageIndex?: number,    // Index of message to expand
-  expandReason?: string,    // Why expansion is needed
-  // ... other fields
-}
+import { ExecuteAgentParams, UserScope } from '@memberjunction/ai-core-plus';
 
-// Request expansion before retry
-{
-  "step": "Retry",
-  "messageIndex": 5,
-  "expandReason": "Need full search results to answer user's question"
-}
-```
-
-## Runtime Action Changes (v2.123.0)
-
-The `ActionChange` interface allows dynamic customization of which actions are available to agents at runtime, without modifying database configuration. This is particularly useful for multi-tenant scenarios where different executions of the same agent need access to different integrations.
-
-### ActionChange Interface
-
-```typescript
-interface ActionChange {
-  scope: ActionChangeScope;  // Which agents to apply to
-  mode: ActionChangeMode;    // 'add' or 'remove'
-  actionIds: string[];       // Action entity IDs
-  agentIds?: string[];       // Required for 'specific' scope
-}
-
-type ActionChangeScope = 'global' | 'root' | 'all-subagents' | 'specific';
-type ActionChangeMode = 'add' | 'remove';
-```
-
-### Scope Options
-
-- **`global`**: Applies to all agents in the hierarchy (root + all sub-agents)
-- **`root`**: Applies only to the root agent
-- **`all-subagents`**: Applies to all sub-agents but NOT the root agent
-- **`specific`**: Applies only to agents listed in `agentIds`
-
-### Usage Examples
-
-```typescript
-// Add CRM and LMS integrations for a specific tenant
 const params: ExecuteAgentParams = {
-  agent: myAgent,
-  conversationMessages: messages,
-  actionChanges: [
-    {
-      scope: 'global',
-      mode: 'add',
-      actionIds: ['lms-query-action-id', 'crm-search-action-id']
+    agent: myAgent,
+    conversationMessages: [{ role: 'user', content: 'Analyze this data' }],
+    contextUser: currentUser,
+    userScope: {
+        primaryEntityName: 'Organizations',
+        primaryRecordId: orgId,
+        secondary: { TeamID: teamId }
+    },
+    onProgress: (step) => console.log(`${step.step}: ${step.message}`)
+};
+```
+
+### Runtime Action Changes
+
+```typescript
+import { ExecuteAgentParams, ActionChange } from '@memberjunction/ai-core-plus';
+
+const params: ExecuteAgentParams = {
+    agent: myAgent,
+    conversationMessages: messages,
+    actionChanges: [
+        { scope: 'global', mode: 'add', actionIds: ['crm-action-id'] },
+        { scope: 'all-subagents', mode: 'remove', actionIds: ['dangerous-action-id'] }
+    ]
+};
+```
+
+### Message Lifecycle Management
+
+```typescript
+import { ExecuteAgentParams, MessageLifecycleEvent } from '@memberjunction/ai-core-plus';
+
+const params: ExecuteAgentParams = {
+    agent: myAgent,
+    conversationMessages: messages,
+    messageExpirationOverride: {
+        expirationTurns: 2,
+        expirationMode: 'Compact',
+        compactMode: 'First N Chars',
+        compactLength: 500
+    },
+    onMessageLifecycle: (event: MessageLifecycleEvent) => {
+        console.log(`[Turn ${event.turn}] ${event.type}: ${event.reason}`);
     }
-  ]
-};
-
-// Remove dangerous actions from sub-agents
-const params: ExecuteAgentParams = {
-  agent: myAgent,
-  conversationMessages: messages,
-  actionChanges: [
-    {
-      scope: 'all-subagents',
-      mode: 'remove',
-      actionIds: ['delete-record-action-id', 'execute-sql-action-id']
-    }
-  ]
-};
-
-// Add special actions only for a specific sub-agent
-const params: ExecuteAgentParams = {
-  agent: myAgent,
-  conversationMessages: messages,
-  actionChanges: [
-    { scope: 'global', mode: 'add', actionIds: ['common-action-id'] },
-    {
-      scope: 'specific',
-      mode: 'add',
-      actionIds: ['special-data-action-id'],
-      agentIds: ['data-gatherer-sub-agent-id']
-    }
-  ]
 };
 ```
 
-### Propagation Rules
+### Effort Level Control
 
-When sub-agents are executed, action changes are propagated based on scope:
-- **`global`**: Propagated as-is to all sub-agents
-- **`root`**: Not propagated (only applies to root agent)
-- **`all-subagents`**: Propagated as `global` to sub-agents (since they're now in scope)
-- **`specific`**: Propagated as-is; each agent checks if it's in `agentIds`
+MemberJunction supports a 1-100 scale for AI model reasoning effort. The resolution precedence is:
 
-**See:** [@memberjunction/ai-agents README](../Agents/README.md) for complete implementation details.
+1. `ExecuteAgentParams.effortLevel` (runtime override, highest priority)
+2. `AIAgent.DefaultPromptEffortLevel` (agent default)
+3. `AIPrompt.EffortLevel` (prompt default)
+4. Provider default behavior (lowest priority)
 
-## Version History
+Provider mappings:
+- **OpenAI**: 1-33 = low, 34-66 = medium, 67-100 = high
+- **Anthropic**: Thinking mode with 25K-2M token budgets
+- **Groq**: Experimental reasoning_effort parameter
+- **Gemini**: Reasoning mode intensity
 
-- **2.127.0** - Added `agentTypeParams` generic to `ExecuteAgentParams` for agent type-specific execution parameters
-- **2.123.0** - Added runtime action changes (ActionChange, ActionChangeScope, ActionChangeMode)
-- **2.108.0** - Added message lifecycle management types and expiration configuration
-- **2.78.0** - Added enhanced model selection tracking with entity objects
-- **2.77.0** - Added execution status enums and cancellation support
-- **2.50.0** - Initial release with core types
+## Dependencies
+
+- `@memberjunction/ai` -- Core AI abstractions
+- `@memberjunction/core` -- MJ framework core (Metadata, RunView, UserInfo)
+- `@memberjunction/core-entities` -- Generated entity classes
+- `@memberjunction/global` -- Class factory and global utilities
+- `@memberjunction/actions-base` -- Action framework base types
+- `@memberjunction/templates-base-types` -- Template engine base types
+- `date-fns` / `date-fns-tz` -- Date/time formatting and timezone support

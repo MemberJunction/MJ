@@ -1,5 +1,71 @@
 # @memberjunction/ai-cli
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/core-entities-server@4.1.0
+  - @memberjunction/core-actions@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ai-agents@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/ai-prompts@4.1.0
+  - @memberjunction/actions@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/ai-anthropic@4.1.0
+  - @memberjunction/ai-betty-bot@4.1.0
+  - @memberjunction/ai-cerebras@4.1.0
+  - @memberjunction/ai-groq@4.1.0
+  - @memberjunction/ai-mistral@4.1.0
+  - @memberjunction/ai-openai@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [2f86270]
+- Updated dependencies [65b4274]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/core-entities-server@4.0.0
+  - @memberjunction/sqlserver-dataprovider@4.0.0
+  - @memberjunction/ai-agents@4.0.0
+  - @memberjunction/ai@4.0.0
+  - @memberjunction/ai-core-plus@4.0.0
+  - @memberjunction/ai-prompts@4.0.0
+  - @memberjunction/ai-anthropic@4.0.0
+  - @memberjunction/ai-betty-bot@4.0.0
+  - @memberjunction/ai-cerebras@4.0.0
+  - @memberjunction/ai-groq@4.0.0
+  - @memberjunction/ai-mistral@4.0.0
+  - @memberjunction/ai-openai@4.0.0
+  - @memberjunction/core-actions@4.0.0
+  - @memberjunction/actions@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+
 ## 3.4.0
 
 ### Patch Changes
