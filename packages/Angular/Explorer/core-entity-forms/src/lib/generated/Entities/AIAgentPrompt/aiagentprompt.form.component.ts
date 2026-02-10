@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Prompts') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aiagentprompt-form',
     templateUrl: './aiagentprompt.form.component.html'
 })
@@ -22,6 +23,3 @@ export class AIAgentPromptFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIAgentPromptFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

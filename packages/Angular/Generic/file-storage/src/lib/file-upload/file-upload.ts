@@ -50,6 +50,7 @@ type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateMJFile']['File'];
 type UploadTuple = [FileInfo, ApiFile, string];
 
 @Component({
+  standalone: false,
   selector: 'mj-files-file-upload',
   templateUrl: './file-upload.html',
   styleUrls: ['./file-upload.css'],

@@ -148,10 +148,3 @@ export class CreateScheduledJobAction extends BaseJobAction {
         }
     }
 }
-
-/**
- * Loader function to prevent tree shaking
- */
-export function LoadCreateScheduledJobAction() {
-    // Stub function - ensures class is included in bundle
-}

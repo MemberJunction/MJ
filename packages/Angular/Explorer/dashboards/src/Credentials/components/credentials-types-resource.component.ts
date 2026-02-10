@@ -5,11 +5,6 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialTypeEditPanelComponent } from '@memberjunction/ng-credentials';
-
-export function LoadCredentialsTypesResource() {
-    // Prevents tree-shaking
-}
-
 interface FieldSchemaProperty {
     name: string;
     type: string;
@@ -27,6 +22,7 @@ interface TypeWithStats extends CredentialTypeEntity {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsTypesResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-types-resource',
     templateUrl: './credentials-types-resource.component.html',
     styleUrls: ['./credentials-types-resource.component.css'],

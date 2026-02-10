@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angu
 import { LiveExecution } from '../../services/ai-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-live-execution-widget',
   template: `
     <div class="live-execution-widget">

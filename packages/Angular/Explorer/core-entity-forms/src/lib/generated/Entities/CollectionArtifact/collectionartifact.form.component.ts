@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Collection Artifacts') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-collectionartifact-form',
     templateUrl: './collectionartifact.form.component.html'
 })
@@ -21,6 +22,3 @@ export class CollectionArtifactFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadCollectionArtifactFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

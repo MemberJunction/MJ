@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { SlidePanelMode } from '../types';
 
 @Component({
+  standalone: false,
     selector: 'mj-slide-panel',
     templateUrl: './slide-panel.component.html',
     styleUrls: ['./slide-panel.component.css'],

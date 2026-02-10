@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Dashboard User States') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-dashboarduserstate-form',
     templateUrl: './dashboarduserstate.form.component.html'
 })
@@ -21,6 +22,3 @@ export class DashboardUserStateFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDashboardUserStateFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

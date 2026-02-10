@@ -37,6 +37,7 @@
 //  * Provides access to all advanced configuration options not available in the main UI.
 //  */
 // @Component({
+//   standalone: false,
 //   selector: 'mj-agent-advanced-settings-dialog',
 //   templateUrl: './agent-advanced-settings-dialog.component.html',
 //   styleUrls: ['./agent-advanced-settings-dialog.component.css']

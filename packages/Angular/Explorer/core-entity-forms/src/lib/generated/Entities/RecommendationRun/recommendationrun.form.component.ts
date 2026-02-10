@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Recommendation Runs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-recommendationrun-form',
     templateUrl: './recommendationrun.form.component.html'
 })
@@ -24,6 +25,3 @@ export class RecommendationRunFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadRecommendationRunFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

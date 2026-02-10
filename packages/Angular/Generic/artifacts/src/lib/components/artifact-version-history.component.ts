@@ -3,6 +3,7 @@ import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-enti
 import { UserInfo, RunView } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-artifact-version-history',
   template: `
     <div class="version-history">
@@ -12,58 +13,63 @@ import { UserInfo, RunView } from '@memberjunction/core';
           <i class="fas fa-times"></i>
         </button>
       </div>
-
+    
       <div class="version-list">
-        <div *ngIf="versions.length === 0" class="empty-state">
-          <i class="fas fa-history"></i>
-          <p>No version history available</p>
-        </div>
-
-        <div
-          *ngFor="let version of versions"
-          class="version-item"
-          [class.selected]="version.VersionNumber === selectedVersion"
-          (click)="onSelectVersion(version)">
-
-          <div class="version-header">
-            <div class="version-info">
-              <span class="version-number">v{{ version.VersionNumber }}</span>
-              <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
-            </div>
-            <div class="version-meta">
-              <span class="version-size">
-                {{ getContentSize(version.Content) }}
-              </span>
-            </div>
+        @if (versions.length === 0) {
+          <div class="empty-state">
+            <i class="fas fa-history"></i>
+            <p>No version history available</p>
           </div>
-
-          <div class="version-actions" *ngIf="version.VersionNumber === selectedVersion">
-            <button class="btn-action" (click)="onRestoreVersion(version); $event.stopPropagation()">
-              <i class="fas fa-undo"></i> Restore
-            </button>
-            <button class="btn-action" (click)="onCompareVersion(version); $event.stopPropagation()">
-              <i class="fas fa-code-compare"></i> Compare
-            </button>
-            <button class="btn-action" (click)="onDownloadVersion(version); $event.stopPropagation()">
-              <i class="fas fa-download"></i> Download
+        }
+    
+        @for (version of versions; track version) {
+          <div
+            class="version-item"
+            [class.selected]="version.VersionNumber === selectedVersion"
+            (click)="onSelectVersion(version)">
+            <div class="version-header">
+              <div class="version-info">
+                <span class="version-number">v{{ version.VersionNumber }}</span>
+                <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
+              </div>
+              <div class="version-meta">
+                <span class="version-size">
+                  {{ getContentSize(version.Content) }}
+                </span>
+              </div>
+            </div>
+            @if (version.VersionNumber === selectedVersion) {
+              <div class="version-actions">
+                <button class="btn-action" (click)="onRestoreVersion(version); $event.stopPropagation()">
+                  <i class="fas fa-undo"></i> Restore
+                </button>
+                <button class="btn-action" (click)="onCompareVersion(version); $event.stopPropagation()">
+                  <i class="fas fa-code-compare"></i> Compare
+                </button>
+                <button class="btn-action" (click)="onDownloadVersion(version); $event.stopPropagation()">
+                  <i class="fas fa-download"></i> Download
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    
+      @if (showDiff && currentVersionContent && previousVersionContent && selectedVersion) {
+        <div class="diff-panel">
+          <div class="diff-header">
+            <h4>Changes from v{{ (selectedVersion || 1) - 1 }} to v{{ selectedVersion }}</h4>
+            <button class="btn-close-diff" (click)="showDiff = false">
+              <i class="fas fa-times"></i>
             </button>
           </div>
+          <div class="diff-content">
+            <pre>{{ getDiffSummary() }}</pre>
+          </div>
         </div>
-      </div>
-
-      <div class="diff-panel" *ngIf="showDiff && currentVersionContent && previousVersionContent && selectedVersion">
-        <div class="diff-header">
-          <h4>Changes from v{{ (selectedVersion || 1) - 1 }} to v{{ selectedVersion }}</h4>
-          <button class="btn-close-diff" (click)="showDiff = false">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="diff-content">
-          <pre>{{ getDiffSummary() }}</pre>
-        </div>
-      </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .version-history { display: flex; flex-direction: column; height: 100%; background: white; }
     .history-header { padding: 16px; border-bottom: 1px solid #D9D9D9; display: flex; justify-content: space-between; align-items: center; }

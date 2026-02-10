@@ -27,17 +27,12 @@ export interface APIKeyCreateResult {
     rawKey?: string;
     error?: string;
 }
-
-/** Tree shaking prevention function */
-export function LoadAPIKeyCreateDialog(): void {
-    // This function prevents tree shaking
-}
-
 /**
  * Dialog for creating new API keys
  * Shows the raw key only once - it cannot be recovered after closing
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-key-create-dialog',
     templateUrl: './api-key-create-dialog.component.html',
     styleUrls: ['./api-key-create-dialog.component.css']

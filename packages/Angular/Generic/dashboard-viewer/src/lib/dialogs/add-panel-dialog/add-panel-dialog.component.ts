@@ -38,6 +38,7 @@ type DialogStep = 'select-type' | 'configure';
  * allowing new part types to be added without modifying this component.
  */
 @Component({
+  standalone: false,
     selector: 'mj-add-panel-dialog',
     templateUrl: './add-panel-dialog.component.html',
     styleUrls: ['./add-panel-dialog.component.css']

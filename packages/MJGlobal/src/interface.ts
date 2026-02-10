@@ -1,15 +1,16 @@
 export class MJGlobalProperty
 {
-    key: any
-    value: any
+    key: unknown;
+    value: unknown;
 }
 
 export class MJEvent
 {
-    component: IMJComponent
-    event: MJEventType
-    eventCode?: string
-    args: any
+    component!: IMJComponent;
+    event!: MJEventType;
+    eventCode?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    args: any; // Intentionally any - event payload varies by event type
 }
 
 export interface IMJComponent

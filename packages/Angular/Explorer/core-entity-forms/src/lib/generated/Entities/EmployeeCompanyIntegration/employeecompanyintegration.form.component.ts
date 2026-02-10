@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Employee Company Integrations') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-employeecompanyintegration-form',
     templateUrl: './employeecompanyintegration.form.component.html'
 })
@@ -16,12 +17,8 @@ export class EmployeeCompanyIntegrationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'integrationMapping', sectionName: 'Integration Mapping', isExpanded: true },
             { sectionKey: 'externalIdentifier', sectionName: 'External Identifier', isExpanded: true },
-            { sectionKey: 'employeeInfo', sectionName: 'Employee Info', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }
 
-export function LoadEmployeeCompanyIntegrationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

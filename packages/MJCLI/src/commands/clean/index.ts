@@ -1,5 +1,5 @@
 import { Command, Flags } from '@oclif/core';
-import { ParserOutput } from '@oclif/core/lib/interfaces/parser';
+import type { ParserOutput } from '@oclif/core/lib/interfaces/parser';
 import { Flyway } from 'node-flyway';
 import { getValidatedConfig, getFlywayConfig } from '../../config';
 import ora from 'ora-classic';

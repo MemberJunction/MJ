@@ -34,6 +34,7 @@ interface ViewportPreset {
  * Renders the live React component preview with toolbar controls.
  */
 @Component({
+  standalone: false,
   selector: 'mj-component-preview',
   templateUrl: './component-preview.component.html',
   styleUrls: ['./component-preview.component.css']

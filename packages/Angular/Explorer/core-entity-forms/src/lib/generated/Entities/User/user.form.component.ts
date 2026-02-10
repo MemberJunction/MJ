@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Users') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-user-form',
     templateUrl: './user.form.component.html'
 })
@@ -66,6 +67,7 @@ export class UserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJListInvitations', sectionName: 'MJ: List Invitations', isExpanded: false },
             { sectionKey: 'mJListShares', sectionName: 'MJ: List Shares', isExpanded: false },
             { sectionKey: 'mJMCPToolExecutionLogs', sectionName: 'MJ: MCP Tool Execution Logs', isExpanded: false },
+            { sectionKey: 'mJOAuthAuthorizationStates', sectionName: 'MJ: O Auth Authorization States', isExpanded: false },
             { sectionKey: 'mJPublicLinks', sectionName: 'MJ: Public Links', isExpanded: false },
             { sectionKey: 'mJReportUserStates', sectionName: 'MJ: Report User States', isExpanded: false },
             { sectionKey: 'mJScheduledJobRuns', sectionName: 'MJ: Scheduled Job Runs', isExpanded: false },
@@ -102,6 +104,3 @@ export class UserFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

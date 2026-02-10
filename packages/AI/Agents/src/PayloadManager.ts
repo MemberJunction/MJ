@@ -35,7 +35,7 @@
 import { LogError, LogStatus } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { DeepDiffer, DeepDiffResult } from '@memberjunction/global';
-import * as _ from 'lodash';
+import _ from 'lodash';
 import { PayloadChangeAnalyzer, PayloadAnalysisResult, PayloadWarning } from './PayloadChangeAnalyzer';
 import { 
     PayloadOperation, 

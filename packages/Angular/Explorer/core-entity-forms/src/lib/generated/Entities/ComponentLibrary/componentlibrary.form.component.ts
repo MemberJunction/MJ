@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Component Libraries') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-componentlibrary-form',
     templateUrl: './componentlibrary.form.component.html'
 })
@@ -24,6 +25,3 @@ export class ComponentLibraryFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadComponentLibraryFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

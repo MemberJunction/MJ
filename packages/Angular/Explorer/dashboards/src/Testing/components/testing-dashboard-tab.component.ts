@@ -29,6 +29,7 @@ interface TestAlert {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-testing-dashboard-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

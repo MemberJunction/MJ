@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: API Key Scopes') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-apikeyscope-form',
     templateUrl: './apikeyscope.form.component.html'
 })
@@ -21,6 +22,3 @@ export class APIKeyScopeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAPIKeyScopeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

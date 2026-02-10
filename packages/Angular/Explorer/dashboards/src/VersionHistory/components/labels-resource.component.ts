@@ -5,11 +5,6 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { RunView, Metadata } from '@memberjunction/core';
 import { ResourceData, VersionLabelEntityType, VersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
 import { EntityLinkClickEvent } from '@memberjunction/ng-versions';
-
-export function LoadVersionHistoryLabelsResource() {
-    // Prevents tree-shaking
-}
-
 interface ScopeStat {
     Scope: string;
     Count: number;
@@ -36,6 +31,7 @@ type SortField = 'Name' | 'Scope' | 'Status' | 'Items' | 'Date';
 
 @RegisterClass(BaseResourceComponent, 'VersionHistoryLabelsResource')
 @Component({
+  standalone: false,
     selector: 'mj-version-history-labels-resource',
     templateUrl: './labels-resource.component.html',
     styleUrls: ['./labels-resource.component.css'],

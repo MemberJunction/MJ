@@ -1,13 +1,12 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, AfterViewInit, ViewChild, ViewContainerRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, AfterViewInit, ViewChild, ViewContainerRef, ElementRef, inject } from '@angular/core';
 import * as d3 from 'd3';
-import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TestSuiteEntity, TestSuiteTestEntity, TestSuiteRunEntity, TestRunEntity, TestRunFeedbackEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { TestSuiteFormComponent } from '../../generated/Entities/TestSuite/testsuite.form.component';
 import {
@@ -23,6 +22,7 @@ const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suites')
 @Component({
+  standalone: false,
   selector: 'mj-test-suite-form',
   templateUrl: './test-suite-form.component.html',
   styleUrls: ['./test-suite-form.component.css'],
@@ -94,19 +94,12 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   matrixTestFilter = '';
   private matrixFilterSubject$ = new Subject<string>();
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService,
-    private evalPrefsService: EvaluationPreferencesService,
-    private viewContainerRef: ViewContainerRef,
-    private appManager: ApplicationManager
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
+  // Service injections
+  private navigationService = inject(NavigationService);
+  private testingDialogService = inject(TestingDialogService);
+  private evalPrefsService = inject(EvaluationPreferencesService);
+  private viewContainerRef = inject(ViewContainerRef);
+  private appManager = inject(ApplicationManager);
 
   async ngOnInit() {
     await super.ngOnInit();
@@ -1949,6 +1942,3 @@ interface TestResultCell {
   humanComments: string | null;
   sequence: number;
 }
-
-export function LoadTestSuiteFormComponentExtended() {}
-LoadTestSuiteFormComponentExtended();

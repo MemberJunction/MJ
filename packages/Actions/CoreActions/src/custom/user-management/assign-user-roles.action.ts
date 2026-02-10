@@ -160,7 +160,3 @@ export class AssignUserRolesAction extends BaseAction {
         }
     }
 }
-
-export function LoadAssignUserRolesAction() {
-    // Prevent tree shaking
-}

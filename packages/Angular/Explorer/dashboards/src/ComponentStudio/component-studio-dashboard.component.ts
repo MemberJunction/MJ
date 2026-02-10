@@ -44,6 +44,7 @@ export interface NewComponentResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-component-studio-dashboard',
   templateUrl: './component-studio-dashboard.component.html',
   styleUrls: ['./component-studio-dashboard.component.css'],
@@ -710,11 +711,4 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
-}
-
-/**
- * Function to prevent tree shaking of the ComponentStudioDashboardComponent.
- */
-export function LoadComponentStudioDashboard() {
-  // This function doesn't need to do anything
 }

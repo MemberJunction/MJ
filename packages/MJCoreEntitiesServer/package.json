@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/core-entities-server",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "4.0.0",
   "description": "Entity subclasses for the metadata layer of MemberJunction that are only used on server side applications like MJAPI, distributed as part of each release of MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,33 +10,33 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "3.4.0",
-    "@memberjunction/ai": "3.4.0",
-    "@memberjunction/ai-core-plus": "3.4.0",
-    "@memberjunction/ai-engine-base": "3.4.0",
-    "@memberjunction/ai-prompts": "3.4.0",
-    "@memberjunction/ai-provider-bundle": "3.4.0",
-    "@memberjunction/ai-vector-dupe": "3.4.0",
-    "@memberjunction/aiengine": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/doc-utils": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/skip-types": "3.4.0",
-    "@memberjunction/sqlserver-dataprovider": "3.4.0",
-    "node-sql-parser": "^5.3.13",
+    "@memberjunction/actions-base": "4.0.0",
+    "@memberjunction/ai": "4.0.0",
+    "@memberjunction/ai-core-plus": "4.0.0",
+    "@memberjunction/ai-engine-base": "4.0.0",
+    "@memberjunction/ai-prompts": "4.0.0",
+    "@memberjunction/ai-provider-bundle": "4.0.0",
+    "@memberjunction/ai-vector-dupe": "4.0.0",
+    "@memberjunction/aiengine": "4.0.0",
+    "@memberjunction/core": "4.0.0",
+    "@memberjunction/core-entities": "4.0.0",
+    "@memberjunction/doc-utils": "4.0.0",
+    "@memberjunction/global": "4.0.0",
+    "@memberjunction/skip-types": "4.0.0",
+    "@memberjunction/sqlserver-dataprovider": "4.0.0",
+    "node-sql-parser": "^5.4.0",
     "nunjucks": "^3.2.4",
-    "zod": "^3.23.8"
+    "zod": "~3.24.4"
   },
   "repository": {
     "type": "git",

@@ -1,0 +1,388 @@
+/**
+ * MemberJunction Design Tokens
+ * ============================
+ *
+ * This file defines all design tokens for the MJ design system.
+ * These tokens provide consistent styling across all components.
+ *
+ * Token Categories:
+ * - Primitives: Raw color values (not used directly in components)
+ * - Semantic: Purpose-based tokens (what components should use)
+ * - Component: Specific component overrides (if needed)
+ */
+
+:root {
+  /* ========================================
+     PRIMITIVE TOKENS
+     Raw values - DO NOT use directly in components
+     ======================================== */
+
+  /* Brand Colors - Primary Blue */
+  --mj-color-brand-50: #e6f3f9;
+  --mj-color-brand-100: #b3dbed;
+  --mj-color-brand-200: #80c3e1;
+  --mj-color-brand-300: #4dabd5;
+  --mj-color-brand-400: #2699cc;
+  --mj-color-brand-500: #0076b6;  /* MJ Primary Blue */
+  --mj-color-brand-600: #006aa3;
+  --mj-color-brand-700: #005a8a;
+  --mj-color-brand-800: #004a71;
+  --mj-color-brand-900: #092340;  /* MJ Navy */
+
+  /* Accent Colors - Light Blue (from MJ website) */
+  --mj-color-accent-50: #f0faff;
+  --mj-color-accent-100: #e0f4fe;
+  --mj-color-accent-200: #bae8fd;
+  --mj-color-accent-300: #aae7fd;  /* MJ Light Blue */
+  --mj-color-accent-400: #5cc0ed;  /* MJ Skip Agent Blue */
+  --mj-color-accent-500: #38a9d9;  /* MJ Accent */
+  --mj-color-accent-600: #2490c0;
+  --mj-color-accent-700: #1d7299;
+  --mj-color-accent-800: #1c5d7d;
+  --mj-color-accent-900: #1b4d68;
+
+  /* Tertiary Colors - Cyan/Teal (secondary actions, info) */
+  --mj-color-tertiary-50: #ecfeff;
+  --mj-color-tertiary-100: #cffafe;
+  --mj-color-tertiary-200: #a5f3fc;
+  --mj-color-tertiary-300: #67e8f9;
+  --mj-color-tertiary-400: #22d3ee;
+  --mj-color-tertiary-500: #06b6d4;  /* MJ Tertiary Cyan */
+  --mj-color-tertiary-600: #0891b2;
+  --mj-color-tertiary-700: #0e7490;
+  --mj-color-tertiary-800: #155e75;
+  --mj-color-tertiary-900: #164e63;
+
+  /* Neutral Colors (Slate palette) */
+  --mj-color-neutral-0: #ffffff;
+  --mj-color-neutral-50: #f8fafc;
+  --mj-color-neutral-100: #f1f5f9;
+  --mj-color-neutral-200: #e2e8f0;
+  --mj-color-neutral-300: #cbd5e1;
+  --mj-color-neutral-400: #94a3b8;
+  --mj-color-neutral-500: #64748b;
+  --mj-color-neutral-600: #475569;
+  --mj-color-neutral-700: #334155;
+  --mj-color-neutral-800: #1e293b;
+  --mj-color-neutral-900: #0f172a;
+  --mj-color-neutral-950: #020617;
+
+  /* Status Colors */
+  --mj-color-success-50: #f0fdf4;
+  --mj-color-success-100: #dcfce7;
+  --mj-color-success-500: #22c55e;
+  --mj-color-success-600: #16a34a;
+  --mj-color-success-700: #15803d;
+
+  --mj-color-warning-50: #fffbeb;
+  --mj-color-warning-100: #fef3c7;
+  --mj-color-warning-500: #f59e0b;
+  --mj-color-warning-600: #d97706;
+  --mj-color-warning-700: #b45309;
+
+  --mj-color-error-50: #fef2f2;
+  --mj-color-error-100: #fee2e2;
+  --mj-color-error-500: #ef4444;
+  --mj-color-error-600: #dc2626;
+  --mj-color-error-700: #b91c1c;
+
+  --mj-color-info-50: #eff6ff;
+  --mj-color-info-100: #dbeafe;
+  --mj-color-info-500: #3b82f6;
+  --mj-color-info-600: #2563eb;
+  --mj-color-info-700: #1d4ed8;
+
+  /* ========================================
+     SEMANTIC TOKENS
+     USE THESE in components
+     ======================================== */
+
+  /* Background Colors */
+  --mj-bg-page: var(--mj-color-neutral-50);
+  --mj-bg-surface: var(--mj-color-neutral-0);
+  --mj-bg-surface-elevated: var(--mj-color-neutral-0);
+  --mj-bg-surface-sunken: var(--mj-color-neutral-100);
+  --mj-bg-surface-hover: var(--mj-color-neutral-100);
+  --mj-bg-surface-active: var(--mj-color-neutral-200);
+  --mj-bg-overlay: rgba(15, 23, 42, 0.5);
+
+  /* Text Colors */
+  --mj-text-primary: var(--mj-color-neutral-800);
+  --mj-text-secondary: var(--mj-color-neutral-600);
+  --mj-text-muted: var(--mj-color-neutral-500);
+  --mj-text-disabled: var(--mj-color-neutral-400);
+  --mj-text-inverse: var(--mj-color-neutral-0);
+  --mj-text-link: var(--mj-color-brand-500);
+  --mj-text-link-hover: var(--mj-color-brand-600);
+
+  /* Border Colors */
+  --mj-border-default: var(--mj-color-neutral-200);
+  --mj-border-subtle: var(--mj-color-neutral-100);
+  --mj-border-strong: var(--mj-color-neutral-300);
+  --mj-border-focus: var(--mj-color-brand-500);
+  --mj-border-error: var(--mj-color-error-500);
+
+  /* Brand Colors (semantic) */
+  --mj-brand-primary: var(--mj-color-brand-500);
+  --mj-brand-primary-hover: var(--mj-color-brand-600);
+  --mj-brand-primary-active: var(--mj-color-brand-700);
+  --mj-brand-secondary: var(--mj-color-brand-900);
+  --mj-brand-on-primary: var(--mj-color-neutral-0);
+  --mj-brand-on-secondary: var(--mj-color-neutral-0);
+
+  /* Accent Colors (semantic) - light blue highlights, emphasis */
+  --mj-brand-accent: var(--mj-color-accent-400);
+  --mj-brand-accent-hover: var(--mj-color-accent-500);
+  --mj-brand-accent-active: var(--mj-color-accent-600);
+  --mj-brand-accent-subtle: var(--mj-color-accent-50);
+  --mj-brand-on-accent: var(--mj-color-neutral-900);
+
+  /* Tertiary Colors (semantic) - secondary actions, complementary highlights */
+  --mj-brand-tertiary: var(--mj-color-tertiary-500);
+  --mj-brand-tertiary-hover: var(--mj-color-tertiary-600);
+  --mj-brand-tertiary-active: var(--mj-color-tertiary-700);
+  --mj-brand-tertiary-subtle: var(--mj-color-tertiary-50);
+  --mj-brand-on-tertiary: var(--mj-color-neutral-0);
+
+  /* Status Colors (semantic) */
+  --mj-status-success: var(--mj-color-success-500);
+  --mj-status-success-bg: var(--mj-color-success-50);
+  --mj-status-success-text: var(--mj-color-success-700);
+  --mj-status-success-border: var(--mj-color-success-500);
+
+  --mj-status-warning: var(--mj-color-warning-500);
+  --mj-status-warning-bg: var(--mj-color-warning-50);
+  --mj-status-warning-text: var(--mj-color-warning-700);
+  --mj-status-warning-border: var(--mj-color-warning-500);
+
+  --mj-status-error: var(--mj-color-error-500);
+  --mj-status-error-bg: var(--mj-color-error-50);
+  --mj-status-error-text: var(--mj-color-error-700);
+  --mj-status-error-border: var(--mj-color-error-500);
+
+  --mj-status-info: var(--mj-color-info-500);
+  --mj-status-info-bg: var(--mj-color-info-50);
+  --mj-status-info-text: var(--mj-color-info-700);
+  --mj-status-info-border: var(--mj-color-info-500);
+
+  /* Application Accent (set per-application from metadata)
+     Default uses amber accent, but apps can override to use primary/tertiary/custom */
+  --mj-app-accent: var(--mj-brand-accent);
+  --mj-app-accent-hover: var(--mj-brand-accent-hover);
+  --mj-app-accent-subtle: var(--mj-brand-accent-subtle);
+
+  /* Highlight Color - for important callouts, notifications, badges */
+  --mj-highlight: var(--mj-brand-accent);
+  --mj-highlight-hover: var(--mj-brand-accent-hover);
+  --mj-highlight-subtle: var(--mj-brand-accent-subtle);
+  --mj-on-highlight: var(--mj-brand-on-accent);
+
+  /* ========================================
+     TYPOGRAPHY
+     ======================================== */
+
+  /* Font Family */
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mj-font-family-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* Font Sizes */
+  --mj-text-xs: 0.75rem;      /* 12px */
+  --mj-text-sm: 0.875rem;     /* 14px */
+  --mj-text-base: 1rem;       /* 16px */
+  --mj-text-lg: 1.125rem;     /* 18px */
+  --mj-text-xl: 1.25rem;      /* 20px */
+  --mj-text-2xl: 1.5rem;      /* 24px */
+  --mj-text-3xl: 1.875rem;    /* 30px */
+  --mj-text-4xl: 2.25rem;     /* 36px */
+
+  /* Font Weights */
+  --mj-font-normal: 400;
+  --mj-font-medium: 500;
+  --mj-font-semibold: 600;
+  --mj-font-bold: 700;
+
+  /* Line Heights */
+  --mj-leading-none: 1;
+  --mj-leading-tight: 1.25;
+  --mj-leading-snug: 1.375;
+  --mj-leading-normal: 1.5;
+  --mj-leading-relaxed: 1.625;
+  --mj-leading-loose: 2;
+
+  /* Letter Spacing */
+  --mj-tracking-tighter: -0.05em;
+  --mj-tracking-tight: -0.025em;
+  --mj-tracking-normal: 0;
+  --mj-tracking-wide: 0.025em;
+  --mj-tracking-wider: 0.05em;
+
+  /* ========================================
+     SPACING (4px base scale)
+     ======================================== */
+
+  --mj-space-0: 0;
+  --mj-space-px: 1px;
+  --mj-space-0-5: 0.125rem;   /* 2px */
+  --mj-space-1: 0.25rem;      /* 4px */
+  --mj-space-1-5: 0.375rem;   /* 6px */
+  --mj-space-2: 0.5rem;       /* 8px */
+  --mj-space-2-5: 0.625rem;   /* 10px */
+  --mj-space-3: 0.75rem;      /* 12px */
+  --mj-space-3-5: 0.875rem;   /* 14px */
+  --mj-space-4: 1rem;         /* 16px */
+  --mj-space-5: 1.25rem;      /* 20px */
+  --mj-space-6: 1.5rem;       /* 24px */
+  --mj-space-7: 1.75rem;      /* 28px */
+  --mj-space-8: 2rem;         /* 32px */
+  --mj-space-9: 2.25rem;      /* 36px */
+  --mj-space-10: 2.5rem;      /* 40px */
+  --mj-space-11: 2.75rem;     /* 44px */
+  --mj-space-12: 3rem;        /* 48px */
+  --mj-space-14: 3.5rem;      /* 56px */
+  --mj-space-16: 4rem;        /* 64px */
+  --mj-space-20: 5rem;        /* 80px */
+  --mj-space-24: 6rem;        /* 96px */
+
+  /* ========================================
+     BREAKPOINTS (documentary)
+     Authoritative values live as SCSS vars in
+     _grid.scss (CSS vars can't be used in @media).
+     These exist for JS access / documentation.
+     ======================================== */
+  --mj-breakpoint-sm: 576px;
+  --mj-breakpoint-md: 768px;
+  --mj-breakpoint-lg: 992px;
+  --mj-breakpoint-xl: 1200px;
+  --mj-breakpoint-2xl: 1400px;
+
+  /* ========================================
+     EFFECTS
+     ======================================== */
+
+  /* Border Radius */
+  --mj-radius-none: 0;
+  --mj-radius-sm: 4px;
+  --mj-radius-md: 8px;
+  --mj-radius-lg: 12px;
+  --mj-radius-xl: 16px;
+  --mj-radius-2xl: 24px;
+  --mj-radius-full: 9999px;
+
+  /* Shadows */
+  --mj-shadow-none: none;
+  --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --mj-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --mj-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+
+  /* Focus Ring */
+  --mj-ring-width: 2px;
+  --mj-ring-offset: 2px;
+  --mj-ring-color: var(--mj-brand-primary);
+  --mj-focus-ring: 0 0 0 var(--mj-ring-offset) var(--mj-bg-surface), 0 0 0 calc(var(--mj-ring-offset) + var(--mj-ring-width)) var(--mj-ring-color);
+
+  /* Transitions */
+  --mj-transition-fast: 150ms ease;
+  --mj-transition-base: 200ms ease;
+  --mj-transition-slow: 300ms ease;
+  --mj-transition-colors: color var(--mj-transition-base), background-color var(--mj-transition-base), border-color var(--mj-transition-base);
+
+  /* ========================================
+     Z-INDEX SCALE
+     ======================================== */
+
+  --mj-z-base: 0;
+  --mj-z-dropdown: 100;
+  --mj-z-sticky: 200;
+  --mj-z-fixed: 300;
+  --mj-z-modal-backdrop: 400;
+  --mj-z-modal: 500;
+  --mj-z-popover: 600;
+  --mj-z-tooltip: 700;
+  --mj-z-toast: 800;
+}
+
+/* ========================================
+   DARK THEME
+   ======================================== */
+
+[data-theme="dark"] {
+  /* Background Colors */
+  --mj-bg-page: var(--mj-color-neutral-900);
+  --mj-bg-surface: var(--mj-color-neutral-800);
+  --mj-bg-surface-elevated: var(--mj-color-neutral-700);
+  --mj-bg-surface-sunken: var(--mj-color-neutral-950);
+  --mj-bg-surface-hover: var(--mj-color-neutral-700);
+  --mj-bg-surface-active: var(--mj-color-neutral-600);
+  --mj-bg-overlay: rgba(0, 0, 0, 0.7);
+
+  /* Text Colors */
+  --mj-text-primary: var(--mj-color-neutral-100);
+  --mj-text-secondary: var(--mj-color-neutral-300);
+  --mj-text-muted: var(--mj-color-neutral-400);
+  --mj-text-disabled: var(--mj-color-neutral-600);
+  --mj-text-inverse: var(--mj-color-neutral-900);
+  --mj-text-link: var(--mj-color-brand-300);
+  --mj-text-link-hover: var(--mj-color-brand-200);
+
+  /* Border Colors */
+  --mj-border-default: var(--mj-color-neutral-700);
+  --mj-border-subtle: var(--mj-color-neutral-800);
+  --mj-border-strong: var(--mj-color-neutral-600);
+  --mj-border-focus: var(--mj-color-brand-400);
+  --mj-border-error: var(--mj-color-error-400);
+
+  /* Brand Colors (adjusted for dark) */
+  --mj-brand-primary: var(--mj-color-brand-400);
+  --mj-brand-primary-hover: var(--mj-color-brand-300);
+  --mj-brand-primary-active: var(--mj-color-brand-200);
+
+  /* Accent Colors (adjusted for dark) */
+  --mj-brand-accent: var(--mj-color-accent-300);
+  --mj-brand-accent-hover: var(--mj-color-accent-200);
+  --mj-brand-accent-active: var(--mj-color-accent-100);
+  --mj-brand-accent-subtle: color-mix(in srgb, var(--mj-color-accent-400) 15%, transparent);
+  --mj-brand-on-accent: var(--mj-color-neutral-900);
+
+  /* Tertiary Colors (adjusted for dark) */
+  --mj-brand-tertiary: var(--mj-color-tertiary-400);
+  --mj-brand-tertiary-hover: var(--mj-color-tertiary-300);
+  --mj-brand-tertiary-active: var(--mj-color-tertiary-200);
+  --mj-brand-tertiary-subtle: color-mix(in srgb, var(--mj-color-tertiary-500) 15%, transparent);
+
+  /* Highlight (adjusted for dark) */
+  --mj-highlight: var(--mj-color-accent-300);
+  --mj-highlight-hover: var(--mj-color-accent-200);
+  --mj-highlight-subtle: var(--mj-brand-accent-subtle);
+
+  /* Status Colors (adjusted for dark backgrounds) */
+  --mj-status-success-bg: rgba(34, 197, 94, 0.15);
+  --mj-status-success-text: var(--mj-color-success-100);
+  --mj-status-success-border: var(--mj-color-success-600);
+
+  --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
+  --mj-status-warning-text: var(--mj-color-warning-100);
+  --mj-status-warning-border: var(--mj-color-warning-600);
+
+  --mj-status-error-bg: rgba(239, 68, 68, 0.15);
+  --mj-status-error-text: var(--mj-color-error-100);
+  --mj-status-error-border: var(--mj-color-error-600);
+
+  --mj-status-info-bg: rgba(59, 130, 246, 0.15);
+  --mj-status-info-text: var(--mj-color-info-100);
+  --mj-status-info-border: var(--mj-color-info-600);
+
+  /* Application Accent (dark mode adjustment) */
+  --mj-app-accent: var(--mj-brand-accent);
+  --mj-app-accent-hover: var(--mj-brand-accent-hover);
+  --mj-app-accent-subtle: var(--mj-brand-accent-subtle);
+
+  /* Shadows (darker for dark mode) */
+  --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --mj-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+}

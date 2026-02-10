@@ -8,39 +8,42 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
  * Shows aggregate ratings and allows users to provide their own rating.
  */
 @Component({
+  standalone: false,
     selector: 'mj-conversation-message-rating',
     template: `
         <div class="rating-container">
-            <div class="aggregate-rating" *ngIf="totalRatings > 0" [title]="getRatingsTooltip()">
-                <span class="thumbs-up" [class.has-votes]="thumbsUpCount > 0">
-                    👍 {{ thumbsUpCount }}
-                </span>
-                <span class="thumbs-down" [class.has-votes]="thumbsDownCount > 0">
-                    👎 {{ thumbsDownCount }}
-                </span>
-                <span class="total-count">({{ totalRatings }} {{ totalRatings === 1 ? 'rating' : 'ratings' }})</span>
+          @if (totalRatings > 0) {
+            <div class="aggregate-rating" [title]="getRatingsTooltip()">
+              <span class="thumbs-up" [class.has-votes]="thumbsUpCount > 0">
+                👍 {{ thumbsUpCount }}
+              </span>
+              <span class="thumbs-down" [class.has-votes]="thumbsDownCount > 0">
+                👎 {{ thumbsDownCount }}
+              </span>
+              <span class="total-count">({{ totalRatings }} {{ totalRatings === 1 ? 'rating' : 'ratings' }})</span>
             </div>
-
-            <div class="user-rating" [class.has-rated]="currentUserRating != null">
-                <button
-                    class="rating-button thumbs-up-btn"
-                    [class.active]="currentUserRating != null && currentUserRating >= 8"
-                    (click)="RateThumbsUp()"
-                    title="This was helpful"
-                    type="button">
-                    👍
-                </button>
-                <button
-                    class="rating-button thumbs-down-btn"
-                    [class.active]="currentUserRating != null && currentUserRating <= 3"
-                    (click)="RateThumbsDown()"
-                    title="This was not helpful"
-                    type="button">
-                    👎
-                </button>
-            </div>
+          }
+        
+          <div class="user-rating" [class.has-rated]="currentUserRating != null">
+            <button
+              class="rating-button thumbs-up-btn"
+              [class.active]="currentUserRating != null && currentUserRating >= 8"
+              (click)="RateThumbsUp()"
+              title="This was helpful"
+              type="button">
+              👍
+            </button>
+            <button
+              class="rating-button thumbs-down-btn"
+              [class.active]="currentUserRating != null && currentUserRating <= 3"
+              (click)="RateThumbsDown()"
+              title="This was not helpful"
+              type="button">
+              👎
+            </button>
+          </div>
         </div>
-    `,
+        `,
     styles: [`
         .rating-container {
             display: flex;

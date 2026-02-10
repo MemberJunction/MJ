@@ -1,10 +1,6 @@
 # @memberjunction/ng-bootstrap
 
-MemberJunction 3.0 Angular Bootstrap - Encapsulates all Angular authentication and initialization logic into a reusable module.
-
-## Overview
-
-In MemberJunction 3.0, Angular applications (MJExplorer) become **minimal configuration files** (~15-20 lines) that import all functionality from NPM packages. This package provides the `MJBootstrapModule` and `MJBootstrapComponent` that handle all authentication, GraphQL setup, and application initialization.
+MemberJunction Angular Bootstrap -- encapsulates all Angular authentication and initialization logic into a single reusable module. Reduces an entire MJExplorer application module to approximately 15 lines of code.
 
 ## Installation
 
@@ -12,22 +8,51 @@ In MemberJunction 3.0, Angular applications (MJExplorer) become **minimal config
 npm install @memberjunction/ng-bootstrap
 ```
 
+## Overview
+
+In MemberJunction 3.0+, Angular applications become minimal configuration files that delegate authentication, GraphQL setup, metadata loading, and user validation to this bootstrap package. The `MJBootstrapModule` configures all necessary providers via `forRoot()`, while `MJBootstrapComponent` serves as the root component handling the full application lifecycle from login through to the authenticated shell.
+
+```mermaid
+flowchart TD
+    subgraph Bootstrap["MJBootstrapModule.forRoot(env)"]
+        A["MJEnvironmentConfig"]
+        A --> B["Auth Provider (MSAL / Auth0)"]
+        A --> C["GraphQL Client + WebSocket"]
+        A --> D["MJ_ENVIRONMENT Token"]
+    end
+    subgraph Lifecycle["MJBootstrapComponent"]
+        E["Login Screen"] --> F["Authentication"]
+        F --> G["Token Management"]
+        G --> H["Metadata Loading"]
+        H --> I["User Validation"]
+        I --> J["Startup Validation"]
+        J --> K["Authenticated Shell"]
+    end
+    subgraph States["Application States"]
+        L["Not Authenticated"]
+        M["Authenticated"]
+        N["Error State"]
+        O["Validation Banner"]
+    end
+
+    Bootstrap --> Lifecycle
+    Lifecycle --> States
+
+    style Bootstrap fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Lifecycle fill:#7c5295,stroke:#563a6b,color:#fff
+    style States fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
+
 ## Usage
 
-### Basic Usage (Minimal MJExplorer 3.0)
-
-Create your `packages/explorer/src/app/app.module.ts`:
+### Minimal Application Module
 
 ```typescript
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-
 import { MJBootstrapModule, MJBootstrapComponent } from '@memberjunction/ng-bootstrap';
 import { MJExplorerModule } from '@memberjunction/ng-explorer-core';
-import { CoreGeneratedFormsModule } from '@memberjunction/ng-core-entity-forms';
-import { GeneratedFormsModule } from '@mycompany/generated-forms';
-
 import { environment } from '../environments/environment';
 
 @NgModule({
@@ -35,20 +60,14 @@ import { environment } from '../environments/environment';
     BrowserModule,
     BrowserAnimationsModule,
     MJBootstrapModule.forRoot(environment),
-    MJExplorerModule,
-    CoreGeneratedFormsModule,
-    GeneratedFormsModule
+    MJExplorerModule
   ],
-  bootstrap: [MJBootstrapComponent]  // Use MJBootstrapComponent as the bootstrap component
+  bootstrap: [MJBootstrapComponent]
 })
 export class AppModule {}
 ```
 
-**That's it!** Your entire MJExplorer application module in ~15 lines.
-
 ### Environment Configuration
-
-Create your `packages/explorer/src/environments/environment.ts`:
 
 ```typescript
 import { MJEnvironmentConfig } from '@memberjunction/ng-bootstrap';
@@ -70,54 +89,31 @@ export const environment: MJEnvironmentConfig = {
 };
 ```
 
-## What It Does
+## What It Handles
 
-The `MJBootstrapModule` and `MJBootstrapComponent` handle:
-
-1. **Authentication Flow** - MSAL or Auth0 login/logout with proper token management
-2. **GraphQL Client Setup** - Configures GraphQL client with WebSocket support
-3. **Token Refresh** - Automatic token refresh before expiration
-4. **Metadata Loading** - Loads MemberJunction metadata and entity definitions
-5. **User Validation** - Checks user access and permissions
-6. **Error Handling** - Displays appropriate error messages for auth failures
-7. **Startup Validation** - Runs system validation checks on initialization
-8. **Navigation** - Handles initial navigation after successful login
-
-## Component Structure
-
-The bootstrap component provides a clean template structure:
-
-```html
-<mj-bootstrap>
-  <!-- Authenticated: Shows the main shell -->
-  <mj-shell *ngIf="authenticated"></mj-shell>
-
-  <!-- Not authenticated: Shows login screen -->
-  <mj-login *ngIf="!authenticated"></mj-login>
-
-  <!-- Error state: Shows error message -->
-  <mj-error *ngIf="hasError"></mj-error>
-
-  <!-- Validation issues: Shows validation banner -->
-  <mj-validation-banner *ngIf="showValidation"></mj-validation-banner>
-</mj-bootstrap>
-```
+| Concern | Description |
+|---------|-------------|
+| Authentication | MSAL or Auth0 login/logout with token management |
+| GraphQL setup | Client configuration with WebSocket subscriptions |
+| Token refresh | Automatic token refresh before expiration |
+| Metadata loading | MemberJunction entity metadata and definitions |
+| User validation | Access and permission checks |
+| Startup validation | System health checks on initialization |
+| Error handling | Appropriate error messages for auth failures |
+| Navigation | Initial routing after successful login |
 
 ## API Reference
 
-### `MJBootstrapModule.forRoot(environment: MJEnvironmentConfig)`
+### MJBootstrapModule.forRoot(environment)
 
 Configures the bootstrap module with environment settings.
 
-#### Parameters
+**Parameters:**
+- `environment: MJEnvironmentConfig` -- Application configuration
 
-- `environment` - MJEnvironmentConfig object with application settings
+**Returns:** `ModuleWithProviders<MJBootstrapModule>`
 
-#### Returns
-
-ModuleWithProviders with environment configuration injected
-
-### `MJEnvironmentConfig` Interface
+### MJEnvironmentConfig
 
 ```typescript
 interface MJEnvironmentConfig {
@@ -127,114 +123,46 @@ interface MJEnvironmentConfig {
   AUTH_TYPE: 'msal' | 'auth0';
   MJ_CORE_SCHEMA_NAME: string;
 
-  // MSAL-specific (optional)
+  // MSAL-specific
   CLIENT_ID?: string;
   TENANT_ID?: string;
 
-  // Auth0-specific (optional)
+  // Auth0-specific
   AUTH0_DOMAIN?: string;
   AUTH0_CLIENTID?: string;
-
-  // Additional custom properties
-  [key: string]: any;
 }
 ```
 
-## Migration from 2.x
+### Injection Tokens
 
-In MemberJunction 2.x, your MJExplorer had:
-- `app.component.ts` with ~245 lines of authentication logic
-- `app.module.ts` with ~107 lines of module imports and configuration
+- `MJ_ENVIRONMENT` -- Provides the `MJEnvironmentConfig` throughout the application
 
-**Before (2.x):**
-```typescript
-// app.component.ts - 245 lines of auth/initialization code
-@Component({...})
-export class AppComponent implements OnInit {
-  // Complex authentication logic
-  // GraphQL setup
-  // Error handling
-  // Navigation logic
-  // ...
-}
+### MJStartupValidationService
 
-// app.module.ts - 107 lines of imports and configuration
-@NgModule({
-  declarations: [AppComponent, ...],
-  imports: [BrowserModule, ...many modules...],
-  providers: [...many providers...],
-  bootstrap: [AppComponent]
-})
-export class AppModule {}
-```
-
-**After (3.0):**
-```typescript
-// app.module.ts - ~15 lines total
-@NgModule({
-  imports: [
-    BrowserModule,
-    BrowserAnimationsModule,
-    MJBootstrapModule.forRoot(environment),
-    MJExplorerModule,
-    GeneratedFormsModule
-  ],
-  bootstrap: [MJBootstrapComponent]
-})
-export class AppModule {}
-```
-
-All the complexity is now encapsulated in this package and updated via NPM.
-
-## Advanced Usage
-
-### Custom Error Handling
-
-You can extend the bootstrap component to add custom error handling:
+An optional interface for implementing custom startup validation:
 
 ```typescript
-import { MJBootstrapComponent } from '@memberjunction/ng-bootstrap';
-
-@Component({
-  selector: 'app-custom-bootstrap',
-  template: `
-    <mj-bootstrap></mj-bootstrap>
-    <app-custom-error *ngIf="hasCustomError"></app-custom-error>
-  `
-})
-export class CustomBootstrapComponent extends MJBootstrapComponent {
-  // Add custom logic
+interface MJStartupValidationService {
+  Validate(): Promise<ValidationResult>;
 }
 ```
 
-### Multiple Auth Providers
+## Migration from MJ 2.x
 
-Configure your environment to support both MSAL and Auth0:
+MemberJunction 2.x required ~350 lines of custom code in `app.component.ts` and `app.module.ts` for authentication and initialization. With 3.0+, this entire surface area is encapsulated in the bootstrap package:
 
-```typescript
-export const environment: MJEnvironmentConfig = {
-  production: false,
-  AUTH_TYPE: 'msal', // Default
+| Before (2.x) | After (3.0+) |
+|--------------|--------------|
+| ~245 lines in `app.component.ts` | Removed entirely |
+| ~107 lines in `app.module.ts` | ~15 lines |
+| Custom auth logic | `MJBootstrapModule.forRoot(env)` |
+| Manual GraphQL setup | Automatic |
+| Custom error handling | Built-in |
 
-  // MSAL config
-  CLIENT_ID: 'msal-client-id',
-  TENANT_ID: 'tenant-id',
+## Dependencies
 
-  // Auth0 config (fallback)
-  AUTH0_DOMAIN: 'yourapp.us.auth0.com',
-  AUTH0_CLIENTID: 'auth0-client-id'
-};
-```
-
-## Benefits
-
-- **Zero-copy updates** - `npm update` brings all improvements automatically
-- **No stale code** - Authentication logic stays up-to-date with MJ releases
-- **Minimal surface area** - Fewer lines of code means fewer places for bugs
-- **Standard patterns** - Everyone uses the same authentication flow
-- **Type safety** - Full TypeScript support with proper interfaces
-- **Tested** - Core authentication logic is tested across all MJ applications
-
-## License
-
-MIT
+- [@memberjunction/core](../../MJCore/README.md) -- Core framework
+- [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) -- GraphQL client
+- [@memberjunction/ng-auth-services](../auth-services/README.md) -- Authentication services
+- [@memberjunction/ng-explorer-core](../../Angular/Explorer/explorer-core/README.md) -- Explorer shell
+- [@memberjunction/ng-shared](../shared/README.md) -- Shared utilities

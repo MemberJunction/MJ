@@ -35,6 +35,7 @@ interface AIModelOption {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-assistant-panel',
   templateUrl: './ai-assistant-panel.component.html',
   styleUrls: ['./ai-assistant-panel.component.css']

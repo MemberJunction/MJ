@@ -5,7 +5,8 @@ import {
     ResolvedLayoutConfig,
     ComponentContainer,
     JsonValue,
-    ComponentItemConfig
+    ComponentItemConfig,
+    VirtualLayout
 } from 'golden-layout';
 import {
     DashboardPanel,
@@ -102,16 +103,14 @@ export class GoldenLayoutWrapperService {
         this._containerElement = container;
         this._isEditing = isEditing;
 
-        // Import VirtualLayout dynamically at runtime
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { VirtualLayout } = require('golden-layout');
-
         // Create VirtualLayout instance with bind/unbind callbacks
+        // Cast through unknown: GLVirtualLayout is a subset interface used throughout this service;
+        // the structural mismatch with golden-layout's VirtualLayout is intentional.
         this._layout = new VirtualLayout(
             container,
-            this.bindComponentEventListener.bind(this),
-            this.unbindComponentEventListener.bind(this)
-        ) as GLVirtualLayout;
+            this.bindComponentEventListener.bind(this) as VirtualLayout.BindComponentEventHandler,
+            this.unbindComponentEventListener.bind(this) as VirtualLayout.UnbindComponentEventHandler
+        ) as unknown as GLVirtualLayout;
 
         // Enable automatic resize when container size changes
         (this._layout as unknown as { resizeWithContainerAutomatically: boolean }).resizeWithContainerAutomatically = true;
@@ -141,10 +140,6 @@ export class GoldenLayoutWrapperService {
      * then applies current edit mode settings.
      */
     private buildLayoutConfig(savedLayout: ResolvedLayoutConfig | null): LayoutConfig {
-        // Import LayoutConfig namespace for conversion function
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { LayoutConfig: GLLayoutConfig } = require('golden-layout');
-
         // Base settings - reorderEnabled is always true so users can click tabs and
         // rearrange in view mode (changes won't be saved). Close button only in edit mode.
         const baseSettings: LayoutConfig = {
@@ -170,7 +165,7 @@ export class GoldenLayoutWrapperService {
                 }
 
                 // Use GL's built-in conversion from ResolvedLayoutConfig to LayoutConfig
-                const convertedConfig = GLLayoutConfig.fromResolved(savedLayout) as LayoutConfig;
+                const convertedConfig = LayoutConfig.fromResolved(savedLayout) as LayoutConfig;
 
                 // Merge our base settings with the converted config
                 return {

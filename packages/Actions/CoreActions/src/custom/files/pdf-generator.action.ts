@@ -186,7 +186,7 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
                 // Collect PDF data
                 const chunks: Buffer[] = [];
                 doc.on('data', (chunk) => chunks.push(chunk));
-                doc.on('end', () => resolve(Buffer.concat(chunks)));
+                doc.on('end', () => resolve(Buffer.concat(chunks as unknown as Uint8Array[])));
                 doc.on('error', reject);
 
                 // Set default font
@@ -267,11 +267,4 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
 
         return lines;
     }
-}
-
-/**
- * Loader function to ensure the PDFGeneratorAction class is included in the bundle
- */
-export function LoadPDFGeneratorAction() {
-    // Stub function to prevent tree shaking
 }

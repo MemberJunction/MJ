@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Recommendation Items') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-recommendationitem-form',
     templateUrl: './recommendationitem.form.component.html'
 })
@@ -21,6 +22,3 @@ export class RecommendationItemFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadRecommendationItemFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

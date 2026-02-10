@@ -9,7 +9,7 @@ import { MJGlobal } from './Global';
  * @param autoRegisterWithRootClass If true (default), will automatically register the subclass with the root class of the baseClass hierarchy. This ensures proper priority ordering when multiple subclasses are registered in a hierarchy.
  * @returns an instance of the class that was registered for the combination of baseClass/key (with highest priority if more than one)
  */
-export function RegisterClass(baseClass: any, key: string = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = true): (constructor: Function) => void {
+export function RegisterClass(baseClass: unknown, key: string | null = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = true): (constructor: Function) => void {
     return function (constructor: Function) {
         // Invoke the registration method
         MJGlobal.Instance.ClassFactory.Register(baseClass, constructor, key, priority, skipNullKeyWarning, autoRegisterWithRootClass);

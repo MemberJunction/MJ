@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- b503400: filter dialog fixes
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
 ## 3.4.0
 
 ## 3.3.0

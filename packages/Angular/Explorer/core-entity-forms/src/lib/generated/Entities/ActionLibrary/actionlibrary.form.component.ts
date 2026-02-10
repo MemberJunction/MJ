@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Action Libraries') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-actionlibrary-form',
     templateUrl: './actionlibrary.form.component.html'
 })
@@ -21,6 +22,3 @@ export class ActionLibraryFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadActionLibraryFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -32,6 +32,7 @@ export interface ActionWithDetails extends ActionEntity {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-action-gallery',
   templateUrl: './action-gallery.component.html',
   styleUrls: ['./action-gallery.component.css']

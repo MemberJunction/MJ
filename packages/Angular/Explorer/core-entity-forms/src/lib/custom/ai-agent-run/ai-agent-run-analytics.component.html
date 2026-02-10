@@ -1,468 +1,482 @@
 <div class="analytics-container">
   <!-- Loading State -->
-  <div class="loading-state" *ngIf="isLoading">
-    <i class="fas fa-spinner fa-spin fa-2x"></i>
-    <p>Loading analytics data...</p>
-  </div>
+  @if (isLoading) {
+    <div class="loading-state">
+      <i class="fas fa-spinner fa-spin fa-2x"></i>
+      <p>Loading analytics data...</p>
+    </div>
+  }
 
   <!-- Error State -->
-  <div class="error-state" *ngIf="error && !isLoading">
-    <i class="fas fa-exclamation-triangle fa-2x"></i>
-    <p>{{ error }}</p>
-    <button kendoButton (click)="loadData()">Retry</button>
-  </div>
+  @if (error && !isLoading) {
+    <div class="error-state">
+      <i class="fas fa-exclamation-triangle fa-2x"></i>
+      <p>{{ error }}</p>
+      <button kendoButton (click)="loadData()">Retry</button>
+    </div>
+  }
 
   <!-- Analytics Content -->
-  <div class="analytics-content" *ngIf="!isLoading && !error">
-    <kendo-panelbar [keepItemContent]="true">
-      <!-- Summary Cards -->
-      <kendo-panelbar-item [expanded]="true">
-        <ng-template kendoPanelBarItemTitle>
-          <i class="fas fa-tachometer-alt"></i> Overview
-        </ng-template>
-        <ng-template kendoPanelBarContent>
-      <div class="summary-cards">
-      <div class="summary-card">
-        <div class="card-icon prompts">
-          <i class="fas fa-microchip"></i>
-        </div>
-        <div class="card-content">
-          <h3>Total Prompts</h3>
-          <div class="metric-value">{{ promptMetrics.totalCount }}</div>
-          <div class="metric-detail">
-            <span class="success">{{ promptMetrics.statusBreakdown.success }} successful</span>
-            <span class="failed" *ngIf="promptMetrics.statusBreakdown.failed > 0">{{ promptMetrics.statusBreakdown.failed }} failed</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="summary-card">
-        <div class="card-icon actions">
-          <i class="fas fa-cog"></i>
-        </div>
-        <div class="card-content">
-          <h3>Total Actions</h3>
-          <div class="metric-value">{{ actionMetrics.totalCount }}</div>
-          <div class="metric-detail">
-            <span class="success">{{ actionMetrics.statusBreakdown.success }} successful</span>
-            <span class="failed" *ngIf="actionMetrics.statusBreakdown.failed > 0">{{ actionMetrics.statusBreakdown.failed }} failed</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="summary-card">
-        <div class="card-icon cost">
-          <i class="fas fa-dollar-sign"></i>
-        </div>
-        <div class="card-content">
-          <h3>Total Cost</h3>
-          <div class="metric-value">{{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
-          <div class="metric-detail">
-            <span>{{ promptMetrics.tokenUsage.totalInput + promptMetrics.tokenUsage.totalOutput }} tokens</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="summary-card">
-        <div class="card-icon time">
-          <i class="fas fa-clock"></i>
-        </div>
-        <div class="card-content">
-          <h3>Execution Time</h3>
-          <div class="metric-value">{{ formatDuration(promptMetrics.totalExecutionTime + actionMetrics.totalExecutionTime) }}</div>
-          <div class="metric-detail">
-            <span>{{ timelineMetrics.totalSteps }} total steps</span>
-          </div>
-        </div>
-      </div>
-    </div>
-        </ng-template>
-      </kendo-panelbar-item>
-
-      <!-- Prompt Analytics -->
-      <kendo-panelbar-item [expanded]="true">
-        <ng-template kendoPanelBarItemTitle>
-          <i class="fas fa-microchip"></i> Prompt Analytics
-        </ng-template>
-        <ng-template kendoPanelBarContent>
-      <div class="analytics-panel">
-        <!-- View Mode Toggle -->
-        <div class="view-mode-toggle" *ngIf="promptMetrics.totalCount > 0">
-          <button kendoButton 
-                  fillMode="flat" 
-                  size="small"
-                  (click)="toggleViewMode()">
-            <i class="fas" [ngClass]="viewMode === 'grid' ? 'fa-expand-arrows-alt' : 'fa-compress-arrows-alt'"></i>
-            {{ viewMode === 'grid' ? 'Expand All' : 'Collapse All' }}
-          </button>
-        </div>
-        
-        <!-- No prompts message -->
-        <div class="no-data-message" *ngIf="promptMetrics.totalCount === 0">
-          <i class="fas fa-info-circle"></i>
-          <p>No prompt executions found in this agent run.</p>
-          <p class="small">This agent run may have only executed actions without any AI prompts.</p>
-        </div>
-
-        <div class="charts-grid" *ngIf="promptMetrics.totalCount > 0">
-          <!-- Model Distribution -->
-          <div class="chart-card" [class.expanded]="expandedCharts['modelDistribution']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('modelDistribution')">
-              <h3><i class="fas fa-chart-pie"></i> Prompts by Model</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['modelDistribution'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="modelDistributionChart" #modelDistributionChart></div>
-                <div class="chart-legend" *ngIf="promptMetrics.byModel.size > 0">
-                  <div class="legend-item" *ngFor="let item of promptMetrics.byModel | keyvalue; trackBy: trackByKey">
-                    <span class="legend-color" [style.backgroundColor]="getModelColor(item.key)"></span>
-                    <span class="legend-label">{{ item.key }}: {{ item.value.count }} ({{ (item.value.count / promptMetrics.totalCount * 100).toFixed(1) }}%)</span>
+  @if (!isLoading && !error) {
+    <div class="analytics-content">
+      <kendo-panelbar [keepItemContent]="true">
+        <!-- Summary Cards -->
+        <kendo-panelbar-item [expanded]="true">
+          <ng-template kendoPanelBarItemTitle>
+            <i class="fas fa-tachometer-alt"></i> Overview
+          </ng-template>
+          <ng-template kendoPanelBarContent>
+            <div class="summary-cards">
+              <div class="summary-card">
+                <div class="card-icon prompts">
+                  <i class="fas fa-microchip"></i>
+                </div>
+                <div class="card-content">
+                  <h3>Total Prompts</h3>
+                  <div class="metric-value">{{ promptMetrics.totalCount }}</div>
+                  <div class="metric-detail">
+                    <span class="success">{{ promptMetrics.statusBreakdown.success }} successful</span>
+                    @if (promptMetrics.statusBreakdown.failed > 0) {
+                      <span class="failed">{{ promptMetrics.statusBreakdown.failed }} failed</span>
+                    }
+                  </div>
+                </div>
+              </div>
+              <div class="summary-card">
+                <div class="card-icon actions">
+                  <i class="fas fa-cog"></i>
+                </div>
+                <div class="card-content">
+                  <h3>Total Actions</h3>
+                  <div class="metric-value">{{ actionMetrics.totalCount }}</div>
+                  <div class="metric-detail">
+                    <span class="success">{{ actionMetrics.statusBreakdown.success }} successful</span>
+                    @if (actionMetrics.statusBreakdown.failed > 0) {
+                      <span class="failed">{{ actionMetrics.statusBreakdown.failed }} failed</span>
+                    }
+                  </div>
+                </div>
+              </div>
+              <div class="summary-card">
+                <div class="card-icon cost">
+                  <i class="fas fa-dollar-sign"></i>
+                </div>
+                <div class="card-content">
+                  <h3>Total Cost</h3>
+                  <div class="metric-value">{{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
+                  <div class="metric-detail">
+                    <span>{{ promptMetrics.tokenUsage.totalInput + promptMetrics.tokenUsage.totalOutput }} tokens</span>
+                  </div>
+                </div>
+              </div>
+              <div class="summary-card">
+                <div class="card-icon time">
+                  <i class="fas fa-clock"></i>
+                </div>
+                <div class="card-content">
+                  <h3>Execution Time</h3>
+                  <div class="metric-value">{{ formatDuration(promptMetrics.totalExecutionTime + actionMetrics.totalExecutionTime) }}</div>
+                  <div class="metric-detail">
+                    <span>{{ timelineMetrics.totalSteps }} total steps</span>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- Execution Time by Vendor -->
-          <div class="chart-card" [class.expanded]="expandedCharts['executionTime']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('executionTime')">
-              <h3><i class="fas fa-clock"></i> Average Execution Time by Vendor</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['executionTime'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="executionTimeChart" #executionTimeChart></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Cost by Vendor -->
-          <div class="chart-card" [class.expanded]="expandedCharts['costByVendor']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('costByVendor')">
-              <h3><i class="fas fa-dollar-sign"></i> Cost Distribution by Vendor</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['costByVendor'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="costByVendorChart" #costByVendorChart></div>
-                <div class="chart-total">Total: {{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Token Usage -->
-          <div class="chart-card" [class.expanded]="expandedCharts['tokenUsage']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('tokenUsage')">
-              <h3><i class="fas fa-coins"></i> Token Usage by Model</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['tokenUsage'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="tokenUsageChart" #tokenUsageChart></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Additional Prompt Analytics Charts -->
-        <div class="charts-grid" style="margin-top: 20px;" *ngIf="promptMetrics.totalCount > 0">
-          <!-- Prompt Execution Time Distribution -->
-          <div class="chart-card" [class.expanded]="expandedCharts['promptTime']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('promptTime')">
-              <h3><i class="fas fa-hourglass-half"></i> Average Execution Time by Prompt</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['promptTime'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="promptTimeDistributionChart" #promptTimeDistributionChart></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Prompt Token Usage -->
-          <div class="chart-card" [class.expanded]="expandedCharts['promptToken']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('promptToken')">
-              <h3><i class="fas fa-database"></i> Token Usage by Prompt</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['promptToken'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="promptTokenDistributionChart" #promptTokenDistributionChart></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Prompt Cost Distribution -->
-          <div class="chart-card" [class.expanded]="expandedCharts['promptCost']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('promptCost')">
-              <h3><i class="fas fa-chart-pie"></i> Cost Distribution by Prompt</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['promptCost'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="promptCostDistributionChart" #promptCostDistributionChart></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Prompt Count by Name -->
-          <div class="chart-card" [class.expanded]="expandedCharts['promptCount']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('promptCount')">
-              <h3><i class="fas fa-list-ol"></i> Prompt Execution Count</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['promptCount'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="promptCountByNameChart" #promptCountByNameChart></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Detailed Prompt Metrics -->
-        <div class="detailed-metrics">
-          <button kendoButton 
-                  fillMode="flat" 
+          </ng-template>
+        </kendo-panelbar-item>
+        <!-- Prompt Analytics -->
+        <kendo-panelbar-item [expanded]="true">
+          <ng-template kendoPanelBarItemTitle>
+            <i class="fas fa-microchip"></i> Prompt Analytics
+          </ng-template>
+          <ng-template kendoPanelBarContent>
+            <div class="analytics-panel">
+              <!-- View Mode Toggle -->
+              @if (promptMetrics.totalCount > 0) {
+                <div class="view-mode-toggle">
+                  <button kendoButton
+                    fillMode="flat"
+                    size="small"
+                    (click)="toggleViewMode()">
+                    <i class="fas" [ngClass]="viewMode === 'grid' ? 'fa-expand-arrows-alt' : 'fa-compress-arrows-alt'"></i>
+                    {{ viewMode === 'grid' ? 'Expand All' : 'Collapse All' }}
+                  </button>
+                </div>
+              }
+              <!-- No prompts message -->
+              @if (promptMetrics.totalCount === 0) {
+                <div class="no-data-message">
+                  <i class="fas fa-info-circle"></i>
+                  <p>No prompt executions found in this agent run.</p>
+                  <p class="small">This agent run may have only executed actions without any AI prompts.</p>
+                </div>
+              }
+              @if (promptMetrics.totalCount > 0) {
+                <div class="charts-grid">
+                  <!-- Model Distribution -->
+                  <div class="chart-card" [class.expanded]="expandedCharts['modelDistribution']">
+                    <div class="chart-card-header" (click)="toggleChartExpansion('modelDistribution')">
+                      <h3><i class="fas fa-chart-pie"></i> Prompts by Model</h3>
+                      <button class="expand-btn">
+                        <i class="fas" [ngClass]="expandedCharts['modelDistribution'] ? 'fa-compress' : 'fa-expand'"></i>
+                      </button>
+                    </div>
+                    <div class="chart-card-body">
+                      <div class="chart-container">
+                        <div id="modelDistributionChart" #modelDistributionChart></div>
+                        @if (promptMetrics.byModel.size > 0) {
+                          <div class="chart-legend">
+                            @for (item of promptMetrics.byModel | keyvalue; track trackByKey($index, item)) {
+                              <div class="legend-item">
+                                <span class="legend-color" [style.backgroundColor]="getModelColor(item.key)"></span>
+                                <span class="legend-label">{{ item.key }}: {{ item.value.count }} ({{ (item.value.count / promptMetrics.totalCount * 100).toFixed(1) }}%)</span>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Execution Time by Vendor -->
+                  <div class="chart-card" [class.expanded]="expandedCharts['executionTime']">
+                    <div class="chart-card-header" (click)="toggleChartExpansion('executionTime')">
+                      <h3><i class="fas fa-clock"></i> Average Execution Time by Vendor</h3>
+                      <button class="expand-btn">
+                        <i class="fas" [ngClass]="expandedCharts['executionTime'] ? 'fa-compress' : 'fa-expand'"></i>
+                      </button>
+                    </div>
+                    <div class="chart-card-body">
+                      <div class="chart-container">
+                        <div id="executionTimeChart" #executionTimeChart></div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Cost by Vendor -->
+                  <div class="chart-card" [class.expanded]="expandedCharts['costByVendor']">
+                    <div class="chart-card-header" (click)="toggleChartExpansion('costByVendor')">
+                      <h3><i class="fas fa-dollar-sign"></i> Cost Distribution by Vendor</h3>
+                      <button class="expand-btn">
+                        <i class="fas" [ngClass]="expandedCharts['costByVendor'] ? 'fa-compress' : 'fa-expand'"></i>
+                      </button>
+                    </div>
+                    <div class="chart-card-body">
+                      <div class="chart-container">
+                        <div id="costByVendorChart" #costByVendorChart></div>
+                        <div class="chart-total">Total: {{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Token Usage -->
+                  <div class="chart-card" [class.expanded]="expandedCharts['tokenUsage']">
+                    <div class="chart-card-header" (click)="toggleChartExpansion('tokenUsage')">
+                      <h3><i class="fas fa-coins"></i> Token Usage by Model</h3>
+                      <button class="expand-btn">
+                        <i class="fas" [ngClass]="expandedCharts['tokenUsage'] ? 'fa-compress' : 'fa-expand'"></i>
+                      </button>
+                    </div>
+                    <div class="chart-card-body">
+                      <div class="chart-container">
+                        <div id="tokenUsageChart" #tokenUsageChart></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+              <!-- Additional Prompt Analytics Charts -->
+              @if (promptMetrics.totalCount > 0) {
+                <div class="charts-grid" style="margin-top: 20px;">
+                  <!-- Prompt Execution Time Distribution -->
+                  <div class="chart-card" [class.expanded]="expandedCharts['promptTime']">
+                    <div class="chart-card-header" (click)="toggleChartExpansion('promptTime')">
+                      <h3><i class="fas fa-hourglass-half"></i> Average Execution Time by Prompt</h3>
+                      <button class="expand-btn">
+                        <i class="fas" [ngClass]="expandedCharts['promptTime'] ? 'fa-compress' : 'fa-expand'"></i>
+                      </button>
+                    </div>
+                    <div class="chart-card-body">
+                      <div class="chart-container">
+                        <div id="promptTimeDistributionChart" #promptTimeDistributionChart></div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Prompt Token Usage -->
+                  <div class="chart-card" [class.expanded]="expandedCharts['promptToken']">
+                    <div class="chart-card-header" (click)="toggleChartExpansion('promptToken')">
+                      <h3><i class="fas fa-database"></i> Token Usage by Prompt</h3>
+                      <button class="expand-btn">
+                        <i class="fas" [ngClass]="expandedCharts['promptToken'] ? 'fa-compress' : 'fa-expand'"></i>
+                      </button>
+                    </div>
+                    <div class="chart-card-body">
+                      <div class="chart-container">
+                        <div id="promptTokenDistributionChart" #promptTokenDistributionChart></div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Prompt Cost Distribution -->
+                  <div class="chart-card" [class.expanded]="expandedCharts['promptCost']">
+                    <div class="chart-card-header" (click)="toggleChartExpansion('promptCost')">
+                      <h3><i class="fas fa-chart-pie"></i> Cost Distribution by Prompt</h3>
+                      <button class="expand-btn">
+                        <i class="fas" [ngClass]="expandedCharts['promptCost'] ? 'fa-compress' : 'fa-expand'"></i>
+                      </button>
+                    </div>
+                    <div class="chart-card-body">
+                      <div class="chart-container">
+                        <div id="promptCostDistributionChart" #promptCostDistributionChart></div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Prompt Count by Name -->
+                  <div class="chart-card" [class.expanded]="expandedCharts['promptCount']">
+                    <div class="chart-card-header" (click)="toggleChartExpansion('promptCount')">
+                      <h3><i class="fas fa-list-ol"></i> Prompt Execution Count</h3>
+                      <button class="expand-btn">
+                        <i class="fas" [ngClass]="expandedCharts['promptCount'] ? 'fa-compress' : 'fa-expand'"></i>
+                      </button>
+                    </div>
+                    <div class="chart-card-body">
+                      <div class="chart-container">
+                        <div id="promptCountByNameChart" #promptCountByNameChart></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+              <!-- Detailed Prompt Metrics -->
+              <div class="detailed-metrics">
+                <button kendoButton
+                  fillMode="flat"
                   (click)="promptDetailsExpanded = !promptDetailsExpanded">
-            <i class="fas" [ngClass]="promptDetailsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-            Detailed Prompt Metrics
-          </button>
-          
-          <div class="metrics-table" *ngIf="promptDetailsExpanded">
-            <table>
-              <thead>
-                <tr>
-                  <th>Prompt Name</th>
-                  <th>Count</th>
-                  <th>Avg Time</th>
-                  <th>Total Time</th>
-                  <th>Success Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let prompt of promptMetrics.byPrompt | keyvalue; trackBy: trackByKey">
-                  <td>{{ prompt.key }}</td>
-                  <td>{{ prompt.value.count }}</td>
-                  <td>{{ formatDuration(prompt.value.avgTime) }}</td>
-                  <td>{{ formatDuration(prompt.value.totalTime) }}</td>
-                  <td>
-                    <span class="success-rate">
-                      <!-- Calculate success rate for this prompt -->
-                      {{ calculatePromptSuccessRate(prompt.key) }}%
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-        </ng-template>
-      </kendo-panelbar-item>
-
-      <!-- Action Analytics -->
-      <kendo-panelbar-item [expanded]="true">
-        <ng-template kendoPanelBarItemTitle>
-          <i class="fas fa-cog"></i> Action Analytics
-        </ng-template>
-        <ng-template kendoPanelBarContent>
-      <div class="analytics-panel">
-
-        <div class="charts-grid">
-          <!-- Action Success Rate -->
-          <div class="chart-card" [class.expanded]="expandedCharts['actionSuccess']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('actionSuccess')">
-              <h3><i class="fas fa-chart-bar"></i> Action Success Rate</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['actionSuccess'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="actionSuccessRateChart" #actionSuccessRateChart></div>
+                  <i class="fas" [ngClass]="promptDetailsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                  Detailed Prompt Metrics
+                </button>
+                @if (promptDetailsExpanded) {
+                  <div class="metrics-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Prompt Name</th>
+                          <th>Count</th>
+                          <th>Avg Time</th>
+                          <th>Total Time</th>
+                          <th>Success Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (prompt of promptMetrics.byPrompt | keyvalue; track trackByKey($index, prompt)) {
+                          <tr>
+                            <td>{{ prompt.key }}</td>
+                            <td>{{ prompt.value.count }}</td>
+                            <td>{{ formatDuration(prompt.value.avgTime) }}</td>
+                            <td>{{ formatDuration(prompt.value.totalTime) }}</td>
+                            <td>
+                              <span class="success-rate">
+                                <!-- Calculate success rate for this prompt -->
+                                {{ calculatePromptSuccessRate(prompt.key) }}%
+                              </span>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
               </div>
             </div>
-          </div>
-
-          <!-- Step Type Distribution -->
-          <div class="chart-card" [class.expanded]="expandedCharts['stepType']">
-            <div class="chart-card-header" (click)="toggleChartExpansion('stepType')">
-              <h3><i class="fas fa-layer-group"></i> Step Type Distribution</h3>
-              <button class="expand-btn">
-                <i class="fas" [ngClass]="expandedCharts['stepType'] ? 'fa-compress' : 'fa-expand'"></i>
-              </button>
-            </div>
-            <div class="chart-card-body">
-              <div class="chart-container">
-                <div id="stepTypeChart" #stepTypeChart></div>
+          </ng-template>
+        </kendo-panelbar-item>
+        <!-- Action Analytics -->
+        <kendo-panelbar-item [expanded]="true">
+          <ng-template kendoPanelBarItemTitle>
+            <i class="fas fa-cog"></i> Action Analytics
+          </ng-template>
+          <ng-template kendoPanelBarContent>
+            <div class="analytics-panel">
+              <div class="charts-grid">
+                <!-- Action Success Rate -->
+                <div class="chart-card" [class.expanded]="expandedCharts['actionSuccess']">
+                  <div class="chart-card-header" (click)="toggleChartExpansion('actionSuccess')">
+                    <h3><i class="fas fa-chart-bar"></i> Action Success Rate</h3>
+                    <button class="expand-btn">
+                      <i class="fas" [ngClass]="expandedCharts['actionSuccess'] ? 'fa-compress' : 'fa-expand'"></i>
+                    </button>
+                  </div>
+                  <div class="chart-card-body">
+                    <div class="chart-container">
+                      <div id="actionSuccessRateChart" #actionSuccessRateChart></div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Step Type Distribution -->
+                <div class="chart-card" [class.expanded]="expandedCharts['stepType']">
+                  <div class="chart-card-header" (click)="toggleChartExpansion('stepType')">
+                    <h3><i class="fas fa-layer-group"></i> Step Type Distribution</h3>
+                    <button class="expand-btn">
+                      <i class="fas" [ngClass]="expandedCharts['stepType'] ? 'fa-compress' : 'fa-expand'"></i>
+                    </button>
+                  </div>
+                  <div class="chart-card-body">
+                    <div class="chart-container">
+                      <div id="stepTypeChart" #stepTypeChart></div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Detailed Action Metrics -->
-        <div class="detailed-metrics">
-          <button kendoButton 
-                  fillMode="flat" 
+              <!-- Detailed Action Metrics -->
+              <div class="detailed-metrics">
+                <button kendoButton
+                  fillMode="flat"
                   (click)="actionDetailsExpanded = !actionDetailsExpanded">
-            <i class="fas" [ngClass]="actionDetailsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-            Detailed Action Metrics
-          </button>
-          
-          <div class="metrics-table" *ngIf="actionDetailsExpanded">
-            <table>
-              <thead>
-                <tr>
-                  <th>Action Name</th>
-                  <th>Count</th>
-                  <th>Avg Time</th>
-                  <th>Success Rate</th>
-                  <th>Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let action of actionMetrics.byAction | keyvalue; trackBy: trackByKey">
-                  <td>{{ action.key }}</td>
-                  <td>{{ action.value.count }}</td>
-                  <td>{{ formatDuration(action.value.avgTime) }}</td>
-                  <td>
-                    <span class="success-rate" [class.high]="action.value.successRate > 0.9" 
-                                                [class.medium]="action.value.successRate > 0.7 && action.value.successRate <= 0.9"
-                                                [class.low]="action.value.successRate <= 0.7">
-                      {{ (action.value.successRate * 100).toFixed(1) }}%
-                    </span>
-                  </td>
-                  <td>{{ getActionType(action.key) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Error Analysis -->
-        <div class="error-analysis-section">
-          <div class="error-analysis" *ngIf="actionMetrics.errorAnalysis.size > 0">
-          <h3>
-            <i class="fas fa-exclamation-triangle"></i>
-            Common Errors
-          </h3>
-          <p class="error-analysis-description">
-            This section shows the most frequent error messages from failed actions, helping identify systemic issues that may need attention.
-          </p>
-          <div class="error-list">
-            <div class="error-item" *ngFor="let error of getTopErrors(); trackBy: trackByErrorMessage">
-              <span class="error-count">{{ error.count }}x</span>
-              <span class="error-message">{{ error.message }}</span>
+                  <i class="fas" [ngClass]="actionDetailsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                  Detailed Action Metrics
+                </button>
+                @if (actionDetailsExpanded) {
+                  <div class="metrics-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Action Name</th>
+                          <th>Count</th>
+                          <th>Avg Time</th>
+                          <th>Success Rate</th>
+                          <th>Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (action of actionMetrics.byAction | keyvalue; track trackByKey($index, action)) {
+                          <tr>
+                            <td>{{ action.key }}</td>
+                            <td>{{ action.value.count }}</td>
+                            <td>{{ formatDuration(action.value.avgTime) }}</td>
+                            <td>
+                              <span class="success-rate" [class.high]="action.value.successRate > 0.9"
+                                [class.medium]="action.value.successRate > 0.7 && action.value.successRate <= 0.9"
+                                [class.low]="action.value.successRate <= 0.7">
+                                {{ (action.value.successRate * 100).toFixed(1) }}%
+                              </span>
+                            </td>
+                            <td>{{ getActionType(action.key) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </div>
+              <!-- Error Analysis -->
+              <div class="error-analysis-section">
+                @if (actionMetrics.errorAnalysis.size > 0) {
+                  <div class="error-analysis">
+                    <h3>
+                      <i class="fas fa-exclamation-triangle"></i>
+                      Common Errors
+                    </h3>
+                    <p class="error-analysis-description">
+                      This section shows the most frequent error messages from failed actions, helping identify systemic issues that may need attention.
+                    </p>
+                    <div class="error-list">
+                      @for (error of getTopErrors(); track trackByErrorMessage($index, error)) {
+                        <div class="error-item">
+                          <span class="error-count">{{ error.count }}x</span>
+                          <span class="error-message">{{ error.message }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+                @if (actionMetrics.errorAnalysis.size === 0) {
+                  <div class="no-errors">
+                    <i class="fas fa-check-circle"></i>
+                    <p>No action errors detected in this run. All actions completed successfully!</p>
+                  </div>
+                }
+              </div>
             </div>
-          </div>
-        </div>
-          <div class="no-errors" *ngIf="actionMetrics.errorAnalysis.size === 0">
-            <i class="fas fa-check-circle"></i>
-            <p>No action errors detected in this run. All actions completed successfully!</p>
-          </div>
-        </div>
-      </div>
-        </ng-template>
-      </kendo-panelbar-item>
-
-      <!-- Model Performance Comparison -->
-      <kendo-panelbar-item [expanded]="true">
-        <ng-template kendoPanelBarItemTitle>
-          <i class="fas fa-chart-line"></i> Model Performance Comparison
-        </ng-template>
-        <ng-template kendoPanelBarContent>
-      <div class="analytics-panel">
-
-        <div class="model-comparison">
-          <table>
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Vendor</th>
-                <th>Prompts</th>
-                <th>Avg Time</th>
-                <th>Total Cost</th>
-                <th>Avg Cost/Prompt</th>
-                <th>Input Tokens</th>
-                <th>Output Tokens</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let model of getModelPerformanceData(); trackBy: trackByModelName">
-                <td>{{ model.name }}</td>
-                <td>{{ model.vendor }}</td>
-                <td>{{ model.count }}</td>
-                <td>{{ formatDuration(model.avgTime) }}</td>
-                <td>{{ formatCost(model.totalCost) }}</td>
-                <td>{{ formatCost(model.avgCost) }}</td>
-                <td>{{ model.inputTokens | number:'1.0-0' }}</td>
-                <td>{{ model.outputTokens | number:'1.0-0' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-        </ng-template>
-      </kendo-panelbar-item>
-
-      <!-- Timeline Analysis -->
-      <kendo-panelbar-item [expanded]="true">
-        <ng-template kendoPanelBarItemTitle>
-          <i class="fas fa-stream"></i> Execution Timeline Analysis
-        </ng-template>
-        <ng-template kendoPanelBarContent>
-      <div class="analytics-panel">
-
-        <div class="timeline-stats">
-          <div class="stat-item">
-            <span class="stat-label">Total Steps</span>
-            <span class="stat-value">{{ timelineMetrics.totalSteps }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Parallel Executions</span>
-            <span class="stat-value">{{ timelineMetrics.parallelExecutions }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Max Nesting Depth</span>
-            <span class="stat-value">{{ timelineMetrics.deepestNesting }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Sub-Agent Runs</span>
-            <span class="stat-value">{{ subAgentRuns.length }}</span>
-          </div>
-        </div>
-
-        <div class="step-breakdown">
-          <h3>Steps by Type</h3>
-          <div class="step-type-list">
-            <div class="step-type-item" *ngFor="let type of timelineMetrics.stepsByType | keyvalue; trackBy: trackByKey">
-              <i class="fas" [ngClass]="getStepTypeIcon(type.key)"></i>
-              <span class="type-name">{{ type.key }}</span>
-              <span class="type-count">{{ type.value }}</span>
-              <span class="type-percentage">({{ (type.value / timelineMetrics.totalSteps * 100).toFixed(1) }}%)</span>
+          </ng-template>
+        </kendo-panelbar-item>
+        <!-- Model Performance Comparison -->
+        <kendo-panelbar-item [expanded]="true">
+          <ng-template kendoPanelBarItemTitle>
+            <i class="fas fa-chart-line"></i> Model Performance Comparison
+          </ng-template>
+          <ng-template kendoPanelBarContent>
+            <div class="analytics-panel">
+              <div class="model-comparison">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Vendor</th>
+                      <th>Prompts</th>
+                      <th>Avg Time</th>
+                      <th>Total Cost</th>
+                      <th>Avg Cost/Prompt</th>
+                      <th>Input Tokens</th>
+                      <th>Output Tokens</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (model of getModelPerformanceData(); track trackByModelName($index, model)) {
+                      <tr>
+                        <td>{{ model.name }}</td>
+                        <td>{{ model.vendor }}</td>
+                        <td>{{ model.count }}</td>
+                        <td>{{ formatDuration(model.avgTime) }}</td>
+                        <td>{{ formatCost(model.totalCost) }}</td>
+                        <td>{{ formatCost(model.avgCost) }}</td>
+                        <td>{{ model.inputTokens | number:'1.0-0' }}</td>
+                        <td>{{ model.outputTokens | number:'1.0-0' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
-        </ng-template>
-      </kendo-panelbar-item>
-    </kendo-panelbar>
-  </div>
+          </ng-template>
+        </kendo-panelbar-item>
+        <!-- Timeline Analysis -->
+        <kendo-panelbar-item [expanded]="true">
+          <ng-template kendoPanelBarItemTitle>
+            <i class="fas fa-stream"></i> Execution Timeline Analysis
+          </ng-template>
+          <ng-template kendoPanelBarContent>
+            <div class="analytics-panel">
+              <div class="timeline-stats">
+                <div class="stat-item">
+                  <span class="stat-label">Total Steps</span>
+                  <span class="stat-value">{{ timelineMetrics.totalSteps }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Parallel Executions</span>
+                  <span class="stat-value">{{ timelineMetrics.parallelExecutions }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Max Nesting Depth</span>
+                  <span class="stat-value">{{ timelineMetrics.deepestNesting }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Sub-Agent Runs</span>
+                  <span class="stat-value">{{ subAgentRuns.length }}</span>
+                </div>
+              </div>
+              <div class="step-breakdown">
+                <h3>Steps by Type</h3>
+                <div class="step-type-list">
+                  @for (type of timelineMetrics.stepsByType | keyvalue; track trackByKey($index, type)) {
+                    <div class="step-type-item">
+                      <i class="fas" [ngClass]="getStepTypeIcon(type.key)"></i>
+                      <span class="type-name">{{ type.key }}</span>
+                      <span class="type-count">{{ type.value }}</span>
+                      <span class="type-percentage">({{ (type.value / timelineMetrics.totalSteps * 100).toFixed(1) }}%)</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          </ng-template>
+        </kendo-panelbar-item>
+      </kendo-panelbar>
+    </div>
+  }
 </div>

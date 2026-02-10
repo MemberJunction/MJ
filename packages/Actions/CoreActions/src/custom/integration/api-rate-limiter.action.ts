@@ -388,10 +388,3 @@ export class APIRateLimiterAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the APIRateLimiterAction class is included in the bundle
- */
-export function LoadAPIRateLimiterAction() {
-    // Stub function to prevent tree shaking
-}

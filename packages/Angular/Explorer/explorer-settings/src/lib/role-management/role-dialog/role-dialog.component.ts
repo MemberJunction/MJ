@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
 import { RoleEntity } from '@memberjunction/core-entities';
@@ -15,6 +15,7 @@ export interface RoleDialogResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-role-dialog',
   encapsulation: ViewEncapsulation.None,
   templateUrl: './role-dialog.component.html',
@@ -69,7 +70,7 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscapeKey(event: KeyboardEvent): void {
+  onEscapeKey(event: Event): void {
     if (this.visible) {
       this.onCancel();
     }

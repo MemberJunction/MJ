@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Workspaces') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-workspace-form',
     templateUrl: './workspace.form.component.html'
 })
@@ -24,6 +25,3 @@ export class WorkspaceFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadWorkspaceFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

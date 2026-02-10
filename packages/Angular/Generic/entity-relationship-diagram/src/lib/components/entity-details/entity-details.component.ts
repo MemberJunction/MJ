@@ -17,6 +17,7 @@ export interface EntityDetailsOpenRecordEvent {
  * a detailed view of the currently selected entity.
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-details',
   templateUrl: './entity-details.component.html',
   styleUrls: ['./entity-details.component.css']

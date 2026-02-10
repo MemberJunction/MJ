@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, AfterViewInit, ElementRef, ViewChild, OnDestroy, HostListener } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { TaskEntity, TaskDependencyEntity } from '@memberjunction/core-entities';
 import { gantt } from 'dhtmlx-gantt';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
@@ -10,31 +10,37 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
 @Component({
   selector: 'mj-gantt-task-viewer',
   standalone: true,
-  imports: [CommonModule, TaskDetailPanelComponent],
+  imports: [TaskDetailPanelComponent],
   template: `
     <div class="gantt-task-viewer">
-      <div *ngIf="!tasks || tasks.length === 0" class="no-tasks">
-        <i class="fas fa-chart-gantt"></i>
-        <p>No tasks to display in Gantt view</p>
-      </div>
-
-      <div *ngIf="tasks && tasks.length > 0" class="gantt-layout">
-        <div #ganttContainer class="gantt-container"></div>
-
-        <div *ngIf="selectedTask" class="gantt-resizer"
-             (mousedown)="startResize($event)"></div>
-
-        <div *ngIf="selectedTask" class="task-detail-panel" [style.width.px]="detailPanelWidth">
-          <mj-task-detail-panel
-            [task]="selectedTask"
-            [agentRunId]="getAgentRunId(selectedTask)"
-            (closePanel)="closeDetailPanel()"
-            (openEntityRecord)="onOpenEntityRecord($event)">
-          </mj-task-detail-panel>
+      @if (!tasks || tasks.length === 0) {
+        <div class="no-tasks">
+          <i class="fas fa-chart-gantt"></i>
+          <p>No tasks to display in Gantt view</p>
         </div>
-      </div>
+      }
+    
+      @if (tasks && tasks.length > 0) {
+        <div class="gantt-layout">
+          <div #ganttContainer class="gantt-container"></div>
+          @if (selectedTask) {
+            <div class="gantt-resizer"
+            (mousedown)="startResize($event)"></div>
+          }
+          @if (selectedTask) {
+            <div class="task-detail-panel" [style.width.px]="detailPanelWidth">
+              <mj-task-detail-panel
+                [task]="selectedTask"
+                [agentRunId]="getAgentRunId(selectedTask)"
+                (closePanel)="closeDetailPanel()"
+                (openEntityRecord)="onOpenEntityRecord($event)">
+              </mj-task-detail-panel>
+            </div>
+          }
+        </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .gantt-task-viewer {
       height: 100%;

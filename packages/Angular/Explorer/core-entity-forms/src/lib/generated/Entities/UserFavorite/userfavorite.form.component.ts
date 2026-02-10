@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'User Favorites') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-userfavorite-form',
     templateUrl: './userfavorite.form.component.html'
 })
@@ -21,6 +22,3 @@ export class UserFavoriteFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserFavoriteFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

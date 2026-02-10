@@ -7,7 +7,7 @@
  * the mssql ConnectionPool lifecycle and MemberJunction provider initialization.
  */
 
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';

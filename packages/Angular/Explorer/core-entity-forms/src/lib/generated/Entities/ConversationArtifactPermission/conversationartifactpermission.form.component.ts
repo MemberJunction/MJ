@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Conversation Artifact Permissions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-conversationartifactpermission-form',
     templateUrl: './conversationartifactpermission.form.component.html'
 })
@@ -21,6 +22,3 @@ export class ConversationArtifactPermissionFormComponent extends BaseFormCompone
     }
 }
 
-export function LoadConversationArtifactPermissionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -7,7 +7,7 @@ import sql from 'mssql';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { GetReadWriteProvider } from '../util.js';
 
-export class FileResolver extends FileCategoryResolverBase {
+export class FileCategoryResolver extends FileCategoryResolverBase {
   @Mutation(() => MJFileCategory_)
   async DeleteFileCategory(
     @Arg('ID', () => String) ID: string,

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Document Runs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entitydocumentrun-form',
     templateUrl: './entitydocumentrun.form.component.html'
 })
@@ -21,6 +22,3 @@ export class EntityDocumentRunFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadEntityDocumentRunFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

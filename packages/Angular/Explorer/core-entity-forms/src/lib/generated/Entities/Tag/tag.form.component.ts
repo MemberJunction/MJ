@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Tags') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-tag-form',
     templateUrl: './tag.form.component.html'
 })
@@ -24,6 +25,3 @@ export class TagFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadTagFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

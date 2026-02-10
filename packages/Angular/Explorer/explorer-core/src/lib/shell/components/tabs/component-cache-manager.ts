@@ -109,7 +109,6 @@ export class ComponentCacheManager {
     };
 
     this.cache.set(key, info);
-    console.log(`💾 Cached component: ${resourceData.ResourceType} (key: ${key})`);
   }
 
   /**
@@ -123,7 +122,6 @@ export class ComponentCacheManager {
       info.isAttached = true;
       info.attachedToTabId = tabId;
       info.lastUsed = new Date();
-      console.log(`📌 Attached component: ${resourceType} to tab ${tabId}`);
     }
   }
 
@@ -144,7 +142,6 @@ export class ComponentCacheManager {
     info.attachedToTabId = null;
     info.lastUsed = new Date();
 
-    console.log(`📎 Detached component: ${info.resourceType} from tab ${tabId}`);
     return info;
   }
 
@@ -176,7 +173,6 @@ export class ComponentCacheManager {
     // Remove from cache
     this.cache.delete(key);
 
-    console.log(`🗑️ Destroyed component: ${resourceType}`);
   }
 
   /**
@@ -199,7 +195,6 @@ export class ComponentCacheManager {
     // Remove from cache
     this.cache.delete(key);
 
-    console.log(`🗑️ Destroyed component by tab ID: ${tabId}`);
   }
 
   /**
@@ -207,7 +202,6 @@ export class ComponentCacheManager {
    * Call this manually when needed (e.g., user logout, app shutdown)
    */
   clearCache(): void {
-    console.log(`🧹 Clearing component cache (${this.cache.size} components)`);
 
     // Destroy all components
     this.cache.forEach(info => {

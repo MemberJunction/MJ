@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Component Library Links') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-componentlibrarylink-form',
     templateUrl: './componentlibrarylink.form.component.html'
 })
@@ -21,6 +22,3 @@ export class ComponentLibraryLinkFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadComponentLibraryLinkFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

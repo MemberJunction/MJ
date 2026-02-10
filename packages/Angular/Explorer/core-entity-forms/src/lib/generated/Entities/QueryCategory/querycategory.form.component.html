@@ -1,142 +1,129 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Category Details Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="categoryDetails"
-        sectionName="Category Details"
-        icon="fa fa-folder"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="categoryDetails"
+        SectionName="Category Details"
+        Icon="fa fa-folder"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Dropdown"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Parent"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="User"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Cache Settings Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="cacheSettings"
-        sectionName="Cache Settings"
-        icon="fa fa-sliders-h"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="cacheSettings"
+        SectionName="Cache Settings"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="DefaultCacheEnabled"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="DefaultCacheTTLMinutes"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="DefaultCacheMaxSize"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="CacheInheritanceEnabled"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-database"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -145,47 +132,53 @@
          ======================================== -->
 
     <!-- Queries Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="queries"
-        sectionName="Queries"
-        icon="fa-solid fa-clipboard-question"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queries')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+    <mj-collapsible-panel after-panels
+        SectionKey="queries"
+        SectionName="Queries"
+        Icon="fa-solid fa-clipboard-question"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('queries')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Queries','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Queries')"
                 [AllowLoad]="IsSectionExpanded('queries')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Query Categories Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="queryCategories"
-        sectionName="Query Categories"
-        icon="fa fa-folder"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queryCategories')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+    <mj-collapsible-panel after-panels
+        SectionKey="queryCategories"
+        SectionName="Query Categories"
+        Icon="fa fa-folder"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('queryCategories')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('Query Categories')"
                 [AllowLoad]="IsSectionExpanded('queryCategories')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('queryCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

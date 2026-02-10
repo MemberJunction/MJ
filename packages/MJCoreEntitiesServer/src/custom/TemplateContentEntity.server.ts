@@ -254,5 +254,3 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
         }
     }
 }
-
-export function LoadTemplateContentEntityServerSubClass() {}

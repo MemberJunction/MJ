@@ -19,6 +19,7 @@ import { ActionExplorerStateService } from '../../services/action-explorer-state
 type ActionType = 'Custom' | 'Generated';
 
 @Component({
+  standalone: false,
   selector: 'mj-new-action-panel',
   templateUrl: './new-action-panel.component.html',
   styleUrls: ['./new-action-panel.component.css'],

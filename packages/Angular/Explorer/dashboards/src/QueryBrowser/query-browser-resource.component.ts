@@ -10,11 +10,6 @@ import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
-
-export function LoadQueryBrowserResource() {
-    // Prevents tree-shaking
-}
-
 /**
  * Tree node for the query category hierarchy
  */
@@ -36,6 +31,7 @@ interface CategoryNode {
  */
 @RegisterClass(BaseResourceComponent, 'QueryBrowserResource')
 @Component({
+  standalone: false,
     selector: 'mj-query-browser-resource',
     templateUrl: './query-browser-resource.component.html',
     styleUrls: ['./query-browser-resource.component.css'],

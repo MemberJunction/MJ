@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Schema Info') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-schemainfo-form',
     templateUrl: './schemainfo.form.component.html'
 })
@@ -21,6 +22,3 @@ export class SchemaInfoFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadSchemaInfoFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -47,6 +47,7 @@ export interface PendingAttachment {
  * Provides Slack/Teams-style mention UX with immutable mention tokens
  */
 @Component({
+  standalone: false,
   selector: 'mj-mention-editor',
   templateUrl: './mention-editor.component.html',
   styleUrls: ['./mention-editor.component.css'],

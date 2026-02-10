@@ -16,6 +16,7 @@ export interface NewAgentConfig {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-new-agent-dialog',
   templateUrl: './new-agent-dialog.component.html',
   styleUrls: ['./new-agent-dialog.component.css']

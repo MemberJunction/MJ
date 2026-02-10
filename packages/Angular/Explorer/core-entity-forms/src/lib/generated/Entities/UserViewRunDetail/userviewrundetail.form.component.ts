@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'User View Run Details') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-userviewrundetail-form',
     templateUrl: './userviewrundetail.form.component.html'
 })
@@ -20,6 +21,3 @@ export class UserViewRunDetailFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadUserViewRunDetailFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -20,6 +20,7 @@ export interface ActionParamDialogResult {
  * </mj-action-param-dialog>
  */
 @Component({
+  standalone: false,
     selector: 'mj-action-param-dialog',
     templateUrl: './action-param-dialog.component.html',
     styleUrls: ['./action-param-dialog.component.css']
@@ -143,9 +144,4 @@ export class ActionParamDialogComponent implements OnInit {
     public GetTypeClass(type: string): string {
         return 'type-' + type.toLowerCase();
     }
-}
-
-// Tree-shaking prevention function
-export function LoadActionParamDialogComponent(): void {
-    // This function ensures the component is included in the bundle
 }

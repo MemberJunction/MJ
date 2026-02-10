@@ -14,11 +14,6 @@ import {
   AuthErrorType,
   TokenRefreshResult
 } from '../auth-types';
-
-// Prevent tree-shaking by explicitly referencing the class
-export function LoadMJMSALProvider() {
-}
-
 /**
  * MSAL (Microsoft Authentication Library) provider implementation - v3.0.0
  *
@@ -53,7 +48,6 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         },
         cache: {
           cacheLocation: 'localStorage',
-          storeAuthStateInCookie: false,
         },
       }),
     },

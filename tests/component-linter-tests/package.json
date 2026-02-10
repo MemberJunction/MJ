@@ -15,19 +15,19 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.10.11",
     "ts-node": "^10.9.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "3.1.1",
-    "@memberjunction/core-entities": "3.1.1",
-    "@memberjunction/global": "3.1.1",
-    "@memberjunction/interactive-component-types": "3.1.1",
-    "@memberjunction/metadata-sync": "3.1.1",
-    "@memberjunction/react-test-harness": "3.1.1",
-    "@memberjunction/sqlserver-dataprovider": "3.1.1",
-    "dotenv": "^16.0.0",
-    "mssql": "^11.0.1"
+    "@memberjunction/core": "4.0.0",
+    "@memberjunction/core-entities": "4.0.0",
+    "@memberjunction/global": "4.0.0",
+    "@memberjunction/interactive-component-types": "4.0.0",
+    "@memberjunction/metadata-sync": "4.0.0",
+    "@memberjunction/react-test-harness": "4.0.0",
+    "@memberjunction/sqlserver-dataprovider": "4.0.0",
+    "dotenv": "^17.2.4",
+    "mssql": "^12.2.0"
   }
 }

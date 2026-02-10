@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Datasets') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-dataset-form',
     templateUrl: './dataset.form.component.html'
 })
@@ -22,6 +23,3 @@ export class DatasetFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDatasetFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

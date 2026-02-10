@@ -140,7 +140,7 @@ export class TestEngine extends TestEngineBase {
             }
 
             // Single execution - delegate to helper method
-            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags);
+            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence ?? null, options, contextUser, startTime, tags);
 
         } catch (error) {
             this.logError(`Test execution failed: ${testId}`, error as Error);

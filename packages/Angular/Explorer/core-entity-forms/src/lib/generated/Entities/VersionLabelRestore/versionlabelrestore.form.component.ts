@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Version Label Restores') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-versionlabelrestore-form',
     templateUrl: './versionlabelrestore.form.component.html'
 })
@@ -21,6 +22,3 @@ export class VersionLabelRestoreFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadVersionLabelRestoreFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

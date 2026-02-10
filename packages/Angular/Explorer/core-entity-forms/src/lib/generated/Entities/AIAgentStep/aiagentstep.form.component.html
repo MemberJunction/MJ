@@ -1,270 +1,239 @@
-<mj-record-form-container [record]="record" [formComponent]="this">
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
 
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
     <!-- Core Definition Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="coreDefinition"
-        sectionName="Core Definition"
-        icon="fa fa-cogs"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="coreDefinition"
+        SectionName="Core Definition"
+        Icon="fa fa-cogs"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="AgentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="StepType"
-            Type="dropdownlist"
+            Type="select"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="StartingStep"
             Type="checkbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Status"
-            Type="dropdownlist"
+            Type="select"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Execution Controls Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="executionControls"
-        sectionName="Execution Controls"
-        icon="fa fa-sliders-h"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="executionControls"
+        SectionName="Execution Controls"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="TimeoutSeconds"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="RetryCount"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="OnErrorBehavior"
-            Type="dropdownlist"
+            Type="select"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="LoopBodyType"
-            Type="dropdownlist"
+            Type="select"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Configuration"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Target Resources Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="targetResources"
-        sectionName="Target Resources"
-        icon="fa fa-project-diagram"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="targetResources"
+        SectionName="Target Resources"
+        Icon="fa fa-project-diagram"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ActionID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="SubAgentID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="PromptID"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ActionOutputMapping"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="ActionInputMapping"
             Type="textarea"
             [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Agent"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Action"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SubAgent"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Prompt"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- Visual Layout Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="visualLayout"
-        sectionName="Visual Layout"
-        icon="fa fa-th-large"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="visualLayout"
+        SectionName="Visual Layout"
+        Icon="fa fa-th-large"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="PositionX"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="PositionY"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Width"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="Height"
-            Type="numerictextbox"
+            Type="number"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
     <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+    <mj-collapsible-panel field-panels
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
-            [record]="record"
+            [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
-            [formContext]="formContext"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -273,47 +242,53 @@
          ======================================== -->
 
     <!-- MJ: AI Agent Step Paths Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIAgentStepPaths"
-        sectionName="MJ: AI Agent Step Paths"
-        icon="fa fa-project-diagram"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIAgentStepPaths')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIAgentStepPaths"
+        SectionName="MJ: AI Agent Step Paths"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentStepPaths')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Step Paths','DestinationStepID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentStepPaths')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPaths', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Step Paths Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIAgentStepPaths"
-        sectionName="MJ: AI Agent Step Paths"
-        icon="fa fa-project-diagram"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIAgentStepPaths')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+    <mj-collapsible-panel after-panels
+        SectionKey="mJAIAgentStepPaths"
+        SectionName="MJ: AI Agent Step Paths"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentStepPaths')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Step Paths','OriginStepID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentStepPaths')"
                 [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPaths', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

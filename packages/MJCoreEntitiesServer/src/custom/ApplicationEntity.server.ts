@@ -165,6 +165,30 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
     }
 
     /**
+     * Calculates the appropriate Sequence value for a new UserApplication record
+     * using the application's DefaultSequence to determine placement.
+     * If DefaultSequence fits between existing sequences, it's used directly.
+     * Otherwise, the app is appended after the highest existing sequence.
+     */
+    protected calculateSequenceFromDefault(existingUserApps: {Sequence: number}[]): number {
+        const defaultSeq = this.DefaultSequence ?? 100;
+
+        if (existingUserApps.length === 0) {
+            return defaultSeq;
+        }
+
+        // Check if DefaultSequence conflicts with an existing sequence
+        const existingSequences = new Set(existingUserApps.map(ua => ua.Sequence || 0));
+        if (!existingSequences.has(defaultSeq)) {
+            return defaultSeq;
+        }
+
+        // Conflict exists — append after the highest existing sequence
+        const maxSequence = Math.max(...existingSequences);
+        return maxSequence + 1;
+    }
+
+    /**
      * Creates UserApplication records for all users in the system for this application
      */
     protected async CreateUserApplicationsForAllUsers(): Promise<void> {
@@ -215,19 +239,16 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
                     continue;
                 }
 
-                // Calculate max sequence for this user (client-side)
-                const userApps = allUserApps.filter((ua: any) => ua.UserID === user.ID);
-                let maxSequence = 0;
-                if (userApps.length > 0) {
-                    maxSequence = Math.max(...userApps.map((ua: any) => ua.Sequence || 0));
-                }
+                // Calculate sequence using DefaultSequence to place the app in its intended position
+                const userApps = allUserApps.filter((ua: {UserID: string}) => ua.UserID === user.ID);
+                const sequence = this.calculateSequenceFromDefault(userApps);
 
                 // Create new UserApplication record
                 const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications', this.ContextCurrentUser);
                 userApp.NewRecord();
                 userApp.UserID = user.ID;
                 userApp.ApplicationID = this.ID;
-                userApp.Sequence = maxSequence + 1;
+                userApp.Sequence = sequence;
                 userApp.IsActive = true;
 
                 const saveResult = await userApp.Save();
@@ -246,8 +267,4 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
             throw e; // Re-throw since we're in a transaction
         }
     }
-}
-
-export function LoadApplicationEntityServer() {
-    // Force class to load and register with the system
 }

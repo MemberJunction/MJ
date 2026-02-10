@@ -91,10 +91,3 @@ export class DeleteScheduledJobAction extends BaseJobAction {
         }
     }
 }
-
-/**
- * Loader function to prevent tree shaking
- */
-export function LoadDeleteScheduledJobAction() {
-    // Stub function - ensures class is included in bundle
-}

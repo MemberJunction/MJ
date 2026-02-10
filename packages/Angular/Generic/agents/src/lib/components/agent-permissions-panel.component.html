@@ -1,0 +1,232 @@
+<div class="ap-panel" [class.ap-loading]="IsLoading">
+
+  <!-- Open-to-everyone banner (when no permissions are set) -->
+  @if (!IsLoading && Rows.length === 0) {
+    <div class="ap-open-banner">
+      <div class="ap-open-banner-icon">
+        <i class="fa-solid fa-lock-open"></i>
+      </div>
+      <div class="ap-open-banner-content">
+        <h4>Open to Everyone</h4>
+        <p>
+          No permission records are configured. All users can
+          <strong>view</strong> and <strong>run</strong> this agent.
+          Only the owner can edit or delete it.
+        </p>
+        <p class="ap-open-banner-hint">
+          Add a permission below to restrict access to specific users or roles.
+        </p>
+      </div>
+    </div>
+  }
+
+  <!-- Owner badge -->
+  @if (OwnerName) {
+    <div class="ap-owner-row">
+      <i class="fa-solid fa-crown ap-owner-icon"></i>
+      <span class="ap-owner-label">Owner</span>
+      <span class="ap-owner-name">{{ OwnerName }}</span>
+      <span class="ap-owner-hint">Full access</span>
+    </div>
+  }
+
+  <!-- Existing permissions list -->
+  @if (Rows.length > 0) {
+    <div class="ap-list">
+      @for (row of Rows; track trackById($index, row)) {
+        <div class="ap-row"
+          [class.ap-row-editing]="EditingRowId === row.ID">
+          <!-- Grantee info -->
+          <div class="ap-row-grantee">
+            <div class="ap-avatar" [class.ap-avatar-role]="row.GrantType === 'role'">
+              <i class="fa-solid" [class.fa-user]="row.GrantType === 'user'" [class.fa-users]="row.GrantType === 'role'"></i>
+            </div>
+            <div class="ap-row-info">
+              <span class="ap-row-name">{{ row.GrantedToName }}</span>
+              <span class="ap-row-type">{{ row.GrantType === 'user' ? 'User' : 'Role' }}</span>
+            </div>
+          </div>
+          <!-- Permission pills -->
+          <div class="ap-row-perms">
+            @if (row.EffectiveCanView) {
+              <span class="ap-pill ap-pill-view" title="Can view agent configuration">
+                <i class="fa-solid fa-eye"></i> View
+              </span>
+            }
+            @if (row.EffectiveCanRun) {
+              <span class="ap-pill ap-pill-run" title="Can execute the agent">
+                <i class="fa-solid fa-play"></i> Run
+              </span>
+            }
+            @if (row.EffectiveCanEdit) {
+              <span class="ap-pill ap-pill-edit" title="Can modify agent configuration">
+                <i class="fa-solid fa-pen"></i> Edit
+              </span>
+            }
+            @if (row.EffectiveCanDelete) {
+              <span class="ap-pill ap-pill-delete" title="Can delete the agent">
+                <i class="fa-solid fa-trash"></i> Delete
+              </span>
+            }
+          </div>
+          <!-- Comments -->
+          @if (row.Comments) {
+            <span class="ap-row-comments" [title]="row.Comments">
+              <i class="fa-solid fa-comment-dots"></i>
+            </span>
+          }
+          <!-- Actions -->
+          <div class="ap-row-actions">
+            <button class="ap-icon-btn" title="Edit" (click)="OnEditRow(row)">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button class="ap-icon-btn ap-icon-btn-danger" title="Remove" (click)="OnDeleteRow(row)">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Add / Edit Form -->
+  @if (IsFormOpen) {
+    <div class="ap-form" @slideDown>
+      <div class="ap-form-header">
+        <h4>{{ EditingRowId ? 'Edit Permission' : 'New Permission' }}</h4>
+        <button class="ap-icon-btn" (click)="OnCancelForm()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <!-- Grant type toggle -->
+      <div class="ap-form-section">
+        <label class="ap-form-label">Grant to</label>
+        <div class="ap-toggle-group">
+          <button class="ap-toggle-btn"
+            [class.ap-toggle-active]="FormGrantType === 'user'"
+            (click)="FormGrantType = 'user'; FormGranteeId = null">
+            <i class="fa-solid fa-user"></i> User
+          </button>
+          <button class="ap-toggle-btn"
+            [class.ap-toggle-active]="FormGrantType === 'role'"
+            (click)="FormGrantType = 'role'; FormGranteeId = null">
+            <i class="fa-solid fa-users"></i> Role
+          </button>
+        </div>
+      </div>
+      <!-- Grantee selector -->
+      <div class="ap-form-section">
+        <label class="ap-form-label">{{ FormGrantType === 'user' ? 'User' : 'Role' }}</label>
+        <div class="ap-search-select">
+          <i class="fa-solid fa-magnifying-glass ap-search-icon"></i>
+          <input class="ap-search-input"
+            type="text"
+            [placeholder]="'Search ' + (FormGrantType === 'user' ? 'users' : 'roles') + '...'"
+            [(ngModel)]="SearchQuery"
+            (input)="OnSearchChanged()" />
+        </div>
+        @if (FilteredGrantees.length > 0) {
+          <div class="ap-select-list">
+            @for (g of FilteredGrantees; track g) {
+              <button class="ap-select-option"
+                [class.ap-select-option-active]="FormGranteeId === g.ID"
+                (click)="FormGranteeId = g.ID; SearchQuery = g.Name">
+                <i class="fa-solid" [class.fa-user]="FormGrantType === 'user'" [class.fa-users]="FormGrantType === 'role'"></i>
+                {{ g.Name }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+      <!-- Permission toggles -->
+      <div class="ap-form-section">
+        <label class="ap-form-label">Permissions</label>
+        <div class="ap-perm-grid">
+          <label class="ap-perm-card"
+            [class.ap-perm-card-active]="FormCanView"
+            [class.ap-perm-card-implied]="FormCanRun || FormCanEdit || FormCanDelete">
+            <input type="checkbox"
+              [(ngModel)]="FormCanView"
+              [disabled]="FormCanRun || FormCanEdit || FormCanDelete"
+              class="ap-perm-checkbox" />
+            <i class="fa-solid fa-eye ap-perm-icon"></i>
+            <span class="ap-perm-name">View</span>
+            <span class="ap-perm-desc">See config</span>
+          </label>
+          <label class="ap-perm-card"
+            [class.ap-perm-card-active]="FormCanRun"
+            [class.ap-perm-card-implied]="FormCanEdit || FormCanDelete">
+            <input type="checkbox"
+              [(ngModel)]="FormCanRun"
+              (ngModelChange)="OnPermToggle('run')"
+              [disabled]="FormCanEdit || FormCanDelete"
+              class="ap-perm-checkbox" />
+            <i class="fa-solid fa-play ap-perm-icon"></i>
+            <span class="ap-perm-name">Run</span>
+            <span class="ap-perm-desc">Execute</span>
+          </label>
+          <label class="ap-perm-card"
+            [class.ap-perm-card-active]="FormCanEdit"
+            [class.ap-perm-card-implied]="FormCanDelete">
+            <input type="checkbox"
+              [(ngModel)]="FormCanEdit"
+              (ngModelChange)="OnPermToggle('edit')"
+              [disabled]="FormCanDelete"
+              class="ap-perm-checkbox" />
+            <i class="fa-solid fa-pen ap-perm-icon"></i>
+            <span class="ap-perm-name">Edit</span>
+            <span class="ap-perm-desc">Modify</span>
+          </label>
+          <label class="ap-perm-card"
+            [class.ap-perm-card-active]="FormCanDelete">
+            <input type="checkbox"
+              [(ngModel)]="FormCanDelete"
+              (ngModelChange)="OnPermToggle('delete')"
+              class="ap-perm-checkbox" />
+            <i class="fa-solid fa-trash ap-perm-icon"></i>
+            <span class="ap-perm-name">Delete</span>
+            <span class="ap-perm-desc">Remove</span>
+          </label>
+        </div>
+      </div>
+      <!-- Comments -->
+      <div class="ap-form-section">
+        <label class="ap-form-label">Comments <span class="ap-optional">(optional)</span></label>
+        <textarea class="ap-textarea"
+          [(ngModel)]="FormComments"
+          placeholder="Why is this permission being granted?"
+        rows="2"></textarea>
+      </div>
+      <!-- Form actions -->
+      <div class="ap-form-actions">
+        <button class="ap-btn ap-btn-primary"
+          [disabled]="!CanSave || IsSaving"
+          (click)="OnSave()">
+          @if (!IsSaving) {
+            <i class="fa-solid fa-check"></i>
+          }
+          @if (IsSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          }
+          {{ EditingRowId ? 'Update' : 'Add' }}
+        </button>
+        <button class="ap-btn ap-btn-ghost" (click)="OnCancelForm()">Cancel</button>
+      </div>
+    </div>
+  }
+
+  <!-- Add button (when form is closed) -->
+  @if (!IsFormOpen && !IsLoading) {
+    <button class="ap-add-btn" (click)="OnAddNew()">
+      <i class="fa-solid fa-plus"></i> Add Permission
+    </button>
+  }
+
+  <!-- Loading state -->
+  @if (IsLoading) {
+    <div class="ap-loading-overlay">
+      <div class="ap-spinner"></div>
+      <span>Loading permissions...</span>
+    </div>
+  }
+</div>

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Workspace Items') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-workspaceitem-form',
     templateUrl: './workspaceitem.form.component.html'
 })
@@ -22,6 +23,3 @@ export class WorkspaceItemFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadWorkspaceItemFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -54,7 +54,6 @@ export {
 export {
     AgentToolAdapter,
     createAgentToolAdapter,
-    LoadAgentToolAdapter,
     type OpenAIFunctionDefinition,
     type AnthropicToolDefinition,
     type AgentToolDefinition,
@@ -112,11 +111,50 @@ export type {
     MCPClientEventListener
 } from './types.js';
 
-/**
- * Tree-shaking prevention function.
- * Call this from application initialization to ensure the package is loaded.
- */
-export function LoadMCPClient(): void {
-    // This function exists to prevent tree-shaking
-    // and ensure the MCPClientManager singleton is available
-}
+// OAuth 2.1 module for MCP server authentication
+export {
+    // Core classes
+    OAuthManager,
+    AuthServerDiscovery,
+    ClientRegistration,
+    TokenManager,
+    PKCEGenerator,
+    OAuthErrorMessages,
+    OAuthAuditLogger,
+    getOAuthAuditLogger,
+
+    // Error classes
+    OAuthAuthorizationRequiredError,
+    OAuthReauthorizationRequiredError,
+
+    // Type re-exports
+    type AuthServerMetadata,
+    type CachedAuthServerMetadata,
+    type DCRRequest,
+    type DCRResponse,
+    type PKCEChallenge,
+    type OAuthTokenResponse,
+    type OAuthTokenSet,
+    type OAuth2AuthCodeCredentialValues,
+    type OAuthAuthorizationState,
+    type OAuthAuthorizationStatus,
+    type OAuthClientRegistration,
+    type OAuthClientRegistrationStatus,
+    type OAuthErrorResponse,
+    type InitiateAuthorizationResult,
+    type CompleteAuthorizationResult,
+    type TokenRefreshResult,
+    type OAuthConnectionStatus,
+    type OAuthEventType,
+    type OAuthEventData,
+    type MCPServerOAuthConfig,
+
+    // Audit logging types
+    type AuthorizationInitiatedDetails,
+    type AuthorizationCompletedDetails,
+    type AuthorizationFailedDetails,
+    type TokenRefreshDetails,
+    type TokenRefreshFailedDetails,
+    type CredentialsRevokedDetails
+} from './oauth/index.js';
+

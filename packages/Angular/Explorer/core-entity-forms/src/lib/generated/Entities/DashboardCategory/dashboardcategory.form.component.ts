@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Dashboard Categories') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-dashboardcategory-form',
     templateUrl: './dashboardcategory.form.component.html'
 })
@@ -26,6 +27,3 @@ export class DashboardCategoryFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDashboardCategoryFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

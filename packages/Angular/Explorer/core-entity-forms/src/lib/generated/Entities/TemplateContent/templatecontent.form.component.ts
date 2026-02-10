@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Template Contents') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-templatecontent-form',
     templateUrl: './templatecontent.form.component.html'
 })
@@ -23,6 +24,3 @@ export class TemplateContentFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadTemplateContentFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

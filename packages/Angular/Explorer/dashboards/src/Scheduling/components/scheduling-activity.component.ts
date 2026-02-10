@@ -14,6 +14,7 @@ import {
 type TimeRange = '24h' | '7d' | '30d' | '90d';
 
 @Component({
+  standalone: false,
   selector: 'app-scheduling-activity',
   templateUrl: './scheduling-activity.component.html',
   styleUrls: ['./scheduling-activity.component.css'],

@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
 import { BaseAction } from '@memberjunction/actions';
-const pdfParse = require('pdf-parse');
+import pdfParse from 'pdf-parse';
 
 /**
  * Action that extracts content from PDF files
@@ -242,11 +242,4 @@ export class PDFExtractorAction extends BaseFileHandlerAction {
             textLength: pdfData.text.length
         };
     }
-}
-
-/**
- * Loader function to ensure the PDFExtractorAction class is included in the bundle
- */
-export function LoadPDFExtractorAction() {
-    // Stub function to prevent tree shaking
 }

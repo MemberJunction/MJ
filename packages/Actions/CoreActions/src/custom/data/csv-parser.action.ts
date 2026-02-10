@@ -154,10 +154,3 @@ export class CSVParserAction extends BaseFileHandlerAction {
         }
     }
 }
-
-/**
- * Loader function to ensure the CSVParserAction class is included in the bundle
- */
-export function LoadCSVParserAction() {
-    // Stub function to prevent tree shaking
-}

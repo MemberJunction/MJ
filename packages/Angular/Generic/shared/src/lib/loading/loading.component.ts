@@ -50,6 +50,7 @@ export interface LogoGradient {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-loading',
   templateUrl: './loading.component.html',
   styleUrls: ['./loading.component.css']

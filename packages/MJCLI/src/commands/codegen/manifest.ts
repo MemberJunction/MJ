@@ -26,6 +26,11 @@ export default class CodeGenManifest extends Command {
             description: 'Only include classes with this base class (can be repeated)',
             multiple: true,
         }),
+        'exclude-packages': Flags.string({
+            char: 'e',
+            description: 'Exclude packages matching this prefix from scanning (can be repeated). Example: --exclude-packages @memberjunction',
+            multiple: true,
+        }),
         quiet: Flags.boolean({
             char: 'q',
             description: 'Suppress all output',
@@ -41,11 +46,13 @@ export default class CodeGenManifest extends Command {
     async run(): Promise<void> {
         const { flags } = await this.parse(CodeGenManifest);
 
+        const excludePackages = flags['exclude-packages'];
         const result = await generateClassRegistrationsManifest({
             outputPath: flags.output,
             appDir: flags.appDir || process.cwd(),
             verbose: flags.verbose,
             filterBaseClasses: flags.filter && flags.filter.length > 0 ? flags.filter : undefined,
+            excludePackages: excludePackages && excludePackages.length > 0 ? excludePackages : undefined,
         });
 
         if (!result.success) {

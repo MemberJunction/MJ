@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Dashboard Category Links') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-dashboardcategorylink-form',
     templateUrl: './dashboardcategorylink.form.component.html'
 })
@@ -21,6 +22,3 @@ export class DashboardCategoryLinkFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDashboardCategoryLinkFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

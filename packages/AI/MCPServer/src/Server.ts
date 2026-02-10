@@ -27,8 +27,7 @@ import { AgentRunner } from "@memberjunction/ai-agents";
 import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { AIEngine, LoadAIEngine } from "@memberjunction/aiengine";
-import { LoadAIProviders } from "@memberjunction/ai-provider-bundle";
+import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
 import { CredentialEngine } from "@memberjunction/credentials";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
@@ -68,9 +67,6 @@ import { send401Response } from './auth/WWWAuthenticate.js';
 import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 
-// Load AI Engine and all providers to prevent tree shaking - REQUIRED for agent execution
-LoadAIEngine();
-LoadAIProviders();
 
 /*******************************************************************************
  * TYPES AND INTERFACES
@@ -1247,7 +1243,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             for await (const chunk of req) {
                 chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
             }
-            const bodyBuffer = Buffer.concat(chunks);
+            const bodyBuffer = Buffer.concat(chunks as unknown as Uint8Array[]);
 
             // Create a new readable stream from the buffered body for the transport
             const { Readable } = await import('stream');
@@ -3093,11 +3089,11 @@ function addEntityGetTool(addToolWithFilter: AddToolFn, entity: EntityInfo): voi
  * Configuration interface for entity tool matching.
  */
 interface EntityToolConfig {
-    get: boolean;
-    create: boolean;
-    update: boolean;
-    delete: boolean;
-    runView: boolean;
+    get?: boolean;
+    create?: boolean;
+    update?: boolean;
+    delete?: boolean;
+    runView?: boolean;
     entityName?: string;
     schemaName?: string;
 }

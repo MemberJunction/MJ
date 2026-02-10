@@ -67,7 +67,7 @@ function findEnvFile(): string | undefined {
 const envPath = findEnvFile();
 if (envPath) {
   console.log(`MCP Server: Loading environment from ${envPath}`);
-  dotenv.config({ path: envPath });
+  dotenv.config({ path: envPath, quiet: true });
 } else {
   console.log(`MCP Server: No .env file found, using existing environment variables`);
 }

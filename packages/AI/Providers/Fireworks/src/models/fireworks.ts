@@ -348,7 +348,3 @@ export class FireworksLLM extends BaseLLM {
         }
     }
 }
-
-export function LoadFireworksLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

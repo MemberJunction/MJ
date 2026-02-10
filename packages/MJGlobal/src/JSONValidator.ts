@@ -462,12 +462,13 @@ export class JSONValidator {
             const schema = JSON.parse(schemaJson);
             return this.validate(data, schema);
         } catch (parseError) {
+            const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
             return {
                 Success: false,
                 Errors: [
                     new ValidationErrorInfo(
                         'schema',
-                        `Invalid JSON schema: ${parseError.message}`,
+                        `Invalid JSON schema: ${errorMessage}`,
                         schemaJson,
                         ValidationErrorType.Failure
                     )

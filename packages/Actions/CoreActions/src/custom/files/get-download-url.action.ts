@@ -68,6 +68,3 @@ export class GetDownloadUrlAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadGetDownloadUrlAction() {
-    // Stub function to prevent tree shaking
-}

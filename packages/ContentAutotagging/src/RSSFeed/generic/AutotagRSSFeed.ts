@@ -8,7 +8,7 @@ import axios from 'axios'
 import crypto from 'crypto'
 import Parser from 'rss-parser'
 import dotenv from 'dotenv';
-dotenv.config()
+dotenv.config({ quiet: true })
 
 @RegisterClass(AutotagBase, 'AutotagRSSFeed')
 export class AutotagRSSFeed extends AutotagBase {

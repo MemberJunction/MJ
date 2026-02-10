@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity AI Actions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entityaiaction-form',
     templateUrl: './entityaiaction.form.component.html'
 })
@@ -22,6 +23,3 @@ export class EntityAIActionFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadEntityAIActionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

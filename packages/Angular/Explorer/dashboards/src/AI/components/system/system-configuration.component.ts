@@ -18,20 +18,13 @@ interface ConfigurationWithParams extends AIConfigurationEntity {
   compressionPrompt?: AIPromptEntityExtended | null;
   summarizationPrompt?: AIPromptEntityExtended | null;
 }
-
-/**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIConfigResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * AI Configuration Resource - displays AI system configuration management
  * Extends BaseResourceComponent to work with the resource type system
  */
 @RegisterClass(BaseResourceComponent, 'AIConfigResource')
 @Component({
+  standalone: false,
   selector: 'app-system-configuration',
   templateUrl: './system-configuration.component.html',
   styleUrls: ['./system-configuration.component.css']

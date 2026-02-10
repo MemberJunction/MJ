@@ -21,6 +21,7 @@ import { ExportService, ExportDialogConfig, ExportDialogResult } from './export.
  * </mj-export-dialog>
  */
 @Component({
+  standalone: false,
   selector: 'mj-export-dialog',
   templateUrl: './export-dialog.component.html',
   styleUrls: ['./export-dialog.component.css']

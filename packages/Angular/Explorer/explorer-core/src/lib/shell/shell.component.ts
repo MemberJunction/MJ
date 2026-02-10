@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { Subscription, combineLatest, Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
@@ -26,6 +26,7 @@ import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } fro
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
 import { UserEntity } from '@memberjunction/core-entities';
+import { CommandPaletteService } from '../command-palette/command-palette.service';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -36,6 +37,7 @@ import { UserEntity } from '@memberjunction/core-entities';
  * - Unified workspace state management
  */
 @Component({
+  standalone: false,
   selector: 'mj-shell',
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
@@ -132,7 +134,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private settingsDialogService: SettingsDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
-    public developerModeService: DeveloperModeService
+    public developerModeService: DeveloperModeService,
+    private commandPaletteService: CommandPaletteService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -231,6 +234,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
+        this.cdr.detectChanges();
 
         // Create default tab when app is activated ONLY if:
         // 1. App has no tabs yet
@@ -387,6 +391,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.initialized = true;
     this.waitingForFirstResource = true;
+
+    // Force change detection to sync Angular's expected values after all async
+    // state changes (apps loaded, searchableEntities populated, etc.) to prevent
+    // NG0100 ExpressionChangedAfterItHasBeenCheckedError in dev mode
+    this.cdr.detectChanges();
   }
 
   /**
@@ -469,6 +478,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Check if this is a system tab (not associated with a registered app)
     if (tabAppId === SYSTEM_APP_ID) {
       this.isViewingSystemTab = true;
+      this.cdr.detectChanges();
+
       // Don't try to set active app - SYSTEM_APP_ID has no registered app
       // Update browser title with just the tab title (no app context)
       this.titleService.setContext(null, activeTab.title || 'Explorer');
@@ -477,6 +488,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Not a system tab - clear the flag
     this.isViewingSystemTab = false;
+    this.cdr.detectChanges();
 
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();
@@ -495,7 +507,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Sync URL with active tab's resource
    */
-  private syncUrlWithWorkspace(config: WorkspaceConfiguration): void {
+  private async syncUrlWithWorkspace(config: WorkspaceConfiguration): Promise<void> {
     // Don't sync URL during URL-based navigation initialization
     if (this.urlBasedNavigation) {
       return;
@@ -512,7 +524,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Build resource URL from tab configuration
-    const resourceUrl = this.buildResourceUrl(activeTab);
+    const resourceUrl = await this.buildResourceUrl(activeTab);
     if (resourceUrl) {
       // Compare full URLs including query params to detect changes
       const currentUrl = this.router.url;
@@ -543,7 +555,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Find the tab that matches this URL
-    const matchingTab = this.findTabForUrl(url, config.tabs);
+    const matchingTab = await this.findTabForUrl(url, config.tabs);
 
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
@@ -634,7 +646,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
 
         if (app) {
-          const navItems = app.GetNavItems();
+          const navItems = await app.GetNavItems();
           // Only auto-create tabs for apps with zero nav items
           // Apps with nav items should have had their tabs preserved
           if (navItems.length === 0) {
@@ -684,7 +696,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Find the tab that matches a given URL
    */
-  private findTabForUrl(url: string, tabs: WorkspaceTab[]): WorkspaceTab | null {
+  private async findTabForUrl(url: string, tabs: WorkspaceTab[]): Promise<WorkspaceTab | null> {
     // Parse the URL to extract resource info
     const urlPath = url.split('?')[0];
 
@@ -731,7 +743,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // Fallback for apps with zero nav items: match ANY tab belonging to this app
         // This handles the case where the default tab was replaced when navigating away
-        const navItems = app.GetNavItems();
+        const navItems = await app.GetNavItems();
         if (navItems.length === 0) {
           return tabs.find(tab => tab.applicationId === app.ID) || null;
         }
@@ -944,7 +956,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Build a shareable resource URL from tab data.
    * Uses app.Path for cleaner URLs (e.g., /app/data-explorer instead of /app/Data%20Explorer)
    */
-  private buildResourceUrl(tab: WorkspaceTab): string | null {
+  private async buildResourceUrl(tab: WorkspaceTab): Promise<string | null> {
     const config = tab.configuration || {};
     const resourceType = (config['resourceType'] as string | undefined)?.toLowerCase();
     const recordId = tab.resourceRecordId;
@@ -997,7 +1009,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       if (app) {
         // Prefer Path, fall back to Name
         const appPath = app.Path || app.Name;
-        const navItems = app.GetNavItems();
+        const navItems = await app.GetNavItems();
 
         // If app has nav items, try to find the matching one
         // Filter out dynamic nav items - they're generated from tab state and shouldn't affect URL building
@@ -1207,7 +1219,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private startLoadingAnimation(): void {
     // Select the appropriate theme based on date and locale
     this.activeTheme = getActiveTheme();
-    console.log(`🎨 Loading theme: ${this.activeTheme.name}`);
 
     // Reset state
     this.usedMessageIndices = [0]; // Mark first message as used
@@ -1456,15 +1467,32 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.cdr.detectChanges();
 
     try {
-      await this.appManager.SetActiveApp(appId);
 
       const app = this.appManager.GetAppById(appId);
       if (!app) {
+        // Get app info from all system apps to show the name
+        const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+        const appName = systemApp?.Name || 'this application';
+
+        // Clear loading indicator before showing dialog
+        this.loadingAppId = null;
+        this.cdr.detectChanges();
+
+        // Show "Add Application?" dialog
+        if (this.appAccessDialog) {
+          this.appAccessDialog.show({
+            type: 'not_installed',
+            appName: appName,
+            appId: appId
+          });
+        }
         return;
       }
 
+      await this.appManager.SetActiveApp(appId);
+
       // Get the default nav item for this app (if any)
-      const navItems = app.GetNavItems();
+      const navItems = await app.GetNavItems();
       const defaultNavItem = navItems.find(item => item.isDefault);
 
       // Check if app has any tabs
@@ -1484,7 +1512,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (defaultNavItemTab) {
           // Found existing tab for default nav item - activate it
           this.workspaceManager.SetActiveTab(defaultNavItemTab.id);
-          const resourceUrl = this.buildResourceUrl(defaultNavItemTab);
+          const resourceUrl = await this.buildResourceUrl(defaultNavItemTab);
           if (resourceUrl) {
             this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
           }
@@ -1499,7 +1527,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // The workspace configuration subscription will trigger URL sync
         // but we can also manually trigger it here to ensure immediate update
-        const resourceUrl = this.buildResourceUrl(firstTab);
+        const resourceUrl = await this.buildResourceUrl(firstTab);
         if (resourceUrl) {
           this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
         }
@@ -1597,6 +1625,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.activeApp.GetColor(),
       { forceNewTab: shiftKey || dblClick }
     );
+  }
+
+  /**
+   * Handle dismiss of a dynamic nav item (remove from recent stack)
+   */
+  onNavItemDismiss(item: NavItem): void {
+    if (!this.activeApp) {
+      return;
+    }
+
+    // Delegate to HomeApplication's RemoveDynamicNavItem if available
+    const appWithRemove = this.activeApp as BaseApplication & {
+      RemoveDynamicNavItem?: (item: NavItem) => void;
+    };
+    if (typeof appWithRemove.RemoveDynamicNavItem === 'function') {
+      appWithRemove.RemoveDynamicNavItem(item);
+    }
   }
 
   /**
@@ -1828,8 +1873,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }]
     };
 
-    console.log('🔄 Resetting layout to fresh state:', freshConfig);
-
     // Update workspace configuration
     this.workspaceManager.UpdateConfiguration(freshConfig);
   }
@@ -1842,6 +1885,30 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.authBase.logout();
     localStorage.removeItem('auth');
     localStorage.removeItem('claims');
+  }
+
+  /**
+   * Global keyboard shortcut handler
+   * Cmd+/ (Mac) or Ctrl+/ (Windows) opens the command palette
+   */
+  @HostListener('document:keydown', ['$event'])
+  handleGlobalKeyboardShortcuts(event: KeyboardEvent): void {
+    // Skip if user is typing in an input/textarea
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+
+    // Platform detection
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+
+    // Cmd+/ or Ctrl+/ opens command palette
+    if (isCtrlOrCmd && event.key === '/') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.commandPaletteService.Open();
+    }
   }
 
   /**
@@ -2196,26 +2263,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const userApp = await this.appManager.InstallAppForUser(appId);
 
       if (userApp) {
-        // App installed successfully - navigate to it
-        const app = this.appManager.GetAppById(appId);
+        // Force refresh the app list to ensure the new app is in the observable
+        await this.appManager.ReloadUserApplications();
 
-        if (app) {
-          await this.navigateToApp(app);
-          this.appAccessDialog?.completeProcessing();
+        // App added successfully - wait for observable to sync then navigate
+        await this.waitForAppAndNavigate(appId);
+
         } else {
-          // Fallback - reload might be needed
-          console.warn(`[ShellComponent] App ${appId} not found after install, redirecting to first app`);
+        
+          console.error('[ShellComponent] Failed to add application');
           this.appAccessDialog?.completeProcessing();
           this.redirectToFirstApp(this.appManager.GetAllApps());
-        }
-      } else {
-        // Installation failed
-        console.error('[ShellComponent] Installation failed');
-        this.appAccessDialog?.completeProcessing();
-        this.redirectToFirstApp(this.appManager.GetAllApps());
       }
     } catch (error) {
-      console.error('Error installing app:', error);
+      console.error('Error adding app:', error);
       this.appAccessDialog?.completeProcessing();
       this.redirectToFirstApp(this.appManager.GetAllApps());
     }
@@ -2229,21 +2290,46 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const success = await this.appManager.EnableAppForUser(appId);
 
       if (success) {
-        // App enabled successfully - navigate to it
-        const app = this.appManager.GetAppById(appId);
-        if (app) {
-          await this.navigateToApp(app);
-          this.appAccessDialog?.completeProcessing();
-        } else {
-          this.appAccessDialog?.completeProcessing();
-          this.redirectToFirstApp(this.appManager.GetAllApps());
-        }
+        // App enabled successfully - wait for observable to sync then navigate
+        await this.waitForAppAndNavigate(appId);
       } else {
         this.appAccessDialog?.completeProcessing();
         this.redirectToFirstApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error enabling app:', error);
+      this.appAccessDialog?.completeProcessing();
+      this.redirectToFirstApp(this.appManager.GetAllApps());
+    }
+  }
+
+  /**
+   * Wait for an app to appear in the applications observable and then navigate to it.
+   * This handles the async nature of observable updates after install/enable.
+   */
+  private async waitForAppAndNavigate(appId: string, maxWaitMs: number = 3000): Promise<void> {
+    const startTime = Date.now();
+    const pollInterval = 100;
+
+    // Poll for the app to appear in the observable
+    while (Date.now() - startTime < maxWaitMs) {
+      const app = this.appManager.GetAppById(appId);
+      if (app) {
+        await this.navigateToApp(app);
+        this.appAccessDialog?.completeProcessing();
+        return;
+      }
+      // Wait a bit before checking again
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    // Timeout - try to get from system apps as fallback
+    const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+    if (systemApp) {
+      await this.navigateToApp(systemApp);
+      this.appAccessDialog?.completeProcessing();
+    } else {
+      console.warn(`[ShellComponent] App ${appId} not found after waiting, redirecting to first app`);
       this.appAccessDialog?.completeProcessing();
       this.redirectToFirstApp(this.appManager.GetAllApps());
     }

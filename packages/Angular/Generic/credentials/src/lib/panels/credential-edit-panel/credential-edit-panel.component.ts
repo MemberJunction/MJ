@@ -3,10 +3,6 @@ import { CredentialEntity, CredentialTypeEntity, CredentialCategoryEntity } from
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-export function LoadCredentialEditPanel() {
-    // Prevents tree-shaking
-}
-
 interface FieldSchemaProperty {
     name: string;
     type: string;
@@ -32,6 +28,7 @@ interface CredentialValues {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-edit-panel',
     templateUrl: './credential-edit-panel.component.html',
     styleUrls: ['./credential-edit-panel.component.css'],

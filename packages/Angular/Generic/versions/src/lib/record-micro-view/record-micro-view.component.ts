@@ -35,6 +35,7 @@ export interface EntityLinkClickEvent {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-record-micro-view',
     templateUrl: './record-micro-view.component.html',
     styleUrls: ['./record-micro-view.component.css'],

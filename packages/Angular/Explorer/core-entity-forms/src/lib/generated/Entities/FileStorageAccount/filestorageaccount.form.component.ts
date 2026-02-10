@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: File Storage Accounts') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-filestorageaccount-form',
     templateUrl: './filestorageaccount.form.component.html'
 })
@@ -21,6 +22,3 @@ export class FileStorageAccountFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadFileStorageAccountFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

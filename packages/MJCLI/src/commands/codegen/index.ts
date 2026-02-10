@@ -1,5 +1,5 @@
 import { Command, Flags } from '@oclif/core';
-import { ParserOutput } from '@oclif/core/lib/interfaces/parser';
+import type { ParserOutput } from '@oclif/core/lib/interfaces/parser';
 import { updatedConfig } from '../../config';
 import { runMemberJunctionCodeGeneration, initializeConfig } from '@memberjunction/codegen-lib';
 

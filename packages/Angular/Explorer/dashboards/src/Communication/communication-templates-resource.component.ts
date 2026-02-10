@@ -10,92 +10,104 @@ interface TemplateCardData {
     LastUpdated: Date | null;
     CategoryName: string;
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadCommunicationTemplatesResource() {
-    // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'CommunicationTemplatesResource')
 @Component({
+  standalone: false,
     selector: 'mj-communication-templates-resource',
     template: `
     <div class="templates-wrapper">
-        <!-- HEADER -->
-        <div class="templates-header">
-            <div>
-                <h2>Communication Templates</h2>
-                <p>Manage reusable message templates</p>
-            </div>
-            <div class="header-actions">
-                <div class="search-input-wrapper">
-                    <i class="fa-solid fa-search"></i>
-                    <input type="text" placeholder="Search templates..." (input)="onSearch($event)">
-                </div>
-                <button class="tb-btn primary" (click)="addNewTemplate()">
-                    <i class="fa-solid fa-plus"></i> New Template
-                </button>
-            </div>
+      <!-- HEADER -->
+      <div class="templates-header">
+        <div>
+          <h2>Communication Templates</h2>
+          <p>Manage reusable message templates</p>
         </div>
-
-        <!-- LOADING -->
-        <div *ngIf="isLoading" class="loading-state">
-            <mj-loading text="Loading templates..."></mj-loading>
+        <div class="header-actions">
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-search"></i>
+            <input type="text" placeholder="Search templates..." (input)="onSearch($event)">
+          </div>
+          <button class="tb-btn primary" (click)="addNewTemplate()">
+            <i class="fa-solid fa-plus"></i> New Template
+          </button>
         </div>
-
-        <!-- CATEGORY FILTERS -->
-        <div *ngIf="!isLoading" class="category-filters">
-            <div class="filter-chip" [class.active]="categoryFilter === ''"
-                (click)="onCategoryFilter('')">
-                All ({{allTemplates.length}})
-            </div>
-            <div *ngFor="let cat of categories" class="filter-chip"
-                [class.active]="categoryFilter === cat"
-                (click)="onCategoryFilter(cat)">
-                {{cat}} ({{getCategoryCount(cat)}})
-            </div>
+      </div>
+    
+      <!-- LOADING -->
+      @if (isLoading) {
+        <div class="loading-state">
+          <mj-loading text="Loading templates..."></mj-loading>
         </div>
-
-        <!-- TEMPLATES GRID -->
-        <div *ngIf="!isLoading" class="templates-grid">
-            <div *ngFor="let card of filteredTemplates" class="template-card"
-                (click)="openTemplate(card.Entity)">
-                <div class="template-card-header">
-                    <div class="template-icon">
-                        <i class="fa-solid fa-file-lines"></i>
-                    </div>
-                    <div class="template-title-area">
-                        <div class="template-name">{{card.Entity.Name}}</div>
-                        <div class="template-category">{{card.CategoryName}}</div>
-                    </div>
-                </div>
-                <div *ngIf="card.Entity.Description" class="template-description">
-                    {{card.Entity.Description}}
-                </div>
-                <div class="template-meta">
-                    <div class="template-content-types">
-                        <span *ngFor="let ct of card.ContentTypes" class="content-type-chip">
-                            <i [class]="getContentTypeIcon(ct)"></i> {{ct}}
-                        </span>
-                        <span *ngIf="card.ContentTypes.length === 0" class="content-type-chip empty">
-                            No content
-                        </span>
-                    </div>
-                    <div *ngIf="card.LastUpdated" class="template-updated">
-                        Updated {{card.LastUpdated | date:'mediumDate'}}
-                    </div>
-                </div>
+      }
+    
+      <!-- CATEGORY FILTERS -->
+      @if (!isLoading) {
+        <div class="category-filters">
+          <div class="filter-chip" [class.active]="categoryFilter === ''"
+            (click)="onCategoryFilter('')">
+            All ({{allTemplates.length}})
+          </div>
+          @for (cat of categories; track cat) {
+            <div class="filter-chip"
+              [class.active]="categoryFilter === cat"
+              (click)="onCategoryFilter(cat)">
+              {{cat}} ({{getCategoryCount(cat)}})
             </div>
-
-            <div *ngIf="filteredTemplates.length === 0" class="empty-state">
-                <i class="fa-solid fa-file-lines"></i>
-                <p>No templates found matching your criteria</p>
-            </div>
+          }
         </div>
+      }
+    
+      <!-- TEMPLATES GRID -->
+      @if (!isLoading) {
+        <div class="templates-grid">
+          @for (card of filteredTemplates; track card) {
+            <div class="template-card"
+              (click)="openTemplate(card.Entity)">
+              <div class="template-card-header">
+                <div class="template-icon">
+                  <i class="fa-solid fa-file-lines"></i>
+                </div>
+                <div class="template-title-area">
+                  <div class="template-name">{{card.Entity.Name}}</div>
+                  <div class="template-category">{{card.CategoryName}}</div>
+                </div>
+              </div>
+              @if (card.Entity.Description) {
+                <div class="template-description">
+                  {{card.Entity.Description}}
+                </div>
+              }
+              <div class="template-meta">
+                <div class="template-content-types">
+                  @for (ct of card.ContentTypes; track ct) {
+                    <span class="content-type-chip">
+                      <i [class]="getContentTypeIcon(ct)"></i> {{ct}}
+                    </span>
+                  }
+                  @if (card.ContentTypes.length === 0) {
+                    <span class="content-type-chip empty">
+                      No content
+                    </span>
+                  }
+                </div>
+                @if (card.LastUpdated) {
+                  <div class="template-updated">
+                    Updated {{card.LastUpdated | date:'mediumDate'}}
+                  </div>
+                }
+              </div>
+            </div>
+          }
+          @if (filteredTemplates.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-file-lines"></i>
+              <p>No templates found matching your criteria</p>
+            </div>
+          }
+        </div>
+      }
     </div>
-  `,
+    `,
     styles: [`
     .templates-wrapper {
         height: 100%;

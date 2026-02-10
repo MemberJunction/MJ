@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Integrations') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-integration-form',
     templateUrl: './integration.form.component.html'
 })
@@ -25,6 +26,3 @@ export class IntegrationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadIntegrationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Duplicate Run Detail Matches') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-duplicaterundetailmatch-form',
     templateUrl: './duplicaterundetailmatch.form.component.html'
 })
@@ -22,6 +23,3 @@ export class DuplicateRunDetailMatchFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadDuplicateRunDetailMatchFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

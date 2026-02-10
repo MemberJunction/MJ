@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aiagentrun-form',
     templateUrl: './aiagentrun.form.component.html'
 })
@@ -34,6 +35,3 @@ export class AIAgentRunFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIAgentRunFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

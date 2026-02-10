@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Vendor Type Definitions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aivendortypedefinition-form',
     templateUrl: './aivendortypedefinition.form.component.html'
 })
@@ -23,6 +24,3 @@ export class AIVendorTypeDefinitionFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIVendorTypeDefinitionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

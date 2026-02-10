@@ -293,6 +293,3 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         }
     }
 }
-
-
-export function LoadAIPromptEntityExtendedServerSubClass() {}

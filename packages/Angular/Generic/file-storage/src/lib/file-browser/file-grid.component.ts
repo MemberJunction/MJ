@@ -60,6 +60,7 @@ export interface MultiProviderSearchResult {
  * Supports file selection and navigation to folders.
  */
 @Component({
+  standalone: false,
   selector: 'mj-file-grid',
   templateUrl: './file-grid.component.html',
   styleUrls: ['./file-grid.component.css']

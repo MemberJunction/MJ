@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, Chan
 import { SchedulingInstrumentationService, JobStatistics } from '../services/scheduling-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-job-slideout',
   templateUrl: './job-slideout.component.html',
   styleUrls: ['./job-slideout.component.css'],

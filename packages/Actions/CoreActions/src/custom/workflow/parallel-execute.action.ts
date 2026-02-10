@@ -504,10 +504,3 @@ export class ParallelExecuteAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the ParallelExecuteAction class is included in the bundle
- */
-export function LoadParallelExecuteAction() {
-    // Stub function to prevent tree shaking
-}

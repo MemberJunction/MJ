@@ -1,0 +1,230 @@
+<div class="mj-agent-editor">
+
+  <!-- ── Toolbar ─────────────────────────────────────────────── -->
+  <div class="mj-agent-editor-toolbar" [class.mj-agent-editor-toolbar--editing]="isEditingActive">
+    <div class="mj-agent-editor-toolbar-left">
+      <!-- Undo / Redo (edit mode only) -->
+      @if (isEditingActive) {
+        <button class="mj-agent-editor-btn"
+          [disabled]="!flowEditor?.CanUndo" (click)="flowEditor?.Undo()" title="Undo (Ctrl+Z)">
+          <i class="fa-solid fa-rotate-left"></i>
+        </button>
+      }
+      @if (isEditingActive) {
+        <button class="mj-agent-editor-btn"
+          [disabled]="!flowEditor?.CanRedo" (click)="flowEditor?.Redo()" title="Redo (Ctrl+Y)">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+      }
+    </div>
+
+    <div class="mj-agent-editor-toolbar-center">
+      <!-- Fullscreen title -->
+      <span class="mj-agent-editor-title">
+        <i class="fa-solid fa-diagram-project"></i> Flow Configuration
+      </span>
+
+      <!-- View Mode Toggle -->
+      <div class="mj-agent-editor-view-toggle">
+        <button class="mj-agent-editor-view-btn"
+          [class.mj-agent-editor-view-btn--active]="viewMode === 'diagram'"
+          (click)="viewMode = 'diagram'">
+          <i class="fa-solid fa-diagram-project"></i> Diagram
+        </button>
+        <button class="mj-agent-editor-view-btn"
+          [class.mj-agent-editor-view-btn--active]="viewMode === 'list'"
+          (click)="viewMode = 'list'">
+          <i class="fa-solid fa-list"></i> List
+        </button>
+      </div>
+
+      <!-- Mode indicator badge -->
+      @if (isEditingActive) {
+        <span class="mj-agent-editor-mode-badge mj-agent-editor-mode-badge--editing">
+          <i class="fa-solid fa-pen"></i> Editing
+        </span>
+      }
+      @if (!isEditingActive) {
+        <span class="mj-agent-editor-mode-badge mj-agent-editor-mode-badge--readonly">
+          <i class="fa-solid fa-lock"></i> Read Only
+        </span>
+      }
+    </div>
+
+    <div class="mj-agent-editor-toolbar-right">
+      <!-- Status indicators -->
+      @if (hasUnsavedChanges) {
+        <span class="mj-agent-editor-status mj-agent-editor-status--unsaved">
+          <i class="fa-solid fa-circle"></i> Unsaved
+        </span>
+      }
+      @if (lastSaved) {
+        <span class="mj-agent-editor-status">
+          Saved {{ lastSaved | date:'shortTime' }}
+        </span>
+      }
+
+      <!-- Save + Cancel (when editing) -->
+      @if (isEditingActive) {
+        <button class="mj-agent-editor-btn mj-agent-editor-btn--primary"
+          [disabled]="isSaving || !hasUnsavedChanges" (click)="Save()">
+          <i class="fa-solid" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
+          {{ isSaving ? 'Saving...' : 'Save' }}
+        </button>
+      }
+      @if (fullscreenEditMode && !EditMode) {
+        <button
+          class="mj-agent-editor-btn"
+          (click)="cancelFullscreenEdit()" title="Cancel editing">
+          <i class="fa-solid fa-xmark"></i> Cancel
+        </button>
+      }
+
+      @if (isEditingActive) {
+        <div class="mj-agent-editor-btn-divider"></div>
+      }
+
+      <!-- Fullscreen edit toggle (only when parent is NOT in edit mode) -->
+      @if (!EditMode && !fullscreenEditMode && userCanUpdate) {
+        <button
+          class="mj-agent-editor-btn mj-agent-editor-btn--edit"
+          (click)="toggleFullscreenEditMode()" title="Edit flow">
+          <i class="fa-solid fa-pen-to-square"></i> Edit
+        </button>
+      }
+
+      <!-- Expand / Close fullscreen -->
+      @if (!FullScreen) {
+        <button class="mj-agent-editor-btn mj-agent-editor-btn--expand"
+          (click)="toggleFullScreen()" title="Expand to full screen">
+          <i class="fa-solid fa-up-right-and-down-left-from-center"></i> Expand
+        </button>
+      }
+      @if (FullScreen) {
+        <button class="mj-agent-editor-btn mj-agent-editor-btn--close"
+          (click)="toggleFullScreen()" title="Close full screen (Esc)">
+          <i class="fa-solid fa-xmark"></i> Close
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- ── Loading State ─────────────────────────────────────── -->
+  @if (isLoading) {
+    <div class="mj-agent-editor-loading">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <span>Loading flow...</span>
+    </div>
+  }
+
+  <!-- ── Main Content ──────────────────────────────────────── -->
+  @if (!isLoading) {
+    <div class="mj-agent-editor-body">
+      <!-- Diagram View -->
+      @if (viewMode === 'diagram') {
+        <div class="mj-agent-editor-diagram">
+          <mj-flow-editor #flowEditor
+            [Nodes]="nodes"
+            [Connections]="connections"
+            [NodeTypes]="nodeTypes"
+            [ReadOnly]="!isEditingActive"
+            [ShowMinimap]="prefShowMinimap"
+            [ShowPalette]="isEditingActive"
+            [ShowGrid]="prefShowGrid"
+            [ShowLegend]="prefShowLegend"
+            [ShowStatusBar]="true"
+            [ShowToolbar]="true"
+            [AutoLayoutDirection]="'vertical'"
+            (NodeSelected)="onNodeSelected($event)"
+            (NodeAdded)="onNodeAdded($event)"
+            (NodeRemoved)="onNodeRemoved($event)"
+            (ConnectionCreated)="onConnectionCreated($event)"
+            (ConnectionRemoved)="onConnectionRemoved($event)"
+            (ConnectionReassigned)="onConnectionReassigned($event)"
+            (ConnectionSelected)="onConnectionSelected($event)"
+            (NodesChanged)="onNodesChanged($event)"
+            (ConnectionsChanged)="onConnectionsChanged($event)"
+            (GridToggled)="onGridPrefChanged($event)"
+            (MinimapToggled)="onMinimapPrefChanged($event)"
+            (LegendToggled)="onLegendPrefChanged($event)">
+          </mj-flow-editor>
+          <!-- Properties Panel -->
+          <div class="mj-agent-editor-properties"
+            [class.mj-agent-editor-properties--visible]="showPropertiesPanel">
+            <mj-agent-properties-panel
+              [Step]="selectedStep"
+              [SelectedConnection]="selectedConnection"
+              [PathEntity]="selectedPathEntity"
+              [ReadOnly]="!isEditingActive"
+              [Actions]="availableActions"
+              [Prompts]="availablePrompts"
+              [Agents]="availableAgents"
+              [AllSteps]="steps"
+              (StepChanged)="onStepChanged($event)"
+              (PathChanged)="onPathChanged($event)"
+              (DeleteStepRequested)="onDeleteStepRequested($event)"
+              (DeletePathRequested)="onDeletePathRequested($event)"
+              (CloseRequested)="onCloseProperties()">
+            </mj-agent-properties-panel>
+          </div>
+        </div>
+      }
+      <!-- List View -->
+      @if (viewMode === 'list') {
+        <div class="mj-agent-editor-list">
+          <mj-agent-step-list
+            [Steps]="steps"
+            [Paths]="paths"
+            [SelectedStepID]="selectedStep?.ID || null"
+            (StepClicked)="onStepClickedInList($event)">
+          </mj-agent-step-list>
+          <!-- Properties Panel in list mode too -->
+          <div class="mj-agent-editor-properties"
+            [class.mj-agent-editor-properties--visible]="showPropertiesPanel">
+            <mj-agent-properties-panel
+              [Step]="selectedStep"
+              [SelectedConnection]="selectedConnection"
+              [PathEntity]="selectedPathEntity"
+              [ReadOnly]="!isEditingActive"
+              [Actions]="availableActions"
+              [Prompts]="availablePrompts"
+              [Agents]="availableAgents"
+              [AllSteps]="steps"
+              (StepChanged)="onStepChanged($event)"
+              (PathChanged)="onPathChanged($event)"
+              (DeleteStepRequested)="onDeleteStepRequested($event)"
+              (DeletePathRequested)="onDeletePathRequested($event)"
+              (CloseRequested)="onCloseProperties()">
+            </mj-agent-properties-panel>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ── Unsaved Changes Dialog ──────────────────────────── -->
+  @if (showUnsavedDialog) {
+    <div class="mj-agent-editor-dialog-overlay">
+      <div class="mj-agent-editor-dialog">
+        <div class="mj-agent-editor-dialog-icon">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <h3 class="mj-agent-editor-dialog-title">Unsaved Changes</h3>
+        <p class="mj-agent-editor-dialog-message">
+          You have unsaved changes to this flow. What would you like to do?
+        </p>
+        <div class="mj-agent-editor-dialog-actions">
+          <button class="mj-agent-editor-btn mj-agent-editor-btn--primary" (click)="onUnsavedDialogSave()">
+            <i class="fa-solid fa-floppy-disk"></i> Save & Close
+          </button>
+          <button class="mj-agent-editor-btn mj-agent-editor-btn--danger-outline" (click)="onUnsavedDialogDiscard()">
+            Discard Changes
+          </button>
+          <button class="mj-agent-editor-btn" (click)="onUnsavedDialogCancel()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

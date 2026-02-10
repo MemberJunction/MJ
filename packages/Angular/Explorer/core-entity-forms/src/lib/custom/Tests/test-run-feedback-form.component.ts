@@ -1,5 +1,4 @@
-import { Component, ChangeDetectionStrategy, ElementRef, ChangeDetectorRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
@@ -9,14 +8,17 @@ import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFe
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Run Feedbacks')
 @Component({
+  standalone: false,
   selector: 'mj-test-run-feedback-form',
   template: `
     <div class="feedback-form">
       <div class="feedback-header">
         <h2><i class="fas fa-comment-dots"></i> Test Run Feedback</h2>
-        <button kendoButton *ngIf="record.TestRunID" (click)="openTestRun()">
-          <i class="fas fa-external-link"></i> View Test Run
-        </button>
+        @if (record.TestRunID) {
+          <button kendoButton (click)="openTestRun()">
+            <i class="fas fa-external-link"></i> View Test Run
+          </button>
+        }
       </div>
       <div class="feedback-content">
         <div class="field-group">
@@ -41,7 +43,7 @@ import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFe
         </div>
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .feedback-form { padding: 20px; }
     .feedback-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
@@ -57,22 +59,9 @@ import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFe
 export class TestRunFeedbackFormComponentExtended extends TestRunFeedbackFormComponent {
   public override record!: TestRunFeedbackEntity;
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
-
   openTestRun() {
     if (this.record.TestRunID) {
       SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(this.record.TestRunID));
     }
   }
 }
-
-export function LoadTestRunFeedbackFormComponentExtended() {}
-LoadTestRunFeedbackFormComponentExtended();

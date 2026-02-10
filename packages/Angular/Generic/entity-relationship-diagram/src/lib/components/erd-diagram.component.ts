@@ -187,6 +187,7 @@ const DEFAULT_CONFIG: Required<ERDConfig> = {
  * @see ERDState for state persistence
  */
 @Component({
+  standalone: false,
   selector: 'mj-erd-diagram',
   templateUrl: './erd-diagram.component.html',
   styleUrls: ['./erd-diagram.component.css']
@@ -1227,7 +1228,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
     this.nodes.forEach(node => {
       node.fields.forEach(field => {
-        if (field.relatedNodeId && !field.isPrimaryKey) {
+        if (field.relatedNodeId) {
           const sourceNode = nodeMap.get(node.id);
           const targetNode = nodeMap.get(field.relatedNodeId);
 
@@ -1977,6 +1978,13 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       if (fkIndex >= 0) {
         const fieldY = -sourceNode.height / 2 + 40 + sourceNode.primaryKeys.length * 20 + fkIndex * 20;
         connectY = sourceNode.y! + fieldY + 10;
+      } else {
+        // Check if the field is a primary key that also serves as a foreign key (IS-A pattern)
+        const pkIndex = sourceNode.primaryKeys.findIndex((pk) => pk.id === field.id);
+        if (pkIndex >= 0) {
+          const fieldY = -sourceNode.height / 2 + 40 + pkIndex * 20;
+          connectY = sourceNode.y! + fieldY + 10;
+        }
       }
     }
 

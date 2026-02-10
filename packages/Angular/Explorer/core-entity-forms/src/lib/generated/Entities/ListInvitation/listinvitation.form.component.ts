@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: List Invitations') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-listinvitation-form',
     templateUrl: './listinvitation.form.component.html'
 })
@@ -20,6 +21,3 @@ export class ListInvitationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadListInvitationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

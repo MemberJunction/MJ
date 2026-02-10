@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Communication Base Message Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-communicationbasemessagetype-form',
     templateUrl: './communicationbasemessagetype.form.component.html'
 })
@@ -24,6 +25,3 @@ export class CommunicationBaseMessageTypeFormComponent extends BaseFormComponent
     }
 }
 
-export function LoadCommunicationBaseMessageTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

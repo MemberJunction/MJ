@@ -1,0 +1,330 @@
+/* ========================================
+   MJ GRID & LAYOUT UTILITY SYSTEM
+   PrimeFlex-inspired, backed by MJ design tokens.
+   Mobile-first 12-column flexbox grid.
+   ======================================== */
+
+// ------------------------------------
+// SCSS Variables (used in @media)
+// ------------------------------------
+$mj-breakpoints: (
+  sm:  576px,
+  md:  768px,
+  lg:  992px,
+  xl:  1200px,
+  2xl: 1400px
+);
+
+$mj-gap-scale: (
+  0: --mj-space-0,
+  1: --mj-space-1,
+  2: --mj-space-2,
+  3: --mj-space-3,
+  4: --mj-space-4,
+  5: --mj-space-5,
+  6: --mj-space-6,
+  8: --mj-space-8
+);
+
+$mj-grid-columns: 12;
+
+// ------------------------------------
+// Grid Container
+// ------------------------------------
+.mj-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+// ------------------------------------
+// Auto & Fixed Columns
+// ------------------------------------
+.mj-col {
+  flex-grow: 1;
+  flex-basis: 0;
+  max-width: 100%;
+}
+
+.mj-col-fixed {
+  flex-grow: 0;
+  flex-shrink: 0;
+  flex-basis: auto;
+}
+
+// ------------------------------------
+// Numbered Columns (1-12)
+// ------------------------------------
+@for $i from 1 through $mj-grid-columns {
+  .mj-col-#{$i} {
+    flex: 0 0 auto;
+    width: calc($i / $mj-grid-columns * 100%);
+  }
+}
+
+// ====================================
+// Row Container (CSS Grid)
+// Mobile-first: children default to full
+// width (1 column). Use mj-row-cols-* or
+// mj-row-auto to set column layout.
+// ====================================
+.mj-row {
+  display: grid;
+  grid-template-columns: 1fr;
+
+  // Enable container queries on each cell
+  // so child components can use @container
+  > * {
+    container-type: inline-size;
+  }
+}
+
+// ------------------------------------
+// Stepped Column Counts (mj-row-cols-*)
+// Set uniform column count from parent.
+// Bootstrap-like, viewport-breakpoint based.
+// ------------------------------------
+@for $i from 1 through $mj-grid-columns {
+  .mj-row-cols-#{$i} {
+    grid-template-columns: repeat(#{$i}, 1fr);
+  }
+}
+
+@each $bp, $width in $mj-breakpoints {
+  @media (min-width: $width) {
+    @for $i from 1 through $mj-grid-columns {
+      .mj-row-cols-#{$bp}-#{$i} {
+        grid-template-columns: repeat(#{$i}, 1fr);
+      }
+    }
+  }
+}
+
+// ------------------------------------
+// Fluid Auto-Fill Columns (mj-row-auto)
+// Columns fill based on minimum width.
+// Responds to container width, not viewport.
+// Pair with mj-row-min-* to set min width.
+// ------------------------------------
+$mj-row-min-scale: (
+  xs:  100px,
+  sm:  140px,
+  md:  180px,
+  lg:  280px,
+  xl:  360px
+);
+
+.mj-row-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--mj-row-min, 280px), 1fr));
+
+  > * {
+    container-type: inline-size;
+  }
+}
+
+@each $key, $val in $mj-row-min-scale {
+  .mj-row-min-#{$key} {
+    --mj-row-min: #{$val};
+  }
+}
+
+// ------------------------------------
+// Offsets (1-11)
+// ------------------------------------
+.mj-offset-0 {
+  margin-left: 0;
+}
+
+@for $i from 1 through ($mj-grid-columns - 1) {
+  .mj-offset-#{$i} {
+    margin-left: calc($i / $mj-grid-columns * 100%);
+  }
+}
+
+// ------------------------------------
+// Responsive Columns & Offsets
+// ------------------------------------
+@each $bp, $width in $mj-breakpoints {
+  @media (min-width: $width) {
+    // Auto column at breakpoint
+    .mj-col-#{$bp} {
+      flex-grow: 1;
+      flex-basis: 0;
+      max-width: 100%;
+    }
+
+    // Fixed column at breakpoint
+    .mj-col-#{$bp}-fixed {
+      flex-grow: 0;
+      flex-shrink: 0;
+      flex-basis: auto;
+    }
+
+    // Numbered columns at breakpoint
+    @for $i from 1 through $mj-grid-columns {
+      .mj-col-#{$bp}-#{$i} {
+        flex: 0 0 auto;
+        width: calc($i / $mj-grid-columns * 100%);
+      }
+    }
+
+    // Offsets at breakpoint (0-11)
+    .mj-offset-#{$bp}-0 {
+      margin-left: 0;
+    }
+
+    @for $i from 1 through ($mj-grid-columns - 1) {
+      .mj-offset-#{$bp}-#{$i} {
+        margin-left: calc($i / $mj-grid-columns * 100%);
+      }
+    }
+  }
+}
+
+// ------------------------------------
+// Gap Utilities (base)
+// ------------------------------------
+@each $key, $token in $mj-gap-scale {
+  .mj-gap-#{$key} {
+    gap: var(#{$token});
+  }
+
+  .mj-row-gap-#{$key} {
+    row-gap: var(#{$token});
+  }
+
+  .mj-col-gap-#{$key} {
+    column-gap: var(#{$token});
+  }
+}
+
+// ------------------------------------
+// Align Items (base)
+// ------------------------------------
+.mj-align-start    { align-items: flex-start; }
+.mj-align-center   { align-items: center; }
+.mj-align-end      { align-items: flex-end; }
+.mj-align-stretch  { align-items: stretch; }
+.mj-align-baseline { align-items: baseline; }
+
+// ------------------------------------
+// Justify Content (base)
+// ------------------------------------
+.mj-justify-start   { justify-content: flex-start; }
+.mj-justify-center  { justify-content: center; }
+.mj-justify-end     { justify-content: flex-end; }
+.mj-justify-between { justify-content: space-between; }
+.mj-justify-around  { justify-content: space-around; }
+.mj-justify-evenly  { justify-content: space-evenly; }
+
+// ------------------------------------
+// Align Self (base)
+// ------------------------------------
+.mj-self-start   { align-self: flex-start; }
+.mj-self-center  { align-self: center; }
+.mj-self-end     { align-self: flex-end; }
+.mj-self-stretch { align-self: stretch; }
+
+// ------------------------------------
+// Flex Direction (base)
+// ------------------------------------
+.mj-flex-row            { flex-direction: row; }
+.mj-flex-row-reverse    { flex-direction: row-reverse; }
+.mj-flex-column         { flex-direction: column; }
+.mj-flex-column-reverse { flex-direction: column-reverse; }
+
+// ------------------------------------
+// Flex Wrap (base)
+// ------------------------------------
+.mj-flex-wrap   { flex-wrap: wrap; }
+.mj-flex-nowrap { flex-wrap: nowrap; }
+
+// ------------------------------------
+// Flex Grow & Shrink (base)
+// ------------------------------------
+.mj-flex-grow-0   { flex-grow: 0; }
+.mj-flex-grow-1   { flex-grow: 1; }
+.mj-flex-shrink-0 { flex-shrink: 0; }
+.mj-flex-shrink-1 { flex-shrink: 1; }
+
+// ------------------------------------
+// Responsive Layout Utilities
+// Generates breakpoint-prefixed variants
+// for gap, alignment, direction, and wrap.
+// e.g. mj-gap-md-4, mj-flex-md-row,
+//      mj-align-lg-center, mj-justify-sm-between
+// ------------------------------------
+@each $bp, $width in $mj-breakpoints {
+  @media (min-width: $width) {
+    // Responsive gap
+    @each $key, $token in $mj-gap-scale {
+      .mj-gap-#{$bp}-#{$key}     { gap: var(#{$token}); }
+      .mj-row-gap-#{$bp}-#{$key} { row-gap: var(#{$token}); }
+      .mj-col-gap-#{$bp}-#{$key} { column-gap: var(#{$token}); }
+    }
+
+    // Responsive align-items
+    .mj-align-#{$bp}-start    { align-items: flex-start; }
+    .mj-align-#{$bp}-center   { align-items: center; }
+    .mj-align-#{$bp}-end      { align-items: flex-end; }
+    .mj-align-#{$bp}-stretch  { align-items: stretch; }
+    .mj-align-#{$bp}-baseline { align-items: baseline; }
+
+    // Responsive justify-content
+    .mj-justify-#{$bp}-start   { justify-content: flex-start; }
+    .mj-justify-#{$bp}-center  { justify-content: center; }
+    .mj-justify-#{$bp}-end     { justify-content: flex-end; }
+    .mj-justify-#{$bp}-between { justify-content: space-between; }
+    .mj-justify-#{$bp}-around  { justify-content: space-around; }
+    .mj-justify-#{$bp}-evenly  { justify-content: space-evenly; }
+
+    // Responsive align-self
+    .mj-self-#{$bp}-start   { align-self: flex-start; }
+    .mj-self-#{$bp}-center  { align-self: center; }
+    .mj-self-#{$bp}-end     { align-self: flex-end; }
+    .mj-self-#{$bp}-stretch { align-self: stretch; }
+
+    // Responsive flex-direction
+    .mj-flex-#{$bp}-row            { flex-direction: row; }
+    .mj-flex-#{$bp}-row-reverse    { flex-direction: row-reverse; }
+    .mj-flex-#{$bp}-column         { flex-direction: column; }
+    .mj-flex-#{$bp}-column-reverse { flex-direction: column-reverse; }
+
+    // Responsive flex-wrap
+    .mj-flex-#{$bp}-wrap   { flex-wrap: wrap; }
+    .mj-flex-#{$bp}-nowrap { flex-wrap: nowrap; }
+
+    // Responsive flex-grow & shrink
+    .mj-flex-#{$bp}-grow-0   { flex-grow: 0; }
+    .mj-flex-#{$bp}-grow-1   { flex-grow: 1; }
+    .mj-flex-#{$bp}-shrink-0 { flex-shrink: 0; }
+    .mj-flex-#{$bp}-shrink-1 { flex-shrink: 1; }
+  }
+}
+
+// ------------------------------------
+// Visibility Utilities
+// ------------------------------------
+.mj-hidden {
+  display: none !important;
+}
+
+// Responsive hide: hidden at breakpoint and above
+@each $bp, $width in $mj-breakpoints {
+  @media (min-width: $width) {
+    .mj-hidden-#{$bp} {
+      display: none !important;
+    }
+  }
+}
+
+// Responsive show: visible only at breakpoint and above
+// Elements using .mj-visible-* should also have .mj-hidden
+// to be hidden by default, then revealed at the breakpoint.
+@each $bp, $width in $mj-breakpoints {
+  @media (min-width: $width) {
+    .mj-visible-#{$bp} {
+      display: unset !important;
+    }
+  }
+}

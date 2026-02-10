@@ -19,6 +19,7 @@ export interface SelectRecordEvent {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-explorer-navigation-panel',
   templateUrl: './navigation-panel.component.html',
   styleUrls: ['./navigation-panel.component.css']

@@ -12,14 +12,6 @@ import { FormsModule } from '@angular/forms';
 import { TreeComponent } from './tree/tree.component';
 import { TreeDropdownComponent } from './tree-dropdown/tree-dropdown.component';
 
-/**
- * Prevents tree-shaking of the NgTrees module.
- * Import this in your application's module to ensure components are available.
- */
-export function LoadNgTreesModule() {
-    // This function exists to prevent tree-shaking
-}
-
 @NgModule({
     declarations: [
         TreeComponent,

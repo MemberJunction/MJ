@@ -8,7 +8,7 @@
  */
 
 import { ProviderConfigDataBase, UserInfo } from '@memberjunction/core';
-import * as sql from 'mssql';
+import sql from 'mssql';
 
 /**
  * Configuration options for SQL execution with logging support
@@ -22,6 +22,12 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers with logRecordChangeMetadata=false (only for Save/Delete operations) */
   simpleSQLFallback?: string;
+  /**
+   * Optional connection source to use instead of the default pool.
+   * Used by IS-A chain orchestration to execute SPs on a shared transaction.
+   * Should be a sql.Transaction or sql.ConnectionPool instance.
+   */
+  connectionSource?: sql.ConnectionPool | sql.Transaction;
 }
 
 /**

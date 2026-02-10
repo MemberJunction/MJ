@@ -2,10 +2,11 @@ import { Component } from '@angular/core';
 import { ProductEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Products') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-product-form',
     templateUrl: './product.form.component.html'
 })
@@ -15,13 +16,12 @@ export class ProductFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'dealProducts', sectionName: 'Deal Products', isExpanded: false },
-            { sectionKey: 'invoiceLineItems', sectionName: 'Invoice Line Items', isExpanded: false }
+            { sectionKey: 'productDetails', sectionName: 'Product Details', isExpanded: true },
+            { sectionKey: 'pricingInventory', sectionName: 'Pricing & Inventory', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'meetings', sectionName: 'Meetings', isExpanded: false },
+            { sectionKey: 'publications', sectionName: 'Publications', isExpanded: false }
         ]);
     }
 }
 
-export function LoadProductFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

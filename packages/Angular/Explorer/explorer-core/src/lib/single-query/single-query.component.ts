@@ -4,6 +4,7 @@ import { QueryEntity } from '@memberjunction/core-entities';
 import { QueryGridComponent } from '@memberjunction/ng-query-grid';
 
 @Component({
+  standalone: false,
   selector: 'mj-single-query',
   templateUrl: './single-query.component.html',
   styleUrls: ['./single-query.component.css']

@@ -10,6 +10,7 @@ import { SetProductionStatus } from '@memberjunction/core';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from './bootstrap.types';
 
 @Component({
+  standalone: false,
   selector: 'mj-bootstrap',
   template: `
     <div class="mj-bootstrap-container">

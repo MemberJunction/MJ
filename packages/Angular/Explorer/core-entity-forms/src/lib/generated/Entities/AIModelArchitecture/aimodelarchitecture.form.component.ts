@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Model Architectures') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aimodelarchitecture-form',
     templateUrl: './aimodelarchitecture.form.component.html'
 })
@@ -21,6 +22,3 @@ export class AIModelArchitectureFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAIModelArchitectureFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

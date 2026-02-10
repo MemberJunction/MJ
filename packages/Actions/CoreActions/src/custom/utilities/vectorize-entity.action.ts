@@ -99,15 +99,3 @@ export class VectorizeEntityAction extends BaseAction {
         };
     }
 }
-
-/**
- * Loader function to ensure the VectorizeEntityAction class is included in the bundle.
- * This prevents tree-shaking from removing the class during the build process.
- * 
- * @remarks
- * This function should be called during application initialization to ensure
- * the action is properly registered with the MemberJunction class factory.
- */
-export function LoadVectorizeEntityAction(){
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

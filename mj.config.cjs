@@ -35,7 +35,7 @@ module.exports = {
   ],
 
   // Soft PK/FK configuration for tables without database constraints
-  //additionalSchemaInfo: './config/database-metadata-config.json',
+  additionalSchemaInfo: './Demos/AdvancedEntities/database-metadata-config.json',
 
   // Output directories specific to monorepo structure
   output: [
@@ -97,12 +97,12 @@ module.exports = {
       args: ['run', 'build'],
       when: 'after',
     },
-    {
-      workingDirectory: './packages/MJAPI',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
+    // {
+    //   workingDirectory: './packages/MJAPI',
+    //   command: 'npm',
+    //   args: ['run', 'build'],
+    //   when: 'after',
+    // },
   ],
 
   /**
@@ -259,4 +259,10 @@ module.exports = {
    * Environment variables (DB_HOST, DB_DATABASE, GRAPHQL_PORT, TENANT_ID, etc.)
    * are all handled by DEFAULT_SERVER_CONFIG.
    */
+
+  // Override example: To set a custom publicUrl for OAuth callbacks, uncomment:
+  // publicUrl: 'https://your-custom-url.com',
+  //
+  // Note: If MJAPI_PUBLIC_URL env var is set, it will be used automatically.
+  // If neither is set, the server constructs it from baseUrl + port + path.
 };

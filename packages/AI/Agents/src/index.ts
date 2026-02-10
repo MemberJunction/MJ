@@ -30,6 +30,5 @@ export {
     parseRerankerConfiguration,
     RerankServiceResult,
     RerankObservabilityOptions,
-    LLMReranker,
-    LoadLLMReranker
+    LLMReranker
 } from '@memberjunction/ai-reranker';

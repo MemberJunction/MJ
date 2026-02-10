@@ -1640,9 +1640,3 @@ export class FlowAgentType extends BaseAgentType {
  
 }
 
-/**
- * Export a load function to ensure the class is registered with the ClassFactory
- */
-export function LoadFlowAgentType() {
-    // This function ensures the class isn't tree-shaken
-}

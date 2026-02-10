@@ -10,12 +10,23 @@
  */
 
 import { Component, OnDestroy, ChangeDetectorRef, AfterViewInit, OnInit } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
+import { Router, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { Subject, BehaviorSubject, Subscription } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, MCPServerEntity, MCPServerConnectionEntity, MCPToolExecutionLogEntity, MCPEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import {
+    ResourceData,
+    MCPServerEntity,
+    MCPServerConnectionEntity,
+    MCPServerToolEntity,
+    MCPToolExecutionLogEntity,
+    MCPEngine,
+    UserInfoEngine,
+    OAuthAuthorizationStateEntity,
+    OAuthClientRegistrationEntity,
+    OAuthTokenEntity
+} from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 
@@ -33,6 +44,7 @@ interface MCPDashboardUserPreferences {
     connectionStatus: string;
     toolStatus: string;
     logStatus: string;
+    filterPanelVisible: boolean;
 }
 
 /**
@@ -52,6 +64,13 @@ export interface MCPServerData {
     LastSyncAt: Date | null;
     ConnectionCount?: number;
     ToolCount?: number;
+    // OAuth configuration fields
+    OAuthIssuerURL?: string | null;
+    OAuthScopes?: string | null;
+    OAuthMetadataCacheTTLMinutes?: number | null;
+    OAuthClientID?: string | null;
+    OAuthClientSecretEncrypted?: string | null;
+    OAuthRequirePKCE?: boolean;
 }
 
 /**
@@ -168,6 +187,7 @@ export type MCPDashboardTab = 'servers' | 'connections' | 'tools' | 'logs';
  */
 @RegisterClass(BaseDashboard, 'MCPDashboard')
 @Component({
+  standalone: false,
     selector: 'mj-mcp-dashboard',
     templateUrl: './mcp-dashboard.component.html',
     styleUrls: ['./mcp-dashboard.component.css']
@@ -257,6 +277,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public SyncStates = new Map<string, MCPSyncState>();
     private syncSubscriptions = new Map<string, Subscription>();
 
+    // Filter panel state
+    public FilterPanelVisible = true;
+
     // ========================================
     // Lifecycle
     // ========================================
@@ -266,6 +289,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     constructor(
         private cdr: ChangeDetectorRef,
         private router: Router,
+        private route: ActivatedRoute,
         private navigationService: NavigationService,
         private mcpToolsService: MCPToolsService
     ) {
@@ -282,6 +306,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
+
+        // Check for OAuth completion redirect
+        this.checkOAuthCompletion();
 
         // Load saved user preferences first
         this.loadUserPreferences();
@@ -412,6 +439,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             toolStatus: prefs.toolStatus || 'all',
             logStatus: prefs.logStatus || 'all'
         });
+        // Apply filter panel visibility
+        if (prefs.filterPanelVisible !== undefined) {
+            this.FilterPanelVisible = prefs.filterPanelVisible;
+        }
     }
 
     /**
@@ -429,7 +460,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             serverStatus: currentFilters.serverStatus,
             connectionStatus: currentFilters.connectionStatus,
             toolStatus: currentFilters.toolStatus,
-            logStatus: currentFilters.logStatus
+            logStatus: currentFilters.logStatus,
+            filterPanelVisible: this.FilterPanelVisible
         };
     }
 
@@ -522,17 +554,20 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Loads all dashboard data using MCPEngine for cached entities
      * and RunView for execution logs (historical data loaded on-demand)
+     * @param forceRefresh - If true, forces MCPEngine to reload from database (use after sync operations)
      */
-    public async loadAllData(): Promise<void> {
+    public async loadAllData(forceRefresh: boolean = false): Promise<void> {
         this.IsLoading = true;
         this.ErrorMessage = null;
         this.cdr.detectChanges();
 
         try {
             // Initialize MCPEngine and load execution logs in parallel
+            // forceRefresh=true is needed after sync operations since backend changes
+            // won't trigger local BaseEntity events
             const rv = new RunView();
             const [, logsResult] = await Promise.all([
-                MCPEngine.Instance.Config(false),
+                MCPEngine.Instance.Config(forceRefresh),
                 rv.RunView<MCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `StartedAt >= DATEADD(day, -7, GETUTCDATE())`,
@@ -554,7 +589,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 Status: s.Status,
                 RateLimitPerMinute: s.RateLimitPerMinute,
                 RateLimitPerHour: s.RateLimitPerHour,
-                LastSyncAt: s.LastSyncAt
+                LastSyncAt: s.LastSyncAt,
+                // OAuth configuration fields
+                OAuthIssuerURL: s.OAuthIssuerURL,
+                OAuthScopes: s.OAuthScopes,
+                OAuthMetadataCacheTTLMinutes: s.OAuthMetadataCacheTTLMinutes,
+                OAuthClientID: s.OAuthClientID,
+                OAuthClientSecretEncrypted: s.OAuthClientSecretEncrypted,
+                OAuthRequirePKCE: s.OAuthRequirePKCE
             }));
 
             this.connections = MCPEngine.Instance.Connections.map(c => ({
@@ -788,6 +830,70 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     // ========================================
+    // Filter Panel
+    // ========================================
+
+    /**
+     * Toggle filter panel visibility
+     */
+    public toggleFilterPanel(): void {
+        this.FilterPanelVisible = !this.FilterPanelVisible;
+        this.saveUserPreferencesDebounced();
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handle filter changes from the filter panel component
+     */
+    public onFiltersChange(filters: MCPDashboardFilters): void {
+        this.filters$.next(filters);
+        this.saveUserPreferencesDebounced();
+    }
+
+    /**
+     * Get the current filtered count based on active tab
+     */
+    public get CurrentFilteredCount(): number {
+        switch (this.ActiveTab) {
+            case 'servers':
+                return this.filteredServers.length;
+            case 'connections':
+                return this.filteredConnections.length;
+            case 'tools':
+                return this.filteredTools.length;
+            case 'logs':
+                return this.filteredLogs.length;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Get the total count based on active tab
+     */
+    public get CurrentTotalCount(): number {
+        switch (this.ActiveTab) {
+            case 'servers':
+                return this.servers.length;
+            case 'connections':
+                return this.connections.length;
+            case 'tools':
+                return this.tools.length;
+            case 'logs':
+                return this.executionLogs.length;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Get current filters value (non-observable)
+     */
+    public get CurrentFilters(): MCPDashboardFilters {
+        return this.filters$.value;
+    }
+
+    // ========================================
     // Tab Navigation
     // ========================================
 
@@ -819,21 +925,231 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     public async deleteServer(server: MCPServerData): Promise<void> {
-        if (!confirm(`Are you sure you want to delete server "${server.Name}"?`)) {
-            return;
+        // Check for related connections first
+        const relatedConnections = this.connections.filter((c: MCPConnectionData) => c.MCPServerID === server.ID);
+        const relatedTools = this.tools.filter((t: MCPToolData) => t.MCPServerID === server.ID);
+
+        if (relatedConnections.length > 0 || relatedTools.length > 0) {
+            const parts: string[] = [];
+            if (relatedConnections.length > 0) {
+                parts.push(`${relatedConnections.length} connection(s)`);
+            }
+            if (relatedTools.length > 0) {
+                parts.push(`${relatedTools.length} tool(s)`);
+            }
+
+            if (!confirm(
+                `Server "${server.Name}" has ${parts.join(' and ')}.\n\n` +
+                `All related records will be deleted. Are you sure you want to proceed?`
+            )) {
+                return;
+            }
+
+            // Delete related connections first (which will cascade to connection tools/permissions)
+            for (const conn of relatedConnections) {
+                try {
+                    await this.deleteConnectionInternal(conn.ID);
+                } catch (error) {
+                    this.ErrorMessage = `Failed to delete related connection "${conn.Name}": ${error instanceof Error ? error.message : String(error)}`;
+                    this.cdr.detectChanges();
+                    return;
+                }
+            }
+
+            // Delete related tools
+            for (const tool of relatedTools) {
+                try {
+                    await this.deleteToolInternal(tool.ID);
+                } catch (error) {
+                    this.ErrorMessage = `Failed to delete related tool "${tool.ToolName}": ${error instanceof Error ? error.message : String(error)}`;
+                    this.cdr.detectChanges();
+                    return;
+                }
+            }
+        } else {
+            if (!confirm(`Are you sure you want to delete server "${server.Name}"?`)) {
+                return;
+            }
         }
 
         try {
             const md = new Metadata();
             const entity = await md.GetEntityObject<MCPServerEntity>('MJ: MCP Servers');
-            const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: server.ID }]));
-            if (loaded) {
-                await entity.Delete();
-                await this.loadAllData();
+            const loaded = await entity.Load(server.ID);
+            if (!loaded) {
+                this.ErrorMessage = `Server not found: ${server.Name}`;
+                this.cdr.detectChanges();
+                return;
             }
+
+            const deleted = await entity.Delete();
+            if (!deleted) {
+                const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Unknown error';
+                this.ErrorMessage = `Failed to delete server: ${errorMsg}`;
+                this.cdr.detectChanges();
+                return;
+            }
+
+            await this.loadAllData();
         } catch (error) {
             this.ErrorMessage = `Failed to delete server: ${error instanceof Error ? error.message : String(error)}`;
             this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Internal helper to delete a tool by ID without confirmation
+     */
+    private async deleteToolInternal(toolId: string): Promise<void> {
+        const md = new Metadata();
+        const entity = await md.GetEntityObject<MCPServerToolEntity>('MJ: MCP Server Tools');
+        const loaded = await entity.Load(toolId);
+        if (!loaded) {
+            throw new Error(`Tool not found`);
+        }
+        const deleted = await entity.Delete();
+        if (!deleted) {
+            const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Delete failed';
+            throw new Error(errorMsg);
+        }
+    }
+
+    /**
+     * Internal helper to delete a connection by ID without confirmation.
+     * Handles deletion of all related records that don't have ON DELETE CASCADE:
+     * - MCP Tool Execution Logs
+     * - OAuth Authorization States
+     * - OAuth Client Registrations
+     * - OAuth Tokens
+     */
+    private async deleteConnectionInternal(connectionId: string): Promise<void> {
+        console.log(`[MCPDashboard] deleteConnectionInternal called for connectionId: ${connectionId}`);
+        const rv = new RunView();
+        const md = new Metadata();
+
+        // Delete execution logs for this connection
+        console.log('[MCPDashboard] Deleting execution logs...');
+        const logsResult = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: MCP Tool Execution Logs',
+            ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        });
+        if (logsResult.Success && logsResult.Results) {
+            console.log(`[MCPDashboard] Found ${logsResult.Results.length} execution logs to delete`);
+            for (const log of logsResult.Results) {
+                console.log(`[MCPDashboard] Loading execution log ${log.ID}...`);
+                const logEntity = await md.GetEntityObject<MCPToolExecutionLogEntity>('MJ: MCP Tool Execution Logs');
+                const loaded = await logEntity.Load(log.ID);
+                console.log(`[MCPDashboard] Load result for execution log ${log.ID}: ${loaded}`);
+                if (loaded) {
+                    const deleted = await logEntity.Delete();
+                    if (!deleted) {
+                        console.error(`[MCPDashboard] Failed to delete execution log ${log.ID}:`, logEntity.LatestResult);
+                        throw new Error(`Failed to delete execution log: ${logEntity.LatestResult?.Message || 'Unknown error'}`);
+                    }
+                    console.log(`[MCPDashboard] Deleted execution log ${log.ID}`);
+                } else {
+                    console.warn(`[MCPDashboard] Could not load execution log ${log.ID} - may have been already deleted`);
+                }
+            }
+        }
+
+        // Delete OAuth Authorization States for this connection
+        console.log('[MCPDashboard] Deleting OAuth Authorization States...');
+        const authStatesResult = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: O Auth Authorization States',
+            ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        });
+        if (authStatesResult.Success && authStatesResult.Results) {
+            console.log(`[MCPDashboard] Found ${authStatesResult.Results.length} OAuth Authorization States to delete`);
+            for (const state of authStatesResult.Results) {
+                console.log(`[MCPDashboard] Loading OAuth Authorization State ${state.ID}...`);
+                const stateEntity = await md.GetEntityObject<OAuthAuthorizationStateEntity>('MJ: O Auth Authorization States');
+                const loaded = await stateEntity.Load(state.ID);
+                console.log(`[MCPDashboard] Load result for OAuth Authorization State ${state.ID}: ${loaded}`);
+                if (loaded) {
+                    const deleted = await stateEntity.Delete();
+                    if (!deleted) {
+                        console.error(`[MCPDashboard] Failed to delete OAuth Authorization State ${state.ID}:`, stateEntity.LatestResult);
+                        throw new Error(`Failed to delete OAuth Authorization State: ${stateEntity.LatestResult?.Message || 'Unknown error'}`);
+                    }
+                    console.log(`[MCPDashboard] Deleted OAuth Authorization State ${state.ID}`);
+                } else {
+                    console.warn(`[MCPDashboard] Could not load OAuth Authorization State ${state.ID} - may have been already deleted`);
+                }
+            }
+        }
+
+        // Delete OAuth Client Registrations for this connection
+        console.log('[MCPDashboard] Deleting OAuth Client Registrations...');
+        const clientRegsResult = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: O Auth Client Registrations',
+            ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        });
+        if (clientRegsResult.Success && clientRegsResult.Results) {
+            console.log(`[MCPDashboard] Found ${clientRegsResult.Results.length} OAuth Client Registrations to delete`);
+            for (const reg of clientRegsResult.Results) {
+                console.log(`[MCPDashboard] Loading OAuth Client Registration ${reg.ID}...`);
+                const regEntity = await md.GetEntityObject<OAuthClientRegistrationEntity>('MJ: O Auth Client Registrations');
+                const loaded = await regEntity.Load(reg.ID);
+                console.log(`[MCPDashboard] Load result for OAuth Client Registration ${reg.ID}: ${loaded}`);
+                if (loaded) {
+                    const deleted = await regEntity.Delete();
+                    if (!deleted) {
+                        console.error(`[MCPDashboard] Failed to delete OAuth Client Registration ${reg.ID}:`, regEntity.LatestResult);
+                        throw new Error(`Failed to delete OAuth Client Registration: ${regEntity.LatestResult?.Message || 'Unknown error'}`);
+                    }
+                    console.log(`[MCPDashboard] Deleted OAuth Client Registration ${reg.ID}`);
+                } else {
+                    console.warn(`[MCPDashboard] Could not load OAuth Client Registration ${reg.ID} - may have been already deleted`);
+                }
+            }
+        }
+
+        // Delete OAuth Tokens for this connection
+        console.log('[MCPDashboard] Deleting OAuth Tokens...');
+        const tokensResult = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: O Auth Tokens',
+            ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        });
+        if (tokensResult.Success && tokensResult.Results) {
+            console.log(`[MCPDashboard] Found ${tokensResult.Results.length} OAuth Tokens to delete`);
+            for (const token of tokensResult.Results) {
+                console.log(`[MCPDashboard] Loading OAuth Token ${token.ID}...`);
+                const tokenEntity = await md.GetEntityObject<OAuthTokenEntity>('MJ: O Auth Tokens');
+                const loaded = await tokenEntity.Load(token.ID);
+                console.log(`[MCPDashboard] Load result for OAuth Token ${token.ID}: ${loaded}`);
+                if (loaded) {
+                    const deleted = await tokenEntity.Delete();
+                    if (!deleted) {
+                        console.error(`[MCPDashboard] Failed to delete OAuth Token ${token.ID}:`, tokenEntity.LatestResult);
+                        throw new Error(`Failed to delete OAuth Token: ${tokenEntity.LatestResult?.Message || 'Unknown error'}`);
+                    }
+                    console.log(`[MCPDashboard] Deleted OAuth Token ${token.ID}`);
+                } else {
+                    console.warn(`[MCPDashboard] Could not load OAuth Token ${token.ID} - may have been already deleted`);
+                }
+            }
+        }
+
+        // Now delete the connection itself
+        console.log('[MCPDashboard] All related records deleted. Now deleting the connection itself...');
+        const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
+        const loaded = await entity.Load(connectionId);
+        if (!loaded) {
+            throw new Error(`Connection not found`);
+        }
+        const deleted = await entity.Delete();
+        if (!deleted) {
+            const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Delete failed';
+            throw new Error(errorMsg);
         }
     }
 
@@ -863,18 +1179,26 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     public async deleteConnection(connection: MCPConnectionData): Promise<void> {
-        if (!confirm(`Are you sure you want to delete connection "${connection.Name}"?`)) {
-            return;
+        // Check for related execution logs
+        const relatedLogs = this.executionLogs.filter(l => l.ConnectionID === connection.ID);
+
+        if (relatedLogs.length > 0) {
+            if (!confirm(
+                `Connection "${connection.Name}" has ${relatedLogs.length} execution log(s).\n\n` +
+                `All related logs will be deleted. Are you sure you want to proceed?`
+            )) {
+                return;
+            }
+        } else {
+            if (!confirm(`Are you sure you want to delete connection "${connection.Name}"?`)) {
+                return;
+            }
         }
 
         try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
-            const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: connection.ID }]));
-            if (loaded) {
-                await entity.Delete();
-                await this.loadAllData();
-            }
+            // Use the internal method which handles deleting related records
+            await this.deleteConnectionInternal(connection.ID);
+            await this.loadAllData();
         } catch (error) {
             this.ErrorMessage = `Failed to delete connection: ${error instanceof Error ? error.message : String(error)}`;
             this.cdr.detectChanges();
@@ -1119,8 +1443,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             const result: MCPSyncResult = await this.mcpToolsService.syncTools(connectionId);
 
             if (result.Success) {
-                // Reload data to show updated tools
-                await this.loadAllData();
+                // Force refresh to show updated tools - backend changes don't trigger local events
+                await this.loadAllData(true);
+            } else if (result.RequiresOAuth || result.RequiresReauthorization) {
+                // OAuth authorization is required - initiate fresh OAuth flow with frontend callback
+                // Note: We ignore result.AuthorizationUrl because it was built with the server's callback URL
+                // We need to initiate a fresh flow that uses the frontend callback URL
+                console.log(`[MCPDashboard] OAuth ${result.RequiresReauthorization ? 're-' : ''}authorization required, initiating frontend OAuth flow...`);
+                await this.initiateOAuthFlow(connectionId);
             } else {
                 this.ErrorMessage = `Sync failed: ${result.ErrorMessage}`;
             }
@@ -1152,6 +1482,135 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         const state = this.SyncStates.get(connectionId);
         if (!state?.progress) return '';
         return state.progress.message;
+    }
+
+    // ========================================
+    // OAuth Operations
+    // ========================================
+
+    /**
+     * Checks for OAuth completion by looking for query params set by the OAuth callback
+     */
+    private checkOAuthCompletion(): void {
+        const params = this.route.snapshot.queryParams;
+
+        if (params['oauth'] === 'success') {
+            // OAuth completed successfully
+            const connectionId = params['connectionId'];
+            console.log(`[MCPDashboard] OAuth authorization completed for connection: ${connectionId}`);
+
+            // Show success notification
+            this.showSuccessNotification('OAuth authorization completed successfully');
+
+            // Clear the query params without triggering a full navigation
+            this.router.navigate([], {
+                relativeTo: this.route,
+                queryParams: {},
+                queryParamsHandling: 'merge',
+                replaceUrl: true
+            });
+
+            // Refresh data to pick up new OAuth state
+            this.loadAllData(true);
+        } else if (params['oauth'] === 'error') {
+            // OAuth failed
+            const errorCode = params['error'] || 'unknown_error';
+            const errorMessage = params['error_description'] || 'Authorization failed';
+            console.error(`[MCPDashboard] OAuth authorization failed: ${errorCode} - ${errorMessage}`);
+
+            // Show error message
+            this.ErrorMessage = `OAuth authorization failed: ${errorMessage}`;
+
+            // Clear the query params
+            this.router.navigate([], {
+                relativeTo: this.route,
+                queryParams: {},
+                queryParamsHandling: 'merge',
+                replaceUrl: true
+            });
+        }
+    }
+
+    /**
+     * Shows a success notification (temporary)
+     */
+    private showSuccessNotification(message: string): void {
+        // For now, use a simple console log and clear any error message
+        console.log(`[MCPDashboard] Success: ${message}`);
+        this.ErrorMessage = null;
+        // TODO: Implement proper toast/notification system
+    }
+
+    /**
+     * Initiates OAuth authorization flow for a connection.
+     * Stores the current URL and redirects directly to the OAuth provider.
+     * Always uses the frontend callback URL so the OAuth redirect comes back to MJExplorer.
+     *
+     * @param connectionId - The MCP connection ID requiring OAuth
+     */
+    public async initiateOAuthFlow(connectionId: string): Promise<void> {
+        // Store current URL for return after OAuth completion
+        // Store both full URL and path-only version for cross-origin scenarios
+        const currentUrl = window.location.href;
+        const currentPath = window.location.pathname + window.location.search;
+
+        // Store in both localStorage and sessionStorage for redundancy
+        localStorage.setItem('oauth_return_url', currentUrl);
+        localStorage.setItem('oauth_return_path', currentPath);
+        sessionStorage.setItem('oauth_return_url', currentUrl);
+        sessionStorage.setItem('oauth_return_path', currentPath);
+
+        console.log('[MCPDashboard] Stored OAuth return URL:', currentUrl);
+        console.log('[MCPDashboard] Stored OAuth return path:', currentPath);
+
+        // Initiate OAuth via GraphQL to get the URL with frontend callback
+        const result = await this.initiateMCPOAuth(connectionId);
+        if (result.Success && result.AuthorizationUrl) {
+            console.log('[MCPDashboard] Redirecting to OAuth provider:', result.AuthorizationUrl);
+            window.location.href = result.AuthorizationUrl;
+        } else {
+            this.ErrorMessage = result.ErrorMessage || 'Failed to initiate OAuth authorization';
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Calls the InitiateMCPOAuth mutation with frontend callback URL
+     */
+    private async initiateMCPOAuth(connectionId: string): Promise<{
+        Success: boolean;
+        AuthorizationUrl?: string;
+        ErrorMessage?: string;
+    }> {
+        try {
+            const { GraphQLDataProvider, gql } = await import('@memberjunction/graphql-dataprovider');
+
+            const mutation = gql`
+                mutation InitiateMCPOAuth($input: InitiateMCPOAuthInput!) {
+                    InitiateMCPOAuth(input: $input) {
+                        Success
+                        ErrorMessage
+                        AuthorizationUrl
+                        StateParameter
+                    }
+                }
+            `;
+
+            // Use the frontend callback URL so we handle the OAuth redirect
+            const frontendCallbackUrl = `${window.location.origin}/oauth/callback`;
+
+            const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, {
+                input: {
+                    ConnectionID: connectionId,
+                    FrontendCallbackUrl: frontendCallbackUrl
+                }
+            });
+
+            return result?.InitiateMCPOAuth || { Success: false, ErrorMessage: 'No result returned' };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { Success: false, ErrorMessage: message };
+        }
     }
 
     // ========================================
@@ -1424,11 +1883,4 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.ShowTestToolDialog = true;
         this.cdr.detectChanges();
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPDashboard(): void {
-    // Ensures the component is not tree-shaken
 }

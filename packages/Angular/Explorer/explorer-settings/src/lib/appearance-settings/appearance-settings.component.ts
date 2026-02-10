@@ -5,6 +5,7 @@ import { Component } from '@angular/core';
  * Will include: theme selection, display density, font size.
  */
 @Component({
+  standalone: false,
   selector: 'mj-appearance-settings',
   templateUrl: './appearance-settings.component.html',
   styleUrls: ['./appearance-settings.component.css']

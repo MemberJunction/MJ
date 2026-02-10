@@ -1,13 +1,24 @@
 <nav class="nav-list" [style.--app-color]="appColor">
-  <div
-    *ngFor="let item of navItems"
-    class="nav-item"
-    [class.active]="isActive(item)"
-    [class.no-icon]="!item.Icon"
-    (click)="onNavClick(item, $event)"
-    (dblclick)="onNavDblClick(item, $event)">
-    <i *ngIf="item.Icon" [class]="item.Icon"></i>
-    <span>{{ item.Label }}</span>
-    <span *ngIf="item.Badge" class="badge">{{ item.Badge }}</span>
-  </div>
+  @for (item of navItems; track trackByNavItem($index, item)) {
+    <div
+      class="nav-item"
+      [class.active]="isActive(item)"
+      [class.dynamic]="isDynamic(item)"
+      [class.no-icon]="!item.Icon"
+      (click)="onNavClick(item, $event)"
+      (dblclick)="onNavDblClick(item, $event)">
+      @if (item.Icon) {
+        <i [class]="item.Icon"></i>
+      }
+      <span>{{ item.Label }}</span>
+      @if (item.Badge) {
+        <span class="badge">{{ item.Badge }}</span>
+      }
+      @if (isDynamic(item)) {
+        <button class="dismiss-btn" title="Remove" (click)="onDismiss(item, $event)">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      }
+    </div>
+  }
 </nav>

@@ -1,7 +1,8 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Subject, debounceTime } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { SharedService } from '@memberjunction/ng-shared';
 import { ListFormComponent } from '../../generated/Entities/List/list.form.component';
 import { ListEntity, ListDetailEntity, ListDetailEntityExtended, ListCategoryEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
@@ -45,12 +46,15 @@ export interface AddableRecord {
  */
 @RegisterClass(BaseFormComponent, 'Lists')
 @Component({
+  standalone: false,
     selector: 'mj-list-form-extended',
     templateUrl: './list-form.component.html',
     styleUrls: ['./list-form.component.css', '../../../shared/form-styles.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ListFormComponentExtended extends ListFormComponent implements OnInit, OnDestroy {
+    private sharedService = inject(SharedService);
+
     public override record!: ListEntity;
 
     // Navigation
@@ -829,8 +833,4 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
         this.shareDialogConfig = null;
         this.cdr.markForCheck();
     }
-}
-
-export function LoadListFormComponentExtended() {
-    // Prevents tree-shaking
 }

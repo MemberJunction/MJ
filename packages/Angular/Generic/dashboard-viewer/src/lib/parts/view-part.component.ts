@@ -12,40 +12,48 @@ import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberj
  */
 @RegisterClass(BaseDashboardPart, 'ViewPanelRenderer')
 @Component({
+  standalone: false,
     selector: 'mj-view-part',
     template: `
         <div class="view-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">
-            <!-- Loading state -->
-            <div class="loading-state" *ngIf="IsLoading">
-                <mj-loading text="Loading view..."></mj-loading>
+          <!-- Loading state -->
+          @if (IsLoading) {
+            <div class="loading-state">
+              <mj-loading text="Loading view..."></mj-loading>
             </div>
-
-            <!-- Error state -->
-            <div class="error-state" *ngIf="ErrorMessage && !IsLoading">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                <span>{{ ErrorMessage }}</span>
+          }
+        
+          <!-- Error state -->
+          @if (ErrorMessage && !IsLoading) {
+            <div class="error-state">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>{{ ErrorMessage }}</span>
             </div>
-
-            <!-- No view configured -->
-            <div class="empty-state" *ngIf="!IsLoading && !ErrorMessage && !hasView">
-                <i class="fa-solid fa-table"></i>
-                <h4>No View Selected</h4>
-                <p>Click the configure button to select a view for this part.</p>
+          }
+        
+          <!-- No view configured -->
+          @if (!IsLoading && !ErrorMessage && !hasView) {
+            <div class="empty-state">
+              <i class="fa-solid fa-table"></i>
+              <h4>No View Selected</h4>
+              <p>Click the configure button to select a view for this part.</p>
             </div>
-
-            <!-- Entity Viewer -->
+          }
+        
+          <!-- Entity Viewer -->
+          @if (!IsLoading && !ErrorMessage && hasView && entityInfo) {
             <mj-entity-viewer
-                *ngIf="!IsLoading && !ErrorMessage && hasView && entityInfo"
-                [entity]="entityInfo"
-                [viewEntity]="viewEntity"
-                [(viewMode)]="viewMode"
-                [gridSelectionMode]="selectionMode"
-                [showGridToolbar]="false"
-                (recordSelected)="onRecordSelected($event)"
-                (recordOpened)="onRecordOpened($event)">
+              [entity]="entityInfo"
+              [viewEntity]="viewEntity"
+              [(viewMode)]="viewMode"
+              [gridSelectionMode]="selectionMode"
+              [showGridToolbar]="false"
+              (recordSelected)="onRecordSelected($event)"
+              (recordOpened)="onRecordOpened($event)">
             </mj-entity-viewer>
+          }
         </div>
-    `,
+        `,
     styles: [`
         :host {
             display: block;
@@ -214,11 +222,4 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
         this.viewEntity = null;
         this.entityInfo = null;
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadViewPart() {
-    // Prevents tree-shaking of the component
 }

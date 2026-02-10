@@ -1,55 +1,69 @@
-<div
-  *ngIf="visible"
-  class="mention-dropdown"
-  [class.show-above]="showAbove"
-  [class.fixed-position]="useFixedPositioning"
-  [style.top.px]="position.top"
-  [style.left.px]="position.left"
->
-  <!-- Suggestions List -->
-  <div class="mention-suggestions" *ngIf="suggestions.length > 0">
-    <div
-      *ngFor="let suggestion of suggestions; let i = index; trackBy: trackBySuggestion"
-      class="mention-suggestion"
-      [class.selected]="i === selectedIndex"
-      (mousedown)="selectSuggestion(suggestion); $event.preventDefault()"
-      (mouseenter)="selectedIndex = i"
+@if (visible) {
+  <div
+    class="mention-dropdown"
+    [class.show-above]="showAbove"
+    [class.fixed-position]="useFixedPositioning"
+    [style.top.px]="position.top"
+    [style.left.px]="position.left"
     >
-      <div class="suggestion-icon">
-        <!-- Agent with LogoURL image (takes precedence) -->
-        <img
-          *ngIf="suggestion.type === 'agent' && suggestion.imageUrl"
-          [src]="suggestion.imageUrl"
-          [alt]="suggestion.displayName"
-          class="suggestion-image"
-        />
-        <!-- Agent with icon class (fallback) -->
-        <i
-          *ngIf="suggestion.type === 'agent' && !suggestion.imageUrl && suggestion.icon"
-          [ngClass]="getIconClasses(suggestion.icon)"
-        ></i>
-        <!-- User icon -->
-        <i
-          *ngIf="suggestion.type === 'user'"
-          class="fa-solid fa-user"
-        ></i>
+    <!-- Suggestions List -->
+    @if (suggestions.length > 0) {
+      <div class="mention-suggestions">
+        @for (suggestion of suggestions; track trackBySuggestion(i, suggestion); let i = $index) {
+          <div
+            class="mention-suggestion"
+            [class.selected]="i === selectedIndex"
+            (mousedown)="selectSuggestion(suggestion); $event.preventDefault()"
+            (mouseenter)="selectedIndex = i"
+            >
+            <div class="suggestion-icon">
+              <!-- Agent with LogoURL image (takes precedence) -->
+              @if (suggestion.type === 'agent' && suggestion.imageUrl) {
+                <img
+                  [src]="suggestion.imageUrl"
+                  [alt]="suggestion.displayName"
+                  class="suggestion-image"
+                  />
+              }
+              <!-- Agent with icon class (fallback) -->
+              @if (suggestion.type === 'agent' && !suggestion.imageUrl && suggestion.icon) {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon)"
+                ></i>
+              }
+              <!-- User icon -->
+              @if (suggestion.type === 'user') {
+                <i
+                  class="fa-solid fa-user"
+                ></i>
+              }
+            </div>
+            <div class="suggestion-content">
+              <div class="suggestion-name">
+                @if (suggestion.type === 'agent') {
+                  <span class="suggestion-type-badge">Agent</span>
+                }
+                @if (suggestion.type === 'user') {
+                  <span class="suggestion-type-badge user">User</span>
+                }
+                {{ suggestion.displayName }}
+              </div>
+              @if (suggestion.description) {
+                <div class="suggestion-description">
+                  {{ suggestion.description }}
+                </div>
+              }
+            </div>
+          </div>
+        }
       </div>
-      <div class="suggestion-content">
-        <div class="suggestion-name">
-          <span class="suggestion-type-badge" *ngIf="suggestion.type === 'agent'">Agent</span>
-          <span class="suggestion-type-badge user" *ngIf="suggestion.type === 'user'">User</span>
-          {{ suggestion.displayName }}
-        </div>
-        <div class="suggestion-description" *ngIf="suggestion.description">
-          {{ suggestion.description }}
-        </div>
+    }
+    <!-- Empty State -->
+    @if (suggestions.length === 0) {
+      <div class="mention-empty-state">
+        <i class="fa-solid fa-robot"></i>
+        <p>No agents or users available</p>
       </div>
-    </div>
+    }
   </div>
-
-  <!-- Empty State -->
-  <div class="mention-empty-state" *ngIf="suggestions.length === 0">
-    <i class="fa-solid fa-robot"></i>
-    <p>No agents or users available</p>
-  </div>
-</div>
+}

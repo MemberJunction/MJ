@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Workflow Engines') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-workflowengine-form',
     templateUrl: './workflowengine.form.component.html'
 })
@@ -22,6 +23,3 @@ export class WorkflowEngineFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadWorkflowEngineFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

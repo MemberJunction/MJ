@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Credential Bindings') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aicredentialbinding-form',
     templateUrl: './aicredentialbinding.form.component.html'
 })
@@ -19,6 +20,3 @@ export class AICredentialBindingFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAICredentialBindingFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Row Level Security Filters') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-rowlevelsecurityfilter-form',
     templateUrl: './rowlevelsecurityfilter.form.component.html'
 })
@@ -23,6 +24,3 @@ export class RowLevelSecurityFilterFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadRowLevelSecurityFilterFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

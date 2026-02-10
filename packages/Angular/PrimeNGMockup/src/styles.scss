@@ -1,0 +1,42 @@
+/* MemberJunction PrimeNG Styleguide - Global Styles */
+
+/* Layer 0: MJ Design Tokens (source of truth) */
+@use "styles/tokens";
+
+/* Layer 2: MJ -> PrimeNG bridge (overrides PrimeNG vars with MJ tokens) */
+@use "styles/primeng-theme";
+
+/* Layer 3: MJ Layout Utilities (grid, flex, gap, alignment) */
+@use "styles/grid";
+
+/* Layer 4: Animation Keyframes & reduced-motion guard */
+@use "styles/animations";
+
+/* Icons */
+@use "primeicons/primeicons.css";
+
+/* Quill Editor styles (required by PrimeNG Editor component) */
+@import "quill/dist/quill.snow.css";
+
+/* ========================================
+   BASE STYLES
+   ======================================== */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-family);
+  background-color: var(--surface-ground);
+  color: var(--text-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

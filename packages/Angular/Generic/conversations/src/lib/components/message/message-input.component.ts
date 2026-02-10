@@ -23,6 +23,7 @@ import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
 
 @Component({
+  standalone: false,
   selector: 'mj-message-input',
   templateUrl: './message-input.component.html',
   styleUrl: './message-input.component.scss'

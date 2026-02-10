@@ -30,6 +30,7 @@ interface ProgressUpdate {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-test-run-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

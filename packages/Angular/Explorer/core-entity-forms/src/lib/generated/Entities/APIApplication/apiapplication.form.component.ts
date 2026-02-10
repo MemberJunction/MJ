@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: API Applications') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-apiapplication-form',
     templateUrl: './apiapplication.form.component.html'
 })
@@ -25,6 +26,3 @@ export class APIApplicationFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAPIApplicationFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

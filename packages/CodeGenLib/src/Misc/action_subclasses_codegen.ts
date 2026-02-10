@@ -6,7 +6,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
 import { ActionEntityServerEntity } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
-import { mkdirSync } from 'fs-extra';
+import { mkdirSync } from 'fs';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionEntityExtended } from '@memberjunction/actions-base';
 
@@ -77,13 +77,9 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
             }
             let actionCode = actionHeader + sCode;
 
-            // finally add the LoadGeneratedActions() stub function at the very end
-            actionCode += `
-            
-export function LoadGeneratedActions() {
-    // this function is a stub that is used to force the bundler to include the generated action classes in the final bundle and not tree shake them out
-}
-`;    
+            // Note: LoadGeneratedActions() stub function has been removed.
+            // Tree-shaking prevention is now handled by the pre-built class registration manifest system.
+            // See packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md for details.
 
             mkdirSync(directory, { recursive: true });
             fs.writeFileSync(actionFilePath, actionCode);

@@ -491,7 +491,3 @@ export class BedrockLLM extends BaseLLM {
     }).join('');
   }
 }
-
-export function LoadBedrockLLM() {
-  // this does nothing but prevents the class from being removed by the tree shaker
-}

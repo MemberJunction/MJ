@@ -75,7 +75,3 @@ export class ExampleNewUserSubClass extends NewUserBase {
     }
   }
 }
-
-export function LoadExampleNewUserSubClass() {
-  // do nothing, just having this forces the above class to get registered via its @RegisterClass decorator
-}

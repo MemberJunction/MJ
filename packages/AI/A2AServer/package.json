@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/a2aserver",
-  "version": "3.4.0",
+  "version": "4.0.0",
   "description": "MemberJunction Agent-To-Agent (A2A) Server Implementation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,7 +9,9 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc",
+    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
+    "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
+    "build": "tsc && tsc-alias -f",
     "clean": "rimraf dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -22,29 +24,30 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/ai": "3.4.0",
-    "@memberjunction/ai-agents": "3.4.0",
-    "@memberjunction/api-keys": "3.4.0",
-    "@memberjunction/ai-core-plus": "3.4.0",
-    "@memberjunction/aiengine": "3.4.0",
-    "@memberjunction/config": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/encryption": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/server": "3.4.0",
-    "@memberjunction/sqlserver-dataprovider": "3.4.0",
-    "cosmiconfig": "^8.0.0",
-    "dotenv": "^16.0.3",
-    "express": "^5.1.0",
-    "mssql": "^11.0.1",
-    "zod": "^3.22.4"
+    "@memberjunction/ai": "4.0.0",
+    "@memberjunction/ai-agents": "4.0.0",
+    "@memberjunction/api-keys": "4.0.0",
+    "@memberjunction/ai-core-plus": "4.0.0",
+    "@memberjunction/aiengine": "4.0.0",
+    "@memberjunction/config": "4.0.0",
+    "@memberjunction/core": "4.0.0",
+    "@memberjunction/core-entities": "4.0.0",
+    "@memberjunction/encryption": "4.0.0",
+    "@memberjunction/global": "4.0.0",
+    "@memberjunction/server": "4.0.0",
+    "@memberjunction/server-bootstrap-lite": "4.0.0",
+    "@memberjunction/sqlserver-dataprovider": "4.0.0",
+    "cosmiconfig": "^9.0.0",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "mssql": "^12.2.0",
+    "zod": "~3.24.4"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^18.11.9",
-    "rimraf": "^5.0.10",
-    "typescript": "^5.0.2"
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.11",
+    "rimraf": "^6.1.2",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

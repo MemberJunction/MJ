@@ -28,6 +28,7 @@ import { AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
  * This dramatically improves performance when messages are added/removed
  */
 @Component({
+  standalone: false,
   selector: 'mj-conversation-message-list',
   templateUrl: './message-list.component.html',
   styleUrls: ['./message-list.component.css']

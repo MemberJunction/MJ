@@ -7,6 +7,7 @@ import { FormQuestion, FormOption } from '@memberjunction/ai-core-plus';
  * Implements ControlValueAccessor for seamless integration with Angular forms
  */
 @Component({
+  standalone: false,
   selector: 'mj-form-question',
   templateUrl: './form-question.component.html',
   styleUrls: ['./form-question.component.css'],

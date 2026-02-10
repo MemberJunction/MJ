@@ -30,6 +30,7 @@ import {
  * - Remove access functionality
  */
 @Component({
+  standalone: false,
   selector: 'mj-list-share-dialog',
   templateUrl: './list-share-dialog.component.html',
   styleUrls: ['./list-share-dialog.component.css']

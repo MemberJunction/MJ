@@ -11,8 +11,3 @@ import { RegisterClass } from "@memberjunction/global";
 import { MJGlobal } from "@memberjunction/global";
 import { Metadata, RunView, RunQuery } from "@memberjunction/core";
 
-
-            
-export function LoadGeneratedActions() {
-    // this function is a stub that is used to force the bundler to include the generated action classes in the final bundle and not tree shake them out
-}

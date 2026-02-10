@@ -5,11 +5,6 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialCategoryEditPanelComponent } from '@memberjunction/ng-credentials';
-
-export function LoadCredentialsCategoriesResource() {
-    // Prevents tree-shaking
-}
-
 interface CategoryNode {
     category: CredentialCategoryEntity;
     children: CategoryNode[];
@@ -20,6 +15,7 @@ interface CategoryNode {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsCategoriesResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-categories-resource',
     templateUrl: './credentials-categories-resource.component.html',
     styleUrls: ['./credentials-categories-resource.component.css'],

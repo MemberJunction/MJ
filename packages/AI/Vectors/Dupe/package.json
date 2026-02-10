@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ai-vector-dupe",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "4.0.0",
   "description": "MemberJunction: AI Vector/Entity Sync Package - Handles synchronization between Vector DB and MJ CDP Data",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,28 +10,28 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "3.4.0",
-    "@memberjunction/ai-vectordb": "3.4.0",
-    "@memberjunction/ai-vectors": "3.4.0",
-    "@memberjunction/ai-vectors-pinecone": "3.4.0",
-    "@memberjunction/ai-vector-sync": "3.4.0",
-    "@memberjunction/aiengine": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "dotenv": "^16.4.1"
+    "@memberjunction/ai": "4.0.0",
+    "@memberjunction/ai-vectordb": "4.0.0",
+    "@memberjunction/ai-vectors": "4.0.0",
+    "@memberjunction/ai-vectors-pinecone": "4.0.0",
+    "@memberjunction/ai-vector-sync": "4.0.0",
+    "@memberjunction/aiengine": "4.0.0",
+    "@memberjunction/core": "4.0.0",
+    "@memberjunction/global": "4.0.0",
+    "@memberjunction/core-entities": "4.0.0",
+    "dotenv": "^17.2.4"
   },
   "devDependencies": {
-    "@types/mssql": "^9.1.5",
-    "@types/node": "20.14.2",
+    "@types/mssql": "^9.1.9",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

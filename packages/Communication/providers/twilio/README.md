@@ -1,18 +1,42 @@
 # @memberjunction/communication-twilio
 
-A Twilio provider implementation for the MemberJunction Communication framework, enabling SMS, WhatsApp, and Facebook Messenger messaging capabilities.
+Twilio provider for the MemberJunction Communication Framework. This provider enables messaging across multiple channels -- SMS, WhatsApp Business, and Facebook Messenger -- through the Twilio API. The channel is automatically detected based on recipient format.
 
-## Overview
+## Architecture
 
-This package provides a Twilio-based implementation of the MemberJunction Communication Provider interface. It supports sending and receiving messages through multiple channels:
+```mermaid
+graph TD
+    subgraph twilio["@memberjunction/communication-twilio"]
+        TP["TwilioProvider"]
+        CFG["Config Module\n(Environment Variables)"]
+        CRED["TwilioCredentials"]
+        DETECT["Channel Detection\n(SMS / WhatsApp / Messenger)"]
+    end
 
-- **SMS** - Traditional text messaging
-- **WhatsApp** - WhatsApp Business messaging
-- **Facebook Messenger** - Facebook page messaging
+    subgraph tw["Twilio Service"]
+        API["Twilio REST API"]
+        SMS["SMS / MMS"]
+        WA["WhatsApp Business"]
+        FB["Facebook Messenger"]
+    end
 
-The provider automatically detects the appropriate channel based on the recipient format and handles all necessary formatting and API interactions with Twilio's services.
+    subgraph base["@memberjunction/communication-types"]
+        BCP["BaseCommunicationProvider"]
+    end
 
-**Note**: Twilio does not support draft messages. The `CreateDraft()` method returns an error indicating this limitation, as SMS/messaging services don't have a draft concept.
+    BCP --> TP
+    TP --> CFG
+    TP --> CRED
+    TP --> DETECT
+    TP --> API
+    API --> SMS
+    API --> WA
+    API --> FB
+
+    style twilio fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style tw fill:#7c5295,stroke:#563a6b,color:#fff
+    style base fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 ## Installation
 
@@ -22,260 +46,193 @@ npm install @memberjunction/communication-twilio
 
 ## Configuration
 
-The provider requires environment variables to be set for Twilio credentials. Create a `.env` file in your project root:
+Set the following environment variables:
 
 ```env
-# Required - Twilio Account Credentials
-TWILIO_ACCOUNT_SID=your_account_sid
-TWILIO_AUTH_TOKEN=your_auth_token
+# Required
+TWILIO_ACCOUNT_SID=your-account-sid
+TWILIO_AUTH_TOKEN=your-auth-token
 TWILIO_PHONE_NUMBER=+1234567890
 
-# Optional - For WhatsApp messaging
+# Optional (for additional channels)
 TWILIO_WHATSAPP_NUMBER=+1234567890
-
-# Optional - For Facebook Messenger
-TWILIO_FACEBOOK_PAGE_ID=your_page_id
+TWILIO_FACEBOOK_PAGE_ID=your-page-id
 ```
 
-### Environment Variables
+## Channel Detection
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `TWILIO_ACCOUNT_SID` | Yes | Your Twilio Account SID |
-| `TWILIO_AUTH_TOKEN` | Yes | Your Twilio Auth Token |
-| `TWILIO_PHONE_NUMBER` | Yes | Your Twilio phone number for SMS |
-| `TWILIO_WHATSAPP_NUMBER` | No | Your Twilio WhatsApp-enabled number |
-| `TWILIO_FACEBOOK_PAGE_ID` | No | Your Facebook Page ID for Messenger |
+The provider automatically selects the messaging channel based on the recipient format:
+
+```mermaid
+flowchart LR
+    TO["Recipient Address"] --> CHECK{"Prefix?"}
+    CHECK -->|"whatsapp:+1..."| WA["WhatsApp Channel"]
+    CHECK -->|"messenger:psid"| FB["Messenger Channel"]
+    CHECK -->|"+1234567890"| SMS["SMS Channel"]
+
+    style TO fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style WA fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style FB fill:#7c5295,stroke:#563a6b,color:#fff
+    style SMS fill:#b8762f,stroke:#8a5722,color:#fff
+```
+
+| Recipient Format | Channel | From Number Config |
+|-----------------|---------|-------------------|
+| `+1234567890` | SMS | `TWILIO_PHONE_NUMBER` |
+| `whatsapp:+1234567890` | WhatsApp | `TWILIO_WHATSAPP_NUMBER` |
+| `messenger:user_psid` | Facebook Messenger | `TWILIO_FACEBOOK_PAGE_ID` |
+
+## Supported Operations
+
+| Operation | Supported | Notes |
+|-----------|-----------|-------|
+| `SendSingleMessage` | Yes | Auto-detects channel, supports media URLs |
+| `GetMessages` | Yes | Filter by from, to, dateSent |
+| `ForwardMessage` | Yes | Reconstructs message body with forward prefix |
+| `ReplyToMessage` | Yes | Fetches original, sends to original sender |
+| `CreateDraft` | No | Messaging services have no draft concept |
+| Extended operations | No | No folder, search, or attachment operations |
 
 ## Usage
 
-### Basic Setup
+### Sending SMS
 
 ```typescript
-import { TwilioProvider } from '@memberjunction/communication-twilio';
+import { CommunicationEngine } from '@memberjunction/communication-engine';
+import { Message } from '@memberjunction/communication-types';
 
-// The provider will be automatically registered with the MemberJunction framework
-// via the @RegisterClass decorator when imported
-const provider = new TwilioProvider();
+const engine = CommunicationEngine.Instance;
+await engine.Config(false, contextUser);
+
+const message = new Message();
+message.To = '+1234567890';
+message.Body = 'Hello from MemberJunction!';
+
+const result = await engine.SendSingleMessage('Twilio', 'Standard SMS', message);
 ```
 
-### Sending Messages
+### Sending WhatsApp Message
 
-#### SMS Message
 ```typescript
-import { ProcessedMessage } from '@memberjunction/communication-types';
+const message = new Message();
+message.To = 'whatsapp:+1234567890';
+message.Body = 'Hello via WhatsApp!';
 
-const message: ProcessedMessage = {
-  To: '+1234567890',
-  ProcessedBody: 'Hello from MemberJunction!',
-  // Other required fields...
-};
-
-const result = await provider.SendSingleMessage(message);
-if (result.Success) {
-  console.log('SMS sent successfully');
-} else {
-  console.error('Failed to send SMS:', result.Error);
-}
+const result = await engine.SendSingleMessage('Twilio', 'Standard SMS', message);
 ```
 
-#### WhatsApp Message
-```typescript
-const whatsappMessage: ProcessedMessage = {
-  To: 'whatsapp:+1234567890', // Prefix with 'whatsapp:'
-  ProcessedBody: 'Hello from WhatsApp!',
-  // Other required fields...
-};
+### Sending Facebook Messenger Message
 
-const result = await provider.SendSingleMessage(whatsappMessage);
+```typescript
+const message = new Message();
+message.To = 'messenger:user_psid';
+message.Body = 'Hello via Messenger!';
+
+const result = await engine.SendSingleMessage('Twilio', 'Standard SMS', message);
 ```
 
-#### Facebook Messenger Message
-```typescript
-const messengerMessage: ProcessedMessage = {
-  To: 'messenger:user_psid', // Prefix with 'messenger:' and use Page-Scoped ID
-  ProcessedBody: 'Hello from Messenger!',
-  // Other required fields...
-};
+### Sending Media (MMS / WhatsApp)
 
-const result = await provider.SendSingleMessage(messengerMessage);
-```
-
-#### Sending Media (MMS/WhatsApp Media)
 ```typescript
-const mediaMessage: ProcessedMessage = {
-  To: '+1234567890',
-  ProcessedBody: 'Check out this image!',
-  ContextData: {
+const message = new Message();
+message.To = '+1234567890';
+message.Body = 'Check out this image!';
+message.ContextData = {
     mediaUrls: ['https://example.com/image.jpg']
-  },
-  // Other required fields...
 };
 
-const result = await provider.SendSingleMessage(mediaMessage);
+const result = await engine.SendSingleMessage('Twilio', 'Standard SMS', message);
 ```
 
 ### Retrieving Messages
 
 ```typescript
-import { GetMessagesParams } from '@memberjunction/communication-types';
+const provider = engine.GetProvider('Twilio');
 
-const params: GetMessagesParams = {
-  NumMessages: 50,
-  ContextData: {
-    // Optional filters
-    from: '+1234567890',
-    to: '+0987654321',
-    dateSent: new Date('2024-01-01')
-  }
-};
+const result = await provider.GetMessages({
+    NumMessages: 50,
+    ContextData: {
+        from: '+1234567890',
+        to: '+0987654321',
+        dateSent: new Date('2025-01-01')
+    }
+});
 
-const result = await provider.GetMessages(params);
-if (result.Success) {
-  console.log(`Retrieved ${result.Messages.length} messages`);
-  result.Messages.forEach(msg => {
-    console.log(`From: ${msg.From}, Body: ${msg.Body}`);
-  });
-}
+result.Messages.forEach(msg => {
+    console.log(`${msg.From} -> ${msg.To}: ${msg.Body}`);
+});
 ```
 
-### Replying to Messages
+### Per-Request Credentials
 
 ```typescript
-import { ReplyToMessageParams } from '@memberjunction/communication-types';
+import { TwilioCredentials } from '@memberjunction/communication-twilio';
 
-const replyParams: ReplyToMessageParams = {
-  MessageID: 'original_message_sid', // The Twilio Message SID
-  Message: {
-    ProcessedBody: 'Thanks for your message!',
-    // Other message fields...
-  }
-};
-
-const result = await provider.ReplyToMessage(replyParams);
-if (result.Success) {
-  console.log('Reply sent successfully');
-}
+const result = await provider.SendSingleMessage(processedMessage, {
+    accountSid: 'customer-sid',
+    authToken: 'customer-token',
+    phoneNumber: '+1987654321'
+} as TwilioCredentials);
 ```
 
-### Forwarding Messages
+### Replying to a Message
 
 ```typescript
-import { ForwardMessageParams } from '@memberjunction/communication-types';
+const result = await provider.ReplyToMessage({
+    MessageID: 'original-twilio-message-sid',
+    Message: processedReply
+});
+```
 
-const forwardParams: ForwardMessageParams = {
-  MessageID: 'message_to_forward_sid',
-  ToRecipients: ['+1234567890', 'whatsapp:+0987654321'],
-  Message: 'FYI - forwarding this message' // Optional comment
-};
+### Forwarding a Message
 
-const result = await provider.ForwardMessage(forwardParams);
-if (result.Success) {
-  console.log('Message forwarded successfully');
+```typescript
+const result = await provider.ForwardMessage({
+    MessageID: 'message-sid-to-forward',
+    ToRecipients: ['+1234567890', 'whatsapp:+0987654321'],
+    Message: 'FYI - forwarding this message'
+});
+```
+
+## TwilioCredentials
+
+```typescript
+interface TwilioCredentials extends ProviderCredentialsBase {
+    accountSid?: string;
+    authToken?: string;
+    phoneNumber?: string;
+    whatsappNumber?: string;
+    facebookPageId?: string;
+    disableEnvironmentFallback?: boolean;
 }
 ```
 
-## Channel Detection
+## Client Caching
 
-The provider automatically detects the communication channel based on the recipient format:
+The provider caches Twilio client instances for performance. Environment credential clients are shared across all calls; per-request credential clients are cached by `accountSid`.
 
-- **SMS**: Standard phone number format (e.g., `+1234567890`)
-- **WhatsApp**: Prefixed with `whatsapp:` (e.g., `whatsapp:+1234567890`)
-- **Facebook Messenger**: Prefixed with `messenger:` (e.g., `messenger:user_psid`)
+## Important Notes
 
-## API Reference
-
-### TwilioProvider
-
-The main provider class that implements the `BaseCommunicationProvider` interface.
-
-#### Methods
-
-##### `SendSingleMessage(message: ProcessedMessage): Promise<MessageResult>`
-Sends a single message through the appropriate Twilio channel.
-
-**Parameters:**
-- `message`: The processed message to send
-  - `To`: Recipient (phone number or channel-prefixed ID)
-  - `From`: (Optional) Sender ID, defaults to configured numbers
-  - `ProcessedBody`: The message content
-  - `ContextData.mediaUrls`: (Optional) Array of media URLs for MMS/WhatsApp media
-
-**Returns:** `MessageResult` with success status and any error information
-
-##### `GetMessages(params: GetMessagesParams): Promise<GetMessagesResult>`
-Retrieves messages from Twilio based on filter criteria.
-
-**Parameters:**
-- `params`: Message retrieval parameters
-  - `NumMessages`: Maximum number of messages to retrieve
-  - `ContextData`: Optional filters (from, to, dateSent)
-
-**Returns:** `GetMessagesResult` with retrieved messages and status
-
-##### `ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult>`
-Sends a reply to a specific message.
-
-**Parameters:**
-- `params`: Reply parameters
-  - `MessageID`: The Twilio SID of the message to reply to
-  - `Message`: The reply message content
-
-**Returns:** `ReplyToMessageResult` with success status
-
-##### `ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult>`
-Forwards a message to one or more recipients.
-
-**Parameters:**
-- `params`: Forward parameters
-  - `MessageID`: The Twilio SID of the message to forward
-  - `ToRecipients`: Array of recipient addresses
-  - `Message`: (Optional) Additional comment to include
-
-**Returns:** `ForwardMessageResult` with success status
+- SMS/messaging channels use **plain text only** -- HTML content is not supported
+- Message threading is simulated using Twilio Message SIDs (Twilio has no native thread concept)
+- Forwarding reconstructs the message content with a "Forwarded message" prefix
+- Media attachments are supported through the `mediaUrls` context data property
+- All operations are asynchronous via the Twilio REST API
 
 ## Dependencies
 
-This package depends on:
-- `@memberjunction/communication-types` - Communication provider interfaces
-- `@memberjunction/core` - Core MemberJunction utilities
-- `@memberjunction/global` - Global registration utilities
-- `twilio` - Official Twilio SDK
-- `dotenv` - Environment variable management
-- `env-var` - Environment variable validation
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/communication-types` | Base provider class and type definitions |
+| `@memberjunction/core` | Logging utilities (LogError, LogStatus) |
+| `@memberjunction/global` | RegisterClass decorator |
+| `twilio` | Official Twilio SDK |
+| `dotenv` | Environment variable loading |
+| `env-var` | Environment variable validation |
 
-## Integration with MemberJunction
+## Development
 
-This provider is automatically registered with the MemberJunction framework using the `@RegisterClass` decorator. Once imported, it becomes available for use through the MemberJunction communication system.
-
-The provider name registered is: **"Twilio"**
-
-## Build and Development
-
-### Building the Package
 ```bash
-npm run build
+npm run build    # Compile TypeScript
+npm run clean    # Remove dist directory
 ```
-
-### Cleaning Build Artifacts
-```bash
-npm run clean
-```
-
-### TypeScript Configuration
-The package uses TypeScript and compiles to ES2020 with CommonJS modules. Type definitions are included in the distribution.
-
-## Notes
-
-- The provider uses plain text for message bodies as HTML is not supported by SMS/messaging channels
-- Message threading is simulated using Message SIDs as Twilio doesn't have a native thread concept
-- Media attachments are supported through the `mediaUrls` context data property
-- All messages are sent asynchronously using the Twilio REST API
-
-## Error Handling
-
-The provider includes comprehensive error handling with detailed logging through the MemberJunction logging system. All errors are caught and returned in the result objects with descriptive error messages.
-
-## License
-
-This package is part of the MemberJunction framework. See the main repository for license information.

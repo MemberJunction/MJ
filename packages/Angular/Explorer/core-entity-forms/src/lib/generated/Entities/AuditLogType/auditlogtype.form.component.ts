@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Audit Log Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-auditlogtype-form',
     templateUrl: './auditlogtype.form.component.html'
 })
@@ -24,6 +25,3 @@ export class AuditLogTypeFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadAuditLogTypeFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

@@ -12,6 +12,7 @@ import { ToolbarConfig, ToolbarActionEvent, TOOLBAR_BUTTONS } from '@memberjunct
 import { EditorView } from '@codemirror/view';
 
 @Component({
+  standalone: false,
   selector: 'skip-dynamic-ui-component',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dynamic-ui-component.html',

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Action Params') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-actionparam-form',
     templateUrl: './actionparam.form.component.html'
 })
@@ -24,6 +25,3 @@ export class ActionParamFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadActionParamFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

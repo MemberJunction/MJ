@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Report Versions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-reportversion-form',
     templateUrl: './reportversion.form.component.html'
 })
@@ -21,6 +22,3 @@ export class ReportVersionFormComponent extends BaseFormComponent {
     }
 }
 
-export function LoadReportVersionFormComponent() {
-    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
-}

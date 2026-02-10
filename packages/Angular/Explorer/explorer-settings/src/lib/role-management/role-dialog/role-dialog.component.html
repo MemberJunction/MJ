@@ -1,183 +1,173 @@
 <!-- MD3 Modal Dialog -->
-<div class="modal-backdrop" *ngIf="visible" (click)="onCancel()">
-  <div class="modal-dialog" (click)="$event.stopPropagation()">
-
-    <!-- Modal Header with MJ Blue -->
-    <div class="modal-header">
-      <div class="dialog-header">
-        <h2 class="dialog-title">
-          <i class="fa-solid fa-shield-halved"></i>
-          {{ isEditMode ? 'Edit Role' : 'Create New Role' }}
-        </h2>
-        <p class="dialog-subtitle">
-          {{ isEditMode ? 'Update role information and permissions' : 'Add a new role to the system' }}
-        </p>
+@if (visible) {
+  <div class="modal-backdrop" (click)="onCancel()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <!-- Modal Header with MJ Blue -->
+      <div class="modal-header">
+        <div class="dialog-header">
+          <h2 class="dialog-title">
+            <i class="fa-solid fa-shield-halved"></i>
+            {{ isEditMode ? 'Edit Role' : 'Create New Role' }}
+          </h2>
+          <p class="dialog-subtitle">
+            {{ isEditMode ? 'Update role information and permissions' : 'Add a new role to the system' }}
+          </p>
+        </div>
+        <button type="button" class="modal-close" (click)="onCancel()" aria-label="Close dialog">
+          <i class="fa-solid fa-times"></i>
+        </button>
       </div>
-      <button type="button" class="modal-close" (click)="onCancel()" aria-label="Close dialog">
-        <i class="fa-solid fa-times"></i>
-      </button>
-    </div>
-
-    <!-- Modal Body -->
-    <div class="modal-body">
-      <form [formGroup]="roleForm" (ngSubmit)="onSubmit()">
-
-        @if (error) {
-          <div class="content-section">
-            <div class="alert alert-error">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <div>{{ error }}</div>
-            </div>
-          </div>
-        }
-
-        <!-- Basic Information Section -->
-        <div class="content-section">
-          <div class="form-section">
-            <div class="section-header">
-              <h3 class="section-title">
-                <i class="fa-solid fa-shield-halved"></i>
-                Role Information
-              </h3>
-              <p class="section-description">Define the role's basic properties and purpose</p>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-field">
-                <label class="field-label required" for="name">Role Name</label>
-                <input
-                  id="name"
-                  type="text"
-                  class="field-input"
-                  formControlName="name"
-                  placeholder="Sales Manager"
-                  [class.error]="roleForm.get('name')?.invalid && roleForm.get('name')?.touched"
-                />
-                @if (roleForm.get('name')?.invalid && roleForm.get('name')?.touched) {
-                  <div class="field-error">
-                    <i class="fa-solid fa-exclamation-circle"></i>
-                    @if (roleForm.get('name')?.errors?.['required']) {
-                      Role name is required
-                    }
-                    @if (roleForm.get('name')?.errors?.['maxlength']) {
-                      Role name cannot exceed 50 characters
-                    }
-                  </div>
-                }
+      <!-- Modal Body -->
+      <div class="modal-body">
+        <form [formGroup]="roleForm" (ngSubmit)="onSubmit()">
+          @if (error) {
+            <div class="content-section">
+              <div class="alert alert-error">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                <div>{{ error }}</div>
               </div>
-
-              <div class="form-field">
-                <label class="field-label" for="description">Description</label>
-                <textarea
-                  id="description"
-                  class="field-textarea"
-                  formControlName="description"
-                  placeholder="Describe the role's purpose and responsibilities..."
-                  rows="4"
-                ></textarea>
-                <div class="field-hint">
-                  Provide a clear description of what this role is for and what permissions it should have.
-                </div>
-              </div>
-
-              @if (isEditMode) {
-                <div class="form-field">
-                  <label class="field-label" for="directoryId">Directory ID</label>
-                  <input
-                    id="directoryId"
-                    type="text"
-                    class="field-input"
-                    formControlName="directoryId"
-                    placeholder="External directory identifier"
-                  />
-                  <div class="field-hint">
-                    External directory identifier for syncing with Active Directory or other systems.
-                  </div>
-                </div>
-              }
             </div>
-          </div>
-        </div>
-
-        <!-- Role Type Section -->
-        <div class="content-section">
-          <div class="form-section">
-            <div class="section-header">
-              <h3 class="section-title">
-                <i class="fa-solid fa-cog"></i>
-                Role Type
-              </h3>
-              <p class="section-description">System or custom role classification</p>
-            </div>
-
-            <div class="form-grid">
-              @if (isSystemRole) {
-                <div class="alert alert-warning">
-                  <i class="fa-solid fa-shield-halved"></i>
-                  <div>
-                    <strong>System Role</strong>
-                    <p>This is a system-defined role. Some properties may be limited for editing to maintain system integrity.</p>
-                  </div>
-                </div>
-              } @else {
-                <div class="alert alert-info">
-                  <i class="fa-solid fa-user-tag"></i>
-                  <div>
-                    <strong>Custom Role</strong>
-                    <p>This is a custom role that can be fully configured and modified.</p>
-                  </div>
-                </div>
-              }
-            </div>
-          </div>
-        </div>
-
-        <!-- Permissions Preview Section -->
-        @if (isEditMode) {
+          }
+          <!-- Basic Information Section -->
           <div class="content-section">
             <div class="form-section">
               <div class="section-header">
                 <h3 class="section-title">
-                  <i class="fa-solid fa-key"></i>
-                  Permissions
+                  <i class="fa-solid fa-shield-halved"></i>
+                  Role Information
                 </h3>
-                <p class="section-description">Manage role permissions and access rights</p>
+                <p class="section-description">Define the role's basic properties and purpose</p>
               </div>
-
               <div class="form-grid">
-                <div class="alert alert-info">
-                  <i class="fa-solid fa-info-circle"></i>
-                  <div>
-                    <strong>Permission Management</strong>
-                    <p>Role permissions can be managed in the <strong>Permissions</strong> tab of the settings dashboard. Use that interface to configure specific access rights for this role.</p>
+                <div class="form-field">
+                  <label class="field-label required" for="name">Role Name</label>
+                  <input
+                    id="name"
+                    type="text"
+                    class="field-input"
+                    formControlName="name"
+                    placeholder="Sales Manager"
+                    [class.error]="roleForm.get('name')?.invalid && roleForm.get('name')?.touched"
+                    />
+                  @if (roleForm.get('name')?.invalid && roleForm.get('name')?.touched) {
+                    <div class="field-error">
+                      <i class="fa-solid fa-exclamation-circle"></i>
+                      @if (roleForm.get('name')?.errors?.['required']) {
+                        Role name is required
+                      }
+                      @if (roleForm.get('name')?.errors?.['maxlength']) {
+                        Role name cannot exceed 50 characters
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="form-field">
+                  <label class="field-label" for="description">Description</label>
+                  <textarea
+                    id="description"
+                    class="field-textarea"
+                    formControlName="description"
+                    placeholder="Describe the role's purpose and responsibilities..."
+                    rows="4"
+                  ></textarea>
+                  <div class="field-hint">
+                    Provide a clear description of what this role is for and what permissions it should have.
+                  </div>
+                </div>
+                @if (isEditMode) {
+                  <div class="form-field">
+                    <label class="field-label" for="directoryId">Directory ID</label>
+                    <input
+                      id="directoryId"
+                      type="text"
+                      class="field-input"
+                      formControlName="directoryId"
+                      placeholder="External directory identifier"
+                      />
+                    <div class="field-hint">
+                      External directory identifier for syncing with Active Directory or other systems.
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+          <!-- Role Type Section -->
+          <div class="content-section">
+            <div class="form-section">
+              <div class="section-header">
+                <h3 class="section-title">
+                  <i class="fa-solid fa-cog"></i>
+                  Role Type
+                </h3>
+                <p class="section-description">System or custom role classification</p>
+              </div>
+              <div class="form-grid">
+                @if (isSystemRole) {
+                  <div class="alert alert-warning">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <div>
+                      <strong>System Role</strong>
+                      <p>This is a system-defined role. Some properties may be limited for editing to maintain system integrity.</p>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="alert alert-info">
+                    <i class="fa-solid fa-user-tag"></i>
+                    <div>
+                      <strong>Custom Role</strong>
+                      <p>This is a custom role that can be fully configured and modified.</p>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+          <!-- Permissions Preview Section -->
+          @if (isEditMode) {
+            <div class="content-section">
+              <div class="form-section">
+                <div class="section-header">
+                  <h3 class="section-title">
+                    <i class="fa-solid fa-key"></i>
+                    Permissions
+                  </h3>
+                  <p class="section-description">Manage role permissions and access rights</p>
+                </div>
+                <div class="form-grid">
+                  <div class="alert alert-info">
+                    <i class="fa-solid fa-info-circle"></i>
+                    <div>
+                      <strong>Permission Management</strong>
+                      <p>Role permissions can be managed in the <strong>Permissions</strong> tab of the settings dashboard. Use that interface to configure specific access rights for this role.</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          }
+          <!-- Modal Footer -->
+          <div class="modal-footer">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="roleForm.invalid || isLoading"
+              >
+              @if (isLoading) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Saving...
+              } @else {
+                <i class="fa-solid fa-save"></i>
+                {{ isEditMode ? 'Update Role' : 'Create Role' }}
+              }
+            </button>
+            <button type="button" class="btn btn-secondary" (click)="onCancel()">
+              <i class="fa-solid fa-times"></i>
+              Cancel
+            </button>
           </div>
-        }
-
-        <!-- Modal Footer -->
-        <div class="modal-footer">
-          <button
-            type="submit"
-            class="btn btn-primary"
-            [disabled]="roleForm.invalid || isLoading"
-          >
-            @if (isLoading) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
-              Saving...
-            } @else {
-              <i class="fa-solid fa-save"></i>
-              {{ isEditMode ? 'Update Role' : 'Create Role' }}
-            }
-          </button>
-          <button type="button" class="btn btn-secondary" (click)="onCancel()">
-            <i class="fa-solid fa-times"></i>
-            Cancel
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   </div>
-</div>
+}

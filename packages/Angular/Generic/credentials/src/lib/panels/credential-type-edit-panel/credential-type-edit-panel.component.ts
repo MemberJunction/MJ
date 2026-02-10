@@ -3,10 +3,6 @@ import { CredentialTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-export function LoadCredentialTypeEditPanel() {
-    // Prevents tree-shaking
-}
-
 type CategoryType = 'AI' | 'Authentication' | 'Communication' | 'Database' | 'Integration' | 'Storage';
 
 interface SchemaField {
@@ -20,6 +16,7 @@ interface SchemaField {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-type-edit-panel',
     templateUrl: './credential-type-edit-panel.component.html',
     styleUrls: ['./credential-type-edit-panel.component.css'],

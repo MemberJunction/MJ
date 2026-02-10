@@ -1,18 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { ActionExecutionLogEntity, ActionEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsMonitorResource() {
-  // Force inclusion in production builds
-}
-
 interface ExecutionMetrics {
   totalExecutions: number;
   successfulExecutions: number;
@@ -35,6 +27,7 @@ interface ExecutionTrend {
  */
 @RegisterClass(BaseResourceComponent, 'ActionsMonitorResource')
 @Component({
+  standalone: false,
   selector: 'mj-execution-monitoring',
   templateUrl: './execution-monitoring.component.html',
   styleUrls: ['./execution-monitoring.component.css']
@@ -83,7 +76,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   private destroy$ = new Subject<void>();
 
-  constructor(private navigationService: NavigationService) {
+  constructor(private navigationService: NavigationService, private cdr: ChangeDetectorRef) {
     super();
   }
 
@@ -145,9 +138,9 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     } finally {
       this.isLoading = false;
       this.NotifyLoadComplete();
+      this.cdr.detectChanges();
     }
   }
-
 
   private populateActionsMap(actions: ActionEntity[]): void {
     this.actions.clear();
