@@ -9,6 +9,9 @@
 /* Layer 3: MJ Layout Utilities (grid, flex, gap, alignment) */
 @use "styles/grid";
 
+/* Layer 4: Animation Keyframes & reduced-motion guard */
+@use "styles/animations";
+
 /* Icons */
 @use "primeicons/primeicons.css";
 

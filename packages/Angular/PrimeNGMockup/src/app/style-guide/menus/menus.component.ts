@@ -122,7 +122,7 @@ import { MenuItem, MegaMenuItem } from 'primeng/api';
     }
 
     .token-section {
-        margin-bottom: var(--mj-space-10);
+        margin-bottom: var(--mj-space-12);
     }
 
     .token-section h2 {

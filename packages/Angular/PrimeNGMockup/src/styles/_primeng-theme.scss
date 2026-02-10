@@ -87,10 +87,42 @@
    ---------------------------------------- */
 .p-button {
   border-radius: var(--mj-radius-md);
+  position: relative;
+  overflow: hidden;
   transition: background-color var(--mj-transition-fast),
               color var(--mj-transition-fast),
               border-color var(--mj-transition-fast),
               box-shadow var(--mj-transition-fast);
+
+  /* Sweep overlay: left-to-right on hover */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.12);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--mj-transition-fast);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  &:enabled:hover::before {
+    transform: scaleX(1);
+  }
+
+  &:enabled:active::before {
+    transform: scaleX(1);
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  /* Ensure button content sits above the sweep */
+  .p-button-label,
+  .p-button-icon,
+  .p-badge {
+    position: relative;
+    z-index: 1;
+  }
 
   &.p-button-primary {
     background: var(--mj-brand-primary);
@@ -98,13 +130,14 @@
     color: var(--mj-brand-on-primary);
 
     &:enabled:hover {
-      background: var(--mj-brand-primary-hover);
       border-color: var(--mj-brand-primary-hover);
+      box-shadow: var(--mj-shadow-md);
     }
 
     &:enabled:active {
       background: var(--mj-brand-primary-active);
       border-color: var(--mj-brand-primary-active);
+      box-shadow: none;
     }
   }
 
@@ -113,25 +146,57 @@
     border: 1px solid var(--mj-border-default);
     color: var(--mj-text-primary);
 
-    &:enabled:hover {
+    &::before {
       background: var(--mj-bg-surface-hover);
+    }
+
+    &:enabled:hover {
       border-color: var(--mj-border-strong);
+      box-shadow: var(--mj-shadow-md);
+    }
+
+    &:enabled:active {
+      box-shadow: none;
     }
   }
 
   &.p-button-success {
     background: var(--mj-status-success);
     border-color: var(--mj-status-success);
+
+    &:enabled:hover {
+      box-shadow: var(--mj-shadow-md);
+    }
+
+    &:enabled:active {
+      box-shadow: none;
+    }
   }
 
   &.p-button-warning {
     background: var(--mj-status-warning);
     border-color: var(--mj-status-warning);
+
+    &:enabled:hover {
+      box-shadow: var(--mj-shadow-md);
+    }
+
+    &:enabled:active {
+      box-shadow: none;
+    }
   }
 
   &.p-button-danger {
     background: var(--mj-status-error);
     border-color: var(--mj-status-error);
+
+    &:enabled:hover {
+      box-shadow: var(--mj-shadow-md);
+    }
+
+    &:enabled:active {
+      box-shadow: none;
+    }
   }
 
   &.p-button-outlined {
@@ -139,8 +204,16 @@
     border: 1px solid var(--mj-brand-primary);
     color: var(--mj-brand-primary);
 
+    &::before {
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    }
+
     &:enabled:hover {
-      background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+      box-shadow: var(--mj-shadow-sm);
+    }
+
+    &:enabled:active {
+      box-shadow: none;
     }
   }
 
@@ -149,7 +222,7 @@
     border-color: transparent;
     color: var(--mj-brand-primary);
 
-    &:enabled:hover {
+    &::before {
       background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
     }
   }
@@ -1136,6 +1209,7 @@
 .p-dialog {
   border-radius: var(--mj-radius-xl);
   box-shadow: var(--mj-shadow-xl);
+  animation: mj-fade-in-scale 400ms var(--mj-ease-out);
 
   .p-dialog-header {
     background: var(--mj-bg-surface-elevated);
@@ -1194,6 +1268,7 @@
 
   .p-drawer-content {
     padding: var(--mj-space-4);
+    animation: mj-slide-in-right 400ms var(--mj-ease-out);
   }
 }
 
@@ -1225,6 +1300,8 @@
 @mixin menu-item-styles($prefix) {
   .#{$prefix}-item-content {
     color: var(--mj-text-primary);
+    transition: background-color var(--mj-transition-fast),
+                padding-left var(--mj-transition-fast);
   }
 
   .#{$prefix}-item-link {
@@ -1243,6 +1320,7 @@
   .#{$prefix}-item:not(.p-disabled) > .#{$prefix}-item-content:hover {
     background: var(--mj-bg-surface-hover);
     color: var(--mj-text-primary);
+    padding-left: var(--mj-space-1);
   }
 
   /* Focus */
@@ -1560,6 +1638,7 @@
   .p-toast-message {
     border-radius: var(--mj-radius-lg);
     box-shadow: var(--mj-shadow-lg);
+    animation: mj-fade-in-scale 400ms var(--mj-ease-out);
 
     .p-toast-message-content {
       padding: var(--mj-space-3) var(--mj-space-4);

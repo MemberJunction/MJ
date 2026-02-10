@@ -93,7 +93,7 @@ interface MenuGroup {
     }
 
     .sidebar-header {
-        padding: var(--mj-space-5) var(--mj-space-5) var(--mj-space-4);
+        padding: var(--mj-space-6) var(--mj-space-6) var(--mj-space-5);
         border-bottom: 1px solid var(--mj-border-default);
 
         h3 {
@@ -206,7 +206,7 @@ interface MenuGroup {
     }
 
     .topbar {
-        height: 56px;
+        height: 60px;
         background-color: var(--mj-bg-surface);
         border-bottom: 1px solid var(--mj-border-default);
         display: flex;
@@ -225,7 +225,7 @@ interface MenuGroup {
     .content-container {
         flex: 1;
         overflow: auto;
-        padding: var(--mj-space-6);
+        padding: var(--mj-space-8);
     }
   `]
 })

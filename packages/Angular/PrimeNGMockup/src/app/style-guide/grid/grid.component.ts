@@ -509,7 +509,7 @@ interface AlignOption {
     }
 
     .demo-section {
-        margin-bottom: var(--mj-space-10);
+        margin-bottom: var(--mj-space-12);
     }
 
     .demo-section h2 {
