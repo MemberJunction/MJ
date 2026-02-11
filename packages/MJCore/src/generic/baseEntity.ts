@@ -1491,13 +1491,22 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
-        // IS-A composition: merge parent entity data with own data
-        // Own fields go first, then Parent data overrides in all cases (ancestors always control so grandparent overrides parent and that overrides owned fields)
-        // Parent's GetAll() recursively collects from its own parent for N-level chains
+        // IS-A composition: merge parent entity data with own data.
+        // Parent's GetAll() recursively collects from its own parent for N-level chains.
         if (this._parentEntity) {
             const parentData = this._parentEntity.GetAll(oldValues, onlyDirtyFields);
-            // FAVOR parent data as it overrides child data in context of IsA parent relationships
-            return { ...obj, ...parentData }; 
+            if (oldValues) {
+                // For OLD values: child mirrors win. During IS-A chain save, finalizeSave()
+                // resets parent OldValues before the child's Save() captures them for Record
+                // Changes. The child's mirror fields still hold the intact pre-save OldValues.
+                return { ...parentData, ...obj };
+            }
+            else {
+                // For CURRENT values: parent wins. The parent entity is the authoritative
+                // source for its owned fields — child mirrors may be stale if Set() was called
+                // directly on the parent (e.g. editing a root field on a 3-level chain).
+                return { ...obj, ...parentData };
+            }
         }
 
         return obj;
