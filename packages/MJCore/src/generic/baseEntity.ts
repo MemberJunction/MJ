@@ -614,11 +614,17 @@ export abstract class BaseEntity<T = unknown> {
     private _pendingDelete$: Observable<boolean> | null = null;
 
     /**************************************************************************
-     * IS-A Type Relationship — Parent Entity Composition
+     * IS-A Type Relationship — Bidirectional Entity Composition
      *
-     * For IS-A child entities, _parentEntity holds a persistent live reference
-     * to the parent entity instance. All data routing (Set/Get), dirty tracking,
-     * validation, and save/delete orchestration flow through this composition chain.
+     * IS-A (Table-Per-Type) inheritance links entities in a chain:
+     *   Product (root) ← Meeting (branch) ← Webinar (leaf)
+     *
+     * _parentEntity links upward (child → parent), _childEntity links downward
+     * (parent → child). Both directions share the same object instances, so
+     * dirty state, PK values, and field values are always in sync.
+     *
+     * All data routing (Set/Get), dirty tracking, validation, and save/delete
+     * orchestration flow through this composition chain.
      **************************************************************************/
 
     /**
@@ -630,11 +636,26 @@ export abstract class BaseEntity<T = unknown> {
     private _parentEntity: BaseEntity | null = null;
 
     /**
+     * Persistent reference to the child entity in the IS-A chain.
+     * For example, if MeetingEntity has a Webinar child record with the same PK,
+     * the MeetingEntity instance holds a reference to a WebinarEntity instance here.
+     * Populated after Load/Hydrate when child discovery finds a matching record.
+     * Null when this entity has no child record, is a leaf, or hasn't been loaded yet.
+     */
+    private _childEntity: BaseEntity | null = null;
+
+    /**
      * Cached set of field names that belong to parent entities — used for
      * efficient O(1) lookup during Set/Get routing to determine if a field
      * should be forwarded to _parentEntity.
      */
     private _parentEntityFieldNames: Set<string> | null = null;
+
+    /**
+     * Tracks whether child entity discovery has been performed for the current
+     * loaded record. Reset to false on NewRecord() and init().
+     */
+    private _childEntityDiscoveryDone: boolean = false;
 
     /**
      * Opaque provider-level transaction handle. Used by IS-A save/delete orchestration
@@ -657,9 +678,27 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Returns the parent entity in the IS-A composition chain, or null if this
-     * entity is not an IS-A child type. Read-only public access for inspection.
-     * Named ISAParentEntity to avoid collision with generated Entity.ParentEntity
-     * string column (which contains the parent entity's name from the view).
+     * entity is not an IS-A child type.
+     *
+     * Example: For a MeetingEntity that IS-A ProductEntity, `ISAParent` returns
+     * the ProductEntity instance.
+     *
+     * Named with ISA prefix to avoid collision with generated entity properties
+     * (many entities have a `Parent` string column in the database).
+     */
+    get ISAParent(): BaseEntity | null { return this._parentEntity; }
+
+    /**
+     * Returns the child entity in the IS-A composition chain, or null if this
+     * entity has no child record or hasn't been loaded yet.
+     *
+     * Example: For a MeetingEntity where a Webinar record exists with the same PK,
+     * `ISAChild` returns the WebinarEntity instance.
+     */
+    get ISAChild(): BaseEntity | null { return this._childEntity; }
+
+    /**
+     * @deprecated Use `ISAParent` instead. Kept for backward compatibility.
      */
     get ISAParentEntity(): BaseEntity | null { return this._parentEntity; }
 
@@ -682,12 +721,12 @@ export abstract class BaseEntity<T = unknown> {
     public async InitializeParentEntity(): Promise<void> {
         if (!this.EntityInfo?.IsChildType) return;
 
-        const md = new Metadata();
         const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
         if (!parentEntityInfo) return;
 
-        // Create the parent entity via Metadata to ensure proper class factory resolution
-        this._parentEntity = await md.GetEntityObject(
+        // Create the parent entity via Metadata.Provider for proper class factory
+        // resolution and provider routing
+        this._parentEntity = await Metadata.Provider.GetEntityObject(
             parentEntityInfo.Name,
             this._contextCurrentUser
         );
@@ -695,6 +734,143 @@ export abstract class BaseEntity<T = unknown> {
 
         // Cache the parent field names for O(1) routing lookups
         this._parentEntityFieldNames = this.EntityInfo.ParentEntityFieldNames;
+    }
+
+    /**
+     * Discovers and initializes the IS-A child entity for a loaded record.
+     *
+     * After a record is loaded, this method checks whether a more-derived child entity
+     * record exists with the same primary key. If found, it creates the child entity
+     * instance, shares the current instance chain (so child._parentEntity === this),
+     * and recursively discovers further children down the hierarchy.
+     *
+     * This ensures that Save/Delete operations always delegate to the leaf entity,
+     * running the full validation and event chain at every level.
+     *
+     * Must be called AFTER a record is loaded (PK must be available).
+     * Skipped for entities that are not parent types or have already been discovered.
+     */
+    protected async InitializeChildEntity(): Promise<void> {
+        if (this._childEntityDiscoveryDone) return;
+        this._childEntityDiscoveryDone = true;
+
+        if (!this.EntityInfo?.IsParentType) return;
+
+        const childEntityName = await this.discoverChildEntityName();
+        if (!childEntityName) return;
+
+        await this.createAndLinkChildEntity(childEntityName);
+    }
+
+    /**
+     * Uses the provider's FindISAChildEntity method (single UNION ALL query) to
+     * determine which child entity type, if any, has a record with our PK value.
+     * Returns the child entity name or null if no child exists.
+     */
+    private async discoverChildEntityName(): Promise<string | null> {
+        const provider = this.ProviderToUse;
+        if (!provider?.FindISAChildEntity) return null;
+
+        const result = await provider.FindISAChildEntity(
+            this.EntityInfo,
+            this.PrimaryKey.Values(),
+            this._contextCurrentUser
+        );
+        return result?.ChildEntityName ?? null;
+    }
+
+    /**
+     * Creates the child entity instance, wires up the shared instance chain
+     * (child._parentEntity = this, this._childEntity = child), loads the
+     * child's data, and recursively discovers further children.
+     */
+    private async createAndLinkChildEntity(childEntityName: string): Promise<void> {
+        // Create child via Metadata.Provider for proper class factory resolution
+        const childEntity = await Metadata.Provider.GetEntityObject<BaseEntity>(
+            childEntityName,
+            this._contextCurrentUser
+        );
+
+        // Wire up the shared instance chain: child's parent IS this entity (same object)
+        // We need to replace the child's auto-initialized parent with our existing instance
+        this.replaceChildParentChain(childEntity);
+
+        this._childEntity = childEntity;
+
+        // Load the child's record using our shared PK
+        const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+        if (!loaded) {
+            // Load failed — clean up the link
+            this._childEntity = null;
+            return;
+        }
+
+        // Recursively discover grandchildren (child may also be a parent type)
+        // InitializeChildEntity is idempotent via _childEntityDiscoveryDone flag
+        await childEntity.InitializeChildEntity();
+    }
+
+    /**
+     * Replaces the child entity's auto-initialized parent chain with references
+     * to our existing chain. This ensures all entities in the IS-A hierarchy
+     * share the SAME object instances, keeping dirty state, PK values, and
+     * field values in sync.
+     *
+     * Walks the child's parent chain and our own chain in lockstep, replacing
+     * each child-chain parent with the corresponding entity from our chain.
+     */
+    private replaceChildParentChain(childEntity: BaseEntity): void {
+        // The child was just created via GetEntityObject, which called
+        // InitializeParentEntity() and built a SEPARATE parent chain.
+        // We need to swap in our existing instances.
+        //
+        // childEntity._parentEntity points to a new instance of OUR entity type.
+        // Replace it with `this`, then walk upward replacing each parent.
+
+        let childParent = childEntity._parentEntity;
+        let ourInstance: BaseEntity | null = this;
+
+        while (childParent && ourInstance) {
+            // Replace the child's parent reference with our shared instance
+            if (childParent === childEntity._parentEntity) {
+                childEntity._parentEntity = ourInstance;
+            } else {
+                // For deeper levels, walk the chain we just rewired
+                let walker: BaseEntity | null = childEntity._parentEntity;
+                while (walker && walker._parentEntity !== childParent) {
+                    walker = walker._parentEntity;
+                }
+                if (walker) {
+                    walker._parentEntity = ourInstance;
+                }
+            }
+            childParent = childParent._parentEntity;
+            ourInstance = ourInstance._parentEntity;
+        }
+    }
+
+    /**
+     * Returns the leaf (most-derived) entity in the IS-A chain, walking
+     * downward through child references. Returns `this` if no child exists.
+     */
+    get LeafEntity(): BaseEntity {
+        let current: BaseEntity = this;
+        while (current._childEntity) {
+            current = current._childEntity;
+        }
+        return current;
+    }
+
+    /**
+     * Returns the root (least-derived) entity in the IS-A chain, walking
+     * upward through parent references. Returns `this` if no parent exists.
+     */
+    get RootEntity(): BaseEntity {
+        let current: BaseEntity = this;
+        while (current._parentEntity) {
+            current = current._parentEntity;
+        }
+        return current;
     }
 
     /**
@@ -1100,9 +1276,10 @@ export abstract class BaseEntity<T = unknown> {
             this._parentEntity.Set(FieldName, Value); // recursive for N-level chains
             // Also mirror the value on our own virtual EntityField for UI compatibility
             this.SetLocal(FieldName, Value);
-            return;
         }
-        this.SetLocal(FieldName, Value);
+        else {
+            this.SetLocal(FieldName, Value);
+        }
     }
 
     /**
@@ -1158,15 +1335,18 @@ export abstract class BaseEntity<T = unknown> {
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
             return this._parentEntity.Get(FieldName); // recursive for N-level chains
         }
-
-        const field = this.GetFieldByName(FieldName);
-        if (field != null) {
-            // if the field is a date and the value is a string, convert it to a date
-            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
-                field.Value = new Date(field.Value);
+        else {
+            const field = this.GetFieldByName(FieldName);
+            if (field != null) {
+                // if the field is a date and the value is a string, convert it to a date
+                if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
+                    field.Value = new Date(field.Value);
+                }
+                return field.Value;
             }
-            return field.Value;
         }
+
+        // if we get here, didn't find it
         return null;
     }
 
@@ -1311,12 +1491,22 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
-        // IS-A composition: merge parent entity data with own data
-        // Parent data goes first, own fields override (for shared PK 'ID')
-        // Parent's GetAll() recursively collects from its own parent for N-level chains
+        // IS-A composition: merge parent entity data with own data.
+        // Parent's GetAll() recursively collects from its own parent for N-level chains.
         if (this._parentEntity) {
             const parentData = this._parentEntity.GetAll(oldValues, onlyDirtyFields);
-            return { ...parentData, ...obj };
+            if (oldValues) {
+                // For OLD values: child mirrors win. During IS-A chain save, finalizeSave()
+                // resets parent OldValues before the child's Save() captures them for Record
+                // Changes. The child's mirror fields still hold the intact pre-save OldValues.
+                return { ...parentData, ...obj };
+            }
+            else {
+                // For CURRENT values: parent wins. The parent entity is the authoritative
+                // source for its owned fields — child mirrors may be stale if Set() was called
+                // directly on the parent (e.g. editing a root field on a 3-level chain).
+                return { ...obj, ...parentData };
+            }
         }
 
         return obj;
@@ -1489,6 +1679,10 @@ export abstract class BaseEntity<T = unknown> {
         this.init();
         this._everSaved = false; // Reset save state for new record
 
+        // Clear child entity — new records don't have children yet
+        this._childEntity = null;
+        this._childEntityDiscoveryDone = false;
+
         // Generate UUID for non-auto-increment uniqueidentifier primary keys
         if (this.EntityInfo.PrimaryKeys.length === 1) {
             const pk = this.EntityInfo.PrimaryKeys[0];
@@ -1545,6 +1739,15 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean>
      */
     public async Save(options?: EntitySaveOptions): Promise<boolean> {
+        // IS-A parent chain saves bypass the debounce to prevent deadlock:
+        // Root.Save() → delegates to Leaf.Save() → Leaf saves parent chain →
+        // calls Root.Save(IsParentEntitySave=true). Without this bypass, the second
+        // Root.Save() would wait on the first _pendingSave$ (which is itself waiting
+        // for the leaf chain), creating a circular wait that hangs forever.
+        if (options?.IsParentEntitySave) {
+            return this._InnerSave(options);
+        }
+
         // If a save is already in progress, return its promise.
         if (this._pendingSave$) {
             return firstValueFrom(this._pendingSave$);
@@ -1575,7 +1778,17 @@ export abstract class BaseEntity<T = unknown> {
         newResult.StartedAt = new Date();
 
         try {
+            const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
+
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
+
+            // IS-A leaf delegation: if this entity has a child entity and we are NOT
+            // already being called as part of a parent chain save, delegate to the leaf.
+            // The leaf's Save() will then save the full chain (root → branch → leaf)
+            // using the existing IS-A parent chain orchestration.
+            if (this._childEntity && !_options.IsParentEntitySave) {
+                return this.LeafEntity.Save(_options);
+            }
 
             // IS-A orchestration: determine if this is the initiating save in a parent chain
             const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
@@ -1621,7 +1834,7 @@ export abstract class BaseEntity<T = unknown> {
                 await this.EnforceDisjointSubtype();
             }
 
-            if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
+            if (_options.IgnoreDirtyState || initialDirtyState || _options.ReplayOnly) {
                 // Raise save_started event only when we're actually going to save
                 this.RaiseEvent('save_started', null, saveSubType);
 
@@ -1947,6 +2160,11 @@ export abstract class BaseEntity<T = unknown> {
             // Cache the record name for faster lookups
             this.CacheRecordName();
 
+            // IS-A: discover child entity records after load completes.
+            // This populates _childEntity so Save/Delete can delegate to the leaf.
+            // Only runs for parent-type entities; idempotent via _childEntityDiscoveryDone.
+            await this.InitializeChildEntity();
+
             // Raise load completion event
             this.RaiseEvent('load_complete', { CompositeKey });
 
@@ -2035,6 +2253,9 @@ export abstract class BaseEntity<T = unknown> {
             // Cache the record name for faster lookups if successfully loaded
             if (this._recordLoaded) {
                 this.CacheRecordName();
+
+                // IS-A: discover child entity records after data load completes.
+                await this.InitializeChildEntity();
             }
         }
         else {
@@ -2157,11 +2378,21 @@ export abstract class BaseEntity<T = unknown> {
         newResult.StartedAt = new Date();
 
         try {
+            const _options: EntityDeleteOptions = options ? options : new EntityDeleteOptions();
+
+            // IS-A leaf delegation: if this entity has a child entity and we are NOT
+            // already being called as part of a parent chain delete, delegate to the leaf.
+            // The leaf's Delete() handles the correct order: leaf first → parent chain.
+            // This check runs BEFORE provider validation so delegation works even when
+            // this entity's provider is not directly set (the leaf has its own provider).
+            if (this._childEntity && !_options.IsParentEntityDelete) {
+                return this.LeafEntity.Delete(_options);
+            }
+
             if (!this.ProviderToUse) {
                 throw new Error('No provider set');
             }
             else{
-                const _options: EntityDeleteOptions = options ? options : new EntityDeleteOptions();
 
                 // IS-A orchestration: determine if this is the initiating delete
                 const hasParentChain = this._parentEntity != null;
@@ -2169,8 +2400,10 @@ export abstract class BaseEntity<T = unknown> {
 
                 // IS-A parent delete protection: prevent deleting a parent record
                 // that has child records — FK constraints require child deletion first.
+                // This is a fallback for cases where _childEntity was not populated
+                // (e.g., entity created without Load, or child discovery is not available).
                 // If CascadeDeletes is enabled, auto-delete child records through the chain.
-                if (this.EntityInfo.IsParentType && !_options.IsParentEntityDelete) {
+                if (this.EntityInfo.IsParentType && !_options.IsParentEntityDelete && !this._childEntity) {
                     const childCheck = await this.CheckForChildRecords();
                     if (childCheck.HasChildren) {
                         if (this.EntityInfo.CascadeDeletes) {
@@ -2345,8 +2578,7 @@ export abstract class BaseEntity<T = unknown> {
         childCheck: { HasChildren: boolean; ChildEntityName: string },
         parentOptions: EntityDeleteOptions
     ): Promise<boolean> {
-        const md = new Metadata();
-        const childEntity = await md.GetEntityObject<BaseEntity>(
+        const childEntity = await Metadata.Provider.GetEntityObject<BaseEntity>(
             childCheck.ChildEntityName,
             this._contextCurrentUser
         );

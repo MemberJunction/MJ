@@ -1,4 +1,4 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
@@ -87,7 +87,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
 
@@ -134,10 +134,13 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       console.error('Error loading user data:', error);
       this.error = 'Failed to load user data. Please try again.';
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
-  
+
   private async loadUsers(): Promise<UserEntity[]> {
     const rv = new RunView();
     const result = await rv.RunView<UserEntity>({
@@ -306,9 +309,12 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       } else {
         throw new Error('User not found or permission denied');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting user:', error);
-      this.error = error.message || 'Failed to delete user';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Failed to delete user';
+        this.cdr.markForCheck();
+      });
     }
   }
   
@@ -316,10 +322,16 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     try {
       user.IsActive = !user.IsActive;
       await user.Save();
-      this.calculateStats();
+      this.ngZone.run(() => {
+        this.calculateStats();
+        this.cdr.markForCheck();
+      });
     } catch (error) {
       console.error('Error updating user status:', error);
-      user.IsActive = !user.IsActive; // Revert on error
+      this.ngZone.run(() => {
+        user.IsActive = !user.IsActive; // Revert on error
+        this.cdr.markForCheck();
+      });
     }
   }
   
@@ -522,9 +534,15 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       await this.loadInitialData();
     } catch (error: unknown) {
       console.error('Bulk action failed:', error);
-      this.error = error instanceof Error ? error.message : 'Bulk action failed';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Bulk action failed';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 
@@ -588,9 +606,15 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       await this.loadInitialData();
     } catch (error: unknown) {
       console.error('Bulk role assignment failed:', error);
-      this.error = error instanceof Error ? error.message : 'Bulk role assignment failed';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Bulk role assignment failed';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

@@ -9,7 +9,7 @@
          FIELD PANELS
          ======================================== -->
     <!-- Invocation Configuration Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="invocationConfiguration"
         SectionName="Invocation Configuration"
         Icon="fa fa-cogs"
@@ -37,7 +37,7 @@
     </mj-collapsible-panel>
 
     <!-- Invocation Status Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="invocationStatus"
         SectionName="Invocation Status"
         Icon="fa fa-flag"
@@ -54,8 +54,18 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
         Icon="fa fa-database"

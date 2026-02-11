@@ -9,7 +9,7 @@
          FIELD PANELS
          ======================================== -->
     <!-- Identifier & Relationships Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="identifierRelationships"
         SectionName="Identifier & Relationships"
         Icon="fa fa-link"
@@ -37,7 +37,7 @@
     </mj-collapsible-panel>
 
     <!-- Parameter Definition Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="parameterDefinition"
         SectionName="Parameter Definition"
         Icon="fa fa-key"
@@ -70,8 +70,18 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
         Icon="fa fa-cog"

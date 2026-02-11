@@ -59681,6 +59681,14 @@ export class MJSchemaInfo_ {
     @Field({nullable: true}) 
     Description?: string;
         
+    @Field({nullable: true, description: `Optional prefix to prepend to entity names generated for this schema. For example, setting this to "Committees: " would result in entity names like "Committees: Individuals". Can be overridden by mj.config.cjs NameRulesBySchema settings.`}) 
+    @MaxLength(50)
+    EntityNamePrefix?: string;
+        
+    @Field({nullable: true, description: `Optional suffix to append to entity names generated for this schema. Can be overridden by mj.config.cjs NameRulesBySchema settings.`}) 
+    @MaxLength(50)
+    EntityNameSuffix?: string;
+        
 }
 
 //****************************************************************************
@@ -59705,6 +59713,12 @@ export class CreateMJSchemaInfoInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    EntityNamePrefix: string | null;
+
+    @Field({ nullable: true })
+    EntityNameSuffix: string | null;
 }
     
 
@@ -59730,6 +59744,12 @@ export class UpdateMJSchemaInfoInput {
 
     @Field({ nullable: true })
     Description?: string | null;
+
+    @Field({ nullable: true })
+    EntityNamePrefix?: string | null;
+
+    @Field({ nullable: true })
+    EntityNameSuffix?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

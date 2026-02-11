@@ -6,6 +6,7 @@ import { MjFormToolbarComponent } from './lib/toolbar/form-toolbar.component';
 import { MjFormFieldComponent } from './lib/field/form-field.component';
 import { MjCollapsiblePanelComponent } from './lib/panel/collapsible-panel.component';
 import { MjRecordFormContainerComponent } from './lib/container/record-form-container.component';
+import { MjSectionManagerComponent } from './lib/section-manager/section-manager.component';
 import { SectionLoaderComponent } from './lib/section-loader-component';
 import { ExplorerEntityDataGridComponent } from './lib/explorer-entity-data-grid.component';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
@@ -37,6 +38,7 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
     MjFormFieldComponent,
     MjCollapsiblePanelComponent,
     MjRecordFormContainerComponent,
+    MjSectionManagerComponent,
     SectionLoaderComponent,
     ExplorerEntityDataGridComponent
   ],
@@ -52,6 +54,7 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
     MjFormFieldComponent,
     MjCollapsiblePanelComponent,
     MjRecordFormContainerComponent,
+    MjSectionManagerComponent,
     SectionLoaderComponent,
     ExplorerEntityDataGridComponent
   ]

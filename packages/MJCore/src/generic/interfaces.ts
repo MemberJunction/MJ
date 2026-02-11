@@ -168,6 +168,19 @@ export interface IEntityDataProvider {
     GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
 
     /**
+     * Discovers which IS-A child entity, if any, has a record with the given primary key.
+     * Used by BaseEntity.InitializeChildEntity() after loading a record to find the
+     * most-derived child type. Implementations should execute a single UNION ALL query
+     * across all child entity tables for efficiency.
+     *
+     * @param entityInfo The parent entity's EntityInfo (to find its child entity types)
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user for server-side operations
+     * @returns The child entity name if found, or null if no child record exists
+     */
+    FindISAChildEntity?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string } | null>;
+
+    /**
      * Begin an independent provider-level transaction for IS-A chain orchestration.
      * Returns a provider-specific transaction object (e.g., sql.Transaction for SQLServer).
      * Separate from the provider's internal transaction management (TransactionGroup system).

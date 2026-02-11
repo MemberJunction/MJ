@@ -226,8 +226,10 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error archiving label:', e);
         } finally {
-            this.IsArchiving = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsArchiving = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -259,8 +261,10 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error loading label items:', e);
         } finally {
-            this.IsLoadingItems = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsLoadingItems = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -296,9 +300,12 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
             input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
 
             const results = await this.metadata.GetEntityRecordNames([input]);
-            if (results.length > 0 && results[0].Success && results[0].RecordName) {
-                this.OverviewRecordName = results[0].RecordName;
-                this.cdr.markForCheck();
+            const recordName = results.length > 0 && results[0].Success ? results[0].RecordName : undefined;
+            if (recordName) {
+                this.ngZone.run(() => {
+                    this.OverviewRecordName = recordName;
+                    this.cdr.markForCheck();
+                });
             }
         } catch (e) {
             console.error('Error loading overview record name:', e);
@@ -486,8 +493,10 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error loading diff data:', e);
         } finally {
-            this.IsLoadingDiff = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsLoadingDiff = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -699,8 +708,10 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error loading history data:', e);
         } finally {
-            this.IsLoadingHistory = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsLoadingHistory = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -752,9 +763,11 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error loading record names for group:', group.EntityName, e);
         } finally {
-            group.IsLoadingNames = false;
-            group.NamesLoaded = true;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                group.IsLoadingNames = false;
+                group.NamesLoaded = true;
+                this.cdr.markForCheck();
+            });
         }
     }
 
