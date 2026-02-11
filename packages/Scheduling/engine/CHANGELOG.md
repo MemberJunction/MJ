@@ -1,5 +1,22 @@
 # @memberjunction/scheduling-engine
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [6f4d33f]
+- Updated dependencies [564e1af]
+  - @memberjunction/ai-agents@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/scheduling-engine-base@4.3.0
+  - @memberjunction/global@4.3.0
+  - @memberjunction/scheduling-base-types@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

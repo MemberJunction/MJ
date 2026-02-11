@@ -1,5 +1,17 @@
 # @memberjunction/react-runtime
 
+## 4.3.0
+
+### Patch Changes
+
+- 7b39671: Fix LocalEmbeddings retry logging with cleaner user-friendly output and resolve ESM compatibility issues for React packages after MJ 4.0 upgrade
+- Updated dependencies [564e1af]
+  - @memberjunction/graphql-dataprovider@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/interactive-component-types@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

@@ -1,5 +1,7 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

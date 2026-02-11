@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/core-entities
 
+## 4.3.0
+
+### Minor Changes
+
+- 564e1af: migration
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/interactive-component-types@4.3.0
+  - @memberjunction/ai@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

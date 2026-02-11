@@ -1,5 +1,15 @@
 # @memberjunction/ng-workspace-initializer
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/graphql-dataprovider@4.3.0
+  - @memberjunction/ng-explorer-core@4.3.0
+  - @memberjunction/ng-shared@4.3.0
+  - @memberjunction/ng-shared-generic@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes
