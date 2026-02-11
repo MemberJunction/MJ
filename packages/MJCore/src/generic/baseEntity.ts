@@ -1492,11 +1492,12 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         // IS-A composition: merge parent entity data with own data
-        // Parent data goes first, own fields override (for shared PK 'ID')
+        // Own fields go first, then Parent data overrides in all cases (ancestors always control so grandparent overrides parent and that overrides owned fields)
         // Parent's GetAll() recursively collects from its own parent for N-level chains
         if (this._parentEntity) {
             const parentData = this._parentEntity.GetAll(oldValues, onlyDirtyFields);
-            return { ...parentData, ...obj };
+            // FAVOR parent data as it overrides child data in context of IsA parent relationships
+            return { ...obj, ...parentData }; 
         }
 
         return obj;
