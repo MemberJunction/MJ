@@ -802,6 +802,212 @@ Tracks inter-app dependency relationships.
 
 The `MJ: Installed Apps` entity tracks **installation state**, while actual app content (entities, actions, etc.) lives in their respective MJ core metadata entities, linked implicitly by schema name and metadata ownership.
 
+### Migration SQL
+
+This is the actual migration that would ship with MJ core to create the tracking tables. Follows all MJ migration conventions (no `__mj_` timestamps, no FK indexes — CodeGen handles those).
+
+```sql
+-- Migration: App Registry and Installed App tracking tables
+-- These tables live in the __mj core schema and are part of MemberJunction itself,
+-- not part of any individual app. They track what apps are installed in this instance.
+
+-----------------------------------------------------------------------
+-- 1. App Registries
+-----------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.AppRegistry (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    Name NVARCHAR(200) NOT NULL,
+    URL NVARCHAR(500) NOT NULL,
+    Type NVARCHAR(20) NOT NULL DEFAULT 'Public',
+    APIVersion NVARCHAR(20) NOT NULL DEFAULT 'v1',
+    Description NVARCHAR(MAX) NULL,
+    AuthMethod NVARCHAR(50) NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Active',
+    CONSTRAINT PK_AppRegistry PRIMARY KEY (ID),
+    CONSTRAINT UQ_AppRegistry_Name UNIQUE (Name),
+    CONSTRAINT CK_AppRegistry_Type CHECK (Type IN ('Public', 'Private', 'Local')),
+    CONSTRAINT CK_AppRegistry_Status CHECK (Status IN ('Active', 'Inactive', 'Error'))
+);
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Known app registries (MJ Central, private registries, etc.)',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AppRegistry';
+GO
+
+-- Seed MJ Central as the default public registry
+INSERT INTO ${flyway:defaultSchema}.AppRegistry (ID, Name, URL, Type, APIVersion, Description, Status)
+VALUES (
+    'A0E1F2A3-B4C5-D6E7-F8A9-B0C1D2E3F4A5',
+    'MJ Central',
+    'https://central.memberjunction.org/api/v1',
+    'Public',
+    'v1',
+    'The official MemberJunction app registry and marketplace',
+    'Active'
+);
+GO
+
+-----------------------------------------------------------------------
+-- 2. Installed Apps
+-----------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.InstalledApp (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    Name NVARCHAR(64) NOT NULL,
+    DisplayName NVARCHAR(200) NOT NULL,
+    Description NVARCHAR(MAX) NULL,
+    Version NVARCHAR(50) NOT NULL,
+    Publisher NVARCHAR(200) NOT NULL,
+    PublisherEmail NVARCHAR(255) NULL,
+    PublisherURL NVARCHAR(500) NULL,
+    RepositoryURL NVARCHAR(500) NOT NULL,
+    SchemaName NVARCHAR(128) NULL,
+    MJVersionRange NVARCHAR(100) NOT NULL,
+    License NVARCHAR(50) NULL,
+    Icon NVARCHAR(100) NULL,
+    Color NVARCHAR(20) NULL,
+    ManifestJSON NVARCHAR(MAX) NOT NULL,
+    ConfigurationSchemaJSON NVARCHAR(MAX) NULL,
+    RegistryID UNIQUEIDENTIFIER NULL,
+    InstalledAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+    UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+    InstalledByUserID UNIQUEIDENTIFIER NOT NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Active',
+    CONSTRAINT PK_InstalledApp PRIMARY KEY (ID),
+    CONSTRAINT UQ_InstalledApp_Name UNIQUE (Name),
+    CONSTRAINT UQ_InstalledApp_Schema UNIQUE (SchemaName),
+    CONSTRAINT FK_InstalledApp_Registry FOREIGN KEY (RegistryID)
+        REFERENCES ${flyway:defaultSchema}.AppRegistry(ID),
+    CONSTRAINT FK_InstalledApp_User FOREIGN KEY (InstalledByUserID)
+        REFERENCES ${flyway:defaultSchema}.[User](ID),
+    CONSTRAINT CK_InstalledApp_Status CHECK (Status IN (
+        'Active', 'Disabled', 'Error', 'Installing', 'Upgrading', 'Removing'
+    )),
+    CONSTRAINT CK_InstalledApp_Name CHECK (Name NOT LIKE '%[^a-z0-9-]%')
+);
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Tracks all MJ Open Apps installed in this instance',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'InstalledApp';
+GO
+
+-----------------------------------------------------------------------
+-- 3. Installed App Versions (audit trail)
+-----------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.InstalledAppVersion (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    InstalledAppID UNIQUEIDENTIFIER NOT NULL,
+    Version NVARCHAR(50) NOT NULL,
+    PreviousVersion NVARCHAR(50) NULL,
+    Action NVARCHAR(20) NOT NULL,
+    ManifestJSON NVARCHAR(MAX) NOT NULL,
+    MigrationsSummary NVARCHAR(MAX) NULL,
+    MetadataSummary NVARCHAR(MAX) NULL,
+    PackagesSummary NVARCHAR(MAX) NULL,
+    ExecutedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+    ExecutedByUserID UNIQUEIDENTIFIER NOT NULL,
+    DurationSeconds INT NULL,
+    Success BIT NOT NULL DEFAULT 1,
+    ErrorMessage NVARCHAR(MAX) NULL,
+    ErrorPhase NVARCHAR(50) NULL,
+    CONSTRAINT PK_InstalledAppVersion PRIMARY KEY (ID),
+    CONSTRAINT FK_InstalledAppVersion_App FOREIGN KEY (InstalledAppID)
+        REFERENCES ${flyway:defaultSchema}.InstalledApp(ID),
+    CONSTRAINT FK_InstalledAppVersion_User FOREIGN KEY (ExecutedByUserID)
+        REFERENCES ${flyway:defaultSchema}.[User](ID),
+    CONSTRAINT CK_InstalledAppVersion_Action CHECK (Action IN (
+        'Install', 'Upgrade', 'Rollback', 'Remove'
+    )),
+    CONSTRAINT CK_InstalledAppVersion_Phase CHECK (ErrorPhase IS NULL OR ErrorPhase IN (
+        'Schema', 'Migration', 'Metadata', 'Packages', 'Manifest', 'Hooks', 'CodeGen'
+    ))
+);
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Audit trail of every install, upgrade, rollback, and removal for installed apps',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'InstalledAppVersion';
+GO
+
+-----------------------------------------------------------------------
+-- 4. Installed App Packages
+-----------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.InstalledAppPackage (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    InstalledAppID UNIQUEIDENTIFIER NOT NULL,
+    PackageName NVARCHAR(200) NOT NULL,
+    PackageVersion NVARCHAR(50) NOT NULL,
+    PackageType NVARCHAR(20) NOT NULL,
+    Role NVARCHAR(50) NOT NULL,
+    HasClassManifest BIT NOT NULL DEFAULT 0,
+    RegistryURL NVARCHAR(500) NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Installed',
+    CONSTRAINT PK_InstalledAppPackage PRIMARY KEY (ID),
+    CONSTRAINT FK_InstalledAppPackage_App FOREIGN KEY (InstalledAppID)
+        REFERENCES ${flyway:defaultSchema}.InstalledApp(ID),
+    CONSTRAINT UQ_InstalledAppPackage UNIQUE (InstalledAppID, PackageName),
+    CONSTRAINT CK_InstalledAppPackage_Type CHECK (PackageType IN (
+        'Server', 'Client', 'Shared'
+    )),
+    CONSTRAINT CK_InstalledAppPackage_Status CHECK (Status IN (
+        'Installed', 'Error', 'Pending'
+    ))
+);
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'NPM packages associated with each installed app',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'InstalledAppPackage';
+GO
+
+-----------------------------------------------------------------------
+-- 5. Installed App Dependencies
+-----------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.InstalledAppDependency (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    InstalledAppID UNIQUEIDENTIFIER NOT NULL,
+    DependsOnAppName NVARCHAR(64) NOT NULL,
+    DependsOnAppID UNIQUEIDENTIFIER NULL,
+    VersionRange NVARCHAR(100) NOT NULL,
+    InstalledVersion NVARCHAR(50) NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Satisfied',
+    CONSTRAINT PK_InstalledAppDependency PRIMARY KEY (ID),
+    CONSTRAINT FK_InstalledAppDep_App FOREIGN KEY (InstalledAppID)
+        REFERENCES ${flyway:defaultSchema}.InstalledApp(ID),
+    CONSTRAINT FK_InstalledAppDep_DepApp FOREIGN KEY (DependsOnAppID)
+        REFERENCES ${flyway:defaultSchema}.InstalledApp(ID),
+    CONSTRAINT UQ_InstalledAppDep UNIQUE (InstalledAppID, DependsOnAppName),
+    CONSTRAINT CK_InstalledAppDep_Status CHECK (Status IN (
+        'Satisfied', 'Missing', 'Incompatible'
+    ))
+);
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Inter-app dependency relationships between installed apps',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'InstalledAppDependency';
+GO
+```
+
+**Notes on the migration:**
+- Uses `${flyway:defaultSchema}` throughout — this resolves to `__mj` since these are core MJ tables
+- No `__mj_CreatedAt` / `__mj_UpdatedAt` columns — CodeGen adds those automatically
+- No FK indexes — CodeGen creates `IDX_AUTO_MJ_FKEY_*` indexes automatically
+- The `InstalledApp` and `InstalledAppVersion` timestamps (`InstalledAt`, `UpdatedAt`, `ExecutedAt`) are business fields distinct from the system audit columns CodeGen manages
+- MJ Central is pre-seeded with a hardcoded UUID so it exists out of the box
+- The `SchemaName` UNIQUE constraint on `InstalledApp` prevents two apps from claiming the same database schema
+
 ---
 
 ## Configuration Integration
