@@ -52,6 +52,49 @@ jobs:
             fi
           done
 
+      - name: Check migration timestamps are newer than existing
+        run: |
+          # Get new migration files being added in this PR
+          NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+
+          if [ -z "$NEW_MIGRATIONS" ]; then
+            echo "No new migration files to check"
+            exit 0
+          fi
+
+          # Find the maximum timestamp from all existing migrations on the base branch
+          # This ensures new migrations always come after all prior version migrations
+          MAX_EXISTING_TIMESTAMP=0
+
+          # Get all existing migration files from the base branch
+          for file in $(git ls-tree -r --name-only ${{ github.event.pull_request.base.sha }} -- migrations/ | grep -E '\.sql$'); do
+            filename=$(basename "$file")
+            # Extract timestamp from filename (VYYYYMMDDHHMM format)
+            if [[ "$filename" =~ ^V([0-9]{12})__ ]]; then
+              timestamp="${BASH_REMATCH[1]}"
+              if [ "$timestamp" -gt "$MAX_EXISTING_TIMESTAMP" ]; then
+                MAX_EXISTING_TIMESTAMP=$timestamp
+                MAX_EXISTING_FILE="$filename"
+              fi
+            fi
+          done
+
+          echo "Maximum existing migration timestamp: $MAX_EXISTING_TIMESTAMP (from $MAX_EXISTING_FILE)"
+
+          # Check each new migration has a timestamp greater than the max existing
+          echo "$NEW_MIGRATIONS" | while read file; do
+            filename=$(basename "$file")
+            if [[ "$filename" =~ ^V([0-9]{12})__ ]]; then
+              new_timestamp="${BASH_REMATCH[1]}"
+              if [ "$new_timestamp" -le "$MAX_EXISTING_TIMESTAMP" ]; then
+                echo "::error file=$file::Migration timestamp ($new_timestamp) must be greater than the latest existing migration timestamp ($MAX_EXISTING_TIMESTAMP from $MAX_EXISTING_FILE). This prevents out-of-order execution when upgrading between versions."
+                exit 1
+              else
+                echo "✓ $filename timestamp ($new_timestamp) is valid (> $MAX_EXISTING_TIMESTAMP)"
+              fi
+            fi
+          done
+
       - name: Check migration content
         run: |
           git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
