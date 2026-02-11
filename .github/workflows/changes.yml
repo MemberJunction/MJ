@@ -19,7 +19,21 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Check for migration file changes
+        id: check_migrations
+        run: |
+          MIGRATION_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+          if [ -n "$MIGRATION_FILES" ]; then
+            echo "has_migrations=true" >> $GITHUB_OUTPUT
+            echo "Migration files found:"
+            echo "$MIGRATION_FILES"
+          else
+            echo "has_migrations=false" >> $GITHUB_OUTPUT
+            echo "No migration files in this PR - skipping validation"
+          fi
+
       - name: Set up node
+        if: steps.check_migrations.outputs.has_migrations == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -27,6 +41,7 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Get current version
+        if: steps.check_migrations.outputs.has_migrations == 'true'
         id: get_version
         run: |
           # Use MJServer package since core and global are pinned at 2.100.3
@@ -35,6 +50,7 @@ jobs:
           echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
       - name: Check migration filenames
+        if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
           CURRENT_VERSION="${{ steps.get_version.outputs.CURRENT_VERSION }}"
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
@@ -53,6 +69,7 @@ jobs:
           done
 
       - name: Check migration timestamps are newer than existing
+        if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
           # Get new migration files being added in this PR
           NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
@@ -96,6 +113,7 @@ jobs:
           done
 
       - name: Check migration content
+        if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
           git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             if grep -qP "__mj[^_]" "$file"; then
@@ -109,6 +127,7 @@ jobs:
           done
 
       - name: Check for minor version change
+        if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
           MIGRATION_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
           if [ -n "$MIGRATION_FILES" ]; then
