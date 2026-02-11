@@ -48,29 +48,15 @@ mj-record-form-container {
   padding-right: 24px;
 }
 
-/* Field panels area - vertical flex with gap between sections */
-.mj-forms-field-panels {
+/* All panels in a single flex container — CSS order drives sequencing */
+.mj-forms-all-panels {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* After panels area - typically related entity grids */
-.mj-after-panels {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 24px;
-}
-
-/* Only show margin-top when after-panels has content */
-.mj-after-panels:empty {
-  margin-top: 0;
-}
-
-/* Hide related entity panels in edit mode */
-.mj-forms-panels--edit-mode .mj-before-panels,
-.mj-forms-panels--edit-mode .mj-after-panels {
+/* Hide related entity panels in edit mode (variant host class on mj-collapsible-panel) */
+.mj-forms-panels--edit-mode .mj-panel--related-entity {
   display: none;
 }
 

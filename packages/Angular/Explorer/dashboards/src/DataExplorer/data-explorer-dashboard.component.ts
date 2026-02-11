@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
@@ -7,7 +7,7 @@ import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
-import { BaseEntity } from '@memberjunction/core';
+// CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { ApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
@@ -21,7 +21,9 @@ import {
   ViewGridState,
   GridStateChangedEvent,
   ViewSaveEvent,
-  ViewConfigPanelComponent
+  ViewConfigPanelComponent,
+  buildCompositeKey,
+  buildPkString
 } from '@memberjunction/ng-entity-viewer';
 import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
@@ -122,11 +124,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public filteredRecordCount = 0;
 
   // Selected record for detail panel
-  public selectedRecord: BaseEntity | null = null;
+  public selectedRecord: Record<string, unknown> | null = null;
   // Entity info for the detail panel (may differ from selectedEntity when viewing FK/related records)
   public detailPanelEntity: EntityInfo | null = null;
   // Currently loaded records from mj-entity-viewer (for back/forward navigation lookup)
-  private loadedRecords: BaseEntity[] = [];
+  private loadedRecords: Record<string, unknown>[] = [];
 
   // Currently selected view entity (for view data loading)
   public selectedViewEntity: UserViewEntityExtended | null = null;
@@ -175,7 +177,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Selection tracking for grid - needed to enable Add to List button in header
   public selectedRecordIds: string[] = [];
-  public selectedRecords: BaseEntity[] = [];
+  public selectedRecords: Record<string, unknown>[] = [];
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return "Data Explorer"
@@ -507,7 +509,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     private router: Router,
     private recentAccessService: RecentAccessService,
     private navigationService: NavigationService,
-    private exportService: ExportService
+    private exportService: ExportService,
+    private ngZone: NgZone
   ) {
     super();
     this.state = this.stateService.CurrentState;
@@ -730,8 +733,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
       }
     } finally {
-      this.isLoadingEntities = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.isLoadingEntities = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
@@ -1131,8 +1136,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     } catch (error) {
       console.error('[DataExplorer] Error saving view:', error);
     } finally {
-      this.isSavingView = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.isSavingView = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
@@ -1193,8 +1200,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // Show error notification
       this.showNotification('Failed to save default view settings', 'error', 3500);
     } finally {
-      this.isSavingView = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.isSavingView = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
@@ -1345,18 +1354,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // When selecting from grid, detail panel entity matches the grid entity
     this.detailPanelEntity = this.selectedEntity;
     const recordName = this.getRecordDisplayName(event.record);
-    this.stateService.selectRecord(event.record.PrimaryKey.ToConcatenatedString(), recordName);
+    const pkString = event.compositeKey.ToConcatenatedString();
+    this.stateService.selectRecord(pkString, recordName);
 
     // Add to recent items (local state for navigation panel)
     if (this.selectedEntity) {
       this.stateService.addRecentItem({
         entityName: this.selectedEntity.Name,
-        compositeKeyString: event.record.PrimaryKey.ToConcatenatedString(),
+        compositeKeyString: pkString,
         displayName: recordName
       });
 
       // Update local recent records immediately for instant home screen updates
-      const recordId = event.record.PrimaryKey.KeyValuePairs[0]?.Value?.toString() || '';
+      const recordId = event.compositeKey.KeyValuePairs[0]?.Value?.toString() || '';
       this.stateService.addLocalRecentRecord(
         this.selectedEntity.Name,
         this.selectedEntity.ID,
@@ -1367,7 +1377,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // Log to User Record Logs for persistence (fire-and-forget)
       this.recentAccessService.logAccess(
         this.selectedEntity.Name,
-        event.record.PrimaryKey.Values(),
+        event.compositeKey.Values(),
         'record'
       );
     }
@@ -1393,14 +1403,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.loadedRecords = event.records;
 
     // Handle pending record selection from deep link
-    if (this.pendingRecordSelection) {
+    if (this.pendingRecordSelection && this.selectedEntity) {
       const recordId = this.pendingRecordSelection;
       this.pendingRecordSelection = null; // Clear it so we don't keep trying
 
       // Try to find the record by primary key or concatenated string
+      const entity = this.selectedEntity;
       const record = event.records.find(r => {
-        const pkString = r.PrimaryKey.ToConcatenatedString();
-        const pkValue = r.PrimaryKey.KeyValuePairs[0]?.Value?.toString();
+        const pkString = buildPkString(r, entity);
+        const pkValue = entity.PrimaryKeys[0] ? String(r[entity.PrimaryKeys[0].Name] ?? '') : '';
         return pkString === recordId || pkValue === recordId;
       });
 
@@ -1408,15 +1419,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedRecord = record;
         this.detailPanelEntity = this.selectedEntity;
         const recordName = this.getRecordDisplayName(record);
-        this.stateService.selectRecord(record.PrimaryKey.ToConcatenatedString(), recordName);
+        this.stateService.selectRecord(buildPkString(record, entity), recordName);
       } else {
         console.warn(`[DataExplorer] Deep link record not found: ${recordId}`);
       }
     }
     // Restore selected record if we have a persisted selectedRecordId
-    else if (this.state.selectedRecordId && this.state.detailPanelOpen && !this.selectedRecord) {
+    else if (this.state.selectedRecordId && this.state.detailPanelOpen && !this.selectedRecord && this.selectedEntity) {
+      const entity = this.selectedEntity;
       const record = event.records.find(r =>
-        r.PrimaryKey.ToConcatenatedString() === this.state.selectedRecordId
+        buildPkString(r, entity) === this.state.selectedRecordId
       );
       if (record) {
         this.selectedRecord = record;
@@ -1453,12 +1465,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle opening a record in full view (from detail panel)
    * Uses detailPanelEntity since the panel may be showing a different entity than the grid
    */
-  public onOpenRecord(record: BaseEntity): void {
+  public onOpenRecord(record: Record<string, unknown>): void {
     if (!this.detailPanelEntity) return;
 
     this.OpenEntityRecord.emit({
       EntityName: this.detailPanelEntity.Name,
-      RecordPKey: record.PrimaryKey
+      RecordPKey: buildCompositeKey(record, this.detailPanelEntity)
     });
   }
 
@@ -1618,13 +1630,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const result = await rv.RunView(params);
 
     if (result && result.Success) {
-      // Convert BaseEntity objects to plain objects for export
-      return result.Results.map((row: BaseEntity | Record<string, unknown>) => {
-        if (row instanceof BaseEntity) {
-          return row.GetAll();
-        }
-        return row as Record<string, unknown>;
-      });
+      return result.Results as Record<string, unknown>[];
     } else {
       throw new Error('Unable to get export data: ' + (result?.ErrorMessage || 'Unknown error'));
     }
@@ -1722,7 +1728,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle opening a related record - display in detail panel (not new tab)
    * The record is already loaded, so just update the detail panel
    */
-  public onOpenRelatedRecord(event: { entityName: string; record: BaseEntity }): void {
+  public onOpenRelatedRecord(event: { entityName: string; record: Record<string, unknown> }): void {
     this.showRecordInDetailPanel(event.entityName, event.record);
   }
 
@@ -1739,7 +1745,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Note: This does NOT change selectedEntity (the main grid's entity)
    * It only updates detailPanelEntity which is used by the detail panel
    */
-  private showRecordInDetailPanel(entityName: string, record: BaseEntity): void {
+  private showRecordInDetailPanel(entityName: string, record: Record<string, unknown>): void {
     const entityInfo = this.metadata.Entities.find(e => e.Name === entityName);
     if (!entityInfo) {
       console.warn(`Entity not found: ${entityName}`);
@@ -1752,8 +1758,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.selectedRecord = record;
 
     // Use selectRecord to open the panel with proper state tracking
-    const recordName = this.getRecordDisplayName(record);
-    this.stateService.selectRecord(record.PrimaryKey.ToConcatenatedString(), recordName);
+    const recordName = this.getRecordDisplayName(record, entityInfo);
+    this.stateService.selectRecord(buildPkString(record, entityInfo), recordName);
     this.cdr.detectChanges();
   }
 
@@ -1770,15 +1776,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     try {
       // Load the record
       const rv = new RunView();
-      const result = await rv.RunView<BaseEntity>({
+      const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
         ExtraFilter: `ID='${recordId}'`,
-        ResultType: 'entity_object',
+        ResultType: 'simple',
         MaxRows: 1
       });
 
       if (result.Success && result.Results.length > 0) {
-        this.showRecordInDetailPanel(entityName, result.Results[0]);
+        this.ngZone.run(() => {
+          this.showRecordInDetailPanel(entityName, result.Results[0]);
+        });
       } else {
         console.warn(`Record not found: ${entityName} ID=${recordId}`);
       }
@@ -1914,15 +1922,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Get display name for a record
    */
-  private getRecordDisplayName(record: BaseEntity): string {
-    if (!this.selectedEntity) return 'Unknown';
+  private getRecordDisplayName(record: Record<string, unknown>, entityInfo?: EntityInfo): string {
+    const entity = entityInfo || this.selectedEntity;
+    if (!entity) return 'Unknown';
 
-    if (this.selectedEntity.NameField) {
-      const nameValue = record.Get(this.selectedEntity.NameField.Name);
+    if (entity.NameField) {
+      const nameValue = record[entity.NameField.Name];
       if (nameValue) return String(nameValue);
     }
 
-    return record.PrimaryKey.ToString();
+    return buildPkString(record, entity);
   }
 
   /**
@@ -2035,11 +2044,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           if (entityChanged) {
             // Entity changed - need to wait for data to load
             this.pendingRecordSelection = urlState.record;
-          } else {
+          } else if (this.selectedEntity) {
             // Entity is the same - find record from already-loaded data
+            const entity = this.selectedEntity;
             const record = this.loadedRecords.find(r => {
-              const pkString = r.PrimaryKey.ToConcatenatedString();
-              const pkValue = r.PrimaryKey.KeyValuePairs[0]?.Value?.toString();
+              const pkString = buildPkString(r, entity);
+              const pkValue = entity.PrimaryKeys[0] ? String(r[entity.PrimaryKeys[0].Name] ?? '') : '';
               return pkString === urlState.record || pkValue === urlState.record;
             });
 
@@ -2047,7 +2057,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
               this.selectedRecord = record;
               this.detailPanelEntity = this.selectedEntity;
               const recordName = this.getRecordDisplayName(record);
-              this.stateService.selectRecord(record.PrimaryKey.ToConcatenatedString(), recordName);
+              this.stateService.selectRecord(buildPkString(record, entity), recordName);
             } else {
               // Record not in current page - update state but panel won't show
               this.stateService.selectRecord(urlState.record, this.state.selectedRecordName || undefined);
@@ -2193,7 +2203,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     } else {
       await this.stateService.addEntityToFavorites(entity.Name, entity.ID);
     }
-    this.cdr.detectChanges();
+    this.ngZone.run(() => this.cdr.detectChanges());
   }
 
   /**
@@ -2310,7 +2320,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle selection changes from entity-viewer grid.
    * Tracks selected records to enable the Add to List button in the header toolbar.
    */
-  public onSelectionChanged(event: { records: BaseEntity[]; recordIds: string[] }): void {
+  public onSelectionChanged(event: { records: Record<string, unknown>[]; recordIds: string[] }): void {
     this.selectedRecords = event.records || [];
     this.selectedRecordIds = event.recordIds || [];
     this.cdr.detectChanges();
@@ -2351,7 +2361,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle Add to List request from entity-viewer grid toolbar.
    * Opens the list management dialog for multiple selected records.
    */
-  public onAddToListRequested(event: { entityInfo: EntityInfo; records: BaseEntity[]; recordIds: string[] }): void {
+  public onAddToListRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[]; recordIds: string[] }): void {
     // Validate input
     if (!event.entityInfo) {
       console.error('Add to List: entityInfo is missing from event');
@@ -2368,10 +2378,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const recordDisplayNames = event.records.map(record => {
       try {
         if (event.entityInfo.NameField) {
-          const nameValue = record.Get(event.entityInfo.NameField.Name);
+          const nameValue = record[event.entityInfo.NameField.Name];
           if (nameValue) return String(nameValue);
         }
-        return record.PrimaryKey?.ToString() || 'Unknown';
+        return buildPkString(record, event.entityInfo) || 'Unknown';
       } catch (err) {
         console.error('Add to List: Error getting record display name:', err);
         return 'Unknown';
@@ -2379,13 +2389,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     });
 
     // Get raw primary key values (not concatenated strings) for list membership
+    const pkFieldName = event.entityInfo.PrimaryKeys[0]?.Name;
     const recordIds = event.records.map(record => {
       try {
-        if (!record.PrimaryKey || !record.PrimaryKey.KeyValuePairs || record.PrimaryKey.KeyValuePairs.length === 0) {
+        if (!pkFieldName || record[pkFieldName] === null || record[pkFieldName] === undefined) {
           console.error('Add to List: Record has no primary key:', record);
           return '';
         }
-        return String(record.PrimaryKey.KeyValuePairs[0].Value);
+        return String(record[pkFieldName]);
       } catch (err) {
         console.error('Add to List: Error getting record ID:', err);
         return '';
@@ -2430,7 +2441,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Use the raw primary key value (not concatenated string) for list membership
     // This matches how records are stored in List Details and enables proper subquery filtering
-    const recordId = String(this.selectedRecord.PrimaryKey.KeyValuePairs[0].Value);
+    const pkFieldName = this.selectedEntity.PrimaryKeys[0]?.Name;
+    const recordId = pkFieldName ? String(this.selectedRecord[pkFieldName] ?? '') : '';
     const recordName = this.getRecordDisplayName(this.selectedRecord);
 
     this.listManagementConfig = {

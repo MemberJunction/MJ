@@ -70,8 +70,8 @@ export interface EntityHierarchyNavigationEvent {
   EntityName: string;
   /** The parent record's primary key (shared PK in IS-A) */
   PrimaryKey: CompositeKey;
-  /** 'parent' = navigating up the chain, 'self' = current entity clicked */
-  Direction: 'parent' | 'self';
+  /** 'parent' = navigating up the chain, 'child' = navigating down, 'self' = current entity clicked */
+  Direction: 'parent' | 'child' | 'self';
 }
 
 /**

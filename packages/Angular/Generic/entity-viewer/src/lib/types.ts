@@ -1,5 +1,4 @@
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
-import { BaseEntity } from '@memberjunction/core';
 import {
   ViewColumnPinned as CoreViewColumnPinned,
   ViewGridSortSetting as CoreViewGridSortSetting,
@@ -101,8 +100,8 @@ export interface GridColumnDef {
  * Event emitted when a record is selected (clicked)
  */
 export interface RecordSelectedEvent {
-  /** The selected entity record */
-  record: BaseEntity;
+  /** The selected record (plain object from ResultType: 'simple') */
+  record: Record<string, unknown>;
   /** The entity metadata */
   entity: EntityInfo;
   /** The composite key of the record */
@@ -113,8 +112,8 @@ export interface RecordSelectedEvent {
  * Event emitted when a record should be opened (double-click or open button)
  */
 export interface RecordOpenedEvent {
-  /** The entity record to open (may be undefined for FK navigation where record isn't loaded) */
-  record?: BaseEntity;
+  /** The record to open (may be undefined for FK navigation where record isn't loaded) */
+  record?: Record<string, unknown>;
   /** The entity metadata */
   entity: EntityInfo;
   /** The composite key of the record */
@@ -132,7 +131,7 @@ export interface DataLoadedEvent {
   /** Time taken to load in milliseconds */
   loadTime: number;
   /** The loaded records - allows parent to access records for state restoration */
-  records: BaseEntity[];
+  records: Record<string, unknown>[];
 }
 
 /**

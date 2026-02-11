@@ -46,7 +46,8 @@
   (CollapseAllRequested)="OnCollapseAll()"
   (ShowEmptyFieldsChange)="OnShowEmptyFieldsChange($event)"
   (WidthModeChange)="OnWidthModeChange($event)"
-  (ResetSectionOrderRequested)="OnResetSectionOrder()">
+  (ResetSectionOrderRequested)="OnResetSectionOrder()"
+  (ManageSectionsRequested)="OnManageSections()">
 </mj-form-toolbar>
 
 <!-- ============================================
@@ -56,14 +57,9 @@
   <div class="mj-forms-panels-container"
        [class.mj-forms-panels--full-width]="EffectiveWidthMode === 'full-width'"
        [class.mj-forms-panels--edit-mode]="EffectiveEditMode">
-    <!-- Before-panels slot (related entities displayed before fields) -->
-    <div class="mj-before-panels">
-      <ng-content select="[before-panels]"></ng-content>
-    </div>
-
-    <!-- Field panels slot -->
-    <div class="mj-forms-field-panels">
-      <ng-content select="[field-panels]"></ng-content>
+    <!-- All panels in a single flex container — CSS order drives sequencing -->
+    <div class="mj-forms-all-panels">
+      <ng-content></ng-content>
 
       <!-- Empty state when no sections match search -->
       @if (EffectiveSearchFilter && VisibleSectionCount === 0) {
@@ -79,14 +75,6 @@
         </div>
       }
     </div>
-
-    <!-- After-panels slot (related entities displayed after fields) -->
-    <div class="mj-after-panels">
-      <ng-content select="[after-panels]"></ng-content>
-    </div>
-
-    <!-- Catch-all for any other projected content -->
-    <ng-content></ng-content>
   </div>
 </div>
 
@@ -117,3 +105,15 @@
     (cancel)="OnListManagementClosed()">
   </mj-list-management-dialog>
 }
+
+<!-- ============================================
+     SECTION MANAGER DRAWER (shown when manage-sections button clicked)
+     ============================================ -->
+<mj-section-manager
+  [Sections]="SectionManagerItems"
+  [SectionOrder]="SectionManagerOrder"
+  [Visible]="ShowSectionManager"
+  (SectionOrderChange)="OnSectionOrderChange($event)"
+  (ResetRequested)="OnSectionManagerReset()"
+  (Closed)="OnSectionManagerClosed()">
+</mj-section-manager>

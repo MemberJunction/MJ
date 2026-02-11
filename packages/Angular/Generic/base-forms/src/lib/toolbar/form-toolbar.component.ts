@@ -164,6 +164,7 @@ export class MjFormToolbarComponent implements DoCheck {
   @Output() ShowEmptyFieldsChange = new EventEmitter<boolean>();
   @Output() WidthModeChange = new EventEmitter<FormWidthMode>();
   @Output() ResetSectionOrderRequested = new EventEmitter<void>();
+  @Output() ManageSectionsRequested = new EventEmitter<void>();
 
   // ---- Internal state ----
   ShowDeleteDialog = false;
@@ -242,7 +243,7 @@ export class MjFormToolbarComponent implements DoCheck {
     return this.ParentChain.length > 0;
   }
 
-  /** Child entity types for dropdown */
+  /** Child entity types from metadata (all possible subtypes) */
   get ChildEntities(): EntityInfo[] {
     return this.EntityInfo?.ChildEntities ?? [];
   }
@@ -250,6 +251,33 @@ export class MjFormToolbarComponent implements DoCheck {
   /** Whether this entity has child entity types (IS-A parent) */
   get HasChildEntities(): boolean {
     return this.ChildEntities.length > 0;
+  }
+
+  /**
+   * The actual loaded IS-A child chain for the current record.
+   * Walks Record.ISAChild → ISAChild.ISAChild → ... collecting each child entity.
+   * This differs from ChildEntities (metadata) because it represents the SPECIFIC
+   * child type that exists for THIS record, not all possible subtypes.
+   */
+  get ChildChain(): BaseEntity[] {
+    if (!this.Record) return [];
+    const chain: BaseEntity[] = [];
+    let current = this.Record.ISAChild;
+    while (current) {
+      chain.push(current);
+      current = current.ISAChild;
+    }
+    return chain;
+  }
+
+  /** Whether this record has a loaded IS-A child entity */
+  get HasLoadedChild(): boolean {
+    return this.Record?.ISAChild != null;
+  }
+
+  /** Whether this entity is part of any IS-A hierarchy (parent or child side) */
+  get IsInHierarchy(): boolean {
+    return this.HasParentEntities || this.HasLoadedChild;
   }
 
   /** Display-friendly names of dirty fields for the edit banner */
@@ -433,6 +461,20 @@ export class MjFormToolbarComponent implements DoCheck {
     });
   }
 
+  /**
+   * Navigate to a loaded child entity record in the IS-A hierarchy.
+   * The child shares the same primary key as the parent (IS-A inheritance).
+   */
+  OnChildBadgeClick(childEntity: BaseEntity, event: MouseEvent): void {
+    if (!this.Record) return;
+    this.Navigate.emit({
+      Kind: 'entity-hierarchy',
+      EntityName: childEntity.EntityInfo.Name,
+      PrimaryKey: this.Record.PrimaryKey,
+      Direction: 'child'
+    });
+  }
+
   // ---- Section Controls ----
 
   OnFilterInput(event: Event): void {
@@ -463,5 +505,9 @@ export class MjFormToolbarComponent implements DoCheck {
 
   OnResetSectionOrder(): void {
     this.ResetSectionOrderRequested.emit();
+  }
+
+  OnManageSections(): void {
+    this.ManageSectionsRequested.emit();
   }
 }

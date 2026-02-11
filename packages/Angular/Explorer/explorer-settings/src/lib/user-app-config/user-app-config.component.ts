@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication, UserAppConfig } from '@memberjunction/ng-base-application';
@@ -57,7 +57,8 @@ export class UserAppConfigComponent {
   constructor(
     private appManager: ApplicationManager,
     private sharedService: SharedService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) {}
 
   /**
@@ -112,8 +113,10 @@ export class UserAppConfigComponent {
       this.errorMessage = 'Failed to load app configuration. Please try again.';
       LogError('Error loading app configuration:', undefined, error instanceof Error ? error.message : String(error));
     } finally {
-      this.isLoading = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
@@ -342,8 +345,10 @@ export class UserAppConfigComponent {
       this.errorMessage = 'Failed to save configuration. Please try again.';
       LogError('Error saving app configuration:', undefined, error instanceof Error ? error.message : String(error));
     } finally {
-      this.isSaving = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.isSaving = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 

@@ -120,7 +120,7 @@
                         <mj-loading text="Loading..." size="small"></mj-loading>
                       </div>
                     } @else {
-                      @for (rec of relEntity.records; track rec.PrimaryKey.ToString()) {
+                      @for (rec of relEntity.records; track $index) {
                         <div class="related-record-item" (click)="onRelatedRecordClick(relEntity, rec, $event)">
                           <div class="record-info">
                             <span class="record-name">{{ getRelatedRecordDisplayName(relEntity, rec) }}</span>
