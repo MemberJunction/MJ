@@ -1,17 +1,19 @@
 {
   "name": "@memberjunction/react-runtime",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "Platform-agnostic React component runtime for MemberJunction. Provides core compilation, registry, and execution capabilities for React components in any JavaScript environment.",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "npm run build:node && npm run build:umd",
     "build:node": "tsc",
-    "build:umd": "webpack --config webpack.umd.config.js",
+    "build:umd": "webpack --config webpack.umd.config.cjs",
     "build:clean": "rimraf ./dist && npm run build",
     "watch": "tsc -w",
     "patchVersion": "npm version patch",
-    "test": "jest"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",
@@ -27,18 +29,18 @@
   },
   "homepage": "https://github.com/MemberJunction/MJ#readme",
   "dependencies": {
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/global": "4.1.0",
-    "@memberjunction/interactive-component-types": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/graphql-dataprovider": "4.1.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/global": "4.2.0",
+    "@memberjunction/interactive-component-types": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/graphql-dataprovider": "4.2.0",
     "@babel/standalone": "^7.29.1",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
-    "jest": "^30.2.0",
     "rimraf": "^6.1.2",
+    "vitest": "^4.0.18",
     "typescript": "~5.9.3",
     "webpack": "^5.105.0",
     "webpack-cli": "^6.0.1",

@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-query-grid
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@4.2.0
+- @memberjunction/ng-container-directives@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

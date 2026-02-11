@@ -585,7 +585,7 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
                       : '';
 
                   section.TabCode = `${sectionIndex > 0 ? '\n' : ''}    <!-- ${section.Name} Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="${sectionKey}"
         SectionName="${section.Name}"
         Icon="${icon}"${inheritedAttrs}
@@ -777,9 +777,13 @@ ${indentedFormHTML}
       protected async generateRelatedEntityTabs(entity: EntityInfo, startIndex: number, contextUser: UserInfo): Promise<AngularFormSectionInfo[]> {
         const md = new Metadata();
         const tabs: AngularFormSectionInfo[] = [];
+        // IS-A child entity IDs — these are shown in the toolbar breadcrumb and
+        // can only have 0 or 1 records (disjoint subtypes), so a grid panel is redundant
+        const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
+
         // Sort related entities by Sequence (user's explicit ordering), then by RelatedEntity name (stable tiebreaker)
         const sortedRelatedEntities = entity.RelatedEntities
-            .filter(re => re.DisplayInForm)
+            .filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
             .sort((a, b) => {
                 if (a.Sequence !== b.Sequence) {
                     return a.Sequence - b.Sequence;
@@ -827,11 +831,8 @@ ${indentedFormHTML}
             // For related entities, use the related entity name as searchable term
             const relatedEntitySearchTerms = relatedEntity.RelatedEntity.toLowerCase();
 
-            // Determine slot based on DisplayLocation
-            const slot = relatedEntity.DisplayLocation === 'Before Field Tabs' ? 'before-panels' : 'after-panels';
-
             const tabCode = `${index > 0 ? '\n' : ''}    <!-- ${tabName} Section -->
-    <mj-collapsible-panel ${slot}
+    <mj-collapsible-panel
         SectionKey="${sectionKey}"
         SectionName="${tabName}"
         Icon="${iconClass}"
@@ -1083,33 +1084,30 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
         // Filter out Top sections as they're handled separately
         const sectionsToRender = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top);
 
-        // Order: before-panels, field-panels, after-panels
-        // The RecordFormContainer handles the related-entity-grid wrapper via named slots
+        // All panels are siblings in a single flex container. Template order determines
+        // the default visual order; user-persisted sectionOrder overrides via CSS order.
+        // Natural order: before-panels → field-panels → after-panels
         const beforePanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
         const afterPanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
 
         const parts: string[] = [];
 
-        // Add before panels if any
         if (beforePanels.length > 0) {
-            parts.push('    <!-- ========================================');
-            parts.push('         RELATED ENTITY PANELS - BEFORE');
-            parts.push('         ======================================== -->');
             parts.push(beforePanels.map(s => s.TabCode).join('\n'));
         }
 
-        // Add field panels with header comment
         if (sectionsToRender.length > 0) {
+            if (parts.length > 0) parts.push('');
             parts.push('    <!-- ========================================');
             parts.push('         FIELD PANELS');
             parts.push('         ======================================== -->');
             parts.push(sectionsToRender.map(s => s.TabCode).join('\n'));
         }
 
-        // Add after panels if any
         if (afterPanels.length > 0) {
+            if (parts.length > 0) parts.push('');
             parts.push('    <!-- ========================================');
-            parts.push('         RELATED ENTITY PANELS - AFTER');
+            parts.push('         RELATED ENTITY PANELS');
             parts.push('         ======================================== -->');
             parts.push(afterPanels.map(s => s.TabCode).join('\n'));
         }

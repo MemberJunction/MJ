@@ -1,4 +1,4 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
@@ -81,7 +81,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
 
@@ -125,10 +125,13 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       console.error('Error loading permissions data:', error);
       this.error = 'Failed to load permissions data. Please try again.';
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
-  
+
   private async loadEntities(): Promise<EntityEntity[]> {
     const rv = new RunView();
     const result = await rv.RunView<EntityEntity>({

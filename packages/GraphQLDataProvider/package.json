@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/graphql-dataprovider",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "MemberJunction: GraphQL Client Data Provider",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -21,25 +21,28 @@
   ],
   "scripts": {
     "build": "tsc -noEmit && pkgroll --sourcemap --minify",
-    "build-debug": "tsc -noEmit && pkgroll --sourcemap=inline --no-minify"
+    "build-debug": "tsc -noEmit && pkgroll --sourcemap=inline --no-minify",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "pkgroll": "2.23.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.17.2",
     "@esbuild/win32-x64": "0.24.0"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "4.1.0",
-    "@memberjunction/ai-core-plus": "4.1.0",
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/global": "4.1.0",
-    "@memberjunction/interactive-component-types": "4.1.0",
+    "@memberjunction/actions-base": "4.2.0",
+    "@memberjunction/ai-core-plus": "4.2.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/global": "4.2.0",
+    "@memberjunction/interactive-component-types": "4.2.0",
     "@tempfix/idb": "^8.0.3",
     "graphql": "^16.12.0",
     "graphql-request": "^7.4.0",

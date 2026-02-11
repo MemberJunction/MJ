@@ -5459,6 +5459,59 @@ export class SQLServerDataProvider
     }
   }
 
+  /**
+   * Discovers which IS-A child entity, if any, has a record with the given primary key.
+   * Executes a single UNION ALL query across all child entity tables for maximum efficiency.
+   * Each branch of the UNION is a PK lookup on a clustered index — effectively instant.
+   *
+   * @param entityInfo The parent entity whose children to search
+   * @param recordPKValue The primary key value to find in child tables
+   * @param contextUser Optional context user for audit/permission purposes
+   * @returns The child entity name if found, or null if no child record exists
+   */
+  public async FindISAChildEntity(
+    entityInfo: EntityInfo,
+    recordPKValue: string,
+    contextUser?: UserInfo
+  ): Promise<{ ChildEntityName: string } | null> {
+    const childEntities = entityInfo.ChildEntities;
+    if (childEntities.length === 0) return null;
+
+    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
+    if (!unionSQL) return null;
+
+    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
+    if (results && results.length > 0 && results[0].EntityName) {
+      return { ChildEntityName: results[0].EntityName };
+    }
+    return null;
+  }
+
+  /**
+   * Builds a UNION ALL query that checks each child entity's base table for a record
+   * with the given primary key. Returns the first match (disjoint subtypes guarantee
+   * at most one result).
+   */
+  private buildChildDiscoverySQL(
+    childEntities: EntityInfo[],
+    recordPKValue: string
+  ): string {
+    // Sanitize the PK value to prevent SQL injection
+    const safePKValue = recordPKValue.replace(/'/g, "''");
+
+    const unionParts = childEntities
+      .filter(child => child.PrimaryKeys.length > 0)
+      .map(child => {
+        const schema = child.SchemaName || '__mj';
+        const table = child.BaseTable;
+        const pkName = child.PrimaryKeys[0].Name;
+        return `SELECT '${child.Name.replace(/'/g, "''")}' AS EntityName FROM [${schema}].[${table}] WHERE [${pkName}] = '${safePKValue}'`;
+      });
+
+    if (unionParts.length === 0) return '';
+    return unionParts.join(' UNION ALL ');
+  }
+
   public async BeginTransaction() {
     try {
       this._transactionDepth++;

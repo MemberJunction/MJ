@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { UserApplicationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
@@ -50,7 +50,8 @@ export class ApplicationSettingsComponent implements OnInit {
   constructor(
     private appManager: ApplicationManager,
     private sharedService: SharedService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -91,8 +92,10 @@ export class ApplicationSettingsComponent implements OnInit {
       this.ErrorMessage = 'Failed to load app configuration. Please try again.';
       LogError('Error loading app configuration:', undefined, error instanceof Error ? error.message : String(error));
     } finally {
-      this.IsLoading = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.IsLoading = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
@@ -317,8 +320,10 @@ export class ApplicationSettingsComponent implements OnInit {
       this.ErrorMessage = 'Failed to save configuration. Please try again.';
       LogError('Error saving app configuration:', undefined, error instanceof Error ? error.message : String(error));
     } finally {
-      this.IsSaving = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.IsSaving = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 

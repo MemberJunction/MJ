@@ -12,7 +12,7 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No tests configured yet\""
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -21,8 +21,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/global": "4.1.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/global": "4.2.0",
     "zod": "~3.24.4"
   },
   "repository": {

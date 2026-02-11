@@ -9,7 +9,7 @@
          FIELD PANELS
          ======================================== -->
     <!-- Conversation Core Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="conversationCore"
         SectionName="Conversation Core"
         Icon="fa fa-comment"
@@ -67,7 +67,7 @@
     </mj-collapsible-panel>
 
     <!-- Participants & References Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="participantsReferences"
         SectionName="Participants & References"
         Icon="fa fa-users"
@@ -111,7 +111,7 @@
     </mj-collapsible-panel>
 
     <!-- Contextual Scope Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="contextualScope"
         SectionName="Contextual Scope"
         Icon="fa fa-sitemap"
@@ -148,7 +148,7 @@
     </mj-collapsible-panel>
 
     <!-- Test Run Details Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="testRunDetails"
         SectionName="Test Run Details"
         Icon="fa fa-flask"
@@ -166,8 +166,18 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
         Icon="fa fa-cog"
@@ -191,12 +201,13 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
+
     <!-- ========================================
-         RELATED ENTITY PANELS - AFTER
+         RELATED ENTITY PANELS
          ======================================== -->
 
     <!-- Conversation Details Section -->
-    <mj-collapsible-panel after-panels
+    <mj-collapsible-panel
         SectionKey="conversationDetails"
         SectionName="Conversation Details"
         Icon="fa fa-comments"
@@ -221,7 +232,7 @@
     </mj-collapsible-panel>
 
     <!-- Reports Section -->
-    <mj-collapsible-panel after-panels
+    <mj-collapsible-panel
         SectionKey="reports"
         SectionName="Reports"
         Icon="fa-solid fa-chart-line"
@@ -246,7 +257,7 @@
     </mj-collapsible-panel>
 
     <!-- MJ: Conversation Artifacts Section -->
-    <mj-collapsible-panel after-panels
+    <mj-collapsible-panel
         SectionKey="mJConversationArtifacts"
         SectionName="MJ: Conversation Artifacts"
         Icon="fa fa-file-alt"
@@ -271,7 +282,7 @@
     </mj-collapsible-panel>
 
     <!-- AI Agent Notes Section -->
-    <mj-collapsible-panel after-panels
+    <mj-collapsible-panel
         SectionKey="aIAgentNotes"
         SectionName="AI Agent Notes"
         Icon="fa fa-robot"
@@ -296,7 +307,7 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Runs Section -->
-    <mj-collapsible-panel after-panels
+    <mj-collapsible-panel
         SectionKey="mJAIAgentRuns"
         SectionName="MJ: AI Agent Runs"
         Icon="fa fa-robot"
@@ -321,7 +332,7 @@
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Examples Section -->
-    <mj-collapsible-panel after-panels
+    <mj-collapsible-panel
         SectionKey="mJAIAgentExamples"
         SectionName="MJ: AI Agent Examples"
         Icon="fa fa-robot"

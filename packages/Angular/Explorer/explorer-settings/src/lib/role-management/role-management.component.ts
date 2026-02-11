@@ -1,4 +1,4 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
@@ -65,7 +65,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
 
@@ -102,10 +102,13 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       console.error('Error loading role data:', error);
       this.error = 'Failed to load role data. Please try again.';
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
-  
+
   private async loadRoles(): Promise<RoleEntity[]> {
     const rv = new RunView();
     const result = await rv.RunView<RoleEntity>({
@@ -235,9 +238,12 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       } else {
         throw new Error('Role not found or permission denied');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting role:', error);
-      this.error = error.message || 'Failed to delete role';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Failed to delete role';
+        this.cdr.markForCheck();
+      });
     }
   }
   

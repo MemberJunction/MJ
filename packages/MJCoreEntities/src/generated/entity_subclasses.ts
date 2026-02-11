@@ -5077,7 +5077,7 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunID: z.string().describe(`
         * * Field Name: DuplicateRunID
-        * * Display Name: Duplicate Run ID
+        * * Display Name: Duplicate Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)`),
     RecordID: z.string().describe(`
@@ -5352,7 +5352,7 @@ export const EmployeeSkillSchema = z.object({
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)`),
     SkillID: z.string().describe(`
         * * Field Name: SkillID
-        * * Display Name: Skill ID
+        * * Display Name: Skill
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Skills (vwSkills.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -5371,7 +5371,7 @@ export const EmployeeSkillSchema = z.object({
         * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
-        * * Display Name: Skill
+        * * Display Name: Skill Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -5839,12 +5839,12 @@ export const EntityActionFilterSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     ActionFilterID: z.string().describe(`
         * * Field Name: ActionFilterID
-        * * Display Name: Action Filter
+        * * Display Name: Action Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)`),
     Sequence: z.number().describe(`
@@ -5935,12 +5935,12 @@ export const EntityActionInvocationSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     InvocationTypeID: z.string().describe(`
         * * Field Name: InvocationTypeID
-        * * Display Name: Invocation Type
+        * * Display Name: Invocation Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)`),
     Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
@@ -5966,11 +5966,11 @@ export const EntityActionInvocationSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Action Name
+        * * Display Name: Entity Action
         * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
-        * * Display Name: Invocation Type Name
+        * * Display Name: Invocation Type
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -6032,7 +6032,7 @@ export const EntityActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Action Parameter
+        * * Display Name: Parameter Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -6234,7 +6234,7 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityCommunicationMessageType: z.string().describe(`
         * * Field Name: EntityCommunicationMessageType
-        * * Display Name: Message Type
+        * * Display Name: Entity Communication Message Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -7459,12 +7459,12 @@ export const ErrorLogSchema = z.object({
         * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Code
+        * * Display Name: Error Code
         * * SQL Data Type: nchar(20)
         * * Description: Error code for categorizing and handling specific error types.`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Error Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The primary error message describing what went wrong.`),
     CreatedBy: z.string().nullable().describe(`
@@ -7475,16 +7475,16 @@ export const ErrorLogSchema = z.object({
         * * Description: User or system process that encountered this error.`),
     Status: z.string().nullable().describe(`
         * * Field Name: Status
-        * * Display Name: Status
+        * * Display Name: Error Status
         * * SQL Data Type: nvarchar(10)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Error Category
         * * SQL Data Type: nvarchar(20)
         * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).`),
     Details: z.string().nullable().describe(`
         * * Field Name: Details
-        * * Display Name: Details
+        * * Display Name: Error Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full error details including stack trace, inner exceptions, and context data.`),
     __mj_CreatedAt: z.date().describe(`
@@ -7499,11 +7499,11 @@ export const ErrorLogSchema = z.object({
         * * Default Value: getutcdate()`),
     CompanyIntegrationRun: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRun
-        * * Display Name: Integration Run
+        * * Display Name: Company Integration Run
         * * SQL Data Type: nvarchar(100)`),
     CompanyIntegrationRunDetail: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunDetail
-        * * Display Name: Integration Run Detail
+        * * Display Name: Company Integration Run Detail
         * * SQL Data Type: nvarchar(450)`),
 });
 
@@ -7980,6 +7980,7 @@ export const IntegrationURLFormatSchema = z.object({
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     URLFormat: z.string().describe(`
         * * Field Name: URLFormat
+        * * Display Name: URL Format
         * * SQL Data Type: nvarchar(500)
         * * Description: The URL Format for the given integration including the ability to include markup with fields from the integration`),
     Comments: z.string().nullable().describe(`
@@ -9488,7 +9489,7 @@ permanently, Warn means validation failed but execution continues.`),
 detailed information about what validation rules failed.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`),
@@ -13589,7 +13590,7 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Default Value: getutcdate()`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Message Text
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
@@ -13745,7 +13746,7 @@ export const ConversationDetailRatingSchema = z.object({
         * * Default Value: getutcdate()`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Message Text
         * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -14935,11 +14936,11 @@ export const MCPServerConnectionToolSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: Connection
+        * * Display Name: Server Connection
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: Tool
+        * * Display Name: Server Tool
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -15307,12 +15308,12 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: MCP Server Connection ID
+        * * Display Name: MCP Server Connection
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     MCPServerToolID: z.string().nullable().describe(`
         * * Field Name: MCPServerToolID
-        * * Display Name: MCP Server Tool ID
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
         * * Description: FK to MCP Server Tool (null if tool not cached)`),
@@ -18744,12 +18745,12 @@ export const RecommendationItemSchema = z.object({
         * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)`),
     DestinationEntityID: z.string().describe(`
         * * Field Name: DestinationEntityID
-        * * Display Name: Destination Entity ID
+        * * Display Name: Destination Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     DestinationEntityRecordID: z.string().describe(`
         * * Field Name: DestinationEntityRecordID
-        * * Display Name: Destination Entity Record ID
+        * * Display Name: Destination Record ID
         * * SQL Data Type: nvarchar(450)
         * * Description: The record ID of the destination entity`),
     MatchProbability: z.number().nullable().describe(`
@@ -18888,7 +18889,7 @@ export const RecommendationSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecommendationRunID: z.string().describe(`
         * * Field Name: RecommendationRunID
-        * * Display Name: Recommendation Run
+        * * Display Name: Recommendation Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)`),
     SourceEntityID: z.string().describe(`
@@ -19116,12 +19117,12 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecordMergeLogID: z.string().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log
+        * * Display Name: Record Merge Log ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)`),
     DeletedRecordID: z.string().describe(`
         * * Field Name: DeletedRecordID
-        * * Display Name: Deleted Record
+        * * Display Name: Deleted Record ID
         * * SQL Data Type: nvarchar(750)
         * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -19151,7 +19152,7 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     RecordMergeLog: z.string().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Merge Log
+        * * Display Name: Record Merge Log
         * * SQL Data Type: nvarchar(450)`),
 });
 
@@ -19745,6 +19746,7 @@ export const RoleSchema = z.object({
         * * Description: The unique ID of the role in the directory being used for authentication, for example an ID in Azure.`),
     SQLName: z.string().nullable().describe(`
         * * Field Name: SQLName
+        * * Display Name: SQL Name
         * * SQL Data Type: nvarchar(250)
         * * Description: The name of the role in the database, this is used for auto-generating permission statements by CodeGen`),
     __mj_CreatedAt: z.date().describe(`
@@ -19980,12 +19982,12 @@ export const SchemaInfoSchema = z.object({
         * * Description: The database schema this information applies to.`),
     EntityIDMin: z.number().describe(`
         * * Field Name: EntityIDMin
-        * * Display Name: Entity IDMin
+        * * Display Name: Entity ID Minimum
         * * SQL Data Type: int
         * * Description: Field EntityIDMin for entity Schema Info.`),
     EntityIDMax: z.number().describe(`
         * * Field Name: EntityIDMax
-        * * Display Name: Entity IDMax
+        * * Display Name: Entity ID Maximum
         * * SQL Data Type: int
         * * Description: Field EntityIDMax for entity Schema Info.`),
     Comments: z.string().nullable().describe(`
@@ -20006,6 +20008,16 @@ export const SchemaInfoSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
+    EntityNamePrefix: z.string().nullable().describe(`
+        * * Field Name: EntityNamePrefix
+        * * Display Name: Entity Name Prefix
+        * * SQL Data Type: nvarchar(25)
+        * * Description: Optional prefix to prepend to entity names generated for this schema. For example, setting this to "Committees: " would result in entity names like "Committees: Individuals". Can be overridden by mj.config.cjs NameRulesBySchema settings.`),
+    EntityNameSuffix: z.string().nullable().describe(`
+        * * Field Name: EntityNameSuffix
+        * * Display Name: Entity Name Suffix
+        * * SQL Data Type: nvarchar(25)
+        * * Description: Optional suffix to append to entity names generated for this schema. Can be overridden by mj.config.cjs NameRulesBySchema settings.`),
 });
 
 export type SchemaInfoEntityType = z.infer<typeof SchemaInfoSchema>;
@@ -20348,7 +20360,7 @@ export const TemplateParamSchema = z.object({
         * * Description: Default value of the parameter`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Is Required
+        * * Display Name: Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this parameter must be provided when using the template.`),
@@ -22980,6 +22992,41 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     }
 
     /**
+    * Actions - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof ActionEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -24953,6 +25000,41 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
 
     /**
+    * AI Agents - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof AIAgentEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
     * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
@@ -26861,6 +26943,41 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * AI Prompts - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof AIPromptEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -34894,7 +35011,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
 
     /**
     * * Field Name: DuplicateRunID
-    * * Display Name: Duplicate Run ID
+    * * Display Name: Duplicate Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)
     */
@@ -35574,7 +35691,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: SkillID
-    * * Display Name: Skill ID
+    * * Display Name: Skill
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Skills (vwSkills.ID)
     */
@@ -35616,7 +35733,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: Skill
-    * * Display Name: Skill
+    * * Display Name: Skill Name
     * * SQL Data Type: nvarchar(50)
     */
     get Skill(): string {
@@ -36782,7 +36899,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -36795,7 +36912,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: ActionFilterID
-    * * Display Name: Action Filter
+    * * Display Name: Action Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
     */
@@ -37028,7 +37145,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -37041,7 +37158,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: InvocationTypeID
-    * * Display Name: Invocation Type
+    * * Display Name: Invocation Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
     */
@@ -37093,7 +37210,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Action Name
+    * * Display Name: Entity Action
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -37102,7 +37219,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: InvocationType
-    * * Display Name: Invocation Type Name
+    * * Display Name: Invocation Type
     * * SQL Data Type: nvarchar(255)
     */
     get InvocationType(): string {
@@ -37256,7 +37373,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: ActionParam
-    * * Display Name: Action Parameter
+    * * Display Name: Parameter Name
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -37764,7 +37881,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: EntityCommunicationMessageType
-    * * Display Name: Message Type
+    * * Display Name: Entity Communication Message Type
     * * SQL Data Type: nvarchar(100)
     */
     get EntityCommunicationMessageType(): string {
@@ -40789,7 +40906,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Code
-    * * Display Name: Code
+    * * Display Name: Error Code
     * * SQL Data Type: nchar(20)
     * * Description: Error code for categorizing and handling specific error types.
     */
@@ -40802,7 +40919,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Error Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The primary error message describing what went wrong.
     */
@@ -40829,7 +40946,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Status
-    * * Display Name: Status
+    * * Display Name: Error Status
     * * SQL Data Type: nvarchar(10)
     */
     get Status(): string | null {
@@ -40841,7 +40958,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Error Category
     * * SQL Data Type: nvarchar(20)
     * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).
     */
@@ -40854,7 +40971,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Details
-    * * Display Name: Details
+    * * Display Name: Error Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full error details including stack trace, inner exceptions, and context data.
     */
@@ -40887,7 +41004,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRun
-    * * Display Name: Integration Run
+    * * Display Name: Company Integration Run
     * * SQL Data Type: nvarchar(100)
     */
     get CompanyIntegrationRun(): string | null {
@@ -40896,7 +41013,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunDetail
-    * * Display Name: Integration Run Detail
+    * * Display Name: Company Integration Run Detail
     * * SQL Data Type: nvarchar(450)
     */
     get CompanyIntegrationRunDetail(): string | null {
@@ -42163,6 +42280,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
 
     /**
     * * Field Name: URLFormat
+    * * Display Name: URL Format
     * * SQL Data Type: nvarchar(500)
     * * Description: The URL Format for the given integration including the ability to include markup with fields from the integration
     */
@@ -45737,6 +45855,41 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     }
 
     /**
+    * MJ: AI Agent Run Steps - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof AIAgentRunStepEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * FinalPayloadValidationResult: The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
@@ -46077,7 +46230,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
     * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles
@@ -46159,6 +46312,41 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: AI Agent Runs - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof AIAgentRunEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -47167,6 +47355,41 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     }
 
     /**
+    * MJ: AI Agent Steps - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof AIAgentStepEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
     * Validate() method override for MJ: AI Agent Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * RetryCount: This rule ensures that the number of retries allowed cannot be negative.
     * * TimeoutSeconds: This rule ensures that, if provided, the timeout value must be greater than zero seconds.
@@ -48118,6 +48341,41 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: AI Configurations - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof AIConfigurationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -50844,6 +51102,41 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: AI Prompt Runs - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof AIPromptRunEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -57009,7 +57302,7 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Message Text
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -57470,7 +57763,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Message Text
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -60517,7 +60810,7 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: Connection
+    * * Display Name: Server Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -60526,7 +60819,7 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: Tool
+    * * Display Name: Server Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -61488,7 +61781,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: MCP Server Connection ID
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -61501,7 +61794,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerToolID
-    * * Display Name: MCP Server Tool ID
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
     * * Description: FK to MCP Server Tool (null if tool not cached)
@@ -70537,7 +70830,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: DestinationEntityID
-    * * Display Name: Destination Entity ID
+    * * Display Name: Destination Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -70550,7 +70843,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: DestinationEntityRecordID
-    * * Display Name: Destination Entity Record ID
+    * * Display Name: Destination Record ID
     * * SQL Data Type: nvarchar(450)
     * * Description: The record ID of the destination entity
     */
@@ -70915,7 +71208,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: RecommendationRunID
-    * * Display Name: Recommendation Run
+    * * Display Name: Recommendation Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)
     */
@@ -71472,7 +71765,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log
+    * * Display Name: Record Merge Log ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -71485,7 +71778,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: DeletedRecordID
-    * * Display Name: Deleted Record
+    * * Display Name: Deleted Record ID
     * * SQL Data Type: nvarchar(750)
     * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.
     */
@@ -71549,7 +71842,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Merge Log
+    * * Display Name: Record Merge Log
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string {
@@ -73129,6 +73422,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
 
     /**
     * * Field Name: SQLName
+    * * Display Name: SQL Name
     * * SQL Data Type: nvarchar(250)
     * * Description: The name of the role in the database, this is used for auto-generating permission statements by CodeGen
     */
@@ -73780,7 +74074,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
 
     /**
     * * Field Name: EntityIDMin
-    * * Display Name: Entity IDMin
+    * * Display Name: Entity ID Minimum
     * * SQL Data Type: int
     * * Description: Field EntityIDMin for entity Schema Info.
     */
@@ -73793,7 +74087,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
 
     /**
     * * Field Name: EntityIDMax
-    * * Display Name: Entity IDMax
+    * * Display Name: Entity ID Maximum
     * * SQL Data Type: int
     * * Description: Field EntityIDMax for entity Schema Info.
     */
@@ -73846,6 +74140,32 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     }
     set Description(value: string | null) {
         this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: EntityNamePrefix
+    * * Display Name: Entity Name Prefix
+    * * SQL Data Type: nvarchar(25)
+    * * Description: Optional prefix to prepend to entity names generated for this schema. For example, setting this to "Committees: " would result in entity names like "Committees: Individuals". Can be overridden by mj.config.cjs NameRulesBySchema settings.
+    */
+    get EntityNamePrefix(): string | null {
+        return this.Get('EntityNamePrefix');
+    }
+    set EntityNamePrefix(value: string | null) {
+        this.Set('EntityNamePrefix', value);
+    }
+
+    /**
+    * * Field Name: EntityNameSuffix
+    * * Display Name: Entity Name Suffix
+    * * SQL Data Type: nvarchar(25)
+    * * Description: Optional suffix to append to entity names generated for this schema. Can be overridden by mj.config.cjs NameRulesBySchema settings.
+    */
+    get EntityNameSuffix(): string | null {
+        return this.Get('EntityNameSuffix');
+    }
+    set EntityNameSuffix(value: string | null) {
+        this.Set('EntityNameSuffix', value);
     }
 }
 
@@ -74737,7 +75057,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Is Required
+    * * Display Name: Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this parameter must be provided when using the template.

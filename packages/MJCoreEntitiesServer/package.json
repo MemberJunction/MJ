@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/core-entities-server",
   "type": "module",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "Entity subclasses for the metadata layer of MemberJunction that are only used on server side applications like MJAPI, distributed as part of each release of MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +11,8 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -20,20 +21,20 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "4.1.0",
-    "@memberjunction/ai": "4.1.0",
-    "@memberjunction/ai-core-plus": "4.1.0",
-    "@memberjunction/ai-engine-base": "4.1.0",
-    "@memberjunction/ai-prompts": "4.1.0",
-    "@memberjunction/ai-provider-bundle": "4.1.0",
-    "@memberjunction/ai-vector-dupe": "4.1.0",
-    "@memberjunction/aiengine": "4.1.0",
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/doc-utils": "4.1.0",
-    "@memberjunction/global": "4.1.0",
-    "@memberjunction/skip-types": "4.1.0",
-    "@memberjunction/sqlserver-dataprovider": "4.1.0",
+    "@memberjunction/actions-base": "4.2.0",
+    "@memberjunction/ai": "4.2.0",
+    "@memberjunction/ai-core-plus": "4.2.0",
+    "@memberjunction/ai-engine-base": "4.2.0",
+    "@memberjunction/ai-prompts": "4.2.0",
+    "@memberjunction/ai-provider-bundle": "4.2.0",
+    "@memberjunction/ai-vector-dupe": "4.2.0",
+    "@memberjunction/aiengine": "4.2.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/doc-utils": "4.2.0",
+    "@memberjunction/global": "4.2.0",
+    "@memberjunction/skip-types": "4.2.0",
+    "@memberjunction/sqlserver-dataprovider": "4.2.0",
     "node-sql-parser": "^5.4.0",
     "nunjucks": "^3.2.4",
     "zod": "~3.24.4"

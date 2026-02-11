@@ -1,5 +1,20 @@
 # @memberjunction/ng-artifacts
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@4.2.0
+- @memberjunction/ng-code-editor@4.2.0
+- @memberjunction/ng-markdown@4.2.0
+- @memberjunction/ng-notifications@4.2.0
+- @memberjunction/ng-react@4.2.0
+- @memberjunction/ng-shared-generic@4.2.0
+- @memberjunction/interactive-component-types@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

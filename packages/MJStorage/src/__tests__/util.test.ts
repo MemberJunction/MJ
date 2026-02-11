@@ -4,6 +4,7 @@
  * which is the core enterprise model for initializing storage drivers.
  */
 
+import { vi } from 'vitest';
 import {
   FileStorageBase,
   StorageProviderConfig,
@@ -19,32 +20,32 @@ import { MJGlobal, ClassFactory } from '@memberjunction/global';
 import { RegisterClass } from '@memberjunction/global';
 
 // Mock the external dependencies
-jest.mock('@memberjunction/global', () => {
-  const actualGlobal = jest.requireActual('@memberjunction/global');
+vi.mock('@memberjunction/global', async () => {
+  const actualGlobal = await vi.importActual('@memberjunction/global');
   return {
     ...actualGlobal,
     MJGlobal: {
       Instance: {
         ClassFactory: {
-          CreateInstance: jest.fn(),
+          CreateInstance: vi.fn(),
         },
       },
     },
   };
 });
 
-jest.mock('@memberjunction/credentials', () => ({
+vi.mock('@memberjunction/credentials', () => ({
   CredentialEngine: {
     Instance: {
-      Config: jest.fn().mockResolvedValue(undefined),
-      getCredentialById: jest.fn(),
-      getCredential: jest.fn(),
+      Config: vi.fn().mockResolvedValue(undefined),
+      getCredentialById: vi.fn(),
+      getCredential: vi.fn(),
     },
   },
 }));
 
-jest.mock('@memberjunction/core', () => ({
-  LogStatus: jest.fn(),
+vi.mock('@memberjunction/core', () => ({
+  LogStatus: vi.fn(),
   UserInfo: class MockUserInfo {
     ID = 'test-user-id';
     Name = 'Test User';
@@ -150,13 +151,13 @@ describe('initializeDriverWithAccountCredentials', () => {
 
   beforeEach(() => {
     // Reset all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Create fresh mock instances
     mockDriver = new MockFileStorageDriver();
 
     // Setup the ClassFactory to return our mock driver
-    (MJGlobal.Instance.ClassFactory.CreateInstance as jest.Mock).mockReturnValue(mockDriver);
+    (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockDriver);
 
     mockAccountEntity = {
       ID: 'account-123',
@@ -191,7 +192,7 @@ describe('initializeDriverWithAccountCredentials', () => {
     });
 
     it('should throw an error if driver creation fails', async () => {
-      (MJGlobal.Instance.ClassFactory.CreateInstance as jest.Mock).mockReturnValue(null);
+      (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
 
       const { initializeDriverWithAccountCredentials } = await import('../util');
 
@@ -240,12 +241,12 @@ describe('initializeDriverWithAccountCredentials', () => {
       mockAccountEntity.CredentialID = 'credential-456';
 
       // Setup credential engine mocks
-      (CredentialEngine.Instance.getCredentialById as jest.Mock).mockReturnValue({
+      (CredentialEngine.Instance.getCredentialById as ReturnType<typeof vi.fn>).mockReturnValue({
         ID: 'credential-456',
         Name: 'Test Credential',
       });
 
-      (CredentialEngine.Instance.getCredential as jest.Mock).mockResolvedValue({
+      (CredentialEngine.Instance.getCredential as ReturnType<typeof vi.fn>).mockResolvedValue({
         values: {
           accessKey: 'test-access-key',
           secretKey: 'test-secret-key',
@@ -283,12 +284,12 @@ describe('initializeDriverWithAccountCredentials', () => {
 
       mockAccountEntity.CredentialID = 'credential-456';
 
-      (CredentialEngine.Instance.getCredentialById as jest.Mock).mockReturnValue({
+      (CredentialEngine.Instance.getCredentialById as ReturnType<typeof vi.fn>).mockReturnValue({
         ID: 'credential-456',
         Name: 'Test Credential',
       });
 
-      (CredentialEngine.Instance.getCredential as jest.Mock).mockResolvedValue({
+      (CredentialEngine.Instance.getCredential as ReturnType<typeof vi.fn>).mockResolvedValue({
         values: {
           accessKey: 'decrypted-access-key',
           secretKey: 'decrypted-secret-key',
@@ -324,7 +325,7 @@ describe('initializeDriverWithAccountCredentials', () => {
       mockAccountEntity.CredentialID = 'credential-456';
 
       // Return null to simulate credential not found
-      (CredentialEngine.Instance.getCredentialById as jest.Mock).mockReturnValue(null);
+      (CredentialEngine.Instance.getCredentialById as ReturnType<typeof vi.fn>).mockReturnValue(null);
 
       const { initializeDriverWithAccountCredentials } = await import('../util');
 

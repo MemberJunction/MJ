@@ -82,6 +82,8 @@ export interface FormContext {
    * Fields filter by `ValidationErrorInfo.Source === FieldName` to find their errors.
    */
   validationErrors?: ValidationErrorInfo[];
+  /** Whether drag-and-drop section reordering is allowed. Read by panels to show/hide drag handles. */
+  allowSectionReorder?: boolean;
 }
 
 /**

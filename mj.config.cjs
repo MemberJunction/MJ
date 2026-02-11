@@ -35,7 +35,8 @@ module.exports = {
   ],
 
   // Soft PK/FK configuration for tables without database constraints
-  additionalSchemaInfo: './Demos/AdvancedEntities/database-metadata-config.json',
+  // RELATIVE PATH TO YOUR ADDITIONAL SCHEMA INFO FILE - below is an example to a demo schema
+  // additionalSchemaInfo: './Demos/AdvancedEntities/database-metadata-config.json',
 
   // Output directories specific to monorepo structure
   output: [
@@ -158,7 +159,7 @@ module.exports = {
     ],
     entityTools: [
       {
-        schemaName: 'CRM',
+        schemaName: '*',
         entityName: '*',
         get: true,
         create: true,
@@ -187,7 +188,7 @@ module.exports = {
     enableA2AServer: true, // Override default (false)
     entityCapabilities: [
       {
-        schemaName: 'CRM',
+        schemaName: '*',
         entityName: '*',
         get: true,
         create: true,
@@ -205,7 +206,7 @@ module.exports = {
    */
 
   queryGen: {
-    includeEntities: ['Members'], // Override to specific entities
+    includeEntities: [], // Override to specific entities
   },
 
   /**

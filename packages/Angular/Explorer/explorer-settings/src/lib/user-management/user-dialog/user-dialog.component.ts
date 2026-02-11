@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation, ChangeDetectorRef, NgZone } from '@angular/core';
 
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -28,6 +28,8 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Output() result = new EventEmitter<UserDialogResult>();
 
   private fb = inject(FormBuilder);
+  private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
   private metadata = new Metadata();
 
   public userForm: FormGroup;
@@ -203,11 +205,17 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
 
       this.result.emit({ action: 'save', user });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving user:', error);
-      this.error = error.message || 'An unexpected error occurred';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'An unexpected error occurred';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

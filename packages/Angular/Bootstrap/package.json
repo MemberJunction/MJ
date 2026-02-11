@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-bootstrap",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "MemberJunction Angular Bootstrap - Encapsulates all Angular authentication and initialization logic",
   "main": "./dist/fesm2022/memberjunction-ng-bootstrap.mjs",
   "types": "./dist/types/memberjunction-ng-bootstrap.d.ts",
@@ -13,7 +13,9 @@
     "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "build": "ng-packagr -p ng-package.json && node scripts/fix-dist-package.js",
     "watch": "ng-packagr -p ng-package.json --watch",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",
@@ -27,34 +29,39 @@
     "@angular/common": "^21.0.0",
     "@angular/core": "^21.0.0",
     "@angular/router": "^21.0.0",
+    "@memberjunction/core": "^4.2.0",
+    "@memberjunction/global": "^4.2.0",
+    "@memberjunction/ng-auth-services": "^4.2.0",
     "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "4.1.0",
-    "@memberjunction/ai-core-plus": "4.1.0",
-    "@memberjunction/ai-engine-base": "4.1.0",
-    "@memberjunction/communication-types": "4.1.0",
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/entity-communications-base": "4.1.0",
-    "@memberjunction/graphql-dataprovider": "4.1.0",
-    "@memberjunction/ng-artifacts": "4.1.0",
-    "@memberjunction/ng-auth-services": "4.1.0",
-    "@memberjunction/ng-core-entity-forms": "4.1.0",
-    "@memberjunction/ng-dashboard-viewer": "4.1.0",
-    "@memberjunction/ng-dashboards": "4.1.0",
-    "@memberjunction/ng-explorer-core": "4.1.0",
-    "@memberjunction/ng-explorer-settings": "4.1.0",
-    "@memberjunction/ng-file-storage": "4.1.0",
-    "@memberjunction/ng-shared": "4.1.0",
+    "@memberjunction/actions-base": "4.2.0",
+    "@memberjunction/ai-core-plus": "4.2.0",
+    "@memberjunction/ai-engine-base": "4.2.0",
+    "@memberjunction/communication-types": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/entity-communications-base": "4.2.0",
+    "@memberjunction/graphql-dataprovider": "4.2.0",
+    "@memberjunction/ng-artifacts": "4.2.0",
+    "@memberjunction/ng-core-entity-forms": "4.2.0",
+    "@memberjunction/ng-dashboard-viewer": "4.2.0",
+    "@memberjunction/ng-dashboards": "4.2.0",
+    "@memberjunction/ng-explorer-core": "4.2.0",
+    "@memberjunction/ng-explorer-settings": "4.2.0",
+    "@memberjunction/ng-file-storage": "4.2.0",
+    "@memberjunction/ng-shared": "4.2.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@angular/common": "^21.1.3",
     "@angular/core": "^21.1.3",
     "@angular/router": "^21.1.3",
+    "@memberjunction/core": "*",
+    "@memberjunction/global": "*",
+    "@memberjunction/ng-auth-services": "*",
     "ng-packagr": "^21.1.0",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.18"
   },
   "files": [
     "dist/**/*"

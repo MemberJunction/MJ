@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/communication-sendgrid",
   "type": "module",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "MemberJunction: SendGrid Provider for the MJ Communication Framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +11,7 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -20,10 +20,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "4.1.0",
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/global": "4.1.0",
+    "@memberjunction/communication-types": "4.2.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/global": "4.2.0",
     "@sendgrid/mail": "^8.1.6",
     "dotenv": "^17.2.4"
   },

@@ -1,5 +1,4 @@
 import { TemplateRef } from '@angular/core';
-import { BaseEntity } from '@memberjunction/core';
 
 // Re-export shared types from the main types file to avoid duplication
 // These are used by both EntityGridComponent and EntityDataGridComponent
@@ -117,7 +116,7 @@ export interface GridColumnConfig {
   headerAlign?: 'left' | 'center' | 'right';
 
   /** CSS class for cells - can be string or function */
-  cellClass?: string | ((row: BaseEntity, column: GridColumnConfig) => string);
+  cellClass?: string | ((row: Record<string, unknown>, column: GridColumnConfig) => string);
 
   /** CSS class for header */
   headerClass?: string;
@@ -132,16 +131,16 @@ export interface GridColumnConfig {
   editorTemplate?: TemplateRef<GridEditorTemplateContext>;
 
   /** Cell value formatter function */
-  formatter?: (value: unknown, row: BaseEntity, column: GridColumnConfig) => string;
+  formatter?: (value: unknown, row: Record<string, unknown>, column: GridColumnConfig) => string;
 
   /** Cell style function */
-  cellStyle?: (row: BaseEntity, column: GridColumnConfig) => Record<string, string>;
+  cellStyle?: (row: Record<string, unknown>, column: GridColumnConfig) => Record<string, string>;
 
   /** Whether to show tooltip on hover */
   showTooltip?: boolean;
 
   /** Custom tooltip content */
-  tooltip?: string | ((row: BaseEntity, column: GridColumnConfig) => string);
+  tooltip?: string | ((row: Record<string, unknown>, column: GridColumnConfig) => string);
 
   /** Frozen column position (alias for pinned, for backward compatibility) */
   frozen?: 'left' | 'right' | false;
@@ -170,7 +169,7 @@ export interface GridColumnConfig {
  */
 export interface GridCellTemplateContext {
   /** The row data (entity) */
-  row: BaseEntity;
+  row: Record<string, unknown>;
   /** Column configuration */
   column: GridColumnConfig;
   /** The cell value */
@@ -198,7 +197,7 @@ export interface GridHeaderTemplateContext {
  */
 export interface GridEditorTemplateContext {
   /** The row data (entity) */
-  row: BaseEntity;
+  row: Record<string, unknown>;
   /** Column configuration */
   column: GridColumnConfig;
   /** Current cell value */
@@ -330,7 +329,7 @@ export interface PendingChange {
   /** Row key (usually ID) */
   rowKey: string;
   /** The row entity */
-  row: BaseEntity;
+  row: Record<string, unknown>;
   /** Field that was changed */
   field: string;
   /** Original value */
@@ -418,7 +417,7 @@ export interface GridRowData {
   /** Row index in the data array */
   index: number;
   /** The entity object */
-  entity: BaseEntity;
+  entity: Record<string, unknown>;
   /** Whether the row is selected */
   selected: boolean;
   /** Whether the row is being edited */

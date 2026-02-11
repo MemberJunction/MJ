@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/encryption",
   "type": "module",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "MemberJunction: Field-level encryption engine with pluggable key sources. Server-side only - provides AES-256-GCM/CBC encryption with environment variable, config file, AWS KMS, and Azure Key Vault key sources.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,25 +10,23 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "@types/jest": "^30.0.0",
     "@types/node": "^24.10.11",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/global": "4.1.0",
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/credentials": "4.1.0",
-    "@memberjunction/actions-base": "4.1.0",
+    "@memberjunction/global": "4.2.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/credentials": "4.2.0",
+    "@memberjunction/actions-base": "4.2.0",
     "cosmiconfig": "^9.0.0"
   },
   "optionalDependencies": {

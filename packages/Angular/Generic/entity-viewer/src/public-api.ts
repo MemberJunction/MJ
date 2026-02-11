@@ -34,3 +34,4 @@ export * from './lib/aggregate-setup-dialog/aggregate-setup-dialog.component';
 
 // Utilities
 export * from './lib/utils/highlight.util';
+export * from './lib/utils/record.util';

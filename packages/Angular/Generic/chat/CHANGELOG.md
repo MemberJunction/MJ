@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-chat
 
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@4.2.0
+- @memberjunction/ng-markdown@4.2.0
+- @memberjunction/ng-shared-generic@4.2.0
+- @memberjunction/core@4.2.0
+
 ## 4.1.0
 
 ### Patch Changes

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ChangeDetectorRef, NgZone, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -36,6 +36,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
 
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
   private metadata = new Metadata();
 
   public permissionForm: FormGroup;
@@ -199,11 +200,17 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
 
       this.result.emit({ action: 'save', entity: this.data.entity });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving permissions:', error);
-      this.error = error.message || 'An unexpected error occurred while saving permissions';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'An unexpected error occurred while saving permissions';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

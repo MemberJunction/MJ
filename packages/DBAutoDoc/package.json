@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/db-auto-doc",
   "type": "module",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "AI-powered database documentation generator for SQL Server, MySQL, and PostgreSQL. Analyzes your database structure, uses AI to generate comprehensive descriptions, and saves them as metadata. Works standalone - no MemberJunction runtime required.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -41,7 +41,8 @@
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "sql-server",
@@ -66,14 +67,15 @@
     "@types/pg": "^8.16.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
-    "@types/inquirer": "^9.0.7"
+    "@types/inquirer": "^9.0.7",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
-    "@memberjunction/ai": "4.1.0",
-    "@memberjunction/ai-provider-bundle": "4.1.0",
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/global": "4.1.0",
+    "@memberjunction/ai": "4.2.0",
+    "@memberjunction/ai-provider-bundle": "4.2.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/global": "4.2.0",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",
     "chalk": "^5.6.2",

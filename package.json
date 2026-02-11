@@ -72,14 +72,19 @@
     "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",
     "mergemain:update-lock": "node ci/merge_main_and_update_lock.mjs",
-    "commitpush": "node ci/commit_push.mjs"
+    "commitpush": "node ci/commit_push.mjs",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "test:coverage": "vitest run --coverage",
+    "test:analytics": "node unit-testing/tools/run-all-tests.js",
+    "test:aggregate": "node unit-testing/tools/aggregate-results.js ",
+    "test:markdown": "node unit-testing/tools/generate-markdown.js "
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/cli": "4.0.0",
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
     "simple-git": "^3.30.0"
@@ -105,7 +110,10 @@
     "typedoc": "~0.28.0",
     "typedoc-plugin-missing-exports": "~4.1.0",
     "typescript": "5.9.3",
-    "browserslist": "4.28.1"
+    "browserslist": "4.28.1",
+    "vitest": "^4.0.18",
+    "@vitest/coverage-v8": "^4.0.18",
+    "vite-tsconfig-paths": "^5.1.4"
   },
   "overrides": {
     "@types/node": "20.14.2",

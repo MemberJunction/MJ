@@ -128,9 +128,13 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   FieldNames = '';
   IsVisible = true;
 
-  @HostBinding('class.mj-search-hidden')
-  get IsHidden(): boolean {
-    return !this.IsVisible;
+  @HostBinding('class')
+  get HostClass(): string {
+    const classes = [`mj-panel--${this.Variant}`];
+    if (!this.IsVisible) classes.push('mj-search-hidden');
+    if (this.IsDragging) classes.push('mj-dragging');
+    if (this.IsDragOver) classes.push('mj-drag-over');
+    return classes.join(' ');
   }
 
   @HostBinding('style.order')
@@ -139,10 +143,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return formRef?.getSectionDisplayOrder ? formRef.getSectionDisplayOrder(this.SectionKey) : 0;
   }
 
-  @HostBinding('class.mj-dragging')
   IsDragging = false;
-
-  @HostBinding('class.mj-drag-over')
   IsDragOver = false;
 
   // ---- Event relay ----
@@ -164,6 +165,11 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     if (this.Variant !== 'related-entity') return undefined;
     const formRef = this.Form as { GetSectionPanelHeight?: (key: string) => number | undefined };
     return formRef?.GetSectionPanelHeight?.(this.SectionKey);
+  }
+
+  /** Whether drag-to-reorder is allowed (from FormContext) */
+  get ReorderAllowed(): boolean {
+    return this.FormContext?.allowSectionReorder !== false;
   }
 
   /** Whether the panel is expanded (delegates to form state) */
@@ -226,15 +232,21 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   /**
    * Navigate to the parent entity when clicking the "Inherited from X" badge.
+   * Derives the PrimaryKey from the Form's record when InheritedRecordPrimaryKey
+   * is not explicitly provided (which is the common case in generated templates).
    */
   OnInheritedBadgeClick(event: MouseEvent): void {
     event.stopPropagation();
     if (!this.InheritedFromEntity) return;
 
+    const primaryKey = this.InheritedRecordPrimaryKey
+      ?? (this.Form as { record?: { PrimaryKey: CompositeKey } })?.record?.PrimaryKey
+      ?? new CompositeKey([]);
+
     this.Navigate.emit({
       Kind: 'entity-hierarchy',
       EntityName: this.InheritedFromEntity,
-      PrimaryKey: this.InheritedRecordPrimaryKey ?? new CompositeKey([]),
+      PrimaryKey: primaryKey,
       Direction: 'parent'
     });
   }
@@ -243,6 +255,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   @HostListener('dragover', ['$event'])
   OnDragOver(event: DragEvent): void {
+    if (!this.ReorderAllowed) return;
     event.preventDefault();
     event.stopPropagation();
     if (event.dataTransfer?.types.includes('text/plain')) {
@@ -252,12 +265,14 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   @HostListener('dragleave', ['$event'])
   OnDragLeave(event: DragEvent): void {
+    if (!this.ReorderAllowed) return;
     event.preventDefault();
     this.IsDragOver = false;
   }
 
   @HostListener('drop', ['$event'])
   OnDrop(event: DragEvent): void {
+    if (!this.ReorderAllowed) return;
     event.preventDefault();
     event.stopPropagation();
     this.IsDragOver = false;
@@ -273,6 +288,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   OnDragStart(event: DragEvent): void {
+    if (!this.ReorderAllowed) return;
     this.IsDragging = true;
     event.dataTransfer?.setData('text/plain', this.SectionKey);
     if (event.dataTransfer) {

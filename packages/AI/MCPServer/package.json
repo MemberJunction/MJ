@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-mcp-server",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "MemberJunction: Model Context Protocol (MCP) - Server Implementation",
   "type": "module",
   "bin": {
@@ -10,7 +10,9 @@
     "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
     "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "build": "tsc && tsc-alias -f && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "files": [
     "dist"
@@ -18,24 +20,24 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "4.1.0",
-    "@memberjunction/actions-base": "4.1.0",
-    "@memberjunction/ai": "4.1.0",
-    "@memberjunction/ai-agents": "4.1.0",
-    "@memberjunction/ai-core-plus": "4.1.0",
-    "@memberjunction/ai-prompts": "4.1.0",
-    "@memberjunction/ai-provider-bundle": "4.1.0",
-    "@memberjunction/aiengine": "4.1.0",
-    "@memberjunction/api-keys": "4.1.0",
-    "@memberjunction/config": "4.1.0",
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/credentials": "4.1.0",
-    "@memberjunction/encryption": "4.1.0",
-    "@memberjunction/global": "4.1.0",
-    "@memberjunction/server": "4.1.0",
-    "@memberjunction/server-bootstrap-lite": "4.1.0",
-    "@memberjunction/sqlserver-dataprovider": "4.1.0",
+    "@memberjunction/actions": "4.2.0",
+    "@memberjunction/actions-base": "4.2.0",
+    "@memberjunction/ai": "4.2.0",
+    "@memberjunction/ai-agents": "4.2.0",
+    "@memberjunction/ai-core-plus": "4.2.0",
+    "@memberjunction/ai-prompts": "4.2.0",
+    "@memberjunction/ai-provider-bundle": "4.2.0",
+    "@memberjunction/aiengine": "4.2.0",
+    "@memberjunction/api-keys": "4.2.0",
+    "@memberjunction/config": "4.2.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/credentials": "4.2.0",
+    "@memberjunction/encryption": "4.2.0",
+    "@memberjunction/global": "4.2.0",
+    "@memberjunction/server": "4.2.0",
+    "@memberjunction/server-bootstrap-lite": "4.2.0",
+    "@memberjunction/sqlserver-dataprovider": "4.2.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "cosmiconfig": "9.0.0",
     "dotenv": "^17.2.4",
@@ -48,10 +50,12 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/yargs": "^17.0.35",
     "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "repository": {
     "type": "git",

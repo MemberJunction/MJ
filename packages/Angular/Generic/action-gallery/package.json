@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-action-gallery",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "MemberJunction Action Gallery - A beautiful, filterable gallery component for browsing and selecting actions",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -8,8 +8,9 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ngc"
+    "test": "echo \"No tests configured yet\"",
+    "build": "ngc",
+    "test:watch": "vitest"
   },
   "keywords": [
     "actions",
@@ -22,7 +23,8 @@
   "devDependencies": {
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
-    "sass": "^1.97.3"
+    "sass": "^1.97.3",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "@angular/common": "21.1.3",
@@ -31,11 +33,11 @@
     "@angular/animations": "21.1.3"
   },
   "dependencies": {
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/ng-ai-test-harness": "4.1.0",
-    "@memberjunction/ng-container-directives": "4.1.0",
-    "@memberjunction/ng-shared-generic": "4.1.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/ng-ai-test-harness": "4.2.0",
+    "@memberjunction/ng-container-directives": "4.2.0",
+    "@memberjunction/ng-shared-generic": "4.2.0",
     "@progress/kendo-angular-buttons": "22.0.1",
     "@progress/kendo-angular-dialog": "22.0.1",
     "@progress/kendo-angular-dropdowns": "22.0.1",

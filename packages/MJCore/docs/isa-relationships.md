@@ -80,25 +80,30 @@ Entity: Meeting    → ParentID: Product  (child of Product)
 Entity: Webinar    → ParentID: Meeting  (child of Meeting, grandchild of Product)
 ```
 
-### Runtime Object Model
+### Runtime Object Model (Bidirectional)
 
 ```mermaid
 flowchart LR
+    subgraph ProductEntity["ProductEntity Instance"]
+        PF[Own Fields:<br/>Name, Price, SKU]
+        PP[_parentEntity = null]
+        PC[_childEntity →]
+    end
+
+    subgraph MeetingEntity["MeetingEntity Instance"]
+        MF[Own Fields:<br/>StartTime, MaxAttendees, Location]
+        MP[_parentEntity →]
+        MC[_childEntity →]
+    end
+
     subgraph WebinarEntity["WebinarEntity Instance"]
         WF[Own Fields:<br/>StreamURL, Platform]
         WP[_parentEntity →]
+        WC[_childEntity = null]
     end
 
-    subgraph MeetingEntity["MeetingEntity Instance (hidden)"]
-        MF[Own Fields:<br/>StartTime, MaxAttendees, Location]
-        MP[_parentEntity →]
-    end
-
-    subgraph ProductEntity["ProductEntity Instance (hidden)"]
-        PF[Own Fields:<br/>Name, Price, SKU]
-        PP[_parentEntity = null]
-    end
-
+    PC --> MeetingEntity
+    MC --> WebinarEntity
     WP --> MeetingEntity
     MP --> ProductEntity
 
@@ -107,11 +112,21 @@ flowchart LR
     style ProductEntity fill:#e8f5e9,stroke:#2e7d32
 ```
 
+The chain is **bidirectional** — `_parentEntity` links upward and `_childEntity` links downward. Both directions share the **same object instances**, so dirty state, PK values, and field values are always in sync.
+
 When you work with a `WebinarEntity`:
 - `webinar.Set('StreamURL', '...')` → sets on Webinar's own fields
 - `webinar.Set('Name', '...')` → routes to `_parentEntity._parentEntity.Set('Name', ...)`
 - `webinar.Get('Price')` → returns from ProductEntity (authoritative source)
 - `webinar.Save()` → saves Product first, then Meeting, then Webinar (in a transaction)
+
+When you load a `MeetingEntity` that has a Webinar child:
+- `meeting.ISAParent` → ProductEntity instance
+- `meeting.ISAChild` → WebinarEntity instance (discovered automatically after Load)
+- `meeting.LeafEntity` → WebinarEntity (walks the full chain down)
+- `meeting.RootEntity` → ProductEntity (walks the full chain up)
+- `meeting.Save()` → **delegates to leaf** (Webinar), which saves the full chain
+- `meeting.Delete()` → **delegates to leaf** (Webinar), which deletes in correct order
 
 ## EntityInfo Computed Properties
 
@@ -148,6 +163,103 @@ meeting.ParentEntityFieldNames; // Set<string> — cached set of parent field na
 | `IsParentType` | `boolean` | `true` if any child entities exist |
 | `AllParentFields` | `EntityFieldInfo[]` | All non-PK, non-timestamp fields from parent chain |
 | `ParentEntityFieldNames` | `Set<string>` | Cached set of parent field names (for fast lookup) |
+
+## IS-A Child Entity Discovery
+
+When a record is loaded at any level of the IS-A hierarchy, `BaseEntity.InitializeChildEntity()` automatically discovers whether a more-derived child record exists and links it into the chain.
+
+### How It Works
+
+1. After `Load()` or `LoadFromData()` completes, `InitializeChildEntity()` runs
+2. It calls `provider.FindISAChildEntity()` — a single UNION ALL query across all child entity tables
+3. If a child is found, creates the child entity and wires the bidirectional chain
+4. Recursively discovers grandchildren (the child may also be a parent type)
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant M as MeetingEntity
+    participant Prov as Provider
+    participant DB as Database
+
+    App->>M: Load(meetingId)
+    M->>Prov: Load(meetingId)
+    Prov->>DB: SELECT * FROM vwMeetings WHERE ID = @id
+    DB-->>Prov: Meeting + Product fields
+    Prov-->>M: Record data
+
+    M->>Prov: FindISAChildEntity(Meetings, meetingId)
+    Prov->>DB: SELECT 'Webinars' AS EntityName FROM Webinar WHERE ID = @id
+    DB-->>Prov: {ChildEntityName: 'Webinars'}
+    Prov-->>M: Child found: Webinars
+
+    M->>M: Create WebinarEntity, wire chain
+    M->>Prov: Load WebinarEntity(meetingId)
+    Prov-->>M: Webinar fields loaded
+    M-->>App: Meeting loaded (with child chain)
+```
+
+### The UNION ALL Query
+
+`FindISAChildEntity` builds a single query checking all possible child entity base tables:
+
+```sql
+SELECT 'Webinars' AS EntityName FROM [dbo].[Webinar] WHERE [ID] = 'abc-123'
+UNION ALL
+SELECT 'Conferences' AS EntityName FROM [dbo].[Conference] WHERE [ID] = 'abc-123'
+```
+
+This executes as PK lookups on clustered indexes — effectively instant, even with many child types.
+
+### Provider Implementations
+
+- **SQLServerDataProvider**: Builds and executes the UNION ALL query directly
+- **GraphQLDataProvider**: Calls the `FindISAChildEntity` GraphQL query endpoint on the server
+- **Server (MJServer)**: `ISAEntityResolver` exposes the `FindISAChildEntity` query, delegates to the provider
+
+### ISAParent / ISAChild Accessors
+
+```typescript
+// Navigate the bidirectional chain
+const meeting = await md.GetEntityObject<MeetingEntity>('Meetings');
+await meeting.Load(someId);
+
+meeting.ISAParent;    // ProductEntity instance (or null if root)
+meeting.ISAChild;     // WebinarEntity instance (or null if leaf/no child)
+meeting.LeafEntity;   // Walks to the deepest child (Webinar)
+meeting.RootEntity;   // Walks to the topmost parent (Product)
+
+// Walk the full chain manually
+let entity: BaseEntity | null = meeting.RootEntity;
+while (entity) {
+    console.log(entity.EntityInfo.Name);
+    entity = entity.ISAChild;
+}
+// Output: Products → Meetings → Webinars
+```
+
+### Save/Delete Delegation
+
+When you call `Save()` or `Delete()` on a **non-leaf** entity that has a child, it automatically delegates to the leaf:
+
+```typescript
+// Loading a Meeting that has a Webinar child record
+const meeting = await md.GetEntityObject<MeetingEntity>('Meetings');
+await meeting.Load(someId);
+
+// Modify a Meeting-specific field
+meeting.MaxAttendees = 500;
+
+// Save delegates to leaf (Webinar) which saves the FULL chain
+await meeting.Save();
+// Internally: meeting.LeafEntity.Save() → saves Product → Meeting → Webinar
+
+// Delete also delegates to leaf for correct FK ordering
+await meeting.Delete();
+// Internally: meeting.LeafEntity.Delete() → deletes Webinar → Meeting → Product
+```
+
+The `IsParentEntitySave` / `IsParentEntityDelete` flags prevent infinite re-delegation when the leaf's Save/Delete calls back up the parent chain.
 
 ## BaseEntity IS-A Orchestration
 
@@ -531,10 +643,17 @@ interface IEntityDataProvider {
     Save(entity, user, options): Promise<{}>
     Delete(entity, options, user): Promise<boolean>
 
-    // NEW: IS-A transaction methods (optional)
+    // IS-A transaction methods (optional)
     BeginISATransaction?(): Promise<unknown>
     CommitISATransaction?(txn: unknown): Promise<void>
     RollbackISATransaction?(txn: unknown): Promise<void>
+
+    // IS-A child discovery (optional)
+    FindISAChildEntity?(
+        entityInfo: EntityInfo,
+        recordPKValue: string,
+        contextUser?: UserInfo
+    ): Promise<{ ChildEntityName: string } | null>
 }
 ```
 
@@ -542,11 +661,30 @@ interface IEntityDataProvider {
 
 ```typescript
 class BaseEntity {
-    // NEW: IS-A parent entity reference
+    // IS-A parent entity reference (upward link)
+    get ISAParent(): BaseEntity | null;
+
+    // IS-A child entity reference (downward link)
+    get ISAChild(): BaseEntity | null;
+
+    // Walk to deepest child (returns this if no children)
+    get LeafEntity(): BaseEntity;
+
+    // Walk to topmost parent (returns this if no parents)
+    get RootEntity(): BaseEntity;
+
+    // @deprecated — use ISAParent instead
     get ISAParentEntity(): BaseEntity | null;
 
-    // NEW: Transaction handle for IS-A operations
+    // Transaction handle for IS-A operations
     ProviderTransaction: unknown;
+
+    // Static helper: resolve the leaf entity name for a given entity/PK
+    static async ResolveLeafEntity(
+        entityName: string,
+        primaryKey: CompositeKey,
+        contextUser?: UserInfo
+    ): Promise<{ LeafEntityName: string; IsLeaf: boolean }>
 }
 ```
 
@@ -560,3 +698,6 @@ class BaseEntity {
 | Save fails with rollback | Parent entity validation failed | Check parent entity field requirements |
 | Delete blocked on parent | Child records exist | Delete children first or enable `CascadeDeletes` |
 | `_parentEntity` is null | Entity not properly initialized | Ensure `GetEntityObject()` is used (not direct constructor) |
+| `ISAChild` is null after Load | Provider doesn't implement `FindISAChildEntity` | Update provider or use `ResolveLeafEntity()` static method |
+| Save on branch entity not saving all fields | Child entity not discovered | Ensure record was loaded with `Load()` (not just `SetMany()`) |
+| Child discovery adds latency | Extra query per Load for parent-type entities | PK lookups are sub-ms; consider Phase 5 optimization for high-traffic |

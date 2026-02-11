@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/component-registry-server",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "MemberJunction: Component Registry Server API Implementation",
   "type": "module",
   "main": "./dist/index.js",
@@ -14,7 +14,8 @@
   },
   "scripts": {
     "build": "tsc && tsc-alias -f && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "vitest run"
   },
   "files": [
     "dist"
@@ -22,11 +23,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "4.1.0",
-    "@memberjunction/global": "4.1.0",
-    "@memberjunction/core-entities": "4.1.0",
-    "@memberjunction/interactive-component-types": "4.1.0",
-    "@memberjunction/sqlserver-dataprovider": "4.1.0",
+    "@memberjunction/core": "4.2.0",
+    "@memberjunction/global": "4.2.0",
+    "@memberjunction/core-entities": "4.2.0",
+    "@memberjunction/interactive-component-types": "4.2.0",
+    "@memberjunction/sqlserver-dataprovider": "4.2.0",
     "@types/express": "^5.0.6",
     "express": "^5.2.1",
     "cors": "^2.8.6",

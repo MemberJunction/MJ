@@ -28,7 +28,7 @@ export interface ListGridRowClickedEvent {
   entityId: string;
   entityName: string;
   compositeKey: CompositeKey;
-  record: BaseEntity;
+  record: Record<string, unknown>;
 }
 
 /**
@@ -334,7 +334,7 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
   /**
    * Get the currently selected entity objects
    */
-  getSelectedRows(): BaseEntity[] {
+  getSelectedRows(): Record<string, unknown>[] {
     if (this.entityDataGrid) {
       return this.entityDataGrid.GetSelectedRows();
     }
