@@ -40,8 +40,7 @@ export function aggregateResults(runDir) {
     const resultsFile = join(byPackageDir, packageName, 'results.json');
 
     if (!existsSync(resultsFile)) {
-      console.warn(`⚠️  No results.json found for ${packageName}`);
-      continue;
+      continue; // Package had no vitest output — skip silently
     }
 
     try {

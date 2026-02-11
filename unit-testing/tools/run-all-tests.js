@@ -44,11 +44,15 @@ function findPackagesWithTests() {
           const packageJson = join(packagePath, 'package.json');
           if (existsSync(vitestConfig) && existsSync(packageJson)) {
             const pkg = JSON.parse(readFileSync(packageJson, 'utf-8'));
-            packages.push({
-              path: packagePath,
-              name: pkg.name || dir,
-              relPath: join(searchPath, dir)
-            });
+            // Only include packages whose test script actually runs vitest
+            const testScript = pkg.scripts?.test || '';
+            if (testScript.includes('vitest')) {
+              packages.push({
+                path: packagePath,
+                name: pkg.name || dir,
+                relPath: join(searchPath, dir)
+              });
+            }
           }
         }
       } catch (err) {

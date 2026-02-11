@@ -80,6 +80,20 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
 - Consumers should import types from their original source package
 - Add comments directing users to the correct import location when helpful
 
+### 6. ALWAYS RUN AND UPDATE UNIT TESTS
+- **When modifying ANY package's source code, you MUST run that package's unit tests** before considering the work complete
+- Run tests with: `cd packages/PackageName && npm run test`
+- **If tests fail due to your changes, UPDATE the tests** to match the new behavior
+- **If tests fail for other reasons, FIX them** — never leave broken tests behind
+- **Report test results to the user**: pass count, failure count, skip count, and any issues found
+- **This is as important as compilation** — broken tests are as bad as broken builds
+- **Never assume tests still pass** after changing function signatures, renaming methods, changing return values, or modifying behavior
+- Common causes of test drift (all of which YOU must fix):
+  - Renamed functions/methods that tests still reference by old name
+  - Changed return values or formats that test assertions still expect
+  - New required parameters that test mocks don't provide
+  - Removed exports that tests still import
+
 ---
 
 ## 📚 Development Guides

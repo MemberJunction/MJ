@@ -312,16 +312,16 @@ describe('Scope Determination', () => {
         expect(determineNoteScope(mockNotes[2])).toBe('Global');
     });
 
-    it('determineSaaSScope: Organization-level (primary scope only)', () => {
-        expect(determineSaaSScope(mockNotes[1])).toBe('Organization-level');
+    it('determineSecondaryScope: Company-level (primary scope only)', () => {
+        expect(determineSecondaryScope(mockNotes[1])).toBe('Company-level');
     });
 
-    it('determineSaaSScope: Contact-specific (has secondary scopes)', () => {
-        expect(determineSaaSScope(mockNotes[3])).toBe('Contact-specific (most specific)');
+    it('determineSecondaryScope: User-specific (has secondary scopes)', () => {
+        expect(determineSecondaryScope(mockNotes[3])).toBe('User-specific (most specific)');
     });
 
-    it('determineSaaSScope: null when no SaaS scope', () => {
-        expect(determineSaaSScope(mockNotes[0])).toBeNull();
+    it('determineSecondaryScope: null when no secondary scope', () => {
+        expect(determineSecondaryScope(mockNotes[0])).toBeNull();
     });
 });
 
@@ -334,7 +334,7 @@ describe('Format Notes', () => {
         const result = formatNotesForInjection(mockNotes);
         expect(result).toContain('<memory_policy>');
         expect(result).toContain('Precedence (highest to lowest)');
-        expect(result).toContain('Contact-specific notes override organization-level');
+        expect(result).toContain('User-specific notes override company-level');
         expect(result).toContain('</memory_policy>');
     });
 
@@ -355,10 +355,10 @@ describe('Format Notes', () => {
         expect(result).toContain('[Constraint] Never share PII');
     });
 
-    it('shows SaaS scope when available', () => {
+    it('shows secondary scope when available', () => {
         const result = formatNotesForInjection(mockNotes);
-        expect(result).toContain('Organization-level');
-        expect(result).toContain('Contact-specific (most specific)');
+        expect(result).toContain('Company-level');
+        expect(result).toContain('User-specific (most specific)');
     });
 
     it('returns empty string for empty notes', () => {
