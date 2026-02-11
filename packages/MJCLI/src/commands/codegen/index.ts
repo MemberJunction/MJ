@@ -1,7 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import type { ParserOutput } from '@oclif/core/lib/interfaces/parser';
 import { updatedConfig } from '../../config';
-import { runMemberJunctionCodeGeneration, initializeConfig } from '@memberjunction/codegen-lib';
 
 export default class CodeGen extends Command {
   static description = 'Run CodeGen to generate code and update metadata for MemberJunction';
@@ -18,6 +17,8 @@ export default class CodeGen extends Command {
   flags: ParserOutput<CodeGen>['flags'];
 
   async run(): Promise<void> {
+    const { runMemberJunctionCodeGeneration, initializeConfig } = await import('@memberjunction/codegen-lib');
+
     const parsed = await this.parse(CodeGen);
     this.flags = parsed.flags;
 

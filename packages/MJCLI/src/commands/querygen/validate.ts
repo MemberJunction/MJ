@@ -1,6 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { validateCommand } from '@memberjunction/query-gen';
-import { loadMJConfig, initializeProvider } from '@memberjunction/metadata-sync';
 
 export default class Validate extends Command {
   static description = 'Validate existing query templates';
@@ -21,6 +19,9 @@ export default class Validate extends Command {
   };
 
   async run(): Promise<void> {
+    const { validateCommand } = await import('@memberjunction/query-gen');
+    const { loadMJConfig, initializeProvider } = await import('@memberjunction/metadata-sync');
+
     const { flags } = await this.parse(Validate);
 
     try {

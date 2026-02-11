@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { ActionService, OutputFormatter } from '@memberjunction/ai-cli';
 import ora from 'ora-classic';
 
 export default class ActionsList extends Command {
@@ -21,9 +20,11 @@ export default class ActionsList extends Command {
   };
 
   async run(): Promise<void> {
+    const { ActionService, OutputFormatter } = await import('@memberjunction/ai-cli');
+
     const { flags } = await this.parse(ActionsList);
     const spinner = ora();
-    
+
     try {
       spinner.start('Loading available actions...');
       const service = new ActionService();
