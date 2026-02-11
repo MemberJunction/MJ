@@ -40,6 +40,10 @@ module.exports = {
               }]
             ]
           }
+        },
+        // Disable ESM's strict extension requirement for local imports
+        resolve: {
+          fullySpecified: false
         }
       }
     ]
