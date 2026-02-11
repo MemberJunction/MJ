@@ -20,21 +20,17 @@
 
 ## Executive Summary
 
-Even when following the quick guide step-by-step, multiple steps required **implicit knowledge** or **trial-and-error** not explicitly captured in docs. The highest-impact friction areas encountered were:
+Even when following the quick guide step-by-step, multiple steps required **implicit knowledge** or **trial-and-error** not explicitly captured in docs. The highest-impact friction areas were:
 
 | Category | Severity | What happened |
 |---|---|---|
-| SQL Server setup | High | SSMS usage and security model assumed; no validation checkpoints |
-| Config surface area | High | Multiple config files, overlapping env vars, a filename mismatch in the docs, and no clear "minimal local" template |
-| CodeGen reliability / messaging | High | "AFTER command npm failed" looked fatal; MJAPI later failed due to missing generated package until CodeGen rerun |
+| SQL Server setup | Medium | SSMS usage and security model assumed; no validation checkpoints |
+| Config surface area | Medium | Multiple config files, overlapping env vars, a filename mismatch in the docs, and no clear "minimal local" template |
 | Windows compatibility | High | MJExplorer start script used Unix env-var syntax; blocked startup on Windows until patched |
-| Order of operations | Medium | Steps not strongly sequenced; running them out of order caused failures that didn't point to the root cause |
-| Success checkpoints | Medium | Limited "you're good if you see X" indicators after major steps |
-| Dependency security noise | Low | `npm install` reported many vulnerabilities with no guidance on what to do |
 
 ---
 
-## Detailed Friction Points
+## Friction Points
 
 ### 1) SSMS / SQL Server Tooling Is Assumed
 
@@ -42,7 +38,6 @@ Even when following the quick guide step-by-step, multiple steps required **impl
 
 **What happened**
 - Docs assume SSMS is already installed and the user is comfortable creating DBs/logins/users.
-- Time was lost getting SSMS set up again and recreating the database cleanly.
 
 **Recommendation**
 - Add a short **"SQL Server Tooling"** prerequisite subsection:
@@ -117,82 +112,7 @@ Even when following the quick guide step-by-step, multiple steps required **impl
 
 ---
 
-### 4) Step 4 (`mj install`) — Unclear Relationship to the Rest of the Flow
-
-**Where**: Install guide Step 4.
-
-**What happened**
-- The docs describe a Step 4: `mj install`, which "asks you a series of questions" and references an `install.config.json` file.
-- During our install, the relationship between this step and the earlier manual config steps (Step 3) was not clear. Specifically:
-  - Does `mj install` replace the need to manually edit `.env` and environment files, or is it in addition to them?
-  - Does `mj install` run `npm install`, `mj codegen`, and builds internally, or are those still separate manual steps?
-  - What happens if you run `mj install` *after* already completing some of those steps manually?
-
-**Recommendation**
-- Clarify in the docs what `mj install` actually does (which steps it automates) and what it expects to already be done.
-- If `mj install` handles config generation, say so explicitly and remove or mark the manual `.env` editing as an alternative path.
-- If `mj install` does NOT handle everything, list exactly which steps still need to be done manually after it runs.
-
----
-
-### 5) Order of Operations Is Not Enforced
-
-**Where**: Steps 3-5 of the install guide.
-
-**What happened**
-- The guide lists steps but does not strongly enforce sequencing. It is not explicit that:
-  - Database must be fully reachable before `mj migrate`
-  - `npm install` must complete before `mj codegen`
-  - `mj codegen` must succeed and produce `mj_generatedentities` before starting MJAPI
-  - MJAPI must be running before starting MJExplorer
-- Running steps out of order produced errors that didn't point to the root cause. For example, MJAPI crashed with a missing package error that was actually caused by CodeGen not having been run (or not having completed successfully).
-
-**Recommendation**
-- Add a numbered checklist with explicit "do not continue until" gates:
-  1. Can connect to DB via SSMS
-  2. Logins and users exist (validation query passes)
-  3. Config files written and validated
-  4. `npm install` completed
-  5. `mj codegen` completed and `mj_generatedentities` exists
-  6. MJAPI shows "Server ready"
-  7. Explorer serves the login page
-
----
-
-### 6) CodeGen "AFTER commands" Looked Like a Hard Failure
-
-**Where**: `mj codegen`
-
-**What happened**
-- CodeGen printed multiple lines like:
-  - `COMMAND: "npm" FAILED ... Error: Process exited with code 1`
-- Immediately after, CodeGen reported completion/success.
-- This was ambiguous: is it safe to ignore or not?
-
-**Recommendation**
-- If these are non-fatal, label them as **warnings** (and show which AFTER command failed).
-- Save the failing AFTER command output to a log file path the user can share.
-
----
-
-### 7) MJAPI Failed to Start Due to Missing Generated Package
-
-**Where**: `npm run start:api` (MJAPI)
-
-**What happened**
-- MJAPI crashed with a missing package error for `mj_generatedentities`.
-- Re-running `mj codegen` fixed it and MJAPI started.
-
-**Recommendation**
-- Docs should explicitly state a checkpoint:
-  - "Verify `node_modules/mj_generatedentities` exists after CodeGen before starting MJAPI."
-- MJAPI should detect this and print an actionable error:
-  - "Generated entities missing; run `mj codegen`."
-- Consider a `prestart` guard that validates CodeGen outputs.
-
----
-
-### 8) MJExplorer Startup Broken on Windows (Unix env var syntax)
+### 4) MJExplorer Startup Broken on Windows (Unix env var syntax)
 
 **Where**: `npm run start` in `apps/MJExplorer`
 
@@ -212,72 +132,27 @@ Even when following the quick guide step-by-step, multiple steps required **impl
 
 ---
 
-### 9) Port / Redirect URI Alignment Was Easy to Miss
+## Documentation Improvements
 
-**Where**: Explorer environment configuration
+The following items are not major friction points on their own, but each would improve the install guide with relatively low effort. Many of these surfaced during the install but did not block progress.
 
-**What happened**
-- To successfully load/auth in Explorer, the configured redirect URI must match the actual Explorer origin.
-- We ran Explorer on `http://localhost:4200/` and updated `REDIRECT_URI` accordingly.
-
-**Recommendation**
-- Add a single, explicit "Ports" section:
-  - MJAPI (GraphQL): `http://localhost:4000/`
-  - MJExplorer: `http://localhost:4200/`
-  - Redirect URI must match the Explorer origin.
-
----
-
-### 10) MJAPI / Explorer Start Commands Not Specified
-
-**Where**: Install guide Step 5.
-
-**What happened**
-- The docs say "run the project either in a debugger environment like VSCode, or just run it with a node command line" but do not provide the actual commands (`npm run start:api`, `npm run start:explorer`, or `ng serve`).
-- No expected output is described. Users don't know what "success" looks like.
-
-**Recommendation**
-- Provide explicit start commands for both MJAPI and Explorer.
-- Add expected success output, e.g.:
-  - MJAPI: "You should see `Server ready on port 4000` in the console"
-  - Explorer: "Navigate to `http://localhost:4200` and you should see the login page"
-
----
-
-### 11) `npm install` Vulnerability Counts Create Anxiety
-
-**Where**: After `npm install`
-
-**What happened**
-- `npm install` reported many vulnerabilities (including high/critical).
-- Install still worked, but it's alarming with no guidance.
-
-**Recommendation**
-- Add a note: vulnerability output is common in large workspaces; do not blindly run `npm audit fix --force` because it can break workspace resolution.
-
----
-
-### 12) Node Version Guidance Could Be Clearer
-
-**Where**: Prerequisites
-
-**What happened**
-- Docs say Node 20+, but this install was performed on Node 22.x.
-- The process worked but produced deprecation/experimental warnings.
-
-**Recommendation**
-- State **recommended** version (e.g., Node 20 LTS) and a **supported** range.
-- Add a one-liner: "Warnings on newer Node versions are expected; proceed unless a step fails."
+| Area | What to add | Why |
+|---|---|---|
+| **Start commands** | Add explicit commands for MJAPI (`npm run start:api`) and Explorer (`npm run start:explorer`). The current docs say "run the project in VSCode or command line" without specifying the actual commands. | Users shouldn't have to guess the commands |
+| **Port / URI section** | Add a short "Default Ports" section listing MJAPI (`http://localhost:4000/`), Explorer (`http://localhost:4200/`), and note that the redirect URI must match the Explorer origin. | Reduces config mismatches |
+| **npm audit note** | Add a one-liner: "Vulnerability output is common in large workspaces. Do not run `npm audit fix --force` — it can break workspace resolution." | Prevents users from breaking their install out of caution |
+| **Order of operations** | Add a brief note reinforcing the required sequence: `npm install` → `mj codegen` → start MJAPI → start Explorer. A "do not continue until" checklist after each major step would help. | Reduces out-of-order errors |
+| **`mj install` (Step 4) scope** | Clarify what the existing `mj install` command automates vs what must still be done manually. Currently the boundary between Step 3 (manual config) and Step 4 (`mj install`) is ambiguous. | Reduces confusion about which steps are manual |
+| **CodeGen AFTER messaging** | If CodeGen AFTER commands are non-fatal, label them as warnings in the CLI output and note this in the docs so users know they can proceed. | Prevents false alarm on "npm FAILED" output |
+| **Generated package checkpoint** | Add a note: "After `mj codegen`, verify `mj_generatedentities` exists before starting MJAPI." This can also be enforced as a `prestart` guard in the CLI automation. | Prevents the opaque missing-package crash |
 
 ---
 
 ## Patterns Observed
 
 1. Docs are written for users already comfortable with SQL Server + Node/monorepos.
-2. Missing validation checkpoints increase uncertainty ("did that really work?").
-3. Windows needs first-class support (scripts must be cross-platform).
-4. Errors rarely point to the fix (e.g., missing generated entities package → "run CodeGen").
-5. The boundary between what `mj install` (Step 4) automates and what the user must do manually is unclear.
+2. Windows needs first-class support (scripts must be cross-platform).
+3. The boundary between what `mj install` (Step 4) automates and what the user must do manually is unclear.
 
 ---
 
@@ -289,19 +164,9 @@ Even when following the quick guide step-by-step, multiple steps required **impl
 | Fix `mj.config.js` → `mj.config.cjs` in docs | Prevents wrong filename | Very low |
 | Add DB setup validation query + gates | Prevents downstream cryptic failures | Low |
 | Add `IF NOT EXISTS` guards to SQL scripts | Makes scripts safe to re-run | Low |
-| Add explicit start commands + expected output | Users know what to run and what success looks like | Low |
-| Clarify Step 4 (`mj install`) scope | Reduces confusion about what's manual vs automated | Low |
+| Add explicit start commands in docs | Users know what to run | Low |
 | Add "minimal local config" templates | Reduces config confusion | Low-Medium |
-| Clarify CodeGen AFTER command messaging | Prevents false alarm | Low |
 
 ---
 
-## Open Items To Confirm Later
-
-- Are there additional generated artifacts that should be validated after CodeGen (beyond `mj_generatedentities`)?
-- Should the distribution default Explorer port be 4200 (and align docs + env templates accordingly)?
-- What exactly does `mj install` (Step 4 in the current docs) automate, and how does it relate to the proposed `mj install -t <tag>` CLI flow?
-
----
-
-**Last updated**: 2026-02-09 (living doc)
+**Last updated**: 2026-02-10 (living doc)

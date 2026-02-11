@@ -1,4 +1,4 @@
-# MJ CLI Automation Plan (Revised): `mj install`
+# MJ CLI Automation Plan: `mj install`
 
 > **Goal:** One command that takes a new user from **release ZIP/tag → working MJAPI + MJExplorer** with the fewest manual steps possible, based on the **actual v3.4.0 Windows install friction** we hit.
 >
@@ -19,7 +19,7 @@
   - `apps/MJExplorer/package.json`: change `start` from `NODE_OPTIONS=... ng serve` to `cross-env NODE_OPTIONS=... ng serve`
   - `apps/MJExplorer/src/environments/environment.ts` (and `environment.development.ts` matched): updated ports/URIs
   - root `.env`: DB + auth vars
-- The current docs (Step 4) already have a `mj install` command that "asks a series of questions" and references `install.config.json`. The proposed `mj install -t <tag>` flow needs to clarify its relationship to this existing command (see Open Questions).
+- The current docs (Step 4) already have a `mj install` command that "asks a series of questions" and references `install.config.json`. The proposed `mj install -t <tag>` flow needs to clarify its relationship to this existing command (see Decisions Needed).
 
 This plan aims to automate or eliminate those manual steps.
 
@@ -74,7 +74,6 @@ mj install -t v3.4.0 --phase scaffold
 mj install -t v3.4.0 --phase db
 mj install -t v3.4.0 --phase config
 mj install -t v3.4.0 --phase deps
-mj install -t v3.4.0 --phase codegen
 mj install -t v3.4.0 --phase patch
 mj install -t v3.4.0 --phase start
 ```
@@ -164,7 +163,7 @@ The install should generate/update the minimal set of files we actually used:
   - `apps/MJExplorer/src/environments/environment.ts`
   - `apps/MJExplorer/src/environments/environment.development.ts` (keep in sync)
 
-**Note on existing `mj install`**: The current docs (Step 4) describe a `mj install` command that prompts for configuration and references `install.config.json`. This phase should either wrap or replace that existing flow. See Open Questions for the decision that needs to be made here.
+**Note on existing `mj install`**: The current docs (Step 4) describe a `mj install` command that prompts for configuration and references `install.config.json`. This phase should either wrap or replace that existing flow. See Decisions Needed for the decision that needs to be made here.
 
 ### Config file overwrite behavior
 
@@ -214,43 +213,7 @@ Run `npm install` at repo root.
 
 ---
 
-## Phase 5: CodeGen (and the one retry that saved us)
-
-Run:
-
-1. `mj migrate` — if the release flow requires it. Note: the current docs use `mj migrate -t main`, where "main" appears to be a GitHub ref. If the ZIP already includes a pre-migrated baseline, this step may only apply to fresh databases or upgrades. The installer should detect whether migrations are needed (e.g., check if `__mj` schema tables exist) rather than always running blindly.
-2. `mj codegen`
-
-### Handle the AFTER-command confusion
-
-We saw output like:
-
-- `COMMAND: "npm" FAILED ...` then
-- `√ MJ CodeGen Complete!`
-
-Installer behavior:
-
-- Treat AFTER failures as **warnings** unless CodeGen core steps fail.
-- Always write logs:
-  - `./logs/mj-codegen.log`
-  - `./logs/mj-codegen-after.log`
-
-### Verify outputs that matter to startup
-
-- Check that the generated entities package exists.
-  - In our case, MJAPI crashed until this was present.
-
-### Auto-retry rule (based on what worked)
-
-If the generated entities package is missing after CodeGen, automatically run **one** retry:
-
-- `mj codegen` (once)
-
-If still missing: hard stop with a clear message and point to logs.
-
----
-
-## Phase 6: Windows patching (make Explorer start work OOTB)
+## Phase 5: Windows patching (make Explorer start work OOTB)
 
 This is the biggest "quick win" we actually validated.
 
@@ -277,26 +240,33 @@ Idempotent: if already patched, do nothing.
 
 ---
 
-## Phase 7: Start + smoke checks
+## Phase 6: Start + smoke checks
 
 Start MJAPI and MJExplorer (unless `--skip-start`).
+
+### Pre-start verification
+
+Before attempting to start MJAPI, verify that `mj_generatedentities` exists in `node_modules/`.
+
+- If missing, print: `"Generated entities package not found. Run 'mj codegen' to generate it."`
+- Do **not** auto-retry CodeGen at this stage — the user should run it explicitly so they can see the output and catch any real errors.
 
 ### MJAPI
 
 - Start command: whatever the release uses (e.g., `npm run start:api`).
-- Timeout: **60 seconds**. MJAPI loads metadata on startup and can be slow the first time.
+- Timeout: **120 seconds**. MJAPI loads metadata on startup and can be slow the first time.
 - Success criteria: look for a "ready" log line OR confirm port 4000 responds.
 
 ### Explorer
 
 - Start command: `npm run start:explorer` or workspace equivalent.
-- Timeout: **90 seconds**. Angular/Vite compilation on first serve is slow.
+- Timeout: **210 seconds**. Angular/Vite compilation on first serve is slow.
 - Success criteria: HTTP GET `http://localhost:<explorerPort>/` returns 200.
 
 If either fails, print:
 - which phase to re-run
 - where logs are
-- the most likely fixes (ports in use, codegen missing, Windows NODE_OPTIONS issue)
+- the most likely fixes (ports in use, generated entities missing, Windows NODE_OPTIONS issue)
 
 If timeout is exceeded without a clear error, print:
 - "MJAPI/Explorer did not report ready within X seconds. It may still be starting. Check the console output."
@@ -338,7 +308,6 @@ Include:
 | `mj doctor` | M | High — standalone diagnostic for support |
 | `mj install --phase config` generator | M | High — eliminates manual config editing |
 | DB script generator with validation | M | High — idempotent scripts + connection test |
-| One retry behavior for CodeGen verification | S | Medium — handles the case we hit |
 
 ### Longer-term
 
@@ -358,11 +327,11 @@ The new commands (`mj install -t <tag>`, `mj doctor`) will be added to the exist
 
 ---
 
-## Open questions (kept only where we truly don't know)
+## Decisions needed for implementation
 
-1. **Release asset resolution:** do we have GitHub Releases consistently for each tag with a ZIP asset, or should the CLI also support a direct URL?
-2. **Canonical GraphQL URL:** Explorer worked with `GRAPHQL_URI: http://localhost:4000/` in our run; is the intended canonical endpoint `/graphql`? (Installer should enforce one consistent convention.)
-3. **Migrations step in the ZIP flow:** does `mj install` always run `mj migrate`, or does the ZIP already contain the expected migrations state? (We can decide based on existing CLI behavior.)
+1. **Release asset resolution:** Do we have GitHub Releases consistently for each tag with a ZIP asset, or should the CLI also support a direct URL?
+2. **Canonical GraphQL URL:** Explorer worked with `GRAPHQL_URI: http://localhost:4000/` in our run; is the intended canonical endpoint `/graphql`? The installer should enforce one consistent convention.
+3. **Migrations step in the ZIP flow:** Does `mj install` always run `mj migrate`, or does the ZIP already contain the expected migrations state? This can be decided based on existing CLI behavior.
 4. **Relationship to existing `mj install`:** The current install docs (Step 4) describe an `mj install` command that prompts for configuration and uses `install.config.json`. Does the proposed `mj install -t <tag>` replace this, extend it with a `-t` flag, or wrap it as one phase in a larger flow? This needs to be decided before implementation.
 
 ---
