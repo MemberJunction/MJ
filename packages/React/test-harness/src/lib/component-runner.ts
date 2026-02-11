@@ -1,5 +1,10 @@
+import { createRequire } from 'module';
 import { BrowserManager } from './browser-context';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
+
+// ESM compatibility: require is not available in ESM, use createRequire
+// See: https://nodejs.org/api/module.html#modulecreaterequirefilename
+const _require = createRequire(import.meta.url);
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
 import { ComponentLinter, Violation } from './component-linter';
 import {
@@ -1337,7 +1342,7 @@ export class ComponentRunner {
     const fs = await import('fs');
     
     // Resolve the path to the UMD bundle
-    const runtimePath = require.resolve('@memberjunction/react-runtime/dist/runtime.umd.js');
+    const runtimePath = _require.resolve('@memberjunction/react-runtime/dist/runtime.umd.js');
     const runtimeBundle = fs.readFileSync(runtimePath, 'utf-8');
     
     // Inject the UMD bundle into the page

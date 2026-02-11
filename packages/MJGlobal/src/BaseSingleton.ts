@@ -1,4 +1,4 @@
-import { GetGlobalObjectStore } from ".";
+import { GetGlobalObjectStore } from "./util";
 
 /**
  * Generic, abstract base class for any scenario where we want to use a Singleton pattern. This base class abstracts away the complexity of ensuring a truly global 
