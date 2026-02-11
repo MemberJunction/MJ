@@ -1402,7 +1402,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             `
             for (let i = 0; i < filteredFields.length; i++) {
                 const f = filteredFields[i];
-                let val = f.Value;
+                // use entity.Get() instead of f.Value
+                // in case there is an IsA relationship where parent entity 
+                // is where the value is. f.Value would still be old value
+                let val = entity.Get(f.Name); 
                 if (val) {
                     // type conversions as needed for GraphQL
                     switch(f.EntityFieldInfo.TSType) {

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
@@ -127,7 +127,9 @@ export class UserProfileSettingsComponent implements OnInit, OnDestroy {
 
   constructor(
     private userAvatarService: UserAvatarService,
-    private sharedService: SharedService
+    private sharedService: SharedService,
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) {}
 
   async ngOnInit() {
@@ -419,10 +421,16 @@ export class UserProfileSettingsComponent implements OnInit, OnDestroy {
         this.errorMessage = 'Failed to revert avatar. Please try again.';
       }
     } catch (error) {
-      this.errorMessage = 'An error occurred while reverting. Please try again.';
       console.error('Error reverting avatar:', error);
+      this.ngZone.run(() => {
+        this.errorMessage = 'An error occurred while reverting. Please try again.';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isSaving = false;
+      this.ngZone.run(() => {
+        this.isSaving = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 
@@ -514,10 +522,16 @@ export class UserProfileSettingsComponent implements OnInit, OnDestroy {
         this.errorMessage = 'Failed to save avatar. Please try again.';
       }
     } catch (error) {
-      this.errorMessage = 'An error occurred while saving. Please try again.';
       console.error('Error saving avatar:', error);
+      this.ngZone.run(() => {
+        this.errorMessage = 'An error occurred while saving. Please try again.';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isSaving = false;
+      this.ngZone.run(() => {
+        this.isSaving = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

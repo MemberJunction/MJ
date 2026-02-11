@@ -1,13 +1,13 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
-import { EntityInfo, EntityRelationshipInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo } from '@memberjunction/core';
-import { BaseEntity } from '@memberjunction/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
+import { EntityInfo, EntityRelationshipInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey } from '@memberjunction/core';
+import { buildCompositeKey, buildPkString } from '../utils/record.util';
 
 interface RelatedEntityData {
   relationship: EntityRelationshipInfo;
   relatedEntityName: string;
   count: number;
   isExpanded: boolean;
-  records: BaseEntity[];
+  records: Record<string, unknown>[];
   isLoadingRecords: boolean;
 }
 
@@ -44,7 +44,7 @@ export interface NavigateToRelatedEvent {
  */
 export interface OpenRelatedRecordEvent {
   entityName: string;
-  record: BaseEntity;
+  record: Record<string, unknown>;
 }
 
 /**
@@ -84,10 +84,10 @@ export interface OpenForeignKeyRecordEvent {
 })
 export class EntityRecordDetailPanelComponent implements OnChanges {
   @Input() entity: EntityInfo | null = null;
-  @Input() record: BaseEntity | null = null;
+  @Input() record: Record<string, unknown> | null = null;
 
   @Output() close = new EventEmitter<void>();
-  @Output() openRecord = new EventEmitter<BaseEntity>();
+  @Output() openRecord = new EventEmitter<Record<string, unknown>>();
   @Output() navigateToRelated = new EventEmitter<NavigateToRelatedEvent>();
   @Output() openRelatedRecord = new EventEmitter<OpenRelatedRecordEvent>();
   @Output() openForeignKeyRecord = new EventEmitter<OpenForeignKeyRecordEvent>();
@@ -102,7 +102,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   public detailsSectionExpanded = true;
   public relationshipsSectionExpanded = true;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['record'] && this.record && this.entity) {
@@ -127,15 +127,11 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
       return;
     }
 
-    // Build the filter using all primary key fields
-    const pkFilter = this.record.PrimaryKey.ToWhereClause();
-    if (!pkFilter) {
-      this.isLoadingRelationships = false;
-      return;
-    }
+    // Build a CompositeKey for the current record
+    const compositeKey = buildCompositeKey(this.record, this.entity);
 
     // Get the first PK value for the join field filter
-    const pkValue = this.record.PrimaryKey.KeyValuePairs[0]?.Value;
+    const pkValue = compositeKey.KeyValuePairs[0]?.Value;
     if (!pkValue) {
       this.isLoadingRelationships = false;
       return;
@@ -176,8 +172,10 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
         isLoadingRecords: false
       }));
     } finally {
-      this.isLoadingRelationships = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.isLoadingRelationships = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
@@ -196,7 +194,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
       // Skip very long text fields (but not FK fields which are usually GUIDs)
       if (field.Length && field.Length > 500 && !field.RelatedEntityID) continue;
 
-      const value = this.record.Get(field.Name);
+      const value = this.record[field.Name];
 
       // Handle Primary Key fields specially
       if (field.IsPrimaryKey) {
@@ -256,7 +254,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     // Try to get the display name from the mapped field
     // RelatedEntityNameFieldMap tells us which field contains the name of the related record
     if (field.RelatedEntityNameFieldMap && field.RelatedEntityNameFieldMap.trim().length > 0) {
-      const mappedValue = this.record!.Get(field.RelatedEntityNameFieldMap);
+      const mappedValue = this.record![field.RelatedEntityNameFieldMap];
       if (mappedValue !== null && mappedValue !== undefined && String(mappedValue).trim() !== '') {
         displayValue = String(mappedValue);
       }
@@ -274,7 +272,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
           f.Name.toLowerCase() === baseName.toLowerCase() && f.IsVirtual
         );
         if (virtualField) {
-          const virtualValue = this.record!.Get(virtualField.Name);
+          const virtualValue = this.record![virtualField.Name];
           if (virtualValue !== null && virtualValue !== undefined && String(virtualValue).trim() !== '') {
             displayValue = String(virtualValue);
           }
@@ -348,11 +346,11 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     if (!this.entity || !this.record) return 'Record';
 
     if (this.entity.NameField) {
-      const name = this.record.Get(this.entity.NameField.Name);
+      const name = this.record[this.entity.NameField.Name];
       if (name) return String(name);
     }
 
-    return this.record.PrimaryKey.ToString();
+    return buildPkString(this.record, this.entity);
   }
 
   /**
@@ -427,19 +425,29 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
    * Load actual records for a related entity
    */
   private async loadRelatedRecords(relEntity: RelatedEntityData): Promise<void> {
-    if (!this.record) return;
+    if (!this.record || !this.entity) return;
 
-    const pkValue = this.record.PrimaryKey.KeyValuePairs[0]?.Value;
+    const compositeKey = buildCompositeKey(this.record, this.entity);
+    const pkValue = compositeKey.KeyValuePairs[0]?.Value;
     if (!pkValue) return;
 
     relEntity.isLoadingRecords = true;
+    this.cdr.detectChanges();
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<BaseEntity>({
+      // Look up related entity info to compute fields
+      const relatedEntityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relationship.RelatedEntity);
+      const fields = relatedEntityInfo
+        ? [...relatedEntityInfo.PrimaryKeys.map(pk => pk.Name),
+           ...(relatedEntityInfo.NameField ? [relatedEntityInfo.NameField.Name] : []),
+           ...relatedEntityInfo.Fields.filter(f => f.DefaultInView).map(f => f.Name)]
+        : undefined;
+      const result = await rv.RunView<Record<string, unknown>>({
         EntityName: relEntity.relationship.RelatedEntity,
         ExtraFilter: `${relEntity.relationship.RelatedEntityJoinField}='${pkValue}'`,
-        ResultType: 'entity_object',
+        ResultType: 'simple',
+        ...(fields ? { Fields: fields } : {}),
         MaxRows: 10 // Limit inline display to 10 records
       });
 
@@ -449,14 +457,17 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     } catch (error) {
       console.warn(`Failed to load records for ${relEntity.relatedEntityName}:`, error);
     } finally {
-      relEntity.isLoadingRecords = false;
+      this.ngZone.run(() => {
+        relEntity.isLoadingRecords = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
   /**
    * Handle click on individual related record - opens in new tab
    */
-  onRelatedRecordClick(relEntity: RelatedEntityData, record: BaseEntity, event: Event): void {
+  onRelatedRecordClick(relEntity: RelatedEntityData, record: Record<string, unknown>, event: Event): void {
     event.stopPropagation();
     this.openRelatedRecord.emit({
       entityName: relEntity.relatedEntityName,
@@ -470,9 +481,10 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   onViewAllRelated(relEntity: RelatedEntityData, event: Event): void {
     event.stopPropagation();
 
-    if (!this.record) return;
+    if (!this.record || !this.entity) return;
 
-    const pkValue = this.record.PrimaryKey.KeyValuePairs[0]?.Value;
+    const compositeKey = buildCompositeKey(this.record, this.entity);
+    const pkValue = compositeKey.KeyValuePairs[0]?.Value;
     if (!pkValue) return;
 
     this.navigateToRelated.emit({
@@ -484,19 +496,22 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   /**
    * Get display name for a related record
    */
-  getRelatedRecordDisplayName(relEntity: RelatedEntityData, record: BaseEntity): string {
+  getRelatedRecordDisplayName(relEntity: RelatedEntityData, record: Record<string, unknown>): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
     if (entityInfo?.NameField) {
-      const name = record.Get(entityInfo.NameField.Name);
+      const name = record[entityInfo.NameField.Name];
       if (name) return String(name);
     }
-    return record.PrimaryKey.ToString();
+    if (entityInfo) {
+      return buildPkString(record, entityInfo);
+    }
+    return 'Record';
   }
 
   /**
    * Get subtitle/secondary info for a related record
    */
-  getRelatedRecordSubtitle(relEntity: RelatedEntityData, record: BaseEntity): string {
+  getRelatedRecordSubtitle(relEntity: RelatedEntityData, record: Record<string, unknown>): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
     if (!entityInfo) return '';
 
@@ -507,7 +522,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
         f.Name.includes(fieldName) && f.Name !== entityInfo.NameField?.Name
       );
       if (field) {
-        const value = record.Get(field.Name);
+        const value = record[field.Name];
         if (value !== null && value !== undefined) {
           return this.formatFieldValue(value, field.Name);
         }

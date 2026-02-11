@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnDestroy } from '@angular/core';
+import { ChangeDetectorRef, Component, NgZone, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
@@ -60,7 +60,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
 
@@ -102,10 +102,13 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
       console.error('Error loading application data:', error);
       this.error = 'Failed to load application data. Please try again.';
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
-  
+
   private async loadApplications(): Promise<ApplicationEntity[]> {
     const rv = new RunView();
     const result = await rv.RunView<ApplicationEntity>({
@@ -264,11 +267,17 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
       this.showDeleteConfirm = false;
       this.selectedApp = null;
       await this.loadInitialData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting application:', error);
-      this.error = error.message || 'Failed to delete application';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Failed to delete application';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

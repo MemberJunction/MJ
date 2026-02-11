@@ -1768,6 +1768,8 @@ export abstract class BaseEntity<T = unknown> {
         newResult.StartedAt = new Date();
 
         try {
+            const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
+
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
 
             // IS-A leaf delegation: if this entity has a child entity and we are NOT
@@ -1822,7 +1824,7 @@ export abstract class BaseEntity<T = unknown> {
                 await this.EnforceDisjointSubtype();
             }
 
-            if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
+            if (_options.IgnoreDirtyState || initialDirtyState || _options.ReplayOnly) {
                 // Raise save_started event only when we're actually going to save
                 this.RaiseEvent('save_started', null, saveSubType);
 
