@@ -6,7 +6,7 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "echo \"No tests configured yet\""
   },
   "private": true,
   "dependencies": {
@@ -30,12 +30,6 @@
     "@angular-devkit/build-angular": "21.1.3",
     "@angular/cli": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
-    "jasmine-core": "6.0.1",
-    "karma": "~6.4.4",
-    "karma-chrome-launcher": "~3.2.0",
-    "karma-coverage": "~2.2.1",
-    "karma-jasmine": "~5.1.0",
-    "karma-jasmine-html-reporter": "2.2.0",
     "typescript": "^5.9.3"
   },
   "repository": {

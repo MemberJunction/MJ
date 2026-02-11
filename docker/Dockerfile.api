@@ -1,0 +1,22 @@
+# MemberJunction API Server - Test Environment
+# This Dockerfile will be fleshed out when the full-stack test pipeline is implemented
+FROM node:24-slim
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY packages/MJAPI/package.json ./packages/MJAPI/
+
+# Install dependencies
+RUN npm ci --workspace=packages/MJAPI
+
+# Copy source
+COPY . .
+
+# Build
+RUN npm run build:api
+
+EXPOSE 4000
+
+CMD ["npm", "run", "start:api"]

@@ -8,55 +8,56 @@
  *
  * Also tests deriveEntityNameFromView and the interaction between sections.
  */
+import { describe, it, expect, vi } from 'vitest';
 
 // Mock heavy dependencies that are not needed for config parsing tests
-jest.mock('mssql', () => ({}));
-jest.mock('../Config/config', () => ({
+vi.mock('mssql', () => ({}));
+vi.mock('../Config/config', () => ({
    configInfo: {},
    currentWorkingDirectory: '/tmp',
-   getSettingValue: jest.fn(),
+   getSettingValue: vi.fn(),
    mj_core_schema: () => '__mj',
    outputDir: '/tmp',
 }));
-jest.mock('@memberjunction/core', () => ({
-   ApplicationInfo: class {},
-   CodeNameFromString: jest.fn((s: string) => s),
-   EntityFieldInfo: class {},
-   EntityInfo: class {},
-   ExtractActualDefaultValue: jest.fn(),
-   LogError: jest.fn(),
-   LogStatus: jest.fn(),
-   Metadata: class {},
-   SeverityType: {},
-   UserInfo: class {},
+vi.mock('@memberjunction/core', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('@memberjunction/core')>();
+   return {
+      ...actual,
+      // Override logging to prevent output during tests
+      LogError: vi.fn(),
+      LogStatus: vi.fn(),
+   };
+});
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
+   return {
+      ...actual,
+      // Keep real exports, no overrides needed for this test
+   };
+});
+vi.mock('../Misc/status_logging', () => ({
+   logError: vi.fn(),
+   logMessage: vi.fn(),
+   logStatus: vi.fn(),
 }));
-jest.mock('@memberjunction/core-entities', () => ({
-   ApplicationEntity: class {},
-}));
-jest.mock('../Misc/status_logging', () => ({
-   logError: jest.fn(),
-   logMessage: jest.fn(),
-   logStatus: jest.fn(),
-}));
-jest.mock('../Database/sql', () => ({
+vi.mock('../Database/sql', () => ({
    SQLUtilityBase: class {},
 }));
-jest.mock('../Misc/advanced_generation', () => ({
+vi.mock('../Misc/advanced_generation', () => ({
    AdvancedGeneration: class {},
 }));
-jest.mock('@memberjunction/global', () => ({
-   convertCamelCaseToHaveSpaces: jest.fn((s: string) => s.replace(/([A-Z])/g, ' $1').trim()),
-   generatePluralName: jest.fn((s: string) => s + 's'),
-   MJGlobal: { Instance: { ClassFactory: { CreateInstance: jest.fn(() => ({})), Create: jest.fn() } } },
-   RegisterClass: jest.fn(() => (target: unknown) => target),
-   SafeJSONParse: jest.fn((s: string) => JSON.parse(s)),
-   stripTrailingChars: jest.fn((s: string) => s),
-}));
-jest.mock('uuid', () => ({ v4: jest.fn(() => 'mock-uuid') }));
-jest.mock('../Misc/sql_logging', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('@memberjunction/global')>();
+   return {
+      ...actual,
+      // Keep real exports
+   };
+});
+vi.mock('uuid', () => ({ v4: vi.fn(() => 'mock-uuid') }));
+vi.mock('../Misc/sql_logging', () => ({
    SQLLogging: class {},
 }));
-jest.mock('@memberjunction/aiengine', () => ({
+vi.mock('@memberjunction/aiengine', () => ({
    AIEngine: class {},
 }));
 

@@ -11,11 +11,11 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:refresh": "jest providerBase.refresh.test.ts",
-    "test:concurrency": "jest providerBase.concurrency.test.ts"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:refresh": "vitest run providerBase.refresh.test.ts",
+    "test:concurrency": "vitest run providerBase.concurrency.test.ts"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -23,9 +23,7 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
     "@types/debug": "^4.1.12",
-    "@types/jest": "^30.0.0",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6"
+    "vitest": "^3.1.1"
   },
   "dependencies": {
     "@memberjunction/global": "4.2.0",

@@ -1,0 +1,12 @@
+# Playwright Test Runner - Test Environment
+# This Dockerfile will be fleshed out when the full-stack test pipeline is implemented
+FROM mcr.microsoft.com/playwright:v1.58.1-noble
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY packages/TestingFramework/ ./packages/TestingFramework/
+
+RUN npm ci
+
+CMD ["npx", "mj-test", "run", "--suite=regression"]

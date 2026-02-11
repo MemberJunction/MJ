@@ -80,6 +80,20 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
 - Consumers should import types from their original source package
 - Add comments directing users to the correct import location when helpful
 
+### 6. ALWAYS RUN AND UPDATE UNIT TESTS
+- **When modifying ANY package's source code, you MUST run that package's unit tests** before considering the work complete
+- Run tests with: `cd packages/PackageName && npm run test`
+- **If tests fail due to your changes, UPDATE the tests** to match the new behavior
+- **If tests fail for other reasons, FIX them** — never leave broken tests behind
+- **Report test results to the user**: pass count, failure count, skip count, and any issues found
+- **This is as important as compilation** — broken tests are as bad as broken builds
+- **Never assume tests still pass** after changing function signatures, renaming methods, changing return values, or modifying behavior
+- Common causes of test drift (all of which YOU must fix):
+  - Renamed functions/methods that tests still reference by old name
+  - Changed return values or formats that test assertions still expect
+  - New required parameters that test mocks don't provide
+  - Removed exports that tests still import
+
 ---
 
 ## 📚 Development Guides
@@ -155,6 +169,56 @@ If `my-feature` tracks `origin/next`:
 - Requires reverts and cleanup to fix
 
 **This is a non-negotiable safety requirement.**
+
+## Unit Testing
+
+MemberJunction uses **Vitest** as the standard unit testing framework across all packages. Jest has been deprecated and all packages are migrated to Vitest.
+
+### Running Tests
+- Run all tests: `npm test` (from repo root, uses Turborepo)
+- Run tests for a specific package: `cd packages/PackageName && npm run test`
+- Watch mode for a package: `cd packages/PackageName && npm run test:watch`
+- Run tests for changed packages: `npx turbo run test --filter=...[HEAD~1]`
+- Run with coverage: `npm run test:coverage`
+
+### Writing Tests
+- Test files live in `src/__tests__/` with `.test.ts` extension
+- One test file per source file (e.g., `ClassFactory.test.ts` tests `ClassFactory.ts`)
+- Use descriptive test names that read as specifications
+- Import from `vitest`: `import { describe, it, expect, vi, beforeEach } from 'vitest'`
+- Use `@memberjunction/test-utils` for shared mocking utilities (singleton reset, mock entities, mock RunView)
+- No database connections in unit tests — mock all external dependencies
+- Tests must be deterministic and fast (< 5s per file)
+
+### Adding Tests to a New Package
+Use the scaffold script:
+```bash
+node scripts/scaffold-tests.mjs packages/YourPackage
+```
+
+This creates the vitest config, test directory, starter test, and updates package.json scripts.
+
+### Test Structure
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+describe('ClassName', () => {
+  beforeEach(() => {
+    // Reset state between tests
+  });
+
+  describe('MethodName', () => {
+    it('should handle the normal case', () => { ... });
+    it('should handle edge case: empty input', () => { ... });
+    it('should throw on invalid input', () => { ... });
+  });
+});
+```
+
+### CI/CD Integration
+- **Every PR** must pass unit tests before merging (GitHub Actions gate)
+- **Every release** runs the full-stack regression suite via Docker Compose
+- Tests are cached by Turborepo — unchanged packages skip test execution
 
 ## Docker Environments
 

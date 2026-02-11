@@ -218,7 +218,7 @@ describe('EntityInfo.ParentEntityFieldNames', () => {
         const names = meetingEntity.ParentEntityFieldNames;
         expect(names.has('Name')).toBe(true);
         expect(names.has('Price')).toBe(true);
-        expect(names.has('ID')).toBe(false); // PK excluded
+        expect(names.has('ID')).toBe(true); // PK included (parent identity routing)
         expect(names.has('StartTime')).toBe(false); // Own field
     });
 

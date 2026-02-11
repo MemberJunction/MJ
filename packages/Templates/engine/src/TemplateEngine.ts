@@ -9,7 +9,7 @@ import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templa
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
 export class TemplateEntityLoader extends nunjucks.Loader {
-    public async: true; // tell nunjucks this is an async loader
+    public async = true; // tell nunjucks this is an async loader
 
     private templates: { [templateId: string]: TemplateEntityExtended } = {};
 
@@ -66,7 +66,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
             // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
             // only done once
             this._templateLoader = new TemplateEntityLoader();
-            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
 
             // Add custom filters
             this.addCustomFilters();
@@ -87,7 +87,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
 
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
-        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
         
         // Add custom filters
         this.addCustomFilters();
