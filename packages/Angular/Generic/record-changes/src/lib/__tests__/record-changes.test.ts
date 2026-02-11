@@ -15,6 +15,7 @@ vi.mock('@angular/core', () => ({
   ChangeDetectionStrategy: { OnPush: 1 },
   ViewEncapsulation: { None: 2 },
   OnInit: class {},
+  NgZone: class { run(fn: Function) { return fn(); } },
 }));
 
 vi.mock('@angular/platform-browser', () => ({
@@ -27,7 +28,7 @@ vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   CompositeKey: class {},
   EntityFieldInfo: class {},
-  EntityFieldTSType: { Boolean: 'boolean' },
+  EntityFieldTSType: { Boolean: 'boolean', Date: 'Date', Number: 'number', String: 'string' },
   Metadata: class {},
   RunView: class {
     RunView = vi.fn().mockResolvedValue({ Success: true, Results: [] });
@@ -67,57 +68,35 @@ describe('RecordChangesComponent utility methods', () => {
     );
   });
 
-  describe('getChangeTypeClass', () => {
+  describe('getChangeTypeCardClass', () => {
     it('should return correct class for Create', () => {
-      expect(component.getChangeTypeClass('Create')).toBe('change-create');
+      expect(component.getChangeTypeCardClass('Create')).toBe('type-create');
     });
 
     it('should return correct class for Update', () => {
-      expect(component.getChangeTypeClass('Update')).toBe('change-update');
+      expect(component.getChangeTypeCardClass('Update')).toBe('type-update');
     });
 
     it('should return correct class for Delete', () => {
-      expect(component.getChangeTypeClass('Delete')).toBe('change-delete');
+      expect(component.getChangeTypeCardClass('Delete')).toBe('type-delete');
     });
 
-    it('should return change-unknown for unknown type', () => {
-      expect(component.getChangeTypeClass('Other')).toBe('change-unknown');
-    });
-  });
-
-  describe('getChangeTypeIcon', () => {
-    it('should return fa-plus for Create', () => {
-      expect(component.getChangeTypeIcon('Create')).toBe('fa-solid fa-plus');
-    });
-
-    it('should return fa-edit for Update', () => {
-      expect(component.getChangeTypeIcon('Update')).toBe('fa-solid fa-edit');
-    });
-
-    it('should return fa-trash for Delete', () => {
-      expect(component.getChangeTypeIcon('Delete')).toBe('fa-solid fa-trash');
-    });
-
-    it('should return fa-question for unknown', () => {
-      expect(component.getChangeTypeIcon('Unknown')).toBe('fa-solid fa-question');
+    it('should return type-update for unknown type', () => {
+      expect(component.getChangeTypeCardClass('Other')).toBe('type-update');
     });
   });
 
-  describe('getChangeTypeBadgeClass', () => {
-    it('should return badge-create for Create', () => {
-      expect(component.getChangeTypeBadgeClass('Create')).toBe('badge-create');
+  describe('getChangeTypeBadgeText', () => {
+    it('should return Created for Create', () => {
+      expect(component.getChangeTypeBadgeText('Create')).toBe('Created');
     });
 
-    it('should return badge-update for Update', () => {
-      expect(component.getChangeTypeBadgeClass('Update')).toBe('badge-update');
+    it('should return Update for Update', () => {
+      expect(component.getChangeTypeBadgeText('Update')).toBe('Update');
     });
 
-    it('should return badge-delete for Delete', () => {
-      expect(component.getChangeTypeBadgeClass('Delete')).toBe('badge-delete');
-    });
-
-    it('should return badge-unknown for unknown', () => {
-      expect(component.getChangeTypeBadgeClass('Other')).toBe('badge-unknown');
+    it('should return Deleted for Delete', () => {
+      expect(component.getChangeTypeBadgeText('Delete')).toBe('Deleted');
     });
   });
 
@@ -158,6 +137,53 @@ describe('RecordChangesComponent utility methods', () => {
     });
   });
 
+  describe('getUserInitials', () => {
+    it('should extract initials from email', () => {
+      expect(component.getUserInitials('amith@bluecypress.io')).toBe('AM');
+    });
+
+    it('should extract initials from name', () => {
+      expect(component.getUserInitials('John Doe')).toBe('JD');
+    });
+
+    it('should handle single word', () => {
+      expect(component.getUserInitials('admin')).toBe('AD');
+    });
+
+    it('should handle null', () => {
+      expect(component.getUserInitials(null)).toBe('?');
+    });
+  });
+
+  describe('getUserDisplayName', () => {
+    it('should extract local part from email', () => {
+      expect(component.getUserDisplayName('amith@bluecypress.io')).toBe('amith');
+    });
+
+    it('should return name as-is', () => {
+      expect(component.getUserDisplayName('John Doe')).toBe('John Doe');
+    });
+
+    it('should return Unknown for null', () => {
+      expect(component.getUserDisplayName(null)).toBe('Unknown');
+    });
+  });
+
+  describe('SetTypeFilter', () => {
+    it('should set type filter', () => {
+      component.viewData = [];
+      component.SetTypeFilter('Update');
+      expect(component.selectedType).toBe('Update');
+    });
+
+    it('should toggle off when same filter clicked', () => {
+      component.viewData = [];
+      component.SetTypeFilter('Update');
+      component.SetTypeFilter('Update');
+      expect(component.selectedType).toBe('');
+    });
+  });
+
   describe('formatRelativeTime', () => {
     it('should return "Just now" for very recent dates', () => {
       const now = new Date();
@@ -182,7 +208,6 @@ describe('RecordChangesComponent utility methods', () => {
     it('should return formatted date for older dates', () => {
       const oldDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const result = component.formatRelativeTime(oldDate);
-      // Should be a formatted date string
       expect(result).not.toContain('ago');
     });
   });
@@ -191,9 +216,17 @@ describe('RecordChangesComponent utility methods', () => {
     it('should format date with all parts', () => {
       const date = new Date('2025-03-15T14:30:00Z');
       const result = component.formatFullDateTime(date);
-      // Should include month, day, year, hour, minute
       expect(result).toContain('2025');
       expect(result).toContain('15');
+    });
+  });
+
+  describe('formatTime', () => {
+    it('should format time in 12-hour format', () => {
+      const date = new Date('2025-03-15T14:30:00');
+      const result = component.formatTime(date);
+      expect(result).toContain('2:30');
+      expect(result).toContain('PM');
     });
   });
 
@@ -226,14 +259,14 @@ describe('RecordChangesComponent utility methods', () => {
   });
 
   describe('getChangeSummary', () => {
-    it('should return "Record was created" for Create type', () => {
+    it('should return "Record created" for Create type', () => {
       const change = { Type: 'Create', ChangesJSON: '{}', ChangesDescription: '' };
-      expect(component.getChangeSummary(change as never)).toBe('Record was created');
+      expect(component.getChangeSummary(change as never)).toBe('Record created');
     });
 
-    it('should return "Record was deleted" for Delete type', () => {
+    it('should return "Record deleted" for Delete type', () => {
       const change = { Type: 'Delete', ChangesJSON: '{}', ChangesDescription: '' };
-      expect(component.getChangeSummary(change as never)).toBe('Record was deleted');
+      expect(component.getChangeSummary(change as never)).toBe('Record deleted');
     });
   });
 });
