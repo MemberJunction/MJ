@@ -21,7 +21,10 @@
   "license": "ISC",
   "devDependencies": {
     "@angular/compiler": "21.1.3",
-    "@angular/compiler-cli": "21.1.3"
+    "@angular/compiler-cli": "21.1.3",
+    "@memberjunction/core": "*",
+    "@memberjunction/global": "*",
+    "@memberjunction/ng-auth-services": "*"
   },
   "peerDependencies": {
     "@angular/common": "21.1.3",
