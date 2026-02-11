@@ -577,10 +577,6 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         try {
             const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
 
-            if (notes.length === 0) {
-                return;
-            }
-
             const entries = notes.map(note => ({
                 key: note.ID,
                 vector: JSON.parse(note.EmbeddingVector!),
@@ -663,10 +659,6 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public async RefreshExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
             const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
-
-            if (examples.length === 0) {
-                return;
-            }
 
             const entries = examples.map(example => ({
                 key: example.ID,
@@ -954,12 +946,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         userId?: string,
         companyId?: string,
         topK: number = 5,
-        minSimilarity: number = 0.5
+        minSimilarity: number = 0.5,
+        additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): Promise<NoteMatchResult[]> {
         if (!this._noteVectorService) {
             // Vector service not available - fall back to returning notes from cache filtered by scope
             LogError('FindSimilarAgentNotes: Note vector service not initialized. Falling back to cached notes without semantic ranking.');
-            return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK);
+            return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
 
         if (!queryText || queryText.trim().length === 0) {
@@ -969,29 +962,50 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         const queryEmbedding = await this.EmbedTextLocal(queryText);
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
             LogError('FindSimilarAgentNotes: Failed to generate embedding for query text. Falling back to cached notes.');
-            return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK);
+            return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
 
-        const needsFiltering = agentId || userId || companyId;
-        const filter = needsFiltering ? (metadata: NoteEmbeddingMetadata) => {
-            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-            if (userId && metadata.userId && metadata.userId !== userId) return false;
-            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-            return true;
-        } : undefined;
+        const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
 
         const results = this._noteVectorService.FindNearest(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
             undefined,
-            filter
+            composedFilter
         );
 
         return results.map(r => ({
             note: r.metadata.noteEntity,
             similarity: r.score
         }));
+    }
+
+    /**
+     * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
+     * into a single filter callback for use with FindNearest.
+     */
+    private composeNoteFilters(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
+    ): ((metadata: NoteEmbeddingMetadata) => boolean) | undefined {
+        const needsBaseFilter = agentId || userId || companyId;
+        const baseFilter = needsBaseFilter
+            ? (metadata: NoteEmbeddingMetadata): boolean => {
+                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
+                if (userId && metadata.userId && metadata.userId !== userId) return false;
+                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+                return true;
+            }
+            : undefined;
+
+        if (baseFilter && additionalFilter) {
+            return (metadata: NoteEmbeddingMetadata): boolean =>
+                baseFilter(metadata) && additionalFilter(metadata);
+        }
+        return baseFilter || additionalFilter || undefined;
     }
 
     /**
@@ -1002,13 +1016,15 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         agentId?: string,
         userId?: string,
         companyId?: string,
-        topK: number = 5
+        topK: number = 5,
+        additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): NoteMatchResult[] {
         const notes = this.AgentNotes.filter(n => {
             if (n.Status !== 'Active') return false;
             if (agentId && n.AgentID !== agentId && n.AgentID !== null) return false;
             if (userId && n.UserID !== userId && n.UserID !== null) return false;
             if (companyId && n.CompanyID !== companyId && n.CompanyID !== null) return false;
+            if (additionalFilter && !additionalFilter(this.packageNoteMetadata(n))) return false;
             return true;
         });
 
@@ -1034,12 +1050,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         userId?: string,
         companyId?: string,
         topK: number = 3,
-        minSimilarity: number = 0.5
+        minSimilarity: number = 0.5,
+        additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
     ): Promise<ExampleMatchResult[]> {
         if (!this._exampleVectorService) {
             // Vector service not available - fall back to returning examples from cache filtered by scope
             LogError('FindSimilarAgentExamples: Example vector service not initialized. Falling back to cached examples without semantic ranking.');
-            return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK);
+            return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
 
         if (!queryText || queryText.trim().length === 0) {
@@ -1049,29 +1066,50 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         const queryEmbedding = await this.EmbedTextLocal(queryText);
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
             LogError('FindSimilarAgentExamples: Failed to generate embedding for query text. Falling back to cached examples.');
-            return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK);
+            return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
 
-        const needsFiltering = agentId || userId || companyId;
-        const filter = needsFiltering ? (metadata: ExampleEmbeddingMetadata) => {
-            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-            if (userId && metadata.userId && metadata.userId !== userId) return false;
-            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-            return true;
-        } : undefined;
+        const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
 
         const results = this._exampleVectorService.FindNearest(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
             undefined,
-            filter
+            composedFilter
         );
 
         return results.map(r => ({
             example: r.metadata.exampleEntity,
             similarity: r.score
         }));
+    }
+
+    /**
+     * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
+     * into a single filter callback for use with FindNearest on examples.
+     */
+    private composeExampleFilters(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
+    ): ((metadata: ExampleEmbeddingMetadata) => boolean) | undefined {
+        const needsBaseFilter = agentId || userId || companyId;
+        const baseFilter = needsBaseFilter
+            ? (metadata: ExampleEmbeddingMetadata): boolean => {
+                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
+                if (userId && metadata.userId && metadata.userId !== userId) return false;
+                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+                return true;
+            }
+            : undefined;
+
+        if (baseFilter && additionalFilter) {
+            return (metadata: ExampleEmbeddingMetadata): boolean =>
+                baseFilter(metadata) && additionalFilter(metadata);
+        }
+        return baseFilter || additionalFilter || undefined;
     }
 
     /**
@@ -1082,13 +1120,15 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         agentId?: string,
         userId?: string,
         companyId?: string,
-        topK: number = 3
+        topK: number = 3,
+        additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
     ): ExampleMatchResult[] {
         const examples = this.AgentExamples.filter(e => {
             if (e.Status !== 'Active') return false;
             if (agentId && e.AgentID !== agentId) return false;
             if (userId && e.UserID !== userId && e.UserID !== null) return false;
             if (companyId && e.CompanyID !== companyId && e.CompanyID !== null) return false;
+            if (additionalFilter && !additionalFilter(this.packageExampleMetadata(e))) return false;
             return true;
         });
 

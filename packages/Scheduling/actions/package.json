@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "vitest run"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -21,7 +22,8 @@
     "@memberjunction/actions": "4.2.0",
     "@memberjunction/actions-base": "4.2.0",
     "@memberjunction/scheduling-base-types": "4.2.0",
-    "cron-parser": "^4.9.0"
+    "cron-parser": "^4.9.0",
+    "luxon": "^3.2.1"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

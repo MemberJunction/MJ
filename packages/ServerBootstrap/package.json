@@ -19,7 +19,9 @@
     "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",

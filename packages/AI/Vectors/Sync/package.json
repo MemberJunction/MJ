@@ -11,7 +11,9 @@
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "buld:pgk": "pkgroll --sourcemap --minify",
-    "watch": "pkgroll --sourcemap --watch"
+    "watch": "pkgroll --sourcemap --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",

@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "vitest run"
   },
   "author": "MemberJunction.com",
   "license": "ISC",

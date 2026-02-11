@@ -95,12 +95,14 @@ export abstract class EntityActionInvocationBase {
             if (this._scriptCache.has(EntityActionID)) {
                 scriptFunction = this._scriptCache.get(EntityActionID);
             }
-            else
+            else {
                 scriptFunction = new Function('EntityActionContext', `
                     return (async () => {
                         ${scriptText}
                     })();
                 `);
+                this._scriptCache.set(EntityActionID, scriptFunction);
+            }
     
             const ret = await scriptFunction(entityActionContext);
             return ret || entityActionContext.result;

@@ -24,7 +24,9 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc -b && tsc-alias -f"
+    "build": "tsc -b && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@memberjunction/server-bootstrap-lite": "4.2.0",
@@ -51,7 +53,8 @@
     "@types/fs-extra": "^11.0.4",
     "rimraf": "6.1.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -33,7 +33,9 @@
     "build": "tsc -b && tsc-alias -f",
     "prepack": "npm run build && oclif manifest && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
-    "version": "oclif readme && git add README.md"
+    "version": "oclif readme && git add README.md",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "oclif": {
     "bin": "mj-ai",
@@ -83,7 +85,8 @@
     "oclif": "^4.22.73",
     "rimraf": "6.1.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.0.0"
