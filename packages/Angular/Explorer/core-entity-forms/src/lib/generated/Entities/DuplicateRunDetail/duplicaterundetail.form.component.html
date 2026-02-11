@@ -9,7 +9,7 @@
          FIELD PANELS
          ======================================== -->
     <!-- Run Identification Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="runIdentification"
         SectionName="Run Identification"
         Icon="fa fa-key"
@@ -36,7 +36,7 @@
     </mj-collapsible-panel>
 
     <!-- Processing Outcomes Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="processingOutcomes"
         SectionName="Processing Outcomes"
         Icon="fa fa-flag"
@@ -85,8 +85,18 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
         Icon="fa fa-cog"
@@ -110,12 +120,13 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
+
     <!-- ========================================
-         RELATED ENTITY PANELS - AFTER
+         RELATED ENTITY PANELS
          ======================================== -->
 
     <!-- Duplicate Run Detail Matches Section -->
-    <mj-collapsible-panel after-panels
+    <mj-collapsible-panel
         SectionKey="duplicateRunDetailMatches"
         SectionName="Duplicate Run Detail Matches"
         Icon="fa fa-clone"

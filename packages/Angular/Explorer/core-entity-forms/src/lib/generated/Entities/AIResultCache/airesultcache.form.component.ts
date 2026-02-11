@@ -19,6 +19,7 @@ export class AIResultCacheFormComponent extends BaseFormComponent {
             { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
             { sectionKey: 'resultInformation', sectionName: 'Result Information', isExpanded: false },
             { sectionKey: 'stakeholderLinks', sectionName: 'Stakeholder Links', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

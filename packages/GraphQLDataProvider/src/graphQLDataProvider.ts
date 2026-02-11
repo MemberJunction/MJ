@@ -1927,8 +1927,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                      CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(i.CompositeKey.KeyValuePairs)}
                     }
                 })});
-        if (data && data.GetEntityRecordNames)
-            return data.GetEntityRecordNames;
+        if (data && data.GetEntityRecordNames) {
+            // Convert plain CompositeKey objects from GraphQL response to real CompositeKey instances
+            return data.GetEntityRecordNames.map((result: EntityRecordNameResult) => ({
+                ...result,
+                CompositeKey: new CompositeKey(result.CompositeKey.KeyValuePairs)
+            }));
+        }
     }
 
     /**
@@ -2608,6 +2613,55 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Dispose WebSocket client
         this.disposeWSClient();
+    }
+
+    /**************************************************************************
+     * IS-A Child Entity Discovery
+     *
+     * Discovers which IS-A child entity, if any, has a record with the given
+     * primary key. Calls the server-side FindISAChildEntity GraphQL query
+     * which executes a single UNION ALL for efficiency.
+     **************************************************************************/
+
+    /**
+     * Discovers which IS-A child entity has a record matching the given PK.
+     * Calls the server-side FindISAChildEntity resolver via GraphQL.
+     *
+     * @param entityInfo The parent entity to check children for
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user (unused on client, present for interface parity)
+     * @returns The child entity name if found, or null if no child record exists
+     */
+    public async FindISAChildEntity(
+        entityInfo: EntityInfo,
+        recordPKValue: string,
+        contextUser?: UserInfo
+    ): Promise<{ ChildEntityName: string } | null> {
+        if (!entityInfo.IsParentType) return null;
+
+        const gql = `query FindISAChildEntity($EntityName: String!, $RecordID: String!) {
+            FindISAChildEntity(EntityName: $EntityName, RecordID: $RecordID) {
+                Success
+                ChildEntityName
+                ErrorMessage
+            }
+        }`;
+
+        try {
+            const result = await this.ExecuteGQL(gql, {
+                EntityName: entityInfo.Name,
+                RecordID: recordPKValue
+            });
+
+            if (result?.FindISAChildEntity?.Success && result.FindISAChildEntity.ChildEntityName) {
+                return { ChildEntityName: result.FindISAChildEntity.ChildEntityName };
+            }
+            return null;
+        }
+        catch (e) {
+            LogError(`FindISAChildEntity failed for ${entityInfo.Name}: ${e}`);
+            return null;
+        }
     }
 }
 
