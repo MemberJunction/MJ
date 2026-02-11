@@ -53,8 +53,8 @@
       "ID": "38129618-88C2-470F-9A32-A631AFB4371E"
     },
     "sync": {
-      "lastModified": "2026-02-01T00:27:33.597Z",
-      "checksum": "8b0b3ac7ed7a227f801fc74eee1ccd53c69d86410fffeea4820ead9a44037fcd"
+      "lastModified": "2026-02-11T21:30:33.334Z",
+      "checksum": "a41239828d0d1d17bd7fa3852ae3fced19bf708685a8416732d4025e5b7c297f"
     }
   },
   {
@@ -111,8 +111,8 @@
       "ID": "14BFD6A6-57E0-4A5B-9AE0-579123DA495B"
     },
     "sync": {
-      "lastModified": "2026-01-27T03:47:56.171Z",
-      "checksum": "e5246897201fbffda0dd2d6f0291f5a1ea0f08901dc9859e42fbc2b73748c59a"
+      "lastModified": "2026-02-11T21:30:32.498Z",
+      "checksum": "94c8a3c4f4f457db292386cff53c62897d4e9d4c6b81b215620a1926f2ebe328"
     }
   },
   {
@@ -227,8 +227,66 @@
       "ID": "078FC278-15E6-4264-82C7-EE19EB79100E"
     },
     "sync": {
-      "lastModified": "2026-01-27T03:47:56.296Z",
-      "checksum": "6f949682df80c57c5f1cdee0ca014c15b4f60e9351995d56ef341e156230b4c8"
+      "lastModified": "2026-02-11T21:30:32.539Z",
+      "checksum": "b83f341519a988a22d4b0b243136d746a38c2cfaf5cb17f80d5ab6c31bf2cf8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Memory Manager - Consolidate Notes",
+      "Description": "Consolidates semantically similar notes into a single comprehensive note that preserves all important information without redundancy.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/memory-manager/consolidate-notes.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "B1D449E1-5050-4E42-AE32-E58FD9617731"
+          },
+          "sync": {
+            "lastModified": "2026-02-11T21:30:33.553Z",
+            "checksum": "44771d370613047c8702cca8e935edf67b38ecac00051b49707576911961eef7"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "5887401E-BF50-45AF-B4A1-35D6D30B070B"
+          },
+          "sync": {
+            "lastModified": "2026-02-11T21:30:33.567Z",
+            "checksum": "b7f9171aaec23e10fa0d1925552a9455d156c4a5c046a442e530258dcbb7a1d5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "084F28BE-2F7E-406D-B80B-20B8EDB88950"
+    },
+    "sync": {
+      "lastModified": "2026-02-11T21:30:32.445Z",
+      "checksum": "cfea108693fd9f97112ee166ba16a0e27f1be371b60eeb480f5ffe38c22c14a2"
     }
   }
 ]

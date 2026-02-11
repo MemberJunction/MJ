@@ -9,7 +9,7 @@
          FIELD PANELS
          ======================================== -->
     <!-- Prompt Configuration Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="promptConfiguration"
         SectionName="Prompt Configuration"
         Icon="fa fa-sliders-h"
@@ -53,7 +53,7 @@
     </mj-collapsible-panel>
 
     <!-- Execution Details Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="executionDetails"
         SectionName="Execution Details"
         Icon="fa fa-clock"
@@ -89,7 +89,7 @@
     </mj-collapsible-panel>
 
     <!-- Result Information Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="resultInformation"
         SectionName="Result Information"
         Icon="fa fa-file-alt"
@@ -123,7 +123,7 @@
     </mj-collapsible-panel>
 
     <!-- Stakeholder Links Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="stakeholderLinks"
         SectionName="Stakeholder Links"
         Icon="fa fa-user"
@@ -150,8 +150,18 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
         Icon="fa fa-cog"

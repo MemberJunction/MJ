@@ -5,15 +5,17 @@
 
   <!-- Panel Header -->
   <div class="mj-forms-panel-header" role="button" tabindex="0" (click)="Toggle()">
-    <!-- Drag Handle -->
-    <div class="mj-forms-drag-handle"
-         title="Drag to reorder sections"
-         draggable="true"
-         (dragstart)="OnDragStart($event)"
-         (dragend)="OnDragEnd()"
-         (click)="$event.stopPropagation()">
-      <i class="fa-solid fa-grip-vertical"></i>
-    </div>
+    <!-- Drag Handle (hidden when reorder disabled) -->
+    @if (ReorderAllowed) {
+      <div class="mj-forms-drag-handle"
+           title="Drag to reorder sections"
+           draggable="true"
+           (dragstart)="OnDragStart($event)"
+           (dragend)="OnDragEnd()"
+           (click)="$event.stopPropagation()">
+        <i class="fa-solid fa-grip-vertical"></i>
+      </div>
+    }
 
     <!-- Icon + Title -->
     <div class="mj-forms-panel-title-group">

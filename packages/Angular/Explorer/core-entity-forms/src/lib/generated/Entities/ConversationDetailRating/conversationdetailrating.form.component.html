@@ -9,10 +9,10 @@
          FIELD PANELS
          ======================================== -->
     <!-- Reference IDs Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="referenceIDs"
         SectionName="Reference IDs"
-        Icon="fa fa-link"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -37,10 +37,10 @@
     </mj-collapsible-panel>
 
     <!-- Rating Information Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="ratingInformation"
         SectionName="Rating Information"
-        Icon="fa fa-star"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -62,8 +62,18 @@
 
     </mj-collapsible-panel>
 
+    <!-- Message Details Section -->
+    <mj-collapsible-panel
+        SectionKey="messageDetails"
+        SectionName="Message Details"
+        Icon="fa fa-comment"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
         Icon="fa fa-cog"

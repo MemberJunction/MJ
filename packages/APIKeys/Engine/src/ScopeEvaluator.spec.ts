@@ -7,7 +7,7 @@ import { ScopeEvaluator } from './ScopeEvaluator';
 import { UserInfo, setMockRunViewResult, clearMockRunViewResults } from './__mocks__/core';
 import { AuthorizationRequest } from './interfaces';
 
-// Note: Mocking is handled by moduleNameMapper in jest.config.js
+// Note: Mocking is handled by resolve.alias in vitest.config.ts
 // @memberjunction/core -> ./__mocks__/core.ts
 // @memberjunction/core-entities -> ./__mocks__/core-entities.ts
 

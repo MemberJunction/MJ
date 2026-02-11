@@ -1,4 +1,3 @@
-import { BaseEntity } from '@memberjunction/core';
 import { GridColumnConfig, DataGridSortState, GridRunViewParams } from '../models/grid-types';
 
 // Forward declaration to avoid circular dependency
@@ -45,7 +44,7 @@ export class CancelableGridEventArgs extends GridEventArgs {
  */
 export class RowEventArgs extends GridEventArgs {
   /** The row data (entity) */
-  readonly row: BaseEntity;
+  readonly row: Record<string, unknown>;
 
   /** The row index in the current view */
   readonly rowIndex: number;
@@ -53,7 +52,7 @@ export class RowEventArgs extends GridEventArgs {
   /** The row key (ID) */
   readonly rowKey: string;
 
-  constructor(grid: GridComponentRef, row: BaseEntity, rowIndex: number, rowKey: string) {
+  constructor(grid: GridComponentRef, row: Record<string, unknown>, rowIndex: number, rowKey: string) {
     super(grid);
     this.row = row;
     this.rowIndex = rowIndex;
@@ -71,7 +70,7 @@ export class CancelableRowEventArgs extends RowEventArgs {
   /** Optional reason for cancellation */
   cancelReason?: string;
 
-  constructor(grid: GridComponentRef, row: BaseEntity, rowIndex: number, rowKey: string) {
+  constructor(grid: GridComponentRef, row: Record<string, unknown>, rowIndex: number, rowKey: string) {
     super(grid, row, rowIndex, rowKey);
   }
 }
@@ -92,7 +91,7 @@ export class BeforeRowSelectEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     isAdditive: boolean,
@@ -119,7 +118,7 @@ export class AfterRowSelectEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     wasAdditive: boolean,
@@ -142,7 +141,7 @@ export class BeforeRowDeselectEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     currentSelection: string[]
@@ -164,7 +163,7 @@ export class AfterRowDeselectEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     newSelection: string[],
@@ -195,7 +194,7 @@ export class BeforeRowClickEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     mouseEvent: MouseEvent,
@@ -224,7 +223,7 @@ export class AfterRowClickEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     mouseEvent: MouseEvent,
@@ -253,7 +252,7 @@ export class BeforeRowDoubleClickEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     mouseEvent: MouseEvent,
@@ -282,7 +281,7 @@ export class AfterRowDoubleClickEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     mouseEvent: MouseEvent,
@@ -312,7 +311,7 @@ export class BeforeCellEditEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     column: GridColumnConfig,
@@ -336,7 +335,7 @@ export class AfterCellEditBeginEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     column: GridColumnConfig,
@@ -366,7 +365,7 @@ export class BeforeCellEditCommitEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     column: GridColumnConfig,
@@ -395,7 +394,7 @@ export class AfterCellEditCommitEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     column: GridColumnConfig,
@@ -424,7 +423,7 @@ export class BeforeCellEditCancelEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     column: GridColumnConfig,
@@ -453,7 +452,7 @@ export class AfterCellEditCancelEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     column: GridColumnConfig,
@@ -483,7 +482,7 @@ export class BeforeRowSaveEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     changes: Record<string, { oldValue: unknown; newValue: unknown }>
@@ -508,7 +507,7 @@ export class AfterRowSaveEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     changes: Record<string, { oldValue: unknown; newValue: unknown }>,
@@ -531,7 +530,7 @@ export class BeforeRowDeleteEventArgs extends CancelableRowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     isBatch: boolean
@@ -553,7 +552,7 @@ export class AfterRowDeleteEventArgs extends RowEventArgs {
 
   constructor(
     grid: GridComponentRef,
-    row: BaseEntity,
+    row: Record<string, unknown>,
     rowIndex: number,
     rowKey: string,
     success: boolean,

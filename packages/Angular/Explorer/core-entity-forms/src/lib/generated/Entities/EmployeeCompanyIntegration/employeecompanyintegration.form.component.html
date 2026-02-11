@@ -9,7 +9,7 @@
          FIELD PANELS
          ======================================== -->
     <!-- Integration Mapping Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="integrationMapping"
         SectionName="Integration Mapping"
         Icon="fa fa-link"
@@ -37,7 +37,7 @@
     </mj-collapsible-panel>
 
     <!-- External Identifier Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="externalIdentifier"
         SectionName="External Identifier"
         Icon="fa fa-id-badge"
@@ -62,8 +62,18 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
-    <mj-collapsible-panel field-panels
+    <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
         Icon="fa fa-cog"

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
-import { RunViewParams, CompositeKey } from '@memberjunction/core';
+import { RunViewParams, CompositeKey, Metadata } from '@memberjunction/core';
 import {
     EntityDataGridComponent,
     AfterRowDoubleClickEventArgs,
@@ -75,9 +75,20 @@ export class ExplorerEntityDataGridComponent {
         // Emit navigation event if enabled
         if (this.NavigateOnDoubleClick && event.row) {
             const entity = event.row;
-            const entityName = entity.EntityInfo?.Name;
+
+            const entityName = this.Params?.EntityName;
+            if (!entityName) 
+                throw new Error('Misconfiguration of ExplorerEntityDataGrid - no Params.EntityName')
+
+            const md = new Metadata();
+            const entityInfo = md.EntityByName(entityName);
             if (entityName) {
-                const pkey: CompositeKey = entity.PrimaryKey;
+                const pkey: CompositeKey = new CompositeKey();
+                const pkeyVals: Record<string, unknown> = {};
+                entityInfo.PrimaryKeys.forEach(pk => pkeyVals[pk.Name] = entity[pk.Name])
+                
+                pkey.LoadFromSimpleObject(pkeyVals);
+
                 this.Navigate.emit({
                     Kind: 'record',
                     EntityName: entityName,

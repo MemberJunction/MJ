@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnInit, Output, ChangeDetectorRef, ChangeDetectionStrategy, ViewEncapsulation } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, ChangeDetectorRef, ChangeDetectionStrategy, ViewEncapsulation, NgZone } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata, RunView } from '@memberjunction/core';
 import { RecordChangeEntity } from '@memberjunction/core-entities';
@@ -46,6 +46,7 @@ export class RecordChangesComponent implements OnInit {
 
   constructor(
     private cdr: ChangeDetectorRef,
+    private ngZone: NgZone,
     private mjNotificationService: MJNotificationService,
     private sanitizer: DomSanitizer
   ) {}
@@ -71,15 +72,17 @@ export class RecordChangesComponent implements OnInit {
     if (pkey && entityName) {
       const md = new Metadata();
       const changes = await md.GetRecordChanges<RecordChangeEntity>(entityName, pkey);
-      if (changes) {
-        this.viewData = changes.sort((a, b) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime());
-        this.filteredData = [...this.viewData];
-        this.IsLoading = false;
-      } else {
-        this.mjNotificationService.CreateSimpleNotification(`Error loading record changes for ${entityName} with primary key ${pkey.ToString()}.`, 'error');
-        this.IsLoading = false;
-      }
-      this.cdr.markForCheck();
+      this.ngZone.run(() => {
+        if (changes) {
+          this.viewData = changes.sort((a, b) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime());
+          this.filteredData = [...this.viewData];
+          this.IsLoading = false;
+        } else {
+          this.mjNotificationService.CreateSimpleNotification(`Error loading record changes for ${entityName} with primary key ${pkey.ToString()}.`, 'error');
+          this.IsLoading = false;
+        }
+        this.cdr.markForCheck();
+      });
     }
   }
 
@@ -120,9 +123,11 @@ export class RecordChangesComponent implements OnInit {
       });
 
       if (!itemsResult.Success || itemsResult.Results.length === 0) {
-        this.RecordLabels = [];
-        this.IsLoadingLabels = false;
-        this.cdr.markForCheck();
+        this.ngZone.run(() => {
+          this.RecordLabels = [];
+          this.IsLoadingLabels = false;
+          this.cdr.markForCheck();
+        });
         return;
       }
 
@@ -155,8 +160,10 @@ export class RecordChangesComponent implements OnInit {
       console.error('Error loading version labels for record:', error);
       this.RecordLabels = [];
     } finally {
-      this.IsLoadingLabels = false;
-      this.cdr.markForCheck();
+      this.ngZone.run(() => {
+        this.IsLoadingLabels = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

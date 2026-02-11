@@ -1,6 +1,6 @@
 import {
   Component, Input, Output, EventEmitter,
-  ChangeDetectionStrategy, ChangeDetectorRef, inject,
+  ChangeDetectionStrategy, ChangeDetectorRef, inject, NgZone,
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
   ViewEncapsulation
 } from '@angular/core';
@@ -11,6 +11,7 @@ import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-conf
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormWidthMode } from '../types/form-types';
 import { MjCollapsiblePanelComponent } from '../panel/collapsible-panel.component';
+import { SectionManagerItem } from '../section-manager/section-manager.component';
 import {
   BeforeSaveEventArgs,
   BeforeDeleteEventArgs,
@@ -41,11 +42,11 @@ import { BaseFormComponent } from '../base-form-component';
  *   (HistoryRequested)="OnHistoryRequested()"
  *   (ListManagementRequested)="OnListManagementRequested()">
  *
- *   <mj-collapsible-panel field-panels ...>
+ *   <mj-collapsible-panel SectionKey="details" ...>
  *     <mj-form-field ...></mj-form-field>
  *   </mj-collapsible-panel>
  *
- *   <mj-collapsible-panel after-panels ...>
+ *   <mj-collapsible-panel SectionKey="relatedOrders" Variant="related-entity" ...>
  *     <!-- related entity grid -->
  *   </mj-collapsible-panel>
  * </mj-record-form-container>
@@ -61,6 +62,7 @@ import { BaseFormComponent } from '../base-form-component';
 })
 export class MjRecordFormContainerComponent implements AfterContentInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
 
@@ -71,6 +73,9 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
   /** Controls visibility of list management dialog */
   ShowListManagement = false;
+
+  /** Controls visibility of section manager drawer */
+  ShowSectionManager = false;
 
   // ---- Primary Inputs ----
 
@@ -253,6 +258,27 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
     return this.Panels.filter(p => p.Expanded && p.IsVisible).length;
   }
 
+  // ---- Section Manager ----
+
+  /** Builds section info array from projected panels for the section manager drawer */
+  get SectionManagerItems(): SectionManagerItem[] {
+    if (!this.Panels) return [];
+    return this.Panels.map(p => ({
+      SectionKey: p.SectionKey,
+      SectionName: p.SectionName,
+      Variant: p.Variant,
+      Icon: p.Icon
+    }));
+  }
+
+  /** Current section order from the form component */
+  get SectionManagerOrder(): string[] {
+    if (this.fc?.getSectionOrder) {
+      return this.fc.getSectionOrder();
+    }
+    return [];
+  }
+
   // ---- Lifecycle ----
 
   ngAfterContentInit(): void {
@@ -344,8 +370,10 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
       } finally {
         // Use microtask timing to avoid ExpressionChangedAfterItHasBeenCheckedError
         await Promise.resolve();
-        this.IsSaving = false;
-        this.cdr.markForCheck();
+        this.ngZone.run(() => {
+          this.IsSaving = false;
+          this.cdr.markForCheck();
+        });
       }
     } else {
       this.SaveRequested.emit();
@@ -466,5 +494,28 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
       this.fc.resetSectionOrder();
       this.cdr.markForCheck();
     }
+  }
+
+  // ---- Section Manager Handlers ----
+
+  OnManageSections(): void {
+    this.ShowSectionManager = true;
+    this.cdr.markForCheck();
+  }
+
+  OnSectionOrderChange(newOrder: string[]): void {
+    if (this.fc?.setSectionOrder) {
+      this.fc.setSectionOrder(newOrder);
+      this.cdr.markForCheck();
+    }
+  }
+
+  OnSectionManagerReset(): void {
+    this.OnResetSectionOrder();
+  }
+
+  OnSectionManagerClosed(): void {
+    this.ShowSectionManager = false;
+    this.cdr.markForCheck();
   }
 }

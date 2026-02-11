@@ -81,23 +81,37 @@
     </div>
 
     <!-- Separator before hierarchy -->
-    @if (Config.ShowEntityHierarchy && HasParentEntities) {
+    @if (Config.ShowEntityHierarchy && IsInHierarchy) {
       <div class="mj-forms-toolbar-separator"></div>
     }
 
-    <!-- IS-A Entity Hierarchy Breadcrumb -->
-    @if (Config.ShowEntityHierarchy && HasParentEntities) {
+    <!-- IS-A Entity Hierarchy Breadcrumb (bidirectional: Root → ... → Current → ... → Leaf) -->
+    @if (Config.ShowEntityHierarchy && IsInHierarchy) {
       <div class="mj-entity-hierarchy">
+        <!-- Parent chain (root → ... → immediate parent) -->
         @for (parent of ParentChain; track parent.ID) {
           <a class="mj-entity-badge mj-entity-badge--parent"
-             [title]="'View parent: ' + parent.Name"
+             [title]="'Navigate to parent: ' + parent.Name"
              (click)="OnParentBadgeClick(parent, $event)">
             <i class="fa-solid fa-arrow-up"></i>
             {{ parent.Name }}
           </a>
           <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
         }
+
+        <!-- Current entity (always shown) -->
         <span class="mj-entity-badge mj-entity-badge--current">{{ EntityInfo?.Name }}</span>
+
+        <!-- Child chain (immediate child → ... → leaf) -->
+        @for (child of ChildChain; track child.EntityInfo.ID) {
+          <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+          <a class="mj-entity-badge mj-entity-badge--child"
+             [title]="'Navigate to child: ' + child.EntityInfo.Name"
+             (click)="OnChildBadgeClick(child, $event)">
+            <i class="fa-solid fa-arrow-down"></i>
+            {{ child.EntityInfo.Name }}
+          </a>
+        }
       </div>
     }
 
@@ -107,18 +121,21 @@
     <!-- Section Controls -->
     @if (Config.ShowSectionControls) {
       <div class="mj-forms-toolbar-group mj-section-controls">
-        <div class="mj-forms-search-wrapper">
-          <input type="text"
-            class="mj-section-search"
-            [value]="SearchFilter"
-            (input)="OnFilterInput($event)"
-            placeholder="Search sections...">
-          @if (SearchFilter) {
-            <button class="mj-clear-search" (click)="OnClearFilter()" title="Clear search">
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-          }
-        </div>
+        @if (Config.ShowSectionFilter) {
+          <div class="mj-forms-search-wrapper">
+            <input type="text"
+              class="mj-section-search"
+              [class.mj-section-search--active]="SearchFilter"
+              [value]="SearchFilter"
+              (input)="OnFilterInput($event)"
+              placeholder="Search sections...">
+            @if (SearchFilter) {
+              <button class="mj-clear-search" (click)="OnClearFilter()" title="Clear search">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            }
+          </div>
+        }
         <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
           [disabled]="ExpandedSectionCount >= VisibleSectionCount"
           (click)="OnExpandAll()" title="Expand all sections">
@@ -134,12 +151,17 @@
             <i class="fa-solid fa-arrow-rotate-left"></i>
           </button>
         }
+        @if (Config.ShowSectionManager) {
+          <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+            (click)="OnManageSections()" title="Manage section order">
+            <i class="fa-solid fa-bars-staggered"></i>
+          </button>
+        }
         <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
           (click)="OnToggleWidthMode()"
           [title]="WidthMode === 'centered' ? 'Expand to full width' : 'Center content'">
           <i [class]="WidthMode === 'centered' ? 'fa-solid fa-arrows-left-right-to-line' : 'fa-solid fa-compress'"></i>
         </button>
-        <span class="mj-section-count-pill">{{ ExpandedSectionCount }}/{{ TotalSectionCount }}</span>
       </div>
     }
 

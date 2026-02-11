@@ -104,12 +104,29 @@ export interface ISARelationshipConfig {
  * Base class for managing metadata within the CodeGen system. This class can be sub-classed to extend/override base class functionality. Make sure to use the RegisterClass decorator from the @memberjunction/global package
  * to properly register your subclass with a priority of 1+ to ensure it gets instantiated.
  */
+/**
+ * Represents a SchemaInfo record loaded from the database, used for resolving
+ * entity name prefix/suffix rules from database metadata.
+ */
+type SchemaInfoRecord = {
+   SchemaName: string;
+   EntityNamePrefix: string | null;
+   EntityNameSuffix: string | null;
+};
+
 export class ManageMetadataBase {
 
    protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
    public get SQLUtilityObject(): SQLUtilityBase {
        return this._sqlUtilityObject;
    }
+
+   /**
+    * Cached SchemaInfo records loaded from the database during metadata sync.
+    * Used by getNewEntityNameRule() to resolve prefix/suffix from DB metadata.
+    */
+   private static _schemaInfoRecords: SchemaInfoRecord[] = [];
+
    private static _newEntityList: string[] = [];
    /**
     * Globally scoped list of entities that have been created during the metadata management process.
@@ -2415,6 +2432,7 @@ NumberedRows AS (
 
          if (result && result.length > 0) {
             logStatus(`   > Updated/created ${result.length} SchemaInfo records`);
+            this.cacheSchemaInfoRecords(result);
          }
 
          return true;
@@ -2423,6 +2441,18 @@ NumberedRows AS (
          logError(e as string);
          return false;
       }
+   }
+
+   /**
+    * Caches SchemaInfo records from the database for use by getNewEntityNameRule().
+    * Only stores the fields relevant to entity name prefix/suffix resolution.
+    */
+   private cacheSchemaInfoRecords(records: Record<string, unknown>[]): void {
+      ManageMetadataBase._schemaInfoRecords = records.map(r => ({
+         SchemaName: r.SchemaName as string,
+         EntityNamePrefix: (r.EntityNamePrefix as string | null) ?? null,
+         EntityNameSuffix: (r.EntityNameSuffix as string | null) ?? null,
+      }));
    }
 
    protected async deleteUnneededEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
@@ -2926,9 +2956,10 @@ NumberedRows AS (
    }
 
    /**
-    * Uses the optional NameRulesBySchema section of the newEntityDefaults section of the config object to auto prefix/suffix a given entity name
-    * @param schemaName 
-    * @param entityName 
+    * Applies entity name prefix/suffix rules to a given entity name. Rules are resolved
+    * from mj.config.cjs first, then from SchemaInfo database metadata as a fallback.
+    * @param schemaName - the database schema name
+    * @param entityName - the base entity name to apply prefix/suffix to
     */
    protected markupEntityName(schemaName: string, entityName: string): string {
       const rule = this.getNewEntityNameRule(schemaName);
@@ -2942,16 +2973,80 @@ NumberedRows AS (
       }
    }
 
+   /**
+    * Resolves entity name prefix/suffix rules for a given schema. The resolution order is:
+    * 1. Config file (mj.config.cjs NameRulesBySchema) - highest priority
+    * 2. SchemaInfo database metadata (EntityNamePrefix/EntityNameSuffix columns) - fallback
+    *
+    * If both sources define rules for the same schema, the config file wins and a console
+    * warning is emitted to alert the user of the override.
+    */
    protected getNewEntityNameRule(schemaName: string): {SchemaName: string, EntityNamePrefix: string, EntityNameSuffix: string} | undefined {
-      const rule = configInfo.newEntityDefaults?.NameRulesBySchema?.find(r => {
+      const configRule = this.getConfigNameRule(schemaName);
+      const dbRule = this.getSchemaInfoNameRule(schemaName);
+
+      if (configRule && dbRule) {
+         this.logSchemaNameRuleConflict(schemaName, configRule, dbRule);
+         return configRule;
+      }
+
+      return configRule ?? dbRule;
+   }
+
+   /**
+    * Looks up a name rule from the mj.config.cjs NameRulesBySchema configuration.
+    */
+   private getConfigNameRule(schemaName: string): {SchemaName: string, EntityNamePrefix: string, EntityNameSuffix: string} | undefined {
+      return configInfo.newEntityDefaults?.NameRulesBySchema?.find(r => {
          let schemaNameToUse = r.SchemaName;
          if (schemaNameToUse?.trim().toLowerCase() === '${mj_core_schema}') {
-            // markup for this is to be replaced with the mj_core_schema() config
             schemaNameToUse = mj_core_schema();
          }
          return schemaNameToUse.trim().toLowerCase() === schemaName.trim().toLowerCase();
       });
-      return rule;
+   }
+
+   /**
+    * Looks up a name rule from the cached SchemaInfo database records.
+    * Only returns a rule if at least one of EntityNamePrefix or EntityNameSuffix is set.
+    */
+   private getSchemaInfoNameRule(schemaName: string): {SchemaName: string, EntityNamePrefix: string, EntityNameSuffix: string} | undefined {
+      const schemaRecord = ManageMetadataBase._schemaInfoRecords.find(
+         s => s.SchemaName.trim().toLowerCase() === schemaName.trim().toLowerCase()
+      );
+      if (!schemaRecord) {
+         return undefined;
+      }
+      // Only return a rule if at least one value is explicitly set
+      if (schemaRecord.EntityNamePrefix == null && schemaRecord.EntityNameSuffix == null) {
+         return undefined;
+      }
+      return {
+         SchemaName: schemaRecord.SchemaName,
+         EntityNamePrefix: schemaRecord.EntityNamePrefix ?? '',
+         EntityNameSuffix: schemaRecord.EntityNameSuffix ?? '',
+      };
+   }
+
+   /**
+    * Logs a warning when both the config file and SchemaInfo database metadata define
+    * entity name prefix/suffix rules for the same schema.
+    */
+   private logSchemaNameRuleConflict(
+      schemaName: string,
+      configRule: {EntityNamePrefix: string, EntityNameSuffix: string},
+      dbRule: {EntityNamePrefix: string, EntityNameSuffix: string}
+   ): void {
+      const configDesc = `prefix="${configRule.EntityNamePrefix}", suffix="${configRule.EntityNameSuffix}"`;
+      const dbDesc = `prefix="${dbRule.EntityNamePrefix}", suffix="${dbRule.EntityNameSuffix}"`;
+      const hasDifference = configRule.EntityNamePrefix !== dbRule.EntityNamePrefix ||
+                            configRule.EntityNameSuffix !== dbRule.EntityNameSuffix;
+      if (hasDifference) {
+         logStatus(`   ⚠️  Schema "${schemaName}" has entity name rules in both mj.config.cjs and SchemaInfo metadata:`);
+         logStatus(`       Config file:      ${configDesc}`);
+         logStatus(`       SchemaInfo (DB):   ${dbDesc}`);
+         logStatus(`       Using config file values (config overrides database metadata).`);
+      }
    }
 
    protected createNewUUID(): string {

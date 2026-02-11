@@ -30,7 +30,8 @@
     "build": "tsc && tsc-alias -f",
     "prepack": "npm run build && oclif manifest && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
-    "version": "oclif readme && git add README.md"
+    "version": "oclif readme && git add README.md",
+    "test": "vitest run"
   },
   "oclif": {
     "bin": "mj",

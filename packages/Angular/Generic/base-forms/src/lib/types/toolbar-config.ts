@@ -48,6 +48,15 @@ export interface FormToolbarConfig {
   /** Show the "Changes" button when record is dirty in edit mode. Default: true */
   ShowChangesButton: boolean;
 
+  /** Show the section search/filter input. Default: true */
+  ShowSectionFilter: boolean;
+
+  /** Allow drag-and-drop section reordering. Default: true */
+  AllowSectionReorder: boolean;
+
+  /** Show the "Manage Sections" button (section manager drawer). Default: true */
+  ShowSectionManager: boolean;
+
   // ---- Behavior ----
 
   /**
@@ -85,6 +94,9 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowSectionControls: true,
   ShowEditBanner: true,
   ShowChangesButton: true,
+  ShowSectionFilter: true,
+  AllowSectionReorder: true,
+  ShowSectionManager: true,
   StickyToolbar: true,
   AdditionalActions: null,
   CustomButtons: []
@@ -105,6 +117,9 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowSectionControls: true,
   ShowEditBanner: true,
   ShowChangesButton: true,
+  ShowSectionFilter: true,
+  AllowSectionReorder: true,
+  ShowSectionManager: true,
   StickyToolbar: true,
   AdditionalActions: null,
   CustomButtons: []
