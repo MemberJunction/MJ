@@ -17,7 +17,6 @@ export class ConversationDetailRatingFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'referenceIDs', sectionName: 'Reference IDs', isExpanded: true },
             { sectionKey: 'ratingInformation', sectionName: 'Rating Information', isExpanded: true },
-            { sectionKey: 'messageContent', sectionName: 'Message Content', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

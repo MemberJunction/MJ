@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ActionAuthorizationEntity, ActionCategoryEntity, ActionContextTypeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, ActionEntity, AIActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentNoteEntity, AIAgentRequestEntity, AIAgentEntity, AIModelActionEntity, AIModelTypeEntity, AIModelEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptEntity, AIResultCacheEntity, ApplicationEntityEntity, ApplicationSettingEntity, ApplicationEntity, AuditLogTypeEntity, AuditLogEntity, AuthorizationRoleEntity, AuthorizationEntity, CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationProviderEntity, CommunicationRunEntity, CompanyEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, CompanyIntegrationEntity, ContentFileTypeEntity, ContentItemAttributeEntity, ContentItemTagEntity, ContentItemEntity, ContentProcessRunEntity, ContentSourceParamEntity, ContentSourceTypeParamEntity, ContentSourceTypeEntity, ContentSourceEntity, ContentTypeAttributeEntity, ContentTypeEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextItemEntity, DataContextEntity, DatasetItemEntity, DatasetEntity, DuplicateRunDetailMatchEntity, DuplicateRunDetailEntity, DuplicateRunEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, EmployeeEntity, EntityEntity, EntityActionFilterEntity, EntityActionInvocationTypeEntity, EntityActionInvocationEntity, EntityActionParamEntity, EntityActionEntity, EntityAIActionEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity, EntityDocumentRunEntity, EntityDocumentSettingEntity, EntityDocumentTypeEntity, EntityDocumentEntity, EntityFieldValueEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipDisplayComponentEntity, EntityRelationshipEntity, EntitySettingEntity, ErrorLogEntity, ExplorerNavigationItemEntity, FileCategoryEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, FileEntity, GeneratedCodeCategoryEntity, GeneratedCodeEntity, IntegrationURLFormatEntity, IntegrationEntity, LibraryEntity, LibraryItemEntity, ListCategoryEntity, ListDetailEntity, ListEntity, AccessControlRuleEntity, AIAgentArtifactTypeEntity, AIAgentConfigurationEntity, AIAgentDataSourceEntity, AIAgentExampleEntity, AIAgentModalityEntity, AIAgentPermissionEntity, AIAgentPromptEntity, AIAgentRelationshipEntity, AIAgentRunMediaEntity, AIAgentRunStepEntity, AIAgentRunEntity, AIAgentStepPathEntity, AIAgentStepEntity, AIAgentTypeEntity, AIArchitectureEntity, AIConfigurationParamEntity, AIConfigurationEntity, AICredentialBindingEntity, AIModalityEntity, AIModelArchitectureEntity, AIModelCostEntity, AIModelModalityEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity, AIModelVendorEntity, AIPromptModelEntity, AIPromptRunMediaEntity, AIPromptRunEntity, AIVendorTypeDefinitionEntity, AIVendorTypeEntity, AIVendorEntity, APIApplicationScopeEntity, APIApplicationEntity, APIKeyApplicationEntity, APIKeyScopeEntity, APIKeyUsageLogEntity, APIKeyEntity, APIScopeEntity, ArtifactPermissionEntity, ArtifactTypeEntity, ArtifactUseEntity, ArtifactVersionAttributeEntity, ArtifactVersionEntity, ArtifactEntity, CollectionArtifactEntity, CollectionPermissionEntity, CollectionEntity, ComponentDependencyEntity, ComponentLibraryEntity, ComponentLibraryLinkEntity, ComponentRegistryEntity, ComponentEntity, ConversationArtifactPermissionEntity, ConversationArtifactVersionEntity, ConversationArtifactEntity, ConversationDetailArtifactEntity, ConversationDetailAttachmentEntity, ConversationDetailRatingEntity, CredentialCategoryEntity, CredentialTypeEntity, CredentialEntity, DashboardCategoryLinkEntity, DashboardCategoryPermissionEntity, DashboardPartTypeEntity, DashboardPermissionEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, EncryptionAlgorithmEntity, EncryptionKeySourceEntity, EncryptionKeyEntity, EnvironmentEntity, FileStorageAccountEntity, ListInvitationEntity, ListShareEntity, MCPServerConnectionPermissionEntity, MCPServerConnectionToolEntity, MCPServerConnectionEntity, MCPServerToolEntity, MCPServerEntity, MCPToolExecutionLogEntity, OAuthAuthServerMetadataCacheEntity, OAuthAuthorizationStateEntity, OAuthClientRegistrationEntity, OAuthTokenEntity, ProjectEntity, PublicLinkEntity, QueryParameterEntity, RecordLinkEntity, ReportUserStateEntity, ReportVersionEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, ScheduledJobEntity, TaskDependencyEntity, TaskTypeEntity, TaskEntity, TestRubricEntity, TestRunFeedbackEntity, TestRunEntity, TestSuiteRunEntity, TestSuiteTestEntity, TestSuiteEntity, TestTypeEntity, TestEntity, UserNotificationPreferenceEntity, UserNotificationTypeEntity, UserSettingEntity, VersionLabelItemEntity, VersionLabelRestoreEntity, VersionLabelEntity, OutputDeliveryTypeEntity, OutputFormatTypeEntity, OutputTriggerTypeEntity, QueryEntity, QueryCategoryEntity, QueryEntityEntity, QueryFieldEntity, QueryPermissionEntity, QueueTaskEntity, QueueTypeEntity, QueueEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationEntity, RecordChangeReplayRunEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportSnapshotEntity, ReportEntity, ResourceLinkEntity, ResourcePermissionEntity, ResourceTypeEntity, RoleEntity, RowLevelSecurityFilterEntity, ScheduledActionParamEntity, ScheduledActionEntity, SchemaInfoEntity, SkillEntity, TaggedItemEntity, TagEntity, TemplateCategoryEntity, TemplateContentTypeEntity, TemplateContentEntity, TemplateParamEntity, TemplateEntity, UserApplicationEntityEntity, UserApplicationEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewRunDetailEntity, UserViewRunEntity, UserViewEntity, UserEntity, VectorDatabaseEntity, VectorIndexEntity, VersionInstallationEntity, WorkflowEngineEntity, WorkflowRunEntity, WorkflowEntity, WorkspaceItemEntity, WorkspaceEntity } from '@memberjunction/core-entities';
+import { ActionAuthorizationEntity, ActionCategoryEntity, ActionContextTypeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, ActionEntity, AIActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentNoteEntity, AIAgentRequestEntity, AIAgentEntity, AIModelActionEntity, AIModelTypeEntity, AIModelEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptEntity, AIResultCacheEntity, ApplicationEntityEntity, ApplicationSettingEntity, ApplicationEntity, AuditLogTypeEntity, AuditLogEntity, AuthorizationRoleEntity, AuthorizationEntity, CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationProviderEntity, CommunicationRunEntity, CompanyEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, CompanyIntegrationEntity, ContentFileTypeEntity, ContentItemAttributeEntity, ContentItemTagEntity, ContentItemEntity, ContentProcessRunEntity, ContentSourceParamEntity, ContentSourceTypeParamEntity, ContentSourceTypeEntity, ContentSourceEntity, ContentTypeAttributeEntity, ContentTypeEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextItemEntity, DataContextEntity, DatasetItemEntity, DatasetEntity, DuplicateRunDetailMatchEntity, DuplicateRunDetailEntity, DuplicateRunEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, EmployeeEntity, EntityEntity, EntityActionFilterEntity, EntityActionInvocationTypeEntity, EntityActionInvocationEntity, EntityActionParamEntity, EntityActionEntity, EntityAIActionEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity, EntityDocumentRunEntity, EntityDocumentSettingEntity, EntityDocumentTypeEntity, EntityDocumentEntity, EntityFieldValueEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipDisplayComponentEntity, EntityRelationshipEntity, EntitySettingEntity, ErrorLogEntity, ExplorerNavigationItemEntity, FileCategoryEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, FileEntity, GeneratedCodeCategoryEntity, GeneratedCodeEntity, IntegrationURLFormatEntity, IntegrationEntity, LibraryEntity, LibraryItemEntity, ListCategoryEntity, ListDetailEntity, ListEntity, AccessControlRuleEntity, AIAgentArtifactTypeEntity, AIAgentConfigurationEntity, AIAgentDataSourceEntity, AIAgentExampleEntity, AIAgentModalityEntity, AIAgentPermissionEntity, AIAgentPromptEntity, AIAgentRelationshipEntity, AIAgentRunMediaEntity, AIAgentRunStepEntity, AIAgentRunEntity, AIAgentStepPathEntity, AIAgentStepEntity, AIAgentTypeEntity, AIArchitectureEntity, AIConfigurationParamEntity, AIConfigurationEntity, AICredentialBindingEntity, AIModalityEntity, AIModelArchitectureEntity, AIModelCostEntity, AIModelModalityEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity, AIModelVendorEntity, AIPromptModelEntity, AIPromptRunMediaEntity, AIPromptRunEntity, AIVendorTypeDefinitionEntity, AIVendorTypeEntity, AIVendorEntity, APIApplicationScopeEntity, APIApplicationEntity, APIKeyApplicationEntity, APIKeyScopeEntity, APIKeyUsageLogEntity, APIKeyEntity, APIScopeEntity, ArtifactPermissionEntity, ArtifactTypeEntity, ArtifactUseEntity, ArtifactVersionAttributeEntity, ArtifactVersionEntity, ArtifactEntity, CollectionArtifactEntity, CollectionPermissionEntity, CollectionEntity, ComponentDependencyEntity, ComponentLibraryEntity, ComponentLibraryLinkEntity, ComponentRegistryEntity, ComponentEntity, ConversationArtifactPermissionEntity, ConversationArtifactVersionEntity, ConversationArtifactEntity, ConversationDetailArtifactEntity, ConversationDetailAttachmentEntity, ConversationDetailRatingEntity, CredentialCategoryEntity, CredentialTypeEntity, CredentialEntity, DashboardCategoryLinkEntity, DashboardCategoryPermissionEntity, DashboardPartTypeEntity, DashboardPermissionEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, EncryptionAlgorithmEntity, EncryptionKeySourceEntity, EncryptionKeyEntity, EnvironmentEntity, FileStorageAccountEntity, ListInvitationEntity, ListShareEntity, MCPServerConnectionPermissionEntity, MCPServerConnectionToolEntity, MCPServerConnectionEntity, MCPServerToolEntity, MCPServerEntity, MCPToolExecutionLogEntity, OAuthAuthServerMetadataCacheEntity, OAuthAuthorizationStateEntity, OAuthClientRegistrationEntity, OAuthTokenEntity, OpenAppDependencyEntity, OpenAppInstallHistoryEntity, OpenAppEntity, ProjectEntity, PublicLinkEntity, QueryParameterEntity, RecordLinkEntity, ReportUserStateEntity, ReportVersionEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, ScheduledJobEntity, TaskDependencyEntity, TaskTypeEntity, TaskEntity, TestRubricEntity, TestRunFeedbackEntity, TestRunEntity, TestSuiteRunEntity, TestSuiteTestEntity, TestSuiteEntity, TestTypeEntity, TestEntity, UserNotificationPreferenceEntity, UserNotificationTypeEntity, UserSettingEntity, VersionLabelItemEntity, VersionLabelRestoreEntity, VersionLabelEntity, OutputDeliveryTypeEntity, OutputFormatTypeEntity, OutputTriggerTypeEntity, QueryEntity, QueryCategoryEntity, QueryEntityEntity, QueryFieldEntity, QueryPermissionEntity, QueueTaskEntity, QueueTypeEntity, QueueEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationEntity, RecordChangeReplayRunEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportSnapshotEntity, ReportEntity, ResourceLinkEntity, ResourcePermissionEntity, ResourceTypeEntity, RoleEntity, RowLevelSecurityFilterEntity, ScheduledActionParamEntity, ScheduledActionEntity, SchemaInfoEntity, SkillEntity, TaggedItemEntity, TagEntity, TemplateCategoryEntity, TemplateContentTypeEntity, TemplateContentEntity, TemplateParamEntity, TemplateEntity, UserApplicationEntityEntity, UserApplicationEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewRunDetailEntity, UserViewRunEntity, UserViewEntity, UserEntity, VectorDatabaseEntity, VectorIndexEntity, VersionInstallationEntity, WorkflowEngineEntity, WorkflowRunEntity, WorkflowEntity, WorkspaceItemEntity, WorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -46918,6 +46918,784 @@ export class MJOAuthTokenResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Open App Dependencies
+//****************************************************************************
+@ObjectType({ description: `Inter-app dependency relationships between installed Open Apps` })
+export class MJOpenAppDependency_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    OpenAppID: string;
+        
+    @Field() 
+    @MaxLength(128)
+    DependsOnAppName: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    DependsOnAppID?: string;
+        
+    @Field() 
+    @MaxLength(200)
+    VersionRange: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    InstalledVersion?: string;
+        
+    @Field() 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(128)
+    OpenApp: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(128)
+    DependsOnApp?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Open App Dependencies
+//****************************************************************************
+@InputType()
+export class CreateMJOpenAppDependencyInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    OpenAppID?: string;
+
+    @Field({ nullable: true })
+    DependsOnAppName?: string;
+
+    @Field({ nullable: true })
+    DependsOnAppID: string | null;
+
+    @Field({ nullable: true })
+    VersionRange?: string;
+
+    @Field({ nullable: true })
+    InstalledVersion: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Open App Dependencies
+//****************************************************************************
+@InputType()
+export class UpdateMJOpenAppDependencyInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    OpenAppID?: string;
+
+    @Field({ nullable: true })
+    DependsOnAppName?: string;
+
+    @Field({ nullable: true })
+    DependsOnAppID?: string | null;
+
+    @Field({ nullable: true })
+    VersionRange?: string;
+
+    @Field({ nullable: true })
+    InstalledVersion?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Open App Dependencies
+//****************************************************************************
+@ObjectType()
+export class RunMJOpenAppDependencyViewResult {
+    @Field(() => [MJOpenAppDependency_])
+    Results: MJOpenAppDependency_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJOpenAppDependency_)
+export class MJOpenAppDependencyResolver extends ResolverBase {
+    @Query(() => RunMJOpenAppDependencyViewResult)
+    async RunMJOpenAppDependencyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOpenAppDependencyViewResult)
+    async RunMJOpenAppDependencyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOpenAppDependencyViewResult)
+    async RunMJOpenAppDependencyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Open App Dependencies';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJOpenAppDependency_, { nullable: true })
+    async MJOpenAppDependency(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJOpenAppDependency_ | null> {
+        this.CheckUserReadPermissions('MJ: Open App Dependencies', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenAppDependencies] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Dependencies', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Open App Dependencies', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJOpenAppDependency_)
+    async CreateMJOpenAppDependency(
+        @Arg('input', () => CreateMJOpenAppDependencyInput) input: CreateMJOpenAppDependencyInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Open App Dependencies', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJOpenAppDependency_)
+    async UpdateMJOpenAppDependency(
+        @Arg('input', () => UpdateMJOpenAppDependencyInput) input: UpdateMJOpenAppDependencyInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Open App Dependencies', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJOpenAppDependency_)
+    async DeleteMJOpenAppDependency(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Open App Dependencies', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Open App Install Histories
+//****************************************************************************
+@ObjectType({ description: `Audit trail of every install, upgrade, and removal for Open Apps` })
+export class MJOpenAppInstallHistory_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    OpenAppID: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Version: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    PreviousVersion?: string;
+        
+    @Field() 
+    @MaxLength(40)
+    Action: string;
+        
+    @Field() 
+    ManifestJSON: string;
+        
+    @Field({nullable: true}) 
+    Summary?: string;
+        
+    @Field() 
+    @MaxLength(16)
+    ExecutedByUserID: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    DurationSeconds?: number;
+        
+    @Field(() => Boolean) 
+    Success: boolean;
+        
+    @Field({nullable: true}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ErrorPhase?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(128)
+    OpenApp: string;
+        
+    @Field() 
+    @MaxLength(200)
+    ExecutedByUser: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Open App Install Histories
+//****************************************************************************
+@InputType()
+export class CreateMJOpenAppInstallHistoryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    OpenAppID?: string;
+
+    @Field({ nullable: true })
+    Version?: string;
+
+    @Field({ nullable: true })
+    PreviousVersion: string | null;
+
+    @Field({ nullable: true })
+    Action?: string;
+
+    @Field({ nullable: true })
+    ManifestJSON?: string;
+
+    @Field({ nullable: true })
+    Summary: string | null;
+
+    @Field({ nullable: true })
+    ExecutedByUserID?: string;
+
+    @Field(() => Int, { nullable: true })
+    DurationSeconds: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Success?: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    ErrorPhase: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Open App Install Histories
+//****************************************************************************
+@InputType()
+export class UpdateMJOpenAppInstallHistoryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    OpenAppID?: string;
+
+    @Field({ nullable: true })
+    Version?: string;
+
+    @Field({ nullable: true })
+    PreviousVersion?: string | null;
+
+    @Field({ nullable: true })
+    Action?: string;
+
+    @Field({ nullable: true })
+    ManifestJSON?: string;
+
+    @Field({ nullable: true })
+    Summary?: string | null;
+
+    @Field({ nullable: true })
+    ExecutedByUserID?: string;
+
+    @Field(() => Int, { nullable: true })
+    DurationSeconds?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Success?: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    ErrorPhase?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Open App Install Histories
+//****************************************************************************
+@ObjectType()
+export class RunMJOpenAppInstallHistoryViewResult {
+    @Field(() => [MJOpenAppInstallHistory_])
+    Results: MJOpenAppInstallHistory_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJOpenAppInstallHistory_)
+export class MJOpenAppInstallHistoryResolver extends ResolverBase {
+    @Query(() => RunMJOpenAppInstallHistoryViewResult)
+    async RunMJOpenAppInstallHistoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOpenAppInstallHistoryViewResult)
+    async RunMJOpenAppInstallHistoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOpenAppInstallHistoryViewResult)
+    async RunMJOpenAppInstallHistoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Open App Install Histories';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJOpenAppInstallHistory_, { nullable: true })
+    async MJOpenAppInstallHistory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJOpenAppInstallHistory_ | null> {
+        this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenAppInstallHistories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Install Histories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Open App Install Histories', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJOpenAppInstallHistory_)
+    async CreateMJOpenAppInstallHistory(
+        @Arg('input', () => CreateMJOpenAppInstallHistoryInput) input: CreateMJOpenAppInstallHistoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Open App Install Histories', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJOpenAppInstallHistory_)
+    async UpdateMJOpenAppInstallHistory(
+        @Arg('input', () => UpdateMJOpenAppInstallHistoryInput) input: UpdateMJOpenAppInstallHistoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Open App Install Histories', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJOpenAppInstallHistory_)
+    async DeleteMJOpenAppInstallHistory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Open App Install Histories', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Open Apps
+//****************************************************************************
+@ObjectType({ description: `Tracks all MJ Open Apps installed in this instance` })
+export class MJOpenApp_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(128)
+    Name: string;
+        
+    @Field() 
+    @MaxLength(400)
+    DisplayName: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Version: string;
+        
+    @Field() 
+    @MaxLength(400)
+    Publisher: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PublisherEmail?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    PublisherURL?: string;
+        
+    @Field() 
+    @MaxLength(1000)
+    RepositoryURL: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(256)
+    SchemaName?: string;
+        
+    @Field() 
+    @MaxLength(200)
+    MJVersionRange: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    License?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Icon?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(40)
+    Color?: string;
+        
+    @Field() 
+    ManifestJSON: string;
+        
+    @Field({nullable: true}) 
+    ConfigurationSchemaJSON?: string;
+        
+    @Field() 
+    @MaxLength(16)
+    InstalledByUserID: string;
+        
+    @Field() 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    InstalledByUser: string;
+        
+    @Field(() => [MJOpenAppDependency_])
+    MJ_OpenAppDependencies_DependsOnAppIDArray: MJOpenAppDependency_[]; // Link to MJ_OpenAppDependencies
+    
+    @Field(() => [MJOpenAppInstallHistory_])
+    MJ_OpenAppInstallHistories_OpenAppIDArray: MJOpenAppInstallHistory_[]; // Link to MJ_OpenAppInstallHistories
+    
+    @Field(() => [MJOpenAppDependency_])
+    MJ_OpenAppDependencies_OpenAppIDArray: MJOpenAppDependency_[]; // Link to MJ_OpenAppDependencies
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Open Apps
+//****************************************************************************
+@InputType()
+export class CreateMJOpenAppInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Version?: string;
+
+    @Field({ nullable: true })
+    Publisher?: string;
+
+    @Field({ nullable: true })
+    PublisherEmail: string | null;
+
+    @Field({ nullable: true })
+    PublisherURL: string | null;
+
+    @Field({ nullable: true })
+    RepositoryURL?: string;
+
+    @Field({ nullable: true })
+    SchemaName: string | null;
+
+    @Field({ nullable: true })
+    MJVersionRange?: string;
+
+    @Field({ nullable: true })
+    License: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field({ nullable: true })
+    Color: string | null;
+
+    @Field({ nullable: true })
+    ManifestJSON?: string;
+
+    @Field({ nullable: true })
+    ConfigurationSchemaJSON: string | null;
+
+    @Field({ nullable: true })
+    InstalledByUserID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Open Apps
+//****************************************************************************
+@InputType()
+export class UpdateMJOpenAppInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Version?: string;
+
+    @Field({ nullable: true })
+    Publisher?: string;
+
+    @Field({ nullable: true })
+    PublisherEmail?: string | null;
+
+    @Field({ nullable: true })
+    PublisherURL?: string | null;
+
+    @Field({ nullable: true })
+    RepositoryURL?: string;
+
+    @Field({ nullable: true })
+    SchemaName?: string | null;
+
+    @Field({ nullable: true })
+    MJVersionRange?: string;
+
+    @Field({ nullable: true })
+    License?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field({ nullable: true })
+    Color?: string | null;
+
+    @Field({ nullable: true })
+    ManifestJSON?: string;
+
+    @Field({ nullable: true })
+    ConfigurationSchemaJSON?: string | null;
+
+    @Field({ nullable: true })
+    InstalledByUserID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Open Apps
+//****************************************************************************
+@ObjectType()
+export class RunMJOpenAppViewResult {
+    @Field(() => [MJOpenApp_])
+    Results: MJOpenApp_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJOpenApp_)
+export class MJOpenAppResolver extends ResolverBase {
+    @Query(() => RunMJOpenAppViewResult)
+    async RunMJOpenAppViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOpenAppViewResult)
+    async RunMJOpenAppViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOpenAppViewResult)
+    async RunMJOpenAppDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Open Apps';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJOpenApp_, { nullable: true })
+    async MJOpenApp(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJOpenApp_ | null> {
+        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenApps] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Open Apps', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJOpenAppDependency_])
+    async MJ_OpenAppDependencies_DependsOnAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open App Dependencies', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenAppDependencies] WHERE [DependsOnAppID]='${mjopenapp_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Dependencies', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open App Dependencies', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOpenAppInstallHistory_])
+    async MJ_OpenAppInstallHistories_OpenAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenAppInstallHistories] WHERE [OpenAppID]='${mjopenapp_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Install Histories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open App Install Histories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOpenAppDependency_])
+    async MJ_OpenAppDependencies_OpenAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open App Dependencies', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenAppDependencies] WHERE [OpenAppID]='${mjopenapp_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Dependencies', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open App Dependencies', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJOpenApp_)
+    async CreateMJOpenApp(
+        @Arg('input', () => CreateMJOpenAppInput) input: CreateMJOpenAppInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Open Apps', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJOpenApp_)
+    async UpdateMJOpenApp(
+        @Arg('input', () => UpdateMJOpenAppInput) input: UpdateMJOpenAppInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Open Apps', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJOpenApp_)
+    async DeleteMJOpenApp(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Open Apps', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Projects
 //****************************************************************************
 @ObjectType({ description: `Container for grouping related conversations around a common topic, client, or initiative. Supports nesting for sub-projects.` })
@@ -63886,6 +64664,12 @@ export class MJUser_ {
     @Field(() => [MJOAuthAuthorizationState_])
     MJ_OAuthAuthorizationStates_UserIDArray: MJOAuthAuthorizationState_[]; // Link to MJ_OAuthAuthorizationStates
     
+    @Field(() => [MJOpenApp_])
+    MJ_OpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJ_OpenApps
+    
+    @Field(() => [MJOpenAppInstallHistory_])
+    MJ_OpenAppInstallHistories_ExecutedByUserIDArray: MJOpenAppInstallHistory_[]; // Link to MJ_OpenAppInstallHistories
+    
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
     
@@ -64755,6 +65539,28 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthAuthorizationStates] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Authorization States', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Authorization States', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOpenApp_])
+    async MJ_OpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenApps] WHERE [InstalledByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOpenAppInstallHistory_])
+    async MJ_OpenAppInstallHistories_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenAppInstallHistories] WHERE [ExecutedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Install Histories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open App Install Histories', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

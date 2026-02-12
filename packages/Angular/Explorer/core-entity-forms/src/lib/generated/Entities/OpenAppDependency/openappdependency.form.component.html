@@ -8,26 +8,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Reference IDs Section -->
+    <!-- Application Info Section -->
     <mj-collapsible-panel
-        SectionKey="referenceIDs"
-        SectionName="Reference IDs"
-        Icon="fa fa-link"
+        SectionKey="applicationInfo"
+        SectionName="Application Info"
+        Icon="fa fa-cubes"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ConversationDetailID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="UserID"
+            [ShowLabel]="false"
+            FieldName="OpenAppID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -36,26 +27,61 @@
 
     </mj-collapsible-panel>
 
-    <!-- Rating Information Section -->
+    <!-- Dependency Details Section -->
     <mj-collapsible-panel
-        SectionKey="ratingInformation"
-        SectionName="Rating Information"
-        Icon="fa fa-star"
+        SectionKey="dependencyDetails"
+        SectionName="Dependency Details"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Rating"
-            Type="number"
+            FieldName="DependsOnAppName"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Comments"
-            Type="textarea"
+            FieldName="DependsOnAppID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Version & Status Section -->
+    <mj-collapsible-panel
+        SectionKey="versionStatus"
+        SectionName="Version & Status"
+        Icon="fa fa-code-branch"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="VersionRange"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="InstalledVersion"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

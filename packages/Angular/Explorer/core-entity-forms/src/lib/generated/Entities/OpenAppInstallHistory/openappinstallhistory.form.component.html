@@ -8,17 +8,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Template Association Section -->
+    <!-- Application Package Section -->
     <mj-collapsible-panel
-        SectionKey="templateAssociation"
-        SectionName="Template Association"
-        Icon="fa fa-info-circle"
+        SectionKey="applicationPackage"
+        SectionName="Application Package"
+        Icon="fa fa-box"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="TemplateID"
+            FieldName="OpenAppID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -27,59 +27,41 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="EntityID"
+            FieldName="Version"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="RecordID"
+            FieldName="PreviousVersion"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ManifestJSON"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="TemplateContentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Parameter Specification Section -->
+    <!-- Installation Event Section -->
     <mj-collapsible-panel
-        SectionKey="parameterSpecification"
-        SectionName="Parameter Specification"
-        Icon="fa fa-info-circle"
+        SectionKey="installationEvent"
+        SectionName="Installation Event"
+        Icon="fa fa-tasks"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Type"
+            FieldName="Action"
             Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -87,7 +69,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="DefaultValue"
+            FieldName="Summary"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -95,7 +77,24 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="IsRequired"
+            FieldName="ExecutedByUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DurationSeconds"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Success"
             Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -103,33 +102,17 @@
 
     </mj-collapsible-panel>
 
-    <!-- Dynamic Linking & Filters Section -->
+    <!-- Error Details Section -->
     <mj-collapsible-panel
-        SectionKey="dynamicLinkingFilters"
-        SectionName="Dynamic Linking & Filters"
-        Icon="fa fa-info-circle"
+        SectionKey="errorDetails"
+        SectionName="Error Details"
+        Icon="fa fa-exclamation-triangle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="LinkedParameterName"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="LinkedParameterField"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ExtraFilter"
+            FieldName="ErrorMessage"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -137,21 +120,11 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="OrderBy"
-            Type="textarea"
+            FieldName="ErrorPhase"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Template Content Section -->
-    <mj-collapsible-panel
-        SectionKey="templateContent"
-        SectionName="Template Content"
-        Icon="fa fa-file-alt"
-        [Form]="this"
-        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 
