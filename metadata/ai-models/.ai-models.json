@@ -9545,5 +9545,95 @@
       "lastModified": "2026-02-01T00:26:53.584Z",
       "checksum": "4be2942ad204b42dba7e62d05fc9f54136b1b248b5938ec2cf4142cfc1c5cbc5"
     }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5",
+      "PowerRank": 20,
+      "Description": "Z.AI's (Zhipu AI) fifth-generation frontier model released February 11, 2026. Features 745B total parameters in a Mixture-of-Experts architecture (256 experts, 44B active per inference) with 200K token context window and 128K output capacity. Achieves 77.8% on SWE-bench Verified, 92.7% on AIME 2026 I, and 86.0% on GPQA-Diamond. Includes Deep Thinking mode for self-critique loops and record-low hallucination rates. Open-source under MIT license.",
+      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:AI Models.Name=GLM 4.7"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "DA488608-6A6B-4955-8266-8DF3B89E36DC"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.220Z",
+            "checksum": "579fd3b8c146054746c1a753ca0a35ccc313e73417014bb46aa8b2d1a1713452"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "ZhipuLLM",
+            "APIName": "glm-5",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E6CC92D4-8EDA-4C2D-BBFD-3F15055B48E6"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.232Z",
+            "checksum": "81b5c688ba73cba90b91c60ea81d4d1e9b880e480c15111a1471ca28e9e280bc"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-02-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 3.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 5 pricing on Z.AI as of February 2026. 745B parameter MoE model (44B active) with 200K context and 128K output. Cached input tokens available at $0.20/1M. State-of-the-art open-source model rivaling Claude Opus on benchmarks."
+          },
+          "primaryKey": {
+            "ID": "5A453FFB-DBF1-4363-B08F-7FC1AAB158CA"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.268Z",
+            "checksum": "5432e8153bdad5642a36a0c2cf7b7f8386a23afe62befa03db1ef7b62d34d343"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A4F2213B-E99D-46E5-806B-B71BF4DE653E"
+    },
+    "sync": {
+      "lastModified": "2026-02-12T19:54:35.177Z",
+      "checksum": "13bfc1ee59301cbfeb86894e547b8745402729680a4d36bd5a720ba35464fef8"
+    }
   }
 ]
