@@ -115,13 +115,28 @@ export default class Migrate extends Command {
         const migrateResult = spawnSync(flywayExePath, migrateArgs, { encoding: 'utf8' });
         const migrateOutput = migrateResult.stderr || migrateResult.stdout || '';
 
+        // DEBUG: Show raw output to diagnose false positives
+        if (flags.verbose) {
+          this.log('\n--- DEBUG: Raw Flyway Output ---');
+          this.log(migrateOutput);
+          this.log('--- END DEBUG ---\n');
+        }
+
         // Check if output contains error messages even if exit code is 0
+        // But trust success indicators - Flyway explicitly says "Successfully applied" when it works
+        const hasSuccessIndicator = migrateOutput.includes('Successfully applied') ||
+                                    migrateOutput.includes('is up to date') ||
+                                    migrateOutput.includes('Schema creation not necessary');
+
+        // Only flag errors if there's no success indicator AND error patterns exist
         // Exclude SQL Server informational messages and recompilation warnings
-        const hasErrorsInOutput = (migrateOutput.toLowerCase().includes('error') &&
+        const hasErrorsInOutput = !hasSuccessIndicator && (
+                                   (migrateOutput.toLowerCase().includes('error') &&
                                    !migrateOutput.includes('Error Code: 0') &&      // Informational messages
-                                   !migrateOutput.includes('Error Code: 15070')) || // Recompilation warnings
+                                   !migrateOutput.includes('Error Code: 15070') &&  // Recompilation warnings
+                                   !migrateOutput.includes('Error Code: 1945')) ||  // Index key length warnings
                                    migrateOutput.toLowerCase().includes('incorrect syntax') ||
-                                   migrateOutput.toLowerCase().includes('must be the only statement');
+                                   migrateOutput.toLowerCase().includes('must be the only statement'));
 
         if (migrateResult.status === 0 && !hasErrorsInOutput) {
           // Migration actually succeeded - don't throw error
@@ -186,7 +201,9 @@ export default class Migrate extends Command {
 
     const isConnectionError = fullError.includes('login failed') ||
                              fullError.includes('unable to obtain connection') ||
-                             fullError.includes('connection') && !fullError.includes('clientconnectionid');
+                             fullError.includes('connection refused') ||
+                             fullError.includes('connection timed out') ||
+                             fullError.includes('unable to connect');
 
     // Display error header
     if (isValidationError) {
@@ -265,7 +282,7 @@ export default class Migrate extends Command {
       this.logToStderr('💡 The database does not exist:');
       this.logToStderr(`   - Create the database: CREATE DATABASE ${config.dbDatabase}`);
       this.logToStderr('   - Or verify DB_DATABASE is set correctly in .env file');
-    } else if (fullError.includes('connection') || fullError.includes('timeout') || fullError.includes('refused')) {
+    } else if (isConnectionError) {
       this.logToStderr('💡 Cannot connect to SQL Server:');
       this.logToStderr('   - Verify SQL Server is running');
       this.logToStderr(`   - Check host and port: ${config.dbHost}:${config.dbPort}`);

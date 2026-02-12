@@ -1,5 +1,4 @@
 import { Command, Flags, Args } from '@oclif/core';
-import { AgentAuditService } from '@memberjunction/ai-cli';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
@@ -125,6 +124,8 @@ export default class AgentRun extends Command {
   };
 
   async run(): Promise<void> {
+    const { AgentAuditService } = await import('@memberjunction/ai-cli');
+
     const { args, flags } = await this.parse(AgentRun);
     const spinner = ora();
 

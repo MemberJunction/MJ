@@ -1,5 +1,40 @@
 # Change Log - @memberjunction/cli
 
+## 4.3.1
+
+### Patch Changes
+
+- f1b4a98: Restore singleton packages as regular dependencies in Angular Bootstrap and Explorer packages, and fix false positive error detection in CLI migrate command.
+- 690f6e0: no migration
+- Updated dependencies [86f6f48]
+- Updated dependencies [690f6e0]
+  - @memberjunction/codegen-lib@4.3.1
+  - @memberjunction/ai-cli@4.3.1
+  - @memberjunction/testing-cli@4.3.1
+  - @memberjunction/config@4.3.1
+  - @memberjunction/db-auto-doc@4.3.1
+  - @memberjunction/core@4.3.1
+  - @memberjunction/metadata-sync@4.3.1
+  - @memberjunction/query-gen@4.3.1
+  - @memberjunction/sqlserver-dataprovider@4.3.1
+  - @memberjunction/server-bootstrap-lite@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/ai-cli@4.3.0
+  - @memberjunction/server-bootstrap-lite@4.3.0
+  - @memberjunction/metadata-sync@4.3.0
+  - @memberjunction/codegen-lib@4.3.0
+  - @memberjunction/db-auto-doc@4.3.0
+  - @memberjunction/query-gen@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/testing-cli@4.3.0
+  - @memberjunction/config@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

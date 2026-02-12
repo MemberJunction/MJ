@@ -1,5 +1,32 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@4.3.1
+- @memberjunction/ai-engine-base@4.3.1
+- @memberjunction/ai-core-plus@4.3.1
+- @memberjunction/actions-base@4.3.1
+- @memberjunction/actions@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ai-agent-manager@4.3.0
+  - @memberjunction/ai-engine-base@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

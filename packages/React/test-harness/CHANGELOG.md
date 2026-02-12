@@ -1,5 +1,34 @@
 # @memberjunction/react-test-harness
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@4.3.1
+- @memberjunction/aiengine@4.3.1
+- @memberjunction/ai-vectors-memory@4.3.1
+- @memberjunction/interactive-component-types@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+- @memberjunction/react-runtime@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- 7b39671: Fix LocalEmbeddings retry logging with cleaner user-friendly output and resolve ESM compatibility issues for React packages after MJ 4.0 upgrade
+- Updated dependencies [564e1af]
+- Updated dependencies [7b39671]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/react-runtime@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/aiengine@4.3.0
+  - @memberjunction/ai-vectors-memory@4.3.0
+  - @memberjunction/interactive-component-types@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

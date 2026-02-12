@@ -20,13 +20,13 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "4.0.0",
-    "@memberjunction/core-entities": "4.0.0",
-    "@memberjunction/global": "4.0.0",
-    "@memberjunction/interactive-component-types": "4.0.0",
-    "@memberjunction/metadata-sync": "4.0.0",
-    "@memberjunction/react-test-harness": "4.0.0",
-    "@memberjunction/sqlserver-dataprovider": "4.0.0",
+    "@memberjunction/core": "4.3.0",
+    "@memberjunction/core-entities": "4.3.0",
+    "@memberjunction/global": "4.3.0",
+    "@memberjunction/interactive-component-types": "4.3.0",
+    "@memberjunction/metadata-sync": "4.3.0",
+    "@memberjunction/react-test-harness": "4.3.0",
+    "@memberjunction/sqlserver-dataprovider": "4.3.0",
     "dotenv": "^17.2.4",
     "mssql": "^12.2.0"
   }

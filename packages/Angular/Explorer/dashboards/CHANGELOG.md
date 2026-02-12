@@ -1,5 +1,90 @@
 # @memberjunction/ng-dashboards
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@4.3.1
+- @memberjunction/ng-explorer-settings@4.3.1
+- @memberjunction/ai-engine-base@4.3.1
+- @memberjunction/ai-core-plus@4.3.1
+- @memberjunction/api-keys-base@4.3.1
+- @memberjunction/actions-base@4.3.1
+- @memberjunction/ng-base-application@4.3.1
+- @memberjunction/ng-shared@4.3.1
+- @memberjunction/ng-testing@4.3.1
+- @memberjunction/ng-action-gallery@4.3.1
+- @memberjunction/ng-actions@4.3.1
+- @memberjunction/ng-agents@4.3.1
+- @memberjunction/ng-ai-test-harness@4.3.1
+- @memberjunction/ng-code-editor@4.3.1
+- @memberjunction/ng-container-directives@4.3.1
+- @memberjunction/ng-credentials@4.3.1
+- @memberjunction/ng-dashboard-viewer@4.3.1
+- @memberjunction/ng-entity-relationship-diagram@4.3.1
+- @memberjunction/ng-entity-viewer@4.3.1
+- @memberjunction/ng-export-service@4.3.1
+- @memberjunction/ng-filter-builder@4.3.1
+- @memberjunction/ng-list-management@4.3.1
+- @memberjunction/ng-markdown@4.3.1
+- @memberjunction/ng-notifications@4.3.1
+- @memberjunction/ng-query-viewer@4.3.1
+- @memberjunction/ng-react@4.3.1
+- @memberjunction/ng-shared-generic@4.3.1
+- @memberjunction/ng-versions@4.3.1
+- @memberjunction/graphql-dataprovider@4.3.1
+- @memberjunction/interactive-component-types@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/export-engine@4.3.1
+- @memberjunction/global@4.3.1
+- @memberjunction/skip-types@4.3.1
+- @memberjunction/templates-base-types@4.3.1
+- @memberjunction/testing-engine-base@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/graphql-dataprovider@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ng-core-entity-forms@4.3.0
+  - @memberjunction/ng-explorer-settings@4.3.0
+  - @memberjunction/ng-shared@4.3.0
+  - @memberjunction/ng-testing@4.3.0
+  - @memberjunction/ng-actions@4.3.0
+  - @memberjunction/ng-ai-test-harness@4.3.0
+  - @memberjunction/ng-notifications@4.3.0
+  - @memberjunction/ng-react@4.3.0
+  - @memberjunction/ng-versions@4.3.0
+  - @memberjunction/ai-engine-base@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/api-keys-base@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/ng-base-application@4.3.0
+  - @memberjunction/ng-action-gallery@4.3.0
+  - @memberjunction/ng-agents@4.3.0
+  - @memberjunction/ng-code-editor@4.3.0
+  - @memberjunction/ng-container-directives@4.3.0
+  - @memberjunction/ng-credentials@4.3.0
+  - @memberjunction/ng-dashboard-viewer@4.3.0
+  - @memberjunction/ng-entity-relationship-diagram@4.3.0
+  - @memberjunction/ng-entity-viewer@4.3.0
+  - @memberjunction/ng-filter-builder@4.3.0
+  - @memberjunction/ng-list-management@4.3.0
+  - @memberjunction/ng-query-viewer@4.3.0
+  - @memberjunction/ng-shared-generic@4.3.0
+  - @memberjunction/interactive-component-types@4.3.0
+  - @memberjunction/skip-types@4.3.0
+  - @memberjunction/templates-base-types@4.3.0
+  - @memberjunction/testing-engine-base@4.3.0
+  - @memberjunction/ng-export-service@4.3.0
+  - @memberjunction/ng-markdown@4.3.0
+  - @memberjunction/export-engine@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

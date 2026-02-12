@@ -1,5 +1,32 @@
 # @memberjunction/metadata-sync
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/config@4.3.1
+- @memberjunction/graphql-dataprovider@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/core-entities-server@4.3.1
+- @memberjunction/global@4.3.1
+- @memberjunction/sqlserver-dataprovider@4.3.1
+- @memberjunction/server-bootstrap-lite@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/graphql-dataprovider@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/server-bootstrap-lite@4.3.0
+  - @memberjunction/core-entities-server@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/config@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

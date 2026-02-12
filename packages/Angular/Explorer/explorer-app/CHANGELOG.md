@@ -1,5 +1,25 @@
 # @memberjunction/ng-explorer-app
 
+## 4.3.1
+
+### Patch Changes
+
+- f1b4a98: Restore singleton packages as regular dependencies in Angular Bootstrap and Explorer packages, and fix false positive error detection in CLI migrate command.
+- Updated dependencies [f1b4a98]
+  - @memberjunction/ng-bootstrap@4.3.1
+  - @memberjunction/ng-auth-services@4.3.1
+  - @memberjunction/ng-explorer-core@4.3.1
+  - @memberjunction/ng-workspace-initializer@4.3.1
+  - @memberjunction/core@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- @memberjunction/ng-bootstrap@4.3.0
+- @memberjunction/ng-explorer-core@4.3.0
+- @memberjunction/ng-workspace-initializer@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

@@ -1,5 +1,29 @@
 # @memberjunction/testing-cli
 
+## 4.3.1
+
+### Patch Changes
+
+- 690f6e0: no migration
+  - @memberjunction/core@4.3.1
+  - @memberjunction/core-entities@4.3.1
+  - @memberjunction/global@4.3.1
+  - @memberjunction/sqlserver-dataprovider@4.3.1
+  - @memberjunction/testing-engine@4.3.1
+  - @memberjunction/testing-engine-base@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/testing-engine@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/testing-engine-base@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

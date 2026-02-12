@@ -1,5 +1,32 @@
 # @memberjunction/ng-explorer-modules
 
+## 4.3.1
+
+### Patch Changes
+
+- Updated dependencies [f1b4a98]
+  - @memberjunction/ng-explorer-core@4.3.1
+  - @memberjunction/ng-workspace-initializer@4.3.1
+  - @memberjunction/ng-core-entity-forms@4.3.1
+  - @memberjunction/ng-explorer-settings@4.3.1
+  - @memberjunction/ng-kendo-modules@4.3.1
+  - @memberjunction/ng-link-directives@4.3.1
+  - @memberjunction/ng-shared@4.3.1
+  - @memberjunction/ng-container-directives@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@4.3.0
+- @memberjunction/ng-explorer-core@4.3.0
+- @memberjunction/ng-explorer-settings@4.3.0
+- @memberjunction/ng-shared@4.3.0
+- @memberjunction/ng-workspace-initializer@4.3.0
+- @memberjunction/ng-link-directives@4.3.0
+- @memberjunction/ng-container-directives@4.3.0
+- @memberjunction/ng-kendo-modules@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

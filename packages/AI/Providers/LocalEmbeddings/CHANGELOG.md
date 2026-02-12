@@ -1,5 +1,20 @@
 # @memberjunction/ai-local-embeddings
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ai@4.3.1
+- @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- 7b39671: Fix LocalEmbeddings retry logging with cleaner user-friendly output and resolve ESM compatibility issues for React packages after MJ 4.0 upgrade
+  - @memberjunction/ai@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

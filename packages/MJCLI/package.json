@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/cli",
   "type": "module",
-  "version": "4.2.0",
+  "version": "4.3.1",
   "description": "MemberJunction command line tools",
   "keywords": [
     "oclif"
@@ -27,8 +27,8 @@
     "/oclif.manifest.json"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f",
-    "prepack": "npm run build && oclif manifest && oclif readme",
+    "build": "tsc && tsc-alias -f && oclif manifest",
+    "prepack": "npm run build && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md",
     "test": "vitest run"
@@ -53,16 +53,16 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
-    "@memberjunction/ai-cli": "4.2.0",
-    "@memberjunction/codegen-lib": "4.2.0",
-    "@memberjunction/config": "4.2.0",
-    "@memberjunction/core": "4.2.0",
-    "@memberjunction/db-auto-doc": "4.2.0",
-    "@memberjunction/metadata-sync": "4.2.0",
-    "@memberjunction/query-gen": "4.2.0",
-    "@memberjunction/server-bootstrap-lite": "4.2.0",
-    "@memberjunction/sqlserver-dataprovider": "4.2.0",
-    "@memberjunction/testing-cli": "4.2.0",
+    "@memberjunction/ai-cli": "4.3.1",
+    "@memberjunction/codegen-lib": "4.3.1",
+    "@memberjunction/config": "4.3.1",
+    "@memberjunction/core": "4.3.1",
+    "@memberjunction/db-auto-doc": "4.3.1",
+    "@memberjunction/metadata-sync": "4.3.1",
+    "@memberjunction/query-gen": "4.3.1",
+    "@memberjunction/server-bootstrap-lite": "4.3.1",
+    "@memberjunction/sqlserver-dataprovider": "4.3.1",
+    "@memberjunction/testing-cli": "4.3.1",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",
     "@oclif/plugin-version": "^2.2.36",

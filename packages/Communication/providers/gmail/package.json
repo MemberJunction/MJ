@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/communication-gmail",
   "type": "module",
-  "version": "4.2.0",
+  "version": "4.3.1",
   "description": "Gmail/Google Suite provider for MemberJunction Communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,9 +14,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "4.2.0",
-    "@memberjunction/core": "4.2.0",
-    "@memberjunction/global": "4.2.0",
+    "@memberjunction/communication-types": "4.3.1",
+    "@memberjunction/core": "4.3.1",
+    "@memberjunction/global": "4.3.1",
     "dotenv": "^17.2.4",
     "env-var": "^7.4.1",
     "googleapis": "^171.4.0"

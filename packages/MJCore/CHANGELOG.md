@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/core
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Minor Changes
+
+- 564e1af: migration
+
+### Patch Changes
+
+- @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

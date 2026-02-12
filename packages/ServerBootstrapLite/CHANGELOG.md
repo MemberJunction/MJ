@@ -1,5 +1,69 @@
 # @memberjunction/server-bootstrap-lite
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@4.3.1
+- @memberjunction/ai-agents@4.3.1
+- @memberjunction/ai-engine-base@4.3.1
+- @memberjunction/ai-core-plus@4.3.1
+- @memberjunction/ai-provider-bundle@4.3.1
+- @memberjunction/ai-reranker@4.3.1
+- @memberjunction/actions-apollo@4.3.1
+- @memberjunction/actions-base@4.3.1
+- @memberjunction/actions-bizapps-accounting@4.3.1
+- @memberjunction/actions-bizapps-crm@4.3.1
+- @memberjunction/actions-bizapps-formbuilders@4.3.1
+- @memberjunction/actions-bizapps-lms@4.3.1
+- @memberjunction/actions-bizapps-social@4.3.1
+- @memberjunction/core-actions@4.3.1
+- @memberjunction/actions@4.3.1
+- @memberjunction/doc-utils@4.3.1
+- @memberjunction/encryption@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/core-entities-server@4.3.1
+- @memberjunction/data-context-server@4.3.1
+- @memberjunction/scheduling-actions@4.3.1
+- @memberjunction/scheduling-engine-base@4.3.1
+- @memberjunction/scheduling-engine@4.3.1
+- @memberjunction/templates@4.3.1
+- @memberjunction/testing-engine@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [6f4d33f]
+- Updated dependencies [564e1af]
+  - @memberjunction/ai-agents@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ai-agent-manager@4.3.0
+  - @memberjunction/core-actions@4.3.0
+  - @memberjunction/scheduling-engine@4.3.0
+  - @memberjunction/testing-engine@4.3.0
+  - @memberjunction/ai-engine-base@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/ai-reranker@4.3.0
+  - @memberjunction/actions-apollo@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/actions-bizapps-accounting@4.3.0
+  - @memberjunction/actions-bizapps-crm@4.3.0
+  - @memberjunction/actions-bizapps-formbuilders@4.3.0
+  - @memberjunction/actions-bizapps-lms@4.3.0
+  - @memberjunction/actions-bizapps-social@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/doc-utils@4.3.0
+  - @memberjunction/encryption@4.3.0
+  - @memberjunction/core-entities-server@4.3.0
+  - @memberjunction/data-context-server@4.3.0
+  - @memberjunction/scheduling-actions@4.3.0
+  - @memberjunction/scheduling-engine-base@4.3.0
+  - @memberjunction/templates@4.3.0
+  - @memberjunction/ai-provider-bundle@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes
