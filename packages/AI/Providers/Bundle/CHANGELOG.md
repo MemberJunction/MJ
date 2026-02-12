@@ -1,5 +1,35 @@
 # @memberjunction/ai-provider-bundle
 
+## 4.4.0
+
+### Patch Changes
+
+- 3bab2cd: Add @memberjunction/ai-zhipu package for Z.AI GLM models including GLM 5 support
+- Updated dependencies [3bab2cd]
+  - @memberjunction/ai-zhipu@4.4.0
+  - @memberjunction/ai-recommendations-rex@4.4.0
+  - @memberjunction/ai-vectors-pinecone@4.4.0
+  - @memberjunction/ai-anthropic@4.4.0
+  - @memberjunction/ai-azure@4.4.0
+  - @memberjunction/ai-bedrock@4.4.0
+  - @memberjunction/ai-betty-bot@4.4.0
+  - @memberjunction/ai-blackforestlabs@4.4.0
+  - @memberjunction/ai-cerebras@4.4.0
+  - @memberjunction/ai-cohere@4.4.0
+  - @memberjunction/ai-elevenlabs@4.4.0
+  - @memberjunction/ai-fireworks@4.4.0
+  - @memberjunction/ai-gemini@4.4.0
+  - @memberjunction/ai-groq@4.4.0
+  - @memberjunction/ai-heygen@4.4.0
+  - @memberjunction/ai-lmstudio@4.4.0
+  - @memberjunction/ai-local-embeddings@4.4.0
+  - @memberjunction/ai-mistral@4.4.0
+  - @memberjunction/ai-ollama@4.4.0
+  - @memberjunction/ai-openai@4.4.0
+  - @memberjunction/ai-openrouter@4.4.0
+  - @memberjunction/ai-vertex@4.4.0
+  - @memberjunction/ai-xai@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes

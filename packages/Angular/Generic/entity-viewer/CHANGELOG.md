@@ -1,5 +1,20 @@
 # @memberjunction/ng-entity-viewer
 
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ng-filter-builder@4.4.0
+  - @memberjunction/ng-shared-generic@4.4.0
+  - @memberjunction/ng-timeline@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/ng-export-service@4.4.0
+  - @memberjunction/export-engine@4.4.0
+  - @memberjunction/global@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes

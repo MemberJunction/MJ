@@ -1,5 +1,28 @@
 # @memberjunction/ng-conversations
 
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-engine-base@4.4.0
+  - @memberjunction/ai-core-plus@4.4.0
+  - @memberjunction/ng-testing@4.4.0
+  - @memberjunction/ng-artifacts@4.4.0
+  - @memberjunction/ng-base-types@4.4.0
+  - @memberjunction/ng-code-editor@4.4.0
+  - @memberjunction/ng-container-directives@4.4.0
+  - @memberjunction/ng-notifications@4.4.0
+  - @memberjunction/ng-shared-generic@4.4.0
+  - @memberjunction/ng-tasks@4.4.0
+  - @memberjunction/graphql-dataprovider@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/ai@4.4.0
+  - @memberjunction/ng-markdown@4.4.0
+  - @memberjunction/global@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes

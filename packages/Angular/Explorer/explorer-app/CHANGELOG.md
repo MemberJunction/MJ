@@ -1,5 +1,17 @@
 # @memberjunction/ng-explorer-app
 
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ng-bootstrap@4.4.0
+  - @memberjunction/ng-auth-services@4.4.0
+  - @memberjunction/ng-explorer-core@4.4.0
+  - @memberjunction/ng-workspace-initializer@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes
