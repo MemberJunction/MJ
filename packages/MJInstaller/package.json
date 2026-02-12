@@ -1,0 +1,27 @@
+{
+  "name": "@memberjunction/installer",
+  "version": "4.0.0",
+  "description": "Headless, event-driven installer engine for MemberJunction",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.15"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "license": "ISC"
+}
