@@ -1,5 +1,11 @@
 # @memberjunction/ng-filter-builder
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/core@4.3.1
+
 ## 4.3.0
 
 ### Patch Changes

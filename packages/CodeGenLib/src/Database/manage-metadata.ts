@@ -452,6 +452,17 @@ export class ManageMetadataBase {
 
       let bSuccess = true;
       let start = new Date();
+
+      // Load SchemaInfo records early so that EntityNamePrefix/Suffix rules from the
+      // database are available when createNewEntities() names new entities.
+      logStatus('   Loading SchemaInfo records for entity name rules...');
+      if (! await this.loadSchemaInfoRecords(pool)) {
+         logError('   Error loading SchemaInfo records');
+         bSuccess = false;
+      }
+      logStatus(`    > Loaded SchemaInfo records in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+
+      start = new Date();
       logStatus('   Creating new entities...');
       if (! await this.createNewEntities(pool, currentUser)) {
          logError('   Error creating new entities');
@@ -2453,6 +2464,26 @@ NumberedRows AS (
          EntityNamePrefix: (r.EntityNamePrefix as string | null) ?? null,
          EntityNameSuffix: (r.EntityNameSuffix as string | null) ?? null,
       }));
+   }
+
+   /**
+    * Loads existing SchemaInfo records from the database into the cache so that
+    * entity name prefix/suffix rules are available before createNewEntities() runs.
+    * This is a read-only SELECT — it does NOT create or update any records.
+    */
+   protected async loadSchemaInfoRecords(pool: sql.ConnectionPool): Promise<boolean> {
+      try {
+         const sSQL = `SELECT * FROM [${mj_core_schema()}].SchemaInfo`;
+         const result = await pool.request().query(sSQL);
+         if (result?.recordset?.length > 0) {
+            this.cacheSchemaInfoRecords(result.recordset);
+         }
+         return true;
+      }
+      catch (e) {
+         logError(e as string);
+         return false;
+      }
    }
 
    protected async deleteUnneededEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
