@@ -16,6 +16,22 @@ interface RecordLabel {
   ItemCount: number;
 }
 
+/** A single field change with type-aware rendering info */
+export interface FieldChangeInfo {
+  field: string;
+  displayName: string;
+  oldValue: string;
+  newValue: string;
+  fieldType: 'boolean' | 'date' | 'number' | 'text';
+  diffHtml?: SafeHtml;
+}
+
+/** A group of changes that share the same date */
+export interface DateGroup {
+  label: string;
+  changes: RecordChangeEntity[];
+}
+
 @Component({
   standalone: false,
   selector: 'mj-record-changes',
@@ -32,6 +48,7 @@ export class RecordChangesComponent implements OnInit {
 
   viewData: RecordChangeEntity[] = [];
   filteredData: RecordChangeEntity[] = [];
+  dateGroups: DateGroup[] = [];
   expandedItems: Set<string> = new Set();
 
   // Version label state
@@ -76,6 +93,7 @@ export class RecordChangesComponent implements OnInit {
         if (changes) {
           this.viewData = changes.sort((a, b) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime());
           this.filteredData = [...this.viewData];
+          this.dateGroups = this.buildDateGroups(this.filteredData);
           this.IsLoading = false;
         } else {
           this.mjNotificationService.CreateSimpleNotification(`Error loading record changes for ${entityName} with primary key ${pkey.ToString()}.`, 'error');
@@ -86,12 +104,18 @@ export class RecordChangesComponent implements OnInit {
     }
   }
 
-  // Filter and search methods
+  // ─── Filter & Search ────────────────────────────────────────────
+
   onSearchChange(): void {
     this.applyFilters();
   }
 
   onFilterChange(): void {
+    this.applyFilters();
+  }
+
+  SetTypeFilter(type: string): void {
+    this.selectedType = this.selectedType === type ? '' : type;
     this.applyFilters();
   }
 
@@ -102,7 +126,33 @@ export class RecordChangesComponent implements OnInit {
     this.applyFilters();
   }
 
-  // Version label methods
+  private applyFilters(): void {
+    let filtered = [...this.viewData];
+
+    if (this.searchTerm.trim()) {
+      const search = this.searchTerm.toLowerCase();
+      filtered = filtered.filter(change =>
+        change.ChangesDescription?.toLowerCase().includes(search) ||
+        change.User?.toLowerCase().includes(search) ||
+        change.Comments?.toLowerCase().includes(search)
+      );
+    }
+
+    if (this.selectedType) {
+      filtered = filtered.filter(change => change.Type === this.selectedType);
+    }
+
+    if (this.selectedSource) {
+      filtered = filtered.filter(change => change.Source === this.selectedSource);
+    }
+
+    this.filteredData = filtered;
+    this.dateGroups = this.buildDateGroups(this.filteredData);
+    this.cdr.markForCheck();
+  }
+
+  // ─── Version Labels ─────────────────────────────────────────────
+
   public async LoadRecordLabels(): Promise<void> {
     if (!this.record) return;
 
@@ -114,7 +164,6 @@ export class RecordChangesComponent implements OnInit {
       const recordId = this.record.PrimaryKey.ToConcatenatedString();
 
       const rv = new RunView();
-      // Find all label items that reference this specific record
       const itemsResult = await rv.RunView<{ VersionLabelID: string }>({
         EntityName: 'MJ: Version Label Items',
         Fields: ['VersionLabelID'],
@@ -196,31 +245,8 @@ export class RecordChangesComponent implements OnInit {
     }
   }
 
-  private applyFilters(): void {
-    let filtered = [...this.viewData];
+  // ─── Timeline Interaction ───────────────────────────────────────
 
-    if (this.searchTerm.trim()) {
-      const search = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(change =>
-        change.ChangesDescription?.toLowerCase().includes(search) ||
-        change.User?.toLowerCase().includes(search) ||
-        change.Comments?.toLowerCase().includes(search)
-      );
-    }
-
-    if (this.selectedType) {
-      filtered = filtered.filter(change => change.Type === this.selectedType);
-    }
-
-    if (this.selectedSource) {
-      filtered = filtered.filter(change => change.Source === this.selectedSource);
-    }
-
-    this.filteredData = filtered;
-    this.cdr.markForCheck();
-  }
-
-  // Timeline interaction methods
   toggleExpansion(changeId: string): void {
     if (this.expandedItems.has(changeId)) {
       this.expandedItems.delete(changeId);
@@ -237,31 +263,51 @@ export class RecordChangesComponent implements OnInit {
     }
   }
 
-  // Utility methods for timeline display
-  getChangeTypeClass(type: string): string {
+  // ─── Date Grouping ─────────────────────────────────────────────
+
+  private buildDateGroups(changes: RecordChangeEntity[]): DateGroup[] {
+    const groups = new Map<string, RecordChangeEntity[]>();
+
+    for (const change of changes) {
+      const label = this.formatDateGroupLabel(new Date(change.ChangedAt));
+      if (!groups.has(label)) {
+        groups.set(label, []);
+      }
+      groups.get(label)!.push(change);
+    }
+
+    return Array.from(groups.entries()).map(([label, items]) => ({ label, changes: items }));
+  }
+
+  private formatDateGroupLabel(date: Date): string {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor((today.getTime() - target.getTime()) / 86400000);
+
+    const formatted = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+
+    if (diffDays === 0) return `Today \u2014 ${formatted}`;
+    if (diffDays === 1) return `Yesterday \u2014 ${formatted}`;
+    return formatted;
+  }
+
+  // ─── Display Helpers ────────────────────────────────────────────
+
+  getChangeTypeCardClass(type: string): string {
     switch (type) {
-      case 'Create': return 'change-create';
-      case 'Update': return 'change-update';
-      case 'Delete': return 'change-delete';
-      default: return 'change-unknown';
+      case 'Create': return 'type-create';
+      case 'Update': return 'type-update';
+      case 'Delete': return 'type-delete';
+      default: return 'type-update';
     }
   }
 
-  getChangeTypeIcon(type: string): string {
+  getChangeTypeBadgeText(type: string): string {
     switch (type) {
-      case 'Create': return 'fa-solid fa-plus';
-      case 'Update': return 'fa-solid fa-edit';
-      case 'Delete': return 'fa-solid fa-trash';
-      default: return 'fa-solid fa-question';
-    }
-  }
-
-  getChangeTypeBadgeClass(type: string): string {
-    switch (type) {
-      case 'Create': return 'badge-create';
-      case 'Update': return 'badge-update';
-      case 'Delete': return 'badge-delete';
-      default: return 'badge-unknown';
+      case 'Create': return 'Created';
+      case 'Delete': return 'Deleted';
+      default: return type;
     }
   }
 
@@ -280,6 +326,40 @@ export class RecordChangesComponent implements OnInit {
 
   getTimelineItemLabel(change: RecordChangeEntity): string {
     return `${change.Type} by ${change.User || 'Unknown User'} on ${this.formatFullDateTime(change.ChangedAt)}`;
+  }
+
+  getUserInitials(user: string | null): string {
+    if (!user) return '?';
+    // Handle email addresses: take first char of local part + first char of domain
+    if (user.includes('@')) {
+      const local = user.split('@')[0];
+      return local.substring(0, 2).toUpperCase();
+    }
+    // Handle names: first char of each word
+    const parts = user.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return user.substring(0, 2).toUpperCase();
+  }
+
+  getUserDisplayName(user: string | null): string {
+    if (!user) return 'Unknown';
+    if (user.includes('@')) return user.split('@')[0];
+    return user;
+  }
+
+  getUniqueContributorCount(): number {
+    const users = new Set(this.viewData.map(c => c.User).filter(Boolean));
+    return users.size;
+  }
+
+  formatTime(date: Date): string {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }).format(new Date(date));
   }
 
   formatRelativeTime(date: Date): string {
@@ -313,80 +393,98 @@ export class RecordChangesComponent implements OnInit {
     }).format(new Date(date));
   }
 
+  // ─── Change Summary ─────────────────────────────────────────────
+
   getChangeSummary(change: RecordChangeEntity): string {
-    if (change.Type === 'Create') {
-      return 'Record was created';
-    }
-    if (change.Type === 'Delete') {
-      return 'Record was deleted';
-    }
+    if (change.Type === 'Create') return 'Record created';
+    if (change.Type === 'Delete') return 'Record deleted';
 
     try {
       const changesJson = JSON.parse(change.ChangesJSON || '{}');
-      const fields = Object.keys(changesJson);
-      if (fields.length === 0) return 'No field changes detected';
+      const fieldNames = this.extractFieldDisplayNames(changesJson);
+      if (fieldNames.length === 0) return 'No field changes detected';
 
-      const fieldNames = fields.map(fieldKey => {
-        const changeInfo = changesJson[fieldKey];
-        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) =>
-          f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
-        );
-        return field?.DisplayNameOrName || changeInfo.field;
-      });
-
-      if (fieldNames.length === 1) {
-        return `${fieldNames[0]} changed`;
-      }
-      if (fieldNames.length === 2) {
-        return `${fieldNames[0]} and ${fieldNames[1]} changed`;
-      }
-      if (fieldNames.length <= 4) {
-        const lastField = fieldNames.pop();
-        return `${fieldNames.join(', ')}, and ${lastField} changed`;
-      }
-
-      return `${fieldNames.slice(0, 3).join(', ')}, and ${fieldNames.length - 3} other field${fieldNames.length - 3 > 1 ? 's' : ''} changed`;
+      return this.buildFieldListSummary(fieldNames);
     } catch {
       return change.ChangesDescription || 'Changes made';
     }
   }
 
-  getFieldChanges(change: RecordChangeEntity): Array<{field: string, displayName: string, oldValue: string, newValue: string, isBooleanField: boolean, diffHtml?: SafeHtml}> {
+  getCreatedFieldCount(change: RecordChangeEntity): number {
+    try {
+      if (!change.FullRecordJSON) return 0;
+      const record = JSON.parse(change.FullRecordJSON);
+      return this.record.EntityInfo.Fields
+        .filter((f: EntityFieldInfo) => record[f.Name] != null && record[f.Name] !== '')
+        .length;
+    } catch {
+      return 0;
+    }
+  }
+
+  private extractFieldDisplayNames(changesJson: Record<string, { field?: string }>): string[] {
+    return Object.keys(changesJson).map(fieldKey => {
+      const changeInfo = changesJson[fieldKey];
+      const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) =>
+        f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
+      );
+      return field?.DisplayNameOrName || changeInfo.field || fieldKey;
+    });
+  }
+
+  private buildFieldListSummary(fieldNames: string[]): string {
+    if (fieldNames.length === 1) return `${fieldNames[0]} changed`;
+    if (fieldNames.length === 2) return `${fieldNames[0]} and ${fieldNames[1]} changed`;
+    if (fieldNames.length <= 4) {
+      const last = fieldNames[fieldNames.length - 1];
+      return `${fieldNames.slice(0, -1).join(', ')}, and ${last} changed`;
+    }
+    const remaining = fieldNames.length - 3;
+    return `${fieldNames.slice(0, 3).join(', ')}, and ${remaining} other field${remaining > 1 ? 's' : ''} changed`;
+  }
+
+  // ─── Field Changes (type-aware) ────────────────────────────────
+
+  getFieldChanges(change: RecordChangeEntity): FieldChangeInfo[] {
     try {
       const changesJson = JSON.parse(change.ChangesJSON || '{}');
-      const fields = Object.keys(changesJson);
-
-      return fields.map(fieldKey => {
-        const changeInfo = changesJson[fieldKey];
-        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) =>
-          f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
-        );
-
-        const isBooleanField = field?.TSType === EntityFieldTSType.Boolean;
-        const isDateField = field?.TSType === EntityFieldTSType.Date;
-        let diffHtml: SafeHtml | undefined;
-
-        const formattedOld = this.formatChangeValue(changeInfo.oldValue, isDateField);
-        const formattedNew = this.formatChangeValue(changeInfo.newValue, isDateField);
-
-        if (!isBooleanField) {
-          if (formattedOld !== formattedNew) {
-            diffHtml = this.generateDiffHtml(formattedOld, formattedNew);
-          }
-        }
-
-        return {
-          field: changeInfo.field,
-          displayName: field?.DisplayNameOrName || changeInfo.field,
-          oldValue: formattedOld,
-          newValue: formattedNew,
-          isBooleanField,
-          diffHtml
-        };
-      });
+      return Object.keys(changesJson).map(fieldKey => this.buildFieldChangeInfo(changesJson[fieldKey]));
     } catch {
       return [];
     }
+  }
+
+  private buildFieldChangeInfo(changeInfo: { field?: string; oldValue?: unknown; newValue?: unknown }): FieldChangeInfo {
+    const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) =>
+      f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
+    );
+
+    const fieldType = this.classifyFieldType(field);
+    const isDateField = fieldType === 'date';
+    const formattedOld = this.formatChangeValue(changeInfo.oldValue, isDateField);
+    const formattedNew = this.formatChangeValue(changeInfo.newValue, isDateField);
+
+    let diffHtml: SafeHtml | undefined;
+    if (fieldType === 'text' && formattedOld !== formattedNew) {
+      diffHtml = this.generateDiffHtml(formattedOld, formattedNew);
+    }
+
+    return {
+      field: changeInfo.field || '',
+      displayName: field?.DisplayNameOrName || changeInfo.field || '',
+      oldValue: formattedOld,
+      newValue: formattedNew,
+      fieldType,
+      diffHtml
+    };
+  }
+
+  private classifyFieldType(field: EntityFieldInfo | undefined): 'boolean' | 'date' | 'number' | 'text' {
+    if (!field) return 'text';
+    if (field.TSType === EntityFieldTSType.Boolean) return 'boolean';
+    if (field.TSType === EntityFieldTSType.Date) return 'date';
+    if (field.TSType === EntityFieldTSType.Number) return 'number';
+    return 'text';
   }
 
   getCreatedFields(change: RecordChangeEntity): Array<{name: string, displayName: string, value: string}> {
@@ -408,6 +506,8 @@ export class RecordChangesComponent implements OnInit {
     }
   }
 
+  // ─── Value Formatting ───────────────────────────────────────────
+
   /**
    * Formats a change value for display. Handles corrupted date values (stored as empty objects)
    * and formats ISO date strings into a human-readable format.
@@ -415,54 +515,53 @@ export class RecordChangesComponent implements OnInit {
   private formatChangeValue(value: unknown, isDateField: boolean): string {
     if (value == null) return '';
 
-    // Handle object values (e.g., Date objects that were incorrectly serialized as {})
     if (typeof value === 'object') {
       const keys = Object.keys(value as Record<string, unknown>);
-      if (keys.length === 0) return ''; // Empty object from corrupted date serialization
+      if (keys.length === 0) return '';
       return JSON.stringify(value);
     }
 
-    // Format ISO date strings into a readable format
     if (isDateField && typeof value === 'string') {
       const date = new Date(value);
       if (!isNaN(date.getTime())) {
-        return date.toLocaleString();
+        return new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        }).format(date);
       }
     }
 
     return String(value);
   }
 
+  // ─── Diff Generation (text fields only) ─────────────────────────
+
   private generateDiffHtml(oldValue: string, newValue: string): SafeHtml {
     if (!oldValue && !newValue) {
-      return this.sanitizer.bypassSecurityTrustHtml('<div class="diff-container"><span class="diff-unchanged">(no change)</span></div>');
+      return this.sanitizer.bypassSecurityTrustHtml('<span class="rc-diff-unchanged">(no change)</span>');
     }
 
     if (!oldValue) {
-      return this.sanitizer.bypassSecurityTrustHtml(`<div class="diff-container"><span class="diff-added">${this.escapeHtml(newValue)}</span></div>`);
+      return this.sanitizer.bypassSecurityTrustHtml(`<span class="rc-diff-added">${this.escapeHtml(newValue)}</span>`);
     }
 
     if (!newValue) {
-      return this.sanitizer.bypassSecurityTrustHtml(`<div class="diff-container"><span class="diff-removed">${this.escapeHtml(oldValue)}</span></div>`);
+      return this.sanitizer.bypassSecurityTrustHtml(`<span class="rc-diff-removed">${this.escapeHtml(oldValue)}</span>`);
     }
 
     const useWordDiff = this.shouldUseWordDiff(oldValue, newValue);
     const diffs = useWordDiff ? diffWords(oldValue, newValue) : diffChars(oldValue, newValue);
 
-    let html = '<div class="diff-container">';
-
-    diffs.forEach((part: Change) => {
-      const escapedValue = this.escapeHtml(part.value);
-      if (part.added) {
-        html += `<span class="diff-added">${escapedValue}</span>`;
-      } else if (part.removed) {
-        html += `<span class="diff-removed">${escapedValue}</span>`;
-      } else {
-        html += `<span class="diff-unchanged">${escapedValue}</span>`;
-      }
-    });
-
-    html += '</div>';
+    const html = diffs.map((part: Change) => {
+      const escaped = this.escapeHtml(part.value);
+      if (part.added) return `<span class="rc-diff-added">${escaped}</span>`;
+      if (part.removed) return `<span class="rc-diff-removed">${escaped}</span>`;
+      return `<span class="rc-diff-unchanged">${escaped}</span>`;
+    }).join('');
 
     return this.sanitizer.bypassSecurityTrustHtml(html);
   }

@@ -8,7 +8,7 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"No tests configured yet\"",
+    "test": "vitest run --config vitest.config.ts",
     "build": "ngc"
   },
   "keywords": [],
