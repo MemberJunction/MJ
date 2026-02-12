@@ -1,5 +1,12 @@
 # @memberjunction/ng-deep-diff
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/core@4.3.1
+- @memberjunction/global@4.3.1
+
 ## 4.3.0
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @memberjunction/actions-bizapps-formbuilders
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/actions-base@4.3.1
+- @memberjunction/actions@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+
 ## 4.3.0
 
 ### Patch Changes

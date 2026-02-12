@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 4.3.1
+
+### Patch Changes
+
+- f1b4a98: Restore singleton packages as regular dependencies in Angular Bootstrap and Explorer packages, and fix false positive error detection in CLI migrate command.
+- Updated dependencies [f1b4a98]
+- Updated dependencies [318c578]
+  - @memberjunction/ng-auth-services@4.3.1
+  - @memberjunction/ng-record-changes@4.3.1
+  - @memberjunction/ng-base-forms@4.3.1
+  - @memberjunction/ng-entity-form-dialog@4.3.1
+  - @memberjunction/ng-explorer-settings@4.3.1
+  - @memberjunction/ng-dashboards@4.3.1
+  - @memberjunction/ai-engine-base@4.3.1
+  - @memberjunction/ai-core-plus@4.3.1
+  - @memberjunction/ng-base-application@4.3.1
+  - @memberjunction/ng-entity-permissions@4.3.1
+  - @memberjunction/ng-list-detail-grid@4.3.1
+  - @memberjunction/ng-shared@4.3.1
+  - @memberjunction/ng-ai-test-harness@4.3.1
+  - @memberjunction/ng-artifacts@4.3.1
+  - @memberjunction/ng-container-directives@4.3.1
+  - @memberjunction/ng-conversations@4.3.1
+  - @memberjunction/ng-dashboard-viewer@4.3.1
+  - @memberjunction/ng-entity-viewer@4.3.1
+  - @memberjunction/ng-file-storage@4.3.1
+  - @memberjunction/ng-generic-dialog@4.3.1
+  - @memberjunction/ng-notifications@4.3.1
+  - @memberjunction/ng-query-grid@4.3.1
+  - @memberjunction/ng-record-selector@4.3.1
+  - @memberjunction/ng-resource-permissions@4.3.1
+  - @memberjunction/ng-shared-generic@4.3.1
+  - @memberjunction/ng-tabstrip@4.3.1
+  - @memberjunction/ng-user-avatar@4.3.1
+  - @memberjunction/communication-types@4.3.1
+  - @memberjunction/entity-communications-client@4.3.1
+  - @memberjunction/graphql-dataprovider@4.3.1
+  - @memberjunction/core@4.3.1
+  - @memberjunction/core-entities@4.3.1
+  - @memberjunction/global@4.3.1
+  - @memberjunction/templates-base-types@4.3.1
+
 ## 4.3.0
 
 ### Patch Changes

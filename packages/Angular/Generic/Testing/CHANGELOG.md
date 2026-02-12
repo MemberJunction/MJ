@@ -1,5 +1,20 @@
 # @memberjunction/ng-testing
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@4.3.1
+- @memberjunction/ng-base-types@4.3.1
+- @memberjunction/ng-code-editor@4.3.1
+- @memberjunction/ng-container-directives@4.3.1
+- @memberjunction/ng-notifications@4.3.1
+- @memberjunction/graphql-dataprovider@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+- @memberjunction/testing-engine-base@4.3.1
+
 ## 4.3.0
 
 ### Patch Changes
