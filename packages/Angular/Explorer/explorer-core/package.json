@@ -18,19 +18,13 @@
   "devDependencies": {
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
-    "@memberjunction/core": "*",
-    "@memberjunction/global": "*",
-    "@memberjunction/ng-auth-services": "*",
     "sass": "^1.97.3"
   },
   "peerDependencies": {
     "@angular/common": "21.1.3",
     "@angular/core": "21.1.3",
     "@angular/forms": "21.1.3",
-    "@angular/router": "21.1.3",
-    "@memberjunction/core": "^4.2.0",
-    "@memberjunction/global": "^4.2.0",
-    "@memberjunction/ng-auth-services": "^4.2.0"
+    "@angular/router": "21.1.3"
   },
   "dependencies": {
     "@angular/cdk": "21.1.3",
@@ -39,11 +33,14 @@
     "@memberjunction/ai-core-plus": "4.3.0",
     "@memberjunction/ai-engine-base": "4.3.0",
     "@memberjunction/communication-types": "4.3.0",
+    "@memberjunction/core": "4.3.0",
     "@memberjunction/core-entities": "4.3.0",
     "@memberjunction/entity-communications-client": "4.3.0",
+    "@memberjunction/global": "4.3.0",
     "@memberjunction/graphql-dataprovider": "4.3.0",
     "@memberjunction/ng-ai-test-harness": "4.3.0",
     "@memberjunction/ng-artifacts": "4.3.0",
+    "@memberjunction/ng-auth-services": "4.3.0",
     "@memberjunction/ng-base-application": "4.3.0",
     "@memberjunction/ng-base-forms": "4.3.0",
     "@memberjunction/ng-container-directives": "4.3.0",
