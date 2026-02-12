@@ -106,8 +106,8 @@ PRINT '  Created [AdvancedEntities].[Product]';
 -- ---------------------------------------------------------------------------
 CREATE TABLE [AdvancedEntities].[Meeting] (
     [ID]              UNIQUEIDENTIFIER NOT NULL,  -- NO DEFAULT: shared PK from Product
-    [StartTime]       DATETIME2        NOT NULL,
-    [EndTime]         DATETIME2        NOT NULL,
+    [StartTime]       DATETIMEOFFSET   NOT NULL,
+    [EndTime]         DATETIMEOFFSET   NOT NULL,
     [Location]        NVARCHAR(500)    NULL,
     [MaxAttendees]    INT              NULL,
     [MeetingPlatform] NVARCHAR(100)    NULL,
@@ -191,7 +191,7 @@ PRINT '  Created [AdvancedEntities].[Customer]';
 CREATE TABLE [AdvancedEntities].[Order] (
     [ID]              UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
     [CustomerID]      UNIQUEIDENTIFIER NOT NULL,
-    [OrderDate]       DATETIME2        NOT NULL,
+    [OrderDate]       DATETIMEOFFSET   NOT NULL,
     [TotalAmount]     DECIMAL(18,2)    NOT NULL,
     [Status]          NVARCHAR(20)     NOT NULL,
     [ItemCount]       INT              NOT NULL DEFAULT 1,
