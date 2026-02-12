@@ -1,5 +1,4 @@
 import { Command, Flags, Args } from '@oclif/core';
-import { RunCommand } from '@memberjunction/testing-cli';
 
 export default class TestRun extends Command {
   static description = 'Execute a single test by ID or name';
@@ -50,6 +49,8 @@ export default class TestRun extends Command {
   };
 
   async run(): Promise<void> {
+    const { RunCommand } = await import('@memberjunction/testing-cli');
+
     const { args, flags } = await this.parse(TestRun);
 
     try {

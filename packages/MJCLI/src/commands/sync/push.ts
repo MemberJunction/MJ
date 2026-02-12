@@ -2,18 +2,6 @@ import { Command, Flags } from '@oclif/core';
 import { confirm } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import {
-  PushService,
-  ValidationService,
-  FormattingService,
-  loadMJConfig,
-  loadSyncConfig,
-  initializeProvider,
-  getSyncEngine,
-  getSystemUser,
-  resetSyncEngine,
-  configManager,
-} from '@memberjunction/metadata-sync';
 import path from 'path';
 
 export default class Push extends Command {
@@ -53,6 +41,12 @@ export default class Push extends Command {
   };
 
   async run(): Promise<void> {
+    const {
+      PushService, ValidationService, FormattingService,
+      loadMJConfig, loadSyncConfig, initializeProvider,
+      getSyncEngine, getSystemUser, resetSyncEngine, configManager,
+    } = await import('@memberjunction/metadata-sync');
+
     const { flags } = await this.parse(Push);
     const spinner = ora();
     const startTime = Date.now();

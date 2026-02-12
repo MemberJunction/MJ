@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { generateClassRegistrationsManifest } from '@memberjunction/codegen-lib';
 
 export default class CodeGenManifest extends Command {
     static description = 'Generate a class registrations manifest to prevent tree-shaking of @RegisterClass decorated classes';
@@ -44,6 +43,8 @@ export default class CodeGenManifest extends Command {
     };
 
     async run(): Promise<void> {
+        const { generateClassRegistrationsManifest } = await import('@memberjunction/codegen-lib');
+
         const { flags } = await this.parse(CodeGenManifest);
 
         const excludePackages = flags['exclude-packages'];

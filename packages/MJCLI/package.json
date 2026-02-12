@@ -27,8 +27,8 @@
     "/oclif.manifest.json"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f",
-    "prepack": "npm run build && oclif manifest && oclif readme",
+    "build": "tsc && tsc-alias -f && oclif manifest",
+    "prepack": "npm run build && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md",
     "test": "vitest run"
