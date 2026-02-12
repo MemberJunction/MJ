@@ -224,88 +224,303 @@ For the MJ core schema specifically:
 
 For custom schemas with prefixes, they should also align assuming the prefix is set to match the schema name (which is the expected convention). Worth verifying in testing.
 
-## Breaking Change Analysis
+## Breaking Change Analysis — v5.0
+
+### Decision: Bite the Bullet
+
+Rather than an opt-in flag that defers the problem, we will make this a clean breaking change in **MemberJunction v5.0**. The reasoning:
+
+1. **The `__mj` entity name inconsistency is tech debt** — older entities like "AI Models" have no `"MJ: "` prefix while newer ones like "MJ: AI Prompt Models" do. This is confusing, hard to remember, and will only get worse over time.
+2. **MJ's external consumer base is still small** — doing this now is far less painful than doing it later with a larger user base.
+3. **Multi-schema support requires this** — without prefixed ClassNames, cross-schema table name collisions are unresolvable. This is foundational for MJ to be truly multi-schema capable.
+4. **An opt-in flag just kicks the can** — it adds complexity, introduces an exception for `__mj`, and means the codebase carries two naming conventions indefinitely.
+
+### What Changes
+
+#### Entity Name Normalization (the bigger change)
+
+All `__mj` entities that currently lack the `"MJ: "` prefix will be renamed to include it. This eliminates the inconsistency between older and newer entities.
+
+Examples:
+
+| Current Name | New Name |
+|---|---|
+| `AI Models` | `MJ: AI Models` |
+| `AI Actions` | `MJ: AI Actions` |
+| `Entities` | `MJ: Entities` |
+| `Entity Fields` | `MJ: Entity Fields` |
+| `Entity Relationships` | `MJ: Entity Relationships` |
+| `Users` | `MJ: Users` |
+| `Roles` | `MJ: Roles` |
+| `Applications` | `MJ: Applications` |
+| ... | ... |
+
+Entities that already have the prefix (e.g., "MJ: AI Prompt Models") are unaffected.
+
+#### ClassName Prefixing (the original problem)
+
+With `EntityNamePrefix` now consistently applied, `vwEntities.ClassName` incorporates the prefix for all schemas that have one configured. No opt-in flag needed — the prefix in `SchemaInfo` is the signal.
+
+#### Combined Impact
+
+For a core entity like "AI Models" (BaseTable: `AIModel`):
+
+| Artifact | Before (v4.x) | After (v5.0) |
+|---|---|---|
+| Entity Name | `AI Models` | `MJ: AI Models` |
+| CodeName | `AIModels` | `MJAIModels` |
+| ClassName | `AIModel` | `MJAIModel` |
+| TS Class | `AIModelEntity` | `MJAIModelEntity` |
+| Zod Schema | `AIModelSchema` | `MJAIModelSchema` |
+| Zod Type | `AIModelEntityType` | `MJAIModelEntityType` |
+| Angular Form | `AIModelFormComponent` | `MJAIModelFormComponent` |
+| GetEntityObject | `'AI Models'` | `'MJ: AI Models'` |
+| @RegisterClass | `'AI Models'` | `'MJ: AI Models'` |
+| RunView EntityName | `'AI Models'` | `'MJ: AI Models'` |
+
+For user-schema entities with no prefix configured, **nothing changes**.
 
 ### Who Is Affected?
 
 ```mermaid
 flowchart TD
-    USER{"Does the user have<br/>multiple schemas with<br/>EntityNamePrefix set?"}
+    USER{"Installation type?"}
 
-    USER -- "No (single schema,<br/>no prefix)" --> SAFE["NO IMPACT<br/>ClassName unchanged"]
-    USER -- "Yes" --> AFFECTED["BREAKING CHANGE<br/>ClassName gains prefix"]
+    USER -- "Uses only user schemas<br/>with no prefix" --> SAFE["NO IMPACT<br/>All names unchanged"]
+    USER -- "References __mj entities<br/>by name in code" --> MJ_BREAK["BREAKING<br/>Entity names gain 'MJ: ' prefix"]
+    USER -- "Has custom schemas<br/>with EntityNamePrefix" --> CUSTOM_BREAK["BREAKING<br/>ClassNames gain prefix"]
 
-    AFFECTED --> IMPACT1["Entity subclass names change<br/>RolesEntity → CommitteesRolesEntity"]
-    AFFECTED --> IMPACT2["Angular form components change<br/>RolesFormComponent → CommitteesRolesFormComponent"]
-    AFFECTED --> IMPACT3["Angular selectors change<br/>gen-roles-form → gen-committeesroles-form"]
-    AFFECTED --> IMPACT4["Zod schemas/types change"]
-    AFFECTED --> IMPACT5["Import paths change"]
+    MJ_BREAK --> TOOL["Migration CLI tool<br/>automates rename"]
+    CUSTOM_BREAK --> TOOL
 
     style SAFE fill:#51cf66,color:#fff
-    style AFFECTED fill:#ff6b6b,color:#fff
+    style MJ_BREAK fill:#ff6b6b,color:#fff
+    style CUSTOM_BREAK fill:#ff6b6b,color:#fff
+    style TOOL fill:#339af0,color:#fff
 ```
 
-### Detailed Impact
+### Surfaces Where Entity Names Appear
 
-| Scenario | Impact |
-|---|---|
-| **Single schema, no prefix** (typical simple install) | **None** — `ClassName` stays exactly the same |
-| **Multiple schemas, no prefixes** | **None** — no prefix means no change to `ClassName`. However, these users already have a latent collision risk if table names overlap |
-| **`__mj` core schema** (MJ itself) | **Breaking** — core entity classes change from e.g. `AIModelEntity` to `MJAIModelEntity`. This is the biggest impact since it affects `@memberjunction/core-entities` and all code referencing those classes |
-| **Custom schemas with `EntityNamePrefix`** | **Breaking** — class names gain the prefix. Custom code referencing old class names must be updated |
+Entity name strings are referenced in many contexts. The migration must cover all of them:
 
-### The MJ Core Schema Question
+| Surface | Example | Migration Approach |
+|---|---|---|
+| TypeScript string literals | `GetEntityObject<T>('AI Models')` | AST-based tool |
+| TypeScript string literals | `RunView({ EntityName: 'AI Models' })` | AST-based tool |
+| TypeScript decorators | `@RegisterClass(BaseEntity, 'AI Models')` | AST-based tool |
+| SQL filter strings in TS | `ExtraFilter: "EntityName = 'AI Models'"` | AST-based tool (string content scan) |
+| Metadata JSON files | `{ "EntityName": "AI Models" }` | JSON key-value scan |
+| Config files (mj.config.cjs) | Entity name references | AST-based tool |
+| Database Entity.Name column | Stored entity names | SQL migration script |
+| External APIs / webhooks | Entity name parameters | Manual audit (documented) |
+| Angular templates | Typically use selectors, not names | Verify — likely no direct impact |
 
-The `__mj` schema currently has `EntityNamePrefix = "MJ: "` configured. This means **all MJ core entity classes would change**, e.g.:
+---
 
-- `AIModelEntity` → `MJAIModelEntity`
-- `EntityEntity` → `MJEntityEntity`
-- `UserEntity` → `MJUserEntity`
+## v5.0 Migration Strategy
 
-This is the most impactful part of the change. Options:
+### Versioning
 
-1. **Apply uniformly** — all schemas including `__mj` get the prefix. Clean and consistent, but massive breaking change for every MJ consumer.
-2. **Exempt `__mj` schema** — only apply prefix for non-core schemas. Reduces blast radius significantly but introduces an exception.
-3. **Opt-in flag** — add a `ApplyPrefixToClassName` boolean column to `SchemaInfo` (default `false`). Only schemas that explicitly opt in get the prefix. Zero breaking change until someone enables it.
+This is a **semver major version bump** (v4.x → v5.0). The breaking changes are:
+1. All `__mj` entity names gain `"MJ: "` prefix (affects `GetEntityObject`, `RunView`, `@RegisterClass`, etc.)
+2. All `ClassName` values for schemas with `EntityNamePrefix` gain the prefix (affects TS classes, Zod types, Angular components)
+3. All `CodeName` values change accordingly (derived from entity Name)
 
-### Recommendation: Option 3 (Opt-In Flag)
+### Phase 1: Database Migration (v4.x migration script)
 
-Add `ApplyPrefixToClassName BIT NOT NULL DEFAULT 0` to `SchemaInfo`. The `vwEntities` computation becomes:
+A Flyway migration that runs as part of the upgrade path to v5.0:
 
 ```sql
-__mj.GetProgrammaticName(
-    CASE WHEN si.ApplyPrefixToClassName = 1
-         THEN ISNULL(si.EntityNamePrefix, '')
-         ELSE ''
-    END
-    + e.BaseTable + ISNULL(e.NameSuffix, '')
-) AS ClassName,
+-- Rename all __mj entities that don't already have the 'MJ: ' prefix
+UPDATE [__mj].Entity
+SET Name = 'MJ: ' + Name
+WHERE SchemaName = '__mj'
+  AND Name NOT LIKE 'MJ: %'
+  AND Name NOT LIKE 'MJ:%'
 ```
 
-This means:
-- **Existing installations:** Zero impact. The flag defaults to `0`, `ClassName` stays the same.
-- **New multi-schema setups:** Set the flag to `1` on schemas where you want prefixed class names.
-- **MJ core schema:** Can optionally enable it in a future major version when the breaking change is acceptable.
-- **Users who want it now:** Flip the flag and re-run CodeGen. They accept the breaking change on their own terms.
+This migration ships as a **v4.x migration** so that the database is ready before the v5.0 baseline assumes the new names. The v5.0 baseline will already reflect the prefixed names.
 
-## Migration Checklist
+The `vwEntities` view change (incorporating `SchemaInfo.EntityNamePrefix` into `ClassName`) is also part of this migration.
 
-- [ ] Add `ApplyPrefixToClassName BIT NOT NULL DEFAULT 0` to `SchemaInfo` table
-- [ ] Update `vwEntities` to conditionally include prefix in `ClassName`
-- [ ] Update `spCreateSchemaInfo` and `spUpdateSchemaInfo` to include the new column
-- [ ] Update `vwSchemaInfos` base view (if it filters columns)
-- [ ] Run CodeGen to regenerate entity field metadata for SchemaInfo entity
+### Phase 2: MJ Codebase Update
+
+After the database migration, run CodeGen against the MJ repo itself. This regenerates:
+- `entity_subclasses.ts` — all class names updated
+- `generated.ts` (GraphQL resolvers) — imports updated
+- Angular generated forms — component names/selectors updated
+
+Then update all non-generated MJ code that references entity names by string. This is a large but mechanical change across the monorepo.
+
+### Phase 3: AST-Based Migration CLI Tool
+
+Build an `mj migrate-entity-names` CLI command that automates the rename for user codebases.
+
+#### Architecture
+
+```mermaid
+flowchart TD
+    subgraph "Migration CLI Tool"
+        DB["Query __mj.Entity<br/>WHERE Name changed"] --> MAP["Build rename map<br/>old name → new name"]
+        MAP --> AST["TypeScript AST Walker<br/>(ts-morph or TS Compiler API)"]
+        MAP --> JSON_SCAN["JSON File Scanner"]
+
+        AST --> STRINGS["Find string literals<br/>matching old entity names"]
+        AST --> DECORATORS["Find @RegisterClass<br/>decorator arguments"]
+        AST --> TEMPLATES["Find template literals<br/>with entity name references"]
+
+        STRINGS --> REPLACE["Replace with new name"]
+        DECORATORS --> REPLACE
+        TEMPLATES --> REPLACE
+        JSON_SCAN --> REPLACE
+
+        REPLACE --> REPORT["Generate change report<br/>file / line / before / after"]
+    end
+
+    subgraph "User Workflow"
+        REPORT --> REVIEW["Developer reviews<br/>changes in Git diff"]
+        REVIEW --> COMMIT["Commit if satisfied"]
+    end
+
+    style MAP fill:#339af0,color:#fff
+    style AST fill:#339af0,color:#fff
+    style REPORT fill:#51cf66,color:#fff
+```
+
+#### Key Design Decisions
+
+1. **AST-based, not regex-based** — Use the TypeScript Compiler API (`ts.createSourceFile`) or `ts-morph` to parse source files into ASTs. Walk the AST looking for:
+   - `StringLiteral` nodes whose text matches an old entity name
+   - `NoSubstitutionTemplateLiteral` nodes (backtick strings)
+   - `TemplateExpression` nodes (template literals with embedded entity names in the static parts)
+   - Decorator arguments (for `@RegisterClass`)
+
+   This eliminates false positives from comments, variable names, or partial matches within longer strings.
+
+2. **Rename map built from the database** — Query all entities where the name was changed (or more simply, all `__mj` entities where `Name` doesn't match `'MJ: ' + <old pattern>`). The tool doesn't maintain a hardcoded list — it discovers the mapping dynamically. This also means it works for any schema's prefix changes, not just `__mj`.
+
+3. **Dry-run mode** — `mj migrate-entity-names --dir ./src --dry-run` outputs a report of every proposed change without modifying files. The report includes:
+   - File path and line number
+   - Before/after text
+   - AST node type (string literal, decorator, template, etc.)
+   - Confidence level (exact match vs. substring within a larger string)
+
+4. **SQL strings within TypeScript** — Entity names also appear inside SQL filter strings (e.g., `ExtraFilter: "EntityName = 'AI Models'"`). The AST walker finds the outer string literal, then scans its text content for entity name patterns. These are flagged with lower confidence since the tool is doing string matching inside a string, but they're still caught.
+
+5. **JSON file support** — Scan `.json` files for values matching old entity names. This covers metadata files, config files, and any JSON-based entity references.
+
+6. **Git-friendly output** — The tool modifies files in place. Users see the full diff in `git diff` and can review every change before committing. The change report is also saved to a file for reference.
+
+#### Handling Edge Cases
+
+| Edge Case | Approach |
+|---|---|
+| Entity name as substring of a longer string | AST ensures we only match complete string literals, not substrings |
+| Entity name in comments | AST skips comment nodes — no false positives |
+| Entity name in SQL within a TS string | Scan string content, flag as lower confidence |
+| Entity name in `.json` files | JSON parser, match property values |
+| Dynamic string construction (`'AI ' + 'Models'`) | Cannot catch — document as limitation |
+| Entity names in non-TS files (`.py`, `.sql`, etc.) | Out of scope for AST — offer a separate grep-based fallback with manual review |
+| External APIs / webhooks | Cannot catch — document in migration guide |
+
+#### CLI Interface
+
+```bash
+# Dry run — show what would change
+mj migrate-entity-names --dir ./src --dry-run
+
+# Apply changes
+mj migrate-entity-names --dir ./src
+
+# Target specific schemas only
+mj migrate-entity-names --dir ./src --schema __mj
+
+# Include JSON files
+mj migrate-entity-names --dir ./src --include-json
+
+# Output report to file
+mj migrate-entity-names --dir ./src --dry-run --report ./migration-report.md
+```
+
+### Phase 4: Documentation and CHANGELOG
+
+The v5.0 release includes:
+
+1. **Complete rename table** — every entity whose name changed, old → new
+2. **Migration guide** — step-by-step instructions:
+   - Run Flyway migrations to update database
+   - Run `mj migrate-entity-names` on your codebase
+   - Review Git diff carefully
+   - Rebuild and test
+   - Audit external integrations manually
+3. **Known limitations** — what the tool cannot catch (dynamic strings, external APIs, non-TS files)
+4. **CHANGELOG entry** clearly marking this as a breaking change with semver major bump rationale
+
+### Timeline
+
+```mermaid
+gantt
+    title v5.0 Migration Timeline
+    dateFormat YYYY-MM-DD
+    section Database
+        Entity Name migration (4.x script)       :db1, 2026-02-15, 3d
+        vwEntities ClassName change               :db2, after db1, 2d
+        Run CodeGen on MJ repo                    :db3, after db2, 1d
+    section MJ Codebase
+        Update all __mj entity name strings       :mj1, after db3, 5d
+        Update tests and verify builds            :mj2, after mj1, 3d
+    section Migration Tool
+        Build AST-based rename tool               :tool1, 2026-02-15, 7d
+        Add dry-run and reporting                 :tool2, after tool1, 3d
+        Test against MJ repo as dogfood           :tool3, after tool2, 2d
+    section Release
+        Documentation and CHANGELOG               :doc1, after mj2, 3d
+        v5.0 release                              :milestone, after doc1, 0d
+```
+
+---
+
+## Implementation Checklist
+
+### Database & Views
+- [ ] Write v4.x Flyway migration to rename all unprefixed `__mj` entity names
+- [ ] Update `vwEntities` to incorporate `SchemaInfo.EntityNamePrefix` into `ClassName`
+- [ ] Update `MJ_BASE_BEFORE_SQL.sql` with the new view definition
+- [ ] Update `spCreateSchemaInfo` and `spUpdateSchemaInfo` for any new columns
+- [ ] Verify `vwEntityFields`, `vwEntityRelationships` and other dependent views propagate correctly
+
+### MJ Codebase
+- [ ] Run CodeGen to regenerate all entity subclasses, resolvers, and Angular forms
+- [ ] Update all entity name string references across the monorepo
+- [ ] Update all `@RegisterClass` decorators
+- [ ] Update all `RunView` / `GetEntityObject` calls
+- [ ] Update metadata JSON files
 - [ ] Verify `getGraphQLTypeNameBase()` alignment with new ClassName values
-- [ ] Add unit tests for ClassName generation with and without the flag
-- [ ] Update CHANGELOG noting the new opt-in capability
-- [ ] Document in CLAUDE.md / guides
+- [ ] Run full test suite — fix any broken tests
+
+### Migration CLI Tool
+- [ ] Implement AST-based TypeScript string literal scanner
+- [ ] Implement decorator argument scanner
+- [ ] Implement JSON file scanner
+- [ ] Build rename map from database query
+- [ ] Add dry-run mode with change report
+- [ ] Add `--dir`, `--schema`, `--include-json`, `--report` flags
+- [ ] Dogfood against MJ repo itself
+- [ ] Add unit tests for the tool
+
+### Documentation & Release
+- [ ] Write complete entity rename table (old → new)
+- [ ] Write step-by-step migration guide
+- [ ] Document known limitations
+- [ ] Write CHANGELOG entry
+- [ ] Tag v5.0 release
 
 ## Open Questions
 
 1. **Should `BaseTableCodeName` also get the prefix?** Current recommendation: No. `BaseTableCodeName` is meant to represent the raw table name. Adding prefix there would be redundant with the new `ClassName` and could break SQL generation that uses it for table references.
 
-2. **Should the `CodeName` computation change?** `CodeName` already includes the prefix (via entity `Name`). No change needed.
+2. **Should the `CodeName` computation change?** `CodeName` already includes the prefix (via entity `Name`). Once all entity names are prefixed consistently, `CodeName` will automatically be correct. No formula change needed.
 
-3. **Should we automatically set `ApplyPrefixToClassName = 1` for new schemas that have a prefix configured?** This would be a good ergonomic default — if you're configuring a prefix, you probably want it applied everywhere. But existing schemas would remain `0` to preserve backward compatibility.
+3. **Should we automatically set `ApplyPrefixToClassName` for new schemas that have a prefix?** Since we're going with the "always apply prefix when present" approach (no opt-in flag), this is moot. The `vwEntities` view unconditionally uses `SchemaInfo.EntityNamePrefix` if present.
 
-4. **Should we add a corresponding `ApplyPrefixToCodeName` flag?** `CodeName` already derives from `e.Name` which always includes the prefix. This is a different mechanism than `ClassName`. Probably not needed, but worth considering for symmetry.
+4. **How do we handle the `DisplayName` column?** When entity Name changes from "AI Models" to "MJ: AI Models", the `DisplayName` (used in UI) may need attention. Currently `DisplayName` is typically null (falls back to Name) or set explicitly. We should verify that Display Names remain user-friendly after the rename — e.g., `DisplayName = 'AI Models'` could stay as-is even when Name becomes `'MJ: AI Models'`, since the display name is what users see in the Explorer UI.
