@@ -1,5 +1,26 @@
 # @memberjunction/ai-agents
 
+## 4.3.0
+
+### Minor Changes
+
+- 6f4d33f: Fix Memory Manager contradiction handling: collapse duplicate merge candidates to create one replacement note instead of duplicates, update dedup prompt to distinguish additive preferences from true duplicates, skip dedup for merge notes, revoke-and-create instead of in-place overwrite, add verbose support from UI, and fallback gracefully when merge targets are missing
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ai-engine-base@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/aiengine@4.3.0
+  - @memberjunction/ai-prompts@4.3.0
+  - @memberjunction/ai-reranker@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/ai@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

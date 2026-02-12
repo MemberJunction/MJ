@@ -1,5 +1,16 @@
 # @memberjunction/actions-bizapps-social
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

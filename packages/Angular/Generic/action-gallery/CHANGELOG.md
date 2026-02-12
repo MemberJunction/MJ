@@ -1,5 +1,16 @@
 # @memberjunction/ng-action-gallery
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ng-ai-test-harness@4.3.0
+  - @memberjunction/ng-container-directives@4.3.0
+  - @memberjunction/ng-shared-generic@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

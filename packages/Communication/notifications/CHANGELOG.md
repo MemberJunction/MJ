@@ -1,5 +1,18 @@
 # @memberjunction/notifications
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/communication-types@4.3.0
+  - @memberjunction/communication-engine@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/templates@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes
