@@ -76,19 +76,17 @@ my-mj-app/
 
 ### Private Repositories
 
-Private repositories are fully supported. The consumer configures GitHub authentication via PAT, GitHub App Installation Token, or SSH key. The CLI uses the configured auth when fetching manifests from private repos.
+Private repositories are fully supported using standard Git and npm authentication — no special MJ infrastructure required:
+
+- **Private GitHub repos**: Configure a PAT via `GITHUB_TOKEN` environment variable (or SSH keys). The CLI uses standard `git` auth when cloning/fetching manifests.
+- **Private npm packages**: Configure `.npmrc` with scoped registry auth (see "Private npm Registries" under NPM Package Integration).
 
 ```javascript
 // mj.config.cjs — GitHub auth for private repos
 module.exports = {
   openApps: {
     github: {
-      // Option 1: Personal Access Token
-      token: process.env.GITHUB_TOKEN,
-      // Option 2: GitHub App
-      appId: process.env.GH_APP_ID,
-      installationId: process.env.GH_INSTALLATION_ID,
-      privateKey: process.env.GH_PRIVATE_KEY
+      token: process.env.GITHUB_TOKEN
     }
   }
 };
@@ -145,7 +143,7 @@ The MJ `config` package will expose a generic config loader where you provide a 
   // ── Migrations ────────────────────────────────────────────
   "migrations": {                                 // REQUIRED if app has database objects
     "directory": "migrations",                    // OPTIONAL - default: "migrations"
-    "engine": "flyway"                            // OPTIONAL - default: "flyway"
+    "engine": "skyway"                            // OPTIONAL - default: "skyway" (Flyway-compatible format)
   },
 
   // ── Metadata ──────────────────────────────────────────────
@@ -272,7 +270,7 @@ The MJ `config` package will expose a generic config loader where you provide a 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `migrations.directory` | string | No | Relative path to migrations. Default: `"migrations"`. |
-| `migrations.engine` | string | No | Only `"flyway"` supported. Default: `"flyway"`. |
+| `migrations.engine` | string | No | Migration engine. Default: `"skyway"` (Flyway-compatible format). |
 
 #### Packages
 
@@ -338,15 +336,24 @@ Rules:
 
 ### Entity Naming Convention
 
-To prevent entity name collisions across apps and with MJ core, app entities MUST use a prefix based on the app name:
+To prevent entity name collisions across apps and with MJ core, app entities MUST use a prefix. MJ already has an `EntityNamePrefix` field on the `SchemaInfo` table — the app's migration sets this for its schema, and all entities in that schema are prefixed accordingly:
 
 ```
-{AppDisplayName}: {EntityName}
+{EntityNamePrefix}: {EntityName}
 ```
 
 Examples: `Acme CRM: Contacts`, `Acme CRM: Deals`, `Acme CRM: Pipeline Stages`
 
-This mirrors the `MJ: ` prefix convention used by newer MJ core entities and ensures uniqueness in the global `Entity` metadata table.
+The app's initial migration should set the `EntityNamePrefix` on the `SchemaInfo` row for its schema:
+
+```sql
+-- Set the entity name prefix for this app's schema
+UPDATE __mj.SchemaInfo
+SET EntityNamePrefix = 'Acme CRM'
+WHERE SchemaName = 'acme_crm';
+```
+
+This mirrors the `MJ: ` prefix convention used by newer MJ core entities and ensures uniqueness in the global `Entity` metadata table. The prefix is stored in MJ metadata (not invented by convention), so the system can enforce and display it consistently.
 
 ### Cross-Schema References
 
@@ -366,7 +373,7 @@ CREATE TABLE ${flyway:defaultSchema}.Contact (
 Rules:
 - Apps MAY reference `__mj` schema entities via foreign keys
 - Apps MAY reference other installed app schemas (declared in `dependencies`)
-- Apps MUST NOT modify tables in `__mj` or other app schemas (this is trust-based — the CLI does not enforce it via migration scanning, but violating this voids compatibility guarantees)
+- Apps MUST NOT perform DDL modifications (ALTER TABLE, DROP TABLE, CREATE INDEX, etc.) on tables in `__mj` or other app schemas. However, apps ARE expected to INSERT rows into `__mj` metadata tables (Entity, EntityField, Action, Application, etc.) as DML — this is how apps register their metadata with the MJ system. This is trust-based — the CLI does not enforce it via migration scanning, but violating the DDL prohibition voids compatibility guarantees.
 - The `__mj` reference is always literal (not a placeholder) — it's the well-known core schema
 - Cross-app references are supported: app A's migrations MAY reference entities/tables defined by app B (via FK constraints or metadata UUIDs), provided B is declared in A's `dependencies`
 
@@ -407,9 +414,11 @@ module.exports = {
 
 ## Migrations
 
-### Flyway Integration
+### Migration Engine: Skyway
 
-App migrations follow the same Flyway conventions as MJ core. The key difference: **the default schema is the app's schema**, not `__mj`.
+MemberJunction uses **Skyway** — a TypeScript-native, open-source migration engine that is a drop-in replacement for Flyway ([github.com/MemberJunction/skyway](https://github.com/MemberJunction/skyway)). Skyway uses the same file naming conventions, database history table format, and placeholder syntax as Flyway, but is built natively in TypeScript and fixes several Flyway bugs (e.g., choking on JS/TS string templates in SQL, mishandling strings > 4000 chars).
+
+App migrations follow the same Skyway conventions as MJ core. The key difference: **the default schema is the app's schema**, not `__mj`.
 
 File naming convention:
 ```
@@ -423,13 +432,34 @@ V202602150000__v1.0.x__Add_Contact_Status.sql
 V202603010000__v1.1.x__Add_Deal_Pipeline.sql
 ```
 
-### Schema Placeholder
+### Schema References in App Migrations
 
-Migrations MUST use `${flyway:defaultSchema}` for the app schema. When the CLI runs migrations, it sets `flyway.defaultSchema` to the app's schema name from the manifest.
+App migrations reference two schemas — the app's own schema and `__mj`. The rules are:
 
-### Flyway History Table
+| Target | Syntax | Example |
+|--------|--------|---------|
+| **App's own tables** | `${flyway:defaultSchema}` | `CREATE TABLE ${flyway:defaultSchema}.Contact (...)` |
+| **MJ core metadata tables** | `__mj` (literal) | `INSERT INTO __mj.Entity (...)` |
 
-Each app gets its own Flyway history table within its schema:
+`${flyway:defaultSchema}` resolves to the app's schema name (e.g., `acme_crm`) because the CLI sets the default schema to the app schema when running migrations. (The `${flyway:defaultSchema}` placeholder name is retained for Flyway format compatibility.) It must NOT be used for `__mj` metadata tables — those are always referenced literally.
+
+#### Multi-Schema Placeholder Support
+
+`mj migrate` supports a `schemaPlaceholders` configuration that maps multiple schemas to named placeholders. This enables apps to use placeholder syntax for both their own schema and `__mj` if desired:
+
+```javascript
+// mj.config.cjs — schemaPlaceholders example
+schemaPlaceholders: [
+  { schema: '__mj', placeholder: '${mjSchema}' },
+  { schema: 'acme_crm', placeholder: '${flyway:defaultSchema}' }
+]
+```
+
+This is an optional convenience — app authors may use `__mj` literally (the default and simplest approach) or adopt `${mjSchema}` as a placeholder if they prefer all schema references to be parameterized. The CLI supports both patterns.
+
+### Migration History Table
+
+Each app gets its own migration history table within its schema (using the Flyway-compatible table format):
 ```
 acme_crm.flyway_schema_history
 ```
@@ -442,7 +472,7 @@ All MJ migration rules apply (see `/migrations/CLAUDE.md`), plus:
 
 1. Use `${flyway:defaultSchema}` for app tables — never hardcode the schema name
 2. Use `__mj` literally for core references
-3. Never modify `__mj` objects
+3. Never perform DDL on `__mj` objects (DML inserts into `__mj` metadata tables are expected)
 4. Hardcode UUIDs (not `NEWID()`)
 5. No `__mj_` timestamp columns — CodeGen adds these when it processes the consumer's schemas
 6. No FK indexes — CodeGen creates these when it processes the consumer's schemas
@@ -460,7 +490,7 @@ The app author runs CodeGen in their own development environment to generate the
 
 ### Baseline Migrations
 
-For major version jumps, apps MAY include a baseline migration using the Flyway `B` prefix:
+For major version jumps, apps MAY include a baseline migration using the `B` prefix (Flyway-compatible convention):
 
 ```
 B202602010000__v2.0_Baseline.sql    # Complete schema for fresh v2.0 installs
@@ -482,7 +512,7 @@ Migration files contain both DDL and DML:
 | Type | Examples |
 |---|---|
 | **DDL** | `CREATE TABLE`, `CREATE VIEW`, `CREATE PROCEDURE`, `CREATE SCHEMA` |
-| **DML — Metadata** | `INSERT INTO __mj.Entity`, `INSERT INTO __mj.EntityField`, `INSERT INTO __mj.Action`, `INSERT INTO __mj.Application`, etc. |
+| **DML — Metadata** | `INSERT INTO __mj.Entity`, `INSERT INTO __mj.EntityField`, `INSERT INTO __mj.Action`, `INSERT INTO __mj.Application`, etc. (always `__mj` literal — NOT `${flyway:defaultSchema}`) |
 | **DML — Seed Data** | Any initial data the app requires to function |
 
 ### Example: Entity Registration in a Migration
@@ -500,8 +530,8 @@ CREATE TABLE acme_crm.Contact (
     CONSTRAINT PK_Contact PRIMARY KEY (ID)
 );
 
--- DML: Register the entity with MJ metadata system
-INSERT INTO ${flyway:defaultSchema}.Entity (
+-- DML: Register the entity with MJ metadata system (use __mj literally, NOT ${flyway:defaultSchema})
+INSERT INTO __mj.Entity (
     ID, Name, SchemaName, BaseTable, Description,
     AllowCreateAPI, AllowUpdateAPI, AllowDeleteAPI,
     TrackRecordChanges, IncludeInAPI
@@ -513,7 +543,7 @@ INSERT INTO ${flyway:defaultSchema}.Entity (
 );
 
 -- DML: Register entity fields
-INSERT INTO ${flyway:defaultSchema}.EntityField (
+INSERT INTO __mj.EntityField (
     ID, EntityID, Name, Type, Length, AllowsNull, Description
 ) VALUES
     ('B2C3D4E5-F6A7-8901-BCDE-F12345678901',
@@ -526,8 +556,8 @@ INSERT INTO ${flyway:defaultSchema}.EntityField (
 ### Example: Application Registration in a Migration
 
 ```sql
--- Register the MJ Application for nav/UI
-INSERT INTO ${flyway:defaultSchema}.Application (
+-- Register the MJ Application for nav/UI (use __mj literally for metadata tables)
+INSERT INTO __mj.Application (
     ID, Name, Description, Icon, DefaultForNewUser, DefaultSequence
 ) VALUES (
     'D4E5F6A7-B8C9-0123-DEFG-456789ABCDEF',
@@ -558,8 +588,8 @@ When upgrading an app, the new version's migrations handle metadata changes too:
 -- DDL: Add column to existing table
 ALTER TABLE acme_crm.Contact ADD Status NVARCHAR(20) NOT NULL DEFAULT 'Active';
 
--- DML: Register the new field with MJ metadata
-INSERT INTO ${flyway:defaultSchema}.EntityField (
+-- DML: Register the new field with MJ metadata (always __mj for metadata tables)
+INSERT INTO __mj.EntityField (
     ID, EntityID, Name, Type, Length, AllowsNull, DefaultValue, Description
 ) VALUES (
     'C3D4E5F6-A7B8-9012-CDEF-G23456789ABC',
@@ -568,7 +598,7 @@ INSERT INTO ${flyway:defaultSchema}.EntityField (
 );
 ```
 
-Flyway ensures only new migrations run (via `flyway_schema_history` in the app's schema), so metadata registration is idempotent across upgrades.
+Skyway ensures only new migrations run (via `flyway_schema_history` in the app's schema), so metadata registration is idempotent across upgrades.
 
 ---
 
@@ -666,7 +696,7 @@ Server and client use different loading mechanisms due to fundamental platform d
 flowchart TD
     A["mj app install acme-crm"] --> B["CLI reads mj-app.json"]
     B --> C["Resolve dependency graph\n(topological sort)"]
-    C --> D["Run migrations via Flyway\n(DDL + metadata DML)"]
+    C --> D["Run migrations via Skyway\n(DDL + metadata DML)"]
     D --> F["Update package.json in\nMJAPI + MJExplorer"]
     F --> G["npm install from repo root\n(single workspace install)"]
     G --> H["Update mj.config.cjs\nserver dynamicPackages"]
@@ -889,7 +919,7 @@ mj app install https://github.com/acme/mj-crm [--version 1.2.0]
 5. **Install dependencies** — Auto-install any missing dependency apps (recursive, depth-first)
 6. **Check schema** — Verify `schema.name` doesn't already exist (and isn't claimed by another app)
 7. **Create schema** — `CREATE SCHEMA [acme_crm]` if `createIfNotExists` is true
-8. **Run migrations** — Execute Flyway against the app schema (sets `flyway.defaultSchema` to app schema, history table in app schema). Migrations include both DDL (tables, views, sprocs) and DML (entity/field/action/prompt metadata registrations in `__mj` tables).
+8. **Run migrations** — Execute Skyway against the app schema (sets default schema to the app schema, history table in app schema). Migrations include both DDL (tables, views, sprocs) and DML (entity/field/action/prompt metadata registrations in `__mj` tables).
 9. **Update package.json files** — Add server packages to `packages/MJAPI/package.json`, client packages to `packages/MJExplorer/package.json`
 10. **Run npm install** — Single `npm install` from repo root (npm workspaces resolve both)
 11. **Update server config** — Add entries to `dynamicPackages.server` in `mj.config.cjs`
@@ -906,7 +936,7 @@ mj app upgrade acme-crm [--version 1.3.0]
 1. Fetch new manifest from target version
 2. Validate manifest and compatibility
 3. Check dependency compatibility with new version
-4. Run migrations (Flyway applies only new ones via `flyway_schema_history` in the app's schema). New migrations include both DDL changes and metadata DML updates.
+4. Run migrations (Skyway applies only new ones via `flyway_schema_history` in the app's schema). New migrations include both DDL changes and metadata DML updates.
 5. Update npm package versions in `packages/MJAPI/package.json` and `packages/MJExplorer/package.json`
 6. Run `npm install` from repo root
 7. Update `dynamicPackages.server` in `mj.config.cjs` if bootstrap packages changed
@@ -1276,7 +1306,7 @@ mj app install https://github.com/acme/mj-crm # Install by URL (bypasses MJ Cent
 
 ## Security Considerations
 
-- **Schema isolation** — Apps own their database schema and MUST NOT modify `__mj` or other app schemas. This is trust-based — the CLI does not scan migration files for violations, but violating this convention voids compatibility guarantees. MJ Central may implement migration scanning for verified publisher badges.
+- **Schema isolation** — Apps own their database schema and MUST NOT alter the DDL structure (ALTER TABLE, DROP TABLE, etc.) of `__mj` or other app schemas. Apps DO insert rows into `__mj` metadata tables (Entity, EntityField, Action, etc.) as part of their migration DML — this is expected and required for metadata registration. This is trust-based — the CLI does not scan migration files for violations, but violating this convention voids compatibility guarantees. MJ Central may implement migration scanning for verified publisher badges.
 - **Code trust** — Apps run with full server privileges. Installing an app is a trust decision. MJ Central may offer verified publisher badges and security scanning.
 - **Metadata safety** — All metadata changes are delivered as explicit DML in migration files, making them auditable. Consumers can review exactly what INSERT/UPDATE statements will run in `__mj` metadata tables before applying.
 - **CodeGen exclusion** — App schemas are excluded from consumer CodeGen by default, preventing apps from affecting the consumer's generated code.
@@ -1315,4 +1345,4 @@ These items were originally open questions, now resolved:
 - **Hot Reload** — Metadata-only updates without server restart
 - **App-Scoped Permissions** — Fine-grained access control per app
 - **Alternative manifest formats** — YAML, JS, or `package.json` key via Cosmiconfig
-- **Migration scanning** — CLI-level validation that app migrations don't modify `__mj` or other app schemas
+- **Migration scanning** — CLI-level validation that app migrations don't perform DDL on `__mj` or other app schemas (DML inserts into `__mj` metadata tables would be allowed)
