@@ -40,7 +40,7 @@
     <mj-collapsible-panel
         SectionKey="errorClassification"
         SectionName="Error Classification"
-        Icon="fa fa-tag"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -74,7 +74,7 @@
     <mj-collapsible-panel
         SectionKey="errorContent"
         SectionName="Error Content"
-        Icon="fa fa-file-alt"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -101,6 +101,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Integration Context Section -->
+    <mj-collapsible-panel
+        SectionKey="integrationContext"
+        SectionName="Integration Context"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 
