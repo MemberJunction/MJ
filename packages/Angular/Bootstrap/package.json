@@ -29,12 +29,12 @@
     "@angular/common": "^21.0.0",
     "@angular/core": "^21.0.0",
     "@angular/router": "^21.0.0",
-    "@memberjunction/core": "^4.2.0",
-    "@memberjunction/global": "^4.2.0",
-    "@memberjunction/ng-auth-services": "^4.2.0",
     "rxjs": "^7.8.2"
   },
   "dependencies": {
+    "@memberjunction/core": "4.3.0",
+    "@memberjunction/global": "4.3.0",
+    "@memberjunction/ng-auth-services": "4.3.0",
     "@memberjunction/actions-base": "4.3.0",
     "@memberjunction/ai-core-plus": "4.3.0",
     "@memberjunction/ai-engine-base": "4.3.0",
