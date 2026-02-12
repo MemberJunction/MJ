@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/core-actions
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [6f4d33f]
+- Updated dependencies [564e1af]
+  - @memberjunction/ai-agents@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ai-agent-manager@4.3.0
+  - @memberjunction/ai-engine-base@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/aiengine@4.3.0
+  - @memberjunction/ai-mcp-client@4.3.0
+  - @memberjunction/ai-prompts@4.3.0
+  - @memberjunction/ai-vector-sync@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/code-execution@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/communication-types@4.3.0
+  - @memberjunction/communication-engine@4.3.0
+  - @memberjunction/content-autotagging@4.3.0
+  - @memberjunction/external-change-detection@4.3.0
+  - @memberjunction/core-entities-server@4.3.0
+  - @memberjunction/storage@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/ai@4.3.0
+  - @memberjunction/ai-betty-bot@4.3.0
+  - @memberjunction/export-engine@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

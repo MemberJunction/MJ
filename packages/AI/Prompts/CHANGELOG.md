@@ -1,5 +1,21 @@
 # @memberjunction/ai-prompts
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ai-engine-base@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/aiengine@4.3.0
+  - @memberjunction/credentials@4.3.0
+  - @memberjunction/templates-base-types@4.3.0
+  - @memberjunction/templates@4.3.0
+  - @memberjunction/ai@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-entity-permissions
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ng-shared@4.3.0
+  - @memberjunction/ng-container-directives@4.3.0
+  - @memberjunction/ng-shared-generic@4.3.0
+  - @memberjunction/global@4.3.0
+
 ## 4.2.0
 
 ### Patch Changes
