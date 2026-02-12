@@ -673,30 +673,57 @@ Today, integrating new packages into MJAPI or MJExplorer requires manually editi
 
 ### Solution
 
-MJ introduces a **config-driven dynamic package loading system** that eliminates the need to modify source code when installing or removing apps. The CLI manages `package.json` dependencies and a configuration array — no manual code changes required.
+MJ introduces an **automated package integration system** that eliminates manual source code changes when installing or removing apps. The CLI manages `package.json` dependencies and configuration files — the developer never edits code.
+
+Server and client use different loading mechanisms due to fundamental platform differences, but the developer experience is identical for both: run `mj app install`, then restart/rebuild.
+
+| | Server (MJAPI) | Client (MJExplorer) |
+|---|---|---|
+| **Mechanism** | Runtime `await import()` via DynamicLoader | Build-time static imports via generated file |
+| **Why** | Node.js resolves packages from `node_modules` at runtime | Browsers have no module resolver; ESBuild must bundle at build time |
+| **CLI manages** | `mj.config.cjs` dynamicPackages array | `open-app-bootstrap.generated.ts` import file |
+| **After install** | Restart server | Rebuild + restart |
 
 ### How It Works
 
 ```mermaid
 flowchart TD
-    A["mj app install acme-crm"] --> B["CLI reads mj-app.json manifest"]
-    B --> C["CLI resolves dependency graph\n(topological sort)"]
-    C --> D["CLI updates package.json\n(MJAPI + MJExplorer)"]
-    D --> E["CLI runs npm install"]
-    E --> F["CLI updates mj.config.cjs\ndynamicPackages arrays"]
-    F --> G["CLI pushes metadata\nvia mj sync push"]
-    G --> H["CLI runs migrations\nvia Flyway"]
-    H --> I["CLI records install in\nMJ: Open Apps table"]
-    I --> J["User restarts server"]
-    J --> K["MJAPI startup reads\nmj.config.cjs dynamicPackages"]
-    K --> L["DynamicLoader iterates\nserver packages"]
-    L --> M["await import(packageName)\nfor each entry"]
-    M --> N["Call startupExport function\ne.g. LoadAcmeCRMServer()"]
-    N --> O["@RegisterClass decorators\nexecute, classes registered"]
-    O --> P["App fully loaded\nand operational"]
+    A["mj app install acme-crm"] --> B["CLI reads mj-app.json"]
+    B --> C["Resolve dependency graph\n(topological sort)"]
+    C --> D["Run migrations via Flyway"]
+    D --> E["Push metadata via mj sync push"]
+    E --> F["Update package.json in\nMJAPI + MJExplorer"]
+    F --> G["npm install from repo root\n(single workspace install)"]
+    G --> H["Update mj.config.cjs\nserver dynamicPackages"]
+    H --> I["Generate\nopen-app-bootstrap.generated.ts\nin MJExplorer"]
+    I --> J["Record in MJ: Open Apps"]
+    J --> K{"User action needed"}
+    K --> L["Restart MJAPI"]
+    K --> M["Rebuild MJExplorer"]
+
+    L --> N["DynamicLoader reads config"]
+    N --> O["await import(packageName)\nfor each server package"]
+    O --> P["Call startupExport\ne.g. LoadAcmeCRMServer()"]
+    P --> Q["Server app loaded"]
+
+    M --> R["ESBuild reads\ngenerated import file"]
+    R --> S["Static imports bundled\ninto app chunks"]
+    S --> T["@RegisterClass decorators\nexecute at load time"]
+    T --> U["Client app loaded"]
 ```
 
-### Configuration
+### Monorepo Awareness
+
+The consumer's repo is an npm workspace monorepo. The CLI is aware of this:
+
+1. **Server deps** are added to `packages/MJAPI/package.json`
+2. **Client deps** are added to `packages/MJExplorer/package.json`
+3. **Single `npm install`** runs from the repo root (npm workspaces handle resolution)
+4. **Config files** are managed at the repo root (`mj.config.cjs`) and in MJExplorer (`open-app-bootstrap.generated.ts`)
+
+### Server-Side: Runtime Dynamic Loading
+
+#### Configuration
 
 The consumer's `mj.config.cjs` includes a `dynamicPackages` section managed by the CLI:
 
@@ -713,20 +740,12 @@ module.exports = {
         appName: 'acme-crm',           // Links back to the Open App
         enabled: true                    // Can be toggled without removing
       }
-    ],
-    client: [
-      {
-        packageName: '@acme/mj-crm-ng-bootstrap',
-        startupExport: 'LoadAcmeCRMClient',
-        appName: 'acme-crm',
-        enabled: true
-      }
     ]
   }
 };
 ```
 
-### DynamicPackageLoad Type
+#### DynamicPackageLoad Type
 
 ```typescript
 // @memberjunction/global — new type
@@ -745,16 +764,16 @@ interface DynamicPackageLoad {
 }
 ```
 
-### DynamicLoader Utility
+#### DynamicLoader Utility
 
-A utility class in `@memberjunction/global` handles the dynamic import sequence:
+A utility class in `@memberjunction/global` handles the runtime import sequence:
 
 ```typescript
 // @memberjunction/global — new utility
 export class DynamicLoader {
     /**
      * Loads all enabled dynamic packages in order.
-     * Called during MJAPI startup and MJExplorer initialization.
+     * Called during MJAPI startup.
      */
     static async LoadPackages(packages: DynamicPackageLoad[]): Promise<DynamicLoadResult[]> {
         const results: DynamicLoadResult[] = [];
@@ -789,9 +808,7 @@ interface DynamicLoadResult {
 }
 ```
 
-### Server-Side Integration (MJAPI)
-
-MJAPI reads the `dynamicPackages.server` array at startup and loads each package:
+#### MJAPI Integration
 
 ```typescript
 // During MJAPI initialization, after core bootstrap
@@ -809,25 +826,76 @@ for (const result of results) {
 }
 ```
 
-### Client-Side Integration (MJExplorer)
+### Client-Side: Generated Import File
 
-For Angular (MJExplorer), the dynamic loading works at the `package.json` + config level:
+#### Why Runtime Loading Doesn't Work in Angular
 
-1. The CLI adds the app's client packages to MJExplorer's `package.json`
-2. The CLI adds entries to `dynamicPackages.client` in `mj.config.cjs`
-3. At build time, ESBuild/Vite resolves the packages from `node_modules` (they're in `package.json`)
-4. At runtime, the Angular app reads the config and calls `DynamicLoader.LoadPackages()` during initialization
-5. The bootstrap package's startup function executes, triggering `@RegisterClass` decorators
+Browsers have no `node_modules` or runtime module resolver. Angular uses ESBuild to bundle everything at build time. A dynamic `await import(variable)` where the package name comes from a config file **cannot be resolved by ESBuild** — it doesn't know what to bundle. Only static import strings that ESBuild can analyze at build time get included in the output.
 
-This means the app's Angular components are available to the class factory without manually editing MJExplorer source code. The consumer only needs to rebuild MJExplorer after installing an app (which they already do for any dependency change).
+#### Solution: CLI-Generated Static Import File
+
+The CLI generates a TypeScript file in MJExplorer that contains static import statements for each installed app's client bootstrap package. ESBuild sees these as normal imports and bundles them.
+
+**Generated file location:**
+```
+packages/MJExplorer/src/app/generated/open-app-bootstrap.generated.ts
+```
+
+**Generated file contents (managed entirely by CLI):**
+
+```typescript
+/**
+ * Open App Bootstrap — AUTO-GENERATED by `mj app install` / `mj app remove`
+ * DO NOT EDIT — this file is overwritten on every app install/upgrade/remove
+ *
+ * Each import below loads an Open App's client bootstrap package, which triggers
+ * @RegisterClass decorators and makes the app's components available to MJ's class factory.
+ */
+
+// acme-crm (v1.2.0)
+import '@acme/mj-crm-ng-bootstrap';
+
+// oss-helpdesk (v2.0.1)
+import '@oss/mj-helpdesk-ng-bootstrap';
+```
+
+**One-time setup in MJExplorer (already done by MJ core):**
+
+MJExplorer's `main.ts` includes a single permanent import:
+
+```typescript
+import './app/generated/open-app-bootstrap.generated';
+```
+
+This file always exists (even if empty when no apps are installed). From that point on, the CLI manages its contents — developers never touch it.
+
+#### How It Works
+
+1. `mj app install` adds client packages to `packages/MJExplorer/package.json`
+2. `npm install` from repo root installs them into the workspace
+3. CLI writes/updates `open-app-bootstrap.generated.ts` with import lines for each app's client bootstrap
+4. User rebuilds MJExplorer — ESBuild sees the static imports, bundles the packages
+5. At load time, the imports evaluate, `@RegisterClass` decorators fire, components are available
+
+#### Disable/Enable Behavior
+
+When an app is disabled via `mj app disable`, the CLI comments out the import line:
+
+```typescript
+// acme-crm (v1.2.0) [DISABLED]
+// import '@acme/mj-crm-ng-bootstrap';
+```
+
+Re-enabling via `mj app enable` uncomments it. A rebuild is required for the change to take effect.
 
 ### Key Benefits
 
-- **No source code changes** — The CLI manages `package.json` and `mj.config.cjs` only
-- **Graceful failure** — A broken app package doesn't crash the server
-- **Toggleable** — Apps can be disabled via `enabled: false` without uninstalling
+- **No manual source code changes** — CLI manages `package.json`, `mj.config.cjs`, and the generated import file
+- **Graceful failure** — A broken server-side app package doesn't crash MJAPI; client-side failures are caught at build time
+- **Toggleable** — Apps can be disabled without uninstalling (server: `enabled: false` in config; client: commented import)
 - **Ordered loading** — The CLI writes packages in dependency order
-- **Auditable** — The config file is human-readable and version-controllable
+- **Auditable** — All managed files are human-readable and version-controllable
+- **Platform-appropriate** — Each side uses the mechanism that actually works for its runtime
 
 ---
 
@@ -848,11 +916,12 @@ mj app install https://github.com/acme/mj-crm [--version 1.2.0]
 7. **Create schema** — `CREATE SCHEMA [acme_crm]` if `createIfNotExists` is true
 8. **Run migrations** — Execute Flyway against the app schema (sets `flyway.defaultSchema` to app schema, history table in app schema)
 9. **Push metadata** — Run `mj sync push` to register entities, actions, prompts, etc.
-10. **Update package.json** — Add all app npm packages to consumer's MJAPI and/or MJExplorer `package.json`
-11. **Run npm install** — Install the new dependencies
-12. **Update dynamic packages config** — Add entries to `dynamicPackages.server` and `dynamicPackages.client` in `mj.config.cjs`
-13. **Execute hooks** — Run `postInstall` hook if defined
-14. **Record installation** — Create record in `MJ: Open Apps` table, create initial `MJ: Open App Install History` entry
+10. **Update package.json files** — Add server packages to `packages/MJAPI/package.json`, client packages to `packages/MJExplorer/package.json`
+11. **Run npm install** — Single `npm install` from repo root (npm workspaces resolve both)
+12. **Update server config** — Add entries to `dynamicPackages.server` in `mj.config.cjs`
+13. **Update client imports** — Regenerate `packages/MJExplorer/src/app/generated/open-app-bootstrap.generated.ts`
+14. **Execute hooks** — Run `postInstall` hook if defined
+15. **Record installation** — Create record in `MJ: Open Apps` table, create initial `MJ: Open App Install History` entry
 
 ### Upgrade Flow
 
@@ -865,10 +934,12 @@ mj app upgrade acme-crm [--version 1.3.0]
 3. Check dependency compatibility with new version
 4. Run migrations (Flyway applies only new ones via `flyway_schema_history` in the app's schema)
 5. Push metadata (mj-sync updates existing, creates new records)
-6. Update npm package versions in `package.json`, run `npm install`
-7. Update `dynamicPackages` config if bootstrap packages changed
-8. Execute `postUpgrade` hook
-9. Update version in `MJ: Open Apps`, create `MJ: Open App Install History` entry
+6. Update npm package versions in `packages/MJAPI/package.json` and `packages/MJExplorer/package.json`
+7. Run `npm install` from repo root
+8. Update `dynamicPackages.server` in `mj.config.cjs` if bootstrap packages changed
+9. Regenerate `open-app-bootstrap.generated.ts` if client bootstrap packages changed
+10. Execute `postUpgrade` hook
+11. Update version in `MJ: Open Apps`, create `MJ: Open App Install History` entry
 
 ### Remove Flow
 
@@ -878,11 +949,12 @@ mj app remove acme-crm [--keep-data]
 
 1. **Check dependents** — Verify no other installed apps depend on this one. Fail if dependents exist (user must remove them first or use `--force`).
 2. **Execute `preRemove` hook**
-3. **Remove dynamic packages config** — Remove entries from `dynamicPackages` in `mj.config.cjs`
-4. **Remove npm packages** — Remove app packages from `package.json`, run `npm install`
-5. **Remove metadata** — Delete app's entity registrations, actions, prompts, etc. from MJ metadata tables. Note: this deletes metadata records only; user data in the app's schema is controlled by step 7.
-6. **Drop schema** (unless `--keep-data`) — `DROP SCHEMA [acme_crm]` and all contained objects. With `--keep-data`, the schema and its tables are preserved but entity registrations are removed.
-7. **Update `MJ: Open Apps`** — Set status to `Removed`, create final `MJ: Open App Install History` entry
+3. **Remove server config** — Remove entries from `dynamicPackages.server` in `mj.config.cjs`
+4. **Remove client imports** — Regenerate `open-app-bootstrap.generated.ts` without this app
+5. **Remove npm packages** — Remove app packages from `packages/MJAPI/package.json` and `packages/MJExplorer/package.json`, run `npm install` from repo root
+6. **Remove metadata** — Delete app's entity registrations, actions, prompts, etc. from MJ metadata tables. Note: this deletes metadata records only; user data in the app's schema is controlled by step 7.
+7. **Drop schema** (unless `--keep-data`) — `DROP SCHEMA [acme_crm]` and all contained objects. With `--keep-data`, the schema and its tables are preserved but entity registrations are removed.
+8. **Update `MJ: Open Apps`** — Set status to `Removed`, create final `MJ: Open App Install History` entry
 
 ### Rollback
 
@@ -1291,12 +1363,6 @@ module.exports = {
     // CodeGen behavior for app schemas
     codeGenExclusions: {
       includeAppSchemas: false  // default: false
-    },
-
-    // Dynamic package loading (managed by CLI)
-    dynamicPackages: {
-      server: [/* ... managed by mj app install/remove ... */],
-      client: [/* ... managed by mj app install/remove ... */]
     },
 
     // Per-app configuration (provided by consumer)
