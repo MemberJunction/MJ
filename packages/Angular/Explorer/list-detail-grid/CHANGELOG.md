@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-list-detail-grid
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@4.3.1
+- @memberjunction/ng-entity-viewer@4.3.1
+- @memberjunction/ng-shared-generic@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+
 ## 4.3.0
 
 ### Patch Changes

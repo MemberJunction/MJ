@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 4.3.1
+
+### Patch Changes
+
+- f1b4a98: Restore singleton packages as regular dependencies in Angular Bootstrap and Explorer packages, and fix false positive error detection in CLI migrate command.
+  - @memberjunction/core@4.3.1
+  - @memberjunction/global@4.3.1
+
 ## 4.3.0
 
 ## 4.2.0

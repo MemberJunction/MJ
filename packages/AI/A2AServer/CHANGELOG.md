@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/a2aserver
 
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@4.3.1
+- @memberjunction/ai@4.3.1
+- @memberjunction/ai-core-plus@4.3.1
+- @memberjunction/aiengine@4.3.1
+- @memberjunction/api-keys@4.3.1
+- @memberjunction/config@4.3.1
+- @memberjunction/encryption@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+- @memberjunction/server@4.3.1
+- @memberjunction/sqlserver-dataprovider@4.3.1
+- @memberjunction/server-bootstrap-lite@4.3.1
+
 ## 4.3.0
 
 ### Patch Changes
