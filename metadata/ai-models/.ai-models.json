@@ -5908,18 +5908,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.375,
-            "OutputPricePerUnit": 0.5775,
+            "InputPricePerUnit": 0.5,
+            "OutputPricePerUnit": 0.77,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Batch",
-            "Comments": "Llama 4 Maverick batch pricing on Groq (25% discount) as of Jan 2025"
+            "ProcessingType": "Realtime",
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025"
           },
           "primaryKey": {
             "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.984Z",
-            "checksum": "368b74020f7805bc3be76f60ef024723a9a9a4e5387bcb1b61faded500850aaa"
+            "lastModified": "2026-02-12T19:48:44.032Z",
+            "checksum": "73619cec0c2e97847c211954e9fd84056d979b3f040be8f0120dabc1aba23a60"
           }
         },
         {
@@ -5942,6 +5942,28 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:56.994Z",
             "checksum": "73619cec0c2e97847c211954e9fd84056d979b3f040be8f0120dabc1aba23a60"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "StartedAt": "2026-01-12T23:25:17.216Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.5,
+            "OutputPricePerUnit": 0.77,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025"
+          },
+          "primaryKey": {
+            "ID": "8C917BF3-1B35-49C3-941B-397EFFD0E7F4"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:48:44.446Z",
+            "checksum": "e95f44f9b8a040febce41841d8da08971995b263bc983f5c870365f4938b698d"
           }
         }
       ]
@@ -6286,18 +6308,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 3,
-            "OutputPricePerUnit": 15,
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Realtime",
-            "Comments": "Claude 4 Sonnet pricing as of Jan 2025"
+            "ProcessingType": "Batch",
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025"
           },
           "primaryKey": {
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.191Z",
-            "checksum": "04ae96db93ac0497b640bffbfc227f5340422a1fc9543532aab4ddfaee23d8d2"
+            "lastModified": "2026-02-12T19:48:44.219Z",
+            "checksum": "b5b869576b542870b6b1952b2190917ef2d0c142be353772f19461647e064564"
           }
         },
         {
@@ -6320,6 +6342,28 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:57.313Z",
             "checksum": "b5b869576b542870b6b1952b2190917ef2d0c142be353772f19461647e064564"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-01-12T23:25:17.216Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Batch",
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025"
+          },
+          "primaryKey": {
+            "ID": "5DDA609E-8445-467E-BE78-EE31BCC385B7"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:48:44.497Z",
+            "checksum": "8b1d7da35472e673e5b6ef0226ed27ca7bbd64800801aff62e791a370f5c6059"
           }
         }
       ]
@@ -6396,18 +6440,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 15,
-            "OutputPricePerUnit": 75,
+            "InputPricePerUnit": 7.5,
+            "OutputPricePerUnit": 37.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Realtime",
-            "Comments": "Claude 4 Opus pricing as of Jan 2025"
+            "ProcessingType": "Batch",
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025"
           },
           "primaryKey": {
             "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.325Z",
-            "checksum": "5f5d34c08142f80365c56b7b515fe527282dd5c43484d092f8fa9ed3742bee7d"
+            "lastModified": "2026-02-12T19:48:44.217Z",
+            "checksum": "2a55ce83c01609580fa11e4259df84294e94471477d02983e573fc0d2fdee7bd"
           }
         },
         {
@@ -6430,6 +6474,28 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:57.336Z",
             "checksum": "2a55ce83c01609580fa11e4259df84294e94471477d02983e573fc0d2fdee7bd"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-01-12T23:25:17.216Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 7.5,
+            "OutputPricePerUnit": 37.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Batch",
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025"
+          },
+          "primaryKey": {
+            "ID": "F6C1FDB8-7BEF-4946-B3F8-B194B474543A"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:48:44.496Z",
+            "checksum": "88415174c6743126a3193188bba7ffec59a4cdadcf5c1243a6955e9dbeb5d382"
           }
         }
       ]
@@ -6508,18 +6574,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.0825,
-            "OutputPricePerUnit": 0.255,
+            "InputPricePerUnit": 0.11,
+            "OutputPricePerUnit": 0.34,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Batch",
-            "Comments": "Llama 4 Scout batch pricing on Groq (25% discount) as of Jan 2025"
+            "ProcessingType": "Realtime",
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025"
           },
           "primaryKey": {
             "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.349Z",
-            "checksum": "373474215aa3b5592bf21d932a80a24172d61a2b3f1d77465965052e5915f856"
+            "lastModified": "2026-02-12T19:48:44.214Z",
+            "checksum": "205e47ff8c1f9f5c1b3b56f88de1d17d530071305f56757f5404779e10106702"
           }
         },
         {
@@ -6542,6 +6608,28 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:57.359Z",
             "checksum": "205e47ff8c1f9f5c1b3b56f88de1d17d530071305f56757f5404779e10106702"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "StartedAt": "2026-01-12T23:25:17.216Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.11,
+            "OutputPricePerUnit": 0.34,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025"
+          },
+          "primaryKey": {
+            "ID": "C0780A29-BC07-430C-B1B8-EB182183F820"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:48:44.496Z",
+            "checksum": "0f2c27d4efc734045aa29cd956382519b22ab8cdd25475bdfeef3c3995a3bdb0"
           }
         }
       ]
@@ -9456,6 +9544,96 @@
     "sync": {
       "lastModified": "2026-02-01T00:26:53.584Z",
       "checksum": "4be2942ad204b42dba7e62d05fc9f54136b1b248b5938ec2cf4142cfc1c5cbc5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5",
+      "PowerRank": 20,
+      "Description": "Z.AI's (Zhipu AI) fifth-generation frontier model released February 11, 2026. Features 745B total parameters in a Mixture-of-Experts architecture (256 experts, 44B active per inference) with 200K token context window and 128K output capacity. Achieves 77.8% on SWE-bench Verified, 92.7% on AIME 2026 I, and 86.0% on GPQA-Diamond. Includes Deep Thinking mode for self-critique loops and record-low hallucination rates. Open-source under MIT license.",
+      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:AI Models.Name=GLM 4.7"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "DA488608-6A6B-4955-8266-8DF3B89E36DC"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.220Z",
+            "checksum": "579fd3b8c146054746c1a753ca0a35ccc313e73417014bb46aa8b2d1a1713452"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "ZhipuLLM",
+            "APIName": "glm-5",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E6CC92D4-8EDA-4C2D-BBFD-3F15055B48E6"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.232Z",
+            "checksum": "81b5c688ba73cba90b91c60ea81d4d1e9b880e480c15111a1471ca28e9e280bc"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-02-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 3.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 5 pricing on Z.AI as of February 2026. 745B parameter MoE model (44B active) with 200K context and 128K output. Cached input tokens available at $0.20/1M. State-of-the-art open-source model rivaling Claude Opus on benchmarks."
+          },
+          "primaryKey": {
+            "ID": "5A453FFB-DBF1-4363-B08F-7FC1AAB158CA"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.268Z",
+            "checksum": "5432e8153bdad5642a36a0c2cf7b7f8386a23afe62befa03db1ef7b62d34d343"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A4F2213B-E99D-46E5-806B-B71BF4DE653E"
+    },
+    "sync": {
+      "lastModified": "2026-02-12T19:54:35.177Z",
+      "checksum": "13bfc1ee59301cbfeb86894e547b8745402729680a4d36bd5a720ba35464fef8"
     }
   }
 ]

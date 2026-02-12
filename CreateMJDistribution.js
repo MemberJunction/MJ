@@ -244,6 +244,16 @@ async function createMJDistribution() {
   const distributionConfig = fs.readFileSync('distribution.config.cjs', 'utf8');
   archive.append(distributionConfig, { name: 'mj.config.cjs' });
 
+  // Add root tsconfig files that packages extend (added in 4.0 upgrade)
+  // MJExplorer extends tsconfig.angular.json, MJAPI/GeneratedEntities/GeneratedActions extend tsconfig.server.json
+  console.log('Adding tsconfig.angular.json to zip file...');
+  const tsconfigAngular = fs.readFileSync('tsconfig.angular.json', 'utf8');
+  archive.append(tsconfigAngular, { name: 'tsconfig.angular.json' });
+
+  console.log('Adding tsconfig.server.json to zip file...');
+  const tsconfigServer = fs.readFileSync('tsconfig.server.json', 'utf8');
+  archive.append(tsconfigServer, { name: 'tsconfig.server.json' });
+
   // Finalize the archive
   console.log('Finalizing creation of zip file...');
   await archive.finalize();

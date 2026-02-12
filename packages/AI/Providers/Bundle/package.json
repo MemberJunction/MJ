@@ -39,7 +39,8 @@
     "@memberjunction/ai-recommendations-rex": "4.3.1",
     "@memberjunction/ai-vectors-pinecone": "4.3.1",
     "@memberjunction/ai-vertex": "4.3.1",
-    "@memberjunction/ai-xai": "4.3.1"
+    "@memberjunction/ai-xai": "4.3.1",
+    "@memberjunction/ai-zhipu": "4.3.1"
   },
   "repository": {
     "type": "git",
