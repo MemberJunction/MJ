@@ -58,6 +58,7 @@
     "@memberjunction/config": "4.3.0",
     "@memberjunction/core": "4.3.0",
     "@memberjunction/db-auto-doc": "4.3.0",
+    "@memberjunction/installer": "4.3.0",
     "@memberjunction/metadata-sync": "4.3.0",
     "@memberjunction/query-gen": "4.3.0",
     "@memberjunction/server-bootstrap-lite": "4.3.0",

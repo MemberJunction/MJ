@@ -28,6 +28,9 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // Install wizard - uses zod, recast, fs-extra only
   'install',
 
+  // Doctor - uses @memberjunction/installer (adm-zip, fs, net only)
+  'doctor',
+
   // Topic index commands (just display help text, no heavy imports)
   'ai',
   'ai audit',
