@@ -1408,31 +1408,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Open Apps Section -->
-    <mj-collapsible-panel
-        SectionKey="mJOpenApps"
-        SectionName="MJ: Open Apps"
-        Icon="fa fa-puzzle-piece"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJOpenApps')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open Apps','InstalledByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Open Apps')"
-                [AllowLoad]="IsSectionExpanded('mJOpenApps')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJOpenApps', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- MJ: Public Links Section -->
     <mj-collapsible-panel
         SectionKey="mJPublicLinks"
@@ -1952,31 +1927,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnectionPermissions', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- MJ: Open App Install Histories Section -->
-    <mj-collapsible-panel
-        SectionKey="mJOpenAppInstallHistories"
-        SectionName="MJ: Open App Install Histories"
-        Icon="fa fa-history"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJOpenAppInstallHistories')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Install Histories','ExecutedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Open App Install Histories')"
-                [AllowLoad]="IsSectionExpanded('mJOpenAppInstallHistories')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJOpenAppInstallHistories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

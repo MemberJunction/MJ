@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="referenceIDs"
         SectionName="Reference IDs"
-        Icon="fa fa-link"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -40,7 +40,7 @@
     <mj-collapsible-panel
         SectionKey="ratingInformation"
         SectionName="Rating Information"
-        Icon="fa fa-star"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -59,6 +59,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Message Details Section -->
+    <mj-collapsible-panel
+        SectionKey="messageDetails"
+        SectionName="Message Details"
+        Icon="fa fa-comment"
+        [Form]="this"
+        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 

@@ -207,9 +207,6 @@ import { OAuthAuthServerMetadataCacheFormComponent } from "./Entities/OAuthAuthS
 import { OAuthAuthorizationStateFormComponent } from "./Entities/OAuthAuthorizationState/oauthauthorizationstate.form.component";
 import { OAuthClientRegistrationFormComponent } from "./Entities/OAuthClientRegistration/oauthclientregistration.form.component";
 import { OAuthTokenFormComponent } from "./Entities/OAuthToken/oauthtoken.form.component";
-import { OpenAppDependencyFormComponent } from "./Entities/OpenAppDependency/openappdependency.form.component";
-import { OpenAppInstallHistoryFormComponent } from "./Entities/OpenAppInstallHistory/openappinstallhistory.form.component";
-import { OpenAppFormComponent } from "./Entities/OpenApp/openapp.form.component";
 import { ProjectFormComponent } from "./Entities/Project/project.form.component";
 import { PublicLinkFormComponent } from "./Entities/PublicLink/publiclink.form.component";
 import { QueryParameterFormComponent } from "./Entities/QueryParameter/queryparameter.form.component";
@@ -658,9 +655,6 @@ declarations: [
     OAuthAuthorizationStateFormComponent,
     OAuthClientRegistrationFormComponent,
     OAuthTokenFormComponent,
-    OpenAppDependencyFormComponent,
-    OpenAppInstallHistoryFormComponent,
-    OpenAppFormComponent,
     ProjectFormComponent,
     PublicLinkFormComponent,
     QueryParameterFormComponent,
@@ -668,7 +662,10 @@ declarations: [
     ReportUserStateFormComponent,
     ReportVersionFormComponent,
     ScheduledJobRunFormComponent,
-    ScheduledJobTypeFormComponent],
+    ScheduledJobTypeFormComponent,
+    ScheduledJobFormComponent,
+    TaskDependencyFormComponent,
+    TaskTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -688,9 +685,6 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
-    ScheduledJobFormComponent,
-    TaskDependencyFormComponent,
-    TaskTypeFormComponent,
     TaskFormComponent,
     TestRubricFormComponent,
     TestRunFeedbackFormComponent,
@@ -707,7 +701,10 @@ declarations: [
     VersionLabelRestoreFormComponent,
     VersionLabelFormComponent,
     OutputDeliveryTypeFormComponent,
-    OutputFormatTypeFormComponent],
+    OutputFormatTypeFormComponent,
+    OutputTriggerTypeFormComponent,
+    QueryFormComponent,
+    QueryCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -727,9 +724,6 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
-    OutputTriggerTypeFormComponent,
-    QueryFormComponent,
-    QueryCategoryFormComponent,
     QueryEntityFormComponent,
     QueryFieldFormComponent,
     QueryPermissionFormComponent,
@@ -746,7 +740,10 @@ declarations: [
     RecordMergeLogFormComponent,
     ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
-    ReportFormComponent],
+    ReportFormComponent,
+    ResourceLinkFormComponent,
+    ResourcePermissionFormComponent,
+    ResourceTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -766,9 +763,6 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
-    ResourceLinkFormComponent,
-    ResourcePermissionFormComponent,
-    ResourceTypeFormComponent,
     RoleFormComponent,
     RowLevelSecurityFilterFormComponent,
     ScheduledActionParamFormComponent,
@@ -785,7 +779,10 @@ declarations: [
     UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
-    UserNotificationFormComponent],
+    UserNotificationFormComponent,
+    UserRecordLogFormComponent,
+    UserRoleFormComponent,
+    UserViewCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -805,9 +802,6 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
-    UserRecordLogFormComponent,
-    UserRoleFormComponent,
-    UserViewCategoryFormComponent,
     UserViewRunDetailFormComponent,
     UserViewRunFormComponent,
     UserViewFormComponent,

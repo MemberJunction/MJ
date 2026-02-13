@@ -389,7 +389,7 @@ export const ActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Other'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -399,8 +399,8 @@ export const ActionParamSchema = z.object({
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Other
     *   * Scalar
+    *   * Other
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
@@ -2473,6 +2473,10 @@ export const AIResultCacheSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
+    PromptRun: z.string().nullable().describe(`
+        * * Field Name: PromptRun
+        * * Display Name: Prompt Run
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIResultCacheEntityType = z.infer<typeof AIResultCacheSchema>;
@@ -4542,6 +4546,10 @@ export const ConversationSchema = z.object({
         * * Field Name: Project
         * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
+    TestRun: z.string().nullable().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ConversationEntityType = z.infer<typeof ConversationSchema>;
@@ -5126,6 +5134,10 @@ export const DuplicateRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DuplicateRun: z.string().describe(`
+        * * Field Name: DuplicateRun
+        * * Display Name: Duplicate Run
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type DuplicateRunDetailEntityType = z.infer<typeof DuplicateRunDetailSchema>;
@@ -5271,6 +5283,10 @@ export const EmployeeCompanyIntegrationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Employee: z.string().nullable().describe(`
+        * * Field Name: Employee
+        * * Display Name: Employee
+        * * SQL Data Type: nvarchar(81)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Company Integration
@@ -5308,6 +5324,10 @@ export const EmployeeRoleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Employee: z.string().nullable().describe(`
+        * * Field Name: Employee
+        * * Display Name: Employee
+        * * SQL Data Type: nvarchar(81)`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
@@ -5345,6 +5365,10 @@ export const EmployeeSkillSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Employee: z.string().nullable().describe(`
+        * * Field Name: Employee
+        * * Display Name: Employee
+        * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
         * * Display Name: Skill Name
@@ -5849,6 +5873,14 @@ export const EntityActionFilterSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EntityAction: z.string().describe(`
+        * * Field Name: EntityAction
+        * * Display Name: Entity Action
+        * * SQL Data Type: nvarchar(425)`),
+    ActionFilter: z.string().describe(`
+        * * Field Name: ActionFilter
+        * * Display Name: Action Filter
+        * * SQL Data Type: nvarchar(MAX)`),
 });
 
 export type EntityActionFilterEntityType = z.infer<typeof EntityActionFilterSchema>;
@@ -5932,6 +5964,10 @@ export const EntityActionInvocationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EntityAction: z.string().describe(`
+        * * Field Name: EntityAction
+        * * Display Name: Entity Action
+        * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
         * * Display Name: Invocation Type
@@ -5990,6 +6026,10 @@ export const EntityActionParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EntityAction: z.string().describe(`
+        * * Field Name: EntityAction
+        * * Display Name: Entity Action
+        * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
         * * Display Name: Parameter Name
@@ -6192,6 +6232,10 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EntityCommunicationMessageType: z.string().describe(`
+        * * Field Name: EntityCommunicationMessageType
+        * * Display Name: Entity Communication Message Type
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type EntityCommunicationFieldEntityType = z.infer<typeof EntityCommunicationFieldSchema>;
@@ -7453,6 +7497,14 @@ export const ErrorLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CompanyIntegrationRun: z.string().nullable().describe(`
+        * * Field Name: CompanyIntegrationRun
+        * * Display Name: Company Integration Run
+        * * SQL Data Type: nvarchar(100)`),
+    CompanyIntegrationRunDetail: z.string().nullable().describe(`
+        * * Field Name: CompanyIntegrationRunDetail
+        * * Display Name: Company Integration Run Detail
+        * * SQL Data Type: nvarchar(450)`),
 });
 
 export type ErrorLogEntityType = z.infer<typeof ErrorLogSchema>;
@@ -9437,7 +9489,7 @@ permanently, Warn means validation failed but execution continues.`),
 detailed information about what validation rules failed.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`),
@@ -9446,6 +9498,14 @@ detailed information about what validation rules failed.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run step`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -13528,6 +13588,10 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ConversationDetail: z.string().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
@@ -13650,7 +13714,7 @@ export const ConversationDetailRatingSchema = z.object({
         * * Default Value: newsequentialid()`),
     ConversationDetailID: z.string().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail ID
+        * * Display Name: Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: The conversation message being rated.`),
@@ -13680,6 +13744,10 @@ export const ConversationDetailRatingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ConversationDetail: z.string().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Message Text
+        * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -14842,7 +14910,7 @@ export const MCPServerConnectionToolSchema = z.object({
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)`),
     IsEnabled: z.boolean().describe(`
         * * Field Name: IsEnabled
-        * * Display Name: Is Enabled
+        * * Display Name: Enabled
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this tool is enabled for the connection`),
@@ -14868,7 +14936,11 @@ export const MCPServerConnectionToolSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: MCP Server Connection
+        * * Display Name: Server Connection
+        * * SQL Data Type: nvarchar(255)`),
+    MCPServerTool: z.string().nullable().describe(`
+        * * Field Name: MCPServerTool
+        * * Display Name: Server Tool
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -15236,12 +15308,12 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: Connection ID
+        * * Display Name: MCP Server Connection
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     MCPServerToolID: z.string().nullable().describe(`
         * * Field Name: MCPServerToolID
-        * * Display Name: Tool ID
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
         * * Description: FK to MCP Server Tool (null if tool not cached)`),
@@ -15252,18 +15324,18 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Description: Tool name (stored directly for resilience)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: FK to User who initiated the call`),
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt
-        * * Display Name: Start Time
+        * * Display Name: Started At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
-        * * Display Name: End Time
+        * * Display Name: Ended At
         * * SQL Data Type: datetimeoffset`),
     DurationMs: z.number().nullable().describe(`
         * * Field Name: DurationMs
@@ -15307,11 +15379,15 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: Connection Name
+        * * Display Name: MCP Server Connection
+        * * SQL Data Type: nvarchar(255)`),
+    MCPServerTool: z.string().nullable().describe(`
+        * * Field Name: MCPServerTool
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -15681,266 +15757,6 @@ export const OAuthTokenSchema = z.object({
 });
 
 export type OAuthTokenEntityType = z.infer<typeof OAuthTokenSchema>;
-
-/**
- * zod schema definition for the entity MJ: Open App Dependencies
- */
-export const OpenAppDependencySchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    OpenAppID: z.string().describe(`
-        * * Field Name: OpenAppID
-        * * Display Name: Open App
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Open Apps (vwOpenApps.ID)`),
-    DependsOnAppName: z.string().describe(`
-        * * Field Name: DependsOnAppName
-        * * Display Name: Depends On App Raw Name
-        * * SQL Data Type: nvarchar(64)`),
-    DependsOnAppID: z.string().nullable().describe(`
-        * * Field Name: DependsOnAppID
-        * * Display Name: Depends On App
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Open Apps (vwOpenApps.ID)`),
-    VersionRange: z.string().describe(`
-        * * Field Name: VersionRange
-        * * Display Name: Version Range
-        * * SQL Data Type: nvarchar(100)`),
-    InstalledVersion: z.string().nullable().describe(`
-        * * Field Name: InstalledVersion
-        * * Display Name: Installed Version
-        * * SQL Data Type: nvarchar(50)`),
-    Status: z.union([z.literal('Incompatible'), z.literal('Missing'), z.literal('Satisfied')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Satisfied
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Incompatible
-    *   * Missing
-    *   * Satisfied`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    OpenApp: z.string().describe(`
-        * * Field Name: OpenApp
-        * * Display Name: Open App Name
-        * * SQL Data Type: nvarchar(64)`),
-    DependsOnApp: z.string().nullable().describe(`
-        * * Field Name: DependsOnApp
-        * * Display Name: Depends On App Name
-        * * SQL Data Type: nvarchar(64)`),
-});
-
-export type OpenAppDependencyEntityType = z.infer<typeof OpenAppDependencySchema>;
-
-/**
- * zod schema definition for the entity MJ: Open App Install Histories
- */
-export const OpenAppInstallHistorySchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    OpenAppID: z.string().describe(`
-        * * Field Name: OpenAppID
-        * * Display Name: Open App ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Open Apps (vwOpenApps.ID)`),
-    Version: z.string().describe(`
-        * * Field Name: Version
-        * * Display Name: Version
-        * * SQL Data Type: nvarchar(50)`),
-    PreviousVersion: z.string().nullable().describe(`
-        * * Field Name: PreviousVersion
-        * * Display Name: Previous Version
-        * * SQL Data Type: nvarchar(50)`),
-    Action: z.union([z.literal('Install'), z.literal('Remove'), z.literal('Upgrade')]).describe(`
-        * * Field Name: Action
-        * * Display Name: Action
-        * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Install
-    *   * Remove
-    *   * Upgrade`),
-    ManifestJSON: z.string().describe(`
-        * * Field Name: ManifestJSON
-        * * Display Name: Manifest JSON
-        * * SQL Data Type: nvarchar(MAX)`),
-    Summary: z.string().nullable().describe(`
-        * * Field Name: Summary
-        * * Display Name: Summary
-        * * SQL Data Type: nvarchar(MAX)`),
-    ExecutedByUserID: z.string().describe(`
-        * * Field Name: ExecutedByUserID
-        * * Display Name: Executed By User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    DurationSeconds: z.number().nullable().describe(`
-        * * Field Name: DurationSeconds
-        * * Display Name: Duration (seconds)
-        * * SQL Data Type: int`),
-    Success: z.boolean().describe(`
-        * * Field Name: Success
-        * * Display Name: Success
-        * * SQL Data Type: bit
-        * * Default Value: 1`),
-    ErrorMessage: z.string().nullable().describe(`
-        * * Field Name: ErrorMessage
-        * * Display Name: Error Message
-        * * SQL Data Type: nvarchar(MAX)`),
-    ErrorPhase: z.union([z.literal('Config'), z.literal('Hooks'), z.literal('Migration'), z.literal('Packages'), z.literal('Record'), z.literal('Schema')]).nullable().describe(`
-        * * Field Name: ErrorPhase
-        * * Display Name: Error Phase
-        * * SQL Data Type: nvarchar(50)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Config
-    *   * Hooks
-    *   * Migration
-    *   * Packages
-    *   * Record
-    *   * Schema`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    OpenApp: z.string().describe(`
-        * * Field Name: OpenApp
-        * * Display Name: Open App Name
-        * * SQL Data Type: nvarchar(64)`),
-    ExecutedByUser: z.string().describe(`
-        * * Field Name: ExecutedByUser
-        * * Display Name: Executed By User
-        * * SQL Data Type: nvarchar(100)`),
-});
-
-export type OpenAppInstallHistoryEntityType = z.infer<typeof OpenAppInstallHistorySchema>;
-
-/**
- * zod schema definition for the entity MJ: Open Apps
- */
-export const OpenAppSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(64)`),
-    DisplayName: z.string().describe(`
-        * * Field Name: DisplayName
-        * * Display Name: Display Name
-        * * SQL Data Type: nvarchar(200)`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)`),
-    Version: z.string().describe(`
-        * * Field Name: Version
-        * * Display Name: Version
-        * * SQL Data Type: nvarchar(50)`),
-    Publisher: z.string().describe(`
-        * * Field Name: Publisher
-        * * Display Name: Publisher
-        * * SQL Data Type: nvarchar(200)`),
-    PublisherEmail: z.string().nullable().describe(`
-        * * Field Name: PublisherEmail
-        * * Display Name: Publisher Email
-        * * SQL Data Type: nvarchar(255)`),
-    PublisherURL: z.string().nullable().describe(`
-        * * Field Name: PublisherURL
-        * * Display Name: Publisher URL
-        * * SQL Data Type: nvarchar(500)`),
-    RepositoryURL: z.string().describe(`
-        * * Field Name: RepositoryURL
-        * * Display Name: Repository URL
-        * * SQL Data Type: nvarchar(500)`),
-    SchemaName: z.string().nullable().describe(`
-        * * Field Name: SchemaName
-        * * Display Name: Schema Name
-        * * SQL Data Type: nvarchar(128)`),
-    MJVersionRange: z.string().describe(`
-        * * Field Name: MJVersionRange
-        * * Display Name: MJ Version Range
-        * * SQL Data Type: nvarchar(100)`),
-    License: z.string().nullable().describe(`
-        * * Field Name: License
-        * * Display Name: License
-        * * SQL Data Type: nvarchar(50)`),
-    Icon: z.string().nullable().describe(`
-        * * Field Name: Icon
-        * * Display Name: Icon
-        * * SQL Data Type: nvarchar(100)`),
-    Color: z.string().nullable().describe(`
-        * * Field Name: Color
-        * * Display Name: Color
-        * * SQL Data Type: nvarchar(20)`),
-    ManifestJSON: z.string().describe(`
-        * * Field Name: ManifestJSON
-        * * Display Name: Manifest JSON
-        * * SQL Data Type: nvarchar(MAX)`),
-    ConfigurationSchemaJSON: z.string().nullable().describe(`
-        * * Field Name: ConfigurationSchemaJSON
-        * * Display Name: Configuration Schema JSON
-        * * SQL Data Type: nvarchar(MAX)`),
-    InstalledByUserID: z.string().describe(`
-        * * Field Name: InstalledByUserID
-        * * Display Name: Installed By User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Error'), z.literal('Installing'), z.literal('Removed'), z.literal('Removing'), z.literal('Upgrading')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Active
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Disabled
-    *   * Error
-    *   * Installing
-    *   * Removed
-    *   * Removing
-    *   * Upgrading`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    InstalledByUser: z.string().describe(`
-        * * Field Name: InstalledByUser
-        * * Display Name: Installed By User
-        * * SQL Data Type: nvarchar(100)`),
-});
-
-export type OpenAppEntityType = z.infer<typeof OpenAppSchema>;
 
 /**
  * zod schema definition for the entity MJ: Projects
@@ -16878,6 +16694,10 @@ export const TaskSchema = z.object({
         * * Field Name: Project
         * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
+    ConversationDetail: z.string().nullable().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -18925,7 +18745,7 @@ export const RecommendationItemSchema = z.object({
         * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)`),
     DestinationEntityID: z.string().describe(`
         * * Field Name: DestinationEntityID
-        * * Display Name: Destination Entity ID
+        * * Display Name: Destination Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     DestinationEntityRecordID: z.string().describe(`
@@ -18948,6 +18768,10 @@ export const RecommendationItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Recommendation: z.string().describe(`
+        * * Field Name: Recommendation
+        * * Display Name: Recommendation
+        * * SQL Data Type: nvarchar(MAX)`),
     DestinationEntity: z.string().describe(`
         * * Field Name: DestinationEntity
         * * Display Name: Destination Entity
@@ -19065,7 +18889,7 @@ export const RecommendationSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecommendationRunID: z.string().describe(`
         * * Field Name: RecommendationRunID
-        * * Display Name: Recommendation Run
+        * * Display Name: Recommendation Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)`),
     SourceEntityID: z.string().describe(`
@@ -19075,7 +18899,7 @@ export const RecommendationSchema = z.object({
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     SourceEntityRecordID: z.string().describe(`
         * * Field Name: SourceEntityRecordID
-        * * Display Name: Source Entity Record ID
+        * * Display Name: Source Entity Record
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The record ID of the source entity`),
     __mj_CreatedAt: z.date().describe(`
@@ -19088,6 +18912,10 @@ export const RecommendationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecommendationRun: z.string().describe(`
+        * * Field Name: RecommendationRun
+        * * Display Name: Recommendation Run
+        * * SQL Data Type: nvarchar(255)`),
     SourceEntity: z.string().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
@@ -19160,7 +18988,7 @@ export const RecordChangeSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RecordID: z.string().describe(`
@@ -19170,7 +18998,7 @@ export const RecordChangeSchema = z.object({
         * * Description: Field RecordID for entity Record Changes.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Snapshot'), z.literal('Update')]).describe(`
@@ -19260,15 +19088,19 @@ export const RecordChangeSchema = z.object({
         * * Description: Field UpdatedAt for entity Record Changes.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    ReplayRun: z.string().nullable().describe(`
+        * * Field Name: ReplayRun
+        * * Display Name: Replay Run
         * * SQL Data Type: nvarchar(100)`),
     Integration: z.string().nullable().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -19290,7 +19122,7 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)`),
     DeletedRecordID: z.string().describe(`
         * * Field Name: DeletedRecordID
-        * * Display Name: Deleted Record
+        * * Display Name: Deleted Record ID
         * * SQL Data Type: nvarchar(750)
         * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -19318,6 +19150,10 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecordMergeLog: z.string().describe(`
+        * * Field Name: RecordMergeLog
+        * * Display Name: Record Merge Log
+        * * SQL Data Type: nvarchar(450)`),
 });
 
 export type RecordMergeDeletionLogEntityType = z.infer<typeof RecordMergeDeletionLogSchema>;
@@ -19639,6 +19475,10 @@ export const ReportSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
+    ConversationDetail: z.string().nullable().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: nvarchar(MAX)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
@@ -20487,7 +20327,7 @@ export const TemplateParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     TemplateID: z.string().describe(`
         * * Field Name: TemplateID
-        * * Display Name: Template
+        * * Display Name: Template ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Templates (vwTemplates.ID)`),
     Name: z.string().describe(`
@@ -20526,7 +20366,7 @@ export const TemplateParamSchema = z.object({
         * * Description: Whether this parameter must be provided when using the template.`),
     LinkedParameterName: z.string().nullable().describe(`
         * * Field Name: LinkedParameterName
-        * * Display Name: Linked Parameter
+        * * Display Name: Linked Parameter Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.`),
     LinkedParameterField: z.string().nullable().describe(`
@@ -20541,7 +20381,7 @@ export const TemplateParamSchema = z.object({
         * * Description: Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.`),
     EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RecordID: z.string().nullable().describe(`
@@ -20566,7 +20406,7 @@ export const TemplateParamSchema = z.object({
         * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`),
     TemplateContentID: z.string().nullable().describe(`
         * * Field Name: TemplateContentID
-        * * Display Name: Template Content
+        * * Display Name: Template Content ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Template Contents (vwTemplateContents.ID)
         * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.`),
@@ -20577,6 +20417,10 @@ export const TemplateParamSchema = z.object({
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    TemplateContent: z.string().nullable().describe(`
+        * * Field Name: TemplateContent
+        * * Display Name: Template Content
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -22887,17 +22731,17 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Other
     *   * Scalar
+    *   * Other
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -28360,6 +28204,15 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     get Configuration(): string | null {
         return this.Get('Configuration');
     }
+
+    /**
+    * * Field Name: PromptRun
+    * * Display Name: Prompt Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PromptRun(): string | null {
+        return this.Get('PromptRun');
+    }
 }
 
 
@@ -33807,6 +33660,15 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     get Project(): string | null {
         return this.Get('Project');
     }
+
+    /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string | null {
+        return this.Get('TestRun');
+    }
 }
 
 
@@ -35271,6 +35133,15 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: DuplicateRun
+    * * Display Name: Duplicate Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DuplicateRun(): string {
+        return this.Get('DuplicateRun');
+    }
 }
 
 
@@ -35634,6 +35505,15 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     }
 
     /**
+    * * Field Name: Employee
+    * * Display Name: Employee
+    * * SQL Data Type: nvarchar(81)
+    */
+    get Employee(): string | null {
+        return this.Get('Employee');
+    }
+
+    /**
     * * Field Name: CompanyIntegration
     * * Display Name: Company Integration
     * * SQL Data Type: nvarchar(255)
@@ -35734,6 +35614,15 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     }
 
     /**
+    * * Field Name: Employee
+    * * Display Name: Employee
+    * * SQL Data Type: nvarchar(81)
+    */
+    get Employee(): string | null {
+        return this.Get('Employee');
+    }
+
+    /**
     * * Field Name: Role
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
@@ -35831,6 +35720,15 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Employee
+    * * Display Name: Employee
+    * * SQL Data Type: nvarchar(81)
+    */
+    get Employee(): string | null {
+        return this.Get('Employee');
     }
 
     /**
@@ -37076,6 +36974,24 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: EntityAction
+    * * Display Name: Entity Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get EntityAction(): string {
+        return this.Get('EntityAction');
+    }
+
+    /**
+    * * Field Name: ActionFilter
+    * * Display Name: Action Filter
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ActionFilter(): string {
+        return this.Get('ActionFilter');
+    }
 }
 
 
@@ -37293,6 +37209,15 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     }
 
     /**
+    * * Field Name: EntityAction
+    * * Display Name: Entity Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get EntityAction(): string {
+        return this.Get('EntityAction');
+    }
+
+    /**
     * * Field Name: InvocationType
     * * Display Name: Invocation Type
     * * SQL Data Type: nvarchar(255)
@@ -37435,6 +37360,15 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityAction
+    * * Display Name: Entity Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get EntityAction(): string {
+        return this.Get('EntityAction');
     }
 
     /**
@@ -37943,6 +37877,15 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityCommunicationMessageType
+    * * Display Name: Entity Communication Message Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get EntityCommunicationMessageType(): string {
+        return this.Get('EntityCommunicationMessageType');
     }
 }
 
@@ -41057,6 +41000,24 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationRun
+    * * Display Name: Company Integration Run
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CompanyIntegrationRun(): string | null {
+        return this.Get('CompanyIntegrationRun');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationRunDetail
+    * * Display Name: Company Integration Run Detail
+    * * SQL Data Type: nvarchar(450)
+    */
+    get CompanyIntegrationRunDetail(): string | null {
+        return this.Get('CompanyIntegrationRunDetail');
     }
 }
 
@@ -46269,7 +46230,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
     * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles
@@ -46292,6 +46253,24 @@ detailed information about what validation rules failed.
     }
     set Comments(value: string | null) {
         this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
     }
 
     /**
@@ -57322,6 +57301,15 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
     }
 
     /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConversationDetail(): string {
+        return this.Get('ConversationDetail');
+    }
+
+    /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
     * * SQL Data Type: nvarchar(255)
@@ -57701,7 +57689,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail ID
+    * * Display Name: Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: The conversation message being rated.
@@ -57771,6 +57759,15 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Message Text
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConversationDetail(): string {
+        return this.Get('ConversationDetail');
     }
 
     /**
@@ -60753,7 +60750,7 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: IsEnabled
-    * * Display Name: Is Enabled
+    * * Display Name: Enabled
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this tool is enabled for the connection
@@ -60813,11 +60810,20 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: MCP Server Connection
+    * * Display Name: Server Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
         return this.Get('MCPServerConnection');
+    }
+
+    /**
+    * * Field Name: MCPServerTool
+    * * Display Name: Server Tool
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerTool(): string | null {
+        return this.Get('MCPServerTool');
     }
 }
 
@@ -61775,7 +61781,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: Connection ID
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -61788,7 +61794,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerToolID
-    * * Display Name: Tool ID
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
     * * Description: FK to MCP Server Tool (null if tool not cached)
@@ -61815,7 +61821,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: FK to User who initiated the call
@@ -61829,7 +61835,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: StartedAt
-    * * Display Name: Start Time
+    * * Display Name: Started At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -61842,7 +61848,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: EndedAt
-    * * Display Name: End Time
+    * * Display Name: Ended At
     * * SQL Data Type: datetimeoffset
     */
     get EndedAt(): Date | null {
@@ -61952,7 +61958,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: Connection Name
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -61960,8 +61966,17 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
     }
 
     /**
+    * * Field Name: MCPServerTool
+    * * Display Name: MCP Server Tool
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerTool(): string | null {
+        return this.Get('MCPServerTool');
+    }
+
+    /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -62945,722 +62960,6 @@ export class OAuthTokenEntity extends BaseEntity<OAuthTokenEntityType> {
     */
     get Credential(): string | null {
         return this.Get('Credential');
-    }
-}
-
-
-/**
- * MJ: Open App Dependencies - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: OpenAppDependency
- * * Base View: vwOpenAppDependencies
- * * @description Inter-app dependency relationships between installed Open Apps
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Open App Dependencies')
-export class OpenAppDependencyEntity extends BaseEntity<OpenAppDependencyEntityType> {
-    /**
-    * Loads the MJ: Open App Dependencies record from the database
-    * @param ID: string - primary key value to load the MJ: Open App Dependencies record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof OpenAppDependencyEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: OpenAppID
-    * * Display Name: Open App
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Open Apps (vwOpenApps.ID)
-    */
-    get OpenAppID(): string {
-        return this.Get('OpenAppID');
-    }
-    set OpenAppID(value: string) {
-        this.Set('OpenAppID', value);
-    }
-
-    /**
-    * * Field Name: DependsOnAppName
-    * * Display Name: Depends On App Raw Name
-    * * SQL Data Type: nvarchar(64)
-    */
-    get DependsOnAppName(): string {
-        return this.Get('DependsOnAppName');
-    }
-    set DependsOnAppName(value: string) {
-        this.Set('DependsOnAppName', value);
-    }
-
-    /**
-    * * Field Name: DependsOnAppID
-    * * Display Name: Depends On App
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Open Apps (vwOpenApps.ID)
-    */
-    get DependsOnAppID(): string | null {
-        return this.Get('DependsOnAppID');
-    }
-    set DependsOnAppID(value: string | null) {
-        this.Set('DependsOnAppID', value);
-    }
-
-    /**
-    * * Field Name: VersionRange
-    * * Display Name: Version Range
-    * * SQL Data Type: nvarchar(100)
-    */
-    get VersionRange(): string {
-        return this.Get('VersionRange');
-    }
-    set VersionRange(value: string) {
-        this.Set('VersionRange', value);
-    }
-
-    /**
-    * * Field Name: InstalledVersion
-    * * Display Name: Installed Version
-    * * SQL Data Type: nvarchar(50)
-    */
-    get InstalledVersion(): string | null {
-        return this.Get('InstalledVersion');
-    }
-    set InstalledVersion(value: string | null) {
-        this.Set('InstalledVersion', value);
-    }
-
-    /**
-    * * Field Name: Status
-    * * Display Name: Status
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Satisfied
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Incompatible
-    *   * Missing
-    *   * Satisfied
-    */
-    get Status(): 'Incompatible' | 'Missing' | 'Satisfied' {
-        return this.Get('Status');
-    }
-    set Status(value: 'Incompatible' | 'Missing' | 'Satisfied') {
-        this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: OpenApp
-    * * Display Name: Open App Name
-    * * SQL Data Type: nvarchar(64)
-    */
-    get OpenApp(): string {
-        return this.Get('OpenApp');
-    }
-
-    /**
-    * * Field Name: DependsOnApp
-    * * Display Name: Depends On App Name
-    * * SQL Data Type: nvarchar(64)
-    */
-    get DependsOnApp(): string | null {
-        return this.Get('DependsOnApp');
-    }
-}
-
-
-/**
- * MJ: Open App Install Histories - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: OpenAppInstallHistory
- * * Base View: vwOpenAppInstallHistories
- * * @description Audit trail of every install, upgrade, and removal for Open Apps
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Open App Install Histories')
-export class OpenAppInstallHistoryEntity extends BaseEntity<OpenAppInstallHistoryEntityType> {
-    /**
-    * Loads the MJ: Open App Install Histories record from the database
-    * @param ID: string - primary key value to load the MJ: Open App Install Histories record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof OpenAppInstallHistoryEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: OpenAppID
-    * * Display Name: Open App ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Open Apps (vwOpenApps.ID)
-    */
-    get OpenAppID(): string {
-        return this.Get('OpenAppID');
-    }
-    set OpenAppID(value: string) {
-        this.Set('OpenAppID', value);
-    }
-
-    /**
-    * * Field Name: Version
-    * * Display Name: Version
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Version(): string {
-        return this.Get('Version');
-    }
-    set Version(value: string) {
-        this.Set('Version', value);
-    }
-
-    /**
-    * * Field Name: PreviousVersion
-    * * Display Name: Previous Version
-    * * SQL Data Type: nvarchar(50)
-    */
-    get PreviousVersion(): string | null {
-        return this.Get('PreviousVersion');
-    }
-    set PreviousVersion(value: string | null) {
-        this.Set('PreviousVersion', value);
-    }
-
-    /**
-    * * Field Name: Action
-    * * Display Name: Action
-    * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Install
-    *   * Remove
-    *   * Upgrade
-    */
-    get Action(): 'Install' | 'Remove' | 'Upgrade' {
-        return this.Get('Action');
-    }
-    set Action(value: 'Install' | 'Remove' | 'Upgrade') {
-        this.Set('Action', value);
-    }
-
-    /**
-    * * Field Name: ManifestJSON
-    * * Display Name: Manifest JSON
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ManifestJSON(): string {
-        return this.Get('ManifestJSON');
-    }
-    set ManifestJSON(value: string) {
-        this.Set('ManifestJSON', value);
-    }
-
-    /**
-    * * Field Name: Summary
-    * * Display Name: Summary
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Summary(): string | null {
-        return this.Get('Summary');
-    }
-    set Summary(value: string | null) {
-        this.Set('Summary', value);
-    }
-
-    /**
-    * * Field Name: ExecutedByUserID
-    * * Display Name: Executed By User ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: Users (vwUsers.ID)
-    */
-    get ExecutedByUserID(): string {
-        return this.Get('ExecutedByUserID');
-    }
-    set ExecutedByUserID(value: string) {
-        this.Set('ExecutedByUserID', value);
-    }
-
-    /**
-    * * Field Name: DurationSeconds
-    * * Display Name: Duration (seconds)
-    * * SQL Data Type: int
-    */
-    get DurationSeconds(): number | null {
-        return this.Get('DurationSeconds');
-    }
-    set DurationSeconds(value: number | null) {
-        this.Set('DurationSeconds', value);
-    }
-
-    /**
-    * * Field Name: Success
-    * * Display Name: Success
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    */
-    get Success(): boolean {
-        return this.Get('Success');
-    }
-    set Success(value: boolean) {
-        this.Set('Success', value);
-    }
-
-    /**
-    * * Field Name: ErrorMessage
-    * * Display Name: Error Message
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ErrorMessage(): string | null {
-        return this.Get('ErrorMessage');
-    }
-    set ErrorMessage(value: string | null) {
-        this.Set('ErrorMessage', value);
-    }
-
-    /**
-    * * Field Name: ErrorPhase
-    * * Display Name: Error Phase
-    * * SQL Data Type: nvarchar(50)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Config
-    *   * Hooks
-    *   * Migration
-    *   * Packages
-    *   * Record
-    *   * Schema
-    */
-    get ErrorPhase(): 'Config' | 'Hooks' | 'Migration' | 'Packages' | 'Record' | 'Schema' | null {
-        return this.Get('ErrorPhase');
-    }
-    set ErrorPhase(value: 'Config' | 'Hooks' | 'Migration' | 'Packages' | 'Record' | 'Schema' | null) {
-        this.Set('ErrorPhase', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: OpenApp
-    * * Display Name: Open App Name
-    * * SQL Data Type: nvarchar(64)
-    */
-    get OpenApp(): string {
-        return this.Get('OpenApp');
-    }
-
-    /**
-    * * Field Name: ExecutedByUser
-    * * Display Name: Executed By User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get ExecutedByUser(): string {
-        return this.Get('ExecutedByUser');
-    }
-}
-
-
-/**
- * MJ: Open Apps - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: OpenApp
- * * Base View: vwOpenApps
- * * @description Tracks all MJ Open Apps installed in this instance
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Open Apps')
-export class OpenAppEntity extends BaseEntity<OpenAppEntityType> {
-    /**
-    * Loads the MJ: Open Apps record from the database
-    * @param ID: string - primary key value to load the MJ: Open Apps record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof OpenAppEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Open Apps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Name: The Name field may only contain lowercase letters (a‑z), digits (0‑9), or hyphens (-). Any other character is not allowed, ensuring the identifier is clean and URL‑friendly.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateNameAllowedCharacters(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * The Name field may only contain lowercase letters (a‑z), digits (0‑9), or hyphens (-). Any other character is not allowed, ensuring the identifier is clean and URL‑friendly.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateNameAllowedCharacters(result: ValidationResult) {
-    	// Name is required, so we only need to verify its characters
-    	if (this.Name != null && !/^[a-z0-9-]+$/.test(this.Name)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Name",
-    			"Name can only contain lowercase letters, numbers, and hyphens.",
-    			this.Name,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(64)
-    */
-    get Name(): string {
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: DisplayName
-    * * Display Name: Display Name
-    * * SQL Data Type: nvarchar(200)
-    */
-    get DisplayName(): string {
-        return this.Get('DisplayName');
-    }
-    set DisplayName(value: string) {
-        this.Set('DisplayName', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: Version
-    * * Display Name: Version
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Version(): string {
-        return this.Get('Version');
-    }
-    set Version(value: string) {
-        this.Set('Version', value);
-    }
-
-    /**
-    * * Field Name: Publisher
-    * * Display Name: Publisher
-    * * SQL Data Type: nvarchar(200)
-    */
-    get Publisher(): string {
-        return this.Get('Publisher');
-    }
-    set Publisher(value: string) {
-        this.Set('Publisher', value);
-    }
-
-    /**
-    * * Field Name: PublisherEmail
-    * * Display Name: Publisher Email
-    * * SQL Data Type: nvarchar(255)
-    */
-    get PublisherEmail(): string | null {
-        return this.Get('PublisherEmail');
-    }
-    set PublisherEmail(value: string | null) {
-        this.Set('PublisherEmail', value);
-    }
-
-    /**
-    * * Field Name: PublisherURL
-    * * Display Name: Publisher URL
-    * * SQL Data Type: nvarchar(500)
-    */
-    get PublisherURL(): string | null {
-        return this.Get('PublisherURL');
-    }
-    set PublisherURL(value: string | null) {
-        this.Set('PublisherURL', value);
-    }
-
-    /**
-    * * Field Name: RepositoryURL
-    * * Display Name: Repository URL
-    * * SQL Data Type: nvarchar(500)
-    */
-    get RepositoryURL(): string {
-        return this.Get('RepositoryURL');
-    }
-    set RepositoryURL(value: string) {
-        this.Set('RepositoryURL', value);
-    }
-
-    /**
-    * * Field Name: SchemaName
-    * * Display Name: Schema Name
-    * * SQL Data Type: nvarchar(128)
-    */
-    get SchemaName(): string | null {
-        return this.Get('SchemaName');
-    }
-    set SchemaName(value: string | null) {
-        this.Set('SchemaName', value);
-    }
-
-    /**
-    * * Field Name: MJVersionRange
-    * * Display Name: MJ Version Range
-    * * SQL Data Type: nvarchar(100)
-    */
-    get MJVersionRange(): string {
-        return this.Get('MJVersionRange');
-    }
-    set MJVersionRange(value: string) {
-        this.Set('MJVersionRange', value);
-    }
-
-    /**
-    * * Field Name: License
-    * * Display Name: License
-    * * SQL Data Type: nvarchar(50)
-    */
-    get License(): string | null {
-        return this.Get('License');
-    }
-    set License(value: string | null) {
-        this.Set('License', value);
-    }
-
-    /**
-    * * Field Name: Icon
-    * * Display Name: Icon
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Icon(): string | null {
-        return this.Get('Icon');
-    }
-    set Icon(value: string | null) {
-        this.Set('Icon', value);
-    }
-
-    /**
-    * * Field Name: Color
-    * * Display Name: Color
-    * * SQL Data Type: nvarchar(20)
-    */
-    get Color(): string | null {
-        return this.Get('Color');
-    }
-    set Color(value: string | null) {
-        this.Set('Color', value);
-    }
-
-    /**
-    * * Field Name: ManifestJSON
-    * * Display Name: Manifest JSON
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ManifestJSON(): string {
-        return this.Get('ManifestJSON');
-    }
-    set ManifestJSON(value: string) {
-        this.Set('ManifestJSON', value);
-    }
-
-    /**
-    * * Field Name: ConfigurationSchemaJSON
-    * * Display Name: Configuration Schema JSON
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConfigurationSchemaJSON(): string | null {
-        return this.Get('ConfigurationSchemaJSON');
-    }
-    set ConfigurationSchemaJSON(value: string | null) {
-        this.Set('ConfigurationSchemaJSON', value);
-    }
-
-    /**
-    * * Field Name: InstalledByUserID
-    * * Display Name: Installed By User ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: Users (vwUsers.ID)
-    */
-    get InstalledByUserID(): string {
-        return this.Get('InstalledByUserID');
-    }
-    set InstalledByUserID(value: string) {
-        this.Set('InstalledByUserID', value);
-    }
-
-    /**
-    * * Field Name: Status
-    * * Display Name: Status
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Active
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Disabled
-    *   * Error
-    *   * Installing
-    *   * Removed
-    *   * Removing
-    *   * Upgrading
-    */
-    get Status(): 'Active' | 'Disabled' | 'Error' | 'Installing' | 'Removed' | 'Removing' | 'Upgrading' {
-        return this.Get('Status');
-    }
-    set Status(value: 'Active' | 'Disabled' | 'Error' | 'Installing' | 'Removed' | 'Removing' | 'Upgrading') {
-        this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: InstalledByUser
-    * * Display Name: Installed By User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get InstalledByUser(): string {
-        return this.Get('InstalledByUser');
     }
 }
 
@@ -66180,6 +65479,15 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
     */
     get Project(): string | null {
         return this.Get('Project');
+    }
+
+    /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConversationDetail(): string | null {
+        return this.Get('ConversationDetail');
     }
 
     /**
@@ -71522,7 +70830,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: DestinationEntityID
-    * * Display Name: Destination Entity ID
+    * * Display Name: Destination Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -71577,6 +70885,15 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Recommendation
+    * * Display Name: Recommendation
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Recommendation(): string {
+        return this.Get('Recommendation');
     }
 
     /**
@@ -71891,7 +71208,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: RecommendationRunID
-    * * Display Name: Recommendation Run
+    * * Display Name: Recommendation Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)
     */
@@ -71917,7 +71234,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: SourceEntityRecordID
-    * * Display Name: Source Entity Record ID
+    * * Display Name: Source Entity Record
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The record ID of the source entity
     */
@@ -71946,6 +71263,15 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecommendationRun
+    * * Display Name: Recommendation Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecommendationRun(): string {
+        return this.Get('RecommendationRun');
     }
 
     /**
@@ -72136,7 +71462,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -72162,7 +71488,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -72358,7 +71684,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -72367,7 +71693,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -72375,8 +71701,17 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     }
 
     /**
+    * * Field Name: ReplayRun
+    * * Display Name: Replay Run
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ReplayRun(): string | null {
+        return this.Get('ReplayRun');
+    }
+
+    /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string | null {
@@ -72443,7 +71778,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: DeletedRecordID
-    * * Display Name: Deleted Record
+    * * Display Name: Deleted Record ID
     * * SQL Data Type: nvarchar(750)
     * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.
     */
@@ -72503,6 +71838,15 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordMergeLog
+    * * Display Name: Record Merge Log
+    * * SQL Data Type: nvarchar(450)
+    */
+    get RecordMergeLog(): string {
+        return this.Get('RecordMergeLog');
     }
 }
 
@@ -73354,6 +72698,15 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConversationDetail(): string | null {
+        return this.Get('ConversationDetail');
     }
 
     /**
@@ -75631,7 +74984,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: TemplateID
-    * * Display Name: Template
+    * * Display Name: Template ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
     */
@@ -75718,7 +75071,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: LinkedParameterName
-    * * Display Name: Linked Parameter
+    * * Display Name: Linked Parameter Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.
     */
@@ -75757,7 +75110,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -75816,7 +75169,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: TemplateContentID
-    * * Display Name: Template Content
+    * * Display Name: Template Content ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Template Contents (vwTemplateContents.ID)
     * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.
@@ -75844,6 +75197,15 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     */
     get Entity(): string | null {
         return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: TemplateContent
+    * * Display Name: Template Content
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TemplateContent(): string | null {
+        return this.Get('TemplateContent');
     }
 }
 
