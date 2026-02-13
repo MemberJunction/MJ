@@ -1491,9 +1491,9 @@ LEFT OUTER JOIN -- left join since can have table level constraints
 LEFT OUTER JOIN
   __mj.vwGeneratedCodes gc 
   ON -- EITHER JOIN ON EntityField or Entity depending on which type of constraint we have here
-  (   (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
+  (   (ef.ID IS NOT NULL AND gc.LinkedEntity='MJ: Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
         OR
-      (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
+      (ef.ID IS NULL and gc.LinkedEntity='MJ: Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
   ) AND -- MUST MATCH Source=definition
   cc.definition = gc.Source
 GO
