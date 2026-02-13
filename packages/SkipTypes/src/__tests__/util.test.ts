@@ -123,7 +123,7 @@ describe('SkipTypes util', () => {
       };
 
       const result = MapEntityRelationshipInfoToSkipEntityRelationshipInfo(re as never);
-      expect(result.entity).toBe('Users');
+      expect(result.entity).toBe('MJ: Users');
       expect(result.relatedEntity).toBe('Orders');
       expect(result.type).toBe('OneToMany');
     });
