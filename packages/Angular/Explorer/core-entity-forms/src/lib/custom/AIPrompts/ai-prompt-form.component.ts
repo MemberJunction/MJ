@@ -271,10 +271,11 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
             this.template = pendingTemplate.entityObject as MJTemplateEntity;
             this.templateNotFoundInDatabase = false;
             this.isLoadingTemplate = false;
-            
+
             // Clear template content and params since this is a new template
             this.templateContent = null;
             this.templateParams = [];
+            this.cdr.detectChanges();
             return;
         }
 
@@ -307,6 +308,7 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
             );
         } finally {
             this.isLoadingTemplate = false;
+            this.cdr.detectChanges();
         }
     }
 

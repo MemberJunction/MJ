@@ -65,6 +65,7 @@ export class ActionExecutionLogFormComponentExtended extends MJActionExecutionLo
             
             // Format JSON fields
             this.formatJSONFields();
+            this.cdr.detectChanges();
         }
     }
 

@@ -84,6 +84,7 @@ export class ActionFormComponentExtended extends MJActionFormComponent implement
                 this.loadActionLibraries(),
                 this.loadExecutionStats()
             ]);
+            this.cdr.detectChanges();
         }
     }
     
