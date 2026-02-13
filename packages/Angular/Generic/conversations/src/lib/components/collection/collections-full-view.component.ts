@@ -182,7 +182,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
               <h3>No collections yet</h3>
               <p>Create your first collection to get started</p>
               @if (canEditCurrent()) {
-                <button class="btn-primary"
+                <button class="btn-primary empty-state-cta"
                   (click)="createCollection()"
                   >
                   <i class="fas fa-plus"></i>
@@ -732,6 +732,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     /* Content area */
     .collections-content {
+      display: flex;
+      flex-direction: column;
       flex: 1;
       overflow-y: auto;
       padding: 20px;
@@ -743,13 +745,14 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100%;
+      flex: 1;
+      min-height: 0;
       color: #9CA3AF;
       text-align: center;
-      padding: 48px 24px;
+      padding: 24px;
     }
 
-    .empty-state i {
+    .empty-state > i {
       font-size: 64px;
       margin-bottom: 24px;
       opacity: 0.3;
@@ -767,6 +770,12 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       margin: 0 0 24px 0;
       font-size: 14px;
       color: #6B7280;
+    }
+
+    .empty-state .empty-state-cta {
+      padding: 10px 20px;
+      font-size: 14px;
+      border-radius: 8px;
     }
 
     .empty-state-actions {
