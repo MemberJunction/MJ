@@ -306,15 +306,20 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           iframeDoc.head.appendChild(style);
         }
 
-        // Inject width override to ensure content fills iframe
+        // Inject width guardrails to prevent iframe content from causing horizontal overflow
         const widthOverride = iframeDoc.createElement('style');
         widthOverride.textContent = `
+          html, body {
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+          }
           body {
-            max-width: none !important;
-            width: 100% !important;
             margin: 20px 10px 5px 20px !important; /* top right bottom left */
             padding: 0 !important;
             box-sizing: border-box !important;
+          }
+          img, svg, table, pre {
+            max-width: 100% !important;
           }
         `;
         iframeDoc.head.appendChild(widthOverride);
@@ -344,22 +349,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Set iframe height to match content (with a bit of padding)
         iframe.style.height = `${contentHeight + 20}px`;
 
-        // Get the iframe's actual width (excluding borders)
-        const iframeWidth = iframe.clientWidth;
-
-        // Force body to use full iframe width with consistent margins
-        if (iframeDoc.body) {
-          const marginSize = 20; // 20px margins on each side
-          const bodyWidth = iframeWidth - (marginSize * 2);
-
-          iframeDoc.body.style.width = `${bodyWidth}px`;
-          iframeDoc.body.style.maxWidth = 'none';
-          iframeDoc.body.style.margin = `${marginSize}px`;
-          iframeDoc.body.style.padding = '0';
-          iframeDoc.body.style.boxSizing = 'border-box';
-        }
-
-        console.log('📦 Iframe resized - Height:', contentHeight + 20, 'px, Width:', iframeWidth, 'px');
+        console.log('📦 Iframe resized - Height:', contentHeight + 20, 'px');
       }
     }
   }
