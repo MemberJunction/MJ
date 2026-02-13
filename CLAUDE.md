@@ -1339,6 +1339,27 @@ Each nav item with `ResourceType: "Custom"` requires a corresponding component:
 ### Overview
 MemberJunction uses `@playwright/cli` (Playwright CLI) for browser-based testing and UI interaction during development. The CLI uses an accessibility-snapshot approach that is token-efficient for AI agents.
 
+### Managing Dev Servers
+Claude Code should start and stop MJAPI and MJExplorer as background processes itself. This allows restarting them after code changes without relying on the user to manage them externally.
+
+```bash
+# Start MJAPI (port 4001, configured via GRAPHQL_PORT in .env)
+# Run as a background task from: packages/MJAPI/
+npm run start
+
+# Start MJExplorer (port 4201, configured in package.json start script)
+# Run as a background task from: packages/MJExplorer/
+npm run start
+```
+
+**Key points:**
+- MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`)
+- MJExplorer runs on port **4201** (set by `--port 4201` in its start script)
+- Run both as background tasks so you can monitor output and restart as needed
+- After rebuilding a server-side package, restart MJAPI to pick up changes
+- After rebuilding an Angular library, MJExplorer's Vite dev server auto-detects changes and triggers a browser reload — no restart needed
+- Always check that servers are healthy before launching the browser (wait for "listening on" / compilation success messages)
+
 ### Persistent Browser Profile (Auth Caching)
 To avoid re-authenticating every time you launch a browser session, use the `--profile` flag to store session data (MSAL tokens, cookies, localStorage) persistently:
 
@@ -1384,13 +1405,16 @@ npx playwright-cli close
 ```
 
 ### Workflow for UI Bug Investigation
-1. Start MJAPI and MJExplorer servers
-2. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
-3. Authenticate once if needed (cached for future sessions)
-4. Use `snapshot` to inspect the page, `click`/`type` to interact
-5. Use `console info` / `console error` to check for issues
-6. Make code fixes, rebuild affected packages, reload the browser
-7. Re-test to verify the fix
+1. Start MJAPI and MJExplorer as background processes (if not already running)
+2. Wait for both servers to be ready (MJAPI listening, MJExplorer compiled)
+3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
+4. Authenticate once if needed (cached for future sessions)
+5. Use `snapshot` to inspect the page, `click`/`type` to interact
+6. Use `console info` / `console error` to check for issues
+7. Make code fixes, rebuild affected packages
+   - Server-side changes: restart MJAPI background process
+   - Angular library changes: Vite auto-reloads the browser
+8. Re-test to verify the fix
 
 ## Active Technologies
 - TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk` (601-mcp-oauth)
