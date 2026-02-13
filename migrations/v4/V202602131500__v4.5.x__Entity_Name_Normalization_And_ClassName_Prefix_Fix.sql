@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Migration: Entity Name Normalization & ClassName Prefix Fix
--- Version:   v4.4.x (preparing for v5.0 breaking change)
+-- Version:   v4.5.x (preparing for v5.0 breaking change)
 -- Purpose:   1. Create StripToAlphanumeric helper function
 --            2. Rename all unprefixed __mj entities to use "MJ: " prefix
 --            3. Set DisplayName to preserve the old short name for UI
