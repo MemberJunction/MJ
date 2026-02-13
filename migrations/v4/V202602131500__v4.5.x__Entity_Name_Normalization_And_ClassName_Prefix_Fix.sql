@@ -9,6 +9,29 @@
 --               class name collisions
 -- =============================================================================
 
+
+
+-- =============================================================================
+-- Step 0: Promote Gemini 3 Flash to highest priority for all CodeGen AI prompts
+-- (Cerebras is unreliable; Gemini 3 Flash is fast and reliable for these tasks)
+-- =============================================================================
+
+-- Check Constraint Parser
+UPDATE [${flyway:defaultSchema}].[AIPromptModel] SET Priority = 10 WHERE ID = '51508C0F-9DAD-4BB6-9CD7-067DCFA64159';
+-- Transitive Join Intelligence
+UPDATE [${flyway:defaultSchema}].[AIPromptModel] SET Priority = 10 WHERE ID = '3E53C8B1-20C9-4597-BBD2-0BB28C29A96F';
+-- Virtual Entity Field Decoration
+UPDATE [${flyway:defaultSchema}].[AIPromptModel] SET Priority = 10 WHERE ID = '6BA72939-D8CD-456E-8AC7-DEA85E3AEE56';
+-- Form Layout Generation
+UPDATE [${flyway:defaultSchema}].[AIPromptModel] SET Priority = 10 WHERE ID = 'A117EB14-411D-4590-A8DC-F9AF5C82DA5D';
+-- Smart Field Identification
+UPDATE [${flyway:defaultSchema}].[AIPromptModel] SET Priority = 10 WHERE ID = '7C6CC54F-6038-4DAB-810C-0D18A1CC659B';
+-- Entity Description Generation
+UPDATE [${flyway:defaultSchema}].[AIPromptModel] SET Priority = 10 WHERE ID = '25554962-6B1A-4FEC-9C76-B69841F06182';
+-- Entity Name Generation
+UPDATE [${flyway:defaultSchema}].[AIPromptModel] SET Priority = 10 WHERE ID = '8FD93F85-E4FB-4658-9260-2E93CE1E562C';
+
+
 -- =============================================================================
 -- STEP 1: Create StripToAlphanumeric helper function
 -- =============================================================================
@@ -58,7 +81,7 @@ IF EXISTS (
       AND e1.Name NOT LIKE 'MJ:%'
 )
 BEGIN
-    RAISERROR(N'CONFLICT: One or more __mj entities would collide with an existing "MJ: " prefixed entity name. Aborting migration.', 16, 1);
+    RAISERROR(N'CONFLICT: One or more ${flyway:defaultSchema} entities would collide with an existing "MJ: " prefixed entity name. Aborting migration.', 16, 1);
     SET NOEXEC ON;
 END
 GO
@@ -91,9 +114,9 @@ GO
 IF @@ERROR <> 0 SET NOEXEC ON
 
 -- =============================================================================
--- STEP 4: Rename all unprefixed __mj entities to add "MJ: " prefix
+-- STEP 4: Rename all unprefixed ${flyway:defaultSchema} entities to add "MJ: " prefix
 -- =============================================================================
-PRINT N'Renaming unprefixed __mj entities to add "MJ: " prefix'
+PRINT N'Renaming unprefixed ${flyway:defaultSchema} entities to add "MJ: " prefix'
 GO
 
 UPDATE [${flyway:defaultSchema}].Entity
@@ -112,7 +135,7 @@ DECLARE @totalMJ INT, @prefixed INT, @unprefixed INT;
 SELECT @totalMJ = COUNT(*) FROM [${flyway:defaultSchema}].Entity WHERE SchemaName = '${flyway:defaultSchema}';
 SELECT @prefixed = COUNT(*) FROM [${flyway:defaultSchema}].Entity WHERE SchemaName = '${flyway:defaultSchema}' AND Name LIKE 'MJ: %';
 SELECT @unprefixed = COUNT(*) FROM [${flyway:defaultSchema}].Entity WHERE SchemaName = '${flyway:defaultSchema}' AND Name NOT LIKE 'MJ: %';
-PRINT N'Total __mj entities: ' + CAST(@totalMJ AS NVARCHAR(10));
+PRINT N'Total ${flyway:defaultSchema} entities: ' + CAST(@totalMJ AS NVARCHAR(10));
 PRINT N'  With MJ: prefix: ' + CAST(@prefixed AS NVARCHAR(10));
 PRINT N'  Without prefix:  ' + CAST(@unprefixed AS NVARCHAR(10)) + N' (should be 0)';
 GO
@@ -282,7 +305,7 @@ GO
 -- STEP 8 - fix up one legacy record in the DisplayComponentConfiguration table
 
 
-UPDATE __mj.EntityRelationship
+UPDATE ${flyway:defaultSchema}.EntityRelationship
 SET DisplayComponentConfiguration = REPLACE(
     DisplayComponentConfiguration,
     '"Communication Base Message Types"',

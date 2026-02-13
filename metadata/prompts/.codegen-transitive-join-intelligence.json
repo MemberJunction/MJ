@@ -71,7 +71,7 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 2
+            "Priority": 10
           },
           "primaryKey": {
             "ID": "3E53C8B1-20C9-4597-BBD2-0BB28C29A96F"
