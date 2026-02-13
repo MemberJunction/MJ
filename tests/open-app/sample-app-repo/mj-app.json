@@ -18,17 +18,9 @@
   },
   "migrations": {
     "directory": "migrations",
-    "engine": "skyway"
+    "engine": "flyway"
   },
-  "packages": {
-    "server": [
-      {
-        "name": "@mj-test/sample-app-server",
-        "role": "actions",
-        "startupExport": "registerSampleApp"
-      }
-    ]
-  },
+  "packages": {},
   "categories": ["testing"],
   "tags": ["sample", "test"]
 }

@@ -65,7 +65,7 @@ const dbSchemaSchema = z.object({
 
 const migrationsSchema = z.object({
     directory: z.string().optional().default('migrations'),
-    engine: z.enum(['skyway']).optional().default('skyway'),
+    engine: z.enum(['flyway', 'skyway']).optional().default('flyway'),
 });
 
 // ── Metadata ──────────────────────────────────────────────

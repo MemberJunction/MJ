@@ -2,7 +2,7 @@
  * History recorder for MJ Open Apps.
  *
  * Records installation state in the MJ: Open Apps table and creates
- * audit trail entries in MJ: Open App Install History.
+ * audit trail entries in MJ: Open App Install Histories.
  *
  * NOTE: This module depends on MJ entity APIs at runtime (Metadata, RunView).
  * The import is done dynamically to avoid a hard dependency on @memberjunction/core
@@ -144,7 +144,7 @@ export async function RecordInstallHistoryEntry(
         ErrorPhase: details.ErrorPhase ?? null
     };
 
-    return provider.CreateRecord('MJ: Open App Install History', values, userId);
+    return provider.CreateRecord('MJ: Open App Install Histories', values, userId);
 }
 
 /**
@@ -213,7 +213,7 @@ export async function FindInstalledApp(
 export async function ListInstalledApps(
     provider: MJDataProvider
 ): Promise<InstalledAppInfo[]> {
-    const records = await provider.FindRecords('MJ: Open Apps', '1=1');
+    const records = await provider.FindRecords('MJ: Open Apps', "Status <> 'Removing'");
     return records as unknown[] as InstalledAppInfo[];
 }
 

@@ -61,7 +61,7 @@ export { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName } from
 export type { SchemaManagerConnection, SchemaOperationResult } from './install/schema-manager.js';
 
 export { RunAppMigrations } from './install/migration-runner.js';
-export type { MigrationRunOptions, MigrationRunResult, SkywayDatabaseConfig } from './install/migration-runner.js';
+export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
 export { AddAppPackages, RemoveAppPackages, RunNpmInstall } from './install/package-manager.js';
 export type { PackageManagerOptions, PackageOperationResult } from './install/package-manager.js';
