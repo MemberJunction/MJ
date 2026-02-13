@@ -372,8 +372,8 @@ export class ValidationService {
     // Check for required fields
     if (this.options.checkBestPractices) {
       for (const field of entityFields) {
-        // Skip if field allows null or has a value already
-        if (field.AllowsNull || fields[field.Name]) {
+        // Skip if field allows null or has a value already (use 'in' to handle falsy values like 0, false, "")
+        if (field.AllowsNull || field.Name in fields) {
           continue;
         }
 
