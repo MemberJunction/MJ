@@ -15,9 +15,9 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('../generated/entity_subclasses', () => ({
-    TemplateEntity: class MockTemplateEntity {},
-    TemplateContentEntity: class MockTemplateContentEntity {},
-    TemplateParamEntity: class MockTemplateParamEntity {},
+    MJTemplateEntity: class MockTemplateEntity {},
+    MJTemplateContentEntity: class MockTemplateContentEntity {},
+    MJTemplateParamEntity: class MockTemplateParamEntity {},
 }));
 
 import { TemplateEntityExtended } from '../custom/TemplateEntityExtended';

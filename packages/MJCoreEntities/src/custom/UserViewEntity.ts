@@ -1,16 +1,16 @@
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult } from "@memberjunction/core";
-import { UserViewEntity } from "../generated/entity_subclasses";
+import { MJUserViewEntity } from "../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissions/ResourcePermissionEngine";
 
 
-@RegisterClass(BaseEntity, 'User Views') 
-export class UserViewEntityExtended extends UserViewEntity  {
+@RegisterClass(BaseEntity, 'MJ: User Views')
+export class UserViewEntityExtended extends MJUserViewEntity  {
     private _ViewEntityInfo: EntityInfo = null
 
     /**
      * This is a read-only property that returns the filters for this view. This information
-     * is persisted in a JSON format in the FilterState column of the UserViewEntity table. To access
+     * is persisted in a JSON format in the FilterState column of the MJUserViewEntity table. To access
      * the filters easily, use this property.
      * @readonly
      * @type {ViewFilterInfo[]}
@@ -26,7 +26,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
 
     /**
      * This is a read-only property that returns the columns for this view. This information
-     * is persisted in a JSON format in the GridState column of the UserViewEntity table. To access
+     * is persisted in a JSON format in the GridState column of the MJUserViewEntity table. To access
      * the columns easily, use this property. 
      */
     public get Columns(): ViewColumnInfo[] {
@@ -214,7 +214,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
     }
 
     /**
-     * This property determines if the specified user can edit the view object. All of the below assumes the user has base Create/Update permissions on the "User Views" entity. 
+     * This property determines if the specified user can edit the view object. All of the below assumes the user has base Create/Update permissions on the "MJ: User Views" entity. 
      * The flow of the logic is:
      *  1) The view is a new record, by definition the user can edit this because it is new
      *  2) The user is the owner of the current view - e.g. UserID in the view record matches the ID of the user provided, allowed
@@ -248,7 +248,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
         }
         else {
             // not the owner, let's see if the user has permissions or not
-            const rt = ResourcePermissionEngine.Instance.ResourceTypes.find((rt: any) => rt.Name === 'User Views');
+            const rt = ResourcePermissionEngine.Instance.ResourceTypes.find((rt: any) => rt.Name === 'MJ: User Views');
             if (!rt)
                 throw new Error('Resource Type User Views not found');
 
@@ -263,7 +263,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
 
 
     /**
-     * This property determines if the specified user can delete the view object. All of the below assumes the user has base Delete permissions on the "User Views" entity.
+     * This property determines if the specified user can delete the view object. All of the below assumes the user has base Delete permissions on the "MJ: User Views" entity.
      * The flow of the logic is:
      *  1) The view is a new record, by definition the user can't delete this because it is new
      *  2) The user is the owner of the current view - e.g. UserID in the view record matches the ID of the user provided, allowed
@@ -330,7 +330,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
     public get ViewResourceTypeID(): string {
         if (!this._ViewResourceTypeID) {
             const rt = ResourcePermissionEngine.Instance.ResourceTypes;
-            const rtUV = rt.find(r => r.Entity === 'User Views');
+            const rtUV = rt.find(r => r.Entity === 'MJ: User Views');
             if (!rtUV)
                 throw new Error('Unable to find Resource Type for User Views entity');
             this._ViewResourceTypeID = rtUV.ID;
@@ -705,7 +705,7 @@ export class ViewInfo {
         const rv = new RunView();
         const md = new Metadata();
         const result = await rv.RunView({
-            EntityName: 'User Views',
+            EntityName: 'MJ: User Views',
             ExtraFilter: `UserID = '${contextUser ? contextUser.ID : md.CurrentUser.ID}'
                          ${entityId ? ` AND EntityID = '${entityId}'` : ''}`
         });
@@ -721,7 +721,7 @@ export class ViewInfo {
      */
     static async GetViewID(viewName: string): Promise<string> {
         const rv = new RunView();
-        const result = await rv.RunView({EntityName: 'User Views', ExtraFilter: `Name = '${viewName}'`})
+        const result = await rv.RunView({EntityName: 'MJ: User Views', ExtraFilter: `Name = '${viewName}'`})
         const rd = result?.Results as Array<any>;
         if (result && result.Success && rd && rd.length > 0) {
             return rd[0].ID

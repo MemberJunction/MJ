@@ -1,12 +1,12 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { FileStorageAccountEntity, FileStorageProviderEntity } from "../generated/entity_subclasses";
+import { MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "../generated/entity_subclasses";
 
 /**
  * Represents a storage account with its associated provider details
  */
 export interface StorageAccountWithProvider {
-    account: FileStorageAccountEntity;
-    provider: FileStorageProviderEntity;
+    account: MJFileStorageAccountEntity;
+    provider: MJFileStorageProviderEntity;
 }
 
 /**
@@ -31,8 +31,8 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
         return super.getInstance<FileStorageEngine>();
     }
 
-    private _accounts: FileStorageAccountEntity[] = [];
-    private _providers: FileStorageProviderEntity[] = [];
+    private _accounts: MJFileStorageAccountEntity[] = [];
+    private _providers: MJFileStorageProviderEntity[] = [];
 
     /**
      * Configures the engine by loading file storage accounts and providers.
@@ -50,7 +50,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
             },
             {
                 Type: 'entity',
-                EntityName: 'File Storage Providers',
+                EntityName: 'MJ: File Storage Providers',
                 PropertyName: '_providers',
                 CacheLocal: true
             }
@@ -65,7 +65,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
     /**
      * Gets all file storage accounts
      */
-    public get Accounts(): FileStorageAccountEntity[] {
+    public get Accounts(): MJFileStorageAccountEntity[] {
         return this._accounts || [];
     }
 
@@ -73,7 +73,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
      * Gets all file storage providers.
      * Consumers should filter by IsActive if needed.
      */
-    public get Providers(): FileStorageProviderEntity[] {
+    public get Providers(): MJFileStorageProviderEntity[] {
         return this._providers || [];
     }
 
@@ -82,7 +82,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
      * Consumers should filter/sort as needed (e.g., by provider.IsActive).
      */
     public get AccountsWithProviders(): StorageAccountWithProvider[] {
-        const providerMap = new Map<string, FileStorageProviderEntity>();
+        const providerMap = new Map<string, MJFileStorageProviderEntity>();
         this.Providers.forEach(p => providerMap.set(p.ID, p));
 
         return this.Accounts
@@ -103,7 +103,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
      * @param accountId - The ID of the account to find
      * @returns The account entity or undefined if not found
      */
-    public GetAccountById(accountId: string): FileStorageAccountEntity | undefined {
+    public GetAccountById(accountId: string): MJFileStorageAccountEntity | undefined {
         return this.Accounts.find(a => a.ID === accountId);
     }
 
@@ -112,7 +112,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
      * @param providerId - The ID of the provider to find
      * @returns The provider entity or undefined if not found
      */
-    public GetProviderById(providerId: string): FileStorageProviderEntity | undefined {
+    public GetProviderById(providerId: string): MJFileStorageProviderEntity | undefined {
         return this.Providers.find(p => p.ID === providerId);
     }
 

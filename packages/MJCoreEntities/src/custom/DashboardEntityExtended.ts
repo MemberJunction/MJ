@@ -1,10 +1,10 @@
 import { BaseEntity, EntityDeleteOptions, IMetadataProvider, LogError, Metadata } from "@memberjunction/core";
 import { RegisterClass, ValidationErrorInfo, ValidationResult } from "@memberjunction/global";
-import { DashboardEntity } from "../generated/entity_subclasses";
+import { MJDashboardEntity } from "../generated/entity_subclasses";
 import { DashboardEngine } from "../engines/dashboards";
 
-@RegisterClass(BaseEntity, 'Dashboards')
-export class DashboardEntityExtended extends DashboardEntity  {
+@RegisterClass(BaseEntity, 'MJ: Dashboards')
+export class DashboardEntityExtended extends MJDashboardEntity  {
     public NewRecord(): boolean {
         try{
             super.NewRecord();

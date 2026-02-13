@@ -1,13 +1,13 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseEntity, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
-import { EntityFieldEntity } from '../generated/entity_subclasses';
+import { MJEntityFieldEntity } from '../generated/entity_subclasses';
 
 /**
- * Extended EntityFieldEntity class that provides safeguards against modifying database-reflected properties.
+ * Extended MJEntityFieldEntity class that provides safeguards against modifying database-reflected properties.
  * These properties should only be updated by the CodeGen system when reflecting changes from the database schema.
  */
-@RegisterClass(BaseEntity, 'Entity Fields')
-export class EntityFieldEntityExtended extends EntityFieldEntity {
+@RegisterClass(BaseEntity, 'MJ: Entity Fields')
+export class EntityFieldEntityExtended extends MJEntityFieldEntity {
     /**
      * Properties that are reflected from the database schema and should not be modified directly
      */

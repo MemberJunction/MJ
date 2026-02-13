@@ -62,7 +62,7 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('../generated/entity_subclasses', () => ({
-    UserViewEntity: class MockUserViewEntity {
+    MJUserViewEntity: class MockUserViewEntity {
         FilterState: string | null = null;
         GridState: string | null = null;
         SortState: string | null = null;
@@ -147,7 +147,7 @@ interface MockField {
 
 function makeMockEntityInfo(fields: MockField[]): Record<string, unknown> {
     return {
-        Name: 'TestEntity',
+        Name: 'MJTestEntity',
         ID: 'entity-1',
         Fields: fields,
     };
@@ -1155,7 +1155,7 @@ describe('UserViewEntityExtended', () => {
                 filters: [{ field: 'NonExistentField', operator: 'eq', value: 'x' }],
             });
             expect(() => testView.TestGenerateWhereClause(fs, entityInfo)).toThrow(
-                'Unable to find field NonExistentField in entity TestEntity'
+                'Unable to find field NonExistentField in entity MJTestEntity'
             );
         });
 
