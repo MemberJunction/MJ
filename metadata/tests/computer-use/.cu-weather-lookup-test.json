@@ -1,0 +1,74 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "Computer Use + Action - Weather Lookup",
+    "Description": "Tests the controller's ability to use the Get Weather action as a tool to retrieve weather data, then type the result into a text field in the MJExplorer UI.",
+    "InputDefinition": {
+      "goal": "Log into MJExplorer, navigate to the Chat application, start a new conversation, and use the Get Weather tool to look up the current weather in New York City. After receiving the weather data, type a summary of the weather into the chat input field and send it as a message.",
+      "startUrl": "http://localhost:4201",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computer!use2",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.75,
+      "maxSteps": 30
+    },
+    "Configuration": {
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "headless": false,
+      "maxSteps": 30,
+      "maxExecutionTime": 300000,
+      "screenshotHistoryDepth": 5,
+      "judgeFrequency": "EveryNSteps:3",
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "actions": [
+        {
+          "actionName": "Get Weather"
+        }
+      ],
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "config": {
+            "minConfidence": 0.75
+          }
+        },
+        {
+          "type": "step-count"
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.75,
+        "step-count": 0.25
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9E835261-3A37-4753-B5FC-70C54E813B09"
+  },
+  "sync": {
+    "lastModified": "2026-02-12T19:33:14.237Z",
+    "checksum": "5a626e260e56a5d6e2a93250d2df3f7bdbed90abb6813d8f8c6829dfa12fe2ab"
+  }
+}

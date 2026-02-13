@@ -38,14 +38,16 @@ export {
   TestVariablesConfig,
   TestSuiteVariablesConfig,
   ResolvedTestVariables,
-  TestVariableValue
+  TestVariableValue,
+  TestRunOutputItem
 } from '@memberjunction/testing-engine-base';
 
 // Import types we need for local interfaces
 import {
   TestRunOptions,
   OracleResult,
-  ResolvedTestVariables
+  ResolvedTestVariables,
+  TestRunOutputItem
 } from '@memberjunction/testing-engine-base';
 
 /**
@@ -222,6 +224,12 @@ export interface DriverExecutionResult {
    * Multi-turn specific: All AgentRun IDs
    */
   allAgentRunIds?: string[];
+
+  /**
+   * Structured outputs emitted by the driver (screenshots, logs, data, etc.).
+   * The engine persists each item as a TestRunOutput entity record.
+   */
+  outputs?: TestRunOutputItem[];
 }
 
 /**

@@ -1,0 +1,75 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "Computer Use + Action - Web Search and Navigate",
+    "Description": "Tests combining the Web Search action tool with browser Navigate actions. The controller uses the tool to find a URL, then navigates the browser to it.",
+    "InputDefinition": {
+      "goal": "Log into MJExplorer. Use the Web Search tool to search for 'MemberJunction GitHub repository'. From the search results, identify the GitHub URL. Then navigate the browser to that URL and verify the GitHub page loads. Finally, use GoBack to return to MJExplorer.",
+      "startUrl": "http://localhost:4201",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com",
+        "github.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computer!use2",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.75,
+      "maxSteps": 25
+    },
+    "Configuration": {
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "headless": false,
+      "maxSteps": 25,
+      "maxExecutionTime": 250000,
+      "screenshotHistoryDepth": 5,
+      "judgeFrequency": "EveryNSteps:3",
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "actions": [
+        {
+          "actionName": "Web Search"
+        }
+      ],
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "config": {
+            "minConfidence": 0.75
+          }
+        },
+        {
+          "type": "step-count"
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.75,
+        "step-count": 0.25
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E61F7E7E-CA03-439B-95FA-E6BA30B9BA9B"
+  },
+  "sync": {
+    "lastModified": "2026-02-12T19:33:14.262Z",
+    "checksum": "102eefaf4260d02371fba166b28ff03cd988ed9d357364c0dd2fc4dccc6eb99a"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "Computer Use + Action - Text Analyzer with Form Fill",
+    "Description": "Tests combining the Text Analyzer action tool with browser Type and Click actions to analyze text visible on screen and fill form fields with the analysis results.",
+    "InputDefinition": {
+      "goal": "Log into MJExplorer, navigate to the Data Explorer application, and select the 'Entity Documents' entity. Open any record and read the description text visible on screen. Use the Text Analyzer tool to analyze that text. Then navigate to the Chat application, start a new conversation, and type a summary of the analysis (word count, readability score) into the chat and send it.",
+      "startUrl": "http://localhost:4201",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computer!use2",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35
+    },
+    "Configuration": {
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "headless": false,
+      "maxSteps": 35,
+      "maxExecutionTime": 350000,
+      "screenshotHistoryDepth": 5,
+      "judgeFrequency": "EveryNSteps:3",
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "actions": [
+        {
+          "actionName": "Text Analyzer"
+        }
+      ],
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count"
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.75,
+        "step-count": 0.25
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "002A39AD-7D56-40DF-8311-AD5BFC657230"
+  },
+  "sync": {
+    "lastModified": "2026-02-12T19:33:14.188Z",
+    "checksum": "24df43ef26af4012668db8e5321622c2f8b43c3aeb84dfce43db6d1cedb0fb61"
+  }
+}

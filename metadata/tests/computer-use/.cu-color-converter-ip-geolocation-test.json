@@ -1,0 +1,77 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "Computer Use + Action - Color Converter and IP Geolocation",
+    "Description": "Tests using multiple unrelated action tools (Color Converter, IP Geolocation) alongside browser actions. The controller gathers data from tools and combines it into a message in the UI.",
+    "InputDefinition": {
+      "goal": "Log into MJExplorer. Use the Color Converter tool to convert the hex color #3B82F6 to RGB and HSL formats. Then use the IP Geolocation tool to look up geolocation info for IP address 8.8.8.8. Navigate to the Chat application, start a new conversation, and type a message that includes: the RGB and HSL values for #3B82F6, and the city and country for 8.8.8.8. Send the message.",
+      "startUrl": "http://localhost:4201",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computer!use2",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.75,
+      "maxSteps": 30
+    },
+    "Configuration": {
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "headless": false,
+      "maxSteps": 30,
+      "maxExecutionTime": 300000,
+      "screenshotHistoryDepth": 5,
+      "judgeFrequency": "EveryNSteps:3",
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "actions": [
+        {
+          "actionName": "Color Converter"
+        },
+        {
+          "actionName": "IP Geolocation"
+        }
+      ],
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "config": {
+            "minConfidence": 0.75
+          }
+        },
+        {
+          "type": "step-count"
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.75,
+        "step-count": 0.25
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "74B9C751-2119-4109-B1F8-36E4111EBB51"
+  },
+  "sync": {
+    "lastModified": "2026-02-12T19:33:14.136Z",
+    "checksum": "7039666a9658a2d2b5a938c9f4ba15dc588fc563b05c8c35d3f2987956e3866e"
+  }
+}

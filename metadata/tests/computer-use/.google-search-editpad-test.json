@@ -1,0 +1,59 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "Google Search to Editpad - Action as Tool",
+    "Description": "Computer Use test that exercises MJ Action-as-Tool integration. Opens editpad.org, invokes the Google Custom Search action (exposed as a tool) to search for 'MemberJunction open source framework', pastes the top result snippet into the text editor, and saves.",
+    "InputDefinition": {
+      "goal": "Navigate to https://www.editpad.org/. Once the page loads, use the Google_Custom_Search tool to search for 'MemberJunction open source framework' with MaxResults set to 1 and Verbosity set to 'minimal'. Take the snippet text from the top search result and paste it into the main text editor area on editpad.org. Then click the Save button to save the document.",
+      "startUrl": "https://www.editpad.org/",
+      "allowedDomains": [
+        "www.editpad.org",
+        "editpad.org"
+      ]
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 20
+    },
+    "Configuration": {
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "headless": false,
+      "maxSteps": 20,
+      "maxExecutionTime": 120000,
+      "screenshotHistoryDepth": 5,
+      "judgeFrequency": "EveryNSteps:3",
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "actions": [
+        {
+          "actionName": "Google Custom Search"
+        }
+      ],
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count"
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "step-count": 0.3
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "01ACB1D0-8B95-442A-9A33-D65B821AB436"
+  },
+  "sync": {
+    "lastModified": "2026-02-12T19:33:14.313Z",
+    "checksum": "b7f6dad22db061160838bfd400aab6ae21957928f4ae4d73b2f651958db7efef"
+  }
+}

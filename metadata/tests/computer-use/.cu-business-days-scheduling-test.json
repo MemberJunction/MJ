@@ -1,0 +1,74 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "Computer Use + Action - Business Days with Scheduling",
+    "Description": "Tests combining the Business Days Calculator action with browser navigation to the Scheduling application. The controller calculates a future business date and verifies job scheduling in the UI.",
+    "InputDefinition": {
+      "goal": "Log into MJExplorer. Use the Business Days Calculator tool to calculate the date that is 10 business days from today. Then navigate to the Scheduling application and view the dashboard to check for any scheduled jobs. Scroll through the job list to see all entries. Finally navigate to the Chat application, start a new conversation, type a message stating the calculated date that is 10 business days from today and how many scheduled jobs you observed, and send it.",
+      "startUrl": "http://localhost:4201",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computer!use2",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35
+    },
+    "Configuration": {
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "headless": false,
+      "maxSteps": 35,
+      "maxExecutionTime": 350000,
+      "screenshotHistoryDepth": 5,
+      "judgeFrequency": "EveryNSteps:3",
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "actions": [
+        {
+          "actionName": "Business Days Calculator"
+        }
+      ],
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count"
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.75,
+        "step-count": 0.25
+      }
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0DFDA875-C5FC-405A-999A-F6C2CB431593"
+  },
+  "sync": {
+    "lastModified": "2026-02-12T19:33:14.084Z",
+    "checksum": "7cf58900722f8c6931ab7516d7a73fb133d553b3ecbbf406a7a48d82a2ac2fe5"
+  }
+}
