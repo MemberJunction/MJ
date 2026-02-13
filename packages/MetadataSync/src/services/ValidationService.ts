@@ -316,7 +316,7 @@ export class ValidationService {
       if (!fieldInfo) {
         // Check if this might be a virtual property (getter/setter)
         try {
-          const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name);
+          const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name, getSystemUser());
           // we use this approach instead of checking Entity Fields because
           // some sub-classes implement setter properties that allow you to set
           // values that are not physically in the database but are resolved by the sub-class
@@ -407,6 +407,11 @@ export class ValidationService {
 
         // Skip Template field if TemplateText is provided
         if (field.Name === 'Template' && fields['TemplateText']) {
+          continue;
+        }
+
+        // Skip Path on Applications - it is auto-calculated by the server on save
+        if (field.Name === 'Path' && entityInfo.Name === 'MJ: Applications') {
           continue;
         }
 
