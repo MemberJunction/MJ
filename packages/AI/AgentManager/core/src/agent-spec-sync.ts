@@ -1286,7 +1286,7 @@ export class AgentSpecSync {
 
             // Track mutation
             this.trackMutation(
-                'AI Agent Prompts',
+                'MJ: AI Agent Prompts',
                 isJunctionUpdate ? 'Update' : 'Create',
                 agentPromptEntity.ID,
                 `${isJunctionUpdate ? 'Updated' : 'Created'} agent-prompt junction for prompt ${promptEntity.ID}`
@@ -1847,7 +1847,7 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted path ${path.ID}`);
-            this.trackMutation('AI Agent Step Paths', 'Delete', path.ID, `Deleted orphaned path`);
+            this.trackMutation('MJ: AI Agent Step Paths', 'Delete', path.ID, `Deleted orphaned path`);
         }
 
         for (const action of orphans.actions) {
@@ -1890,7 +1890,7 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted step ${step.ID}`);
-            this.trackMutation('AI Agent Steps', 'Delete', step.ID, `Deleted orphaned step`);
+            this.trackMutation('MJ: AI Agent Steps', 'Delete', step.ID, `Deleted orphaned step`);
         }
 
         for (const promptJunction of orphans.prompts) {
@@ -1910,7 +1910,7 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted prompt junction ${promptJunction.ID}`);
-            this.trackMutation('AI Agent Prompts', 'Delete', promptJunction.ID, `Deleted orphaned prompt junction`);
+            this.trackMutation('MJ: AI Agent Prompts', 'Delete', promptJunction.ID, `Deleted orphaned prompt junction`);
             // NOTE: We do NOT delete the AIPrompt itself - it's a shared resource
         }
 
@@ -1931,7 +1931,7 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted relationship ${relationship.ID}`);
-            this.trackMutation('AI Agent Relationships', 'Delete', relationship.ID, `Deleted orphaned relationship`);
+            this.trackMutation('MJ: AI Agent Relationships', 'Delete', relationship.ID, `Deleted orphaned relationship`);
         }
 
         // Phase 3: Orphan child agents (set ParentID = NULL)
