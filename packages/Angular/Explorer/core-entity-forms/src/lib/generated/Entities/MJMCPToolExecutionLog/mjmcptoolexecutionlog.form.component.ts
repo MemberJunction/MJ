@@ -19,7 +19,6 @@ export class MJMCPToolExecutionLogFormComponent extends BaseFormComponent {
             { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
             { sectionKey: 'userContext', sectionName: 'User Context', isExpanded: false },
             { sectionKey: 'payloadErrors', sectionName: 'Payload & Errors', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

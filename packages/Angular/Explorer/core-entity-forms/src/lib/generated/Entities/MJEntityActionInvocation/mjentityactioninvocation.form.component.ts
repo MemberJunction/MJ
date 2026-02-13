@@ -17,7 +17,6 @@ export class MJEntityActionInvocationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'invocationConfiguration', sectionName: 'Invocation Configuration', isExpanded: true },
             { sectionKey: 'invocationStatus', sectionName: 'Invocation Status', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

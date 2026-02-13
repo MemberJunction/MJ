@@ -13,8 +13,6 @@ import { FormsModule } from '@angular/forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
-import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
 import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
@@ -320,9 +318,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -359,9 +355,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -398,9 +392,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -437,9 +429,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -477,8 +467,6 @@ imports: [
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
     JoinGridModule
 ],
 exports: [
@@ -516,9 +504,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -555,9 +541,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -594,9 +578,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -633,9 +615,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -672,9 +652,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -711,9 +689,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -750,9 +726,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -789,9 +763,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -820,9 +792,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule
+    LinkDirectivesModule
 ],
 exports: [
 ]
