@@ -45,7 +45,10 @@ const packageEntrySchema = z.object({
     name: z.string().min(1).max(200),
     role: packageRoleSchema,
     startupExport: z.string().optional(),
-});
+}).refine(
+    (pkg) => pkg.role !== 'bootstrap' || (pkg.startupExport != null && pkg.startupExport.length > 0),
+    { message: 'startupExport is required for packages with the "bootstrap" role', path: ['startupExport'] }
+);
 
 const packagesSchema = z.object({
     registry: z.string().url().optional(),
@@ -65,7 +68,7 @@ const dbSchemaSchema = z.object({
 
 const migrationsSchema = z.object({
     directory: z.string().optional().default('migrations'),
-    engine: z.enum(['flyway', 'skyway']).optional().default('flyway'),
+    engine: z.enum(['flyway', 'skyway']).optional().default('skyway'),
 });
 
 // ── Metadata ──────────────────────────────────────────────
@@ -134,10 +137,16 @@ export const mjAppManifestSchema = z.object({
     // NPM Packages
     packages: packagesSchema,
 
-    // App Dependencies
+    // App Dependencies — values can be a semver range string or an object with version + repository
     dependencies: z.record(
         z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
-        z.string().min(1)
+        z.union([
+            z.string().min(1),
+            z.object({
+                version: z.string().min(1),
+                repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+            })
+        ])
     ).optional(),
 
     // Code Visibility

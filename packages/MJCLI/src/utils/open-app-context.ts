@@ -7,10 +7,8 @@
  */
 import sql from 'mssql';
 import ora from 'ora-classic';
-import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import type { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { getValidatedConfig } from '../config.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,102 +103,16 @@ function getSystemUserInfo(): UserInfo {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MJ Data Provider (uses Metadata + RunView)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildMJDataProvider(contextUser: UserInfo): OrchestratorContextShape['DataProvider'] {
-  const md = new Metadata();
-  const rv = new RunView();
-
-  return {
-    CreateRecord: async (entityName, values, _contextUserId) => {
-      const entity = await md.GetEntityObject(entityName, contextUser);
-      entity.NewRecord();
-      for (const [field, value] of Object.entries(values)) {
-        entity.Set(field, value);
-      }
-      const saved = await entity.Save();
-      if (!saved) {
-        throw new Error(`Failed to create ${entityName} record: ${entity.LatestResult?.Message ?? 'unknown error'}`);
-      }
-      return String(entity.Get('ID'));
-    },
-
-    UpdateRecord: async (entityName, id, values, _contextUserId) => {
-      const entity = await md.GetEntityObject(entityName, contextUser);
-      const loaded = await entity.InnerLoad(CompositeKey.FromID(id));
-      if (!loaded) {
-        throw new Error(`${entityName} record not found: ${id}`);
-      }
-      for (const [field, value] of Object.entries(values)) {
-        entity.Set(field, value);
-      }
-      const saved = await entity.Save();
-      if (!saved) {
-        throw new Error(`Failed to update ${entityName} record ${id}: ${entity.LatestResult?.Message ?? 'unknown error'}`);
-      }
-    },
-
-    FindRecord: async (entityName, filter) => {
-      const result = await rv.RunView(
-        {
-          EntityName: entityName,
-          ExtraFilter: filter,
-          ResultType: 'simple',
-          MaxRows: 1,
-        },
-        contextUser,
-      );
-      if (!result.Success) {
-        throw new Error(`FindRecord failed for ${entityName}: ${result.ErrorMessage}`);
-      }
-      return result.Results.length > 0
-        ? (result.Results[0] as Record<string, unknown>)
-        : null;
-    },
-
-    FindRecords: async (entityName, filter) => {
-      const result = await rv.RunView(
-        {
-          EntityName: entityName,
-          ExtraFilter: filter,
-          ResultType: 'simple',
-        },
-        contextUser,
-      );
-      if (!result.Success) {
-        throw new Error(`FindRecords failed for ${entityName}: ${result.ErrorMessage}`);
-      }
-      return result.Results as Record<string, unknown>[];
-    },
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Schema Connection (raw SQL for DDL operations like CREATE SCHEMA)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildSchemaConnection(pool: sql.ConnectionPool): OrchestratorContextShape['SchemaConnection'] {
-  return {
-    ExecuteSQL: async (sqlText: string) => {
-      const result = await pool.request().query(sqlText);
-      return result.recordset as Record<string, unknown>[];
-    },
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Builds a data provider for read-only commands (list, info, check-updates).
- * Initializes the MJ runtime and returns a provider backed by Metadata + RunView.
+ * Builds a context user for read-only commands (list, info, check-updates).
+ * Initializes the MJ runtime and returns the system user.
  */
-export async function buildDataProvider(): Promise<OrchestratorContextShape['DataProvider']> {
+export async function buildContextUser(): Promise<UserInfo> {
   await ensureProviderInitialized();
-  const contextUser = getSystemUserInfo();
-  return buildMJDataProvider(contextUser);
+  return getSystemUserInfo();
 }
 
 /**
@@ -211,13 +123,13 @@ export async function buildOrchestratorContext(
   verbose?: boolean,
 ): Promise<OrchestratorContextShape> {
   const config = getValidatedConfig();
-  const { pool } = await ensureProviderInitialized();
+  const { provider } = await ensureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
 
   return {
-    DataProvider: buildMJDataProvider(contextUser),
-    SchemaConnection: buildSchemaConnection(pool),
+    ContextUser: contextUser,
+    DatabaseProvider: provider,
     DatabaseConfig: {
       Host: config.dbHost,
       Port: config.dbPort,
@@ -230,7 +142,6 @@ export async function buildOrchestratorContext(
     },
     RepoRoot: process.cwd(),
     MJVersion: getMJVersion(),
-    UserId: contextUser.ID,
     Callbacks: {
       OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
       OnSuccess: (phase: string, message: string) => spinner?.succeed(`[${phase}] ${message}`),
@@ -246,15 +157,8 @@ export async function buildOrchestratorContext(
  * Defined here to avoid a compile-time import of the engine package.
  */
 interface OrchestratorContextShape {
-  DataProvider: {
-    CreateRecord: (entityName: string, values: Record<string, unknown>, contextUserId: string) => Promise<string>;
-    UpdateRecord: (entityName: string, id: string, values: Record<string, unknown>, contextUserId: string) => Promise<void>;
-    FindRecord: (entityName: string, filter: string) => Promise<Record<string, unknown> | null>;
-    FindRecords: (entityName: string, filter: string) => Promise<Record<string, unknown>[]>;
-  };
-  SchemaConnection: {
-    ExecuteSQL: (sql: string) => Promise<Record<string, unknown>[]>;
-  };
+  ContextUser: UserInfo;
+  DatabaseProvider: SQLServerDataProvider;
   DatabaseConfig: {
     Host: string;
     Port: number;
@@ -268,7 +172,6 @@ interface OrchestratorContextShape {
   };
   RepoRoot: string;
   MJVersion: string;
-  UserId: string;
   Callbacks?: {
     OnProgress?: (phase: string, message: string) => void;
     OnSuccess?: (phase: string, message: string) => void;

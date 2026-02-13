@@ -51,10 +51,10 @@ const schemaPlaceholderSchema = z.object({
 
 // Schema for dynamic package entries managed by `mj app install/remove`
 const dynamicPackageEntrySchema = z.object({
-  packageName: z.string(),
-  startupExport: z.string(),
-  appName: z.string(),
-  enabled: z.boolean().default(true),
+  PackageName: z.string(),
+  StartupExport: z.string(),
+  AppName: z.string(),
+  Enabled: z.boolean().default(true),
 });
 
 // Schema for Open App configuration section
@@ -69,6 +69,7 @@ const openAppsConfigSchema = z.object({
   })).optional(),
   codeGenExclusions: z.object({
     includeAppSchemas: z.boolean().default(false),
+    overrideApps: z.array(z.string()).default([]),
   }).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
 }).optional();

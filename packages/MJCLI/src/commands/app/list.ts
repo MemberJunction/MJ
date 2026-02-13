@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
-import { buildDataProvider } from '../../utils/open-app-context.js';
+import { buildContextUser } from '../../utils/open-app-context.js';
 
 interface InstalledAppRow {
   Name: string;
@@ -26,8 +26,8 @@ export default class AppList extends Command {
 
     try {
       const { ListInstalledApps } = await import('@memberjunction/mj-open-app-engine');
-      const dataProvider = await buildDataProvider();
-      const apps = await ListInstalledApps(dataProvider);
+      const contextUser = await buildContextUser();
+      const apps = await ListInstalledApps(contextUser);
 
       if (apps.length === 0) {
         this.log('No Open Apps installed.');

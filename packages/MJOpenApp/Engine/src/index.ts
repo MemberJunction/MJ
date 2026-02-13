@@ -31,6 +31,7 @@ export type {
 export { ResolveDependencies } from './dependency/dependency-resolver.js';
 export type {
     DependencyNode,
+    DependencyValue,
     DependencyResolutionResult,
     InstalledAppMap
 } from './dependency/dependency-resolver.js';
@@ -57,8 +58,8 @@ export type {
 } from './github/github-client.js';
 
 // Install handlers
-export { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName } from './install/schema-manager.js';
-export type { SchemaManagerConnection, SchemaOperationResult } from './install/schema-manager.js';
+export { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, EscapeSqlString } from './install/schema-manager.js';
+export type { SchemaOperationResult } from './install/schema-manager.js';
 
 export { RunAppMigrations } from './install/migration-runner.js';
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
@@ -82,11 +83,11 @@ export {
     SetAppStatus,
     RecordInstallHistoryEntry,
     RecordAppDependencies,
+    DeleteAppDependencies,
     FindInstalledApp,
     ListInstalledApps,
     FindDependentApps
 } from './install/history-recorder.js';
-export type { MJDataProvider } from './install/history-recorder.js';
 
 // Orchestrator (main entry point for CLI)
 export {

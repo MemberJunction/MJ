@@ -15,9 +15,9 @@ export class OpenAppInstallHistoryFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'applicationPackage', sectionName: 'Application Package', isExpanded: true },
+            { sectionKey: 'appDetails', sectionName: 'App Details', isExpanded: true },
             { sectionKey: 'installationEvent', sectionName: 'Installation Event', isExpanded: true },
-            { sectionKey: 'errorDetails', sectionName: 'Error Details', isExpanded: false },
+            { sectionKey: 'outcomeDiagnostics', sectionName: 'Outcome & Diagnostics', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

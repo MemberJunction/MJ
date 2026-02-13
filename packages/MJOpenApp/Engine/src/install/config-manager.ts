@@ -9,7 +9,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { MJAppManifest, ManifestPackageEntry } from '../manifest/manifest-schema.js';
+import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
 /**
  * A single entry in the dynamicPackages.server array.
@@ -173,7 +173,7 @@ function AddEntryToServerArray(content: string, entry: DynamicPackageEntry): str
         return content;
     }
 
-    const entryStr = `\n      {\n        packageName: '${entry.PackageName}',\n        startupExport: '${entry.StartupExport}',\n        appName: '${entry.AppName}',\n        enabled: ${entry.Enabled}\n      },`;
+    const entryStr = `\n      {\n        PackageName: '${entry.PackageName}',\n        StartupExport: '${entry.StartupExport}',\n        AppName: '${entry.AppName}',\n        Enabled: ${entry.Enabled}\n      },`;
 
     // Find the closing bracket of the server array
     const arrayStart = serverArrayMatch.index + serverArrayMatch[0].length;
@@ -191,7 +191,7 @@ function AddEntryToServerArray(content: string, entry: DynamicPackageEntry): str
 function RemoveEntriesForApp(content: string, appName: string): string {
     // Match object blocks containing the appName
     const pattern = new RegExp(
-        `\\s*\\{[^}]*appName:\\s*'${EscapeRegex(appName)}'[^}]*\\},?`,
+        `\\s*\\{[^}]*AppName:\\s*'${EscapeRegex(appName)}'[^}]*\\},?`,
         'g'
     );
     return content.replace(pattern, '');
@@ -203,7 +203,7 @@ function RemoveEntriesForApp(content: string, appName: string): string {
 function ToggleEntriesForApp(content: string, appName: string, enabled: boolean): string {
     // Find entries with the given appName and replace enabled value
     const pattern = new RegExp(
-        `(appName:\\s*'${EscapeRegex(appName)}'[^}]*enabled:\\s*)(?:true|false)`,
+        `(AppName:\\s*'${EscapeRegex(appName)}'[^}]*Enabled:\\s*)(?:true|false)`,
         'g'
     );
     return content.replace(pattern, `$1${enabled}`);

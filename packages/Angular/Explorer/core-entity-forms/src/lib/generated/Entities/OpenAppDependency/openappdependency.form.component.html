@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Application Info Section -->
+    <!-- Application Record Section -->
     <mj-collapsible-panel
-        SectionKey="applicationInfo"
-        SectionName="Application Info"
+        SectionKey="applicationRecord"
+        SectionName="Application Record"
         Icon="fa fa-cubes"
         [Form]="this"
         [FormContext]="formContext">
@@ -51,16 +51,6 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Version & Status Section -->
-    <mj-collapsible-panel
-        SectionKey="versionStatus"
-        SectionName="Version & Status"
-        Icon="fa fa-code-branch"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

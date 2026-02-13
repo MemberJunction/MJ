@@ -442,6 +442,47 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Queries the OpenApp table for installed app schemas and adds them to the
+    * exclusion list so CodeGen doesn't regenerate entities that the app's own
+    * migrations already manage.
+    *
+    * Respects `openApps.codeGenExclusions` in mj.config.cjs:
+    * - `includeAppSchemas: true` disables exclusion entirely
+    * - `overrideApps: ['app-name']` includes specific apps even when exclusion is active
+    */
+   protected async addOpenAppSchemaExclusions(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<void> {
+      const exclusionConfig = configInfo.openApps?.codeGenExclusions;
+      if (exclusionConfig?.includeAppSchemas) {
+         return; // User opted to include all app schemas in CodeGen
+      }
+
+      try {
+         const overrideApps = exclusionConfig?.overrideApps ?? [];
+         const overrideClause = overrideApps.length > 0
+            ? ` AND Name NOT IN (${overrideApps.map(a => `'${a.replace(/'/g, "''")}'`).join(',')})`
+            : '';
+
+         const result = await pool.request().query(`
+            SELECT DISTINCT SchemaName
+            FROM [${mj_core_schema()}].[OpenApp]
+            WHERE SchemaName IS NOT NULL
+              AND Status IN ('Active', 'Disabled')
+              ${overrideClause}
+         `);
+
+         const appSchemas: string[] = result.recordset.map((r: Record<string, string>) => r.SchemaName);
+         if (appSchemas.length > 0) {
+            const newSchemas = appSchemas.filter(s => !excludeSchemas.includes(s));
+            excludeSchemas.push(...newSchemas);
+            logStatus(`   Excluding ${newSchemas.length} Open App schema(s) from CodeGen: ${newSchemas.join(', ')}`);
+         }
+      } catch (err) {
+         // Non-fatal — OpenApp table may not exist yet (pre-migration)
+         logStatus(`   Note: Could not query Open App schemas for exclusion (table may not exist yet)`);
+      }
+   }
+
+   /**
     * Primary function to manage metadata within the CodeGen system. This function will call a series of sub-functions to manage the metadata.
     * @param pool - the ConnectionPool object to use for querying and updating the database
     * @returns
@@ -449,6 +490,9 @@ export class ManageMetadataBase {
    public async manageMetadata(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<boolean> {
       const md = new Metadata();
       const excludeSchemas = configInfo.excludeSchemas ? configInfo.excludeSchemas : [];
+
+      // Exclude Open App schemas from CodeGen unless overridden in config
+      await this.addOpenAppSchemaExclusions(pool, excludeSchemas);
 
       let bSuccess = true;
       let start = new Date();

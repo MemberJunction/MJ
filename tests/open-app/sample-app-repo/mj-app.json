@@ -18,7 +18,7 @@
   },
   "migrations": {
     "directory": "migrations",
-    "engine": "flyway"
+    "engine": "skyway"
   },
   "packages": {},
   "categories": ["testing"],

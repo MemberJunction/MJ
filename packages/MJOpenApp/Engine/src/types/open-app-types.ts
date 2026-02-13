@@ -9,7 +9,7 @@
  * Possible statuses for an installed Open App.
  * Matches the CHECK constraint on the OpenApp.Status column.
  */
-export type AppStatus = 'Active' | 'Disabled' | 'Error' | 'Installing' | 'Upgrading' | 'Removing';
+export type AppStatus = 'Active' | 'Disabled' | 'Error' | 'Installing' | 'Upgrading' | 'Removing' | 'Removed';
 
 /**
  * Actions recorded in the Open App Install History table.
@@ -21,7 +21,7 @@ export type InstallAction = 'Install' | 'Upgrade' | 'Remove';
  * Phases in the install/upgrade/remove lifecycle.
  * Recorded in OpenAppInstallHistory.ErrorPhase when an operation fails.
  */
-export type ErrorPhase = 'Schema' | 'Migration' | 'Packages' | 'Config' | 'Hooks';
+export type ErrorPhase = 'Schema' | 'Migration' | 'Packages' | 'Config' | 'Hooks' | 'Record';
 
 /**
  * Status of an inter-app dependency.

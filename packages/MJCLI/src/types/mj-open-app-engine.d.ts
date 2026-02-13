@@ -6,18 +6,13 @@
  * is loaded dynamically at runtime via `await import()`.
  */
 declare module '@memberjunction/mj-open-app-engine' {
+  import type { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
+
   /** Loose context type accepted by orchestrator functions. */
   // eslint-disable-next-line @typescript-eslint/no-empty-interface
   interface OrchestratorContext {
-    DataProvider: {
-      CreateRecord: (entityName: string, values: Record<string, unknown>, contextUserId: string) => Promise<string>;
-      UpdateRecord: (entityName: string, id: string, values: Record<string, unknown>, contextUserId: string) => Promise<void>;
-      FindRecord: (entityName: string, filter: string) => Promise<Record<string, unknown> | null>;
-      FindRecords: (entityName: string, filter: string) => Promise<Record<string, unknown>[]>;
-    };
-    SchemaConnection: {
-      ExecuteSQL: (sql: string) => Promise<Record<string, unknown>[]>;
-    };
+    ContextUser: UserInfo;
+    DatabaseProvider: DatabaseProviderBase;
     DatabaseConfig: {
       Host: string;
       Port: number;
@@ -31,29 +26,24 @@ declare module '@memberjunction/mj-open-app-engine' {
     };
     RepoRoot: string;
     MJVersion: string;
-    UserId: string;
     Callbacks?: {
       OnProgress?: (phase: string, message: string) => void;
       OnSuccess?: (phase: string, message: string) => void;
       OnError?: (phase: string, message: string) => void;
       OnWarn?: (phase: string, message: string) => void;
       OnLog?: (message: string) => void;
+      OnConfirm?: (message: string) => Promise<boolean>;
     };
-  }
-
-  /** Data provider subset used by read-only commands (list, info). */
-  interface MJDataProvider {
-    CreateRecord: (entityName: string, values: Record<string, unknown>, contextUserId: string) => Promise<string>;
-    UpdateRecord: (entityName: string, id: string, values: Record<string, unknown>, contextUserId: string) => Promise<void>;
-    FindRecord: (entityName: string, filter: string) => Promise<Record<string, unknown> | null>;
-    FindRecords: (entityName: string, filter: string) => Promise<Record<string, unknown>[]>;
   }
 
   interface AppOperationResult {
     Success: boolean;
     AppName: string;
     Version: string;
+    Action?: 'Install' | 'Upgrade' | 'Remove';
     ErrorMessage?: string;
+    ErrorPhase?: string;
+    DurationSeconds?: number;
     Summary?: string;
   }
 
@@ -70,7 +60,12 @@ declare module '@memberjunction/mj-open-app-engine' {
     SchemaName: string | null;
     MJVersionRange: string;
     License: string | null;
-    Status: string;
+    Icon: string | null;
+    Color: string | null;
+    ManifestJSON: string;
+    ConfigurationSchemaJSON: string | null;
+    InstalledByUserID: string;
+    Status: 'Active' | 'Disabled' | 'Error' | 'Installing' | 'Upgrading' | 'Removing' | 'Removed';
   }
 
   export function InstallApp(
@@ -99,11 +94,11 @@ declare module '@memberjunction/mj-open-app-engine' {
   ): Promise<AppOperationResult>;
 
   export function ListInstalledApps(
-    provider: MJDataProvider
+    contextUser: UserInfo
   ): Promise<InstalledAppInfo[]>;
 
   export function FindInstalledApp(
-    provider: MJDataProvider,
+    contextUser: UserInfo,
     appName: string
   ): Promise<InstalledAppInfo | null>;
 

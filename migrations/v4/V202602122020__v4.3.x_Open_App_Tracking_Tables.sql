@@ -30,7 +30,7 @@ CREATE TABLE ${flyway:defaultSchema}.OpenApp (
     CONSTRAINT FK_OpenApp_User FOREIGN KEY (InstalledByUserID)
         REFERENCES ${flyway:defaultSchema}.[User](ID),
     CONSTRAINT CK_OpenApp_Status CHECK (Status IN (
-        'Active', 'Disabled', 'Error', 'Installing', 'Upgrading', 'Removing'
+        'Active', 'Disabled', 'Error', 'Installing', 'Upgrading', 'Removing', 'Removed'
     )),
     CONSTRAINT CK_OpenApp_Name CHECK (Name NOT LIKE '%[^a-z0-9-]%')
 );
@@ -68,7 +68,7 @@ CREATE TABLE ${flyway:defaultSchema}.OpenAppInstallHistory (
         'Install', 'Upgrade', 'Remove'
     )),
     CONSTRAINT CK_OpenAppInstallHistory_Phase CHECK (ErrorPhase IS NULL OR ErrorPhase IN (
-        'Schema', 'Migration', 'Packages', 'Config', 'Hooks'
+        'Schema', 'Migration', 'Packages', 'Config', 'Hooks', 'Record'
     ))
 );
 GO
@@ -123,16 +123,222 @@ GO
 
 
 
+/* SQL generated to create new entity MJ: Open App Dependencies */
 
+      INSERT INTO [${flyway:defaultSchema}].Entity (
+         ID,
+         Name,
+         DisplayName,
+         Description,
+         NameSuffix,
+         BaseTable,
+         BaseView,
+         SchemaName,
+         IncludeInAPI,
+         AllowUserSearchAPI
+         , TrackRecordChanges
+         , AuditRecordAccess
+         , AuditViewRuns
+         , AllowAllRowsAPI
+         , AllowCreateAPI
+         , AllowUpdateAPI
+         , AllowDeleteAPI
+         , UserViewMaxRows
+      )
+      VALUES (
+         'c55eaa5a-4c9f-4d9a-b72b-0b76c2055188',
+         'MJ: Open App Dependencies',
+         'Open App Dependencies',
+         NULL,
+         NULL,
+         'OpenAppDependency',
+         'vwOpenAppDependencies',
+         '${flyway:defaultSchema}',
+         1,
+         0
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+      )
+   
 
+/* SQL generated to add new entity MJ: Open App Dependencies to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
+                                       (ApplicationID, EntityID, Sequence) VALUES
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c55eaa5a-4c9f-4d9a-b72b-0b76c2055188', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 
+/* SQL generated to add new permission for entity MJ: Open App Dependencies for role UI */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c55eaa5a-4c9f-4d9a-b72b-0b76c2055188', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+
+/* SQL generated to add new permission for entity MJ: Open App Dependencies for role Developer */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c55eaa5a-4c9f-4d9a-b72b-0b76c2055188', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+
+/* SQL generated to add new permission for entity MJ: Open App Dependencies for role Integration */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c55eaa5a-4c9f-4d9a-b72b-0b76c2055188', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+
+/* SQL generated to create new entity MJ: Open Apps */
+
+      INSERT INTO [${flyway:defaultSchema}].Entity (
+         ID,
+         Name,
+         DisplayName,
+         Description,
+         NameSuffix,
+         BaseTable,
+         BaseView,
+         SchemaName,
+         IncludeInAPI,
+         AllowUserSearchAPI
+         , TrackRecordChanges
+         , AuditRecordAccess
+         , AuditViewRuns
+         , AllowAllRowsAPI
+         , AllowCreateAPI
+         , AllowUpdateAPI
+         , AllowDeleteAPI
+         , UserViewMaxRows
+      )
+      VALUES (
+         'c19f14cd-e29e-49bb-b5de-1040263a5427',
+         'MJ: Open Apps',
+         'Open Apps',
+         NULL,
+         NULL,
+         'OpenApp',
+         'vwOpenApps',
+         '${flyway:defaultSchema}',
+         1,
+         0
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+      )
+   
+
+/* SQL generated to add new entity MJ: Open Apps to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
+                                       (ApplicationID, EntityID, Sequence) VALUES
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c19f14cd-e29e-49bb-b5de-1040263a5427', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+
+/* SQL generated to add new permission for entity MJ: Open Apps for role UI */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c19f14cd-e29e-49bb-b5de-1040263a5427', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+
+/* SQL generated to add new permission for entity MJ: Open Apps for role Developer */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c19f14cd-e29e-49bb-b5de-1040263a5427', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+
+/* SQL generated to add new permission for entity MJ: Open Apps for role Integration */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c19f14cd-e29e-49bb-b5de-1040263a5427', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+
+/* SQL generated to create new entity MJ: Open App Install Histories */
+
+      INSERT INTO [${flyway:defaultSchema}].Entity (
+         ID,
+         Name,
+         DisplayName,
+         Description,
+         NameSuffix,
+         BaseTable,
+         BaseView,
+         SchemaName,
+         IncludeInAPI,
+         AllowUserSearchAPI
+         , TrackRecordChanges
+         , AuditRecordAccess
+         , AuditViewRuns
+         , AllowAllRowsAPI
+         , AllowCreateAPI
+         , AllowUpdateAPI
+         , AllowDeleteAPI
+         , UserViewMaxRows
+      )
+      VALUES (
+         '934a6248-7c1c-4866-ae5c-aeb589a92cc9',
+         'MJ: Open App Install Histories',
+         'Open App Install Histories',
+         NULL,
+         NULL,
+         'OpenAppInstallHistory',
+         'vwOpenAppInstallHistories',
+         '${flyway:defaultSchema}',
+         1,
+         0
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+      )
+   
+
+/* SQL generated to add new entity MJ: Open App Install Histories to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
+                                       (ApplicationID, EntityID, Sequence) VALUES
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '934a6248-7c1c-4866-ae5c-aeb589a92cc9', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+
+/* SQL generated to add new permission for entity MJ: Open App Install Histories for role UI */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('934a6248-7c1c-4866-ae5c-aeb589a92cc9', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+
+/* SQL generated to add new permission for entity MJ: Open App Install Histories for role Developer */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('934a6248-7c1c-4866-ae5c-aeb589a92cc9', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+
+/* SQL generated to add new permission for entity MJ: Open App Install Histories for role Integration */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('934a6248-7c1c-4866-ae5c-aeb589a92cc9', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.OpenAppDependency */
+ALTER TABLE [${flyway:defaultSchema}].[OpenAppDependency] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.OpenAppDependency */
+ALTER TABLE [${flyway:defaultSchema}].[OpenAppDependency] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.OpenApp */
+ALTER TABLE [${flyway:defaultSchema}].[OpenApp] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.OpenApp */
+ALTER TABLE [${flyway:defaultSchema}].[OpenApp] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.OpenAppInstallHistory */
+ALTER TABLE [${flyway:defaultSchema}].[OpenAppInstallHistory] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.OpenAppInstallHistory */
+ALTER TABLE [${flyway:defaultSchema}].[OpenAppInstallHistory] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
 
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '9b89b840-09be-4a18-8c85-b17735e9683d'  OR 
-               (EntityID = 'A75F1DD8-2146-4D03-AA7F-50D048E44D11' AND Name = 'MCPServerTool')
+         WHERE ID = 'a3900340-b4bb-4e89-9287-9b012b3b1fd0'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'ID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -165,26 +371,221 @@ GO
          )
          VALUES
          (
-            '9b89b840-09be-4a18-8c85-b17735e9683d',
-            'A75F1DD8-2146-4D03-AA7F-50D048E44D11', -- Entity: MJ: MCP Server Connection Tools
-            100019,
-            'MCPServerTool',
-            'MCP Server Tool',
+            'a3900340-b4bb-4e89-9287-9b012b3b1fd0',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '5eab988e-8cb1-4987-b68a-4e1d8ab5d8de'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'OpenAppID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '5eab988e-8cb1-4987-b68a-4e1d8ab5d8de',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100002,
+            'OpenAppID',
+            'Open App ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '193bad25-8554-4954-8f0b-f142b8599238'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'DependsOnAppName')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '193bad25-8554-4954-8f0b-f142b8599238',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100003,
+            'DependsOnAppName',
+            'Depends On App Name',
             NULL,
             'nvarchar',
-            510,
+            128,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'ef3f40ce-346c-4485-82c8-dd3cc778f3b0'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'DependsOnAppID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'ef3f40ce-346c-4485-82c8-dd3cc778f3b0',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100004,
+            'DependsOnAppID',
+            'Depends On App ID',
+            NULL,
+            'uniqueidentifier',
+            16,
             0,
             0,
             1,
             'null',
             0,
+            1,
+            0,
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427',
+            'ID',
+            0,
             0,
             1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
             0,
             0,
             0,
@@ -196,8 +597,8 @@ GO
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'c70b4e09-eb16-449c-b922-19f1704b7b94'  OR 
-               (EntityID = '78AD0238-8B56-EF11-991A-6045BDEBA539' AND Name = 'PromptRun')
+         WHERE ID = '901fd9a1-d37f-42eb-a8bd-419e0be0aa6e'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'VersionRange')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -230,281 +631,21 @@ GO
          )
          VALUES
          (
-            'c70b4e09-eb16-449c-b922-19f1704b7b94',
-            '78AD0238-8B56-EF11-991A-6045BDEBA539', -- Entity: AI Result Cache
-            100041,
-            'PromptRun',
-            'Prompt Run',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'd381610b-59b6-411e-8fef-6b8695dbfb81'  OR 
-               (EntityID = 'D7238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Employee')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'd381610b-59b6-411e-8fef-6b8695dbfb81',
-            'D7238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Employee Company Integrations
-            100016,
-            'Employee',
-            'Employee',
-            NULL,
-            'nvarchar',
-            162,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'e3ef0a52-972e-4800-9109-50ccd7563d6d'  OR 
-               (EntityID = 'D8238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Employee')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'e3ef0a52-972e-4800-9109-50ccd7563d6d',
-            'D8238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Employee Roles
-            100012,
-            'Employee',
-            'Employee',
-            NULL,
-            'nvarchar',
-            162,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f7599f21-fc49-45aa-8fd0-c74f01bac336'  OR 
-               (EntityID = 'D9238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Employee')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'f7599f21-fc49-45aa-8fd0-c74f01bac336',
-            'D9238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Employee Skills
-            100012,
-            'Employee',
-            'Employee',
-            NULL,
-            'nvarchar',
-            162,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '5618a204-3f2f-4318-8d5d-269d0f853f65'  OR 
-               (EntityID = 'E7238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompanyIntegrationRun')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '5618a204-3f2f-4318-8d5d-269d0f853f65',
-            'E7238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Error Logs
-            100023,
-            'CompanyIntegrationRun',
-            'Company Integration Run',
+            '901fd9a1-d37f-42eb-a8bd-419e0be0aa6e',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100005,
+            'VersionRange',
+            'Version Range',
             NULL,
             'nvarchar',
             200,
             0,
             0,
-            1,
+            0,
             'null',
             0,
-            0,
             1,
+            0,
             NULL,
             NULL,
             0,
@@ -521,8 +662,8 @@ GO
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '3692e9d5-9684-43bd-affe-413c1d5fee33'  OR 
-               (EntityID = 'E7238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompanyIntegrationRunDetail')
+         WHERE ID = '6a204dc5-b742-4d3a-84e3-b88230da8ab4'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'InstalledVersion')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -555,21 +696,21 @@ GO
          )
          VALUES
          (
-            '3692e9d5-9684-43bd-affe-413c1d5fee33',
-            'E7238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Error Logs
-            100024,
-            'CompanyIntegrationRunDetail',
-            'Company Integration Run Detail',
+            '6a204dc5-b742-4d3a-84e3-b88230da8ab4',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100006,
+            'InstalledVersion',
+            'Installed Version',
             NULL,
             'nvarchar',
-            900,
+            100,
             0,
             0,
             1,
             'null',
             0,
-            0,
             1,
+            0,
             NULL,
             NULL,
             0,
@@ -586,8 +727,8 @@ GO
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '12422c1a-8e66-46c9-b7ef-bbd7c400b3dd'  OR 
-               (EntityID = 'F5238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ReplayRun')
+         WHERE ID = '228f671b-2963-4017-bee6-3f70d6522fbe'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'Status')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -620,21 +761,866 @@ GO
          )
          VALUES
          (
-            '12422c1a-8e66-46c9-b7ef-bbd7c400b3dd',
-            'F5238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Record Changes
-            100040,
-            'ReplayRun',
-            'Replay Run',
+            '228f671b-2963-4017-bee6-3f70d6522fbe',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100007,
+            'Status',
+            'Status',
+            NULL,
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Satisfied',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '8b4a8073-f4f2-4ed5-b48a-5389b2dbdecc'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = '__mj_CreatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '8b4a8073-f4f2-4ed5-b48a-5389b2dbdecc',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100008,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '4a311b61-00b0-443f-a189-453fc37647b3'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = '__mj_UpdatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '4a311b61-00b0-443f-a189-453fc37647b3',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100009,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '2e1aa1eb-24a5-4ddb-9479-26d7fb1711fc'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'ID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '2e1aa1eb-24a5-4ddb-9479-26d7fb1711fc',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '77da64c6-4ea7-4188-a826-7f1f0863ab05'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'Name')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '77da64c6-4ea7-4188-a826-7f1f0863ab05',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100002,
+            'Name',
+            'Name',
+            NULL,
+            'nvarchar',
+            128,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '6868f228-4530-4e86-a643-5af256b2a91e'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'DisplayName')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '6868f228-4530-4e86-a643-5af256b2a91e',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100003,
+            'DisplayName',
+            'Display Name',
+            NULL,
+            'nvarchar',
+            400,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '2d7be27b-c212-4d79-9c83-5d1ad1b8b663'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'Description')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '2d7be27b-c212-4d79-9c83-5d1ad1b8b663',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100004,
+            'Description',
+            'Description',
+            NULL,
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '0a08d5d3-ae41-4384-b040-5436e87ae7cd'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'Version')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '0a08d5d3-ae41-4384-b040-5436e87ae7cd',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100005,
+            'Version',
+            'Version',
+            NULL,
+            'nvarchar',
+            100,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'cff0f2e9-2b08-46ec-ad9e-e307b55de6b2'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'Publisher')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'cff0f2e9-2b08-46ec-ad9e-e307b55de6b2',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100006,
+            'Publisher',
+            'Publisher',
+            NULL,
+            'nvarchar',
+            400,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '3816dba3-82c2-416b-be85-c13c0ac97dfb'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'PublisherEmail')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '3816dba3-82c2-416b-be85-c13c0ac97dfb',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100007,
+            'PublisherEmail',
+            'Publisher Email',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'db50e49f-570d-4823-829f-41f05b95e9b3'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'PublisherURL')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'db50e49f-570d-4823-829f-41f05b95e9b3',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100008,
+            'PublisherURL',
+            'Publisher URL',
+            NULL,
+            'nvarchar',
+            1000,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '989c9e29-e928-4b17-980e-3ccbf12803de'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'RepositoryURL')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '989c9e29-e928-4b17-980e-3ccbf12803de',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100009,
+            'RepositoryURL',
+            'Repository URL',
+            NULL,
+            'nvarchar',
+            1000,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '5b6efbd3-7176-409e-b251-b76d5f1cda20'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'SchemaName')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '5b6efbd3-7176-409e-b251-b76d5f1cda20',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100010,
+            'SchemaName',
+            'Schema Name',
+            NULL,
+            'nvarchar',
+            256,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'a12ee3e0-10c7-4208-ae6f-94082b1d8eaf'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'MJVersionRange')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'a12ee3e0-10c7-4208-ae6f-94082b1d8eaf',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100011,
+            'MJVersionRange',
+            'MJ Version Range',
             NULL,
             'nvarchar',
             200,
             0,
             0,
-            1,
+            0,
             'null',
             0,
-            0,
             1,
+            0,
             NULL,
             NULL,
             0,
@@ -651,8 +1637,8 @@ GO
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '01eb3160-63c2-403b-a15c-cc9eff1ff16b'  OR 
-               (EntityID = '09248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ConversationDetail')
+         WHERE ID = '654d8454-416c-4c97-8812-fa4b23f59086'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'License')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -685,21 +1671,21 @@ GO
          )
          VALUES
          (
-            '01eb3160-63c2-403b-a15c-cc9eff1ff16b',
-            '09248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Reports
-            100053,
-            'ConversationDetail',
-            'Conversation Detail',
+            '654d8454-416c-4c97-8812-fa4b23f59086',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100012,
+            'License',
+            'License',
             NULL,
             'nvarchar',
-            -1,
+            100,
             0,
             0,
             1,
             'null',
             0,
-            0,
             1,
+            0,
             NULL,
             NULL,
             0,
@@ -716,8 +1702,8 @@ GO
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'bad5158c-0675-4d28-a161-fc754bf57880'  OR 
-               (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'TestRun')
+         WHERE ID = 'd2b92ef0-3c70-4134-ab7b-8ee51b62583e'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'Icon')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -750,596 +1736,2797 @@ GO
          )
          VALUES
          (
-            'bad5158c-0675-4d28-a161-fc754bf57880',
-            '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Conversations
-            100045,
-            'TestRun',
-            'Test Run',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '62036496-02b9-4deb-a8fe-f76e41432155'  OR 
-               (EntityID = '18248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'RecordMergeLog')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '62036496-02b9-4deb-a8fe-f76e41432155',
-            '18248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Record Merge Deletion Logs
-            100015,
-            'RecordMergeLog',
-            'Record Merge Log',
-            NULL,
-            'nvarchar',
-            900,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'b169992f-c09c-4290-a755-01fedd2540dc'  OR 
-               (EntityID = '31248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'DuplicateRun')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'b169992f-c09c-4290-a755-01fedd2540dc',
-            '31248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Duplicate Run Details
-            100021,
-            'DuplicateRun',
-            'Duplicate Run',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '7ec5fd3a-081c-4394-ac9d-9f0a52fc8826'  OR 
-               (EntityID = '35248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'EntityAction')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '7ec5fd3a-081c-4394-ac9d-9f0a52fc8826',
-            '35248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Entity Action Invocations
-            100014,
-            'EntityAction',
-            'Entity Action',
-            NULL,
-            'nvarchar',
-            850,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'a3e82c1d-1c63-40d2-af16-e32aaf651f16'  OR 
-               (EntityID = '39248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'EntityAction')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'a3e82c1d-1c63-40d2-af16-e32aaf651f16',
-            '39248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Entity Action Filters
-            100015,
-            'EntityAction',
-            'Entity Action',
-            NULL,
-            'nvarchar',
-            850,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f872e82d-be6f-418d-9ea4-ab0b03d67dbd'  OR 
-               (EntityID = '39248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ActionFilter')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'f872e82d-be6f-418d-9ea4-ab0b03d67dbd',
-            '39248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Entity Action Filters
-            100016,
-            'ActionFilter',
-            'Action Filter',
-            NULL,
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '18b763c8-4466-4231-9644-2eb3d0ddac78'  OR 
-               (EntityID = '4B248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'TemplateContent')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '18b763c8-4466-4231-9644-2eb3d0ddac78',
-            '4B248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Template Params
-            100037,
-            'TemplateContent',
-            'Template Content',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'd9f2e764-5462-4bb2-bb56-75ffae3b5e2a'  OR 
-               (EntityID = '4D248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'RecommendationRun')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'd9f2e764-5462-4bb2-bb56-75ffae3b5e2a',
-            '4D248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Recommendations
-            100014,
-            'RecommendationRun',
-            'Recommendation Run',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '86b3e078-8321-4efa-995a-31285e3d9196'  OR 
-               (EntityID = '50248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Recommendation')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '86b3e078-8321-4efa-995a-31285e3d9196',
-            '50248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Recommendation Items
-            100016,
-            'Recommendation',
-            'Recommendation',
-            NULL,
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '96edcdef-a2e7-44f6-84c8-edb7dcbf9fe1'  OR 
-               (EntityID = '52248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'EntityCommunicationMessageType')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '96edcdef-a2e7-44f6-84c8-edb7dcbf9fe1',
-            '52248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Entity Communication Fields
+            'd2b92ef0-3c70-4134-ab7b-8ee51b62583e',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
             100013,
-            'EntityCommunicationMessageType',
-            'Entity Communication Message Type',
+            'Icon',
+            'Icon',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '4c6dbbf5-0c1e-4610-95d5-78c0a464aed0'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'Color')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '4c6dbbf5-0c1e-4610-95d5-78c0a464aed0',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100014,
+            'Color',
+            'Color',
+            NULL,
+            'nvarchar',
+            40,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'bc351ba8-209e-4ca6-a7a0-d624a3b39fa9'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'ManifestJSON')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'bc351ba8-209e-4ca6-a7a0-d624a3b39fa9',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100015,
+            'ManifestJSON',
+            'Manifest JSON',
+            NULL,
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '4b742331-be93-4d37-8cba-f63811c3d1f7'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'ConfigurationSchemaJSON')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '4b742331-be93-4d37-8cba-f63811c3d1f7',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100016,
+            'ConfigurationSchemaJSON',
+            'Configuration Schema JSON',
+            NULL,
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'a0bab779-2746-40f2-970e-1e08ea746488'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'InstalledByUserID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'a0bab779-2746-40f2-970e-1e08ea746488',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100017,
+            'InstalledByUserID',
+            'Installed By User ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '141d36e7-11b9-4c91-897a-985298d8d169'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'Status')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '141d36e7-11b9-4c91-897a-985298d8d169',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100018,
+            'Status',
+            'Status',
+            NULL,
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Active',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '2b0a0d3f-4719-4b50-b466-a12d403a5796'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = '__mj_CreatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '2b0a0d3f-4719-4b50-b466-a12d403a5796',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100019,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'e8dbec43-4b9b-4c43-92c0-d0e690988b7c'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = '__mj_UpdatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'e8dbec43-4b9b-4c43-92c0-d0e690988b7c',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100020,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'cf9f1683-496c-47e5-8560-7480edc01dbe'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'ID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'cf9f1683-496c-47e5-8560-7480edc01dbe',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'd886dfd5-3578-4b3f-b5d5-66849a72fbef'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'OpenAppID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'd886dfd5-3578-4b3f-b5d5-66849a72fbef',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100002,
+            'OpenAppID',
+            'Open App ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '6c0b78c0-0fa4-4951-9fa1-881729892b25'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'Version')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '6c0b78c0-0fa4-4951-9fa1-881729892b25',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100003,
+            'Version',
+            'Version',
+            NULL,
+            'nvarchar',
+            100,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '504032a3-df25-4048-a171-1bc313953df4'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'PreviousVersion')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '504032a3-df25-4048-a171-1bc313953df4',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100004,
+            'PreviousVersion',
+            'Previous Version',
+            NULL,
+            'nvarchar',
+            100,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'b3b91f4d-7f45-433c-a716-cba1db978123'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'Action')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'b3b91f4d-7f45-433c-a716-cba1db978123',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100005,
+            'Action',
+            'Action',
+            NULL,
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'e7ed2f99-71e4-4f49-9e49-869c08aecc5d'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'ManifestJSON')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'e7ed2f99-71e4-4f49-9e49-869c08aecc5d',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100006,
+            'ManifestJSON',
+            'Manifest JSON',
+            NULL,
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '1dc36c39-16b6-4511-966f-fc567dd683b5'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'Summary')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '1dc36c39-16b6-4511-966f-fc567dd683b5',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100007,
+            'Summary',
+            'Summary',
+            NULL,
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '235e5d6a-bdcd-417a-9dde-b809a1ba9b73'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'ExecutedByUserID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '235e5d6a-bdcd-417a-9dde-b809a1ba9b73',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100008,
+            'ExecutedByUserID',
+            'Executed By User ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'ac11421c-2800-4c8a-81d7-adefc8ccd6fa'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'DurationSeconds')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'ac11421c-2800-4c8a-81d7-adefc8ccd6fa',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100009,
+            'DurationSeconds',
+            'Duration Seconds',
+            NULL,
+            'int',
+            4,
+            10,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '18607ab0-045f-41ef-803b-f087604961d9'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'Success')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '18607ab0-045f-41ef-803b-f087604961d9',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100010,
+            'Success',
+            'Success',
+            NULL,
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(1)',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '808d0b5a-8520-4db7-81c4-0b2f2f090996'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'ErrorMessage')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '808d0b5a-8520-4db7-81c4-0b2f2f090996',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100011,
+            'ErrorMessage',
+            'Error Message',
+            NULL,
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '11c20aa0-4bf2-42a1-8054-3f198377e8e2'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'ErrorPhase')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '11c20aa0-4bf2-42a1-8054-3f198377e8e2',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100012,
+            'ErrorPhase',
+            'Error Phase',
+            NULL,
+            'nvarchar',
+            100,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'ba77fe6c-d005-44db-81d1-9a929e8e56cb'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = '__mj_CreatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'ba77fe6c-d005-44db-81d1-9a929e8e56cb',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100013,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '9941f9a0-929b-4510-8ed3-87293ce8f51d'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = '__mj_UpdatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '9941f9a0-929b-4510-8ed3-87293ce8f51d',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100014,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert entity field value with ID a9f45cf0-f84d-41a8-9533-3bb86a9ca76e */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('a9f45cf0-f84d-41a8-9533-3bb86a9ca76e', '11C20AA0-4BF2-42A1-8054-3F198377E8E2', 1, 'Config', 'Config')
+
+/* SQL text to insert entity field value with ID ffd6df79-363f-433d-8807-3580763e0231 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('ffd6df79-363f-433d-8807-3580763e0231', '11C20AA0-4BF2-42A1-8054-3F198377E8E2', 2, 'Hooks', 'Hooks')
+
+/* SQL text to insert entity field value with ID fa03efb1-afca-4488-9a70-7b35973be35f */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('fa03efb1-afca-4488-9a70-7b35973be35f', '11C20AA0-4BF2-42A1-8054-3F198377E8E2', 3, 'Migration', 'Migration')
+
+/* SQL text to insert entity field value with ID 43a327d6-e01f-4d92-b807-bedc9f26cae9 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('43a327d6-e01f-4d92-b807-bedc9f26cae9', '11C20AA0-4BF2-42A1-8054-3F198377E8E2', 4, 'Packages', 'Packages')
+
+/* SQL text to insert entity field value with ID ea17753b-3c08-4150-b109-14798762cfa6 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('ea17753b-3c08-4150-b109-14798762cfa6', '11C20AA0-4BF2-42A1-8054-3F198377E8E2', 5, 'Record', 'Record')
+
+/* SQL text to insert entity field value with ID 6c0c21de-d590-486b-8172-68229d5e13e0 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('6c0c21de-d590-486b-8172-68229d5e13e0', '11C20AA0-4BF2-42A1-8054-3F198377E8E2', 6, 'Schema', 'Schema')
+
+/* SQL text to update ValueListType for entity field ID 11C20AA0-4BF2-42A1-8054-3F198377E8E2 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='11C20AA0-4BF2-42A1-8054-3F198377E8E2'
+
+/* SQL text to insert entity field value with ID fd161b49-0561-4457-a319-0867d36f0479 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('fd161b49-0561-4457-a319-0867d36f0479', '228F671B-2963-4017-BEE6-3F70D6522FBE', 1, 'Incompatible', 'Incompatible')
+
+/* SQL text to insert entity field value with ID 06fad89a-85d6-49f8-80df-37dc16fdc5bd */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('06fad89a-85d6-49f8-80df-37dc16fdc5bd', '228F671B-2963-4017-BEE6-3F70D6522FBE', 2, 'Missing', 'Missing')
+
+/* SQL text to insert entity field value with ID b312e203-cf73-4460-bc28-1980722a513d */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('b312e203-cf73-4460-bc28-1980722a513d', '228F671B-2963-4017-BEE6-3F70D6522FBE', 3, 'Satisfied', 'Satisfied')
+
+/* SQL text to update ValueListType for entity field ID 228F671B-2963-4017-BEE6-3F70D6522FBE */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='228F671B-2963-4017-BEE6-3F70D6522FBE'
+
+/* SQL text to insert entity field value with ID 4425baaf-e811-497c-9ea6-855c37ce5815 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('4425baaf-e811-497c-9ea6-855c37ce5815', '141D36E7-11B9-4C91-897A-985298D8D169', 1, 'Active', 'Active')
+
+/* SQL text to insert entity field value with ID 8f9dc009-3867-48b9-9a15-d56ab359f85c */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('8f9dc009-3867-48b9-9a15-d56ab359f85c', '141D36E7-11B9-4C91-897A-985298D8D169', 2, 'Disabled', 'Disabled')
+
+/* SQL text to insert entity field value with ID c96e2ee8-70a1-4bb1-b544-174cab3fc3c3 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('c96e2ee8-70a1-4bb1-b544-174cab3fc3c3', '141D36E7-11B9-4C91-897A-985298D8D169', 3, 'Error', 'Error')
+
+/* SQL text to insert entity field value with ID 20bcb522-ac99-4ff0-9924-69a97f8885fd */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('20bcb522-ac99-4ff0-9924-69a97f8885fd', '141D36E7-11B9-4C91-897A-985298D8D169', 4, 'Installing', 'Installing')
+
+/* SQL text to insert entity field value with ID a37ba8b7-8bfb-4dee-a03f-ad7f17768655 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('a37ba8b7-8bfb-4dee-a03f-ad7f17768655', '141D36E7-11B9-4C91-897A-985298D8D169', 5, 'Removed', 'Removed')
+
+/* SQL text to insert entity field value with ID c3b71124-a56d-4691-a596-1f770e832e4b */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('c3b71124-a56d-4691-a596-1f770e832e4b', '141D36E7-11B9-4C91-897A-985298D8D169', 6, 'Removing', 'Removing')
+
+/* SQL text to insert entity field value with ID 73c1ba82-86f5-496f-b312-ef79e2876344 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('73c1ba82-86f5-496f-b312-ef79e2876344', '141D36E7-11B9-4C91-897A-985298D8D169', 7, 'Upgrading', 'Upgrading')
+
+/* SQL text to update ValueListType for entity field ID 141D36E7-11B9-4C91-897A-985298D8D169 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='141D36E7-11B9-4C91-897A-985298D8D169'
+
+/* SQL text to insert entity field value with ID 703b2128-76d3-489f-ae28-d224bcff1547 */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('703b2128-76d3-489f-ae28-d224bcff1547', 'B3B91F4D-7F45-433C-A716-CBA1DB978123', 1, 'Install', 'Install')
+
+/* SQL text to insert entity field value with ID c9d3a175-13bd-43c3-9b89-ad041b4f595f */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('c9d3a175-13bd-43c3-9b89-ad041b4f595f', 'B3B91F4D-7F45-433C-A716-CBA1DB978123', 2, 'Remove', 'Remove')
+
+/* SQL text to insert entity field value with ID a65cb32d-d0a6-4480-b706-3e22acefd33f */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('a65cb32d-d0a6-4480-b706-3e22acefd33f', 'B3B91F4D-7F45-433C-A716-CBA1DB978123', 3, 'Upgrade', 'Upgrade')
+
+/* SQL text to update ValueListType for entity field ID B3B91F4D-7F45-433C-A716-CBA1DB978123 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='B3B91F4D-7F45-433C-A716-CBA1DB978123'
+
+/* SQL text to create Entitiy Relationships */
+
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = '5133310e-2399-491b-ae6a-b8a7db795632'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('5133310e-2399-491b-ae6a-b8a7db795632', 'C19F14CD-E29E-49BB-B5DE-1040263A5427', 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', 'OpenAppID', 'One To Many', 1, 1, 'MJ: Open App Dependencies', 1);
+   END
+                              
+
+/* SQL text to create Entitiy Relationships */
+
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = '0af00d52-0c37-43f5-8a8a-2f8635573eea'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('0af00d52-0c37-43f5-8a8a-2f8635573eea', 'C19F14CD-E29E-49BB-B5DE-1040263A5427', 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', 'DependsOnAppID', 'One To Many', 1, 1, 'MJ: Open App Dependencies', 2);
+   END
+                              
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = '2dba0888-bde8-405f-8822-793025e95679'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('2dba0888-bde8-405f-8822-793025e95679', 'C19F14CD-E29E-49BB-B5DE-1040263A5427', '934A6248-7C1C-4866-AE5C-AEB589A92CC9', 'OpenAppID', 'One To Many', 1, 1, 'MJ: Open App Install Histories', 1);
+   END
+                              
+
+/* SQL text to create Entitiy Relationships */
+
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = '39314b25-5c3a-47d1-a368-f16ed12e3492'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('39314b25-5c3a-47d1-a368-f16ed12e3492', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '934A6248-7C1C-4866-AE5C-AEB589A92CC9', 'ExecutedByUserID', 'One To Many', 1, 1, 'MJ: Open App Install Histories', 2);
+   END
+                              
+
+/* SQL text to create Entitiy Relationships */
+
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = '1affca7a-9087-43de-a82d-4d7bdaece5dc'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('1affca7a-9087-43de-a82d-4d7bdaece5dc', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'C19F14CD-E29E-49BB-B5DE-1040263A5427', 'InstalledByUserID', 'One To Many', 1, 1, 'MJ: Open Apps', 1);
+   END
+                              
+
+/* Index for Foreign Keys for OpenAppDependency */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Dependencies
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key OpenAppID in table OpenAppDependency
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppDependency_OpenAppID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[OpenAppDependency]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_OpenAppDependency_OpenAppID ON [${flyway:defaultSchema}].[OpenAppDependency] ([OpenAppID]);
+
+-- Index for foreign key DependsOnAppID in table OpenAppDependency
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppDependency_DependsOnAppID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[OpenAppDependency]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_OpenAppDependency_DependsOnAppID ON [${flyway:defaultSchema}].[OpenAppDependency] ([DependsOnAppID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID 5EAB988E-8CB1-4987-B68A-4E1D8AB5D8DE */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='5EAB988E-8CB1-4987-B68A-4E1D8AB5D8DE',
+         @RelatedEntityNameFieldMap='OpenApp'
+
+/* SQL text to update entity field related entity name field map for entity field ID EF3F40CE-346C-4485-82C8-DD3CC778F3B0 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='EF3F40CE-346C-4485-82C8-DD3CC778F3B0',
+         @RelatedEntityNameFieldMap='DependsOnApp'
+
+/* Base View SQL for MJ: Open App Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Dependencies
+-- Item: vwOpenAppDependencies
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Open App Dependencies
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  OpenAppDependency
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwOpenAppDependencies]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwOpenAppDependencies];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwOpenAppDependencies]
+AS
+SELECT
+    o.*,
+    OpenApp_OpenAppID.[Name] AS [OpenApp],
+    OpenApp_DependsOnAppID.[Name] AS [DependsOnApp]
+FROM
+    [${flyway:defaultSchema}].[OpenAppDependency] AS o
+INNER JOIN
+    [${flyway:defaultSchema}].[OpenApp] AS OpenApp_OpenAppID
+  ON
+    [o].[OpenAppID] = OpenApp_OpenAppID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[OpenApp] AS OpenApp_DependsOnAppID
+  ON
+    [o].[DependsOnAppID] = OpenApp_DependsOnAppID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwOpenAppDependencies] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Open App Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Dependencies
+-- Item: Permissions for vwOpenAppDependencies
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwOpenAppDependencies] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Open App Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Dependencies
+-- Item: spCreateOpenAppDependency
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR OpenAppDependency
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateOpenAppDependency]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateOpenAppDependency];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateOpenAppDependency]
+    @ID uniqueidentifier = NULL,
+    @OpenAppID uniqueidentifier,
+    @DependsOnAppName nvarchar(64),
+    @DependsOnAppID uniqueidentifier,
+    @VersionRange nvarchar(100),
+    @InstalledVersion nvarchar(50),
+    @Status nvarchar(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[OpenAppDependency]
+            (
+                [ID],
+                [OpenAppID],
+                [DependsOnAppName],
+                [DependsOnAppID],
+                [VersionRange],
+                [InstalledVersion],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @OpenAppID,
+                @DependsOnAppName,
+                @DependsOnAppID,
+                @VersionRange,
+                @InstalledVersion,
+                ISNULL(@Status, 'Satisfied')
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[OpenAppDependency]
+            (
+                [OpenAppID],
+                [DependsOnAppName],
+                [DependsOnAppID],
+                [VersionRange],
+                [InstalledVersion],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @OpenAppID,
+                @DependsOnAppName,
+                @DependsOnAppID,
+                @VersionRange,
+                @InstalledVersion,
+                ISNULL(@Status, 'Satisfied')
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwOpenAppDependencies] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateOpenAppDependency] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Open App Dependencies */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateOpenAppDependency] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Open App Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Dependencies
+-- Item: spUpdateOpenAppDependency
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR OpenAppDependency
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateOpenAppDependency]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateOpenAppDependency];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateOpenAppDependency]
+    @ID uniqueidentifier,
+    @OpenAppID uniqueidentifier,
+    @DependsOnAppName nvarchar(64),
+    @DependsOnAppID uniqueidentifier,
+    @VersionRange nvarchar(100),
+    @InstalledVersion nvarchar(50),
+    @Status nvarchar(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[OpenAppDependency]
+    SET
+        [OpenAppID] = @OpenAppID,
+        [DependsOnAppName] = @DependsOnAppName,
+        [DependsOnAppID] = @DependsOnAppID,
+        [VersionRange] = @VersionRange,
+        [InstalledVersion] = @InstalledVersion,
+        [Status] = @Status
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwOpenAppDependencies] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwOpenAppDependencies]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateOpenAppDependency] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the OpenAppDependency table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateOpenAppDependency]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateOpenAppDependency];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateOpenAppDependency
+ON [${flyway:defaultSchema}].[OpenAppDependency]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[OpenAppDependency]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[OpenAppDependency] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Open App Dependencies */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateOpenAppDependency] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Open App Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Dependencies
+-- Item: spDeleteOpenAppDependency
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR OpenAppDependency
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteOpenAppDependency]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteOpenAppDependency];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteOpenAppDependency]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[OpenAppDependency]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteOpenAppDependency] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Open App Dependencies */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteOpenAppDependency] TO [cdp_Integration]
+
+
+
+/* Index for Foreign Keys for OpenAppInstallHistory */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Install Histories
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key OpenAppID in table OpenAppInstallHistory
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_OpenAppID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[OpenAppInstallHistory]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_OpenAppID ON [${flyway:defaultSchema}].[OpenAppInstallHistory] ([OpenAppID]);
+
+-- Index for foreign key ExecutedByUserID in table OpenAppInstallHistory
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_ExecutedByUserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[OpenAppInstallHistory]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_ExecutedByUserID ON [${flyway:defaultSchema}].[OpenAppInstallHistory] ([ExecutedByUserID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID D886DFD5-3578-4B3F-B5D5-66849A72FBEF */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='D886DFD5-3578-4B3F-B5D5-66849A72FBEF',
+         @RelatedEntityNameFieldMap='OpenApp'
+
+/* Index for Foreign Keys for OpenApp */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open Apps
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key InstalledByUserID in table OpenApp
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_OpenApp_InstalledByUserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[OpenApp]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_OpenApp_InstalledByUserID ON [${flyway:defaultSchema}].[OpenApp] ([InstalledByUserID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID A0BAB779-2746-40F2-970E-1E08EA746488 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='A0BAB779-2746-40F2-970E-1E08EA746488',
+         @RelatedEntityNameFieldMap='InstalledByUser'
+
+/* SQL text to update entity field related entity name field map for entity field ID 235E5D6A-BDCD-417A-9DDE-B809A1BA9B73 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='235E5D6A-BDCD-417A-9DDE-B809A1BA9B73',
+         @RelatedEntityNameFieldMap='ExecutedByUser'
+
+/* Base View SQL for MJ: Open Apps */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open Apps
+-- Item: vwOpenApps
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Open Apps
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  OpenApp
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwOpenApps]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwOpenApps];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwOpenApps]
+AS
+SELECT
+    o.*,
+    User_InstalledByUserID.[Name] AS [InstalledByUser]
+FROM
+    [${flyway:defaultSchema}].[OpenApp] AS o
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_InstalledByUserID
+  ON
+    [o].[InstalledByUserID] = User_InstalledByUserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwOpenApps] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Open Apps */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open Apps
+-- Item: Permissions for vwOpenApps
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwOpenApps] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Open Apps */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open Apps
+-- Item: spCreateOpenApp
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR OpenApp
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateOpenApp]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateOpenApp];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateOpenApp]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(64),
+    @DisplayName nvarchar(200),
+    @Description nvarchar(MAX),
+    @Version nvarchar(50),
+    @Publisher nvarchar(200),
+    @PublisherEmail nvarchar(255),
+    @PublisherURL nvarchar(500),
+    @RepositoryURL nvarchar(500),
+    @SchemaName nvarchar(128),
+    @MJVersionRange nvarchar(100),
+    @License nvarchar(50),
+    @Icon nvarchar(100),
+    @Color nvarchar(20),
+    @ManifestJSON nvarchar(MAX),
+    @ConfigurationSchemaJSON nvarchar(MAX),
+    @InstalledByUserID uniqueidentifier,
+    @Status nvarchar(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[OpenApp]
+            (
+                [ID],
+                [Name],
+                [DisplayName],
+                [Description],
+                [Version],
+                [Publisher],
+                [PublisherEmail],
+                [PublisherURL],
+                [RepositoryURL],
+                [SchemaName],
+                [MJVersionRange],
+                [License],
+                [Icon],
+                [Color],
+                [ManifestJSON],
+                [ConfigurationSchemaJSON],
+                [InstalledByUserID],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                @DisplayName,
+                @Description,
+                @Version,
+                @Publisher,
+                @PublisherEmail,
+                @PublisherURL,
+                @RepositoryURL,
+                @SchemaName,
+                @MJVersionRange,
+                @License,
+                @Icon,
+                @Color,
+                @ManifestJSON,
+                @ConfigurationSchemaJSON,
+                @InstalledByUserID,
+                ISNULL(@Status, 'Active')
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[OpenApp]
+            (
+                [Name],
+                [DisplayName],
+                [Description],
+                [Version],
+                [Publisher],
+                [PublisherEmail],
+                [PublisherURL],
+                [RepositoryURL],
+                [SchemaName],
+                [MJVersionRange],
+                [License],
+                [Icon],
+                [Color],
+                [ManifestJSON],
+                [ConfigurationSchemaJSON],
+                [InstalledByUserID],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                @DisplayName,
+                @Description,
+                @Version,
+                @Publisher,
+                @PublisherEmail,
+                @PublisherURL,
+                @RepositoryURL,
+                @SchemaName,
+                @MJVersionRange,
+                @License,
+                @Icon,
+                @Color,
+                @ManifestJSON,
+                @ConfigurationSchemaJSON,
+                @InstalledByUserID,
+                ISNULL(@Status, 'Active')
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwOpenApps] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateOpenApp] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Open Apps */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateOpenApp] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Open Apps */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open Apps
+-- Item: spUpdateOpenApp
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR OpenApp
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateOpenApp]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateOpenApp];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateOpenApp]
+    @ID uniqueidentifier,
+    @Name nvarchar(64),
+    @DisplayName nvarchar(200),
+    @Description nvarchar(MAX),
+    @Version nvarchar(50),
+    @Publisher nvarchar(200),
+    @PublisherEmail nvarchar(255),
+    @PublisherURL nvarchar(500),
+    @RepositoryURL nvarchar(500),
+    @SchemaName nvarchar(128),
+    @MJVersionRange nvarchar(100),
+    @License nvarchar(50),
+    @Icon nvarchar(100),
+    @Color nvarchar(20),
+    @ManifestJSON nvarchar(MAX),
+    @ConfigurationSchemaJSON nvarchar(MAX),
+    @InstalledByUserID uniqueidentifier,
+    @Status nvarchar(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[OpenApp]
+    SET
+        [Name] = @Name,
+        [DisplayName] = @DisplayName,
+        [Description] = @Description,
+        [Version] = @Version,
+        [Publisher] = @Publisher,
+        [PublisherEmail] = @PublisherEmail,
+        [PublisherURL] = @PublisherURL,
+        [RepositoryURL] = @RepositoryURL,
+        [SchemaName] = @SchemaName,
+        [MJVersionRange] = @MJVersionRange,
+        [License] = @License,
+        [Icon] = @Icon,
+        [Color] = @Color,
+        [ManifestJSON] = @ManifestJSON,
+        [ConfigurationSchemaJSON] = @ConfigurationSchemaJSON,
+        [InstalledByUserID] = @InstalledByUserID,
+        [Status] = @Status
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwOpenApps] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwOpenApps]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateOpenApp] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the OpenApp table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateOpenApp]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateOpenApp];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateOpenApp
+ON [${flyway:defaultSchema}].[OpenApp]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[OpenApp]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[OpenApp] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Open Apps */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateOpenApp] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Open Apps */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open Apps
+-- Item: spDeleteOpenApp
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR OpenApp
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteOpenApp]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteOpenApp];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteOpenApp]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[OpenApp]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteOpenApp] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Open Apps */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteOpenApp] TO [cdp_Integration]
+
+
+
+/* Base View SQL for MJ: Open App Install Histories */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Install Histories
+-- Item: vwOpenAppInstallHistories
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Open App Install Histories
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  OpenAppInstallHistory
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwOpenAppInstallHistories]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwOpenAppInstallHistories];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwOpenAppInstallHistories]
+AS
+SELECT
+    o.*,
+    OpenApp_OpenAppID.[Name] AS [OpenApp],
+    User_ExecutedByUserID.[Name] AS [ExecutedByUser]
+FROM
+    [${flyway:defaultSchema}].[OpenAppInstallHistory] AS o
+INNER JOIN
+    [${flyway:defaultSchema}].[OpenApp] AS OpenApp_OpenAppID
+  ON
+    [o].[OpenAppID] = OpenApp_OpenAppID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_ExecutedByUserID
+  ON
+    [o].[ExecutedByUserID] = User_ExecutedByUserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwOpenAppInstallHistories] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Open App Install Histories */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Install Histories
+-- Item: Permissions for vwOpenAppInstallHistories
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwOpenAppInstallHistories] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Open App Install Histories */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Install Histories
+-- Item: spCreateOpenAppInstallHistory
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR OpenAppInstallHistory
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateOpenAppInstallHistory]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateOpenAppInstallHistory];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateOpenAppInstallHistory]
+    @ID uniqueidentifier = NULL,
+    @OpenAppID uniqueidentifier,
+    @Version nvarchar(50),
+    @PreviousVersion nvarchar(50),
+    @Action nvarchar(20),
+    @ManifestJSON nvarchar(MAX),
+    @Summary nvarchar(MAX),
+    @ExecutedByUserID uniqueidentifier,
+    @DurationSeconds int,
+    @Success bit = NULL,
+    @ErrorMessage nvarchar(MAX),
+    @ErrorPhase nvarchar(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[OpenAppInstallHistory]
+            (
+                [ID],
+                [OpenAppID],
+                [Version],
+                [PreviousVersion],
+                [Action],
+                [ManifestJSON],
+                [Summary],
+                [ExecutedByUserID],
+                [DurationSeconds],
+                [Success],
+                [ErrorMessage],
+                [ErrorPhase]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @OpenAppID,
+                @Version,
+                @PreviousVersion,
+                @Action,
+                @ManifestJSON,
+                @Summary,
+                @ExecutedByUserID,
+                @DurationSeconds,
+                ISNULL(@Success, 1),
+                @ErrorMessage,
+                @ErrorPhase
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[OpenAppInstallHistory]
+            (
+                [OpenAppID],
+                [Version],
+                [PreviousVersion],
+                [Action],
+                [ManifestJSON],
+                [Summary],
+                [ExecutedByUserID],
+                [DurationSeconds],
+                [Success],
+                [ErrorMessage],
+                [ErrorPhase]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @OpenAppID,
+                @Version,
+                @PreviousVersion,
+                @Action,
+                @ManifestJSON,
+                @Summary,
+                @ExecutedByUserID,
+                @DurationSeconds,
+                ISNULL(@Success, 1),
+                @ErrorMessage,
+                @ErrorPhase
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwOpenAppInstallHistories] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateOpenAppInstallHistory] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Open App Install Histories */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateOpenAppInstallHistory] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Open App Install Histories */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Install Histories
+-- Item: spUpdateOpenAppInstallHistory
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR OpenAppInstallHistory
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateOpenAppInstallHistory]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateOpenAppInstallHistory];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateOpenAppInstallHistory]
+    @ID uniqueidentifier,
+    @OpenAppID uniqueidentifier,
+    @Version nvarchar(50),
+    @PreviousVersion nvarchar(50),
+    @Action nvarchar(20),
+    @ManifestJSON nvarchar(MAX),
+    @Summary nvarchar(MAX),
+    @ExecutedByUserID uniqueidentifier,
+    @DurationSeconds int,
+    @Success bit,
+    @ErrorMessage nvarchar(MAX),
+    @ErrorPhase nvarchar(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[OpenAppInstallHistory]
+    SET
+        [OpenAppID] = @OpenAppID,
+        [Version] = @Version,
+        [PreviousVersion] = @PreviousVersion,
+        [Action] = @Action,
+        [ManifestJSON] = @ManifestJSON,
+        [Summary] = @Summary,
+        [ExecutedByUserID] = @ExecutedByUserID,
+        [DurationSeconds] = @DurationSeconds,
+        [Success] = @Success,
+        [ErrorMessage] = @ErrorMessage,
+        [ErrorPhase] = @ErrorPhase
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwOpenAppInstallHistories] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwOpenAppInstallHistories]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateOpenAppInstallHistory] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the OpenAppInstallHistory table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateOpenAppInstallHistory]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateOpenAppInstallHistory];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateOpenAppInstallHistory
+ON [${flyway:defaultSchema}].[OpenAppInstallHistory]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[OpenAppInstallHistory]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[OpenAppInstallHistory] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Open App Install Histories */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateOpenAppInstallHistory] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Open App Install Histories */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Open App Install Histories
+-- Item: spDeleteOpenAppInstallHistory
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR OpenAppInstallHistory
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteOpenAppInstallHistory]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteOpenAppInstallHistory];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteOpenAppInstallHistory]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[OpenAppInstallHistory]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteOpenAppInstallHistory] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Open App Install Histories */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteOpenAppInstallHistory] TO [cdp_Integration]
+
+
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'e0d8f65e-12fe-4620-aeeb-16eb577531fa'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'OpenApp')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'e0d8f65e-12fe-4620-aeeb-16eb577531fa',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100019,
+            'OpenApp',
+            'Open App',
+            NULL,
+            'nvarchar',
+            128,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '4a6302d5-5bfa-40a4-a695-d3defe935b61'  OR 
+               (EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188' AND Name = 'DependsOnApp')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '4a6302d5-5bfa-40a4-a695-d3defe935b61',
+            'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', -- Entity: MJ: Open App Dependencies
+            100020,
+            'DependsOnApp',
+            'Depends On App',
+            NULL,
+            'nvarchar',
+            128,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '7cb510d0-65a7-4b83-9973-d19a90ba56eb'  OR 
+               (EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427' AND Name = 'InstalledByUser')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '7cb510d0-65a7-4b83-9973-d19a90ba56eb',
+            'C19F14CD-E29E-49BB-B5DE-1040263A5427', -- Entity: MJ: Open Apps
+            100041,
+            'InstalledByUser',
+            'Installed By User',
             NULL,
             'nvarchar',
             200,
@@ -1366,8 +4553,8 @@ GO
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '7df42d5a-9d13-48df-9eba-a16e960c55bd'  OR 
-               (EntityID = '56248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'EntityAction')
+         WHERE ID = 'cf93e0df-0327-4b60-933e-837a9ef6ec35'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'OpenApp')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1400,14 +4587,14 @@ GO
          )
          VALUES
          (
-            '7df42d5a-9d13-48df-9eba-a16e960c55bd',
-            '56248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Entity Action Params
-            100018,
-            'EntityAction',
-            'Entity Action',
+            'cf93e0df-0327-4b60-933e-837a9ef6ec35',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100029,
+            'OpenApp',
+            'Open App',
             NULL,
             'nvarchar',
-            850,
+            128,
             0,
             0,
             0,
@@ -1431,8 +4618,8 @@ GO
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'eaf87394-714c-4852-b6ce-fac2b408d2cc'  OR 
-               (EntityID = 'DE8EE300-B423-4B86-9E92-B06CAF7F0C3E' AND Name = 'ConversationDetail')
+         WHERE ID = '03820b3f-34e5-4bf5-96a2-abe6c7cbd523'  OR 
+               (EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9' AND Name = 'ExecutedByUser')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1465,342 +4652,17 @@ GO
          )
          VALUES
          (
-            'eaf87394-714c-4852-b6ce-fac2b408d2cc',
-            'DE8EE300-B423-4B86-9E92-B06CAF7F0C3E', -- Entity: MJ: Conversation Detail Ratings
-            100016,
-            'ConversationDetail',
-            'Conversation Detail',
+            '03820b3f-34e5-4bf5-96a2-abe6c7cbd523',
+            '934A6248-7C1C-4866-AE5C-AEB589A92CC9', -- Entity: MJ: Open App Install Histories
+            100030,
+            'ExecutedByUser',
+            'Executed By User',
             NULL,
             'nvarchar',
-            -1,
+            200,
             0,
             0,
             0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '75394bfe-2273-4b55-a3af-bc37847667d8'  OR 
-               (EntityID = '99273DAD-560E-4ABC-8332-C97AB58B7463' AND Name = 'AgentRun')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '75394bfe-2273-4b55-a3af-bc37847667d8',
-            '99273DAD-560E-4ABC-8332-C97AB58B7463', -- Entity: MJ: AI Agent Run Steps
-            100046,
-            'AgentRun',
-            'Agent Run',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'a71d9b12-51eb-404c-8e0c-9bff52cae8e4'  OR 
-               (EntityID = '99273DAD-560E-4ABC-8332-C97AB58B7463' AND Name = 'Parent')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'a71d9b12-51eb-404c-8e0c-9bff52cae8e4',
-            '99273DAD-560E-4ABC-8332-C97AB58B7463', -- Entity: MJ: AI Agent Run Steps
-            100047,
-            'Parent',
-            'Parent',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '06f44caa-9400-4660-a02a-cf9f94ceb8cb'  OR 
-               (EntityID = '16AB21D1-8047-41B9-8AEA-CD253DED9743' AND Name = 'ConversationDetail')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '06f44caa-9400-4660-a02a-cf9f94ceb8cb',
-            '16AB21D1-8047-41B9-8AEA-CD253DED9743', -- Entity: MJ: Conversation Detail Artifacts
-            100014,
-            'ConversationDetail',
-            'Conversation Detail',
-            NULL,
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'e9085cd4-65fa-48d6-a085-0ba7956c3dfa'  OR 
-               (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'ConversationDetail')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'e9085cd4-65fa-48d6-a085-0ba7956c3dfa',
-            '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
-            100046,
-            'ConversationDetail',
-            'Conversation Detail',
-            NULL,
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            0,
-            1,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '2fdbc763-08a1-4cdd-8f04-631c8c5c776b'  OR 
-               (EntityID = 'BA51038B-121F-48DC-8B9B-D75E61FD91CA' AND Name = 'MCPServerTool')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '2fdbc763-08a1-4cdd-8f04-631c8c5c776b',
-            'BA51038B-121F-48DC-8B9B-D75E61FD91CA', -- Entity: MJ: MCP Tool Execution Logs
-            100034,
-            'MCPServerTool',
-            'MCP Server Tool',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
             'null',
             0,
             0,
@@ -1821,49 +4683,79 @@ GO
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET IsNameField = 1
-            WHERE ID = 'D381610B-59B6-411E-8FEF-6B8695DBFB81'
+            WHERE ID = 'CF93E0DF-0327-4B60-933E-837A9EF6EC35'
             AND AutoUpdateIsNameField = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '3C4D17F0-6F36-EF11-86D4-6045BDEE16E6'
+            WHERE ID = '6C0B78C0-0FA4-4951-9FA1-881729892B25'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = 'C94D17F0-6F36-EF11-86D4-6045BDEE16E6'
+            WHERE ID = 'B3B91F4D-7F45-433C-A716-CBA1DB978123'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = 'D381610B-59B6-411E-8FEF-6B8695DBFB81'
+            WHERE ID = '18607AB0-045F-41EF-803B-F087604961D9'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '50A4214B-56C2-4B72-8544-1D86CBBB329F'
+            WHERE ID = 'BA77FE6C-D005-44DB-81D1-9A929E8E56CB'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = 'CF93E0DF-0327-4B60-933E-837A9EF6EC35'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '03820B3F-34E5-4BF5-96A2-ABE6C7CBD523'
             AND AutoUpdateDefaultInView = 1
          
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '3C4D17F0-6F36-EF11-86D4-6045BDEE16E6'
+               WHERE ID = '6C0B78C0-0FA4-4951-9FA1-881729892B25'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'D381610B-59B6-411E-8FEF-6B8695DBFB81'
+               WHERE ID = 'B3B91F4D-7F45-433C-A716-CBA1DB978123'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '50A4214B-56C2-4B72-8544-1D86CBBB329F'
+               WHERE ID = '808D0B5A-8520-4DB7-81C4-0B2F2F090996'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '11C20AA0-4BF2-42A1-8054-3F198377E8E2'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'CF93E0DF-0327-4B60-933E-837A9EF6EC35'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '03820B3F-34E5-4BF5-96A2-ABE6C7CBD523'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
@@ -1871,31 +4763,85 @@ GO
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET IsNameField = 1
-            WHERE ID = 'E3EF0A52-972E-4800-9109-50CCD7563D6D'
+            WHERE ID = '6868F228-4530-4E86-A643-5AF256B2A91E'
             AND AutoUpdateIsNameField = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = 'E3EF0A52-972E-4800-9109-50CCD7563D6D'
+            WHERE ID = '6868F228-4530-4E86-A643-5AF256B2A91E'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '5E4317F0-6F36-EF11-86D4-6045BDEE16E6'
+            WHERE ID = '0A08D5D3-AE41-4384-B040-5436E87AE7CD'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = 'CFF0F2E9-2B08-46EC-AD9E-E307B55DE6B2'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '141D36E7-11B9-4C91-897A-985298D8D169'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '7CB510D0-65A7-4B83-9973-D19A90BA56EB'
             AND AutoUpdateDefaultInView = 1
          
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'E3EF0A52-972E-4800-9109-50CCD7563D6D'
+               WHERE ID = '77DA64C6-4EA7-4188-A826-7F1F0863AB05'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5E4317F0-6F36-EF11-86D4-6045BDEE16E6'
+               WHERE ID = '6868F228-4530-4E86-A643-5AF256B2A91E'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'CFF0F2E9-2B08-46EC-AD9E-E307B55DE6B2'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '3816DBA3-82C2-416B-BE85-C13C0AC97DFB'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'DB50E49F-570D-4823-829F-41F05B95E9B3'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '989C9E29-E928-4B17-980E-3CCBF12803DE'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '5B6EFBD3-7176-409E-B251-B76D5F1CDA20'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '7CB510D0-65A7-4B83-9973-D19A90BA56EB'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
@@ -1903,268 +4849,72 @@ GO
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET IsNameField = 1
-            WHERE ID = '144E17F0-6F36-EF11-86D4-6045BDEE16E6'
+            WHERE ID = '193BAD25-8554-4954-8F0B-F142B8599238'
             AND AutoUpdateIsNameField = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '144E17F0-6F36-EF11-86D4-6045BDEE16E6'
+            WHERE ID = '193BAD25-8554-4954-8F0B-F142B8599238'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '804E17F0-6F36-EF11-86D4-6045BDEE16E6'
+            WHERE ID = '901FD9A1-D37F-42EB-A8BD-419E0BE0AA6E'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '575753A4-C12E-4E48-A835-6FE3FACE5527'
+            WHERE ID = '6A204DC5-B742-4D3A-84E3-B88230DA8AB4'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '7CAD1EDB-FDFC-4C19-8E8C-CCBCE0C60558'
+            WHERE ID = '228F671B-2963-4017-BEE6-3F70D6522FBE'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '6E4317F0-6F36-EF11-86D4-6045BDEE16E6'
+            WHERE ID = 'E0D8F65E-12FE-4620-AEEB-16EB577531FA'
             AND AutoUpdateDefaultInView = 1
          
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '114E17F0-6F36-EF11-86D4-6045BDEE16E6'
+               WHERE ID = '193BAD25-8554-4954-8F0B-F142B8599238'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '144E17F0-6F36-EF11-86D4-6045BDEE16E6'
+               WHERE ID = '228F671B-2963-4017-BEE6-3F70D6522FBE'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '804E17F0-6F36-EF11-86D4-6045BDEE16E6'
+               WHERE ID = 'E0D8F65E-12FE-4620-AEEB-16EB577531FA'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '824E17F0-6F36-EF11-86D4-6045BDEE16E6'
+               WHERE ID = '4A6302D5-5BFA-40A4-A695-D3DEFE935B61'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '575753A4-C12E-4E48-A835-6FE3FACE5527'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '6E4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '49A2D31E-331D-42C6-BA30-C96EB5A1310F'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'FE95FC8E-8A64-48D1-AA72-2F141C9199A2'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = 'FE73433E-F36B-1410-883E-00D02208DC50'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'FD73433E-F36B-1410-883E-00D02208DC50'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'FE73433E-F36B-1410-883E-00D02208DC50'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '0074433E-F36B-1410-883E-00D02208DC50'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '9B74433E-F36B-1410-883E-00D02208DC50'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '750A856A-8E2A-4161-AE35-0A311266D2EA'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'FE73433E-F36B-1410-883E-00D02208DC50'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9774433E-F36B-1410-883E-00D02208DC50'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9B74433E-F36B-1410-883E-00D02208DC50'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '750A856A-8E2A-4161-AE35-0A311266D2EA'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '0B216DCA-0EB9-42E3-942F-8C74960C2CD5'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '48C4211A-CF59-45BE-B2F1-EF59FD5D2050'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '374417F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '374417F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '384417F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '3B4417F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '374417F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '384417F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '3B4417F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'B169992F-C09C-4290-A755-01FEDD2540DC'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set categories for 9 fields */
+/* Set categories for 16 fields */
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Integration Mapping',
+   SET Category = 'System Metadata',
        GeneratedFormSection = 'Category',
        DisplayName = 'ID',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '394D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Integration Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Employee',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3A4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Integration Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Company Integration',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3B4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Integration Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Company Integration',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '50A4214B-56C2-4B72-8544-1D86CBBB329F'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Integration Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Employee',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'D381610B-59B6-411E-8FEF-6B8695DBFB81'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'External Identifier',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'External System Record ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3C4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'External Identifier',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Active',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'C94D17F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = 'CF9F1683-496C-47E5-8560-7480EDC01DBE'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'System Metadata',
@@ -2172,7 +4922,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Created At',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = 'A05817F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = 'BA77FE6C-D005-44DB-81D1-9A929E8E56CB'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'System Metadata',
@@ -2180,875 +4930,192 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Updated At',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = 'A15817F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '9941F9A0-929B-4510-8ED3-87293CE8F51D'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'App Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Open App ID',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'D886DFD5-3578-4B3F-B5D5-66849A72FBEF'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'App Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Open App Name',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'CF93E0DF-0327-4B60-933E-837A9EF6EC35'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'App Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Version',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '6C0B78C0-0FA4-4951-9FA1-881729892B25'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'App Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Previous Version',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '504032A3-DF25-4048-A171-1BC313953DF4'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'App Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Manifest JSON',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'E7ED2F99-71E4-4F49-9E49-869C08AECC5D'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'App Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Summary',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '1DC36C39-16B6-4511-966F-FC567DD683B5'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Installation Event',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Action',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'B3B91F4D-7F45-433C-A716-CBA1DB978123'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Installation Event',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Executed By User ID',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '235E5D6A-BDCD-417A-9DDE-B809A1BA9B73'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Installation Event',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Executed By User',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '03820B3F-34E5-4BF5-96A2-ABE6C7CBD523'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Installation Event',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Duration (seconds)',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'AC11421C-2800-4C8A-81D7-ADEFC8CCD6FA'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Outcome & Diagnostics',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Success',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '18607AB0-045F-41EF-803B-F087604961D9'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Outcome & Diagnostics',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Error Message',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '808D0B5A-8520-4DB7-81C4-0B2F2F090996'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Outcome & Diagnostics',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Error Phase',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '11C20AA0-4BF2-42A1-8054-3F198377E8E2'
    AND AutoUpdateCategory = 1
 
-/* Set categories for 7 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Entity Keys',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '394E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Entity Keys',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Employee',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3D4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Entity Keys',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Role',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3E4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '014D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '024D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Role Assignment',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Employee Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E3EF0A52-972E-4800-9109-50CCD7563D6D'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Role Assignment',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Role Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5E4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
+/* Set entity icon to fa fa-history */
 
-/* Set categories for 23 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Conversation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0F4E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Participants & References',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '104E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Participants & References',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'External ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '114E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Conversation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '144E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Conversation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Description',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7F4E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Conversation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '804E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Conversation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Archived',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '144417F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Participants & References',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Linked Entity',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '814E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Participants & References',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Linked Record ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '824E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Contextual Scope',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Data Context',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EB4E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6B5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6C5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Conversation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Status',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '575753A4-C12E-4E48-A835-6FE3FACE5527'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Contextual Scope',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Environment',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'A8EE672F-D2DF-4C0F-81FC-1392FCAD9813'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Contextual Scope',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Project',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EB07B3D0-FF8B-43AD-A612-01340C796652'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Conversation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Pinned',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7CAD1EDB-FDFC-4C19-8E8C-CCBCE0C60558'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Test Run Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Test Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3E687A08-D39E-4488-9AF9-C71394F7217A'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Participants & References',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6E4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Participants & References',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Linked Entity',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '834E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Contextual Scope',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Data Context',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '1AE26D76-2246-4FD4-8BCB-04C1953E2612'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Contextual Scope',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Environment',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '49A2D31E-331D-42C6-BA30-C96EB5A1310F'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Contextual Scope',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Project',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FE95FC8E-8A64-48D1-AA72-2F141C9199A2'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Test Run Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Test Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'BAD5158C-0675-4D28-A161-FC754BF57880'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 21 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FA73433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0774433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0D74433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Prompt Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'AI Prompt',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FB73433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Prompt Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Prompt Text',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FE73433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Prompt Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Configuration',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '4D991B48-52BD-4609-B8C1-71529BF8E9E8'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Prompt Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Prompt Embedding',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'C20C752B-8050-44A3-BC08-C1E85E1A9231'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Prompt Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'AI Prompt',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9774433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Prompt Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Configuration',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '48C4211A-CF59-45BE-B2F1-EF59FD5D2050'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'AI Model',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FC73433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Run At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FD73433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Prompt Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '1BF0DAAD-4F43-4486-AF6A-787A9DD73684'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'AI Model',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9B74433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Prompt Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'C70B4E09-EB16-449C-B922-19F1704B7B94'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Result Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Result Text',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FF73433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Result Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Status',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0074433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Result Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Expired On',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0174433E-F36B-1410-883E-00D02208DC50'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Stakeholder Links',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Vendor',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F332D3A9-5402-4E82-90E4-DDB3F4315F19'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Stakeholder Links',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Agent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '257026B1-1FD2-4B71-B94D-F97E7FEE6023'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Stakeholder Links',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Vendor',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '750A856A-8E2A-4161-AE35-0A311266D2EA'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Stakeholder Links',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Agent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0B216DCA-0EB9-42E3-942F-8C74960C2CD5'
-   AND AutoUpdateCategory = 1
+               UPDATE [${flyway:defaultSchema}].Entity
+               SET Icon = 'fa fa-history', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9'
+            
 
 /* Set categories for 11 fields */
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Run Identification',
+   SET Category = 'Application Record',
        GeneratedFormSection = 'Category',
        DisplayName = 'ID',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '354417F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = 'A3900340-B4BB-4E89-9287-9B012B3B1FD0'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Run Identification',
+   SET Category = 'Application Record',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Duplicate Run ID',
+       DisplayName = 'Open App',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '364417F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '5EAB988E-8CB1-4987-B68A-4E1D8AB5D8DE'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Run Identification',
+   SET Category = 'Application Record',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Record ID',
+       DisplayName = 'Open App Name',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '374417F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = 'E0D8F65E-12FE-4620-AEEB-16EB577531FA'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Processing Outcomes',
+   SET Category = 'Dependency Details',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Match Status',
+       DisplayName = 'Depends On App',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '384417F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = 'EF3F40CE-346C-4485-82C8-DD3CC778F3B0'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Processing Outcomes',
+   SET Category = 'Dependency Details',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Skipped Reason',
+       DisplayName = 'Depends On App Name',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '394417F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '4A6302D5-5BFA-40A4-A695-D3DEFE935B61'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Processing Outcomes',
+   SET Category = 'Dependency Details',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Match Error Message',
+       DisplayName = 'Depends On App Raw Name',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '3A4417F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '193BAD25-8554-4954-8F0B-F142B8599238'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Processing Outcomes',
+   SET Category = 'Dependency Details',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Merge Status',
+       DisplayName = 'Version Range',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '3B4417F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '901FD9A1-D37F-42EB-A8BD-419E0BE0AA6E'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Processing Outcomes',
+   SET Category = 'Dependency Details',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Merge Error Message',
+       DisplayName = 'Installed Version',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '3C4417F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '6A204DC5-B742-4D3A-84E3-B88230DA8AB4'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '835817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '845817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Run Identification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Duplicate Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B169992F-C09C-4290-A755-01FEDD2540DC'
-   AND AutoUpdateCategory = 1
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = 'AF5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'AF5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'B05717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '96EDCDEF-A2E7-44F6-84C8-EDB7DCBF9FE1'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'AF5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '96EDCDEF-A2E7-44F6-84C8-EDB7DCBF9FE1'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '5F4317F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'F7599F21-FC49-45AA-8FD0-C74F01BAC336'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '5F4317F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'F7599F21-FC49-45AA-8FD0-C74F01BAC336'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5F4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = 'F872E82D-BE6F-418D-9EA4-AB0B03D67DBD'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '5D5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '5E5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'A3E82C1D-1C63-40D2-AF16-E32AAF651F16'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'F872E82D-BE6F-418D-9EA4-AB0B03D67DBD'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5E5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'A3E82C1D-1C63-40D2-AF16-E32AAF651F16'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'F872E82D-BE6F-418D-9EA4-AB0B03D67DBD'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '9E5817F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '995817F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '9A5817F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '7DF42D5A-9D13-48DF-9EBA-A16E960C55BD'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '9E5817F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9A5817F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '7DF42D5A-9D13-48DF-9EBA-A16E960C55BD'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9E5817F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '7EC5FD3A-081C-4394-AC9D-9F0A52FC8826'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '7E4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '7EC5FD3A-081C-4394-AC9D-9F0A52FC8826'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '6A5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '7E4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '7EC5FD3A-081C-4394-AC9D-9F0A52FC8826'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '6A5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set categories for 7 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Identification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'AD5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Mapping Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Communication Message Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'AE5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Mapping Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Field Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'AF5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Mapping Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Priority',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B05717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Mapping Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Communication Message Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '96EDCDEF-A2E7-44F6-84C8-EDB7DCBF9FE1'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E15717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E25717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 7 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Skill Assignment',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3A4E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Skill Assignment',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Employee',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3F4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Skill Assignment',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Skill',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '404D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Skill Assignment',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Skill',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5F4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Skill Assignment',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Employee',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F7599F21-FC49-45AA-8FD0-C74F01BAC336'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '034D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '044D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 8 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7B4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Invocation Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity Action',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7C4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Invocation Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Invocation Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7D4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Invocation Status',
+   SET Category = 'Dependency Details',
        GeneratedFormSection = 'Category',
        DisplayName = 'Status',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '7E4C17F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '228F671B-2963-4017-BEE6-3F70D6522FBE'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'System Metadata',
@@ -3056,7 +5123,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Created At',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '1C4D17F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '8B4A8073-F4F2-4ED5-B48A-5389B2DBDECC'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'System Metadata',
@@ -3064,1594 +5131,14 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Updated At',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '1D4D17F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '4A311B61-00B0-443F-A189-453FC37647B3'
    AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Invocation Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity Action',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7EC5FD3A-081C-4394-AC9D-9F0A52FC8826'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Invocation Configuration',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Invocation Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6A5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 10 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Identifier & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F95717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Identifier & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity Action',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9F5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Identifier & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Action Parameter',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '985817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Definition',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Value Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '995817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Definition',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Value',
-       ExtendedType = 'Code',
-       CodeType = 'JavaScript'
-   WHERE ID = '9A5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Definition',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Comments',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9B5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9C5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9D5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Action Reference',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity Action',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7DF42D5A-9D13-48DF-9EBA-A16E960C55BD'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Definition',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Action Parameter',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9E5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-
-/* Update FieldCategoryInfo setting for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Action Reference":{"icon":"fa fa-cogs","description":"Specifies the action to which the parameter mapping applies"}}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '56248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryInfo'
-         
-
-/* Update FieldCategoryIcons setting (legacy) */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Action Reference":"fa fa-cogs"}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '56248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryIcons'
-         
-
-/* Set categories for 9 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Identifier Keys',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5A5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Identifier Keys',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity Action',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5B5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Identifier Keys',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Action Filter',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5C5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Settings',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Sequence',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5D5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Settings',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Status',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5E5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DD5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DE5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Action Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity Action',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'A3E82C1D-1C63-40D2-AF16-E32AAF651F16'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Action Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Action Filter',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F872E82D-BE6F-418D-9EA4-AB0B03D67DBD'
-   AND AutoUpdateCategory = 1
-
-/* Update FieldCategoryInfo setting for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Action Mapping":{"icon":"fa fa-filter","description":"Names of the Action and Filter definitions applied to the entity action"}}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '39248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryInfo'
-         
-
-/* Update FieldCategoryIcons setting (legacy) */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Action Mapping":"fa fa-filter"}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '39248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryIcons'
-         
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '9B89B840-09BE-4A18-8C85-B17735E9683D'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'D2431785-0203-430C-A267-6A0EEB22A4C5'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'D5D4F701-DD24-41F4-B62C-C5EFD4676B92'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'DFA67CE0-B4DC-4327-B7C3-5E4CE5A88817'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '9B89B840-09BE-4A18-8C85-B17735E9683D'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'DFA67CE0-B4DC-4327-B7C3-5E4CE5A88817'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9B89B840-09BE-4A18-8C85-B17735E9683D'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '711A7415-47F6-437C-A519-D0C22DC8B0AD'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '6D420001-1FB8-430E-9E2C-027A6BF7D757'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'B04A327B-55BF-4914-9DCF-3552A5DD0293'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '711A7415-47F6-437C-A519-D0C22DC8B0AD'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '4B0A5884-5F7C-4668-8DE8-3CBD8790DA28'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'DD862060-4FD4-4D09-AB19-8E03AAEFC4E1'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '79CABC92-666A-4403-8802-F6B57F9E00DE'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'B04A327B-55BF-4914-9DCF-3552A5DD0293'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '711A7415-47F6-437C-A519-D0C22DC8B0AD'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '4B0A5884-5F7C-4668-8DE8-3CBD8790DA28'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '84D28564-733D-4CC6-BBA3-0DB947BD2040'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '6B3AB4D4-9150-499E-B9FF-5AF9454849CB'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '95427194-037B-40BB-8A70-23D84323BC4B'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '8D564214-0633-4D21-93D9-18FF2CE1CDFE'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'EAF87394-714C-4852-B6CE-FAC2B408D2CC'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '95427194-037B-40BB-8A70-23D84323BC4B'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'EAF87394-714C-4852-B6CE-FAC2B408D2CC'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '95427194-037B-40BB-8A70-23D84323BC4B'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '475817F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '465817F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '475817F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '7A4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '7B4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '7C4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '465817F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '475817F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '7A4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '7B4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '7C4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '06F44CAA-9400-4660-A02A-CF9F94CEB8CB'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '2C6E811B-94B8-45F6-93C3-004CAFB054F8'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '06F44CAA-9400-4660-A02A-CF9F94CEB8CB'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'CB7692F5-554C-48A6-B88B-207DD35A3072'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '2C6E811B-94B8-45F6-93C3-004CAFB054F8'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '06F44CAA-9400-4660-A02A-CF9F94CEB8CB'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'CB7692F5-554C-48A6-B88B-207DD35A3072'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set categories for 10 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5B0E0446-427C-4BF0-8562-5152265CFE1A'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Connection Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'MCP Server Connection',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B5EE3D38-8573-4170-BEE5-A3EF5D51DD4C'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Connection Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'MCP Server Tool',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '019FFEE0-0763-48E0-9862-D429A4CDAB3C'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Settings',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Enabled',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'D2431785-0203-430C-A267-6A0EEB22A4C5'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Settings',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Default Input Values',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B114689E-036B-428F-B179-0B68371CF237'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Settings',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Max Calls Per Minute',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'D5D4F701-DD24-41F4-B62C-C5EFD4676B92'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3DC2DCEC-6F1E-421A-BE51-578F7D2F091E'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '95E2B969-4F03-4EFE-B519-D6DAC1272C3D'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Connection Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'MCP Server Connection',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DFA67CE0-B4DC-4327-B7C3-5E4CE5A88817'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Connection Mapping',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'MCP Server Tool',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9B89B840-09BE-4A18-8C85-B17735E9683D'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 9 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Reference IDs',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '2C6C87F9-2BD3-4FAC-BDF6-083AF4B27DC1'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Reference IDs',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation Detail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '28CB2BA0-F1BB-4F94-92C0-C70864CC2572'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Reference IDs',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '560E53BF-3F6E-42A2-B3C6-FF2DBAD2EF1C'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Rating Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Rating',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '8D564214-0633-4D21-93D9-18FF2CE1CDFE'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Rating Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Comments',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '84845FA8-AF88-48F0-B343-2F27EA892DDC'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Rating Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '95427194-037B-40BB-8A70-23D84323BC4B'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '49C7ADAE-9D03-4347-B477-6DE824021056'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '140CF09F-62A3-4A17-A6B5-A6D75D6EEF8D'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Message Content',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Message Text',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EAF87394-714C-4852-B6CE-FAC2B408D2CC'
-   AND AutoUpdateCategory = 1
-
-/* Update FieldCategoryInfo setting for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Message Content":{"icon":"fa fa-comment","description":"Text of the conversation message being rated"}}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = 'DE8EE300-B423-4B86-9E92-B06CAF7F0C3E' AND Name = 'FieldCategoryInfo'
-         
-
-/* Update FieldCategoryIcons setting (legacy) */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Message Content":"fa fa-comment"}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = 'DE8EE300-B423-4B86-9E92-B06CAF7F0C3E' AND Name = 'FieldCategoryIcons'
-         
-
-/* Set categories for 25 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '73A164F4-CD17-4818-944F-C32FF6AECC6F'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Agent Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6EC40C86-3805-46B5-B13C-8BF4C440B8C9'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Step Number',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6D420001-1FB8-430E-9E2C-027A6BF7D757'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Step Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B04A327B-55BF-4914-9DCF-3552A5DD0293'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Step Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '711A7415-47F6-437C-A519-D0C22DC8B0AD'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Target',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'A60234B6-768E-4A9A-B320-19945BE32C96'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Target Log',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '221FA3C6-184F-49ED-B679-13ABE9A55FEF'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Parent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EFDF061E-458A-4510-B5B3-A1508BE9C156'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Root Parent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5CB223A8-487A-4C9F-895D-490CDA610571'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Agent Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '75394BFE-2273-4B55-A3AF-BC37847667D8'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Step Identification & Hierarchy',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Parent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'A71D9B12-51EB-404C-8E0C-9BFF52CAE8E4'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Status & Validation',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Status',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '4B0A5884-5F7C-4668-8DE8-3CBD8790DA28'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Status & Validation',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Started At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DD862060-4FD4-4D09-AB19-8E03AAEFC4E1'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Status & Validation',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Completed At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '79CABC92-666A-4403-8802-F6B57F9E00DE'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Status & Validation',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Success',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '8E36A2B5-3F14-4BDA-942E-C0F771D323D5'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Status & Validation',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Error Message',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '84D28564-733D-4CC6-BBA3-0DB947BD2040'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Status & Validation',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Final Payload Validation Result',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '885CA658-9A97-4A8D-8726-286F954BF65A'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Status & Validation',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Final Payload Validation Messages',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'ADA3E427-9792-4587-96F6-7ECE2CF854FC'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data & Payload',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Input Data',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'C3DCA069-31F0-41CE-9E73-471BD9F6DA4C'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data & Payload',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Data',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '4BE3997A-2974-482B-B5BA-5017439E6CDA'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data & Payload',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Payload At Start',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '93A2C3A5-2773-4DEA-847C-0D1AAD1929AA'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data & Payload',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Payload At End',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DD7A82BD-C269-434B-9BB4-BBAC6064AF98'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '576FE9EC-53A5-47F3-B194-6F32981B92D8'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '57DAC94A-8AD5-46A3-979B-E8A3E0A8AD38'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Notes & System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Comments',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6B3AB4D4-9150-499E-B9FF-5AF9454849CB'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 13 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Technical Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '435817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Technical Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Company Integration Run ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '445817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Technical Information',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Company Integration Run Detail ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '455817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Error Classification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Error Code',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '465817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Error Content',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Message',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '475817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Error Content',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created By',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7A4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Error Classification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Status',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7B4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Error Classification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Category',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7C4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Error Content',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Details',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7D4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '4D5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '4E5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Integration Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Integration Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5618A204-3F2F-4318-8D5D-269D0F853F65'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Integration Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Integration Run Detail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3692E9D5-9684-43BD-AFFE-413C1D5FEE33'
-   AND AutoUpdateCategory = 1
-
-/* Update FieldCategoryInfo setting for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Integration Context":{"icon":"fa fa-cog","description":"Contextual information linking the error to a specific integration run and its detail"}}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = 'E7238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryInfo'
-         
-
-/* Update FieldCategoryIcons setting (legacy) */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Integration Context":"fa fa-cog"}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = 'E7238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryIcons'
-         
-
-/* Set categories for 8 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Core Identifiers',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6286C405-7ABB-481E-BD23-F517DE7E8BD3'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Core Identifiers',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation Detail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B46BAD20-46B2-445E-B703-CA74BD6F9C5D'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Core Identifiers',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Artifact Version',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'C45DA881-7CD4-424E-8855-C259F531E018'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Artifact Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Direction',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '2C6E811B-94B8-45F6-93C3-004CAFB054F8'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Artifact Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Artifact Version',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'CB7692F5-554C-48A6-B88B-207DD35A3072'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DDB7A2FA-6D08-4DC3-B69A-6851901A4F79'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '34B67D3A-FED8-49E7-ABCA-3F34FDC88DC3'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Message Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation Detail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '06F44CAA-9400-4660-A02A-CF9F94CEB8CB'
-   AND AutoUpdateCategory = 1
-
-/* Update FieldCategoryInfo setting for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Message Context":{"icon":"fa fa-comment","description":"Content and details of the conversation message"}}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '16AB21D1-8047-41B9-8AEA-CD253DED9743' AND Name = 'FieldCategoryInfo'
-         
-
-/* Update FieldCategoryIcons setting (legacy) */
-
-            UPDATE [${flyway:defaultSchema}].EntitySetting
-            SET Value = '{"Message Context":"fa fa-comment"}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '16AB21D1-8047-41B9-8AEA-CD253DED9743' AND Name = 'FieldCategoryIcons'
-         
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '55602C1C-FB4A-4678-A847-7889860791D5'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '55602C1C-FB4A-4678-A847-7889860791D5'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '9320E9C7-764E-401B-BF2D-A07358E4DD00'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '8071305E-E1C1-48BF-AE70-E345D6B892EE'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '97A0A3EA-5563-4C55-9935-397C26BFD00A'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'E1E5F477-3ABE-4793-BC11-A719CB078463'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '65ABF2B8-3355-4427-828B-E3082806C557'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '55602C1C-FB4A-4678-A847-7889860791D5'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9320E9C7-764E-401B-BF2D-A07358E4DD00'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'E1E5F477-3ABE-4793-BC11-A719CB078463'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9A8AEAF5-9065-4B87-8A63-B04F84E83886'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '65ABF2B8-3355-4427-828B-E3082806C557'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '1EFAD61D-3A38-4CEA-86FE-67463E887920'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'E7951B0E-3F0A-45DA-BFC3-A4ABB3AC5E0C'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = 'D9F2E764-5462-4BB2-BB56-75FFAE3B5E2A'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'DE4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'D9F2E764-5462-4BB2-BB56-75FFAE3B5E2A'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'E34C17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'DE4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'D9F2E764-5462-4BB2-BB56-75FFAE3B5E2A'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'E34C17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '3C7797AA-F939-4BC2-BBBC-0F69FA7B585E'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '3C7797AA-F939-4BC2-BBBC-0F69FA7B585E'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'E7F6FE9B-D064-4C71-AA91-66D1E81FCD52'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'A765705A-2032-49A5-8FE5-4E5B7254240B'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '6053FB8C-5F7A-4579-B8D1-5C046FB17627'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '5EBB437A-0705-4143-81DA-CC23587916FC'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '3C7797AA-F939-4BC2-BBBC-0F69FA7B585E'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'CEF515F8-77D6-4981-9F31-378ED7BAF0A2'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '6053FB8C-5F7A-4579-B8D1-5C046FB17627'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5EBB437A-0705-4143-81DA-CC23587916FC'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '86B3E078-8321-4EFA-995A-31285E3D9196'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'AB5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'AC5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '86B3E078-8321-4EFA-995A-31285E3D9196'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '135917F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'AB5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '86B3E078-8321-4EFA-995A-31285E3D9196'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '135917F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = 'B44D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'DD4217F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'B75717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'B85717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'DA4217F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'B44D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
 
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'B24D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
+/* Insert FieldCategoryInfo setting for entity */
 
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'EF5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('b55695a0-5ff1-47c6-ad2a-0b61743c17ee', '934A6248-7C1C-4866-AE5C-AEB589A92CC9', 'FieldCategoryInfo', '{"App Details":{"icon":"fa fa-box","description":"Core information about the Open App, its versions, manifest and descriptive summary"},"Installation Event":{"icon":"fa fa-rocket","description":"Details of the install/upgrade/remove action, the executing user, and execution duration"},"Outcome & Diagnostics":{"icon":"fa fa-bug","description":"Result of the action together with success flag and any error details"},"System Metadata":{"icon":"fa fa-cog","description":"System‑managed identifiers and audit timestamps"}}', GETUTCDATE(), GETUTCDATE())
          
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'DD4217F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'B75717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'B85717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'B44D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'B24D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '145917F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'EF5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set categories for 8 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DB4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Recommendation Run ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DC4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Source Entity ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DD4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Source Entity Record ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DE4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Source Entity',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E34C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Core',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Recommendation Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'D9F2E764-5462-4BB2-BB56-75FFAE3B5E2A'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FD5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FE5817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 18 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3B26460B-B434-41E8-98D6-6E8973A1998F'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '78A09C32-7FE6-408A-862A-71BD7E0042F7'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '73C2B5A4-9F4F-4195-9794-BCE839DB8B70'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Connection Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'MCP Server Connection',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F402BB2F-2BDB-458A-BA98-58C95C41FE03'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Connection Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'MCP Server Tool',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9BEF8A97-4002-4707-A73C-2A679ACE8F96'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Connection Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'MCP Server Connection',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '6053FB8C-5F7A-4579-B8D1-5C046FB17627'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Connection Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'MCP Server Tool',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '2FDBC763-08A1-4CDD-8F04-631C8C5C776B'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Tool Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '3C7797AA-F939-4BC2-BBBC-0F69FA7B585E'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Started At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E7F6FE9B-D064-4C71-AA91-66D1E81FCD52'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Ended At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '1B8A92DB-CFF9-400D-B88F-41131C0480C6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Duration (ms)',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '32ED9C3D-9F06-49EA-8165-4C78C41128F0'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Execution Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Success',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'A765705A-2032-49A5-8FE5-4E5B7254240B'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'User Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '68CB9A34-65C2-4546-ABAE-1A616D5F93A6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'User Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5EBB437A-0705-4143-81DA-CC23587916FC'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Payload & Errors',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Error Message',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'CEF515F8-77D6-4981-9F31-378ED7BAF0A2'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Payload & Errors',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Input Parameters',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'C584FB9F-D0A0-48D8-9E0E-DAB449769F44'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Payload & Errors',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Content',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F92F2ED5-628E-4222-B66C-F5B4139F3309'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Payload & Errors',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Truncated',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B0BE70A8-D2E8-46A6-B746-57528E095F81'
-   AND AutoUpdateCategory = 1
 
 /* Set categories for 21 fields */
 UPDATE [${flyway:defaultSchema}].EntityField
@@ -4660,1114 +5147,248 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'ID',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = 'DB4217F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '2E1AA1EB-24A5-4DDB-9479-26D7FB1711FC'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F14C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F24C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DC4217F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Record ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DD4217F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0A4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Replay Run ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F34C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Integration ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EF4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Comments',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B64D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '145917F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EF5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Integration',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E7A8FEEC-7840-EF11-86C3-00224821D189'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Record Context',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Replay Run',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '12422C1A-8E66-46C9-B7EF-BBD7C400B3DD'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Change Summary',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Change Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B75717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Change Summary',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Source',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B85717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Change Summary',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Changed At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DA4217F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Change Summary',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Status',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B24D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Change Summary',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Error Log',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F04C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Change Content',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Changes JSON',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B34D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Change Content',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Changes Description',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B44D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Change Content',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Full Record JSON',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B54D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 25 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FD227316-95F3-468B-8DB8-AEA5E3A4C431'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7B6A3F29-48A9-41B8-8374-214F12A5659C'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0B5358D5-C6C2-4579-879E-D2BA19D95541'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Parent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'C866D300-E97C-44E7-8848-F3DA97CE3F77'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F8719181-09B2-4C98-86F1-9A7828F46D2B'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Environment',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '1B80F5CC-B3AD-4C4E-9F64-4C061AC14EC2'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Project',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E94662C2-69B9-4603-9BFC-279CFD42A222'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation Detail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'CCE153EB-99AC-42DD-9BF7-628C0E121C62'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9F585440-DA55-4A2A-A48B-2937A3B24483'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Agent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'A1E1C7BA-66FA-4BDC-A21A-A27AB8C577C4'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Root Parent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '18585DF4-33D0-4CFC-95E4-6674186DCD9C'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Parent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '2344E41B-6F21-419A-B80F-43636478A814'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '1EFAD61D-3A38-4CEA-86FE-67463E887920'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Agent',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E7951B0E-3F0A-45DA-BFC3-A4ABB3AC5E0C'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Relationships & Ownership',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation Detail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E9085CD4-65FA-48D6-A085-0BA7956C3DFA'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Task Details',
+   SET Category = 'App Identity',
        GeneratedFormSection = 'Category',
        DisplayName = 'Name',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '55602C1C-FB4A-4678-A847-7889860791D5'
+   WHERE ID = '77DA64C6-4EA7-4188-A826-7F1F0863AB05'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Task Details',
+   SET Category = 'App Identity',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Display Name',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '6868F228-4530-4E86-A643-5AF256B2A91E'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'App Identity',
        GeneratedFormSection = 'Category',
        DisplayName = 'Description',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '24940E6C-FC69-40F1-9EA6-D860F38FC93F'
+   WHERE ID = '2D7BE27B-C212-4D79-9C83-5D1AD1B8B663'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Task Details',
+   SET Category = 'App Identity',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Status',
+       DisplayName = 'Version',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '9320E9C7-764E-401B-BF2D-A07358E4DD00'
+   WHERE ID = '0A08D5D3-AE41-4384-B040-5436E87AE7CD'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Task Details',
+   SET Category = 'App Identity',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Percent Complete',
+       DisplayName = 'License',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '8071305E-E1C1-48BF-AE70-E345D6B892EE'
+   WHERE ID = '654D8454-416C-4C97-8812-FA4B23F59086'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Task Details',
+   SET Category = 'App Identity',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Type',
+       DisplayName = 'Icon',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = 'E1E5F477-3ABE-4793-BC11-A719CB078463'
+   WHERE ID = 'D2B92EF0-3C70-4134-AB7B-8EE51B62583E'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Task Details',
+   SET Category = 'App Identity',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Environment',
+       DisplayName = 'Color',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '9A8AEAF5-9065-4B87-8A63-B04F84E83886'
+   WHERE ID = '4C6DBBF5-0C1E-4610-95D5-78C0A464AED0'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Task Details',
+   SET Category = 'Publisher Information',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Project',
+       DisplayName = 'Publisher',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '65ABF2B8-3355-4427-828B-E3082806C557'
+   WHERE ID = 'CFF0F2E9-2B08-46EC-AD9E-E307B55DE6B2'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Timeline & Milestones',
+   SET Category = 'Publisher Information',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Due At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '97A0A3EA-5563-4C55-9935-397C26BFD00A'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Timeline & Milestones',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Started At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B267C59C-3370-4EDF-A9D4-106D46A6BBF4'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Timeline & Milestones',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Completed At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F09901B1-A4C3-4845-A639-B9730146021A'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 9 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Technical Identifiers',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'A85717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Data',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Recommendation ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'A95717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Data',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Destination Entity ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'AA5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Data',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Destination Entity Record ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'AB5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Data',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Match Probability',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'AC5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '035917F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '045917F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Data',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Recommendation',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '86B3E078-8321-4EFA-995A-31285E3D9196'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Recommendation Data',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Destination Entity',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '135917F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '5B4317F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '5B4317F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '5C4317F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '62036496-02B9-4DEB-A8FE-F76E41432155'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5B4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5C4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '62036496-02B9-4DEB-A8FE-F76E41432155'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '294317F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '294317F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'F34D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'F64D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'E9A8FEEC-7840-EF11-86C3-00224821D189'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'EAA8FEEC-7840-EF11-86C3-00224821D189'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'EFA8FEEC-7840-EF11-86C3-00224821D189'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '54D5F848-BE9C-4B4A-8DF0-B53E2EA196E5'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '294317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'F34D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'F64D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'F74D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'E9A8FEEC-7840-EF11-86C3-00224821D189'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'EAA8FEEC-7840-EF11-86C3-00224821D189'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'EDA8FEEC-7840-EF11-86C3-00224821D189'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'EEA8FEEC-7840-EF11-86C3-00224821D189'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'EFA8FEEC-7840-EF11-86C3-00224821D189'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '54D5F848-BE9C-4B4A-8DF0-B53E2EA196E5'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set field properties for entity */
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET IsNameField = 1
-            WHERE ID = '9A5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateIsNameField = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '9A5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '9C5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '9D5717F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'DA4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9A5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9B5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9C5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9D5717F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-/* Set categories for 8 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Deletion Audit',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '594317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Deletion Audit',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Record Merge Log',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5A4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Deletion Audit',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Deleted Record ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5B4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Deletion Audit',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Status',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5C4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Deletion Audit',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Processing Log',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '5D4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '755817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '765817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Deletion Audit',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Record Merge Log',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '62036496-02B9-4DEB-A8FE-F76E41432155'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 19 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Template Association',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '985717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Template Association',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Template',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '995717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Template Association',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9E5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Template Association',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Record ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9F5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Template Association',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Template Content',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '58826477-0141-4692-A271-24918F5B9224'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Template Association',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Template',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'D74C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Template Association',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Entity',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'D84C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Template Association',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Template Content',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '18B763C8-4466-4231-9644-2EB3D0DDAC78'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Specification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9A5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Specification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Description',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9B5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Specification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9C5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Specification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Default Value',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '9D5717F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Parameter Specification',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Is Required',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'DA4C17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Dynamic Linking & Filters',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Linked Parameter Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0E5917F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Dynamic Linking & Filters',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Linked Parameter Field',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '0F5917F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Dynamic Linking & Filters',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Extra Filter',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '105917F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Dynamic Linking & Filters',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Order By',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '7321B323-7F8B-4DCD-AE44-01FCE8AAB7EF'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '945817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '955817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-
-/* Set categories for 30 fields */
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'ID',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '284317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Created At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B55817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'System Metadata',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Updated At',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'B65817F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Report Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Name',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '294317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Report Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Description',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '2A4317F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Report Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Category',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F84E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Report Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Sharing Scope',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F34D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Report Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Thumbnail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '291EF341-1318-4B86-A9A7-1180CE820609'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Report Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Environment',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '257FFE0E-EC6F-441B-8039-3A17B44FF4FB'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Report Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Category',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'E9A8FEEC-7840-EF11-86C3-00224821D189'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Report Details',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Environment',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '54D5F848-BE9C-4B4A-8DF0-B53E2EA196E5'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F44D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EF4D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation Detail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '524F17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Data Context',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F94E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Workflow',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F84D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'User',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EAA8FEEC-7840-EF11-86C3-00224821D189'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'EBA8FEEC-7840-EF11-86C3-00224821D189'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Conversation Detail',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = '01EB3160-63C2-403B-A15C-CC9EFF1FF16B'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Data Context',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'ECA8FEEC-7840-EF11-86C3-00224821D189'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Data Context & Relationships',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Workflow',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F0A8FEEC-7840-EF11-86C3-00224821D189'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Configuration',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'FA4E17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Trigger Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F04D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Format Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F14D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Delivery Type',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F24D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Frequency',
-       ExtendedType = NULL,
-       CodeType = NULL
-   WHERE ID = 'F64D17F0-6F36-EF11-86D4-6045BDEE16E6'
-   AND AutoUpdateCategory = 1
-UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
-       GeneratedFormSection = 'Category',
-       DisplayName = 'Output Target Email',
+       DisplayName = 'Publisher Email',
        ExtendedType = 'Email',
        CodeType = NULL
-   WHERE ID = 'F74D17F0-6F36-EF11-86D4-6045BDEE16E6'
+   WHERE ID = '3816DBA3-82C2-416B-BE85-C13C0AC97DFB'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
+   SET Category = 'Publisher Information',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Output Trigger Type',
-       ExtendedType = NULL,
+       DisplayName = 'Publisher URL',
+       ExtendedType = 'URL',
        CodeType = NULL
-   WHERE ID = 'EDA8FEEC-7840-EF11-86C3-00224821D189'
+   WHERE ID = 'DB50E49F-570D-4823-829F-41F05B95E9B3'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
+   SET Category = 'Technical Details',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Output Format Type',
-       ExtendedType = NULL,
+       DisplayName = 'Repository URL',
+       ExtendedType = 'URL',
        CodeType = NULL
-   WHERE ID = 'EEA8FEEC-7840-EF11-86C3-00224821D189'
+   WHERE ID = '989C9E29-E928-4B17-980E-3CCBF12803DE'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
-   SET Category = 'Output & Scheduling',
+   SET Category = 'Technical Details',
        GeneratedFormSection = 'Category',
-       DisplayName = 'Output Delivery Type',
+       DisplayName = 'Schema Name',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = 'EFA8FEEC-7840-EF11-86C3-00224821D189'
+   WHERE ID = '5B6EFBD3-7176-409E-B251-B76D5F1CDA20'
    AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Technical Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'MJ Version Range',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'A12EE3E0-10C7-4208-AE6F-94082B1D8EAF'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Technical Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Manifest JSON',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'BC351BA8-209E-4CA6-A7A0-D624A3B39FA9'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Technical Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Configuration Schema JSON',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '4B742331-BE93-4D37-8CBA-F63811C3D1F7'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Installation Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Installed By User ID',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'A0BAB779-2746-40F2-970E-1E08EA746488'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Installation Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Installed By User',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '7CB510D0-65A7-4B83-9973-D19A90BA56EB'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Installation Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Status',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '141D36E7-11B9-4C91-897A-985298D8D169'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'System Metadata',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Created At',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '2B0A0D3F-4719-4B50-B466-A12D403A5796'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'System Metadata',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Updated At',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'E8DBEC43-4B9B-4C43-92C0-D0E690988B7C'
+   AND AutoUpdateCategory = 1
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('54f145f2-ebc3-44a1-b2ee-21d589d0918c', '934A6248-7C1C-4866-AE5C-AEB589A92CC9', 'FieldCategoryIcons', '{"App Details":"fa fa-box","Installation Event":"fa fa-rocket","Outcome & Diagnostics":"fa fa-bug","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+         
+
+/* Set DefaultForNewUser=1 for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].ApplicationEntity
+         SET DefaultForNewUser = 1, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = '934A6248-7C1C-4866-AE5C-AEB589A92CC9'
+      
+
+/* Set entity icon to fa fa-puzzle-piece */
+
+               UPDATE [${flyway:defaultSchema}].Entity
+               SET Icon = 'fa fa-puzzle-piece', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188'
+            
+
+/* Insert FieldCategoryInfo setting for entity */
+
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('6c0485ed-df43-473d-a2b9-4b370fd32a3d', 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', 'FieldCategoryInfo', '{"Application Record":{"icon":"fa fa-cubes","description":"Core identifiers for the Open App installation"},"Dependency Details":{"icon":"fa fa-link","description":"Information about required app dependencies, version constraints, and status"},"System Metadata":{"icon":"fa fa-cog","description":"System‑managed audit fields tracking creation and modification timestamps"}}', GETUTCDATE(), GETUTCDATE())
+         
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('bb7a8067-cd3a-4660-93c7-ea80c8b28458', 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188', 'FieldCategoryIcons', '{"Application Record":"fa fa-cubes","Dependency Details":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+         
+
+/* Set DefaultForNewUser=0 for NEW entity (category: reference, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].ApplicationEntity
+         SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = 'C55EAA5A-4C9F-4D9A-B72B-0B76C2055188'
+      
+
+/* Set entity icon to fa fa-puzzle-piece */
+
+               UPDATE [${flyway:defaultSchema}].Entity
+               SET Icon = 'fa fa-puzzle-piece', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427'
+            
+
+/* Insert FieldCategoryInfo setting for entity */
+
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('6e1902a9-9ec3-459c-bbd4-e6eef41fee3b', 'C19F14CD-E29E-49BB-B5DE-1040263A5427', 'FieldCategoryInfo', '{"App Identity":{"icon":"fa fa-puzzle-piece","description":"Core identification details of the app, including name, display name, description, version, license, icon and theme color."},"Publisher Information":{"icon":"fa fa-building","description":"Details about the app''s publisher, such as name, contact email and website."},"Technical Details":{"icon":"fa fa-file-code","description":"Technical metadata like repository URL, schema name, MJ version compatibility, and JSON manifest/configuration."},"Installation Details":{"icon":"fa fa-download","description":"Information about who installed the app and its current status."},"System Metadata":{"icon":"fa fa-database","description":"System‑generated audit fields and primary key."}}', GETUTCDATE(), GETUTCDATE())
+         
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('3e700257-451a-4d2f-8a20-44b1b657bae1', 'C19F14CD-E29E-49BB-B5DE-1040263A5427', 'FieldCategoryIcons', '{"App Identity":"fa fa-puzzle-piece","Publisher Information":"fa fa-building","Technical Details":"fa fa-file-code","Installation Details":"fa fa-download","System Metadata":"fa fa-database"}', GETUTCDATE(), GETUTCDATE())
+         
+
+/* Set DefaultForNewUser=1 for NEW entity (category: primary, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].ApplicationEntity
+         SET DefaultForNewUser = 1, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = 'C19F14CD-E29E-49BB-B5DE-1040263A5427'
+      
+
+/* Generated Validation Functions for MJ: Open Apps */
+-- CHECK constraint for MJ: Open Apps: Field: Name was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
+                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0', GETUTCDATE(), 'TypeScript','Approved', '(NOT [Name] like ''%[^a-z0-9-]%'')', 'public ValidateNameAllowedCharacters(result: ValidationResult) {
+	// Name is required, so we only need to verify its characters
+	if (this.Name != null && !/^[a-z0-9-]+$/.test(this.Name)) {
+		result.Errors.push(new ValidationErrorInfo(
+			"Name",
+			"Name can only contain lowercase letters, numbers, and hyphens.",
+			this.Name,
+			ValidationErrorType.Failure
+		));
+	}
+}', 'The Name field may only contain lowercase letters (a‑z), digits (0‑9), or hyphens (-). Any other character is not allowed, ensuring the identifier is clean and URL‑friendly.', 'ValidateNameAllowedCharacters', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '77DA64C6-4EA7-4188-A826-7F1F0863AB05');
+  
+            
 

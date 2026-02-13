@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- App Identification Section -->
+    <!-- App Identity Section -->
     <mj-collapsible-panel
-        SectionKey="appIdentification"
-        SectionName="App Identification"
+        SectionKey="appIdentity"
+        SectionName="App Identity"
         Icon="fa fa-puzzle-piece"
         [Form]="this"
         [FormContext]="formContext">
@@ -71,22 +71,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ManifestJSON"
-            Type="code"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ConfigurationSchemaJSON"
-            Type="code"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -126,11 +110,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Source Repository Section -->
+    <!-- Technical Details Section -->
     <mj-collapsible-panel
-        SectionKey="sourceRepository"
-        SectionName="Source Repository"
-        Icon="fa fa-code-branch"
+        SectionKey="technicalDetails"
+        SectionName="Technical Details"
+        Icon="fa fa-file-code"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -158,13 +142,29 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ManifestJSON"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ConfigurationSchemaJSON"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Installation Metadata Section -->
+    <!-- Installation Details Section -->
     <mj-collapsible-panel
-        SectionKey="installationMetadata"
-        SectionName="Installation Metadata"
+        SectionKey="installationDetails"
+        SectionName="Installation Details"
         Icon="fa fa-download"
         [Form]="this"
         [FormContext]="formContext">
@@ -192,7 +192,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -222,32 +222,7 @@
     <mj-collapsible-panel
         SectionKey="mJOpenAppDependencies"
         SectionName="MJ: Open App Dependencies"
-        Icon="fa fa-plug"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJOpenAppDependencies')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','DependsOnAppID')"
-                [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
-                [AllowLoad]="IsSectionExpanded('mJOpenAppDependencies')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependencies', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- MJ: Open App Dependencies Section -->
-    <mj-collapsible-panel
-        SectionKey="mJOpenAppDependencies"
-        SectionName="MJ: Open App Dependencies"
-        Icon="fa fa-plug"
+        Icon="fa fa-puzzle-piece"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -272,7 +247,7 @@
     <mj-collapsible-panel
         SectionKey="mJOpenAppInstallHistories"
         SectionName="MJ: Open App Install Histories"
-        Icon="fa fa-download"
+        Icon="fa fa-history"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -287,6 +262,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOpenAppInstallHistories', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- MJ: Open App Dependencies Section -->
+    <mj-collapsible-panel
+        SectionKey="mJOpenAppDependencies"
+        SectionName="MJ: Open App Dependencies"
+        Icon="fa fa-puzzle-piece"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJOpenAppDependencies')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','DependsOnAppID')"
+                [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
+                [AllowLoad]="IsSectionExpanded('mJOpenAppDependencies')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependencies', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

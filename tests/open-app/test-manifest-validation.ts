@@ -273,10 +273,14 @@ console.log('\n▸ Valid Package Roles');
 (function testAllValidRoles() {
     const roles = ['bootstrap', 'actions', 'engine', 'provider', 'module', 'components', 'library'];
     for (const role of roles) {
+        const pkg: Record<string, string> = { name: `@test/${role}-pkg`, role };
+        if (role === 'bootstrap') {
+            pkg.startupExport = 'registerApp';
+        }
         const m = {
             ...minimalManifest(),
             packages: {
-                server: [{ name: `@test/${role}-pkg`, role }],
+                server: [pkg],
             },
         };
         assertValid(ValidateManifestObject(m), `Package role '${role}' is accepted`);

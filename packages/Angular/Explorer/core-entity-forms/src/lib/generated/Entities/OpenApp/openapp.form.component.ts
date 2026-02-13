@@ -16,14 +16,14 @@ export class OpenAppFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'appIdentification', sectionName: 'App Identification', isExpanded: true },
+            { sectionKey: 'appIdentity', sectionName: 'App Identity', isExpanded: true },
             { sectionKey: 'publisherInformation', sectionName: 'Publisher Information', isExpanded: true },
-            { sectionKey: 'sourceRepository', sectionName: 'Source Repository', isExpanded: false },
-            { sectionKey: 'installationMetadata', sectionName: 'Installation Metadata', isExpanded: false },
+            { sectionKey: 'technicalDetails', sectionName: 'Technical Details', isExpanded: false },
+            { sectionKey: 'installationDetails', sectionName: 'Installation Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJOpenAppDependencies', sectionName: 'MJ: Open App Dependencies', isExpanded: false },
-            { sectionKey: 'mJOpenAppDependencies1', sectionName: 'MJ: Open App Dependencies', isExpanded: false },
-            { sectionKey: 'mJOpenAppInstallHistories', sectionName: 'MJ: Open App Install Histories', isExpanded: false }
+            { sectionKey: 'mJOpenAppInstallHistories', sectionName: 'MJ: Open App Install Histories', isExpanded: false },
+            { sectionKey: 'mJOpenAppDependencies1', sectionName: 'MJ: Open App Dependencies', isExpanded: false }
         ]);
     }
 }

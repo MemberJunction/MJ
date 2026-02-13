@@ -5,7 +5,7 @@
  * Each import below loads an Open App's client bootstrap package, which triggers
  * @RegisterClass decorators and makes the app's components available to MJ's class factory.
  *
- * Generated: 2026-02-13T01:16:05.827Z
+ * Generated: 2026-02-13T17:38:19.980Z
  */
 
 // No Open Apps installed

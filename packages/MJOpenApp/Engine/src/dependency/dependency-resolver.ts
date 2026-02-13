@@ -5,6 +5,12 @@
  * install order, and detects circular dependency chains.
  */
 import type { ResolvedDependency } from '../types/open-app-types.js';
+import { CheckDependencyVersionCompatibility } from './version-checker.js';
+
+/**
+ * Dependency value: either a plain semver range string or an object with version and repository.
+ */
+export type DependencyValue = string | { version: string; repository: string };
 
 /**
  * A node in the dependency graph, representing one app and its requirements.
@@ -14,8 +20,8 @@ export interface DependencyNode {
     AppName: string;
     /** GitHub repository URL */
     Repository: string;
-    /** Dependencies: map of app name -> semver range */
-    Dependencies: Record<string, string>;
+    /** Dependencies: map of app name -> semver range or { version, repository } */
+    Dependencies: Record<string, DependencyValue>;
 }
 
 /**
@@ -69,13 +75,23 @@ export function ResolveDependencies(
 }
 
 /**
+ * Extracts version range and optional repository from a dependency value.
+ */
+function ParseDependencyValue(value: DependencyValue): { versionRange: string; repository?: string } {
+    if (typeof value === 'string') {
+        return { versionRange: value };
+    }
+    return { versionRange: value.version, repository: value.repository };
+}
+
+/**
  * Recursive depth-first visitor for topological sort.
  *
  * @returns Error message string if a cycle is detected, undefined otherwise
  */
 function VisitNode(
     appName: string,
-    dependencies: Record<string, string>,
+    dependencies: Record<string, DependencyValue>,
     visited: Set<string>,
     inStack: Set<string>,
     order: ResolvedDependency[],
@@ -92,8 +108,8 @@ function VisitNode(
 
     inStack.add(appName);
 
-    for (const [depName, versionRange] of Object.entries(dependencies)) {
-        const depError = VisitDependency(depName, versionRange, visited, inStack, order, installedApps);
+    for (const [depName, depValue] of Object.entries(dependencies)) {
+        const depError = VisitDependency(depName, depValue, visited, inStack, order, installedApps);
         if (depError) {
             return depError;
         }
@@ -113,19 +129,28 @@ function VisitNode(
  */
 function VisitDependency(
     depName: string,
-    versionRange: string,
+    depValue: DependencyValue,
     visited: Set<string>,
     inStack: Set<string>,
     order: ResolvedDependency[],
     installedApps: InstalledAppMap
 ): string | undefined {
+    const { versionRange, repository: manifestRepo } = ParseDependencyValue(depValue);
     const installed = installedApps[depName];
     const alreadyInstalled = installed !== undefined;
+
+    // Validate version compatibility for already-installed dependencies
+    if (alreadyInstalled && installed.Version) {
+        const compatCheck = CheckDependencyVersionCompatibility(installed.Version, versionRange);
+        if (!compatCheck.Compatible) {
+            return `Dependency '${depName}' is installed (v${installed.Version}) but does not satisfy required range '${versionRange}': ${compatCheck.Message}`;
+        }
+    }
 
     const resolved: ResolvedDependency = {
         AppName: depName,
         VersionRange: versionRange,
-        Repository: installed?.Repository ?? '',
+        Repository: installed?.Repository ?? manifestRepo ?? '',
         AlreadyInstalled: alreadyInstalled,
         InstalledVersion: installed?.Version
     };

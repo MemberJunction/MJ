@@ -16,8 +16,9 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/core": "4.3.1",
     "@memberjunction/global": "4.3.1",
-    "node-flyway": "0.0.13",
+    "@skyway/core": "file:../../../../skyway/packages/core",
     "semver": "^7.7.1",
     "simple-git": "^3.27.0",
     "zod": "^3.24.3"

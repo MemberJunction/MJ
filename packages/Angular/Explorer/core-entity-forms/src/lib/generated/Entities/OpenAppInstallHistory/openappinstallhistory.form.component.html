@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Application Package Section -->
+    <!-- App Details Section -->
     <mj-collapsible-panel
-        SectionKey="applicationPackage"
-        SectionName="Application Package"
+        SectionKey="appDetails"
+        SectionName="App Details"
         Icon="fa fa-box"
         [Form]="this"
         [FormContext]="formContext">
@@ -48,6 +48,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Summary"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -55,7 +63,7 @@
     <mj-collapsible-panel
         SectionKey="installationEvent"
         SectionName="Installation Event"
-        Icon="fa fa-tasks"
+        Icon="fa fa-rocket"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -63,14 +71,6 @@
             [ShowLabel]="true"
             FieldName="Action"
             Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Summary"
-            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -91,6 +91,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Outcome & Diagnostics Section -->
+    <mj-collapsible-panel
+        SectionKey="outcomeDiagnostics"
+        SectionName="Outcome & Diagnostics"
+        Icon="fa fa-bug"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -99,16 +109,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Error Details Section -->
-    <mj-collapsible-panel
-        SectionKey="errorDetails"
-        SectionName="Error Details"
-        Icon="fa fa-exclamation-triangle"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

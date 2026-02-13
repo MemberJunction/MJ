@@ -186,8 +186,12 @@ The MJ `config` package will expose a generic config loader where you provide a 
 
   // ── App Dependencies ──────────────────────────────────────
   "dependencies": {                               // OPTIONAL - other MJ apps this app requires
-    "acme-billing": ">=1.0.0",                    // App name -> semver range
-    "acme-contacts": "^2.0.0"
+    "acme-billing": ">=1.0.0",                    // Simple form: app name -> semver range
+    "acme-contacts": "^2.0.0",
+    "acme-inventory": {                            // Object form: includes repository for auto-install
+      "version": ">=1.0.0",
+      "repository": "https://github.com/acme/mj-inventory"
+    }
   },
 
   // ── Code Visibility ───────────────────────────────────────
@@ -256,7 +260,7 @@ The MJ `config` package will expose a generic config loader where you provide a 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `mjVersionRange` | string | Yes | Semver range of compatible MJ versions |
-| `dependencies` | object | No | Map of app name to semver range for required peer apps. Transitive dependencies are resolved and auto-installed by the CLI. |
+| `dependencies` | object | No | Map of app name to semver range (string) or `{ version, repository }` object. The object form includes a GitHub URL for auto-installing uninstalled dependencies. Transitive dependencies are resolved and auto-installed by the CLI. |
 
 #### Database Schema
 
@@ -740,10 +744,10 @@ module.exports = {
   dynamicPackages: {
     server: [
       {
-        packageName: '@acme/mj-crm-server-bootstrap',
-        startupExport: 'LoadAcmeCRMServer',
-        appName: 'acme-crm',           // Links back to the Open App
-        enabled: true                    // Can be toggled without removing
+        PackageName: '@acme/mj-crm-server-bootstrap',
+        StartupExport: 'LoadAcmeCRMServer',
+        AppName: 'acme-crm',           // Links back to the Open App
+        Enabled: true                    // Can be toggled without removing
       }
     ]
   }
@@ -1036,7 +1040,7 @@ Primary tracking entity for all Open Apps installed in this MJ instance.
 | ManifestJSON | NVARCHAR(MAX) | No | | Complete manifest JSON at current version |
 | ConfigurationSchemaJSON | NVARCHAR(MAX) | Yes | | JSON Schema for app config |
 | InstalledByUserID | UNIQUEIDENTIFIER | No | | FK to User |
-| Status | NVARCHAR(20) | No | 'Active' | Active, Disabled, Error, Installing, Upgrading, Removing |
+| Status | NVARCHAR(20) | No | 'Active' | Active, Disabled, Error, Installing, Upgrading, Removing, Removed |
 
 **Constraints:** PK, UNIQUE(Name), UNIQUE(SchemaName), FK(InstalledByUserID -> User), CHECK(Status), CHECK(Name lowercase+hyphens only)
 
@@ -1128,7 +1132,7 @@ CREATE TABLE ${flyway:defaultSchema}.OpenApp (
     CONSTRAINT FK_OpenApp_User FOREIGN KEY (InstalledByUserID)
         REFERENCES ${flyway:defaultSchema}.[User](ID),
     CONSTRAINT CK_OpenApp_Status CHECK (Status IN (
-        'Active', 'Disabled', 'Error', 'Installing', 'Upgrading', 'Removing'
+        'Active', 'Disabled', 'Error', 'Installing', 'Upgrading', 'Removing', 'Removed'
     )),
     CONSTRAINT CK_OpenApp_Name CHECK (Name NOT LIKE '%[^a-z0-9-]%')
 );
@@ -1166,7 +1170,7 @@ CREATE TABLE ${flyway:defaultSchema}.OpenAppInstallHistory (
         'Install', 'Upgrade', 'Remove'
     )),
     CONSTRAINT CK_OpenAppInstallHistory_Phase CHECK (ErrorPhase IS NULL OR ErrorPhase IN (
-        'Schema', 'Migration', 'Packages', 'Config', 'Hooks'
+        'Schema', 'Migration', 'Packages', 'Config', 'Hooks', 'Record'
     ))
 );
 GO

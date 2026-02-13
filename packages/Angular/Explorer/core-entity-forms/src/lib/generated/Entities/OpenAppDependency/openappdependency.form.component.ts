@@ -15,9 +15,8 @@ export class OpenAppDependencyFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'applicationInfo', sectionName: 'Application Info', isExpanded: true },
+            { sectionKey: 'applicationRecord', sectionName: 'Application Record', isExpanded: true },
             { sectionKey: 'dependencyDetails', sectionName: 'Dependency Details', isExpanded: true },
-            { sectionKey: 'versionStatus', sectionName: 'Version & Status', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
