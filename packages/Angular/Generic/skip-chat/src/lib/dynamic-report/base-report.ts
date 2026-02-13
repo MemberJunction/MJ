@@ -1,6 +1,6 @@
 import { AfterViewInit, ChangeDetectorRef, Component, Directive, EventEmitter, Input, OnInit, Output } from "@angular/core";
 import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from "@memberjunction/core";
-import { ReportEntity } from "@memberjunction/core-entities";
+import { MJReportEntity } from "@memberjunction/core-entities";
 import { DataContext } from "@memberjunction/data-context";
 import { ConvertMarkdownStringToHtmlList } from "@memberjunction/global";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
@@ -19,7 +19,7 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
   @Input() ConversationName: string | null = null;
   @Input() ConversationDetailID: string | null = null;
   @Input() DataContext!: DataContext;
-  @Input() ReportEntity?: ReportEntity;
+  @Input() MJReportEntity?: MJReportEntity;
 
   @Output() UserNotification = new EventEmitter<{message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number}>();
 
@@ -162,7 +162,7 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
           this.RaiseUserNotification(`Report "${result.ReportName}" Saved`, 'success', 2500);
 
           // tell our shared report cache about the new report
-          const report = await this.ProviderToUse.GetEntityObject<ReportEntity>('Reports', this.ProviderToUse.CurrentUser);
+          const report = await this.ProviderToUse.GetEntityObject<MJReportEntity>('MJ: Reports', this.ProviderToUse.CurrentUser);
           report.Load(result.ReportID).then(() => {
             // do async so the user doesn't wait for this to finish
             SkipConversationReportCache.Instance.AddConversationReport(this.ConversationID!, report);
@@ -221,7 +221,7 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
         return;
       }
 
-      if(!this.ReportEntity || !this.ReportEntity.ID){
+      if(!this.MJReportEntity || !this.MJReportEntity.ID){
         this.RaiseUserNotification('No report to refresh', 'error', 2500);
         return
       }
@@ -241,7 +241,7 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
 
       const p = <GraphQLDataProvider>this.ProviderToUse;
       const result: {ExecuteAskSkipRunScript: MJAPISkipResult} = await p.ExecuteGQL(gql, {
-        dataContextId: this.ReportEntity.DataContextID,
+        dataContextId: this.MJReportEntity.DataContextID,
         scriptText: this.SkipData?.scriptText,
       });
 
@@ -268,11 +268,11 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
       newSkipData.title = this.SkipData.title || this.SkipData.reportTitle; // favor the new title but fallback to the legacy reportTitle. This is the title of the component, we don't want to change it
       newSkipData.drillDown = this.SkipData.drillDown; // this is the drill down data, we don't want to change it
       
-      this.ReportEntity.Configuration = JSON.stringify(newSkipData);
+      this.MJReportEntity.Configuration = JSON.stringify(newSkipData);
 
-      const saveResult: boolean = await this.ReportEntity.Save();
+      const saveResult: boolean = await this.MJReportEntity.Save();
       if(!saveResult){
-        LogError('Error refreshing report: failed to save report entity', undefined, this.ReportEntity.LatestResult);
+        LogError('Error refreshing report: failed to save report entity', undefined, this.MJReportEntity.LatestResult);
         this.RaiseUserNotification('Error refreshing report', 'error', 2500);
       }
       else{

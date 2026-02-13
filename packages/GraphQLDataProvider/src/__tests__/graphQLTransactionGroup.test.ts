@@ -95,14 +95,14 @@ describe('GraphQLTransactionGroup', () => {
     group.PendingTransactions = [
       {
         BaseEntity: {
-          EntityInfo: { Name: 'TestEntity' },
+          EntityInfo: { Name: 'MJTestEntity' },
           GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
         },
         OperationType: 'Create',
       },
       {
         BaseEntity: {
-          EntityInfo: { Name: 'TestEntity' },
+          EntityInfo: { Name: 'MJTestEntity' },
           GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
         },
         OperationType: 'Update',
@@ -185,7 +185,7 @@ describe('GraphQLTransactionGroup', () => {
     group.PendingTransactions = [
       {
         BaseEntity: {
-          EntityInfo: { Name: 'TestEntity' },
+          EntityInfo: { Name: 'MJTestEntity' },
           GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
         },
         OperationType: 'Create',

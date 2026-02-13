@@ -1181,7 +1181,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async GetRecordChanges(entityName: string, primaryKey: CompositeKey): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
-                EntityName: 'Record Changes',
+                EntityName: 'MJ: Record Changes',
                 ExtraFilter: `RecordID = '${primaryKey.Values()}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }

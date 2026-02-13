@@ -2,7 +2,7 @@ import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Res
 import { AppContext } from '../types.js';
 import { LogError, RunView, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
-import { QueryCategoryEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
+import { MJQueryCategoryEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
 import { MJQueryResolver } from '../generated/generated.js';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
@@ -222,7 +222,7 @@ export class QueryParameterType {
 }
 
 @ObjectType()
-export class QueryEntityType {
+export class MJQueryEntityType {
     @Field(() => String)
     ID!: string;
 
@@ -300,8 +300,8 @@ export class CreateQueryResultType {
     @Field(() => [QueryParameterType], { nullable: true })
     Parameters?: QueryParameterType[];
 
-    @Field(() => [QueryEntityType], { nullable: true })
-    Entities?: QueryEntityType[];
+    @Field(() => [MJQueryEntityType], { nullable: true })
+    Entities?: MJQueryEntityType[];
 
     @Field(() => [QueryPermissionType], { nullable: true })
     Permissions?: QueryPermissionType[];
@@ -356,8 +356,8 @@ export class UpdateQueryResultType {
     @Field(() => [QueryParameterType], { nullable: true })
     Parameters?: QueryParameterType[];
 
-    @Field(() => [QueryEntityType], { nullable: true })
-    Entities?: QueryEntityType[];
+    @Field(() => [MJQueryEntityType], { nullable: true })
+    Entities?: MJQueryEntityType[];
 
     @Field(() => [QueryPermissionType], { nullable: true })
     Permissions?: QueryPermissionType[];
@@ -426,7 +426,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             }
 
             // Use QueryEntityExtended which handles AI processing
-            const record = await provider.GetEntityObject<QueryEntityExtended>("Queries", context.userPayload.userRecord);
+            const record = await provider.GetEntityObject<QueryEntityExtended>("MJ: Queries", context.userPayload.userRecord);
             
             // Set the fields from input, handling CategoryPath resolution
             const fieldsToSet = {
@@ -604,7 +604,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         const createdPermissions: QueryPermissionType[] = [];
         if (permissions && permissions.length > 0) {
             for (const perm of permissions) {
-                const permissionEntity = await p.GetEntityObject<QueryPermissionEntity>('Query Permissions', contextUser);
+                const permissionEntity = await p.GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', contextUser);
                 if (permissionEntity) {
                     permissionEntity.QueryID = queryID;
                     permissionEntity.RoleID = perm.RoleID;
@@ -640,7 +640,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         try {
             // Load the existing query using QueryEntityExtended
             const provider = GetReadWriteProvider(context.providers);
-            const queryEntity = await provider.GetEntityObject<QueryEntityExtended>('Queries', context.userPayload.userRecord);
+            const queryEntity = await provider.GetEntityObject<QueryEntityExtended>('MJ: Queries', context.userPayload.userRecord);
             if (!queryEntity || !await queryEntity.Load(input.ID)) {
                 return {
                     Success: false,
@@ -656,7 +656,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
             // now make sure there is NO existing query by the same name in the specified category
             const existingQueryResult = await provider.RunView({
-                EntityName: 'Queries',
+                EntityName: 'MJ: Queries',
                 ExtraFilter: `Name='${input.Name}' AND CategoryID='${finalCategoryID}'` 
             }, context.userPayload.userRecord);
             if (existingQueryResult.Success && existingQueryResult.Results?.length > 0) {
@@ -704,8 +704,8 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             if (input.Permissions !== undefined) {
                 // Delete existing permissions
                 const rv = new RunView();
-                const existingPermissions = await rv.RunView<QueryPermissionEntity>({
-                    EntityName: 'Query Permissions',
+                const existingPermissions = await rv.RunView<MJQueryPermissionEntity>({
+                    EntityName: 'MJ: Query Permissions',
                     ExtraFilter: `QueryID='${queryID}'`,
                     ResultType: 'entity_object'
                 }, context.userPayload.userRecord);
@@ -883,7 +883,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             } else {
                 try {
                     // Create new category
-                    const newCategory = await p.GetEntityObject<QueryCategoryEntity>("Query Categories", contextUser);
+                    const newCategory = await p.GetEntityObject<MJQueryCategoryEntity>("MJ: Query Categories", contextUser);
                     if (!newCategory) {
                         throw new Error(`Failed to create entity object for Query Categories`);
                     }
@@ -954,7 +954,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             const nameFilter = `LOWER(Name) = LOWER('${queryName.replace(/'/g, "''")}')`;
 
             const result = await provider.RunView({
-                EntityName: 'Queries',
+                EntityName: 'MJ: Queries',
                 ExtraFilter: `${nameFilter} AND ${categoryFilter}`
             }, contextUser);
 
@@ -977,14 +977,14 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      * @param contextUser - User context for database operations
      * @returns The matching category entity or null if not found
      */
-    private async findCategoryByNameAndParent(provider: DatabaseProviderBase, categoryName: string, parentID: string | null, contextUser: UserInfo): Promise<QueryCategoryEntity | null> {
+    private async findCategoryByNameAndParent(provider: DatabaseProviderBase, categoryName: string, parentID: string | null, contextUser: UserInfo): Promise<MJQueryCategoryEntity | null> {
         try {
             // Query database directly to avoid cache staleness issues
             const parentFilter = parentID ? `ParentID='${parentID}'` : 'ParentID IS NULL';
             const nameFilter = `LOWER(Name) = LOWER('${categoryName.replace(/'/g, "''")}')`; // Escape single quotes
 
-            const result = await provider.RunView<QueryCategoryEntity>({
-                EntityName: 'Query Categories',
+            const result = await provider.RunView<MJQueryCategoryEntity>({
+                EntityName: 'MJ: Query Categories',
                 ExtraFilter: `${nameFilter} AND ${parentFilter}`,
                 ResultType: 'entity_object'
             }, contextUser);

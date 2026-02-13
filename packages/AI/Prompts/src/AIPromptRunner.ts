@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity, TemplateEntityExtended, AICredentialBindingEntity, CredentialEntity } from '@memberjunction/core-entities';
+import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, TemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -217,7 +217,7 @@ export class AIPromptRunner {
    * @param modelVendor The model vendor to check
    * @returns true if the vendor is an inference provider
    */
-  private isInferenceProvider(modelVendor: AIModelVendorEntity): boolean {
+  private isInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean {
     // Find the inference provider type from cached vendor type definitions
     const inferenceProviderType = AIEngine.Instance.VendorTypeDefinitions.find(
       vt => vt.Name === 'Inference Provider'
@@ -330,7 +330,7 @@ export class AIPromptRunner {
    * Tries each binding in priority order until one succeeds.
    */
   private async tryCredentialBindingsWithFailover(
-    bindings: AICredentialBindingEntity[],
+    bindings: MJAICredentialBindingEntity[],
     source: string,
     params: AIPromptParams,
     verbose: boolean
@@ -366,7 +366,7 @@ export class AIPromptRunner {
    * Attempts to resolve a single credential, returning null on failure for failover support.
    */
   private async tryResolveCredential(
-    credential: CredentialEntity,
+    credential: MJCredentialEntity,
     source: string,
     params: AIPromptParams,
     verbose: boolean,
@@ -458,7 +458,7 @@ export class AIPromptRunner {
   /**
    * Finds a default credential matching a specific credential type.
    */
-  private findDefaultCredentialByType(credentialTypeId: string): CredentialEntity | null {
+  private findDefaultCredentialByType(credentialTypeId: string): MJCredentialEntity | null {
     const credentials = CredentialEngine.Instance.Credentials;
     return credentials.find(c =>
       c.CredentialTypeID === credentialTypeId &&
@@ -1448,7 +1448,7 @@ export class AIPromptRunner {
   }> {
     // Declare variables outside try block for catch block access
     let configurationName: string | undefined;
-    let configuration: AIConfigurationEntity | undefined;
+    let configuration: MJAIConfigurationEntity | undefined;
     
     try {
       // Load AI Engine to access cached models and prompt models
@@ -1482,7 +1482,7 @@ export class AIPromptRunner {
       // Track all models considered for selection info
       const modelsConsidered: Array<{
         model: AIModelEntityExtended;
-        vendor?: AIVendorEntity;
+        vendor?: MJAIVendorEntity;
         priority: number;
         available: boolean;
         unavailableReason?: string;
@@ -1567,7 +1567,7 @@ export class AIPromptRunner {
       const fallbackUsed = candidates.indexOf(selected) > 0;
 
       // Get selected vendor entity
-      let selectedVendor: AIVendorEntity | undefined;
+      let selectedVendor: MJAIVendorEntity | undefined;
       if (selected.vendorId) {
         selectedVendor = AIEngine.Instance.Vendors.find(v => v.ID === selected.vendorId);
       }
@@ -1757,9 +1757,9 @@ export class AIPromptRunner {
    * Supports configuration inheritance - includes models from the entire inheritance chain.
    */
   private filterPromptModelsByConfiguration(
-    allPromptModels: AIPromptModelEntity[],
+    allPromptModels: MJAIPromptModelEntity[],
     configurationId?: string
-  ): AIPromptModelEntity[] {
+  ): MJAIPromptModelEntity[] {
     if (configurationId) {
       // Get the configuration inheritance chain
       const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
@@ -1782,9 +1782,9 @@ export class AIPromptRunner {
    * Within each config level, sorts by priority DESC.
    */
   private sortPromptModelsForSpecificStrategy(
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     configurationId?: string
-  ): AIPromptModelEntity[] {
+  ): MJAIPromptModelEntity[] {
     if (!configurationId) {
       // No config specified - just sort by priority
       return promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
@@ -1813,7 +1813,7 @@ export class AIPromptRunner {
    * Expands VendorID=null to all vendors for that model.
    */
   private buildCandidatesFromPromptModels(
-    promptModels: AIPromptModelEntity[]
+    promptModels: MJAIPromptModelEntity[]
   ): ModelVendorCandidate[] {
     const candidates: ModelVendorCandidate[] = [];
 
@@ -1842,7 +1842,7 @@ export class AIPromptRunner {
    */
   private createCandidateForSpecificVendor(
     model: AIModelEntityExtended,
-    promptModel: AIPromptModelEntity
+    promptModel: MJAIPromptModelEntity
   ): ModelVendorCandidate | null {
     const modelVendor = AIEngine.Instance.ModelVendors.find(
       mv => mv.ModelID === promptModel.ModelID &&
@@ -1921,7 +1921,7 @@ export class AIPromptRunner {
   private getPromptModelsForConfiguration(
     prompt: AIPromptEntityExtended,
     configurationId?: string
-  ): AIPromptModelEntity[] {
+  ): MJAIPromptModelEntity[] {
     if (configurationId) {
       // Get the configuration inheritance chain (child -> parent -> grandparent -> ...)
       const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
@@ -1956,7 +1956,7 @@ export class AIPromptRunner {
    */
   private addPromptSpecificCandidates(
     candidates: ModelVendorCandidate[],
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     preferredVendorId?: string
   ): void {
     for (const pm of promptModels) {
@@ -2202,16 +2202,16 @@ export class AIPromptRunner {
    * TypeScript requires instantiating the class to get the getValidCandidates() method.
    */
   private createSelectionInfo(data: {
-    aiConfiguration?: AIConfigurationEntity;
+    aiConfiguration?: MJAIConfigurationEntity;
     modelsConsidered: Array<{
       model: AIModelEntityExtended;
-      vendor?: AIVendorEntity;
+      vendor?: MJAIVendorEntity;
       priority: number;
       available: boolean;
       unavailableReason?: string;
     }>;
     modelSelected: AIModelEntityExtended;
-    vendorSelected?: AIVendorEntity;
+    vendorSelected?: MJAIVendorEntity;
     selectionReason: string;
     fallbackUsed: boolean;
     selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
@@ -2274,7 +2274,7 @@ export class AIPromptRunner {
     selected: ModelVendorCandidate | null;
     consideredModels: Array<{
       model: AIModelEntityExtended;
-      vendor?: AIVendorEntity;
+      vendor?: MJAIVendorEntity;
       priority: number;
       available: boolean;
       unavailableReason?: string;
@@ -2285,7 +2285,7 @@ export class AIPromptRunner {
     const credentialCache = new Map<string, boolean>();
     const consideredModels: Array<{
       model: AIModelEntityExtended;
-      vendor?: AIVendorEntity;
+      vendor?: MJAIVendorEntity;
       priority: number;
       available: boolean;
       unavailableReason?: string;
@@ -2313,7 +2313,7 @@ export class AIPromptRunner {
       }
 
       // Get vendor entity from AIEngine cache if vendorId is available
-      let vendorEntity: AIVendorEntity | undefined;
+      let vendorEntity: MJAIVendorEntity | undefined;
       if (candidate.vendorId) {
         vendorEntity = AIEngine.Instance.Vendors.find(v => v.ID === candidate.vendorId);
       }
@@ -4833,9 +4833,9 @@ export class AIPromptRunner {
 
         // Secondary sort: context window size (largest first) - only as tiebreaker
         const aMaxTokens = a.model.ModelVendors?.length > 0 ?
-          Math.max(...a.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
+          Math.max(...a.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
         const bMaxTokens = b.model.ModelVendors?.length > 0 ?
-          Math.max(...b.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
+          Math.max(...b.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
 
         return bMaxTokens - aMaxTokens;
       });
@@ -4843,7 +4843,7 @@ export class AIPromptRunner {
       // Log context-aware failover selection
       const bestCandidate = candidates[0];
       const bestCandidateMaxTokens = bestCandidate.model.ModelVendors?.length > 0 ?
-        Math.max(...bestCandidate.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
+        Math.max(...bestCandidate.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
       LogStatusEx({
         message: `🔄 Context-aware failover: Selected model ${bestCandidate.model.Name} with ${bestCandidateMaxTokens} max input tokens (vs ${currentMaxTokens} for failed model)`,
         category: 'AI',

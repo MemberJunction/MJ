@@ -3,7 +3,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { RunView } from '@memberjunction/core';
-import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
+import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
 
 /**
  * Viewer component for JSON artifacts.
@@ -134,7 +134,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
   public htmlBlobUrl: SafeResourceUrl | null = null;
-  private versionAttributes: ArtifactVersionAttributeEntity[] = [];
+  private versionAttributes: MJArtifactVersionAttributeEntity[] = [];
   private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
 
   /**
@@ -197,7 +197,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionAttributeEntity>({
+      const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
         EntityName: 'MJ: Artifact Version Attributes',
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
         ResultType: 'entity_object'

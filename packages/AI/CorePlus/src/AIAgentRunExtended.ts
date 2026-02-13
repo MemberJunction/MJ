@@ -1,10 +1,10 @@
 import { BaseEntity, CompositeKey, LogErrorEx, Metadata } from "@memberjunction/core";
-import { AIAgentRunEntity } from "@memberjunction/core-entities";
+import { MJAIAgentRunEntity } from "@memberjunction/core-entities";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { AIAgentRunStepEntityExtended } from "./AIAgentRunStepExtended";
 
 @RegisterClass(BaseEntity, "MJ: AI Agent Runs")
-export class AIAgentRunEntityExtended extends AIAgentRunEntity {
+export class AIAgentRunEntityExtended extends MJAIAgentRunEntity {
     private _runSteps: AIAgentRunStepEntityExtended[] = [];
 
     /**

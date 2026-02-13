@@ -455,13 +455,13 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
       .attr('x', 0 - (this.height / 2))
       .attr('dy', '1em')
       .style('text-anchor', 'middle')
-      .text('AI Agents');
+      .text('MJ: AI Agents');
 
     g.append('text')
       .attr('class', 'axis-label')
       .attr('transform', `translate(${this.width / 2}, ${this.height + this.margin.bottom - 10})`)
       .style('text-anchor', 'middle')
-      .text('AI Models');
+      .text('MJ: AI Models');
   }
 
   private getMetricValue(data: HeatmapData): number {

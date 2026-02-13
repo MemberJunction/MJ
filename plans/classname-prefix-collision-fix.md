@@ -483,17 +483,39 @@ gantt
 ## Implementation Checklist
 
 ### Database & Views
-- [ ] Write v4.x Flyway migration to rename all unprefixed `__mj` entity names
-- [ ] Update `vwEntities` to incorporate `SchemaInfo.EntityNamePrefix` into `ClassName`
-- [ ] Update `MJ_BASE_BEFORE_SQL.sql` with the new view definition
-- [ ] Update `spCreateSchemaInfo` and `spUpdateSchemaInfo` for any new columns
-- [ ] Verify `vwEntityFields`, `vwEntityRelationships` and other dependent views propagate correctly
+- [x] Write v4.x Flyway migration to rename all unprefixed `__mj` entity names
+  - **File:** `migrations/v4/V202602121500__v4.4.x__Entity_Name_Normalization_And_ClassName_Prefix_Fix.sql`
+  - Includes conflict check, DisplayName preservation, entity rename, vwEntities update, and dependent view refresh
+- [x] Update `vwEntities` to incorporate `SchemaInfo.EntityNamePrefix` into `ClassName`
+  - Both ClassName AND CodeName formulas updated
+  - Created `StripToAlphanumeric()` helper function to clean prefix before concatenation
+- [x] Update `MJ_BASE_BEFORE_SQL.sql` with the new view definition
+  - Added `StripToAlphanumeric` function definition
+  - Updated `vwEntities` with new JOIN to SchemaInfo and prefix-aware formulas
+- [x] `spCreateSchemaInfo` and `spUpdateSchemaInfo` — no changes needed (already updated in prior migration v4.3.x)
+- [x] Verify `vwEntityFields`, `vwEntityRelationships` and other dependent views propagate correctly
+  - `vwEntityFields`, `vwEntityRelationships`, `vwApplicationEntities`, `vwEntitiesWithExternalChangeTracking`, `vwEntitiesWithMissingBaseTables` all covered with `sp_refreshview` calls
+- [x] DisplayName set explicitly for ALL __mj entities (both newly renamed and already-prefixed)
 
-### MJ Codebase
+### MJ Codebase — Phase 2a: Unblock CodeGen
+- [x] Fix entity name references in CodeGen dependency chain (AI Engine, Action Engine, CodeGenLib)
+- [x] Fix `@RegisterClass` decorators in custom entity subclasses (MJCoreEntities/src/custom/)
+- [x] Fix entity name references in MJCoreEntitiesServer custom subclasses
+- [x] Fix entity name references in MJCore (metadata.ts, providerBase.ts)
+- [x] Fix entity name references in SQLServerDataProvider (Audit Logs, Record Changes)
+- [x] Fix entity name references in MJServer (ResolverBase Audit Logs)
+- [x] Fix entity name references in Credentials (CredentialEngine Audit Logs)
+- [x] Fix entity name references in Encryption (EnableFieldEncryption, RotateEncryptionKey)
+- [x] Fix entity name references in AI/MCPClient (Action Categories)
+- [ ] Recompile dependent SQL views/SPs in database (resolves nesting level 32 error)
+- [ ] Rebuild all affected packages
 - [ ] Run CodeGen to regenerate all entity subclasses, resolvers, and Angular forms
-- [ ] Update all entity name string references across the monorepo
-- [ ] Update all `@RegisterClass` decorators
-- [ ] Update all `RunView` / `GetEntityObject` calls
+- [ ] Verify CodeGen runs cleanly
+
+### MJ Codebase — Phase 2b: Remaining Codebase Sweep
+- [ ] Update remaining entity name string references across Angular packages
+- [ ] Update remaining entity name string references across Communication packages
+- [ ] Update remaining entity name string references across other packages
 - [ ] Update metadata JSON files
 - [ ] Verify `getGraphQLTypeNameBase()` alignment with new ClassName values
 - [ ] Run full test suite — fix any broken tests
@@ -515,12 +537,208 @@ gantt
 - [ ] Write CHANGELOG entry
 - [ ] Tag v5.0 release
 
-## Open Questions
+## Implementation Decisions Made
 
-1. **Should `BaseTableCodeName` also get the prefix?** Current recommendation: No. `BaseTableCodeName` is meant to represent the raw table name. Adding prefix there would be redundant with the new `ClassName` and could break SQL generation that uses it for table references.
+### 1. `GetProgrammaticName` replaces non-alphanumeric chars with underscores, not strips them
+**Problem:** Directly concatenating `EntityNamePrefix + BaseTable` and passing to `GetProgrammaticName` produces ugly results: `"MJ: " + "AIModel"` → `"MJ__AIModel"` (colon→underscore, space→underscore).
 
-2. **Should the `CodeName` computation change?** `CodeName` already includes the prefix (via entity `Name`). Once all entity names are prefixed consistently, `CodeName` will automatically be correct. No formula change needed.
+**Solution:** Created a new `StripToAlphanumeric()` SQL function that **removes** non-alphanumeric characters entirely (keeps only `[A-Za-z0-9]`). The prefix is cleaned through this function before concatenation:
+```sql
+StripToAlphanumeric('MJ: ') → 'MJ'
+'MJ' + 'AIModel' → 'MJAIModel'
+GetProgrammaticName('MJAIModel') → 'MJAIModel'  ✓
+```
 
-3. **Should we automatically set `ApplyPrefixToClassName` for new schemas that have a prefix?** Since we're going with the "always apply prefix when present" approach (no opt-in flag), this is moot. The `vwEntities` view unconditionally uses `SchemaInfo.EntityNamePrefix` if present.
+### 2. CodeName formula also updated (not just ClassName)
+**Problem:** The original plan said "CodeName already includes the prefix via entity Name. No formula change needed." But the old formula `GetProgrammaticName(REPLACE(Name, ' ', ''))` would produce `"MJ_AIModels"` (colon→underscore) for "MJ: AI Models".
 
-4. **How do we handle the `DisplayName` column?** When entity Name changes from "AI Models" to "MJ: AI Models", the `DisplayName` (used in UI) may need attention. Currently `DisplayName` is typically null (falls back to Name) or set explicitly. We should verify that Display Names remain user-friendly after the rename — e.g., `DisplayName = 'AI Models'` could stay as-is even when Name becomes `'MJ: AI Models'`, since the display name is what users see in the Explorer UI.
+**Solution:** CodeName now strips the prefix from the entity Name, prepends the cleaned prefix, then removes spaces:
+```sql
+StripToAlphanumeric('MJ: ') + REPLACE(REPLACE('MJ: AI Models', 'MJ: ', ''), ' ', '')
+→ 'MJ' + 'AIModels' → 'MJAIModels'  ✓
+```
+
+### 3. DisplayName set for ALL __mj entities
+- Entities being renamed: `DisplayName = Name` (preserves the old short name, e.g., "AI Models")
+- Entities already prefixed: `DisplayName = SUBSTRING(Name, 5, ...)` (strips "MJ: " prefix, e.g., "AI Prompt Models")
+- This ensures the Explorer UI shows user-friendly names without "MJ: " prefix
+
+### 4. BaseTableCodeName unchanged
+Confirmed the decision: `BaseTableCodeName` remains schema-unaware, derived solely from `BaseTable + NameSuffix`. It's used for SQL table references and should not include the schema prefix.
+
+## Resolved Open Questions
+
+1. **Should `BaseTableCodeName` also get the prefix?** → **No.** Confirmed. (See decision #4)
+
+2. **Should the `CodeName` computation change?** → **Yes!** The plan originally said no, but the `GetProgrammaticName` function turns `:` into `_`, producing ugly `"MJ_AIModels"`. The formula was updated. (See decision #2)
+
+3. **Should we automatically set `ApplyPrefixToClassName`?** → **Moot.** No opt-in flag. The `vwEntities` view unconditionally uses `SchemaInfo.EntityNamePrefix` if present.
+
+4. **How do we handle `DisplayName`?** → **Set explicitly for all entities.** (See decision #3)
+
+---
+
+## Phase 2a Implementation Log — Entity Name Reference Fixes
+
+### Pattern Categories Discovered
+
+When fixing entity name references to unblock CodeGen, we identified these distinct pattern categories that the future AST migration tool must handle:
+
+| # | Pattern | Example | Fix Approach |
+|---|---------|---------|--------------|
+| 1 | `@RegisterClass(BaseEntity, 'EntityName')` | `@RegisterClass(BaseEntity, 'AI Models')` | Decorator string literal |
+| 2 | `EntityName: 'EntityName'` in engine configs | `EntityName: 'AI Models'` in BaseEngine params | Object property string literal |
+| 3 | `GetEntityObject<T>('EntityName', user)` | `md.GetEntityObject('Entities', u)` | Function argument string literal |
+| 4 | `EntityByName('EntityName')` | `md.EntityByName('Users')` | Function argument string literal |
+| 5 | `e.Name === 'EntityName'` | `md.Entities.find(e=>e.Name === 'Entity Fields')` | Comparison string literal |
+| 6 | `EntityName: 'EntityName'` in RunView params | `RunView({EntityName: 'User Views', ...})` | Object property string literal |
+| 7 | `Entity: "EntityName"` in JSON data strings | `JSON.stringify({Entity: "Resource Permissions"})` | String inside JSON construction |
+
+### Category 7 (JSON data strings) is tricky for AST tools:
+The entity name appears inside a JSON string that gets stored as data. The AST tool needs to:
+1. Find `JSON.stringify()` calls or object literals that contain entity name strings
+2. Recognize that these are data values, not direct API calls
+3. Still flag them for update since downstream code reads them back
+
+### Files Changed — Detailed Log
+
+Each entry below documents the exact file, line, old value, and new value. This serves as the
+reference for building the AST migration tool's test suite.
+
+#### AI Engine (BaseAIEngine)
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 119 | `'AI Models'` | `'MJ: AI Models'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 125 | `'AI Model Types'` | `'MJ: AI Model Types'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 130 | `'AI Prompts'` | `'MJ: AI Prompts'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 140 | `'AI Prompt Types'` | `'MJ: AI Prompt Types'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 145 | `'AI Prompt Categories'` | `'MJ: AI Prompt Categories'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 150 | `'Vector Databases'` | `'MJ: Vector Databases'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 155 | `'AI Agent Actions'` | `'MJ: AI Agent Actions'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 160 | `'AI Agent Note Types'` | `'MJ: AI Agent Note Types'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 165 | `'AI Agent Notes'` | `'MJ: AI Agent Notes'` | Engine config EntityName |
+| `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` | 175 | `'AI Agents'` | `'MJ: AI Agents'` | Engine config EntityName |
+
+#### AI CorePlus
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/AI/CorePlus/src/AIModelExtended.ts` | 5 | `'AI Models'` | `'MJ: AI Models'` | @RegisterClass |
+| `packages/AI/CorePlus/src/AIPromptExtended.ts` | 6 | `"AI Prompts"` | `"MJ: AI Prompts"` | @RegisterClass |
+
+#### Action Engine
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/Actions/Base/src/ActionEngine-Base.ts` | 217 | `'Actions'` | `'MJ: Actions'` | Engine config EntityName |
+| `packages/Actions/Base/src/ActionEngine-Base.ts` | 222 | `'Action Categories'` | `'MJ: Action Categories'` | Engine config EntityName |
+| `packages/Actions/Base/src/ActionEngine-Base.ts` | 227 | `'Action Filters'` | `'MJ: Action Filters'` | Engine config EntityName |
+| `packages/Actions/Base/src/ActionEngine-Base.ts` | 232 | `'Action Result Codes'` | `'MJ: Action Result Codes'` | Engine config EntityName |
+| `packages/Actions/Base/src/ActionEngine-Base.ts` | 237 | `'Action Params'` | `'MJ: Action Params'` | Engine config EntityName |
+| `packages/Actions/Base/src/ActionEngine-Base.ts` | 242 | `'Action Libraries'` | `'MJ: Action Libraries'` | Engine config EntityName |
+| `packages/Actions/Base/src/ActionEntity-Extended.ts` | 6 | `'Actions'` | `'MJ: Actions'` | @RegisterClass |
+
+#### CodeGenLib
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/CodeGenLib/src/Database/sql_codegen.ts` | 941 | `'Entities'` | `'MJ: Entities'` | GetEntityObject argument |
+| `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts` | 269 | `'Entity Fields'` | `'MJ: Entity Fields'` | Name comparison |
+| `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts` | 270 | `'Entities'` | `'MJ: Entities'` | Name comparison |
+| `packages/CodeGenLib/src/Misc/createNewUser.ts` | 32 | `'Users'` | `'MJ: Users'` | GetEntityObject argument |
+| `packages/CodeGenLib/src/Misc/createNewUser.ts` | 49 | `'User Roles'` | `'MJ: User Roles'` | GetEntityObject argument |
+
+#### MJCoreEntities (custom subclasses and engines)
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/MJCoreEntities/src/custom/EntityEntityExtended.ts` | 10 | `'Entities'` | `'MJ: Entities'` | @RegisterClass |
+| `packages/MJCoreEntities/src/custom/DashboardEntityExtended.ts` | 6 | `'Dashboards'` | `'MJ: Dashboards'` | @RegisterClass |
+| `packages/MJCoreEntities/src/custom/TemplateEntityExtended.ts` | 5 | `'Templates'` | `'MJ: Templates'` | @RegisterClass |
+| `packages/MJCoreEntities/src/custom/UserViewEntity.ts` | 7 | `'User Views'` | `'MJ: User Views'` | @RegisterClass |
+| `packages/MJCoreEntities/src/custom/UserViewEntity.ts` | 708 | `'User Views'` | `'MJ: User Views'` | RunView EntityName |
+| `packages/MJCoreEntities/src/custom/UserViewEntity.ts` | 724 | `'User Views'` | `'MJ: User Views'` | RunView EntityName |
+| `packages/MJCoreEntities/src/custom/EntityFieldEntityExtended.ts` | 9 | `'Entity Fields'` | `'MJ: Entity Fields'` | @RegisterClass |
+| `packages/MJCoreEntities/src/custom/ResourcePermissions/ResourcePermissionEngine.ts` | 25 | `'Resource Permissions'` | `'MJ: Resource Permissions'` | Engine config EntityName |
+| `packages/MJCoreEntities/src/custom/ResourcePermissions/ResourcePermissionEngine.ts` | 174 | `'Users'` | `'MJ: Users'` | EntityByName argument |
+| `packages/MJCoreEntities/src/custom/ResourcePermissions/ResourcePermissionSubclass.ts` | 9 | `'Resource Permissions'` | `'MJ: Resource Permissions'` | @RegisterClass |
+| `packages/MJCoreEntities/src/custom/ResourcePermissions/ResourcePermissionSubclass.ts` | 55 | `'User Notifications'` | `'MJ: User Notifications'` | GetEntityObject argument |
+| `packages/MJCoreEntities/src/custom/ResourcePermissions/ResourcePermissionSubclass.ts` | 58 | `'Users'` | `'MJ: Users'` | GetEntityObject argument |
+| `packages/MJCoreEntities/src/custom/ResourcePermissions/ResourcePermissionSubclass.ts` | 65 | `"Resource Permissions"` | `"MJ: Resource Permissions"` | JSON data string |
+| `packages/MJCoreEntities/src/engines/dashboards.ts` | 84 | `'Dashboards'` | `'MJ: Dashboards'` | Engine config EntityName |
+| `packages/MJCoreEntities/src/engines/dashboards.ts` | 96 | `'Dashboard Categories'` | `'MJ: Dashboard Categories'` | Engine config EntityName |
+| `packages/MJCoreEntities/src/engines/UserInfoEngine.ts` | 136 | `'User Notifications'` | `'MJ: User Notifications'` | Engine config EntityName |
+| `packages/MJCoreEntities/src/engines/UserInfoEngine.ts` | 148 | `'Workspaces'` | `'MJ: Workspaces'` | Engine config EntityName |
+| `packages/MJCoreEntities/src/engines/UserInfoEngine.ts` | 160 | `'User Applications'` | `'MJ: User Applications'` | Engine config EntityName |
+| `packages/MJCoreEntities/src/engines/UserInfoEngine.ts` | 166 | `'User Favorites'` | `'MJ: User Favorites'` | Engine config EntityName |
+| `packages/MJCoreEntities/src/engines/UserInfoEngine.ts` | 172 | `'User Record Logs'` | `'MJ: User Record Logs'` | Engine config EntityName |
+| `packages/MJCoreEntities/src/engines/UserViewEngine.ts` | 58 | `'User Views'` | `'MJ: User Views'` | Engine config EntityName |
+
+#### MJCoreEntitiesServer
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/MJCoreEntitiesServer/src/custom/ApplicationEntity.server.ts` | 13 | `'Applications'` | `'MJ: Applications'` | @RegisterClass |
+| `packages/MJCoreEntitiesServer/src/custom/ApplicationEntity.server.ts` | 135 | `'Applications'` | `'MJ: Applications'` | RunView EntityName |
+| `packages/MJCoreEntitiesServer/src/custom/AIPromptEntityExtended.server.ts` | 13 | `"AI Prompts"` | `"MJ: AI Prompts"` | @RegisterClass |
+| `packages/MJCoreEntitiesServer/src/custom/AIPromptEntityExtended.server.ts` | 231 | `"Templates"` | `"MJ: Templates"` | GetEntityObject argument |
+| `packages/MJCoreEntitiesServer/src/custom/userViewEntity.server.ts` | 17 | `'User Views'` | `'MJ: User Views'` | @RegisterClass |
+| `packages/MJCoreEntitiesServer/src/custom/QueryEntity.server.ts` | 40 | `'Queries'` | `'MJ: Queries'` | @RegisterClass |
+| `packages/MJCoreEntitiesServer/src/custom/reportEntity.server.ts` | 6 | `'Reports'` | `'MJ: Reports'` | @RegisterClass |
+
+#### MJCore
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/MJCore/src/generic/metadata.ts` | 216 | `"Record Changes"` | `"MJ: Record Changes"` | RunView EntityName |
+
+#### SQLServerDataProvider
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/SQLServerDataProvider/src/SQLServerDataProvider.ts` | 2663 | `'Audit Logs'` | `'MJ: Audit Logs'` | GetEntityObject argument |
+| `packages/SQLServerDataProvider/src/SQLServerDataProvider.ts` | 3152 | `'Record Changes'` | `'MJ: Record Changes'` | Name comparison |
+| `packages/SQLServerDataProvider/src/SQLServerDataProvider.ts` | 4167 | `'Record Changes'` | `'MJ: Record Changes'` | Name comparison |
+
+#### MJServer
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/MJServer/src/generic/ResolverBase.ts` | 882 | `'Audit Logs'` | `'MJ: Audit Logs'` | GetEntityObject argument |
+
+#### Credentials
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/Credentials/Engine/src/CredentialEngine.ts` | 712 | `'Audit Logs'` | `'MJ: Audit Logs'` | GetEntityObject argument |
+
+#### Encryption
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/Encryption/src/actions/EnableFieldEncryptionAction.ts` | 160 | `'Entity Fields'` | `'MJ: Entity Fields'` | RunView EntityName |
+| `packages/Encryption/src/actions/RotateEncryptionKeyAction.ts` | 205 | `'Entity Fields'` | `'MJ: Entity Fields'` | RunView EntityName |
+
+#### AI/MCPClient
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/AI/MCPClient/src/MCPClientManager.ts` | 1009 | `'Action Categories'` | `'MJ: Action Categories'` | RunView EntityName |
+
+#### ExternalChangeDetection
+| File | Line | Old | New | Pattern |
+|------|------|-----|-----|---------|
+| `packages/ExternalChangeDetection/src/ChangeDetector.ts` | 699 | `"Record Changes"` | `"MJ: Record Changes"` | GetEntityObject argument |
+
+### Deferred Items (Not Changed Yet)
+
+These data comparison references compare against **database data values** (ResourceType.Name, ResourceType.Entity), not entity metadata names. They may need updating after CodeGen updates the data, or via a separate data migration:
+
+| File | Line | Code | Reason Deferred |
+|------|------|------|-----------------|
+| `UserViewEntity.ts` | 251 | `rt.Name === 'User Views'` | ResourceType.Name is separate data, not entity name |
+| `UserViewEntity.ts` | 333 | `r.Entity === 'User Views'` | ResourceType.Entity column data may auto-update via CodeGen |
+| `providerBase.ts` | 1591 | `ItemCode: 'Entities'` | Dataset item codes, not entity names |
+| `providerBase.ts` | 1592 | `ItemCode: 'EntityFields'` | Dataset item codes, not entity names |
+
+### Key Insight for AST Tool Design
+
+**Mixed-prefix entities**: Not all entities referenced in code needed updating. Entities that were ALREADY prefixed (created after the "MJ: " convention was established) were left unchanged. The AST tool must:
+1. Query the DB for the rename map (old name → new name)
+2. Only replace exact matches of OLD names
+3. Skip strings that already have the "MJ: " prefix
+
+**Entity count**: Of the ~272 __mj entities, approximately 160+ had their Name changed (gained "MJ: " prefix). The remaining ~110 already had the prefix. The tool must handle this asymmetry.
+
+### SQL Nesting Level Error Resolution
+
+The "Maximum stored procedure, function, trigger, or view nesting level exceeded (limit 32)" error during `spDeleteUnneededEntityFields` execution was caused by stale cached metadata in dependent views/SPs after `vwEntities` was changed to include the SchemaInfo JOIN. **Resolution: recompile all dependent SQL views and stored procedures** in the database. The user is handling this manually via database recompilation.

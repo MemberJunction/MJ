@@ -25,7 +25,7 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    AIPromptEntity: class AIPromptEntity {
+    MJAIPromptEntity: class MJAIPromptEntity {
         TemplateID: string = '';
         ResultSelectorPromptID: string | null = null;
         ID: string | null = null;
@@ -36,7 +36,7 @@ vi.mock('@memberjunction/core-entities', () => ({
         async InnerLoad(key: unknown) { return true; }
         ValidateResultSelectorPromptIDNotEqualID(result: { Errors: unknown[] }) {}
     },
-    TemplateParamEntity: class TemplateParamEntity {
+    MJTemplateParamEntity: class MJTemplateParamEntity {
         TemplateID: string = '';
         Name: string = '';
     }

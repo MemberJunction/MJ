@@ -99,7 +99,7 @@ describe('Metadata', () => {
             Metadata.Provider = mockProvider as never;
             const md = new Metadata();
 
-            await md.GetEntityObject('Users');
+            await md.GetEntityObject('MJ: Users');
 
             // GetEntityObject always passes 3 args: (entityName, loadKey, contextUser)
             expect(mockProvider.GetEntityObject).toHaveBeenCalledWith('Users', undefined, undefined);
@@ -111,7 +111,7 @@ describe('Metadata', () => {
             // contextUser must have the shape: ID, Name, Email, UserRoles
             const contextUser = { ID: 'u-1', Name: 'TestUser', Email: 'test@test.com', UserRoles: [] } as never;
 
-            await md.GetEntityObject('Users', contextUser);
+            await md.GetEntityObject('MJ: Users', contextUser);
 
             // When called with (entityName, contextUser), the overload resolves to
             // provider.GetEntityObject(entityName, undefined, wrappedContextUser)

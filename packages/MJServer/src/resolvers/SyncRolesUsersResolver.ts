@@ -2,7 +2,7 @@ import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } fr
 import { AppContext, UserPayload } from '../types.js';
 import { EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
-import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { MJRoleEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
 @ObjectType()
@@ -124,8 +124,8 @@ export class SyncRolesAndUsersResolver {
             // we iterate through the provided roles and we remove roles that are not in the input and add roles that are new
             // and update roles that already exist
             const rv = new RunView();
-            const result = await rv.RunView<RoleEntity>({
-                EntityName: "Roles",
+            const result = await rv.RunView<MJRoleEntity>({
+                EntityName: "MJ: Roles",
                 ResultType: 'entity_object'
             }, context.userPayload.userRecord);
     
@@ -145,7 +145,7 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    protected async UpdateExistingRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
+    protected async UpdateExistingRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
         // go through the future roles and update any that are in the current roles
         const md = new Metadata();
         let ok: boolean = true;
@@ -160,14 +160,14 @@ export class SyncRolesAndUsersResolver {
         return { Success: ok };
     }
 
-    protected async AddNewRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async AddNewRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // go through the future roles and add any that are not in the current roles
         const md = new Metadata();
         let ok: boolean = true;
 
         for (const add of futureRoles) {
             if (!currentRoles.find(r => r.Name.trim().toLowerCase() === add.Name.trim().toLowerCase())) {
-                const role = await md.GetEntityObject<RoleEntity>("Roles", user);
+                const role = await md.GetEntityObject<MJRoleEntity>("MJ: Roles", user);
                 role.Name = add.Name;
                 role.Description = add.Description;
                 ok = ok && await role.Save();  
@@ -177,7 +177,7 @@ export class SyncRolesAndUsersResolver {
     }
 
 
-    protected async DeleteRemovedRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async DeleteRemovedRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<boolean> {
         const rv = new RunView();
         let ok: boolean = true;
 
@@ -199,12 +199,12 @@ export class SyncRolesAndUsersResolver {
         return this.StandardRoles.find(r => r.toLowerCase() === roleName.toLowerCase()) !== undefined;
     }
 
-    protected async DeleteSingleRole(role: RoleEntity, rv: RunView, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async DeleteSingleRole(role: MJRoleEntity, rv: RunView, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // first, remove all the UserRole records that match this role
         let ok: boolean = true;
 
-        const r2 = await rv.RunView<UserRoleEntity>({
-            EntityName: "User Roles",
+        const r2 = await rv.RunView<MJUserRoleEntity>({
+            EntityName: "MJ: User Roles",
             ExtraFilter: "RoleID = '" + role.ID + "'",
             ResultType: 'entity_object'
         }, user);
@@ -232,8 +232,8 @@ export class SyncRolesAndUsersResolver {
             // first, we sync up the users and then the user roles. 
             // for syncing users we first remove users that are no longer in the input, then we add new users and update existing users
             const rv = new RunView();
-            const result = await rv.RunView<UserEntity>({
-                EntityName: "Users",
+            const result = await rv.RunView<MJUserEntity>({
+                EntityName: "MJ: Users",
                 ResultType: 'entity_object'
             }, context.userPayload.userRecord);
             if (result && result.Success) {
@@ -257,7 +257,7 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    protected async UpdateExistingUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {  
+    protected async UpdateExistingUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {  
         // go through the future users and update any that are in the current users
         let ok: boolean = true;
 
@@ -274,7 +274,7 @@ export class SyncRolesAndUsersResolver {
         }
         return ok;
     }
-    protected async AddNewUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {
+    protected async AddNewUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {
         // add users that are not in the current users
         const md = new Metadata();
         let ok: boolean = true;
@@ -287,7 +287,7 @@ export class SyncRolesAndUsersResolver {
                 ok = ok && await match.Save();  
             }  
             else {
-                const user = await md.GetEntityObject<UserEntity>("Users", userPayload.userRecord);
+                const user = await md.GetEntityObject<MJUserEntity>("MJ: Users", userPayload.userRecord);
                 user.Name = add.Name;
                 user.Type = add.Type;
                 user.Email = add.Email;
@@ -302,7 +302,7 @@ export class SyncRolesAndUsersResolver {
         return ok;
     }
 
-    protected async DeleteRemovedUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async DeleteRemovedUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // remove users that are not in the future users
         const rv = new RunView();
         const md = new Metadata();
@@ -319,12 +319,12 @@ export class SyncRolesAndUsersResolver {
         return ok;
     }
 
-    protected async DeleteSingleUser(user: UserEntity, rv: RunView, u: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async DeleteSingleUser(user: MJUserEntity, rv: RunView, u: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // first, remove all the UserRole records that match this user
         let ok: boolean = true;
 
-        const r2 = await rv.RunView<UserRoleEntity>({
-            EntityName: "User Roles",
+        const r2 = await rv.RunView<MJUserRoleEntity>({
+            EntityName: "MJ: User Roles",
             ExtraFilter: "UserID = '" + user.ID + "'",
             ResultType: 'entity_object'
         }, u);
@@ -349,16 +349,16 @@ export class SyncRolesAndUsersResolver {
         const rv = new RunView();
         const md = new Metadata();
 
-        const p1 = rv.RunView<UserEntity>({
-            EntityName: "Users",
+        const p1 = rv.RunView<MJUserEntity>({
+            EntityName: "MJ: Users",
             ResultType: 'entity_object'
         }, u);
-        const p2 = rv.RunView<RoleEntity>({
-            EntityName: "Roles",
+        const p2 = rv.RunView<MJRoleEntity>({
+            EntityName: "MJ: Roles",
             ResultType: 'entity_object'
         }, u);
-        const p3 = rv.RunView<UserRoleEntity>({
-            EntityName: "User Roles",
+        const p3 = rv.RunView<MJUserRoleEntity>({
+            EntityName: "MJ: User Roles",
             ResultType: 'entity_object'
         }, u);
 
@@ -384,7 +384,7 @@ export class SyncRolesAndUsersResolver {
                             // now we need to make sure there is a user role that matches this user and role
                             if (!dbUserRoles.find(ur => ur.UserID === dbUser.ID && ur.RoleID === dbRole.ID)) {
                                 // we need to add a user role
-                                const ur = await md.GetEntityObject<UserRoleEntity>("User Roles", u);
+                                const ur = await md.GetEntityObject<MJUserRoleEntity>("MJ: User Roles", u);
                                 ur.UserID = dbUser.ID;
                                 ur.RoleID = dbRole.ID;
                                 ok = ok && await ur.Save();  

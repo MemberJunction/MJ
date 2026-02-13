@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, AfterViewInit, ComponentFactoryResolver, Injector, Output, EventEmitter, ChangeDetectorRef, OnDestroy, ElementRef } from '@angular/core';
-import { ConversationArtifactEntity, ArtifactTypeEntity, ConversationArtifactVersionEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationArtifactEntity, MJArtifactTypeEntity, MJConversationArtifactVersionEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { RunView, LogError, LogStatus } from '@memberjunction/core';
 import { DataContext } from '@memberjunction/data-context';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -53,17 +53,17 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   }>();
   
   public isLoading: boolean = false;
-  public artifact: ConversationArtifactEntity | null = null;
-  public artifactVersion: ConversationArtifactVersionEntity | null = null;
+  public artifact: MJConversationArtifactEntity | null = null;
+  public artifactVersion: MJConversationArtifactVersionEntity | null = null;
   public artifactType: any = null;
   public contentType: string = '';
   public displayContent: any = null;
   public error: string | null = null;
-  public artifactVersions: ConversationArtifactVersionEntity[] = [];
+  public artifactVersions: MJConversationArtifactVersionEntity[] = [];
   public selectedVersionId: string = '';
   public showVersionDropdown: boolean = false;
   private reportComponentRef: ComponentRef<any> | null = null;
-  public conversationDetailRecord: ConversationDetailEntity | null = null;
+  public conversationDetailRecord: MJConversationDetailEntity | null = null;
 
   // Component feedback properties
   public showFeedbackPanel = false;
@@ -126,7 +126,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       const provider = this.ProviderToUse;
       
       // Load the artifact
-      const artifactEntity = await provider.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', provider.CurrentUser);
+      const artifactEntity = await provider.GetEntityObject<MJConversationArtifactEntity>('MJ: Conversation Artifacts', provider.CurrentUser);
       if (!await artifactEntity.Load(this.ArtifactID)) {
         throw new Error(`Failed to load artifact: ${artifactEntity.LatestResult.CompleteMessage}`);
       }
@@ -134,7 +134,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       this.artifact = artifactEntity;
       
       // Load the artifact type
-      const artifactTypeEntity = await provider.GetEntityObject<ArtifactTypeEntity>('MJ: Artifact Types', provider.CurrentUser);
+      const artifactTypeEntity = await provider.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types', provider.CurrentUser);
       if (!await artifactTypeEntity.Load(this.artifact.ArtifactTypeID)) {
         throw new Error(`Failed to load artifact type: ${artifactTypeEntity.LatestResult.CompleteMessage}`);
       }
@@ -189,7 +189,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
    */
   private async loadArtifactVersions(): Promise<void> {
     const runView = new RunView(this.RunViewToUse);
-    const versionResult = await runView.RunView<ConversationArtifactVersionEntity>({
+    const versionResult = await runView.RunView<MJConversationArtifactVersionEntity>({
       EntityName: 'MJ: Conversation Artifact Versions',
       ResultType: 'entity_object',
       OrderBy: 'Version DESC',
@@ -375,8 +375,8 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
     try {
       // Get the conversation detail record
       const runView = new RunView(this.RunViewToUse);
-      const detailsResult = await runView.RunView<ConversationDetailEntity>({
-        EntityName: 'Conversation Details',
+      const detailsResult = await runView.RunView<MJConversationDetailEntity>({
+        EntityName: 'MJ: Conversation Details',
         ResultType: 'entity_object',
         ExtraFilter: `ArtifactID = '${this.artifact.ID}' ${this.artifactVersion ? `AND ArtifactVersionID = '${this.artifactVersion.ID}'` : ''}`,
         OrderBy: '__mj_CreatedAt DESC' // Get most recent first

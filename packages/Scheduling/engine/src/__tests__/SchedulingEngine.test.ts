@@ -25,7 +25,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    ScheduledJobEntity: class {
+    MJScheduledJobEntity: class {
         ID = '';
         Name = '';
         Status = '';
@@ -54,7 +54,7 @@ vi.mock('@memberjunction/core-entities', () => ({
         Save = vi.fn().mockResolvedValue(true);
         Load = vi.fn().mockResolvedValue(true);
     },
-    ScheduledJobRunEntity: class {
+    MJScheduledJobRunEntity: class {
         ID = 'run-123';
         ScheduledJobID = '';
         ExecutedByUserID = '';

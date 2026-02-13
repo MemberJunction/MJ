@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Component, NgZone, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { ApplicationEntity, ApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJApplicationEntity, MJApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { ApplicationDialogData, ApplicationDialogResult } from './application-dialog/application-dialog.component';
@@ -28,14 +28,14 @@ interface FilterOptions {
 @RegisterClass(BaseDashboard, 'ApplicationManagement')
 export class ApplicationManagementComponent extends BaseDashboard implements OnDestroy {
   // State management
-  public applications: ApplicationEntity[] = [];
-  public filteredApplications: ApplicationEntity[] = [];
-  public selectedApp: ApplicationEntity | null = null;
+  public applications: MJApplicationEntity[] = [];
+  public filteredApplications: MJApplicationEntity[] = [];
+  public selectedApp: MJApplicationEntity | null = null;
   public isLoading = false;
   public error: string | null = null;
 
   // Application entities mapping
-  public appEntities: Map<string, ApplicationEntityEntity[]> = new Map();
+  public appEntities: Map<string, MJApplicationEntityEntity[]> = new Map();
 
   // Stats
   public stats: AppStats = {
@@ -109,10 +109,10 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     }
   }
 
-  private async loadApplications(): Promise<ApplicationEntity[]> {
+  private async loadApplications(): Promise<MJApplicationEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<ApplicationEntity>({
-      EntityName: 'Applications',
+    const result = await rv.RunView<MJApplicationEntity>({
+      EntityName: 'MJ: Applications',
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
@@ -120,10 +120,10 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     return result.Success ? result.Results : [];
   }
   
-  private async loadApplicationEntities(): Promise<ApplicationEntityEntity[]> {
+  private async loadApplicationEntities(): Promise<MJApplicationEntityEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<ApplicationEntityEntity>({
-      EntityName: 'Application Entities',
+    const result = await rv.RunView<MJApplicationEntityEntity>({
+      EntityName: 'MJ: Application Entities',
       ResultType: 'entity_object',
       OrderBy: 'ApplicationID, Sequence'
     });
@@ -131,7 +131,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     return result.Success ? result.Results : [];
   }
   
-  private processApplicationEntities(appEntities: ApplicationEntityEntity[]): void {
+  private processApplicationEntities(appEntities: MJApplicationEntityEntity[]): void {
     this.appEntities.clear();
     
     for (const appEntity of appEntities) {
@@ -223,7 +223,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     return this.expandedAppId === appId;
   }
   
-  public getAppEntities(appId: string): ApplicationEntityEntity[] {
+  public getAppEntities(appId: string): MJApplicationEntityEntity[] {
     return this.appEntities.get(appId) || [];
   }
   
@@ -238,7 +238,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     this.showApplicationDialog = true;
   }
   
-  public editApplication(app: ApplicationEntity): void {
+  public editApplication(app: MJApplicationEntity): void {
     this.applicationDialogData = {
       application: app,
       mode: 'edit'
@@ -246,7 +246,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     this.showApplicationDialog = true;
   }
   
-  public confirmDeleteApplication(app: ApplicationEntity): void {
+  public confirmDeleteApplication(app: MJApplicationEntity): void {
     this.selectedApp = app;
     this.showDeleteConfirm = true;
   }
@@ -291,7 +291,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     }
   }
   
-  public getAppIcon(app: ApplicationEntity): string {
+  public getAppIcon(app: MJApplicationEntity): string {
     // Map application names to appropriate icons based on their purpose
     const name = (app.Name || '').toLowerCase();
 
@@ -343,12 +343,12 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     return 'fa-grid-2';
   }
   
-  public getAppStatusClass(app: ApplicationEntity): string {
+  public getAppStatusClass(app: MJApplicationEntity): string {
     // For now, all apps are considered active
     return 'status-active';
   }
   
-  public getAppStatusLabel(app: ApplicationEntity): string {
+  public getAppStatusLabel(app: MJApplicationEntity): string {
     // For now, all apps are considered active
     return 'Active';
   }

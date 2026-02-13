@@ -84,13 +84,13 @@ import { QueryParameterProcessor } from './queryParameterProcessor';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import {
-  AuditLogEntity,
-  DuplicateRunEntity,
-  EntityAIActionEntity,
-  ListEntity,
-  RecordMergeDeletionLogEntity,
-  RecordMergeLogEntity,
-  UserFavoriteEntity,
+  MJAuditLogEntity,
+  MJDuplicateRunEntity,
+  MJEntityAIActionEntity,
+  MJListEntity,
+  MJRecordMergeDeletionLogEntity,
+  MJRecordMergeLogEntity,
+  MJUserFavoriteEntity,
   UserViewEntityExtended,
   ViewInfo,
 } from '@memberjunction/core-entities';
@@ -2648,7 +2648,7 @@ export class SQLServerDataProvider
     recordId: any | null,
     auditLogDescription: string | null,
     saveOptions: EntitySaveOptions
-  ): Promise<AuditLogEntity> {
+  ): Promise<MJAuditLogEntity> {
     try {
       const authorization = authorizationName
         ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase())
@@ -2660,7 +2660,7 @@ export class SQLServerDataProvider
         throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
       }
 
-      const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
+      const auditLog = await this.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = user.ID;
       auditLog.AuditLogTypeID = auditLogType.ID;
@@ -2738,7 +2738,7 @@ export class SQLServerDataProvider
 
       // if we're here that means we need to invert the status, which either means creating a record or deleting a record
       const e = this.Entities.find((e) => e.Name === entityName);
-      const ufEntity = <UserFavoriteEntity>await this.GetEntityObject('User Favorites', contextUser || this.CurrentUser);
+      const ufEntity = <MJUserFavoriteEntity>await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
       if (currentFavoriteId !== null) {
         // delete the record since we are setting isFavorite to FALSE
         await ufEntity.Load(currentFavoriteId);
@@ -2924,14 +2924,14 @@ export class SQLServerDataProvider
       throw new Error('User context is required to get record duplicates.');
     }
 
-    const listEntity: ListEntity = await this.GetEntityObject<ListEntity>('Lists');
+    const listEntity: MJListEntity = await this.GetEntityObject<MJListEntity>('MJ: Lists');
     listEntity.ContextCurrentUser = contextUser;
     const success = await listEntity.Load(params.ListID);
     if (!success) {
       throw new Error(`List with ID ${params.ListID} not found.`);
     }
 
-    const duplicateRun: DuplicateRunEntity = await this.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
+    const duplicateRun: MJDuplicateRunEntity = await this.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
     duplicateRun.NewRecord();
     duplicateRun.EntityID = params.EntityID;
     duplicateRun.StartedByUserID = contextUser.ID;
@@ -2966,7 +2966,7 @@ export class SQLServerDataProvider
       Request: request,
       OverallStatus: null,
     };
-    const mergeRecordLog: RecordMergeLogEntity = await this.StartMergeLogging(request, result, contextUser);
+    const mergeRecordLog: MJRecordMergeLogEntity = await this.StartMergeLogging(request, result, contextUser);
     try {
       /*
                 we will follow this process...
@@ -3050,10 +3050,10 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<RecordMergeLogEntity> {
+  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<MJRecordMergeLogEntity> {
     try {
       // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
-      const recordMergeLog = <RecordMergeLogEntity>await this.GetEntityObject('Record Merge Logs', contextUser);
+      const recordMergeLog = <MJRecordMergeLogEntity>await this.GetEntityObject('MJ: Record Merge Logs', contextUser);
       const entity = this.Entities.find((e) => e.Name === request.EntityName);
       if (!entity) throw new Error(`Entity ${result.Request.EntityName} not found in metadata`);
       if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
@@ -3076,7 +3076,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async CompleteMergeLogging(recordMergeLog: RecordMergeLogEntity, result: RecordMergeResult, contextUser?: UserInfo) {
+  protected async CompleteMergeLogging(recordMergeLog: MJRecordMergeLogEntity, result: RecordMergeResult, contextUser?: UserInfo) {
     try {
       // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
       if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
@@ -3089,7 +3089,7 @@ export class SQLServerDataProvider
       if (await recordMergeLog.Save()) {
         // top level saved, now let's create the deletion detail records for each of the records that were merged
         for (const d of result.RecordStatus) {
-          const recordMergeDeletionLog = <RecordMergeDeletionLogEntity>await this.GetEntityObject('Record Merge Deletion Logs', contextUser);
+          const recordMergeDeletionLog = <MJRecordMergeDeletionLogEntity>await this.GetEntityObject('MJ: Record Merge Deletion Logs', contextUser);
           recordMergeDeletionLog.NewRecord();
           recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
           recordMergeDeletionLog.DeletedRecordID = d.CompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
@@ -3149,7 +3149,7 @@ export class SQLServerDataProvider
       sSimpleSQL = execSQL;
     }
     
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
+    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
     let sSQL: string = '';
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
@@ -3214,7 +3214,7 @@ export class SQLServerDataProvider
    * @returns Array of AI action entities
    * @internal
    */
-  protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): EntityAIActionEntity[] {
+  protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): MJEntityAIActionEntity[] {
     return AIEngine.Instance.EntityAIActions.filter(
       (a) => a.EntityID === entityInfo.ID && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'),
     );
@@ -4164,7 +4164,7 @@ export class SQLServerDataProvider
       return `@${f.CodeName}=${quotes}${kv.Value}${quotes}`;
     }).join(', ');
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
+    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
 
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity

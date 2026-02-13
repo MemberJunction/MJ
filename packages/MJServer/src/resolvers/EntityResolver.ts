@@ -34,7 +34,7 @@ export class EntityResolver extends MJEntityResolverBase {
     }
     const rv = provider as any as IRunViewProvider;
     const result = await rv.RunView({
-      EntityName: 'Entities',
+      EntityName: 'MJ: Entities',
       ExtraFilter: totalWhere,
     }, userPayload.userRecord);
     if (result && result.Success) {

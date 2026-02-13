@@ -1,29 +1,29 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { AIActionEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity,
-         AIModelActionEntity,
-         AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity,
-         ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
-         AIAgentPromptEntity,
-         AIAgentTypeEntity,
-         AIVendorEntity,
-         AIModelVendorEntity,
-         AIModelTypeEntity,
-         AIModelCostEntity,
-         AIModelPriceTypeEntity,
-         AIModelPriceUnitTypeEntity,
-         AIConfigurationEntity,
-         AIConfigurationParamEntity,
-         AIAgentStepEntity,
-         AIAgentStepPathEntity,
-         AIAgentRelationshipEntity,
-         AIAgentPermissionEntity,
-         AIAgentDataSourceEntity,
-         AIAgentConfigurationEntity,
-         AIAgentExampleEntity,
-         AICredentialBindingEntity,
-         AIModalityEntity,
-         AIAgentModalityEntity,
-         AIModelModalityEntity} from "@memberjunction/core-entities";
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+         MJAIModelActionEntity,
+         MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
+         MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity,
+         MJAIAgentPromptEntity,
+         MJAIAgentTypeEntity,
+         MJAIVendorEntity,
+         MJAIModelVendorEntity,
+         MJAIModelTypeEntity,
+         MJAIModelCostEntity,
+         MJAIModelPriceTypeEntity,
+         MJAIModelPriceUnitTypeEntity,
+         MJAIConfigurationEntity,
+         MJAIConfigurationParamEntity,
+         MJAIAgentStepEntity,
+         MJAIAgentStepPathEntity,
+         MJAIAgentRelationshipEntity,
+         MJAIAgentPermissionEntity,
+         MJAIAgentDataSourceEntity,
+         MJAIAgentConfigurationEntity,
+         MJAIAgentExampleEntity,
+         MJAICredentialBindingEntity,
+         MJAIModalityEntity,
+         MJAIAgentModalityEntity,
+         MJAIModelModalityEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { AIPromptEntityExtended, AIPromptCategoryEntityExtended, AIModelEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
@@ -73,61 +73,61 @@ const DEFAULT_MAX_DIMENSION = 4096;
 @RegisterForStartup()
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: AIModelEntityExtended[] = [];
-    private _modelTypes: AIModelTypeEntity[] = [];
-    private _vectorDatabases: VectorDatabaseEntity[] = [];
+    private _modelTypes: MJAIModelTypeEntity[] = [];
+    private _vectorDatabases: MJVectorDatabaseEntity[] = [];
     private _prompts: AIPromptEntityExtended[] = [];
-    private _promptModels: AIPromptModelEntity[] = [];
-    private _promptTypes: AIPromptTypeEntity[] = [];
+    private _promptModels: MJAIPromptModelEntity[] = [];
+    private _promptTypes: MJAIPromptTypeEntity[] = [];
     private _promptCategories: AIPromptCategoryEntityExtended[] = [];
-    private _agentActions: AIAgentActionEntity[] = [];
-    private _agentPrompts: AIAgentPromptEntity[] = [];
-    private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
-    private _agentNotes: AIAgentNoteEntity[] = [];
-    private _agentExamples: AIAgentExampleEntity[] = [];
-    private _agentDataSources: AIAgentDataSourceEntity[] = [];
+    private _agentActions: MJAIAgentActionEntity[] = [];
+    private _agentPrompts: MJAIAgentPromptEntity[] = [];
+    private _agentNoteTypes: MJAIAgentNoteTypeEntity[] = [];
+    private _agentNotes: MJAIAgentNoteEntity[] = [];
+    private _agentExamples: MJAIAgentExampleEntity[] = [];
+    private _agentDataSources: MJAIAgentDataSourceEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
-    private _agentRelationships: AIAgentRelationshipEntity[] = [];
-    private _agentTypes: AIAgentTypeEntity[] = [];
-    private _artifactTypes: ArtifactTypeEntity[] = [];
-    private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
-    private _vendors: AIVendorEntity[] = [];
-    private _modelVendors: AIModelVendorEntity[] = [];
-    private _modelCosts: AIModelCostEntity[] = [];
-    private _modelPriceTypes: AIModelPriceTypeEntity[] = [];
-    private _modelPriceUnitTypes: AIModelPriceUnitTypeEntity[] = [];
-    private _configurations: AIConfigurationEntity[] = [];
-    private _configurationParams: AIConfigurationParamEntity[] = [];
-    private _agentSteps: AIAgentStepEntity[] = [];
-    private _agentStepPaths: AIAgentStepPathEntity[] = [];
-    private _agentPermissions: AIAgentPermissionEntity[] = [];
-    private _agentConfigurations: AIAgentConfigurationEntity[] = [];
-    private _credentialBindings: AICredentialBindingEntity[] = [];
-    private _modalities: AIModalityEntity[] = [];
-    private _agentModalities: AIAgentModalityEntity[] = [];
-    private _modelModalities: AIModelModalityEntity[] = [];
+    private _agentRelationships: MJAIAgentRelationshipEntity[] = [];
+    private _agentTypes: MJAIAgentTypeEntity[] = [];
+    private _artifactTypes: MJArtifactTypeEntity[] = [];
+    private _vendorTypeDefinitions: MJAIVendorTypeDefinitionEntity[] = [];
+    private _vendors: MJAIVendorEntity[] = [];
+    private _modelVendors: MJAIModelVendorEntity[] = [];
+    private _modelCosts: MJAIModelCostEntity[] = [];
+    private _modelPriceTypes: MJAIModelPriceTypeEntity[] = [];
+    private _modelPriceUnitTypes: MJAIModelPriceUnitTypeEntity[] = [];
+    private _configurations: MJAIConfigurationEntity[] = [];
+    private _configurationParams: MJAIConfigurationParamEntity[] = [];
+    private _agentSteps: MJAIAgentStepEntity[] = [];
+    private _agentStepPaths: MJAIAgentStepPathEntity[] = [];
+    private _agentPermissions: MJAIAgentPermissionEntity[] = [];
+    private _agentConfigurations: MJAIAgentConfigurationEntity[] = [];
+    private _credentialBindings: MJAICredentialBindingEntity[] = [];
+    private _modalities: MJAIModalityEntity[] = [];
+    private _agentModalities: MJAIAgentModalityEntity[] = [];
+    private _modelModalities: MJAIModelModalityEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
-     * Key: configurationId, Value: array of AIConfigurationEntity from child to root
+     * Key: configurationId, Value: array of MJAIConfigurationEntity from child to root
      */
-    private _configurationChainCache: Map<string, AIConfigurationEntity[]> = new Map();
+    private _configurationChainCache: Map<string, MJAIConfigurationEntity[]> = new Map();
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
             {
                 PropertyName: '_models',
-                EntityName: 'AI Models',
+                EntityName: 'MJ: AI Models',
                 CacheLocal: true
                 
             },
             {
                 PropertyName: '_modelTypes',
-                EntityName: 'AI Model Types',
+                EntityName: 'MJ: AI Model Types',
                 CacheLocal: true
             },
             {
                 PropertyName: '_prompts',
-                EntityName: 'AI Prompts',
+                EntityName: 'MJ: AI Prompts',
                 CacheLocal: true
             },
             {
@@ -137,32 +137,32 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             },
             {
                 PropertyName: '_promptTypes',
-                EntityName: 'AI Prompt Types',
+                EntityName: 'MJ: AI Prompt Types',
                 CacheLocal: true
             },
             {
                 PropertyName: '_promptCategories',
-                EntityName: 'AI Prompt Categories',
+                EntityName: 'MJ: AI Prompt Categories',
                 CacheLocal: true
             },
             {
                 PropertyName: '_vectorDatabases',
-                EntityName: 'Vector Databases',
+                EntityName: 'MJ: Vector Databases',
                 CacheLocal: true
             },
             {
                 PropertyName: '_agentActions',
-                EntityName: 'AI Agent Actions',
+                EntityName: 'MJ: AI Agent Actions',
                 CacheLocal: true
             },
             {
                 PropertyName: '_agentNoteTypes',
-                EntityName: 'AI Agent Note Types',
+                EntityName: 'MJ: AI Agent Note Types',
                 CacheLocal: true
             },
             {
                 PropertyName: '_agentNotes',
-                EntityName: 'AI Agent Notes',
+                EntityName: 'MJ: AI Agent Notes',
                 CacheLocal: true
             },
             {
@@ -172,7 +172,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             },
             {
                 PropertyName: '_agents',
-                EntityName: 'AI Agents',
+                EntityName: 'MJ: AI Agents',
                 CacheLocal: true
             },
             {
@@ -305,22 +305,22 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         // handle association agent actions, models, and notes with agents
         for(const agent of this._agents){
-            this._agentActions.filter((action: AIAgentActionEntity) => {
+            this._agentActions.filter((action: MJAIAgentActionEntity) => {
                 return action.AgentID === agent.ID;
-            }).forEach((action: AIAgentActionEntity) => {
+            }).forEach((action: MJAIAgentActionEntity) => {
                 agent.Actions.push(action);
             });
 
-            this._agentNotes.filter((note: AIAgentNoteEntity) => {
+            this._agentNotes.filter((note: MJAIAgentNoteEntity) => {
                 return note.AgentID === agent.ID;
-            }).forEach((note: AIAgentNoteEntity) => {
+            }).forEach((note: MJAIAgentNoteEntity) => {
                 agent.Notes.push(note);
             });
         }
 
         for (const model of this._models) {
             this._modelVendors.filter(mv => mv.ModelID === model.ID)
-            .forEach((mv: AIModelVendorEntity) => {
+            .forEach((mv: MJAIModelVendorEntity) => {
                 model.ModelVendors.push(mv);
             });
         }
@@ -371,9 +371,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param modelID - The ID of the AI model
      * @param vendorID - The ID of the vendor
      * @param processingType - 'Realtime' or 'Batch' (defaults to 'Realtime')
-     * @returns The active AIModelCostEntity or null if none found
+     * @returns The active MJAIModelCostEntity or null if none found
      */
-    public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): AIModelCostEntity | null {
+    public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): MJAIModelCostEntity | null {
         const now = new Date();
         const activeCosts = this._modelCosts.filter(cost => 
             cost.ModelID === modelID && 
@@ -401,7 +401,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agents;
     }
 
-    public get AgentRelationships(): AIAgentRelationshipEntity[] {
+    public get AgentRelationships(): MJAIAgentRelationshipEntity[] {
         return this._agentRelationships;
     }
 
@@ -418,7 +418,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     public GetSubAgents(
         agentID: string,
         status?: AIAgentEntityExtended['Status'],
-        relationshipStatus?: AIAgentRelationshipEntity['Status']
+        relationshipStatus?: MJAIAgentRelationshipEntity['Status']
     ): AIAgentEntityExtended[] {
         // Get child agents (ParentID relationship)
         const childAgents = this._agents.filter(a =>
@@ -452,7 +452,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return allSubAgents;
     }
 
-    public get AgentTypes(): AIAgentTypeEntity[] {
+    public get AgentTypes(): MJAIAgentTypeEntity[] {
         return this._agentTypes;
     }
 
@@ -460,11 +460,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
     }
 
-    public get AgentActions(): AIAgentActionEntity[] {
+    public get AgentActions(): MJAIAgentActionEntity[] {
         return this._agentActions;
     }
 
-    public get AgentPrompts(): AIAgentPromptEntity[] {
+    public get AgentPrompts(): MJAIAgentPromptEntity[] {
         return this._agentPrompts;
     }
 
@@ -472,7 +472,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Cached array of AI Agent Configurations loaded from the database.
      * These define semantic presets for agents (e.g., "Fast", "High Quality").
      */
-    public get AgentConfigurations(): AIAgentConfigurationEntity[] {
+    public get AgentConfigurations(): MJAIAgentConfigurationEntity[] {
         return this._agentConfigurations;
     }
 
@@ -482,7 +482,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param activeOnly If true, only returns Active status presets (default: true)
      * @returns Array of configuration presets sorted by Priority
      */
-    public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): AIAgentConfigurationEntity[] {
+    public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
         let presets = this._agentConfigurations.filter(ac => ac.AgentID === agentId);
 
         if (activeOnly) {
@@ -497,7 +497,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param agentId The agent ID
      * @returns The default preset, or undefined if none exists
      */
-    public GetDefaultAgentConfigurationPreset(agentId: string): AIAgentConfigurationEntity | undefined {
+    public GetDefaultAgentConfigurationPreset(agentId: string): MJAIAgentConfigurationEntity | undefined {
         const presets = this.GetAgentConfigurationPresets(agentId, true);
         return presets.find(ac => ac.IsDefault);
     }
@@ -508,7 +508,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param presetName The preset name (e.g., "Fast", "HighQuality")
      * @returns The configuration preset, or undefined if not found
      */
-    public GetAgentConfigurationPresetByName(agentId: string, presetName: string): AIAgentConfigurationEntity | undefined {
+    public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
         return this._agentConfigurations.find(
             ac => ac.AgentID === agentId &&
                   ac.Name === presetName &&
@@ -516,11 +516,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         );
     }
 
-    public get AgentNoteTypes(): AIAgentNoteTypeEntity[] {
+    public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] {
         return this._agentNoteTypes;
     }
 
-    public get AgentPermissions(): AIAgentPermissionEntity[] {
+    public get AgentPermissions(): MJAIAgentPermissionEntity[] {
         return this._agentPermissions;
     }
 
@@ -528,27 +528,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentNoteTypes.find(a => a.Name.trim().toLowerCase() === agentNoteTypeName.trim().toLowerCase())?.ID;
     }
 
-    public get AgentNotes(): AIAgentNoteEntity[] {
+    public get AgentNotes(): MJAIAgentNoteEntity[] {
         return this._agentNotes;
     }
 
-    public get AgentExamples(): AIAgentExampleEntity[] {
+    public get AgentExamples(): MJAIAgentExampleEntity[] {
         return this._agentExamples;
     }
 
-    public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] {
+    public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] {
         return this._vendorTypeDefinitions;
     }
 
-    public get Vendors(): AIVendorEntity[] {
+    public get Vendors(): MJAIVendorEntity[] {
         return this._vendors;
     }
 
-    public get ModelVendors(): AIModelVendorEntity[] {
+    public get ModelVendors(): MJAIModelVendorEntity[] {
         return this._modelVendors;
     }
 
-    public get CredentialBindings(): AICredentialBindingEntity[] {
+    public get CredentialBindings(): MJAICredentialBindingEntity[] {
         return this._credentialBindings;
     }
 
@@ -562,7 +562,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     public GetCredentialBindingsForTarget(
         bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
         targetId: string
-    ): AICredentialBindingEntity[] {
+    ): MJAICredentialBindingEntity[] {
         return this._credentialBindings
             .filter(b => {
                 if (!b.IsActive) return false;
@@ -595,7 +595,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this.GetCredentialBindingsForTarget(bindingType, targetId).length > 0;
     }
 
-    public get ModelTypes(): AIModelTypeEntity[] {
+    public get ModelTypes(): MJAIModelTypeEntity[] {
         return this._modelTypes;
     }
 
@@ -603,11 +603,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._prompts;
     }
 
-    public get PromptModels(): AIPromptModelEntity[] {
+    public get PromptModels(): MJAIPromptModelEntity[] {
         return this._promptModels;
     }
 
-    public get PromptTypes(): AIPromptTypeEntity[] {
+    public get PromptTypes(): MJAIPromptTypeEntity[] {
         return this._promptTypes;
     }
 
@@ -619,7 +619,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._models;
     }
 
-    public get ArtifactTypes(): ArtifactTypeEntity[] {
+    public get ArtifactTypes(): MJArtifactTypeEntity[] {
         return this._artifactTypes;
     }
 
@@ -630,27 +630,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm');
     }
 
-    public get VectorDatabases(): VectorDatabaseEntity[] {
+    public get VectorDatabases(): MJVectorDatabaseEntity[] {
         return this._vectorDatabases;
     }
 
-    public get ModelCosts(): AIModelCostEntity[] {
+    public get ModelCosts(): MJAIModelCostEntity[] {
         return this._modelCosts;
     }
 
-    public get ModelPriceTypes(): AIModelPriceTypeEntity[] {
+    public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] {
         return this._modelPriceTypes;
     }
 
-    public get ModelPriceUnitTypes(): AIModelPriceUnitTypeEntity[] {
+    public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] {
         return this._modelPriceUnitTypes;
     }
 
-    public get Configurations(): AIConfigurationEntity[] {
+    public get Configurations(): MJAIConfigurationEntity[] {
         return this._configurations;
     }
 
-    public get ConfigurationParams(): AIConfigurationParamEntity[] {
+    public get ConfigurationParams(): MJAIConfigurationParamEntity[] {
         return this._configurationParams;
     }
 
@@ -659,7 +659,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param configurationId - The ID of the configuration
      * @returns Array of configuration parameters for the specified configuration
      */
-    public GetConfigurationParams(configurationId: string): AIConfigurationParamEntity[] {
+    public GetConfigurationParams(configurationId: string): MJAIConfigurationParamEntity[] {
         return this._configurationParams.filter(p => p.ConfigurationID === configurationId);
     }
 
@@ -669,7 +669,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param paramName - The name of the parameter
      * @returns The parameter entity or null if not found
      */
-    public GetConfigurationParam(configurationId: string, paramName: string): AIConfigurationParamEntity | null {
+    public GetConfigurationParam(configurationId: string, paramName: string): MJAIConfigurationParamEntity | null {
         return this._configurationParams.find(p =>
             p.ConfigurationID === configurationId &&
             p.Name.toLowerCase() === paramName.toLowerCase()
@@ -687,7 +687,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * are reloaded via Config().
      *
      * @param configurationId - The ID of the configuration to get the chain for
-     * @returns Array of AIConfigurationEntity objects representing the inheritance chain,
+     * @returns Array of MJAIConfigurationEntity objects representing the inheritance chain,
      *          or empty array if the configuration is not found
      * @throws Error if a circular reference is detected in the configuration hierarchy
      *
@@ -710,13 +710,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * }
      * // Fall back to null-config models if no match in chain
      */
-    public GetConfigurationChain(configurationId: string): AIConfigurationEntity[] {
+    public GetConfigurationChain(configurationId: string): MJAIConfigurationEntity[] {
         // Check cache first
         if (this._configurationChainCache.has(configurationId)) {
             return this._configurationChainCache.get(configurationId)!;
         }
 
-        const chain: AIConfigurationEntity[] = [];
+        const chain: MJAIConfigurationEntity[] = [];
         const visitedIds = new Set<string>();
         let currentId: string | null = configurationId;
 
@@ -754,7 +754,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * over parent values for parameters with the same name.
      *
      * @param configurationId - The ID of the configuration to get parameters for
-     * @returns Array of AIConfigurationParamEntity objects, with child overrides applied.
+     * @returns Array of MJAIConfigurationParamEntity objects, with child overrides applied.
      *          Returns empty array if configuration is not found.
      *
      * @example
@@ -763,7 +763,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * // Result: temperature=0.9 (child), maxTokens=4000 (inherited from parent)
      * const params = AIEngine.Instance.GetConfigurationParamsWithInheritance('child-config-id');
      */
-    public GetConfigurationParamsWithInheritance(configurationId: string): AIConfigurationParamEntity[] {
+    public GetConfigurationParamsWithInheritance(configurationId: string): MJAIConfigurationParamEntity[] {
         const chain = this.GetConfigurationChain(configurationId);
 
         if (chain.length === 0) {
@@ -772,7 +772,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         // Use a map to track params by name (lowercase for case-insensitive matching)
         // Walk chain in reverse (root first, child last) so child overwrites parent
-        const paramMap = new Map<string, AIConfigurationParamEntity>();
+        const paramMap = new Map<string, MJAIConfigurationParamEntity>();
 
         for (let i = chain.length - 1; i >= 0; i--) {
             const configParams = this._configurationParams.filter(
@@ -786,15 +786,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return Array.from(paramMap.values());
     }
 
-    public get AgentDataSources(): AIAgentDataSourceEntity[] {
+    public get AgentDataSources(): MJAIAgentDataSourceEntity[] {
         return this._agentDataSources;
     }
 
-    public get AgentSteps(): AIAgentStepEntity[] {
+    public get AgentSteps(): MJAIAgentStepEntity[] {
         return this._agentSteps;
     }
 
-    public get AgentStepPaths(): AIAgentStepPathEntity[] {
+    public get AgentStepPaths(): MJAIAgentStepPathEntity[] {
         return this._agentStepPaths;
     }
 
@@ -805,21 +805,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     /**
      * Gets all AI modalities (Text, Image, Audio, Video, File, Embedding, etc.)
      */
-    public get Modalities(): AIModalityEntity[] {
+    public get Modalities(): MJAIModalityEntity[] {
         return this._modalities;
     }
 
     /**
      * Gets all agent-modality mappings
      */
-    public get AgentModalities(): AIAgentModalityEntity[] {
+    public get AgentModalities(): MJAIAgentModalityEntity[] {
         return this._agentModalities;
     }
 
     /**
      * Gets all model-modality mappings
      */
-    public get ModelModalities(): AIModelModalityEntity[] {
+    public get ModelModalities(): MJAIModelModalityEntity[] {
         return this._modelModalities;
     }
 
@@ -828,7 +828,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param name - The modality name (e.g., 'Text', 'Image', 'Audio', 'Video', 'File')
      * @returns The modality entity or undefined if not found
      */
-    public GetModalityByName(name: string): AIModalityEntity | undefined {
+    public GetModalityByName(name: string): MJAIModalityEntity | undefined {
         return this._modalities.find(m => m.Name.toLowerCase() === name.toLowerCase());
     }
 
@@ -838,14 +838,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param direction - 'Input' or 'Output'
      * @returns Array of modality entities the agent supports
      */
-    public GetAgentModalities(agentId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+    public GetAgentModalities(agentId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         const agentModalityRecords = this._agentModalities.filter(
             am => am.AgentID === agentId && am.Direction === direction
         );
 
         return agentModalityRecords
             .map(am => this._modalities.find(m => m.ID === am.ModalityID))
-            .filter((m): m is AIModalityEntity => m !== undefined);
+            .filter((m): m is MJAIModalityEntity => m !== undefined);
     }
 
     /**
@@ -854,14 +854,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param direction - 'Input' or 'Output'
      * @returns Array of modality entities the model supports
      */
-    public GetModelModalities(modelId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+    public GetModelModalities(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         const modelModalityRecords = this._modelModalities.filter(
             mm => mm.ModelID === modelId && mm.Direction === direction
         );
 
         return modelModalityRecords
             .map(mm => this._modalities.find(m => m.ID === mm.ModalityID))
-            .filter((m): m is AIModalityEntity => m !== undefined);
+            .filter((m): m is MJAIModalityEntity => m !== undefined);
     }
 
     /**
@@ -1128,7 +1128,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param status - Optional status filter ('Active', 'Pending', 'Disabled')
      * @returns Array of agent steps
      */
-    public GetAgentSteps(agentId: string, status?: string): AIAgentStepEntity[] {
+    public GetAgentSteps(agentId: string, status?: string): MJAIAgentStepEntity[] {
         return this._agentSteps.filter(step => 
             step.AgentID === agentId && 
             (!status || step.Status === status)
@@ -1140,7 +1140,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param stepId - The ID of the step
      * @returns The step or null if not found
      */
-    public GetAgentStepByID(stepId: string): AIAgentStepEntity | null {
+    public GetAgentStepByID(stepId: string): MJAIAgentStepEntity | null {
         return this._agentSteps.find(step => step.ID === stepId) || null;
     }
 
@@ -1149,28 +1149,28 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param stepId - The ID of the origin step
      * @returns Array of paths from the step
      */
-    public GetPathsFromStep(stepId: string): AIAgentStepPathEntity[] {
+    public GetPathsFromStep(stepId: string): MJAIAgentStepPathEntity[] {
         return this._agentStepPaths.filter(path => path.OriginStepID === stepId);
     }
 
     /**
      * @deprecated AI Model Actions are deprecated. Returns an empty array.
      */
-    public get ModelActions(): AIModelActionEntity[] {
+    public get ModelActions(): MJAIModelActionEntity[] {
         return [];
     }
 
     /**
      * @deprecated AI Actions are deprecated. Returns an empty array.
      */
-    public get Actions(): AIActionEntity[] {
+    public get Actions(): MJAIActionEntity[] {
         return [];
     }
 
     /**
      * @deprecated Entity AI Actions are deprecated. Returns an empty array.
      */
-    public get EntityAIActions(): EntityAIActionEntity[] {
+    public get EntityAIActions(): MJEntityAIActionEntity[] {
         return [];
     }
 
@@ -1188,12 +1188,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * This method will check the result cache for the given params and return the result if it exists, otherwise it will return null if the request is not cached.
      * @param prompt - the fully populated prompt to check the cache for
      */
-    public async CheckResultCache(prompt: string): Promise<AIResultCacheEntity | null> {
+    public async CheckResultCache(prompt: string): Promise<MJAIResultCacheEntity | null> {
         try {
             const rv = new RunView();
             const escapedPrompt = prompt.replace(/'/g, "''");
             const result = await rv.RunView({
-                EntityName: 'AI Result Cache',
+                EntityName: 'MJ: AI Result Cache',
                 ExtraFilter: `PromptText = '${escapedPrompt}' AND Status='Active'`,
                 OrderBy: 'RunAt DESC',
                 MaxRows: 1, // get only the latest one
@@ -1216,7 +1216,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public async CacheResult(model: AIModelEntityExtended, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
         const md = new Metadata();
-        const cacheItem = await md.GetEntityObject<AIResultCacheEntity>('AI Result Cache', this.ContextUser);
+        const cacheItem = await md.GetEntityObject<MJAIResultCacheEntity>('MJ: AI Result Cache', this.ContextUser);
         cacheItem.AIModelID = model.ID;
         cacheItem.AIPromptID = prompt.ID;
         cacheItem.PromptText = promptText;

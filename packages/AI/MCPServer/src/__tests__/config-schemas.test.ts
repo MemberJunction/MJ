@@ -174,7 +174,7 @@ describe('Entity Tool Schema', () => {
 
     it('should parse full entity tool config', () => {
         const result = mcpServerEntityToolInfoSchema.parse({
-            entityName: 'Users',
+            entityName: 'MJ: Users',
             schemaName: '__mj',
             get: true,
             create: false,
@@ -346,8 +346,8 @@ describe('MCP Server Info Schema', () => {
             enableMCPServer: true,
             systemApiKey: 'test-key-123',
             entityTools: [
-                { entityName: 'Users', get: true, runView: true },
-                { entityName: 'AI Agents', get: true },
+                { entityName: 'MJ: Users', get: true, runView: true },
+                { entityName: 'MJ: AI Agents', get: true },
             ],
             actionTools: [
                 { actionCategory: 'Communication', discover: true, execute: true },

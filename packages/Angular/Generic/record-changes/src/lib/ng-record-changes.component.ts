@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output, ChangeDetectorRef, ChangeDetectionStrategy, ViewEncapsulation, NgZone } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata, RunView } from '@memberjunction/core';
-import { RecordChangeEntity } from '@memberjunction/core-entities';
+import { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { diffChars, diffWords, Change } from 'diff';
 
@@ -29,7 +29,7 @@ export interface FieldChangeInfo {
 /** A group of changes that share the same date */
 export interface DateGroup {
   label: string;
-  changes: RecordChangeEntity[];
+  changes: MJRecordChangeEntity[];
 }
 
 @Component({
@@ -46,8 +46,8 @@ export class RecordChangesComponent implements OnInit {
   @Output() dialogClosed = new EventEmitter();
   @Input() record!: BaseEntity;
 
-  viewData: RecordChangeEntity[] = [];
-  filteredData: RecordChangeEntity[] = [];
+  viewData: MJRecordChangeEntity[] = [];
+  filteredData: MJRecordChangeEntity[] = [];
   dateGroups: DateGroup[] = [];
   expandedItems: Set<string> = new Set();
 
@@ -88,7 +88,7 @@ export class RecordChangesComponent implements OnInit {
   public async LoadRecordChanges(pkey: CompositeKey, appName: string, entityName: string): Promise<void> {
     if (pkey && entityName) {
       const md = new Metadata();
-      const changes = await md.GetRecordChanges<RecordChangeEntity>(entityName, pkey);
+      const changes = await md.GetRecordChanges<MJRecordChangeEntity>(entityName, pkey);
       this.ngZone.run(() => {
         if (changes) {
           this.viewData = changes.sort((a, b) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime());
@@ -265,8 +265,8 @@ export class RecordChangesComponent implements OnInit {
 
   // ─── Date Grouping ─────────────────────────────────────────────
 
-  private buildDateGroups(changes: RecordChangeEntity[]): DateGroup[] {
-    const groups = new Map<string, RecordChangeEntity[]>();
+  private buildDateGroups(changes: MJRecordChangeEntity[]): DateGroup[] {
+    const groups = new Map<string, MJRecordChangeEntity[]>();
 
     for (const change of changes) {
       const label = this.formatDateGroupLabel(new Date(change.ChangedAt));
@@ -324,7 +324,7 @@ export class RecordChangesComponent implements OnInit {
     }
   }
 
-  getTimelineItemLabel(change: RecordChangeEntity): string {
+  getTimelineItemLabel(change: MJRecordChangeEntity): string {
     return `${change.Type} by ${change.User || 'Unknown User'} on ${this.formatFullDateTime(change.ChangedAt)}`;
   }
 
@@ -395,7 +395,7 @@ export class RecordChangesComponent implements OnInit {
 
   // ─── Change Summary ─────────────────────────────────────────────
 
-  getChangeSummary(change: RecordChangeEntity): string {
+  getChangeSummary(change: MJRecordChangeEntity): string {
     if (change.Type === 'Create') return 'Record created';
     if (change.Type === 'Delete') return 'Record deleted';
 
@@ -410,7 +410,7 @@ export class RecordChangesComponent implements OnInit {
     }
   }
 
-  getCreatedFieldCount(change: RecordChangeEntity): number {
+  getCreatedFieldCount(change: MJRecordChangeEntity): number {
     try {
       if (!change.FullRecordJSON) return 0;
       const record = JSON.parse(change.FullRecordJSON);
@@ -445,7 +445,7 @@ export class RecordChangesComponent implements OnInit {
 
   // ─── Field Changes (type-aware) ────────────────────────────────
 
-  getFieldChanges(change: RecordChangeEntity): FieldChangeInfo[] {
+  getFieldChanges(change: MJRecordChangeEntity): FieldChangeInfo[] {
     try {
       const changesJson = JSON.parse(change.ChangesJSON || '{}');
       return Object.keys(changesJson).map(fieldKey => this.buildFieldChangeInfo(changesJson[fieldKey]));
@@ -487,7 +487,7 @@ export class RecordChangesComponent implements OnInit {
     return 'text';
   }
 
-  getCreatedFields(change: RecordChangeEntity): Array<{name: string, displayName: string, value: string}> {
+  getCreatedFields(change: MJRecordChangeEntity): Array<{name: string, displayName: string, value: string}> {
     try {
       if (!change.FullRecordJSON) return [];
 

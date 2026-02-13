@@ -1,5 +1,5 @@
 import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions, RunView } from '@memberjunction/core';
-import { FileEntity, FileStorageProviderEntity, FileStorageAccountEntity } from '@memberjunction/core-entities';
+import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import {
   AppContext,
   Arg,
@@ -330,7 +330,7 @@ export class FileResolver extends FileResolverBase {
    * Builds ExtendedUserContextOptions that includes the account entity for enterprise model.
    * This is required for OAuth providers using the Credential Engine to decrypt credentials.
    */
-  private buildExtendedUserContext(context: AppContext, accountEntity: FileStorageAccountEntity): ExtendedUserContextOptions {
+  private buildExtendedUserContext(context: AppContext, accountEntity: MJFileStorageAccountEntity): ExtendedUserContextOptions {
     const user = this.GetUserFromPayload(context.userPayload);
     return {
       userID: user.ID,
@@ -349,19 +349,19 @@ export class FileResolver extends FileResolverBase {
   private async loadAccountAndProvider(
     accountId: string,
     context: AppContext,
-  ): Promise<{ account: FileStorageAccountEntity; provider: FileStorageProviderEntity }> {
+  ): Promise<{ account: MJFileStorageAccountEntity; provider: MJFileStorageProviderEntity }> {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
     // Load the account entity
-    const account = await md.GetEntityObject<FileStorageAccountEntity>('MJ: File Storage Accounts', user);
+    const account = await md.GetEntityObject<MJFileStorageAccountEntity>('MJ: File Storage Accounts', user);
     const loaded = await account.Load(accountId);
     if (!loaded) {
       throw new Error(`Storage account with ID ${accountId} not found`);
     }
 
     // Load the provider entity from the account's ProviderID
-    const provider = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
+    const provider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     await provider.Load(account.ProviderID);
 
     return { account, provider };
@@ -372,8 +372,8 @@ export class FileResolver extends FileResolverBase {
     // Check to see if there's already an object with that name
     const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
-    const fileEntity = await provider.GetEntityObject<FileEntity>('Files', user);
-    const providerEntity = await provider.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
+    const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+    const providerEntity = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     const [sameName] = await this.findBy(provider, 'Files', { Name: input.Name, ProviderID: input.ProviderID }, context.userPayload.userRecord);
@@ -403,10 +403,10 @@ export class FileResolver extends FileResolverBase {
   async DownloadUrl(@Root() file: MJFile_, @Ctx() context: AppContext) {
     const md = new Metadata();
     const user = this.GetUserFromPayload(context.userPayload);
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
-    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
+    const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     await providerEntity.Load(file.ProviderID);
 
     const userContext = this.buildUserContext(context);
@@ -420,13 +420,13 @@ export class FileResolver extends FileResolverBase {
     // if the name is changing, rename the target object as well
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
 
     await fileEntity.Load(input.ID);
 
     if (fileEntity.Name !== input.Name) {
-      const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
+      const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
       await providerEntity.Load(fileEntity.ProviderID);
 
       const userContext = this.buildUserContext(context);
@@ -450,7 +450,7 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const userInfo = this.GetUserFromPayload(context.userPayload);
 
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', userInfo);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', userInfo);
     await fileEntity.Load(ID);
     if (!fileEntity) {
       return null;
@@ -459,7 +459,7 @@ export class FileResolver extends FileResolverBase {
 
     // Only delete the object from the provider if it's actually been uploaded
     if (fileEntity.Status === 'Uploaded') {
-      const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', userInfo);
+      const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', userInfo);
       await providerEntity.Load(fileEntity.ProviderID);
       const userContext = this.buildUserContext(context);
       await deleteObject(providerEntity, fileEntity.ProviderKey ?? fileEntity.Name, userContext);
@@ -489,7 +489,7 @@ export class FileResolver extends FileResolverBase {
     });
 
     // Check permissions - user must have read access to Files entity
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
     // Call the storage provider to list objects with extended user context (includes account for credential lookup)
@@ -524,7 +524,7 @@ export class FileResolver extends FileResolverBase {
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     // Check permissions
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
     // Create download URL with extended user context (includes account for credential lookup)
@@ -542,7 +542,7 @@ export class FileResolver extends FileResolverBase {
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     // Check permissions
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     // Create upload URL with extended user context (includes account for credential lookup)
@@ -584,7 +584,7 @@ export class FileResolver extends FileResolverBase {
     });
 
     // Check permissions
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Delete, true);
 
     console.log('[FileResolver] Permissions checked, calling deleteObject...');
@@ -607,7 +607,7 @@ export class FileResolver extends FileResolverBase {
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     // Check permissions
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
 
     // Move the object with extended user context (includes account for credential lookup)
@@ -625,7 +625,7 @@ export class FileResolver extends FileResolverBase {
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     // Check permissions - copying requires both read (source) and create (destination)
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
@@ -644,7 +644,7 @@ export class FileResolver extends FileResolverBase {
     const { account: accountEntity, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     // Check permissions
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     // Initialize driver with account-based credentials from Credential Engine
@@ -674,7 +674,7 @@ export class FileResolver extends FileResolverBase {
     const user = this.GetUserFromPayload(context.userPayload);
 
     // Check permissions - copying requires both read (source) and create (destination)
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
@@ -722,13 +722,13 @@ export class FileResolver extends FileResolverBase {
     const user = this.GetUserFromPayload(context.userPayload);
 
     // Check permissions - searching requires read access
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
     // Load all requested account entities in a single query
     const rv = new RunView();
     const quotedIDs = input.AccountIDs.map((id) => `'${id}'`).join(', ');
-    const accountResult = await rv.RunView<FileStorageAccountEntity>(
+    const accountResult = await rv.RunView<MJFileStorageAccountEntity>(
       {
         EntityName: 'MJ: File Storage Accounts',
         ExtraFilter: `ID IN (${quotedIDs})`,
@@ -756,9 +756,9 @@ export class FileResolver extends FileResolverBase {
     // Load providers for all accounts
     const providerIDs = [...new Set(accountEntities.map((a) => a.ProviderID))];
     const quotedProviderIDs = providerIDs.map((id) => `'${id}'`).join(', ');
-    const providerResult = await rv.RunView<FileStorageProviderEntity>(
+    const providerResult = await rv.RunView<MJFileStorageProviderEntity>(
       {
-        EntityName: 'File Storage Providers',
+        EntityName: 'MJ: File Storage Providers',
         ExtraFilter: `ID IN (${quotedProviderIDs})`,
         ResultType: 'entity_object',
       },
@@ -769,7 +769,7 @@ export class FileResolver extends FileResolverBase {
       throw new Error(`Failed to load storage providers: ${providerResult.ErrorMessage}`);
     }
 
-    const providerMap = new Map<string, FileStorageProviderEntity>();
+    const providerMap = new Map<string, MJFileStorageProviderEntity>();
     for (const provider of providerResult.Results) {
       providerMap.set(provider.ID, provider);
     }

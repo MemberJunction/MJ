@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ComponentRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ViewContainerRef } from '@angular/core';
-import { ConversationArtifactEntity, ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJConversationArtifactEntity, MJConversationArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
-import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
 import { DataContext } from '@memberjunction/data-context';
@@ -19,11 +19,11 @@ import { DrillDownInfo } from '../drill-down-info';
   styleUrls: ['./skip-single-message.component.css']
 })
 export class SkipSingleMessageComponent  extends BaseAngularComponent implements AfterViewInit, OnDestroy {  
-    @Input() public ConversationRecord!: ConversationEntity;
-    @Input() public ConversationDetailRecord!: ConversationDetailEntity;
+    @Input() public ConversationRecord!: MJConversationEntity;
+    @Input() public ConversationDetailRecord!: MJConversationDetailEntity;
     @Input() public ConversationUser!: UserInfo;
     @Input() public DataContext!: DataContext;
-    @Input() public ConversationMessages!: ConversationDetailEntity[];
+    @Input() public ConversationMessages!: MJConversationDetailEntity[];
     /**
      * This variable should be set by the component instantiating this one, it should be bound to the state
      * of the conversation processing, so that this component can handle its internal functionality correctly,
@@ -124,11 +124,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     /**
      * This event fires when the user is requesting to edit a message, the container of this component will handle
      */
-    @Output() EditMessageRequested = new EventEmitter<ConversationDetailEntity>();
+    @Output() EditMessageRequested = new EventEmitter<MJConversationDetailEntity>();
     /**
      * This event fires when the user is requesting to delete a message, the container of this component will handle
      */
-    @Output() DeleteMessageRequested = new EventEmitter<ConversationDetailEntity>();
+    @Output() DeleteMessageRequested = new EventEmitter<MJConversationDetailEntity>();
 
     /**
      * This event fires whenever a drill down is requested within a given report.
@@ -212,7 +212,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
       return `(${formattedTime} elapsed)`;
     }
 
-    private GetHtmlFromCache(detail: ConversationDetailEntity): string | null {
+    private GetHtmlFromCache(detail: MJConversationDetailEntity): string | null {
         if (detail.ID !== null && detail.ID !== undefined && detail.ID.length > 0 && SkipSingleMessageComponent._detailHtml[detail.ID] !== undefined && SkipSingleMessageComponent._detailHtml[detail.ID] !== null) {
             // use cached HTML details for SAVED conversation details, don't do for NEW ONes where ID is null
             return SkipSingleMessageComponent._detailHtml[detail.ID];
@@ -220,7 +220,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         else    
             return null;
     }
-    private CacheHtml(detail: ConversationDetailEntity, html: string) {
+    private CacheHtml(detail: MJConversationDetailEntity, html: string) {
         // only cache it if it's a saved detail if it is for a new one don't bother yet...
         if (detail.ID !== null && detail.ID !== undefined && detail.ID.length > 0)
             SkipSingleMessageComponent._detailHtml[detail.ID] = html; 
@@ -377,10 +377,10 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         let objToSave = this.ConversationDetailRecord;
         
         if (undefined === this.ConversationDetailRecord.Save) {
-          // this means that the current object is not a ConversationDetailEntity, so we can't save it directly, we must load an object first
+          // this means that the current object is not a MJConversationDetailEntity, so we can't save it directly, we must load an object first
           const p = this.ProviderToUse;
           const savedID = this.ConversationDetailRecord.ID;
-          objToSave = await p.GetEntityObject<ConversationDetailEntity>("Conversation Details", p.CurrentUser);
+          objToSave = await p.GetEntityObject<MJConversationDetailEntity>("MJ: Conversation Details", p.CurrentUser);
           await objToSave.Load(savedID);
           objToSave.UserRating = rating;
           
@@ -625,7 +625,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
           if (this.ConversationDetailRecord.ArtifactVersionID) {
             const versionResult = results[1];
             if (versionResult && versionResult.Results?.length > 0) {
-              const version = <ConversationArtifactVersionEntity>versionResult.Results[0];
+              const version = <MJConversationArtifactVersionEntity>versionResult.Results[0];
               if (version) {
                 this.ArtifactVersion = version.Version;
               }

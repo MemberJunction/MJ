@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { Subject, Observable, combineLatest, interval, of, from, Subscription } from 'rxjs';
 import { takeUntil, map, shareReplay, switchMap, filter } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
-import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
@@ -46,10 +46,10 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   
   // Public observables from data helper
-  steps$!: Observable<AIAgentRunStepEntity[]>;
-  subRuns$!: Observable<AIAgentRunEntity[]>;
-  actionLogs$!: Observable<ActionExecutionLogEntity[]>;
-  promptRuns$!: Observable<AIPromptRunEntity[]>;
+  steps$!: Observable<MJAIAgentRunStepEntity[]>;
+  subRuns$!: Observable<MJAIAgentRunEntity[]>;
+  actionLogs$!: Observable<MJActionExecutionLogEntity[]>;
+  promptRuns$!: Observable<MJAIPromptRunEntity[]>;
   
   timelineItems$!: Observable<TimelineItem[]>;
   
@@ -164,18 +164,18 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   }
   
   private buildTimelineItems(
-    steps: AIAgentRunStepEntity[],
-    subRuns: AIAgentRunEntity[],
-    actionLogs: ActionExecutionLogEntity[],
-    promptRuns: AIPromptRunEntity[]
+    steps: MJAIAgentRunStepEntity[],
+    subRuns: MJAIAgentRunEntity[],
+    actionLogs: MJActionExecutionLogEntity[],
+    promptRuns: MJAIPromptRunEntity[]
   ): TimelineItem[] {
     return this.buildHierarchicalItems(steps, 0, promptRuns);
   }
 
   private buildHierarchicalItems(
-    steps: AIAgentRunStepEntity[],
+    steps: MJAIAgentRunStepEntity[],
     baseLevel: number,
-    promptRuns?: AIPromptRunEntity[]
+    promptRuns?: MJAIPromptRunEntity[]
   ): TimelineItem[] {
     // Create a map of all timeline items by step ID
     const itemMap = new Map<string, TimelineItem>();
@@ -221,7 +221,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     return rootItems;
   }
   
-  private createTimelineItemFromStep(step: AIAgentRunStepEntity, level: number, promptRuns?: AIPromptRunEntity[]): TimelineItem {
+  private createTimelineItemFromStep(step: MJAIAgentRunStepEntity, level: number, promptRuns?: MJAIPromptRunEntity[]): TimelineItem {
     let subtitle = `Type: ${step.StepType}`;
 
     // For prompt steps, try to find the associated prompt run to get model/vendor info
@@ -255,7 +255,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   }
   
 
-  private getStepIconInfo(step: AIAgentRunStepEntity): { icon: string; logoUrl?: string } {
+  private getStepIconInfo(step: MJAIAgentRunStepEntity): { icon: string; logoUrl?: string } {
     // For sub-agents, try to get agent-specific icon/logo
     if (step.StepType === 'Sub-Agent' && step.TargetID) {
       const agent = AIEngineBase.Instance.Agents.find(a => a.ID === step.TargetID);
@@ -383,7 +383,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   navigateToActionLog(logId: string, event: Event) {
     event.stopPropagation();
-    this.navigateToEntity.emit({ entityName: 'Action Execution Logs', recordId: logId });
+    this.navigateToEntity.emit({ entityName: 'MJ: Action Execution Logs', recordId: logId });
   }
   
   navigateToPromptRun(runId: string, event: Event) {

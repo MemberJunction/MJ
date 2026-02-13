@@ -26,7 +26,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    AIAgentEntity: class {},
+    MJAIAgentEntity: class {},
 }));
 
 vi.mock('../BaseAIEngine', () => ({

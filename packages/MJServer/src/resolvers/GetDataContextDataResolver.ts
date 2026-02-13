@@ -3,7 +3,7 @@ import { AppContext } from "../types.js";
 import { DataContext } from "@memberjunction/data-context";
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from "../util.js";
 import { Metadata } from "@memberjunction/core";
-import { DataContextItemEntity } from "@memberjunction/core-entities";
+import { MJDataContextItemEntity } from "@memberjunction/core-entities";
 import { ResolverBase } from "../generic/ResolverBase.js";
 
 @ObjectType()
@@ -59,7 +59,7 @@ export class GetDataContextDataResolver extends ResolverBase {
                 allowFallbackToReadWrite: true,
             })
             const md = GetReadOnlyProvider(appCtx.providers, {allowFallbackToReadWrite: true});
-            const dciData = await md.GetEntityObject<DataContextItemEntity>("Data Context Items", appCtx.userPayload.userRecord);
+            const dciData = await md.GetEntityObject<MJDataContextItemEntity>("MJ: Data Context Items", appCtx.userPayload.userRecord);
             if (await dciData.Load(DataContextItemID)) {
                 const dci = DataContext.CreateDataContextItem(); // use class factory to get whatever lowest level sub-class is registered
                 await dci.LoadMetadataFromEntityRecord(dciData, Metadata.Provider, appCtx.userPayload.userRecord);

@@ -10,7 +10,7 @@
  * @since 2.50.0
  */
 
-import { AIAgentTypeEntity,  } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
@@ -435,8 +435,8 @@ export type ExecuteAgentResult<P = any> = {
      * Includes the notes and examples that were retrieved and used for context.
      */
     memoryContext?: {
-        notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
-        examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
+        notes: any[]; // MJAIAgentNoteEntity[] - using any to avoid circular dependency
+        examples: any[]; // MJAIAgentExampleEntity[] - using any to avoid circular dependency
     };
 
     /**
@@ -1050,7 +1050,7 @@ export type AgentContextData = {
     subAgentDetails: string;
     /** Number of actions available to this agent */
     actionCount: number;
-    /** JSON stringified array of ActionEntity objects representing available actions */
+    /** JSON stringified array of MJActionEntity objects representing available actions */
     actionDetails: string;
 }
 
@@ -1063,7 +1063,7 @@ export type AgentConfiguration = {
     /** Error message if configuration failed */
     errorMessage?: string;
     /** The loaded agent type entity */
-    agentType?: AIAgentTypeEntity;
+    agentType?: MJAIAgentTypeEntity;
     /** The loaded system prompt entity */
     systemPrompt?: AIPromptEntityExtended;
     /** The loaded child prompt entity */

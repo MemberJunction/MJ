@@ -1,12 +1,12 @@
 import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
-import { ActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentTypeEntity, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
+import { MJAIAgentFormComponent } from '../../generated/Entities/MJAIAgent/mjaiagent.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
@@ -31,7 +31,7 @@ export type SubAgentFilterType = 'all' | 'child' | 'related';
 export interface UnifiedSubAgent {
     agent: AIAgentEntityExtended;
     type: 'child' | 'related';
-    relationship?: AIAgentRelationshipEntity;  // Only for related sub-agents
+    relationship?: MJAIAgentRelationshipEntity;  // Only for related sub-agents
 }
 
 /**
@@ -64,14 +64,14 @@ export interface UnifiedSubAgent {
  * <mj-ai-agent-form [recordId]="agentId"></mj-ai-agent-form>
  * ```
  */
-@RegisterClass(BaseFormComponent, 'AI Agents')
+@RegisterClass(BaseFormComponent, 'MJ: AI Agents')
 @Component({
   standalone: false,
     selector: 'mj-ai-agent-form',
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
 })
-export class AIAgentFormComponentExtended extends AIAgentFormComponent implements OnDestroy {
+export class AIAgentFormComponentExtended extends MJAIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
     public record!: AIAgentEntityExtended;
     
@@ -116,7 +116,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
     
     /** The agent type entity for this agent */
-    public agentType: AIAgentTypeEntity | null = null;
+    public agentType: MJAIAgentTypeEntity | null = null;
     
     /** Reference to the dynamically loaded custom section component */
     private customSectionComponent: BaseFormSectionComponent | null = null;
@@ -208,14 +208,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public agentPrompts: AIPromptEntityExtended[] = [];
     
     /** Array of agent action entities for card display */
-    public agentActions: ActionEntity[] = [];
+    public agentActions: MJActionEntity[] = [];
     
     
     /** Array of learning cycle entities for display */
-    public learningCycles: AIAgentLearningCycleEntity[] = [];
+    public learningCycles: MJAIAgentLearningCycleEntity[] = [];
     
     /** Array of agent note entities for display */
-    public agentNotes: AIAgentNoteEntity[] = [];
+    public agentNotes: MJAIAgentNoteEntity[] = [];
     
     /** Array of recent execution records for history display */
     public recentExecutions: AIAgentRunEntityExtended[] = [];
@@ -370,17 +370,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /** Check if user can create AI Agent Actions */
     public get UserCanCreateActions(): boolean {
-        return this.checkEntityPermission('AI Agent Actions', 'Create');
+        return this.checkEntityPermission('MJ: AI Agent Actions', 'Create');
     }
 
     /** Check if user can update AI Agent Actions */
     public get UserCanUpdateActions(): boolean {
-        return this.checkEntityPermission('AI Agent Actions', 'Update');
+        return this.checkEntityPermission('MJ: AI Agent Actions', 'Update');
     }
 
     /** Check if user can delete AI Agent Actions */
     public get UserCanDeleteActions(): boolean {
-        return this.checkEntityPermission('AI Agent Actions', 'Delete');
+        return this.checkEntityPermission('MJ: AI Agent Actions', 'Delete');
     }
 
     /** Check if user can create AI Agent Prompts */
@@ -400,37 +400,37 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /** Check if user can create AI Agents (for sub-agents) */
     public get UserCanCreateSubAgents(): boolean {
-        return this.checkEntityPermission('AI Agents', 'Create');
+        return this.checkEntityPermission('MJ: AI Agents', 'Create');
     }
 
     /** Check if user can update AI Agents (for sub-agents) */
     public get UserCanUpdateSubAgents(): boolean {
-        return this.checkEntityPermission('AI Agents', 'Update');
+        return this.checkEntityPermission('MJ: AI Agents', 'Update');
     }
 
     /** Check if user can delete AI Agents (for sub-agents) */
     public get UserCanDeleteSubAgents(): boolean {
-        return this.checkEntityPermission('AI Agents', 'Delete');
+        return this.checkEntityPermission('MJ: AI Agents', 'Delete');
     }
 
     /** Check if user can create AI Agent Notes */
     public get UserCanCreateNotes(): boolean {
-        return this.checkEntityPermission('AI Agent Notes', 'Create');
+        return this.checkEntityPermission('MJ: AI Agent Notes', 'Create');
     }
 
     /** Check if user can update AI Agent Notes */
     public get UserCanUpdateNotes(): boolean {
-        return this.checkEntityPermission('AI Agent Notes', 'Update');
+        return this.checkEntityPermission('MJ: AI Agent Notes', 'Update');
     }
 
     /** Check if user can delete AI Agent Notes */
     public get UserCanDeleteNotes(): boolean {
-        return this.checkEntityPermission('AI Agent Notes', 'Delete');
+        return this.checkEntityPermission('MJ: AI Agent Notes', 'Delete');
     }
 
     /** Check if user can view AI Agent Learning Cycles */
     public get UserCanViewLearningCycles(): boolean {
-        return this.checkEntityPermission('AI Agent Learning Cycles', 'Read');
+        return this.checkEntityPermission('MJ: AI Agent Learning Cycles', 'Read');
     }
 
     /** Check if user can view AI Agent Runs (execution history) */
@@ -440,7 +440,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /** Check if user can create AI Prompts (needed for creating new prompts) */
     public get UserCanCreateAIPrompts(): boolean {
-        return this.checkEntityPermission('AI Prompts', 'Create');
+        return this.checkEntityPermission('MJ: AI Prompts', 'Create');
     }
 
     /** Check if user can create both AI Prompts and AI Agent Prompts (for createNewPrompt functionality) */
@@ -519,7 +519,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** Snapshots of original data for reverting UI changes */
     private originalSnapshots: {
         agentPrompts: AIPromptEntityExtended[];
-        agentActions: ActionEntity[];
+        agentActions: MJActionEntity[];
         subAgents: AIAgentEntityExtended[];
         promptCount: number;
         actionCount: number;
@@ -626,7 +626,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // Load related sub-agents (Relationship-based)
             const rv = new RunView();
-            const relationshipsResult = await rv.RunView<AIAgentRelationshipEntity>({
+            const relationshipsResult = await rv.RunView<MJAIAgentRelationshipEntity>({
                 EntityName: 'MJ: AI Agent Relationships',
                 ExtraFilter: `AgentID='${this.record.ID}' AND Status='Active'`,
                 ResultType: 'entity_object'
@@ -670,7 +670,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             const results = await rv.RunViews([
                 // Learning cycles
                 {
-                    EntityName: 'AI Agent Learning Cycles',
+                    EntityName: 'MJ: AI Agent Learning Cycles',
                     // limit fields
                     Fields: ["ID","Name","StartedAt", "EndedAt","Status","AgentID"],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
@@ -678,7 +678,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 },
                 // Notes
                 {
-                    EntityName: 'AI Agent Notes',
+                    EntityName: 'MJ: AI Agent Notes',
                     // limit fields
                     Fields: ["ID","Name", "AgentID", "AgentNoteType","AgentNoteTypeID","UserID"],
                     ExtraFilter: `AgentID='${this.record.ID}'`
@@ -706,9 +706,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // Process results in the same order as queries
             if (results && results.length > 0) {
-                this.learningCycles = results[0].Results as AIAgentLearningCycleEntity[] || [];
+                this.learningCycles = results[0].Results as MJAIAgentLearningCycleEntity[] || [];
 
-                this.agentNotes = results[1].Results as AIAgentNoteEntity[] || [];
+                this.agentNotes = results[1].Results as MJAIAgentNoteEntity[] || [];
 
                 this.recentExecutions = results[2].Results as AIAgentRunEntityExtended[] || [];
                 this.totalExecutionHistoryCount = results[2].TotalRowCount;
@@ -886,7 +886,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         
         try {
             const md = new Metadata();
-            this.agentType = await md.GetEntityObject<AIAgentTypeEntity>('MJ: AI Agent Types');
+            this.agentType = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types');
             if (this.agentType) {
                 await this.agentType.Load(this.record.TypeID);
             }
@@ -1218,7 +1218,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Gets the icon class for an action
      * Falls back to default bolt icon if no IconClass is set
      */
-    public getActionIcon(action: ActionEntity): string {
+    public getActionIcon(action: MJActionEntity): string {
         return action?.IconClass || 'fa-solid fa-bolt';
     }
 
@@ -1364,7 +1364,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         // Add to pending changes (defer until save)
                         const md = new Metadata();
                         for (const prompt of newPrompts) {
-                            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                            const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                             agentPrompt.NewRecord();
                             agentPrompt.AgentID = this.record.ID;
                             agentPrompt.PromptID = prompt.ID;
@@ -1438,7 +1438,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         // Get currently linked and pending action IDs for pre-selection
         const currentActionIds = this.agentActions.map(aa => aa.ID);
         const pendingAddIds = this.PendingRecords
-            .filter(p => p.entityObject.EntityInfo.Name === 'AI Agent Actions' && p.action === 'save')
+            .filter(p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Actions' && p.action === 'save')
             .map(p => p.entityObject.Get('ActionID'));
         const allLinkedIds = [...currentActionIds, ...pendingAddIds];
         
@@ -1467,7 +1467,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     // Add to pending changes (defer until save)
                     const md = new Metadata();
                     for (const action of newActions) {
-                        const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
+                        const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
                         agentAction.NewRecord();
                         agentAction.AgentID = this.record.ID;
                         agentAction.ActionID = action.ID;
@@ -1943,7 +1943,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                             }
 
                             // Create the AI Agent Prompt link
-                            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                            const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                             agentPrompt.NewRecord();
                             agentPrompt.AgentID = this.record.ID;
                             agentPrompt.PromptID = result.prompt.ID;
@@ -2033,7 +2033,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     } else {
                         // Find the existing AI Agent Prompt link record for deferred deletion
                         const rv = new RunView();
-                        const linkResult = await rv.RunView<AIAgentPromptEntity>({
+                        const linkResult = await rv.RunView<MJAIAgentPromptEntity>({
                             EntityName: 'MJ: AI Agent Prompts',
                             ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
                             ResultType: 'entity_object'
@@ -2100,7 +2100,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         try {
             // Get list of already pending sub-agent IDs to filter duplicates
             const pendingSubAgentIds = this.PendingRecords
-                .filter(p => p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                .filter(p => p.entityObject.EntityInfo.Name === 'MJ: AI Agents' && 
                             p.action === 'save' && 
                             p.entityObject.Get('ParentID') === this.record.ID)
                 .map(p => p.entityObject.Get('ID'));
@@ -2133,7 +2133,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         // Add to pending changes (defer until save)
                         const md = new Metadata();
                         for (const agent of newAgents) {
-                            const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+                            const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
                             await subAgentToUpdate.Load(agent.ID);
                             subAgentToUpdate.ParentID = this.record.ID;
                             // Database constraint requires ExposeAsAction = false for sub-agents
@@ -2206,7 +2206,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 try {
                     // Check if this is a pending add (not yet in database)
                     const pendingAddIndex = this.PendingRecords.findIndex(
-                        p => p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                        p => p.entityObject.EntityInfo.Name === 'MJ: AI Agents' && 
                              p.action === 'save' && 
                              p.entityObject.Get('ID') === subAgent.ID &&
                              p.entityObject.Get('ParentID') === this.record.ID
@@ -2218,7 +2218,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     } else {
                         // Add to pending removals (will restore to root agent)
                         const md = new Metadata();
-                        const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+                        const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
                         await subAgentToUpdate.Load(subAgent.ID);
                         subAgentToUpdate.ParentID = null; // Will become a root agent
                         
@@ -2408,7 +2408,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Removes an action from the agent (deferred until save)
      */
-    public async removeAction(action: ActionEntity, event: Event) {
+    public async removeAction(action: MJActionEntity, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2428,7 +2428,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 try {
                 // Check if this is a pending add (not yet in database)
                 const pendingAddIndex = this.PendingRecords.findIndex(
-                    p => p.entityObject.EntityInfo.Name === 'AI Agent Actions' && 
+                    p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Actions' && 
                          p.action === 'save' && 
                          p.entityObject.Get('ActionID') === action.ID
                 );
@@ -2439,8 +2439,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 } else {
                     // Find the existing AI Agent Action link record for deferred deletion
                     const rv = new RunView();
-                    const linkResult = await rv.RunView<AIAgentActionEntity>({
-                        EntityName: 'AI Agent Actions',
+                    const linkResult = await rv.RunView<MJAIAgentActionEntity>({
+                        EntityName: 'MJ: AI Agent Actions',
                         ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'`,
                         ResultType: 'entity_object'
                     });
@@ -2495,7 +2495,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         event.stopPropagation(); // Prevent navigation
         
         try {
-            // Find the corresponding AIAgentPromptEntity for this prompt
+            // Find the corresponding MJAIAgentPromptEntity for this prompt
             // Get all agent prompts for validation
 
             const allAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => ap.AgentID === this.record.ID);
@@ -2740,7 +2740,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // 2. Save Template Contents (depend on Templates)
             const templateContentRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'Template Contents'
+                p.entityObject.EntityInfo.Name === 'MJ: Template Contents'
             );
             for (const contentRecord of templateContentRecords) {
                 contentRecord.entityObject.TransactionGroup = transactionGroup;
@@ -2761,7 +2761,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // 3. Save AI Prompts (depend on Templates)
             const promptRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'AI Prompts'
+                p.entityObject.EntityInfo.Name === 'MJ: AI Prompts'
             );
             for (const promptRecord of promptRecords) {
                 promptRecord.entityObject.TransactionGroup = transactionGroup;
@@ -2794,7 +2794,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // 4.1. Handle deferred sub-agent creation - set ParentID on any sub-agents created before parent was saved
             const subAgentRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                p.entityObject.EntityInfo.Name === 'MJ: AI Agents' && 
                 p.action === 'save' && 
                 p.entityObject.Get('_tempParentId') === this.record.ID
             );
@@ -2811,8 +2811,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             // 5. Save all other pending records (AI Agent Actions, AI Agent Prompts, etc.)
             const otherRecords = this.PendingRecords.filter(p => 
                 p.entityObject.EntityInfo.Name !== 'Templates' &&
-                p.entityObject.EntityInfo.Name !== 'Template Contents' &&
-                p.entityObject.EntityInfo.Name !== 'AI Prompts'
+                p.entityObject.EntityInfo.Name !== 'MJ: Template Contents' &&
+                p.entityObject.EntityInfo.Name !== 'MJ: AI Prompts'
             );
             for (const record of otherRecords) {
                 record.entityObject.TransactionGroup = transactionGroup;
@@ -2873,7 +2873,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     public navigateToParentAgent(): void {
         if (this.record.ParentID) {
-            this.navigateToEntity('AI Agents', this.record.ParentID);
+            this.navigateToEntity('MJ: AI Agents', this.record.ParentID);
         }
     }
 

@@ -58,20 +58,20 @@ vi.mock('@memberjunction/core', () => {
 vi.mock('@memberjunction/core-entities', () => {
     const cls = () => class { ID = ''; Name = '' };
     return {
-        AIActionEntity: cls(), AIAgentActionEntity: cls(), AIAgentNoteEntity: cls(),
-        AIAgentNoteTypeEntity: cls(), AIModelActionEntity: cls(), AIPromptModelEntity: cls(),
-        AIPromptTypeEntity: cls(), AIResultCacheEntity: cls(), AIVendorTypeDefinitionEntity: cls(),
-        ArtifactTypeEntity: cls(), EntityAIActionEntity: cls(), VectorDatabaseEntity: cls(),
-        AIAgentPromptEntity: cls(), AIAgentTypeEntity: cls(), AIVendorEntity: cls(),
-        AIModelVendorEntity: cls(), AIModelTypeEntity: cls(), AIModelCostEntity: cls(),
-        AIModelPriceTypeEntity: cls(), AIModelPriceUnitTypeEntity: cls(),
-        AIConfigurationEntity: cls(), AIConfigurationParamEntity: cls(),
-        AIAgentStepEntity: cls(), AIAgentStepPathEntity: cls(),
-        AIAgentRelationshipEntity: cls(), AIAgentPermissionEntity: cls(),
-        AIAgentDataSourceEntity: cls(), AIAgentConfigurationEntity: cls(),
-        AIAgentExampleEntity: cls(), AICredentialBindingEntity: cls(),
-        AIModalityEntity: cls(), AIAgentModalityEntity: cls(), AIModelModalityEntity: cls(),
-        CredentialEntity: cls(), AIAgentEntity: cls(),
+        MJAIActionEntity: cls(), MJAIAgentActionEntity: cls(), MJAIAgentNoteEntity: cls(),
+        MJAIAgentNoteTypeEntity: cls(), MJAIModelActionEntity: cls(), MJAIPromptModelEntity: cls(),
+        MJAIPromptTypeEntity: cls(), MJAIResultCacheEntity: cls(), MJAIVendorTypeDefinitionEntity: cls(),
+        MJArtifactTypeEntity: cls(), MJEntityAIActionEntity: cls(), MJVectorDatabaseEntity: cls(),
+        MJAIAgentPromptEntity: cls(), MJAIAgentTypeEntity: cls(), MJAIVendorEntity: cls(),
+        MJAIModelVendorEntity: cls(), MJAIModelTypeEntity: cls(), MJAIModelCostEntity: cls(),
+        MJAIModelPriceTypeEntity: cls(), MJAIModelPriceUnitTypeEntity: cls(),
+        MJAIConfigurationEntity: cls(), MJAIConfigurationParamEntity: cls(),
+        MJAIAgentStepEntity: cls(), MJAIAgentStepPathEntity: cls(),
+        MJAIAgentRelationshipEntity: cls(), MJAIAgentPermissionEntity: cls(),
+        MJAIAgentDataSourceEntity: cls(), MJAIAgentConfigurationEntity: cls(),
+        MJAIAgentExampleEntity: cls(), MJAICredentialBindingEntity: cls(),
+        MJAIModalityEntity: cls(), MJAIAgentModalityEntity: cls(), MJAIModelModalityEntity: cls(),
+        MJCredentialEntity: cls(), MJAIAgentEntity: cls(),
     };
 });
 

@@ -1,7 +1,7 @@
 import { Component, Output, EventEmitter, Input, OnInit } from '@angular/core';
 import { CommunicationEngineBase, Message, ProcessedMessage } from '@memberjunction/communication-types';
 import { EntityInfo, RunView, RunViewParams } from '@memberjunction/core';
-import { TemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
+import { MJTemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
@@ -43,13 +43,13 @@ export class EntityCommunicationsPreviewComponent implements OnInit  {
     const rv = new RunView();
     const result = await rv.RunView<TemplateEntityExtended>(
       {
-        EntityName: "Templates",
+        EntityName: "MJ: Templates",
         ExtraFilter: `(IsActive = 1 AND (ActiveAt IS NULL OR ActiveAt <= GETDATE())) ${this.templateFilter ? `AND ${this.templateFilter}` : ''}`,
         ResultType: 'entity_object'
       }
     );
-    const content = await rv.RunView<TemplateContentEntity>({
-      EntityName: "Template Contents",
+    const content = await rv.RunView<MJTemplateContentEntity>({
+      EntityName: "MJ: Template Contents",
       ResultType: 'entity_object'
     })
     this.templates = result.Results;

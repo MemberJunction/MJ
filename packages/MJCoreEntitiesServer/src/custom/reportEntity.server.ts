@@ -1,10 +1,10 @@
 import { BaseEntity, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
-import { ReportEntity, ReportSnapshotEntity, ReportVersionEntity } from "@memberjunction/core-entities";
+import { MJReportEntity, MJReportSnapshotEntity, MJReportVersionEntity } from "@memberjunction/core-entities";
 import { SkipAPIAnalysisCompleteResponse } from "@memberjunction/skip-types";
 
-@RegisterClass(BaseEntity, 'Reports')
-export class ReportEntity_Server extends ReportEntity  {
+@RegisterClass(BaseEntity, 'MJ: Reports')
+export class ReportEntity_Server extends MJReportEntity  {
     /**
      * The server side Report Entity sub-class has a simple logic that will create a snapshot of the report when it is first created and each time it is modified, but only
      * if it is either newly created or if the Configuration field has changed.
@@ -69,7 +69,7 @@ export class ReportEntity_Server extends ReportEntity  {
                     const md = this.ProviderToUse as any as IMetadataProvider;
 
                     if (createReportVersion) {
-                        const reportVersion = await md.GetEntityObject<ReportVersionEntity>('MJ: Report Versions', this.ContextCurrentUser);
+                        const reportVersion = await md.GetEntityObject<MJReportVersionEntity>('MJ: Report Versions', this.ContextCurrentUser);
                         reportVersion.ReportID = this.ID;
                         // const get highest new version number already in DB
                         let newVersionNumber: number = 1;
@@ -102,7 +102,7 @@ export class ReportEntity_Server extends ReportEntity  {
                     }
 
                     if (createSnapshot) {
-                        const snapshot = await md.GetEntityObject<ReportSnapshotEntity>('Report Snapshots', this.ContextCurrentUser);
+                        const snapshot = await md.GetEntityObject<MJReportSnapshotEntity>('MJ: Report Snapshots', this.ContextCurrentUser);
                         snapshot.ReportID = this.ID;
                         snapshot.UserID = this.ContextCurrentUser.ID;
                         // in the snapshot entity the ResultSet column is the Configuration column from the Report entity

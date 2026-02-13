@@ -1201,7 +1201,7 @@ export class ValidationService {
       // Load all user roles with role names
       const result = await rv.RunView(
         {
-          EntityName: 'User Roles',
+          EntityName: 'MJ: User Roles',
           ExtraFilter: '',
           OrderBy: 'UserID',
           MaxRows: 10000,

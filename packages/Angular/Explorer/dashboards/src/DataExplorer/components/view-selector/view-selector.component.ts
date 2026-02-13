@@ -150,7 +150,7 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
 
       // Load all views for this entity that the user owns OR that are shared
       const result = await rv.RunView<UserViewEntityExtended>({
-        EntityName: 'User Views',
+        EntityName: 'MJ: User Views',
         ExtraFilter: `EntityID = '${this.entity.ID}' AND (UserID = '${userId}' OR IsShared = 1)`,
         OrderBy: 'Name',
         ResultType: 'entity_object'

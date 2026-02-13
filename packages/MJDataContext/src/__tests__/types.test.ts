@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {
     PrimaryKey = { ToString: () => 'pk-123' };
-    EntityInfo = { ID: 'ent-1', Name: 'TestEntity', Fields: [] };
+    EntityInfo = { ID: 'ent-1', Name: 'MJTestEntity', Fields: [] };
   },
   DataObjectRelatedEntityParam: class {},
   EntityInfo: class { ID = ''; Name = ''; Fields = []; RelatedEntities = []; },
@@ -21,8 +21,8 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  DataContextEntity: class { ID = ''; },
-  DataContextItemEntity: class {
+  MJDataContextEntity: class { ID = ''; },
+  MJDataContextItemEntity: class {
     ID = '';
     Type = '';
     EntityID = '';
@@ -33,7 +33,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     CodeName = '';
     DataJSON = '';
   },
-  DataContextItemEntityType: class {},
+  MJDataContextItemEntityType: class {},
   UserViewEntityExtended: class {
     ID = '';
     Name = '';
@@ -92,7 +92,7 @@ describe('MJDataContext', () => {
       const item = new DataContextItem();
       item.Type = 'view';
       item.RecordName = 'Active Users';
-      item.EntityName = 'Users';
+      item.EntityName = 'MJ: Users';
       expect(item.Description).toBe('View: Active Users, From Entity: Users');
     });
 

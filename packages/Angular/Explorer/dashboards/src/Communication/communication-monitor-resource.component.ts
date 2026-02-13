@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, CommunicationLogEntity, CommunicationProviderEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCommunicationLogEntity, MJCommunicationProviderEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
@@ -484,7 +484,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         pending: 0,
         failed: 0
     };
-    public recentLogs: CommunicationLogEntity[] = [];
+    public recentLogs: MJCommunicationLogEntity[] = [];
     public chartData: HourlyBucket[] = [];
     public chartConfig = {
         useDualAxis: false,
@@ -518,34 +518,34 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
 
             const [totalResult, failedResult, pendingResult, recentResult, allLogsResult, providersResult] = await Promise.all([
                 rv.RunView({
-                    EntityName: 'Communication Logs',
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
                     ResultType: 'count_only'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Logs',
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}' AND Status = 'Failed'`,
                     ResultType: 'count_only'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Logs',
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `Status = 'Pending'`,
                     ResultType: 'count_only'
                 }),
-                rv.RunView<CommunicationLogEntity>({
-                    EntityName: 'Communication Logs',
+                rv.RunView<MJCommunicationLogEntity>({
+                    EntityName: 'MJ: Communication Logs',
                     OrderBy: 'MessageDate DESC',
                     MaxRows: 8,
                     ResultType: 'entity_object'
                 }),
-                rv.RunView<CommunicationLogEntity>({
-                    EntityName: 'Communication Logs',
+                rv.RunView<MJCommunicationLogEntity>({
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
                     OrderBy: 'MessageDate ASC',
                     ResultType: 'entity_object'
                 }),
-                rv.RunView<CommunicationProviderEntity>({
-                    EntityName: 'Communication Providers',
+                rv.RunView<MJCommunicationProviderEntity>({
+                    EntityName: 'MJ: Communication Providers',
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
                 })
@@ -580,14 +580,14 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         }
     }
 
-    public getActivityIconClass(log: CommunicationLogEntity): string {
+    public getActivityIconClass(log: MJCommunicationLogEntity): string {
         if (log.Status === 'Failed') return 'error';
         const type = (log.CommunicationProviderMessageType || '').toLowerCase();
         if (type.includes('sms')) return 'sms';
         return 'email';
     }
 
-    public getActivityIcon(log: CommunicationLogEntity): string {
+    public getActivityIcon(log: MJCommunicationLogEntity): string {
         if (log.Direction === 'Receiving') return 'fa-solid fa-arrow-down';
         const type = (log.CommunicationProviderMessageType || '').toLowerCase();
         if (type.includes('sms')) return 'fa-solid fa-comment-sms';
@@ -601,7 +601,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         return 'critical';
     }
 
-    private processTrendData(logs: CommunicationLogEntity[], startTime: Date): HourlyBucket[] {
+    private processTrendData(logs: MJCommunicationLogEntity[], startTime: Date): HourlyBucket[] {
         const buckets: HourlyBucket[] = [];
         const now = new Date();
         const current = new Date(startTime);
@@ -628,7 +628,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         return buckets;
     }
 
-    private buildProviderHealth(providers: CommunicationProviderEntity[], logs: CommunicationLogEntity[]): ProviderHealth[] {
+    private buildProviderHealth(providers: MJCommunicationProviderEntity[], logs: MJCommunicationLogEntity[]): ProviderHealth[] {
         return providers.map(p => {
             const providerLogs = logs.filter(l => l.CommunicationProvider === p.Name);
             const sent = providerLogs.length;
@@ -647,7 +647,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         });
     }
 
-    private buildChannelBreakdown(logs: CommunicationLogEntity[]): ChannelBreakdown[] {
+    private buildChannelBreakdown(logs: MJCommunicationLogEntity[]): ChannelBreakdown[] {
         const total = logs.length;
         if (total === 0) return [];
 

@@ -1,6 +1,6 @@
 import { ViewContainerRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 
 /**
  * Defines a single menu item in the user context menu
@@ -101,7 +101,7 @@ export interface UserMenuContext {
     user: UserInfo;
 
     /** Full user entity with all fields */
-    userEntity: UserEntity;
+    userEntity: MJUserEntity;
 
     /** Reference to shell component for advanced operations */
     shell: Record<string, unknown>;

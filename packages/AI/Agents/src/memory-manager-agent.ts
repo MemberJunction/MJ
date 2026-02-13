@@ -2,12 +2,12 @@ import { BaseAgent } from './base-agent';
 import { RegisterClass, CleanAndParseJSON } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView, RunQuery, LogError, LogStatus } from '@memberjunction/core';
 import {
-    ConversationDetailEntity,
-    AIAgentRunEntity,
-    AIAgentNoteEntity,
-    AIAgentExampleEntity,
-    ConversationDetailRatingEntity,
-    AIAgentRunStepEntity
+    MJConversationDetailEntity,
+    MJAIAgentRunEntity,
+    MJAIAgentNoteEntity,
+    MJAIAgentExampleEntity,
+    MJConversationDetailRatingEntity,
+    MJAIAgentRunStepEntity
 } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -170,14 +170,14 @@ export class MemoryManagerAgent extends BaseAgent {
         stepName: string,
         inputData?: Record<string, unknown>,
         targetId?: string
-    ): Promise<AIAgentRunStepEntity | null> {
+    ): Promise<MJAIAgentRunStepEntity | null> {
         if (!this._agentRunID || !this._contextUser) {
             return null;
         }
 
         try {
             const md = new Metadata();
-            const step = await md.GetEntityObject<AIAgentRunStepEntity>('MJ: AI Agent Run Steps', this._contextUser);
+            const step = await md.GetEntityObject<MJAIAgentRunStepEntity>('MJ: AI Agent Run Steps', this._contextUser);
 
             step.AgentRunID = this._agentRunID;
             step.StepNumber = ++this._stepCounter;
@@ -210,7 +210,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Finalize an agent run step with success/failure status and output data.
      */
     private async FinalizeRunStep(
-        step: AIAgentRunStepEntity | null,
+        step: MJAIAgentRunStepEntity | null,
         success: boolean,
         outputData?: Record<string, unknown>,
         targetLogId?: string,
@@ -251,7 +251,7 @@ export class MemoryManagerAgent extends BaseAgent {
      */
     private async GetLastRunTime(agentId: string, contextUser: UserInfo): Promise<Date | null> {
         const rv = new RunView();
-        const result = await rv.RunView<AIAgentRunEntity>({
+        const result = await rv.RunView<MJAIAgentRunEntity>({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
             OrderBy: 'StartedAt DESC',
@@ -386,7 +386,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Load agent runs with high-usage artifacts since last run.
      * Links through: ArtifactUse -> ArtifactVersion -> ConversationDetailArtifact -> ConversationDetail -> Conversation -> AIAgentRun
      */
-    private async LoadHighValueAgentRuns(since: Date | null, contextUser: UserInfo): Promise<AIAgentRunEntity[]> {
+    private async LoadHighValueAgentRuns(since: Date | null, contextUser: UserInfo): Promise<MJAIAgentRunEntity[]> {
         const rv = new RunView();
 
         // Use subquery to find agent runs with high-usage artifacts
@@ -414,7 +414,7 @@ export class MemoryManagerAgent extends BaseAgent {
             )
         `.trim().replace(/\s+/g, ' ');
 
-        const result = await rv.RunView<AIAgentRunEntity>({
+        const result = await rv.RunView<MJAIAgentRunEntity>({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: filter,
             OrderBy: '__mj_CreatedAt DESC',
@@ -480,7 +480,7 @@ export class MemoryManagerAgent extends BaseAgent {
      */
     private async executeNoteExtraction(
         promptData: { conversationThreads: ConversationThread[]; existingNotes: unknown[] },
-        existingNotes: AIAgentNoteEntity[],
+        existingNotes: MJAIAgentNoteEntity[],
         contextUser: UserInfo
     ): Promise<ExtractedNote[]> {
         const conversationThreads = promptData.conversationThreads;
@@ -786,7 +786,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Uses LLM-based deduplication to avoid adding redundant examples.
      */
     private async ExtractExamples(
-        conversationDetails: ConversationDetailEntity[],
+        conversationDetails: MJConversationDetailEntity[],
         contextUser: UserInfo
     ): Promise<ExtractedExample[]> {
         if (conversationDetails.length === 0) {
@@ -957,7 +957,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const rv = new RunView();
 
         // Cache source agent runs to avoid repeated lookups
-        const runCache = new Map<string, AIAgentRunEntity | null>();
+        const runCache = new Map<string, MJAIAgentRunEntity | null>();
 
         // Get the "AI" note type ID for AI-generated notes
         const aiNoteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName('AI');
@@ -975,10 +975,10 @@ export class MemoryManagerAgent extends BaseAgent {
             try {
 
                 // Load source agent run for scope inheritance (if available)
-                let sourceRun: AIAgentRunEntity | null = null;
+                let sourceRun: MJAIAgentRunEntity | null = null;
                 if (extracted.sourceAgentRunId) {
                     if (!runCache.has(extracted.sourceAgentRunId)) {
-                        const runResult = await rv.RunView<AIAgentRunEntity>({
+                        const runResult = await rv.RunView<MJAIAgentRunEntity>({
                             EntityName: 'MJ: AI Agent Runs',
                             ExtraFilter: `ID='${extracted.sourceAgentRunId}'`,
                             MaxRows: 1,
@@ -994,7 +994,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
                 if (extracted.mergeWithExistingIds?.length) {
                     for (const mergeTargetId of extracted.mergeWithExistingIds) {
-                        const existingNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
+                        const existingNote = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
                         if (await existingNote.Load(mergeTargetId)) {
                             existingNote.Status = 'Revoked';
                             existingNote.Comments = `Superseded: contradiction detected, replaced by new note from conversation ${extracted.sourceConversationId || 'unknown'}`;
@@ -1013,7 +1013,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
                 if (createNewNote) {
                     // Create new note
-                    const note = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
+                    const note = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
                     // Only use valid UUIDs, filter out placeholders like "user-uuid-here"
                     const isValidUUID = (id: string | undefined | null): boolean => {
                         if (!id) return false;
@@ -1247,8 +1247,8 @@ export class MemoryManagerAgent extends BaseAgent {
      * Find clusters of semantically similar notes suitable for consolidation.
      * Each cluster contains notes that exceed the similarity threshold and meet the minimum cluster size.
      */
-    private async findConsolidationClusters(activeNotes: AIAgentNoteEntity[]): Promise<AIAgentNoteEntity[][]> {
-        const clusters: AIAgentNoteEntity[][] = [];
+    private async findConsolidationClusters(activeNotes: MJAIAgentNoteEntity[]): Promise<MJAIAgentNoteEntity[][]> {
+        const clusters: MJAIAgentNoteEntity[][] = [];
         const processedIds = new Set<string>();
 
         for (const note of activeNotes) {
@@ -1265,7 +1265,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 CONSOLIDATION_CONFIG.similarityThreshold
             );
 
-            const cluster: AIAgentNoteEntity[] = [note];
+            const cluster: MJAIAgentNoteEntity[] = [note];
             processedIds.add(note.ID);
 
             for (const similar of similarNotes) {
@@ -1288,7 +1288,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * and revoke source notes.
      */
     private async processConsolidationCluster(
-        cluster: AIAgentNoteEntity[],
+        cluster: MJAIAgentNoteEntity[],
         consolidatePrompt: AIPromptEntityExtended,
         aiNoteTypeId: string,
         runner: AIPromptRunner,
@@ -1351,7 +1351,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
         // Create consolidated note
         const consolidatedNoteData = parsedResult.consolidatedNote!;
-        const newNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
+        const newNote = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
         const templateNote = cluster[0];
 
         newNote.AgentID = templateNote.AgentID;
@@ -1378,7 +1378,7 @@ export class MemoryManagerAgent extends BaseAgent {
         // set it here so decomposition can properly restore source notes.
         const revokeResults = await Promise.all(
             cluster.map(async (sourceNote) => {
-                const noteToRevoke = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
+                const noteToRevoke = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
                 if (await noteToRevoke.Load(sourceNote.ID)) {
                     noteToRevoke.Status = 'Revoked';
                     noteToRevoke.Comments = 'Revoked during note consolidation';
@@ -1405,8 +1405,8 @@ export class MemoryManagerAgent extends BaseAgent {
      * Mirrors the scoping logic in CreateNoteRecords.
      */
     private applyScopeToConsolidatedNote(
-        newNote: AIAgentNoteEntity,
-        templateNote: AIAgentNoteEntity,
+        newNote: MJAIAgentNoteEntity,
+        templateNote: MJAIAgentNoteEntity,
         scopeLevel: string | undefined
     ): void {
         const level = scopeLevel || 'user';
@@ -1444,15 +1444,15 @@ export class MemoryManagerAgent extends BaseAgent {
         const rv = new RunView();
 
         // Cache source agent runs to avoid repeated lookups
-        const runCache = new Map<string, AIAgentRunEntity | null>();
+        const runCache = new Map<string, MJAIAgentRunEntity | null>();
 
         for (const extracted of extractedExamples) {
             try {
                 // Load source agent run for scope inheritance (if available)
-                let sourceRun: AIAgentRunEntity | null = null;
+                let sourceRun: MJAIAgentRunEntity | null = null;
                 if (extracted.sourceAgentRunId) {
                     if (!runCache.has(extracted.sourceAgentRunId)) {
-                        const runResult = await rv.RunView<AIAgentRunEntity>({
+                        const runResult = await rv.RunView<MJAIAgentRunEntity>({
                             EntityName: 'MJ: AI Agent Runs',
                             ExtraFilter: `ID='${extracted.sourceAgentRunId}'`,
                             MaxRows: 1,
@@ -1463,7 +1463,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
                 }
 
-                const example = await md.GetEntityObject<AIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
+                const example = await md.GetEntityObject<MJAIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
 
                 // AgentID must come from source run - LLM doesn't know real agent IDs
                 if (!sourceRun?.AgentID) {
@@ -1635,7 +1635,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     Message: msg.message,
                     Status: 'Complete',
                     __mj_CreatedAt: msg.createdAt
-                } as unknown as ConversationDetailEntity))
+                } as unknown as MJConversationDetailEntity))
             );
             const extractedExamples = await this.ExtractExamples(conversationDetails, params.contextUser!);
             if (this._verbose) {

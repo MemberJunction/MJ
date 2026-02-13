@@ -23,7 +23,7 @@ class MockBaseEntity {
     GetAll(): Record<string, unknown> { return { ...this._data }; }
 }
 
-export class CredentialEntity extends MockBaseEntity {
+export class MJCredentialEntity extends MockBaseEntity {
     get Name(): string { return this._data.Name as string || ''; }
     set Name(value: string) { this._data.Name = value; }
 
@@ -58,7 +58,7 @@ export class CredentialEntity extends MockBaseEntity {
     set Description(value: string | null) { this._data.Description = value; }
 }
 
-export class CredentialTypeEntity extends MockBaseEntity {
+export class MJCredentialTypeEntity extends MockBaseEntity {
     get Name(): string { return this._data.Name as string || ''; }
     set Name(value: string) { this._data.Name = value; }
 
@@ -69,12 +69,12 @@ export class CredentialTypeEntity extends MockBaseEntity {
     set ValidationEndpoint(value: string | null) { this._data.ValidationEndpoint = value; }
 }
 
-export class CredentialCategoryEntity extends MockBaseEntity {
+export class MJCredentialCategoryEntity extends MockBaseEntity {
     get Name(): string { return this._data.Name as string || ''; }
     set Name(value: string) { this._data.Name = value; }
 }
 
-export class AuditLogEntity extends MockBaseEntity {
+export class MJAuditLogEntity extends MockBaseEntity {
     get UserID(): string { return this._data.UserID as string || ''; }
     set UserID(value: string) { this._data.UserID = value; }
 

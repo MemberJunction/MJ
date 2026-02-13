@@ -243,7 +243,7 @@ describe('JSON round-trip serialization', () => {
                 type: 'open:resource',
                 label: 'Open Record',
                 resourceType: 'Record',
-                entityName: 'Users',
+                entityName: 'MJ: Users',
                 resourceId: 'u-1',
                 mode: 'edit'
             },

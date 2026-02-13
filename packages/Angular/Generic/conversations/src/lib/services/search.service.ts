@@ -2,13 +2,13 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, of } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap, map } from 'rxjs/operators';
 import {
-  ConversationEntity,
-  ConversationDetailEntity,
-  ConversationArtifactEntity,
-  CollectionEntity,
-  CollectionArtifactEntity,
-  TaskEntity,
-  ArtifactEntity
+  MJConversationEntity,
+  MJConversationDetailEntity,
+  MJConversationArtifactEntity,
+  MJCollectionEntity,
+  MJCollectionArtifactEntity,
+  MJTaskEntity,
+  MJArtifactEntity
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata } from '@memberjunction/core';
 
@@ -196,9 +196,9 @@ export class SearchService {
       filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
     }
 
-    const result = await rv.RunView<ConversationEntity>(
+    const result = await rv.RunView<MJConversationEntity>(
       {
-        EntityName: 'Conversations',
+        EntityName: 'MJ: Conversations',
         ExtraFilter: filter,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 100,
@@ -239,9 +239,9 @@ export class SearchService {
       filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
     }
 
-    const result = await rv.RunView<ConversationDetailEntity>(
+    const result = await rv.RunView<MJConversationDetailEntity>(
       {
-        EntityName: 'Conversation Details',
+        EntityName: 'MJ: Conversation Details',
         ExtraFilter: filter,
         OrderBy: '__mj_CreatedAt DESC',
         MaxRows: 100,
@@ -282,7 +282,7 @@ export class SearchService {
       filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
     }
 
-    const result = await rv.RunView<ArtifactEntity>(
+    const result = await rv.RunView<MJArtifactEntity>(
       {
         EntityName: 'MJ: Artifacts',
         ExtraFilter: `${filter} AND (Visibility IS NULL OR Visibility='Always')`,
@@ -303,7 +303,7 @@ export class SearchService {
     // For each artifact, check if it's in a collection for context
     for (const artifact of result.Results) {
       // Check for collection associations
-      const collResult = await rv.RunView<CollectionArtifactEntity>(
+      const collResult = await rv.RunView<MJCollectionArtifactEntity>(
         {
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `ArtifactVersionID IN (
@@ -365,7 +365,7 @@ export class SearchService {
       filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
     }
 
-    const result = await rv.RunView<CollectionEntity>(
+    const result = await rv.RunView<MJCollectionEntity>(
       {
         EntityName: 'MJ: Collections',
         ExtraFilter: filter,
@@ -399,7 +399,7 @@ export class SearchService {
 
     // Build filter using same logic as TasksFullViewComponent
     const md = new Metadata();
-    const cd = md.EntityByName('Conversation Details');
+    const cd = md.EntityByName('MJ: Conversation Details');
     const c = md.EntityByName('Conversations');
 
     if (!cd || !c) {
@@ -425,7 +425,7 @@ export class SearchService {
       filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
     }
 
-    const result = await rv.RunView<TaskEntity>(
+    const result = await rv.RunView<MJTaskEntity>(
       {
         EntityName: 'MJ: Tasks',
         ExtraFilter: filter,
@@ -447,7 +447,7 @@ export class SearchService {
   /**
    * Map conversation entity to search result
    */
-  private mapConversationToSearchResult(conversation: ConversationEntity, query: string): SearchResult {
+  private mapConversationToSearchResult(conversation: MJConversationEntity, query: string): SearchResult {
     const lowerQuery = query.toLowerCase();
     const name = conversation.Name || 'Untitled Conversation';
     const description = conversation.Description || '';
@@ -479,7 +479,7 @@ export class SearchService {
   /**
    * Map message entity to search result
    */
-  private mapMessageToSearchResult(message: ConversationDetailEntity, query: string): SearchResult {
+  private mapMessageToSearchResult(message: MJConversationDetailEntity, query: string): SearchResult {
     const messageText = message.Message || '';
     const matchedText = this.extractMatchContext(messageText, query);
 
@@ -500,7 +500,7 @@ export class SearchService {
    * Map artifact entity to search result
    */
   private mapArtifactToSearchResult(
-    artifact: ArtifactEntity,
+    artifact: MJArtifactEntity,
     query: string,
     collectionId?: string,
     collectionName?: string
@@ -535,7 +535,7 @@ export class SearchService {
   /**
    * Map collection entity to search result
    */
-  private mapCollectionToSearchResult(collection: CollectionEntity, query: string): SearchResult {
+  private mapCollectionToSearchResult(collection: MJCollectionEntity, query: string): SearchResult {
     const lowerQuery = query.toLowerCase();
     const name = collection.Name || 'Untitled Collection';
     const description = collection.Description || '';
@@ -565,7 +565,7 @@ export class SearchService {
   /**
    * Map task entity to search result
    */
-  private mapTaskToSearchResult(task: TaskEntity, query: string): SearchResult {
+  private mapTaskToSearchResult(task: MJTaskEntity, query: string): SearchResult {
     const lowerQuery = query.toLowerCase();
     const name = task.Name || 'Untitled Task';
     const description = task.Description || '';

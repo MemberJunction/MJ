@@ -1924,7 +1924,7 @@ export interface QueryParameter {
 /**
  * Type for query entity information
  */
-export interface QueryEntity {
+export interface MJQueryEntity {
     ID: string;
     QueryID: string;
     EntityID: string;
@@ -2008,7 +2008,7 @@ export interface CreateQueryResult {
     /**
      * Array of entities referenced by the query (optional)
      */
-    Entities?: QueryEntity[];
+    Entities?: MJQueryEntity[];
     /**
      * Array of permissions created for the query (optional)
      */
@@ -2148,7 +2148,7 @@ export interface UpdateQueryResult {
     /**
      * Array of entities referenced by the query (optional)
      */
-    Entities?: QueryEntity[];
+    Entities?: MJQueryEntity[];
     /**
      * Array of permissions for the query (optional)
      */

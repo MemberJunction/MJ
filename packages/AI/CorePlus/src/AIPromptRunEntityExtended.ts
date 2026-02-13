@@ -1,14 +1,14 @@
 import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BaseEntity } from '@memberjunction/core';
-import { AIPromptRunEntity } from '@memberjunction/core-entities';
+import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 
 /**
- * Extended AIPromptRunEntity class with helper methods for extracting 
+ * Extended MJAIPromptRunEntity class with helper methods for extracting 
  * conversation messages and data from the stored JSON.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Runs')
-export class AIPromptRunEntityExtended extends AIPromptRunEntity {
+export class AIPromptRunEntityExtended extends MJAIPromptRunEntity {
     
     /**
      * Parses and extracts all message data from the Messages field.

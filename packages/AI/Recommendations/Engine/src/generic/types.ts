@@ -1,5 +1,5 @@
 import { UserInfo } from "@memberjunction/core";
-import { RecommendationEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity } from "@memberjunction/core-entities";
+import { MJRecommendationEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity } from "@memberjunction/core-entities";
 
 /**
  * Used to make requests to Recommendation providers
@@ -17,7 +17,7 @@ export class RecommendationRequest<T = Record<string, any>> {
      * to save the Recommendation records. This will be done as the batch is processed. You cannot save a Recommendation record until a Run is created
      * which is done by the RecommendationEngineBase.Recommend() method.
      */
-    Recommendations?: RecommendationEntity[] = [];
+    Recommendations?: MJRecommendationEntity[] = [];
   
     /**
      * This is an optional field that can be passed in instead of the Recommendations field. If passed in,
@@ -40,7 +40,7 @@ export class RecommendationRequest<T = Record<string, any>> {
     /**
      * The specific provider to use for the request. Leave this undefined if you want to use the default provider.
      */
-    Provider?: RecommendationProviderEntity;
+    Provider?: MJRecommendationProviderEntity;
   
     /**
      * UserInfo object to use when applicable.
@@ -72,11 +72,11 @@ export class RecommendationResult {
     /**
      * The Recommendation Run entity that was created by the recommendation engine
      */
-    RecommendationRun?: RecommendationRunEntity;
+    RecommendationRun?: MJRecommendationRunEntity;
     /**
      * The Recommendation Item Entities that were created by the recommendation provider
      */
-    RecommendationItems?: RecommendationItemEntity[] = [];
+    RecommendationItems?: MJRecommendationItemEntity[] = [];
     Success: boolean;
     ErrorMessage: string;
 

@@ -109,7 +109,7 @@ describe('SkipTypes util', () => {
     it('should map relationship properties', () => {
       const re = {
         EntityID: 'ent-1',
-        Entity: 'Users',
+        Entity: 'MJ: Users',
         EntityBaseView: 'vwUsers',
         EntityKeyField: 'ID',
         RelatedEntityID: 'ent-2',

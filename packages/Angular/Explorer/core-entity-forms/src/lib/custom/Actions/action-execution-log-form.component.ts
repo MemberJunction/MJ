@@ -1,10 +1,10 @@
 import { Component, OnInit } from '@angular/core';
-import { ActionExecutionLogEntity, ActionEntity, UserEntity } from '@memberjunction/core-entities';
+import { MJActionExecutionLogEntity, MJActionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { ActionExecutionLogFormComponent } from '../../generated/Entities/ActionExecutionLog/actionexecutionlog.form.component';
+import { MJActionExecutionLogFormComponent } from '../../generated/Entities/MJActionExecutionLog/mjactionexecutionlog.form.component';
 
 interface ActionParameter {
     Name: string;
@@ -12,19 +12,19 @@ interface ActionParameter {
     Type: 'Input' | 'Output' | 'Both';
 }
 
-@RegisterClass(BaseFormComponent, 'Action Execution Logs')
+@RegisterClass(BaseFormComponent, 'MJ: Action Execution Logs')
 @Component({
   standalone: false,
     selector: 'mj-action-execution-log-form',
     templateUrl: './action-execution-log-form.component.html',
     styleUrls: ['./action-execution-log-form.component.css']
 })
-export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogFormComponent implements OnInit {
-    public record!: ActionExecutionLogEntity;
+export class ActionExecutionLogFormComponentExtended extends MJActionExecutionLogFormComponent implements OnInit {
+    public record!: MJActionExecutionLogEntity;
     
     // Related entities
-    public action: ActionEntity | null = null;
-    public user: UserEntity | null = null;
+    public action: MJActionEntity | null = null;
+    public user: MJUserEntity | null = null;
     
     // Parameter counts for visibility
     public hasInputParams = false;
@@ -74,7 +74,7 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         this.isLoadingAction = true;
         try {
             const md = new Metadata();
-            this.action = await md.GetEntityObject<ActionEntity>('Actions');
+            this.action = await md.GetEntityObject<MJActionEntity>('MJ: Actions');
             if (this.action) {
                 await this.action.Load(this.record.ActionID);
             }
@@ -91,7 +91,7 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         this.isLoadingUser = true;
         try {
             const md = new Metadata();
-            this.user = await md.GetEntityObject<UserEntity>('Users');
+            this.user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
             if (this.user) {
                 await this.user.Load(this.record.UserID);
             }

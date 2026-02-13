@@ -243,7 +243,7 @@ export class ExecuteAIPromptAction extends BaseAction {
     private async loadPrompt(promptName: string, contextUser?: any): Promise<AIPromptEntityExtended | null> {
         const rv = new RunView();
         const result = await rv.RunView<AIPromptEntityExtended>({
-            EntityName: 'AI Prompts',
+            EntityName: 'MJ: AI Prompts',
             ExtraFilter: `Name = '${promptName.replace(/'/g, "''")}'`,
             MaxRows: 1,
             ResultType: 'entity_object'

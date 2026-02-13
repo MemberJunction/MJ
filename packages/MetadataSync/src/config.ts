@@ -255,7 +255,7 @@ export interface EntityConfig {
     lookupFields?: {
       /** Field name in this entity (e.g., "CategoryID") */
       [fieldName: string]: {
-        /** Target entity name (e.g., "AI Prompt Categories") */
+        /** Target entity name (e.g., "MJ: AI Prompt Categories") */
         entity: string;
         /** Field in target entity to use for lookup (e.g., "Name") */
         field: string;

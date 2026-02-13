@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogModule } from '@progress/kendo-angular-dialog';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { InputsModule } from '@progress/kendo-angular-inputs';
@@ -11,7 +11,7 @@ import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
 
 interface CollectionNode {
-  collection: CollectionEntity;
+  collection: MJCollectionEntity;
   selected: boolean;
   hasChildren: boolean;
   alreadyContainsArtifact: boolean;
@@ -494,14 +494,14 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   @Output() saved = new EventEmitter<string[]>(); // Emits selected collection IDs
   @Output() cancelled = new EventEmitter<void>();
 
-  public allCollections: CollectionEntity[] = [];
+  public allCollections: MJCollectionEntity[] = [];
   public displayedCollections: CollectionNode[] = [];
-  public selectedCollections: CollectionEntity[] = [];
+  public selectedCollections: MJCollectionEntity[] = [];
   public userPermissions: Map<string, CollectionPermission> = new Map();
 
   public navigationPath: CollectionNode[] = []; // Breadcrumb trail
   public currentParentId: string | null = null;
-  public currentParentCollection: CollectionEntity | undefined = undefined;
+  public currentParentCollection: MJCollectionEntity | undefined = undefined;
 
   public searchQuery: string = '';
   public isLoading: boolean = false;
@@ -550,7 +550,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
       // Load all collections in environment
       const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>({
+      const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `EnvironmentID='${this.environmentId}'`,
         OrderBy: 'Name ASC',
@@ -606,17 +606,17 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     });
   }
 
-  private displayRootCollections(editableCollections: CollectionEntity[]): void {
+  private displayRootCollections(editableCollections: MJCollectionEntity[]): void {
     const rootCollections = editableCollections.filter(c => !c.ParentID);
     this.displayedCollections = rootCollections.map(c => this.createNode(c, editableCollections));
   }
 
-  private displayChildCollections(parentId: string, editableCollections: CollectionEntity[]): void {
+  private displayChildCollections(parentId: string, editableCollections: MJCollectionEntity[]): void {
     const childCollections = editableCollections.filter(c => c.ParentID === parentId);
     this.displayedCollections = childCollections.map(c => this.createNode(c, editableCollections));
   }
 
-  private createNode(collection: CollectionEntity, allEditableCollections: CollectionEntity[]): CollectionNode {
+  private createNode(collection: MJCollectionEntity, allEditableCollections: MJCollectionEntity[]): CollectionNode {
     const hasChildren = allEditableCollections.some(c => c.ParentID === collection.ID);
     const alreadyContainsArtifact = this.excludeCollectionIds.includes(collection.ID);
     return {
@@ -627,7 +627,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     };
   }
 
-  canEdit(collection: CollectionEntity): boolean {
+  canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
     if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
       return true;
@@ -654,7 +654,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     }
   }
 
-  drillIntoCollection(collection: CollectionEntity): void {
+  drillIntoCollection(collection: MJCollectionEntity): void {
     // Add current location to navigation path
     const editableCollections = this.allCollections.filter(c => {
       return this.canEdit(c);
@@ -686,7 +686,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     this.searchQuery = '';
   }
 
-  navigateToCollection(collection: CollectionEntity): void {
+  navigateToCollection(collection: MJCollectionEntity): void {
     // Find the index of this collection in the navigation path
     const index = this.navigationPath.findIndex(n => n.collection.ID === collection.ID);
 
@@ -740,7 +740,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     try {
       this.isCreatingCollection = true;
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = this.newCollectionName.trim();
       collection.EnvironmentID = this.environmentId;

@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity,  TemplateParamEntity, ActionParamEntity, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -705,7 +705,7 @@ export class BaseAgent {
         category?: string;
         metadata?: Record<string, any>;
         agent?: AIAgentEntityExtended;
-        agentType?: AIAgentTypeEntity;
+        agentType?: MJAIAgentTypeEntity;
         severity?: 'warning' | 'error' | 'critical';
     }): void {
         const errorMessage = error instanceof Error ? error.message : error;
@@ -1214,7 +1214,7 @@ export class BaseAgent {
     /**
      * Storage for injected notes and examples to include in result
      */
-    private _injectedMemory: { notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] } = { notes: [], examples: [] };
+    private _injectedMemory: { notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] } = { notes: [], examples: [] };
 
     /**
      * Determine the scope label for a note based on its scope fields.
@@ -1224,7 +1224,7 @@ export class BaseAgent {
      * @param note - The agent note entity
      * @returns A human-readable scope label
      */
-    private determineNoteScope(note: AIAgentNoteEntity): string {
+    private determineNoteScope(note: MJAIAgentNoteEntity): string {
         const hasAgent = note.AgentID !== null;
         const hasUser = note.UserID !== null;
         const hasCompany = note.CompanyID !== null;
@@ -1280,7 +1280,7 @@ export class BaseAgent {
         primaryScopeRecordId?: string,
         secondaryScopes?: Record<string, SecondaryScopeValue>,
         secondaryScopeConfig?: SecondaryScopeConfig | null
-    ): Promise<{ notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] }> {
+    ): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
         // Check if injection is enabled
         if (!agent.InjectNotes && !agent.InjectExamples) {
             return { notes: [], examples: [] };
@@ -1661,7 +1661,7 @@ export class BaseAgent {
     /**
      * Prepares prompt parameters for hierarchical execution.
      * 
-     * @param {AIAgentTypeEntity} agentType - The agent type
+     * @param {MJAIAgentTypeEntity} agentType - The agent type
      * @param {AIPromptEntityExtended} systemPrompt - The system prompt
      * @param {AIPromptEntityExtended} childPrompt - The child prompt
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -1673,7 +1673,7 @@ export class BaseAgent {
         payload: P,
         params: ExecuteAgentParams
     ): Promise<AIPromptParams> {
-        const agentType: AIAgentTypeEntity = config.agentType;
+        const agentType: MJAIAgentTypeEntity = config.agentType;
         const systemPrompt: AIPromptEntityExtended = config.systemPrompt;
         const childPrompt: AIPromptEntityExtended = config.childPrompt;
 
@@ -1833,7 +1833,7 @@ export class BaseAgent {
      */
     protected async determineNextStep<P>(
         params: ExecuteAgentParams,
-        agentType: AIAgentTypeEntity,
+        agentType: MJAIAgentTypeEntity,
         promptResult: AIPromptRunResult,
         currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
@@ -3378,7 +3378,7 @@ The context is now within limits. Please retry your request with the recovered c
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
-     * @param {AIAgentTypeEntity} agentType - The agent type
+     * @param {MJAIAgentTypeEntity} agentType - The agent type
      * @param {AIPromptRunResult} promptResult - The prompt execution result
      * @returns {Promise<ExecuteAgentResult>} The execution result
      * @protected
@@ -3386,7 +3386,7 @@ The context is now within limits. Please retry your request with the recovered c
     protected async processNextStep<P>(
         nextStep: BaseAgentNextStep<P>,
         params: ExecuteAgentParams,
-        agentType: AIAgentTypeEntity,
+        agentType: MJAIAgentTypeEntity,
         promptResult: AIPromptRunResult,
         currentPayload: P,
         currentStep: AIAgentRunStepEntityExtended
@@ -3582,7 +3582,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @since 2.131.0
      */
     protected buildAgentTypePromptParams(
-        agentType: AIAgentTypeEntity | undefined,
+        agentType: MJAIAgentTypeEntity | undefined,
         agent: AIAgentEntityExtended,
         runtimeOverrides?: Record<string, unknown>
     ): Record<string, unknown> {
@@ -4033,7 +4033,7 @@ The context is now within limits. Please retry your request with the recovered c
      * prompt.
      * @param agent 
      */
-    protected getAgentPromptParameters(agent: AIAgentEntityExtended): Array<TemplateParamEntity> {
+    protected getAgentPromptParameters(agent: AIAgentEntityExtended): Array<MJTemplateParamEntity> {
         const engine = AIEngine.Instance;
         const agentPrompt = engine.AgentPrompts
             .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
@@ -4098,7 +4098,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns {object} Formatted parameter object
      * @private
      */
-    private formatActionParameter(param: ActionParamEntity): object {
+    private formatActionParameter(param: MJActionParamEntity): object {
         return {
             Name: param.Name,
             Type: param.Type,
@@ -4348,7 +4348,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         
-        // Create AIAgentRunEntity
+        // Create MJAIAgentRunEntity
         this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
         if (params.conversationDetailId) {
@@ -5357,7 +5357,7 @@ The context is now within limits. Please retry your request with the recovered c
         
         try {
             // Note: TypeScript errors on PayloadDownstreamPaths/PayloadUpstreamPaths are expected
-            // until CodeGen runs after the migration to add these fields to AIAgentEntity
+            // until CodeGen runs after the migration to add these fields to MJAIAgentEntity
             if (subAgentEntity.PayloadDownstreamPaths) {
                 downstreamPaths = JSON.parse(subAgentEntity.PayloadDownstreamPaths);
             }
@@ -5846,7 +5846,7 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams<SC>,
         previousDecision: BaseAgentNextStep<SR, SC>,
         subAgentEntity: AIAgentEntityExtended,
-        relationship: AIAgentRelationshipEntity,
+        relationship: MJAIAgentRelationshipEntity,
         parentStepId?: string,
         subAgentPayloadOverride?: SR,
         stepCount: number = 0

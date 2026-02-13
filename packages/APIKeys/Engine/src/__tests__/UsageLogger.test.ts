@@ -32,7 +32,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    APIKeyUsageLogEntity: class {},
+    MJAPIKeyUsageLogEntity: class {},
 }));
 
 import { UsageLogger } from '../UsageLogger';

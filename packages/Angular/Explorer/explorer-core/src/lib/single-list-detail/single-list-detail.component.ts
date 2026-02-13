@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
-import { ListDetailEntity, ListDetailEntityExtended, ListEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJListDetailEntity, ListDetailEntityExtended, MJListEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
@@ -30,7 +30,7 @@ export class SingleListDetailComponent implements OnInit {
   @ViewChild('listDetailGrid') listDetailGrid: ListDetailGridComponent | undefined;
 
   // List record
-  public listRecord: ListEntity | null = null;
+  public listRecord: MJListEntity | null = null;
   public showLoader: boolean = false;
 
   // Grid state
@@ -116,7 +116,7 @@ export class SingleListDetailComponent implements OnInit {
 
     try {
       const md = new Metadata();
-      this.listRecord = await md.GetEntityObject<ListEntity>("Lists");
+      this.listRecord = await md.GetEntityObject<MJListEntity>("MJ: Lists");
       const loadResult = await this.listRecord.Load(this.ListID);
 
       if (!loadResult) {
@@ -227,8 +227,8 @@ export class SingleListDetailComponent implements OnInit {
 
     const listDetailsFilter = `ListID = '${this.listRecord.ID}' AND RecordID IN (${selectedRecordIds.map(id => `'${id}'`).join(',')})`;
 
-    const listDetailsResult = await rv.RunView<ListDetailEntity>({
-      EntityName: 'List Details',
+    const listDetailsResult = await rv.RunView<MJListDetailEntity>({
+      EntityName: 'MJ: List Details',
       ExtraFilter: listDetailsFilter,
       ResultType: 'entity_object'
     }, md.CurrentUser);
@@ -301,7 +301,7 @@ export class SingleListDetailComponent implements OnInit {
     const rv = new RunView();
 
     const result = await rv.RunView<{ RecordID: string }>({
-      EntityName: 'List Details',
+      EntityName: 'MJ: List Details',
       ExtraFilter: `ListID = '${this.listRecord.ID}'`,
       Fields: ['RecordID'],
       ResultType: 'simple'
@@ -400,7 +400,7 @@ export class SingleListDetailComponent implements OnInit {
 
     for (let i = 0; i < recordsToAdd.length; i++) {
       const record = recordsToAdd[i];
-      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
+      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("MJ: List Details", md.CurrentUser);
       listDetail.ListID = this.listRecord.ID;
       listDetail.RecordID = record.ID;
       listDetail.TransactionGroup = tg;
@@ -465,7 +465,7 @@ export class SingleListDetailComponent implements OnInit {
     const md = new Metadata();
 
     const runViewResult = await rv.RunView<UserViewEntityExtended>({
-      EntityName: "User Views",
+      EntityName: "MJ: User Views",
       ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.listRecord.EntityID}'`,
       ResultType: 'entity_object'
     }, md.CurrentUser);
@@ -506,7 +506,7 @@ export class SingleListDetailComponent implements OnInit {
 
     for (const userView of this.userViewsToAdd) {
       const runViewResult = await rv.RunView({
-        EntityName: "User Views",
+        EntityName: "MJ: User Views",
         ViewEntity: userView,
         Fields: ["ID"]
       }, md.CurrentUser);
@@ -539,7 +539,7 @@ export class SingleListDetailComponent implements OnInit {
 
     for (let i = 0; i < recordsToAdd.length; i++) {
       const recordID = recordsToAdd[i];
-      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
+      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("MJ: List Details", md.CurrentUser);
       listDetail.ListID = this.listRecord.ID;
       listDetail.RecordID = recordID;
       listDetail.TransactionGroup = tg;

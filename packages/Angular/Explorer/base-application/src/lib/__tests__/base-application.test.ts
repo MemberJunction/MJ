@@ -44,8 +44,8 @@ vi.mock('@memberjunction/core-entities', () => ({
       UninstallApplication: vi.fn(),
     }
   },
-  WorkspaceEntity: class {},
-  UserApplicationEntity: class {},
+  MJWorkspaceEntity: class {},
+  MJUserApplicationEntity: class {},
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -119,7 +119,7 @@ describe('WorkspaceStateManager', () => {
       manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
 
       const tabId = manager.OpenTab(
-        { ApplicationId: 'app-1', Title: 'Test Tab', Configuration: { resourceType: 'Records', Entity: 'Users' } },
+        { ApplicationId: 'app-1', Title: 'Test Tab', Configuration: { resourceType: 'Records', Entity: 'MJ: Users' } },
         '#ff0000'
       );
 
@@ -135,11 +135,11 @@ describe('WorkspaceStateManager', () => {
       manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
 
       const tabId1 = manager.OpenTab(
-        { ApplicationId: 'app-1', Title: 'Test', ResourceRecordId: 'rec-1', Configuration: { resourceType: 'Records', Entity: 'Users' } },
+        { ApplicationId: 'app-1', Title: 'Test', ResourceRecordId: 'rec-1', Configuration: { resourceType: 'Records', Entity: 'MJ: Users' } },
         '#ff0000'
       );
       const tabId2 = manager.OpenTab(
-        { ApplicationId: 'app-1', Title: 'Test', ResourceRecordId: 'rec-1', Configuration: { resourceType: 'Records', Entity: 'Users' } },
+        { ApplicationId: 'app-1', Title: 'Test', ResourceRecordId: 'rec-1', Configuration: { resourceType: 'Records', Entity: 'MJ: Users' } },
         '#ff0000'
       );
 
@@ -152,7 +152,7 @@ describe('WorkspaceStateManager', () => {
       manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
 
       manager.OpenTab(
-        { ApplicationId: 'app-1', Title: 'Tab 1', Configuration: { resourceType: 'Records', Entity: 'Users' }, ResourceRecordId: '1' },
+        { ApplicationId: 'app-1', Title: 'Tab 1', Configuration: { resourceType: 'Records', Entity: 'MJ: Users' }, ResourceRecordId: '1' },
         '#ff0000'
       );
 
@@ -180,7 +180,7 @@ describe('WorkspaceStateManager', () => {
       manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
 
       const tab1Id = manager.OpenTab(
-        { ApplicationId: 'app-1', Title: 'Tab 1', IsPinned: true, Configuration: { resourceType: 'Records', Entity: 'Users' }, ResourceRecordId: '1' },
+        { ApplicationId: 'app-1', Title: 'Tab 1', IsPinned: true, Configuration: { resourceType: 'Records', Entity: 'MJ: Users' }, ResourceRecordId: '1' },
         '#ff0000'
       );
       const tab2Id = manager.OpenTab(

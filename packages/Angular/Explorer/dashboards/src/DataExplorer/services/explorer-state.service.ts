@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
-import { UserSettingEntity, UserFavoriteEntity, ApplicationEntityEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserSettingEntity, MJUserFavoriteEntity, MJApplicationEntityEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, FavoriteEntity, RecentRecordAccess, FavoriteRecord, DataExplorerViewMode } from '../models/explorer-state.interface';
 
 const BASE_SETTING_KEY = 'DataExplorer.State';
@@ -31,7 +31,7 @@ export class ExplorerStateService {
   private favoriteRecords$ = new BehaviorSubject<FavoriteRecord[]>([]);
 
   /** Application entities with DefaultForNewUser info (loaded once per context) */
-  private applicationEntities: ApplicationEntityEntity[] = [];
+  private applicationEntities: MJApplicationEntityEntity[] = [];
 
   /** Set of entity IDs that have DefaultForNewUser=true */
   private defaultEntityIds = new Set<string>();
@@ -508,7 +508,7 @@ export class ExplorerStateService {
 
       if (!setting) {
         // Create new setting if not found
-        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = settingKey;
       }
@@ -623,7 +623,7 @@ export class ExplorerStateService {
 
       // Create User Favorite record
       const md = new Metadata();
-      const favorite = await md.GetEntityObject<UserFavoriteEntity>('User Favorites');
+      const favorite = await md.GetEntityObject<MJUserFavoriteEntity>('MJ: User Favorites');
       favorite.UserID = userId;
       favorite.EntityID = entitiesEntity.ID;
       favorite.RecordID = entityId;
@@ -656,7 +656,7 @@ export class ExplorerStateService {
 
       // Delete User Favorite record
       const md = new Metadata();
-      const favoriteEntity = await md.GetEntityObject<UserFavoriteEntity>('User Favorites');
+      const favoriteEntity = await md.GetEntityObject<MJUserFavoriteEntity>('MJ: User Favorites');
       await favoriteEntity.Load(favorite.userFavoriteId);
       const deleted = await favoriteEntity.Delete();
 
@@ -691,8 +691,8 @@ export class ExplorerStateService {
       }
 
       const rv = new RunView();
-      const result = await rv.RunView<ApplicationEntityEntity>({
-        EntityName: 'Application Entities',
+      const result = await rv.RunView<MJApplicationEntityEntity>({
+        EntityName: 'MJ: Application Entities',
         ExtraFilter: `ApplicationID = '${this.currentFilter.applicationId}'`,
         ResultType: 'entity_object'
       });

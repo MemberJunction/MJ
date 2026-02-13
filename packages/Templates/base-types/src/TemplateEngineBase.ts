@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
+import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, TemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
@@ -14,11 +14,11 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
 
 
     private _Metadata: {
-        TemplateContentTypes: TemplateContentTypeEntity[],
-        TemplateCategories: TemplateCategoryEntity[],
+        TemplateContentTypes: MJTemplateContentTypeEntity[],
+        TemplateCategories: MJTemplateCategoryEntity[],
         Templates: TemplateEntityExtended[],
-        TemplateContents: TemplateContentEntity[],
-        TemplateParams: TemplateParamEntity[]
+        TemplateContents: MJTemplateContentEntity[],
+        TemplateParams: MJTemplateParamEntity[]
     };
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
@@ -45,16 +45,16 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         return this._Metadata.Templates;
     }
 
-    public get TemplateContentTypes(): TemplateContentTypeEntity[] {
+    public get TemplateContentTypes(): MJTemplateContentTypeEntity[] {
         return this._Metadata.TemplateContentTypes;
     }
-    public get TemplateCategories(): TemplateCategoryEntity[] {
+    public get TemplateCategories(): MJTemplateCategoryEntity[] {
         return this._Metadata.TemplateCategories;
     }
-    public get TemplateContents(): TemplateContentEntity[] {
+    public get TemplateContents(): MJTemplateContentEntity[] {
         return this._Metadata.TemplateContents;
     }
-    public get TemplateParams(): TemplateParamEntity[] {
+    public get TemplateParams(): MJTemplateParamEntity[] {
         return this._Metadata.TemplateParams;
     }
 

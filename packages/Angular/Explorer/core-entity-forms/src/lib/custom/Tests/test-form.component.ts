@@ -2,12 +2,12 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, Vi
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { TestEntity, TestRunEntity, TestSuiteTestEntity, TestSuiteRunEntity, UserSettingEntity, UserInfoEngine, TestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJTestEntity, MJTestRunEntity, MJTestSuiteTestEntity, MJTestSuiteRunEntity, MJUserSettingEntity, UserInfoEngine, MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
-import { TestFormComponent } from '../../generated/Entities/Test/test.form.component';
+import { MJTestFormComponent } from '../../generated/Entities/MJTest/mjtest.form.component';
 import {
   TestingDialogService,
   TagsHelper,
@@ -59,8 +59,8 @@ interface ParsedJSON {
   styleUrls: ['./test-form.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestFormComponentExtended extends TestFormComponent implements OnInit, OnDestroy {
-  public override record!: TestEntity;
+export class TestFormComponentExtended extends MJTestFormComponent implements OnInit, OnDestroy {
+  public override record!: MJTestEntity;
 
   private destroy$ = new Subject<void>();
 
@@ -75,11 +75,11 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   isRefreshing = false;
 
   // Related data
-  testRuns: TestRunEntity[] = [];
-  suiteTests: TestSuiteTestEntity[] = [];
+  testRuns: MJTestRunEntity[] = [];
+  suiteTests: MJTestSuiteTestEntity[] = [];
 
   // Human feedback map: testRunId -> feedback entity
-  feedbackMap = new Map<string, TestRunFeedbackEntity>();
+  feedbackMap = new Map<string, MJTestRunFeedbackEntity>();
 
   // History tab data
   historyLoaded = false;
@@ -102,7 +102,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   // Keyboard shortcuts
   keyboardShortcutsEnabled = true;
   showShortcuts = false; // Hidden by default
-  private shortcutsSettingEntity: UserSettingEntity | null = null;
+  private shortcutsSettingEntity: MJUserSettingEntity | null = null;
   private metadata = new Metadata();
 
   // Evaluation preferences
@@ -176,7 +176,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TestRunEntity>({
+      const result = await rv.RunView<MJTestRunEntity>({
         EntityName: 'MJ: Test Runs',
         ExtraFilter: `TestID='${this.record.ID}'`,
         OrderBy: 'StartedAt DESC',
@@ -216,7 +216,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
         const chunk = testRunIds.slice(i, i + chunkSize);
         const inClause = chunk.map(id => `'${id}'`).join(',');
 
-        const result = await rv.RunView<TestRunFeedbackEntity>({
+        const result = await rv.RunView<MJTestRunFeedbackEntity>({
           EntityName: 'MJ: Test Run Feedbacks',
           ExtraFilter: `TestRunID IN (${inClause})`,
           ResultType: 'entity_object'
@@ -236,7 +236,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   /**
    * Get feedback for a specific test run
    */
-  getFeedbackForRun(testRunId: string): TestRunFeedbackEntity | undefined {
+  getFeedbackForRun(testRunId: string): MJTestRunFeedbackEntity | undefined {
     return this.feedbackMap.get(testRunId);
   }
 
@@ -276,7 +276,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TestSuiteTestEntity>({
+      const result = await rv.RunView<MJTestSuiteTestEntity>({
         EntityName: 'MJ: Test Suite Tests',
         ExtraFilter: `TestID='${this.record.ID}'`,
         OrderBy: 'Sequence',
@@ -427,7 +427,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(runId));
   }
 
-  getRunTags(run: TestRunEntity): string[] {
+  getRunTags(run: MJTestRunEntity): string[] {
     return TagsHelper.parseTags(run.Tags);
   }
 
@@ -517,7 +517,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     try {
       // Load all test runs for this test
       const rv = new RunView();
-      const runsResult = await rv.RunView<TestRunEntity>({
+      const runsResult = await rv.RunView<MJTestRunEntity>({
         EntityName: 'MJ: Test Runs',
         ExtraFilter: `TestID='${this.record.ID}'`,
         OrderBy: 'StartedAt DESC',
@@ -547,12 +547,12 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     }
   }
 
-  private buildHistoryData(runs: TestRunEntity[]): HistoryDataPoint[] {
+  private buildHistoryData(runs: MJTestRunEntity[]): HistoryDataPoint[] {
     // Filter by time range
     const filteredRuns = this.filterRunsByTimeRange(runs);
 
     // Group by date
-    const dateMap = new Map<string, TestRunEntity[]>();
+    const dateMap = new Map<string, MJTestRunEntity[]>();
     for (const run of filteredRuns) {
       if (run.StartedAt) {
         const dateKey = new Date(run.StartedAt).toISOString().split('T')[0];
@@ -588,7 +588,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     return dataPoints.sort((a, b) => b.date.getTime() - a.date.getTime());
   }
 
-  private filterRunsByTimeRange(runs: TestRunEntity[]): TestRunEntity[] {
+  private filterRunsByTimeRange(runs: MJTestRunEntity[]): MJTestRunEntity[] {
     if (this.historyTimeRange === 'all') return runs;
 
     const now = new Date();
@@ -611,9 +611,9 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     return runs.filter(r => r.StartedAt && new Date(r.StartedAt) >= cutoff);
   }
 
-  private async buildSuitePerformance(runs: TestRunEntity[]): Promise<void> {
+  private async buildSuitePerformance(runs: MJTestRunEntity[]): Promise<void> {
     // Group runs by suite
-    const suiteMap = new Map<string, TestRunEntity[]>();
+    const suiteMap = new Map<string, MJTestRunEntity[]>();
 
     for (const run of runs) {
       if (run.TestSuiteRunID) {
@@ -628,7 +628,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     if (suiteMap.size > 0) {
       const suiteRunIds = Array.from(suiteMap.keys()).map(id => `'${id}'`).join(',');
       const rv = new RunView();
-      const suiteRunsResult = await rv.RunView<TestSuiteRunEntity>({
+      const suiteRunsResult = await rv.RunView<MJTestSuiteRunEntity>({
         EntityName: 'MJ: Test Suite Runs',
         ExtraFilter: `ID IN (${suiteRunIds})`,
         ResultType: 'entity_object'
@@ -636,7 +636,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
 
       if (suiteRunsResult.Success && suiteRunsResult.Results) {
         // Group by suite ID
-        const suiteIdMap = new Map<string, { runs: TestRunEntity[], suiteRuns: TestSuiteRunEntity[] }>();
+        const suiteIdMap = new Map<string, { runs: MJTestRunEntity[], suiteRuns: MJTestSuiteRunEntity[] }>();
 
         for (const suiteRun of suiteRunsResult.Results) {
           const suiteId = suiteRun.SuiteID;
@@ -824,7 +824,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
         if (setting) {
           this.shortcutsSettingEntity = setting;
         } else {
-          this.shortcutsSettingEntity = await this.metadata.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+          this.shortcutsSettingEntity = await this.metadata.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
           this.shortcutsSettingEntity.UserID = userId;
           this.shortcutsSettingEntity.Setting = SHORTCUTS_SETTINGS_KEY;
         }

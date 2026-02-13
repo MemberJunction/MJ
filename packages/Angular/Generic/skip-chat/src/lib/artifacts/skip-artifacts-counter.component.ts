@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { ConversationArtifactEntity, ArtifactTypeEntity } from '@memberjunction/core-entities';
+import { MJConversationArtifactEntity, MJArtifactTypeEntity } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -48,7 +48,7 @@ export class SkipArtifactsCounterComponent extends BaseAngularComponent implemen
       // Get artifacts for this conversation
       // Use RunView to execute the query
       const runView = new RunView(this.RunViewToUse);
-      const artifactsResult = await runView.RunView<ConversationArtifactEntity>({
+      const artifactsResult = await runView.RunView<MJConversationArtifactEntity>({
         EntityName: 'ConversationArtifact',
         ResultType: 'entity_object',
         ExtraFilter: `ConversationID = '${this.ConversationID}'`
@@ -89,7 +89,7 @@ export class SkipArtifactsCounterComponent extends BaseAngularComponent implemen
       // Get all artifact types
       // Use RunView to execute the query
       const runView = new RunView(this.RunViewToUse);
-      const typesResult = await runView.RunView<ArtifactTypeEntity>({
+      const typesResult = await runView.RunView<MJArtifactTypeEntity>({
         EntityName: 'ArtifactType',
         ResultType: 'entity_object'
       });

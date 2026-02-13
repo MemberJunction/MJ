@@ -13,7 +13,6 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EntityFormComponentExtended } from "./Entities/entity-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
-import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
 import { EntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
 import { TemplatesFormExtendedComponent } from "./Templates/templates-form.component";
 import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.component";
@@ -138,7 +137,6 @@ import { ListFormComponentExtended } from "./Lists/list-form.component";
         JoinGridModule,
         BaseFormsModule,
         MJTabStripModule,
-        ContainerDirectivesModule,
         CodeEditorModule,
         DeepDiffModule,
         TreeViewModule,

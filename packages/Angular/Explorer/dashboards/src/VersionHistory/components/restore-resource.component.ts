@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-import { ResourceData, UserInfoEngine, VersionLabelRestoreEntityType } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJVersionLabelRestoreEntityType } from '@memberjunction/core-entities';
 
 interface VersionRestorePreferences {
     StatusFilter: string;
@@ -26,8 +26,8 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
     public PartialRestores = 0;
 
     // Data
-    public Restores: VersionLabelRestoreEntityType[] = [];
-    public FilteredRestores: VersionLabelRestoreEntityType[] = [];
+    public Restores: MJVersionLabelRestoreEntityType[] = [];
+    public FilteredRestores: MJVersionLabelRestoreEntityType[] = [];
 
     // Filters
     public StatusFilter = '';
@@ -67,7 +67,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
             this.cdr.markForCheck();
 
             const rv = new RunView();
-            const result = await rv.RunView<VersionLabelRestoreEntityType>({
+            const result = await rv.RunView<MJVersionLabelRestoreEntityType>({
                 EntityName: 'MJ: Version Label Restores',
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 200,
@@ -165,7 +165,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
         return icons[status ?? ''] ?? 'fa-solid fa-circle';
     }
 
-    public GetProgressPercent(restore: VersionLabelRestoreEntityType): number {
+    public GetProgressPercent(restore: MJVersionLabelRestoreEntityType): number {
         if (!restore.TotalItems) return 0;
         return Math.round(((restore.CompletedItems ?? 0) / restore.TotalItems) * 100);
     }

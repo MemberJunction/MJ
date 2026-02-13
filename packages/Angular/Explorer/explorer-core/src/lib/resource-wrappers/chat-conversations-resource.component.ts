@@ -3,7 +3,7 @@ import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, EnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment } from '@memberjunction/ng-conversations';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
@@ -189,7 +189,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // LOCAL SELECTION STATE - each wrapper instance manages its own selection
   public selectedConversationId: string | null = null;
-  public selectedConversation: ConversationEntity | null = null;
+  public selectedConversation: MJConversationEntity | null = null;
   public selectedThreadId: string | null = null;
   public isNewUnsavedConversation: boolean = false;
   public renamedConversationId: string | null = null;
@@ -743,7 +743,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
       if (!setting) {
         // Create new setting
-        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = this.USER_SETTING_SIDEBAR_KEY;
       }
@@ -817,7 +817,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * The event now includes pending message and attachments for atomic state update.
    */
   async onConversationCreated(event: {
-    conversation: ConversationEntity;
+    conversation: MJConversationEntity;
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
   }): Promise<void> {

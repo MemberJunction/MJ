@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { AIConfigurationEntity } from '@memberjunction/core-entities';
+import { MJAIConfigurationEntity } from '@memberjunction/core-entities';
 
 interface SystemConfigFilter {
   searchTerm: string;
@@ -14,8 +14,8 @@ interface SystemConfigFilter {
   styleUrls: ['./system-config-filter-panel.component.css']
 })
 export class SystemConfigFilterPanelComponent implements OnInit {
-  @Input() configurations: AIConfigurationEntity[] = [];
-  @Input() filteredConfigurations: AIConfigurationEntity[] = [];
+  @Input() configurations: MJAIConfigurationEntity[] = [];
+  @Input() filteredConfigurations: MJAIConfigurationEntity[] = [];
   @Input() filters: SystemConfigFilter = {
     searchTerm: '',
     status: 'all',

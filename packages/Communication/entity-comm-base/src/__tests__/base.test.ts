@@ -21,8 +21,8 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-    EntityCommunicationFieldEntity: class { EntityCommunicationMessageTypeID = ''; },
-    EntityCommunicationMessageTypeEntity: class { ID = ''; EntityID = ''; },
+    MJEntityCommunicationFieldEntity: class { EntityCommunicationMessageTypeID = ''; },
+    MJEntityCommunicationMessageTypeEntity: class { ID = ''; EntityID = ''; },
 }));
 
 vi.mock('@memberjunction/global', () => ({

@@ -1,16 +1,16 @@
 import { BaseEntity, EntitySaveOptions } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { ConversationDetailEntity } from "@memberjunction/core-entities";
+import { MJConversationDetailEntity } from "@memberjunction/core-entities";
 
 /**
- * Server-side subclass of ConversationDetailEntity that automatically tracks
+ * Server-side subclass of MJConversationDetailEntity that automatically tracks
  * when the original message content has been modified.
  *
  * When a user edits their message after initial creation, the OriginalMessageChanged
  * flag is set to true, allowing the UI to display an "(Edited)" indicator.
  */
-@RegisterClass(BaseEntity, "Conversation Details")
-export class ConversationDetailEntityServer extends ConversationDetailEntity {
+@RegisterClass(BaseEntity, "MJ: Conversation Details")
+export class ConversationDetailEntityServer extends MJConversationDetailEntity {
     /**
      * Override Save to detect message changes and set the OriginalMessageChanged flag.
      * This is done as pre-processing before calling super.Save() to ensure it's a single DB round trip.

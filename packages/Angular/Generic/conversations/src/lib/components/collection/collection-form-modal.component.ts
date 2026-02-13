@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
@@ -128,12 +128,12 @@ import { CollectionPermissionService } from '../../services/collection-permissio
 })
 export class CollectionFormModalComponent implements OnChanges {
   @Input() isOpen: boolean = false;
-  @Input() collection?: CollectionEntity;
-  @Input() parentCollection?: CollectionEntity;
+  @Input() collection?: MJCollectionEntity;
+  @Input() parentCollection?: MJCollectionEntity;
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  @Output() saved = new EventEmitter<CollectionEntity>();
+  @Output() saved = new EventEmitter<MJCollectionEntity>();
   @Output() cancelled = new EventEmitter<void>();
 
   public formData = {
@@ -206,7 +206,7 @@ export class CollectionFormModalComponent implements OnChanges {
 
       const md = new Metadata();
       const collection = this.collection ||
-        await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = this.formData.name.trim();
       collection.Description = this.formData.description.trim() || null;

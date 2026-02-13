@@ -27,11 +27,11 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-  APIScopeEntity: class {},
-  APIApplicationEntity: class {},
-  APIApplicationScopeEntity: class {},
-  APIKeyApplicationEntity: class {},
-  APIKeyScopeEntity: class {},
+  MJAPIScopeEntity: class {},
+  MJAPIApplicationEntity: class {},
+  MJAPIApplicationScopeEntity: class {},
+  MJAPIKeyApplicationEntity: class {},
+  MJAPIKeyScopeEntity: class {},
 }));
 
 // ---------------------------------------------------------------------------

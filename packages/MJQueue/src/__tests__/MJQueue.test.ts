@@ -51,9 +51,9 @@ vi.mock('@memberjunction/core-entities', () => {
     IsActive = true;
   }
   return {
-    QueueEntity: MockQueueEntity,
-    QueueTaskEntity: MockQueueTaskEntity,
-    QueueTypeEntity: MockQueueTypeEntity,
+    MJQueueEntity: MockQueueEntity,
+    MJQueueTaskEntity: MockQueueTaskEntity,
+    MJQueueTypeEntity: MockQueueTypeEntity,
   };
 });
 
@@ -85,7 +85,7 @@ vi.mock('os', () => ({
 // ---------------------------------------------------------------------------
 
 import { TaskBase, TaskResult, TaskStatus, QueueBase } from '../generic/QueueBase';
-import { QueueTaskEntity } from '@memberjunction/core-entities';
+import { MJQueueTaskEntity } from '@memberjunction/core-entities';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -103,11 +103,11 @@ describe('TaskStatus', () => {
 
 describe('TaskBase', () => {
   let task: TaskBase;
-  let mockTaskRecord: QueueTaskEntity;
+  let mockTaskRecord: MJQueueTaskEntity;
 
   beforeEach(() => {
     // Use a plain object to avoid BaseEntity constructor issues
-    mockTaskRecord = { ID: 'task-1', Status: 'Pending', Save: vi.fn() } as unknown as QueueTaskEntity;
+    mockTaskRecord = { ID: 'task-1', Status: 'Pending', Save: vi.fn() } as unknown as MJQueueTaskEntity;
     task = new TaskBase(mockTaskRecord, { key: 'value' }, { priority: 1 });
   });
 
@@ -148,20 +148,20 @@ describe('QueueBase', () => {
 
   beforeEach(() => {
     // Create mock records as plain objects cast to the expected types
-    const queueRecord = { ID: 'queue-1', Save: vi.fn() } as unknown as import('@memberjunction/core-entities').QueueEntity;
+    const queueRecord = { ID: 'queue-1', Save: vi.fn() } as unknown as import('@memberjunction/core-entities').MJQueueEntity;
     const user = { ID: 'user-1' } as InstanceType<typeof import('@memberjunction/core').UserInfo>;
     queue = new TestQueue(queueRecord, 'type-1', user);
   });
 
   it('AddTask should return true and add task to queue', () => {
-    const taskRecord = { ID: 'task-1', Status: 'Pending', Save: vi.fn() } as unknown as QueueTaskEntity;
+    const taskRecord = { ID: 'task-1', Status: 'Pending', Save: vi.fn() } as unknown as MJQueueTaskEntity;
     const task = new TaskBase(taskRecord, {}, {});
     const result = queue.AddTask(task);
     expect(result).toBe(true);
   });
 
   it('FindTask should find a task by ID', () => {
-    const taskRecord = { ID: 'task-1', Status: 'Pending', Save: vi.fn() } as unknown as QueueTaskEntity;
+    const taskRecord = { ID: 'task-1', Status: 'Pending', Save: vi.fn() } as unknown as MJQueueTaskEntity;
     const task = new TaskBase(taskRecord, {}, {});
     queue.AddTask(task);
     const found = queue.FindTask('task-1');

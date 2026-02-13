@@ -16,7 +16,7 @@ import {
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
 import { LogError, UserInfo, CompositeKey, LogStatus, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine, ConversationArtifactEntity, ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJDataContextEntity, MJDataContextItemEntity, ResourcePermissionEngine, MJConversationArtifactEntity, MJConversationArtifactVersionEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
 
@@ -47,9 +47,9 @@ import { BaseManagedComponent } from '../base-managed-component';
 })
 export class SkipChatComponent extends BaseManagedComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
   @Input() AllowSend: boolean = true;
-  @Input() public Messages: ConversationDetailEntity[] = [];
-  @Input() public Conversations: ConversationEntity[] = [];
-  @Input() public SelectedConversation: ConversationEntity | undefined;
+  @Input() public Messages: MJConversationDetailEntity[] = [];
+  @Input() public Conversations: MJConversationEntity[] = [];
+  @Input() public SelectedConversation: MJConversationEntity | undefined;
   @Input() public ConversationEditMode: boolean = false;
   /**
    * If true, the component will show the conversation list. Default is true.
@@ -185,14 +185,14 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   private _conversationsInProgress: { [key: string]: any } = {};
   private _conversationsToReload: { [key: string]: boolean } = {};
   public _conversationLoadComplete: boolean = false;
-  private _temporaryMessage: ConversationDetailEntity | undefined;
+  private _temporaryMessage: MJConversationDetailEntity | undefined;
   private _intersectionObserver: IntersectionObserver | undefined;
   private static __skipChatWindowsCurrentlyVisible: number = 0;
   private sub?: Subscription;
   
   // Per-conversation status message tracking
   private _statusMessagesByConversation: { [conversationId: string]: { message: string; startTime?: Date } } = {};
-  private _temporaryMessagesByConversation: { [conversationId: string]: ConversationDetailEntity } = {};
+  private _temporaryMessagesByConversation: { [conversationId: string]: MJConversationDetailEntity } = {};
   
   /**
    * Currently selected artifact for viewing in the split panel
@@ -448,7 +448,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     }
   }
 
-  public GetConversationItemClass(item: ConversationEntity) {
+  public GetConversationItemClass(item: MJConversationEntity) {
     let classInfo: string = '';
     if (this.SelectedConversation?.ID === item.ID) classInfo += 'conversation-item-selected';
     if (item.LinkedEntityID && item.LinkedRecordID) {
@@ -485,7 +485,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       
       if (!this._temporaryMessage) {
         const actualStartTime = startTime || (conversationId ? this._statusMessagesByConversation[conversationId]?.startTime : undefined) || new Date();
-        this._temporaryMessage = <ConversationDetailEntity>(<any>{ ID: -1, Message: message, Role: 'ai', __mj_CreatedAt: actualStartTime }); // create a new object
+        this._temporaryMessage = <MJConversationDetailEntity>(<any>{ ID: -1, Message: message, Role: 'ai', __mj_CreatedAt: actualStartTime }); // create a new object
         this.AddMessageToCurrentConversation(this._temporaryMessage, true, false);
         
         // Store the temporary message for this conversation
@@ -530,7 +530,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       const p = this.ProviderToUse;
       if (p.CurrentUser.ID !== this.SelectedConversation.UserID) {
         const result = await this.RunViewToUse.RunView({
-          EntityName: 'Users',
+          EntityName: 'MJ: Users',
           ExtraFilter: `ID='${this.SelectedConversation.UserID}'`,
         });
         this.SelectedConversationUser = result && result.Success ? <UserInfo>result.Results[0] : undefined;
@@ -688,13 +688,13 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   * @param conversationId The ID of the conversation
   * @param role Optional role filter (User or AI)
   * @param limit Optional limit on number of records to return
-  * @returns Array of ConversationDetailEntity objects
+  * @returns Array of MJConversationDetailEntity objects
   */
   protected async LoadRecentConversationDetails(
     conversationId: string,
     role?: string,
     limit?: number
-  ): Promise<ConversationDetailEntity[]> {
+  ): Promise<MJConversationDetailEntity[]> {
     try {
       if (!conversationId || conversationId.length === 0) {
         return [];
@@ -706,8 +706,8 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         `ConversationID='${conversationId}'`;
 
       // Use RunView for convenience
-      const result = await this.RunViewToUse.RunView<ConversationDetailEntity>({
-        EntityName: 'Conversation Details',
+      const result = await this.RunViewToUse.RunView<MJConversationDetailEntity>({
+        EntityName: 'MJ: Conversation Details',
         ExtraFilter: extraFilter,
         ResultType: 'entity_object',
         OrderBy: '__mj_CreatedAt DESC', // Most recent first
@@ -733,7 +733,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   protected async checkRequestStatus(convoID: string) {
     try {
       const p = this.ProviderToUse;
-      const conversation = <ConversationEntity>await p.GetEntityObject('Conversations', p.CurrentUser);
+      const conversation = <MJConversationEntity>await p.GetEntityObject('MJ: Conversations', p.CurrentUser);
       const loadResult = await conversation.Load(convoID);
 
       if (loadResult && conversation.Status === 'Available') {
@@ -976,7 +976,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
     const cacheConversationsKey = `${SkipChatComponent._cacheRootKey}_Conversations`;
     const cacheConversationServerURLKey = `${SkipChatComponent._cacheRootKey}_ConversationsServerURL`;
-    let cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>(cacheConversationsKey);
+    let cachedConversations = MJGlobal.Instance.ObjectCache.Find<MJConversationEntity[]>(cacheConversationsKey);
     const cacheConversationsServerURL = MJGlobal.Instance.ObjectCache.Find<string>(cacheConversationServerURLKey);
     const gqlConfig = <GraphQLProviderConfigData>this.ProviderToUse.ConfigData;
 
@@ -984,7 +984,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       // load up from the database as we don't have any cached conversations
       // or we have a different URL 
       const result = await this.RunViewToUse.RunView({
-        EntityName: 'Conversations',
+        EntityName: 'MJ: Conversations',
         ExtraFilter: `UserID='${this.ProviderToUse.CurrentUser.ID}'`,
         OrderBy: '__mj_CreatedAt DESC', // get in reverse order so we have latest on top
       });
@@ -994,7 +994,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         MJGlobal.Instance.ObjectCache.Replace(cacheConversationServerURLKey, gqlConfig.URL); // ensure the key for the conversations object is set to the current server URL
 
         // also set the local variable so we can use it below
-        cachedConversations = <ConversationEntity[]>result.Results;
+        cachedConversations = <MJConversationEntity[]>result.Results;
       }
     }
 
@@ -1009,12 +1009,12 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     } 
     else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.CompositeKeyIsPopulated()) {
       this.Conversations = cachedConversations.filter(
-        (c: ConversationEntity) => c.LinkedEntity === this.LinkedEntity && c.LinkedRecordID === this.LinkedEntityCompositeKey.Values()
+        (c: MJConversationEntity) => c.LinkedEntity === this.LinkedEntity && c.LinkedRecordID === this.LinkedEntityCompositeKey.Values()
       ); // ONLY include the linked conversations
     } 
     else {
       this.Conversations = cachedConversations.filter(
-        (c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID && c.LinkedRecordID.length > 0)
+        (c: MJConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID && c.LinkedRecordID.length > 0)
       ); // filter OUT linked conversations
     }
 
@@ -1065,10 +1065,10 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
    * @param conversationId 
    * @returns 
    */
-  public async LoadSingleConversation(conversationId: string): Promise<ConversationEntity | undefined> {
+  public async LoadSingleConversation(conversationId: string): Promise<MJConversationEntity | undefined> {
     const rv = new RunView(this.RunViewToUse);
-    const result = await rv.RunView<ConversationEntity>({
-      EntityName: 'Conversations',
+    const result = await rv.RunView<MJConversationEntity>({
+      EntityName: 'MJ: Conversations',
       ExtraFilter: `ID='${conversationId}'`,
       ResultType: 'entity_object'
     });
@@ -1078,24 +1078,24 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   }
 
   private _oldConvoName: string = '';
-  public editConvo(conversation: ConversationEntity) {
+  public editConvo(conversation: MJConversationEntity) {
     this._oldConvoName = conversation.Name ? conversation.Name : '';
     this.ConversationEditMode = true;
   }
 
-  public cancelConvoEdit(conversation: ConversationEntity) {
+  public cancelConvoEdit(conversation: MJConversationEntity) {
     conversation.Name = this._oldConvoName;
     this.ConversationEditMode = false;
   }
 
-  public async saveConvoName(conversation: ConversationEntity) {
-    let newConvoObject: ConversationEntity;
+  public async saveConvoName(conversation: MJConversationEntity) {
+    let newConvoObject: MJConversationEntity;
     if (conversation.Save !== undefined) {
       newConvoObject = conversation;
     } 
     else {
       const p = this.ProviderToUse;
-      newConvoObject = await p.GetEntityObject('Conversations', p.CurrentUser);
+      newConvoObject = await p.GetEntityObject('MJ: Conversations', p.CurrentUser);
       await newConvoObject.Load(conversation.ID);
       // now replace conversation in the list with the new object
       this.Conversations = this.Conversations.map((c) => (c.ID == conversation.ID ? newConvoObject : c));
@@ -1104,7 +1104,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     if (await newConvoObject.Save()) {
       this.ConversationEditMode = false;
       // we've already updated the bound UI element, but let's make sure to update the cache as well
-      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
+      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<MJConversationEntity[]>('Conversations');
       if (cachedConversations) {
         // find the item in the cache
         const idx = cachedConversations.findIndex((c) => c.ID === conversation.ID);
@@ -1120,8 +1120,8 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   }
 
   public confirmDeleteConversationDialogOpen: boolean = false;
-  private _conversationToDelete: ConversationEntity | undefined;
-  public async showDeleteConvoDialog(conversation: ConversationEntity) {
+  private _conversationToDelete: MJConversationEntity | undefined;
+  public async showDeleteConvoDialog(conversation: MJConversationEntity) {
     this.confirmDeleteConversationDialogOpen = true;
     this._conversationToDelete = conversation;
   }
@@ -1131,7 +1131,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       await this.deleteConvo(this._conversationToDelete);
   }
 
-  public async deleteConvo(conversation: ConversationEntity) {
+  public async deleteConvo(conversation: MJConversationEntity) {
     // delete the conversation - we might need to load the entity if the current object isn't a "real object"
     if (await this.DeleteConversation(conversation.ID)) {
       // we need to remove the conversation from the request status polling
@@ -1142,7 +1142,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       this.Conversations = this.Conversations.filter((c) => c.ID != conversation.ID);
 
       // also, remove the conversation from the cache
-      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
+      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<MJConversationEntity[]>('Conversations');
       if (cachedConversations) {
         MJGlobal.Instance.ObjectCache.Replace(
           'Conversations',
@@ -1169,7 +1169,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
   public async CreateNewConversation() {
     const p = this.ProviderToUse;
-    const convo = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
+    const convo = await p.GetEntityObject<MJConversationEntity>('MJ: Conversations', p.CurrentUser);
     convo.NewRecord();
     convo.Name = 'New Chat'; // default value
     convo.UserID = p.CurrentUser.ID;
@@ -1181,17 +1181,17 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       convo.LinkedRecordID = this.LinkedEntityCompositeKey.Values();
     }
     // next, create a new data context for this conversation
-    const dc = await p.GetEntityObject<DataContextEntity>('Data Contexts', p.CurrentUser);
+    const dc = await p.GetEntityObject<MJDataContextEntity>('MJ: Data Contexts', p.CurrentUser);
     dc.NewRecord();
     dc.Name = 'Data Context for Skip Conversation';
     dc.UserID = p.CurrentUser.ID;
     if (await dc.Save()) {
       // now create a data context item for the linked record if we have one
       if (this.LinkedEntityID && this.LinkedEntityID.length > 0 && this.CompositeKeyIsPopulated()) {
-        const dci = await p.GetEntityObject<DataContextItemEntity>('Data Context Items', p.CurrentUser);
+        const dci = await p.GetEntityObject<MJDataContextItemEntity>('MJ: Data Context Items', p.CurrentUser);
         dci.NewRecord();
         dci.DataContextID = dc.ID;
-        if (this.LinkedEntity === 'User Views') {
+        if (this.LinkedEntity === 'MJ: User Views') {
           dci.Type = 'view';
           dci.ViewID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
         } else if (this.LinkedEntity === 'Queries') {
@@ -1223,7 +1223,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
       this.Conversations = [convo, ...this.Conversations]; // do this way instead of unshift to ensure that binding refreshes
       // also update the cache
-      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
+      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<MJConversationEntity[]>('Conversations');
       if (cachedConversations) {
         MJGlobal.Instance.ObjectCache.Replace('Conversations', [convo, ...cachedConversations]);
       } else {
@@ -1247,7 +1247,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
    * This method returns true if the specified user can access the conversation provided, otherwise false.
    * @param conversation 
    */
-  public async UserCanAccessConversation(user: UserInfo, conversation: ConversationEntity): Promise<boolean> {
+  public async UserCanAccessConversation(user: UserInfo, conversation: MJConversationEntity): Promise<boolean> {
     if (!this.conversationResourceTypeID) {
       LogError('Resource type ID for conversations is not loaded - metadata loading error');
       return false;
@@ -1273,7 +1273,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
    * @param conversation 
    * @returns 
    */
-  public async GetUserConversationPermissionLevel(user: UserInfo, conversation: ConversationEntity): Promise<"View" | "Edit" | "Owner" | null> {
+  public async GetUserConversationPermissionLevel(user: UserInfo, conversation: MJConversationEntity): Promise<"View" | "Edit" | "Owner" | null> {
     if (!this.conversationResourceTypeID) {
       LogError('Resource type ID for conversations is not loaded - metadata loading error');
       return null;
@@ -1298,7 +1298,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
    * @param conversation 
    * @returns 
    */
-  public async SelectConversation(conversation: ConversationEntity) {
+  public async SelectConversation(conversation: MJConversationEntity) {
     
       // load up the conversation if not already the one that's loaded
     if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
@@ -1356,8 +1356,8 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         this._conversationsToReload[conversation.ID] = false; // reset this flag since we're reloading from the DB right now
 
         const start = new Date().getTime();
-        const result = await this.RunViewToUse.RunView<ConversationDetailEntity>({
-          EntityName: 'Conversation Details',
+        const result = await this.RunViewToUse.RunView<MJConversationDetailEntity>({
+          EntityName: 'MJ: Conversation Details',
           ExtraFilter: `ConversationID='${conversation.ID}'`,
           OrderBy: '__mj_CreatedAt ASC' // show messages in order of creation,
         });
@@ -1529,7 +1529,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       this._messageInProgress = true;
       this.AllowSend = false;
       const p = this.ProviderToUse;
-      const convoDetail = <ConversationDetailEntity>await p.GetEntityObject('Conversation Details', p.CurrentUser);
+      const convoDetail = <MJConversationDetailEntity>await p.GetEntityObject('MJ: Conversation Details', p.CurrentUser);
       convoDetail.NewRecord();
       convoDetail.Message = val;
       convoDetail.Role = 'User';
@@ -1574,7 +1574,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           const innerResult: SkipAPIResponse = JSON.parse(skipResult.Result);
 
           if (!this.SelectedConversation) {
-            const convo = <ConversationEntity>await p.GetEntityObject('Conversations', p.CurrentUser);
+            const convo = <MJConversationEntity>await p.GetEntityObject('MJ: Conversations', p.CurrentUser);
             await convo.Load(skipResult.ConversationId);
             this.setProcessingStatus(skipResult.ConversationId, true);
             this.Conversations.push(convo);
@@ -1600,7 +1600,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           }
 
           await convoDetail.Load(skipResult.UserMessageConversationDetailId); // update the object to load from DB
-          const aiDetail = <ConversationDetailEntity>await p.GetEntityObject('Conversation Details', p.CurrentUser);
+          const aiDetail = <MJConversationDetailEntity>await p.GetEntityObject('MJ: Conversation Details', p.CurrentUser);
           await aiDetail.Load(skipResult.AIMessageConversationDetailId); // get record from the database
           this.AddMessageToCurrentConversation(aiDetail, true, true);
           
@@ -1689,7 +1689,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       }
     }
   }
-  public AddMessageToCurrentConversation(detail: ConversationDetailEntity, stopChangeDetection: boolean, cacheMessage: boolean) {
+  public AddMessageToCurrentConversation(detail: MJConversationDetailEntity, stopChangeDetection: boolean, cacheMessage: boolean) {
     // update the local binding for the UI
     if (this.Messages.find((m) => m.ID === detail.ID) || this.Messages.find(m => m === detail)) {
       // we already have this message, so don't add it again
@@ -1713,7 +1713,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     // dynamically add the message to the panel
     this.AddMessageToPanel(detail, stopChangeDetection);
   }
-  public RemoveMessageFromCurrentConversation(detail: ConversationDetailEntity) {
+  public RemoveMessageFromCurrentConversation(detail: MJConversationDetailEntity) {
     // update the local binding for the UI
     this.Messages = this.Messages.filter((m) => m !== detail);
 
@@ -1722,7 +1722,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     if (convo) {
       const convoAny = <any>convo;
       if (convoAny._Messages) {
-        convoAny._Messages = convoAny._Messages.filter((m: ConversationDetailEntity) => m.ID !== detail.ID);
+        convoAny._Messages = convoAny._Messages.filter((m: MJConversationDetailEntity) => m.ID !== detail.ID);
       }
     }
 
@@ -1731,7 +1731,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   }
 
   // method to dynamically remove a message
-  protected RemoveMessageFromPanel(messageDetail: ConversationDetailEntity) {
+  protected RemoveMessageFromPanel(messageDetail: MJConversationDetailEntity) {
     const ref = (<any>messageDetail)._componentRef;
     if (ref) {
       // Temporarily stop change detection for performance
@@ -1758,7 +1758,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     }
   }
 
-  protected UpdatePanelMessage(messageDetail: ConversationDetailEntity, invokeChangeDetection: boolean = true) {
+  protected UpdatePanelMessage(messageDetail: MJConversationDetailEntity, invokeChangeDetection: boolean = true) {
     const ref = (<any>messageDetail)._componentRef;
     if (ref) {
       const obj = <SkipSingleMessageComponent>ref.instance;
@@ -1781,7 +1781,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   }
 
   // Method to dynamically add a message
-  protected AddMessageToPanel(messageDetail: ConversationDetailEntity, stopChangeDetection: boolean) {
+  protected AddMessageToPanel(messageDetail: MJConversationDetailEntity, stopChangeDetection: boolean) {
     // Temporarily stop change detection for performance
     if (stopChangeDetection) this.cdRef.detach();
 
@@ -1800,10 +1800,10 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     subscriptions.push(obj.NewReportCreated.subscribe((reportId: string) => {
       this.NewReportCreated.emit(reportId);
     }));
-    subscriptions.push(obj.DeleteMessageRequested.subscribe((message: ConversationDetailEntity) => {
+    subscriptions.push(obj.DeleteMessageRequested.subscribe((message: MJConversationDetailEntity) => {
       this.HandleMessageDeleteRequest(message);
     }));
-    subscriptions.push(obj.EditMessageRequested.subscribe((message: ConversationDetailEntity) => {
+    subscriptions.push(obj.EditMessageRequested.subscribe((message: MJConversationDetailEntity) => {
       this.HandleMessageEditRequest(message);
     }));
     subscriptions.push(obj.DrillDownEvent.subscribe((drillDownInfo: DrillDownInfo) => {
@@ -1921,7 +1921,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       // need to create a data context
       // add to the new data context a single item for the passed in linked record, which could be a query, view, or something else
       const p = this.ProviderToUse;
-      const dc = await p.GetEntityObject<DataContextEntity>('Data Contexts', p.CurrentUser);
+      const dc = await p.GetEntityObject<MJDataContextEntity>('MJ: Data Contexts', p.CurrentUser);
       dc.NewRecord();
       const e = p.Entities.find((e) => e.Name === this.LinkedEntity);
       dc.Name =
@@ -1931,7 +1931,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         this.DataContextID = dc.ID;
 
         // update the conversation with the data context id
-        const convo = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
+        const convo = await p.GetEntityObject<MJConversationEntity>('MJ: Conversations', p.CurrentUser);
         await convo.Load(this.SelectedConversation.ID);
         await convo.Save(); // save to the database
         this.SelectedConversation.DataContextID = dc.ID; // update the in-memory object
@@ -1952,7 +1952,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
               } else type = 'full_entity';
               break;
           }
-          const dci = await p.GetEntityObject<DataContextItemEntity>('Data Context Items', p.CurrentUser);
+          const dci = await p.GetEntityObject<MJDataContextItemEntity>('MJ: Data Context Items', p.CurrentUser);
           dci.NewRecord();
           dci.DataContextID = dc.ID;
           dci.Type = type;
@@ -1981,7 +1981,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     return this.DataContextID;
   }
 
-  async ExecuteAskSkipQuery(question: string, dataContextId: string, SelectedConversation: ConversationEntity | undefined) {
+  async ExecuteAskSkipQuery(question: string, dataContextId: string, SelectedConversation: MJConversationEntity | undefined) {
     try {
       const gql = `query ExecuteAskSkipAnalysisQuery($userQuestion: String!, $dataContextId: String!, $conversationId: String!) {
         ExecuteAskSkipAnalysisQuery(UserQuestion: $userQuestion, DataContextId: $dataContextId, ConversationId: $conversationId) {
@@ -2004,7 +2004,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     } catch (err) {
       LogError('Error executing AskSkip query', undefined, err);
       const p = this.ProviderToUse;
-      const errorMessage = await p.GetEntityObject<ConversationDetailEntity>('Conversation Details', p.CurrentUser);
+      const errorMessage = await p.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', p.CurrentUser);
       errorMessage.NewRecord();
       errorMessage.Role = 'Error';
       errorMessage.Message = 'Error took place' + err;
@@ -2015,13 +2015,13 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
   protected async DeleteConversation(ConversationID: string) {
     const p = this.ProviderToUse;
-    const convEntity = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
+    const convEntity = await p.GetEntityObject<MJConversationEntity>('MJ: Conversations', p.CurrentUser);
     await convEntity.Load(ConversationID);
     return await convEntity.Delete();
   }
 
   private _processingStatus: { [key: string]: any } = {};
-  protected IsSkipProcessing(Conversation: ConversationEntity): boolean {
+  protected IsSkipProcessing(Conversation: MJConversationEntity): boolean {
     if (!Conversation) {
       return false;
     }
@@ -2119,19 +2119,19 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
 
   public confirmMessageEditOrDeleteDialogOpen: boolean = false;
-  public messageToEditOrDelete: ConversationDetailEntity | undefined;
+  public messageToEditOrDelete: MJConversationDetailEntity | undefined;
   public messageEditOrDeleteType: 'edit' | 'delete' = 'edit';
-  public HandleMessageEditOrDeleteRequest(message: ConversationDetailEntity, type: 'edit' | 'delete') {
+  public HandleMessageEditOrDeleteRequest(message: MJConversationDetailEntity, type: 'edit' | 'delete') {
     if (this.SelectedConversation && !this.IsSkipProcessing(this.SelectedConversation)) {
       this.messageToEditOrDelete = message;
       this.messageEditOrDeleteType = type;
       this.confirmMessageEditOrDeleteDialogOpen = true;  
     }
   }
-  public HandleMessageEditRequest(message: ConversationDetailEntity) {
+  public HandleMessageEditRequest(message: MJConversationDetailEntity) {
     this.HandleMessageEditOrDeleteRequest(message, 'edit');
   }
-  public HandleMessageDeleteRequest(message: ConversationDetailEntity) {
+  public HandleMessageDeleteRequest(message: MJConversationDetailEntity) {
     this.HandleMessageEditOrDeleteRequest(message, 'delete');
   }
 
@@ -2151,7 +2151,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     }    
   }
 
-  protected async editMessage(message: ConversationDetailEntity) {
+  protected async editMessage(message: MJConversationDetailEntity) {
     const oldMessageText = message.Message;
     await this.deleteMessage(message);
     // now add the text from the message to the input box
@@ -2159,7 +2159,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     // this will let the user edit the message and submit it
   }
 
-  protected async deleteMessage(message: ConversationDetailEntity) {
+  protected async deleteMessage(message: MJConversationDetailEntity) {
     if (!this.SelectedConversation || this.IsSkipProcessing(this.SelectedConversation)) {
       return; // don't allow deleting messages while we're processing or don't have a selected convo
     }
@@ -2178,7 +2178,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         // need to create the BaseEntity subclass for the conversation detail entity
         // as our initial load of the conversation detail entity is not a full object it is 
         // a simple javascript object.
-        const actualEntityObject = await this.ProviderToUse.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.ProviderToUse.CurrentUser);
+        const actualEntityObject = await this.ProviderToUse.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.ProviderToUse.CurrentUser);
         if (await actualEntityObject.Load(m.ID)) {
           // check to see if it loaded succesfully or not, sometimes it is already deleted
           if (actualEntityObject.ConversationID === this.SelectedConversation.ID) {
@@ -2213,7 +2213,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       for (const [artifactId, artifactInfo] of artifactsToDelete) {
         // Delete artifact versions
         for (const versionId of artifactInfo.versionIds) {
-          const artifactVersion = await this.ProviderToUse.GetEntityObject<ConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions', this.ProviderToUse.CurrentUser);
+          const artifactVersion = await this.ProviderToUse.GetEntityObject<MJConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions', this.ProviderToUse.CurrentUser);
           if (await artifactVersion.Load(versionId)) {
             artifactVersion.TransactionGroup = tg;
             await artifactVersion.Delete();
@@ -2223,14 +2223,14 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         // Check if this artifact is referenced by any other conversation details
         const rv = new RunView();
         const otherReferences = await rv.RunView({
-          EntityName: 'Conversation Details',
+          EntityName: 'MJ: Conversation Details',
           ExtraFilter: `ArtifactID = '${artifactId}' AND ID NOT IN ('${currentAndSubsequentMessages.map(m => m.ID).join("','")}')`,
           MaxRows: 1
         }, this.ProviderToUse.CurrentUser);
         
         // If no other references exist, delete the artifact
         if (!otherReferences.Results || otherReferences.Results.length === 0) {
-          const artifact = await this.ProviderToUse.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', this.ProviderToUse.CurrentUser);
+          const artifact = await this.ProviderToUse.GetEntityObject<MJConversationArtifactEntity>('MJ: Conversation Artifacts', this.ProviderToUse.CurrentUser);
           if (await artifact.Load(artifactId)) {
             artifact.TransactionGroup = tg;
             await artifact.Delete();
@@ -2404,12 +2404,12 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
     try {
       // Get proper entity object for conversation if needed
-      let conversationEntity: ConversationEntity;
+      let conversationEntity: MJConversationEntity;
       if (this.SelectedConversation.Save !== undefined) {
         conversationEntity = this.SelectedConversation;
       } else {
         const p = this.ProviderToUse;
-        conversationEntity = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
+        conversationEntity = await p.GetEntityObject<MJConversationEntity>('MJ: Conversations', p.CurrentUser);
         await conversationEntity.Load(this.SelectedConversation.ID);
       }
 
@@ -2438,12 +2438,12 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         }
 
         // Get proper entity object for the message if needed
-        let messageEntity: ConversationDetailEntity;
+        let messageEntity: MJConversationDetailEntity;
         if (lastUserMessage.Delete !== undefined) {
           messageEntity = lastUserMessage;
         } else {
           const p = this.ProviderToUse;
-          messageEntity = await p.GetEntityObject<ConversationDetailEntity>('Conversation Details', p.CurrentUser);
+          messageEntity = await p.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', p.CurrentUser);
           await messageEntity.Load(lastUserMessage.ID);
         }
 
@@ -2453,7 +2453,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           
           // Delete artifact version if exists
           if (messageEntity.ArtifactVersionID) {
-            const artifactVersion = await this.ProviderToUse.GetEntityObject<ConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions', this.ProviderToUse.CurrentUser);
+            const artifactVersion = await this.ProviderToUse.GetEntityObject<MJConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions', this.ProviderToUse.CurrentUser);
             if (await artifactVersion.Load(messageEntity.ArtifactVersionID)) {
               artifactVersion.TransactionGroup = tg;
               await artifactVersion.Delete();
@@ -2463,14 +2463,14 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           // Check if artifact is referenced elsewhere
           const rv = new RunView();
           const otherReferences = await rv.RunView({
-            EntityName: 'Conversation Details',
+            EntityName: 'MJ: Conversation Details',
             ExtraFilter: `ArtifactID = '${messageEntity.ArtifactID}' AND ID != '${messageEntity.ID}'`,
             MaxRows: 1
           }, this.ProviderToUse.CurrentUser);
           
           // Delete artifact if no other references
           if (!otherReferences.Results || otherReferences.Results.length === 0) {
-            const artifact = await this.ProviderToUse.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', this.ProviderToUse.CurrentUser);
+            const artifact = await this.ProviderToUse.GetEntityObject<MJConversationArtifactEntity>('MJ: Conversation Artifacts', this.ProviderToUse.CurrentUser);
             if (await artifact.Load(messageEntity.ArtifactID)) {
               artifact.TransactionGroup = tg;
               await artifact.Delete();
@@ -2529,7 +2529,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
    */
   private async syncConversationNameFromServer(conversationId: string): Promise<void> {
     const p = this.ProviderToUse;
-    const updatedConvo = <ConversationEntity>await p.GetEntityObject('Conversations', p.CurrentUser);
+    const updatedConvo = <MJConversationEntity>await p.GetEntityObject('MJ: Conversations', p.CurrentUser);
     await updatedConvo.Load(conversationId);
     
     if (this.SelectedConversation && updatedConvo.Name !== this.SelectedConversation.Name) {
@@ -2551,7 +2551,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
    * This is called when new AI messages are received to automatically display artifacts
    * @param aiMessage The AI message to check for artifacts
    */
-  private autoShowArtifactIfPresent(aiMessage: ConversationDetailEntity): void {
+  private autoShowArtifactIfPresent(aiMessage: MJConversationDetailEntity): void {
     if (!this.EnableArtifactSplitView || !aiMessage) {
       return;
     }
@@ -2583,7 +2583,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
    * @param aiMessage The AI message to check
    * @returns true if this is a new artifact or version, false otherwise
    */
-  private isNewArtifactOrVersion(aiMessage: ConversationDetailEntity): boolean {
+  private isNewArtifactOrVersion(aiMessage: MJConversationDetailEntity): boolean {
     if (!aiMessage.ArtifactID) {
       return false;
     }

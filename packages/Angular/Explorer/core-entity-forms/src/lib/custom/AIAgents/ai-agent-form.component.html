@@ -446,7 +446,7 @@
                           </div>
                         }
                         @if (actionCount > agentActions.length) {
-                          <div class="view-more-item" (click)="navigateToEntity('AI Agent Actions', '')">
+                          <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Actions', '')">
                             <span>View all {{ actionCount }} actions...</span>
                           </div>
                         }
@@ -547,7 +547,7 @@
                         <div class="entity-item sub-agent-item"
                           [class.child-sub-agent]="item.type === 'child'"
                           [class.related-sub-agent]="item.type === 'related'"
-                          (click)="navigateToEntity('AI Agents', item.agent.ID)">
+                          (click)="navigateToEntity('MJ: AI Agents', item.agent.ID)">
                           <!-- Type Badge -->
                           <div class="sub-agent-type-badge"
                             [style.background-color]="getSubAgentBadgeColor(item)">
@@ -694,7 +694,7 @@
                   } @else {
                     <div class="entity-list">
                       @for (prompt of agentPrompts; track prompt.ID) {
-                        <div class="entity-item prompt-item" (click)="navigateToEntity('AI Prompts', prompt.ID)">
+                        <div class="entity-item prompt-item" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)">
                           <div class="item-icon">
                             <i class="fa-solid fa-comment-dots"></i>
                           </div>
@@ -735,7 +735,7 @@
                         </div>
                       }
                       @if (promptCount > agentPrompts.length) {
-                        <div class="view-more-item" (click)="navigateToEntity('AI Prompts', '')">
+                        <div class="view-more-item" (click)="navigateToEntity('MJ: AI Prompts', '')">
                           <span>View all {{ promptCount }} prompts...</span>
                         </div>
                       }
@@ -770,7 +770,7 @@
                   } @else {
                     <div class="entity-list">
                       @for (cycle of learningCycles; track cycle.ID) {
-                        <div class="entity-item learning-item" (click)="navigateToEntity('AI Agent Learning Cycles', cycle.ID)">
+                        <div class="entity-item learning-item" (click)="navigateToEntity('MJ: AI Agent Learning Cycles', cycle.ID)">
                           <div class="item-icon">
                             <i class="fa-solid fa-brain"></i>
                           </div>
@@ -794,7 +794,7 @@
                         </div>
                       }
                       @if (learningCycleCount > learningCycles.length) {
-                        <div class="view-more-item" (click)="navigateToEntity('AI Agent Learning Cycles', '')">
+                        <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Learning Cycles', '')">
                           <span>View all {{ learningCycleCount }} cycles...</span>
                         </div>
                       }
@@ -841,7 +841,7 @@
                   } @else {
                     <div class="entity-list">
                       @for (note of agentNotes; track note.ID) {
-                        <div class="entity-item note-item" (click)="navigateToEntity('AI Agent Notes', note.ID)">
+                        <div class="entity-item note-item" (click)="navigateToEntity('MJ: AI Agent Notes', note.ID)">
                           <div class="item-icon">
                             <i class="fa-solid fa-sticky-note"></i>
                           </div>
@@ -865,7 +865,7 @@
                         </div>
                       }
                       @if (noteCount > agentNotes.length) {
-                        <div class="view-more-item" (click)="navigateToEntity('AI Agent Notes', '')">
+                        <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Notes', '')">
                           <span>View all {{ noteCount }} notes...</span>
                         </div>
                       }

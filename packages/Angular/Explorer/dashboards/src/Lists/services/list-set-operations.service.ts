@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { RunView } from '@memberjunction/core';
-import { ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 /**
@@ -104,7 +104,7 @@ export class ListSetOperationsService {
   /**
    * Load list data and calculate all intersections for Venn visualization
    */
-  async calculateVennData(lists: ListEntity[]): Promise<VennData> {
+  async calculateVennData(lists: MJListEntity[]): Promise<VennData> {
     if (lists.length === 0) {
       return { sets: [], intersections: [] };
     }
@@ -118,7 +118,7 @@ export class ListSetOperationsService {
 
       const rv = new RunView();
       const result = await rv.RunView<{ ListID: string; RecordID: string }>({
-        EntityName: 'List Details',
+        EntityName: 'MJ: List Details',
         ExtraFilter: `ListID IN (${listIdFilter})`,
         Fields: ['ListID', 'RecordID'],
         ResultType: 'simple'
@@ -322,7 +322,7 @@ export class ListSetOperationsService {
     const rv = new RunView();
 
     const result = await rv.RunView<{ ListID: string; RecordID: string }>({
-      EntityName: 'List Details',
+      EntityName: 'MJ: List Details',
       ExtraFilter: `ListID IN (${listIdFilter})`,
       Fields: ['ListID', 'RecordID'],
       ResultType: 'simple'

@@ -112,7 +112,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
       }
       
       const result = await rv.RunView<AIPromptEntityExtended>({
-        EntityName: 'AI Prompts',
+        EntityName: 'MJ: AI Prompts',
         ExtraFilter: filter,
         OrderBy: 'Name ASC',
         ResultType: 'entity_object',

@@ -7,7 +7,7 @@ import {
   LogStatus,
   LogError
 } from '@memberjunction/core';
-import { ComponentEntity, ComponentRegistryEntity } from '@memberjunction/core-entities';
+import { MJComponentEntity, MJComponentRegistryEntity } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
@@ -37,7 +37,7 @@ import { DataSourceInfo, ComponentRegistryServerOptions, ComponentFeedbackParams
 export class ComponentRegistryAPIServer {
   protected app: express.Application | null = null;
   protected router: express.Router | null = null;
-  protected registry: ComponentRegistryEntity | null = null;
+  protected registry: MJComponentRegistryEntity | null = null;
   protected metadata: Metadata;
   protected pool: sql.ConnectionPool | null = null;
   protected readOnlyPool: sql.ConnectionPool | null = null;
@@ -199,7 +199,7 @@ export class ComponentRegistryAPIServer {
       return;
     }
     
-    this.registry = await this.metadata.GetEntityObject<ComponentRegistryEntity>('MJ: Component Registries');
+    this.registry = await this.metadata.GetEntityObject<MJComponentRegistryEntity>('MJ: Component Registries');
     const loaded = await this.registry.Load(componentRegistrySettings.registryId);
     
     if (!loaded) {
@@ -423,7 +423,7 @@ export class ComponentRegistryAPIServer {
       const filter = `${baseFilter} AND Status = 'Published'`;
       
       const rv = new RunView();
-      const result = await rv.RunView<ComponentEntity>({
+      const result = await rv.RunView<MJComponentEntity>({
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
         OrderBy: 'Namespace, Name, VersionSequence DESC' 
@@ -482,7 +482,7 @@ export class ComponentRegistryAPIServer {
       }
       
       const rv = new RunView();
-      const result = await rv.RunView<ComponentEntity>({
+      const result = await rv.RunView<MJComponentEntity>({
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
         OrderBy: 'Namespace, Name, VersionSequence DESC' 
@@ -556,7 +556,7 @@ export class ComponentRegistryAPIServer {
       }
       
       const rv = new RunView();
-      const result = await rv.RunView<ComponentEntity>({
+      const result = await rv.RunView<MJComponentEntity>({
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
         OrderBy: 'VersionSequence DESC',
@@ -610,8 +610,8 @@ export class ComponentRegistryAPIServer {
    * 
    * @protected
    */
-  protected getLatestVersions(components: ComponentEntity[]): ComponentEntity[] {
-    const latestComponents = new Map<string, ComponentEntity>();
+  protected getLatestVersions(components: MJComponentEntity[]): MJComponentEntity[] {
+    const latestComponents = new Map<string, MJComponentEntity>();
     
     for (const component of components) {
       const key = `${component.Namespace}/${component.Name}`;

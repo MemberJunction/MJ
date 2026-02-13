@@ -2,7 +2,7 @@ import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
+import { MJContentSourceEntity, MJContentItemEntity } from '@memberjunction/core-entities';
 import { RSSItem } from './RSS.types';
 import axios from 'axios'
 import crypto from 'crypto'
@@ -44,8 +44,8 @@ export class AutotagRSSFeed extends AutotagBase {
      * @param contentSources - An array of content sources to check for modified or added content source items
      * @returns - An array of content source items that have been modified or added after the most recent process run for that content source
      */
-    public async SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]> {
-        const contentItemsToProcess: ContentItemEntity[] = []
+    public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
+        const contentItemsToProcess: MJContentItemEntity[] = []
         for (const contentSource of contentSources) {
 
             // If content source parameters were provided, set them. Otherwise, use the default values.
@@ -70,7 +70,7 @@ export class AutotagRSSFeed extends AutotagBase {
             
             const allRSSItems: RSSItem[] = await this.parseRSSFeed(contentSourceParams.URL);
             
-            const contentItems: ContentItemEntity[] = await this.SetNewAndModifiedContentItems(allRSSItems, contentSourceParams)
+            const contentItems: MJContentItemEntity[] = await this.SetNewAndModifiedContentItems(allRSSItems, contentSourceParams)
             
             if (contentItems && contentItems.length > 0) {
                 contentItemsToProcess.push(...contentItems);
@@ -83,18 +83,18 @@ export class AutotagRSSFeed extends AutotagBase {
         return contentItemsToProcess
     }
 
-    public async SetNewAndModifiedContentItems(allRSSItems: RSSItem[], contentSourceParams: ContentSourceParams): Promise<ContentItemEntity[]> {
-        const contentItemsToProcess: ContentItemEntity[] = [];
+    public async SetNewAndModifiedContentItems(allRSSItems: RSSItem[], contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity[]> {
+        const contentItemsToProcess: MJContentItemEntity[] = [];
         for (const RSSContentItem of allRSSItems) {
             const rv = new RunView();
             const results = await rv.RunView({
-                EntityName: 'Content Items', 
+                EntityName: 'MJ: Content Items', 
                 ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND (URL = '${RSSContentItem.link}' OR Description = '${RSSContentItem.description}')`, // According to the RSS spec, all items must contain either a title or a description.
                 ResultType: 'entity_object',
             }, this.contextUser)
 
             if (results.Success && results.Results.length) {
-                const contentItemResult = <ContentItemEntity> results.Results[0];
+                const contentItemResult = <MJContentItemEntity> results.Results[0];
                 // This content item already exists, check the last hash to see if it has been modified
                 const lastStoredHash: string = contentItemResult.Checksum
                 const newHash: string = await this.getChecksumFromRSSItem(RSSContentItem, this.contextUser)
@@ -102,7 +102,7 @@ export class AutotagRSSFeed extends AutotagBase {
                 if (lastStoredHash !== newHash) {
                     // This content item has been modified
                     const md = new Metadata();
-                    const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                    const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
                     contentItem.Load(contentItemResult.ID);
                     contentItem.Checksum = newHash
                     contentItem.Text = JSON.stringify(RSSContentItem)
@@ -114,7 +114,7 @@ export class AutotagRSSFeed extends AutotagBase {
             else {
                 // This content item does not exist, add it
                 const md = new Metadata();
-                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
                 contentItem.ContentSourceID = contentSourceParams.contentSourceID
                 contentItem.Name = contentSourceParams.name
                 contentItem.Description = RSSContentItem.description || await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)

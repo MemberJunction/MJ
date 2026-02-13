@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
-import { UserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
 /**
@@ -277,7 +277,7 @@ export class ApplicationManager {
     // Load user's UserApplication records using UserInfoEngine for caching
     const engine = UserInfoEngine.Instance;
 
-    let userApps: UserApplicationEntity[] = engine.UserApplications;
+    let userApps: MJUserApplicationEntity[] = engine.UserApplications;
 
     // Self-healing: If user has no UserApplication records, create from DefaultForNewUser apps
     if (userApps.length === 0) {
@@ -311,7 +311,7 @@ export class ApplicationManager {
    * Called when a user has no existing UserApplication records (self-healing).
    * Delegates to UserInfoEngine for the actual creation.
    */
-  private async createDefaultUserApplications(): Promise<UserApplicationEntity[]> {
+  private async createDefaultUserApplications(): Promise<MJUserApplicationEntity[]> {
     const engine = UserInfoEngine.Instance;
     return await engine.CreateDefaultApplications();
   }
@@ -501,7 +501,7 @@ export class ApplicationManager {
    * Delegates to UserInfoEngine for the actual installation.
    * Returns the newly created UserApplication entity.
    */
-  async InstallAppForUser(appId: string): Promise<UserApplicationEntity | null> {
+  async InstallAppForUser(appId: string): Promise<MJUserApplicationEntity | null> {
     const engine = UserInfoEngine.Instance;
     // The engine will emit DataChange$ after the entity save triggers a refresh,
     // which our subscribeToEngineChanges() handler will pick up and call syncFromEngine()

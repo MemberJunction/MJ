@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { LogError, Metadata } from '@memberjunction/core';
-import { ResourcePermissionEngine, ResourcePermissionEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
+import { ResourcePermissionEngine, MJResourcePermissionEntity, MJResourceTypeEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -38,12 +38,12 @@ export class RequestResourceAccessComponent  extends BaseAngularComponent implem
      */
     @Input() ShowPermissionLevelDropdown: boolean = true;
 
-    @Output() AccessRequested = new EventEmitter<ResourcePermissionEntity>();
+    @Output() AccessRequested = new EventEmitter<MJResourcePermissionEntity>();
 
     /**
      * The resource type object that the user is requesting access to for all info on the resource type
      */
-    public ResourceTypeObject!: ResourceTypeEntity;
+    public ResourceTypeObject!: MJResourceTypeEntity;
     public AfterRequest: boolean = false;
 
     async ngOnInit() {
@@ -56,7 +56,7 @@ export class RequestResourceAccessComponent  extends BaseAngularComponent implem
 
     public async requestAccess() {
         const p = this.ProviderToUse;
-        const permission = await p.GetEntityObject<ResourcePermissionEntity>("Resource Permissions", p.CurrentUser);
+        const permission = await p.GetEntityObject<MJResourcePermissionEntity>("MJ: Resource Permissions", p.CurrentUser);
         permission.ResourceTypeID = this.ResourceTypeObject.ID;
         permission.ResourceRecordID = this.ResourceRecordID;
         permission.Status = 'Requested';
@@ -65,7 +65,7 @@ export class RequestResourceAccessComponent  extends BaseAngularComponent implem
         permission.PermissionLevel = this.PermissionLevel;
         if (await permission.Save()) {
             // worked, fire the event. 
-            // NOTE - the notification creatd to notify the resource owner happens in the ResourcePermissionEntity sub-class not here in the UI
+            // NOTE - the notification creatd to notify the resource owner happens in the MJResourcePermissionEntity sub-class not here in the UI
             this.AccessRequested.emit(permission);
             this.AfterRequest = true;
         }
