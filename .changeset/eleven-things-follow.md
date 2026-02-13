@@ -1,8 +1,6 @@
 ---
 "@memberjunction/mj-open-app-engine": minor
 "@memberjunction/cli": minor
-"@memberjunction/codegen-lib": minor
-"@memberjunction/core-entities": minor
 "@memberjunction/global": minor
 "@memberjunction/server-bootstrap": minor
 ---

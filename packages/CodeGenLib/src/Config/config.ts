@@ -465,16 +465,6 @@ const configInfoSchema = z.object({
   entityPackageName: z.string().default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
-
-  /** Open App settings relevant to CodeGen */
-  openApps: z.object({
-    codeGenExclusions: z.object({
-      /** When true, app schemas are NOT excluded from CodeGen (default: false) */
-      includeAppSchemas: z.boolean().default(false),
-      /** Specific app names whose schemas should be included in CodeGen even when includeAppSchemas is false */
-      overrideApps: z.string().array().default([]),
-    }).default({}),
-  }).default({}),
 });
 
 /**

@@ -9,7 +9,7 @@ This document defines the **MJ Open App** standard — a packaging, distribution
 1. **Standardized packaging** — Any developer can create and distribute an MJ app using a well-defined manifest format.
 2. **Schema isolation** — Each app owns a dedicated database schema, preventing collisions with MJ core (`__mj`) or other apps.
 3. **Version management** — Apps use semver via GitHub release tags. Migrations manage schema evolution across versions.
-4. **Metadata portability** — App metadata (entity registrations, actions, prompts, agents, dashboards, etc.) is delivered as DML within the app's migration files. App authors may use `mj sync` tooling in their own dev workflow to generate these migration statements, but the consumer only ever runs migrations.
+4. **Metadata portability** — App metadata (entities, actions, prompts, agents, dashboards, etc.) is packaged using the existing mj-sync format and pushed into the target MJ installation at install time.
 5. **npm integration** — App code ships as npm packages (public or private registry) and integrates with MJ's dynamic package loading system.
 6. **CLI-driven lifecycle** — `mj app install`, `mj app upgrade`, `mj app remove` commands handle the full lifecycle.
 7. **Immutable artifacts** — App authors publish immutable, pre-built code via npm and immutable tagged migrations via GitHub. The consumer's environment never runs CodeGen on app schemas.
@@ -52,10 +52,16 @@ my-mj-app/
 │   ├── V202602010000__v1.0.x__Initial_Schema.sql
 │   ├── V202603150000__v1.1.x__Add_Status_Column.sql
 │   └── ...
-├── metadata/                       # Dev-time mj-sync files (OPTIONAL — for author workflow only)
-│   ├── .mj-sync.json              # Sync configuration
-│   └── ...                         # Entity/action/prompt/agent definitions used by author
-│                                    # to generate migration DML via `mj sync push --dry-run`
+├── metadata/                       # mj-sync metadata files (REQUIRED)
+│   ├── .mj-sync.json              # Sync configuration with directoryOrder
+│   ├── entities/                   # Entity metadata registrations
+│   ├── actions/                    # Action definitions
+│   ├── prompts/                    # AI prompt definitions
+│   │   └── templates/             # Prompt template content files
+│   ├── agents/                     # AI agent definitions
+│   ├── applications/               # Application nav definitions
+│   ├── dashboards/                 # Dashboard definitions
+│   └── ...                         # Any mj-sync entity directories
 ├── packages/                       # Source code (OPTIONAL for closed-source)
 │   ├── server-bootstrap/          # Server bootstrap package (REQUIRED)
 │   ├── ng-bootstrap/              # Angular bootstrap package (REQUIRED if app has UI)
@@ -76,17 +82,19 @@ my-mj-app/
 
 ### Private Repositories
 
-Private repositories are fully supported using standard Git and npm authentication — no special MJ infrastructure required:
-
-- **Private GitHub repos**: Configure a PAT via `GITHUB_TOKEN` environment variable (or SSH keys). The CLI uses standard `git` auth when cloning/fetching manifests.
-- **Private npm packages**: Configure `.npmrc` with scoped registry auth (see "Private npm Registries" under NPM Package Integration).
+Private repositories are fully supported. The consumer configures GitHub authentication via PAT, GitHub App Installation Token, or SSH key. The CLI uses the configured auth when fetching manifests from private repos.
 
 ```javascript
 // mj.config.cjs — GitHub auth for private repos
 module.exports = {
   openApps: {
     github: {
-      token: process.env.GITHUB_TOKEN
+      // Option 1: Personal Access Token
+      token: process.env.GITHUB_TOKEN,
+      // Option 2: GitHub App
+      appId: process.env.GH_APP_ID,
+      installationId: process.env.GH_INSTALLATION_ID,
+      privateKey: process.env.GH_PRIVATE_KEY
     }
   }
 };
@@ -143,7 +151,7 @@ The MJ `config` package will expose a generic config loader where you provide a 
   // ── Migrations ────────────────────────────────────────────
   "migrations": {                                 // REQUIRED if app has database objects
     "directory": "migrations",                    // OPTIONAL - default: "migrations"
-    "engine": "skyway"                            // OPTIONAL - default: "skyway" (Flyway-compatible format)
+    "engine": "flyway"                            // OPTIONAL - default: "flyway"
   },
 
   // ── Metadata ──────────────────────────────────────────────
@@ -186,12 +194,8 @@ The MJ `config` package will expose a generic config loader where you provide a 
 
   // ── App Dependencies ──────────────────────────────────────
   "dependencies": {                               // OPTIONAL - other MJ apps this app requires
-    "acme-billing": ">=1.0.0",                    // Simple form: app name -> semver range
-    "acme-contacts": "^2.0.0",
-    "acme-inventory": {                            // Object form: includes repository for auto-install
-      "version": ">=1.0.0",
-      "repository": "https://github.com/acme/mj-inventory"
-    }
+    "acme-billing": ">=1.0.0",                    // App name -> semver range
+    "acme-contacts": "^2.0.0"
   },
 
   // ── Code Visibility ───────────────────────────────────────
@@ -260,7 +264,7 @@ The MJ `config` package will expose a generic config loader where you provide a 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `mjVersionRange` | string | Yes | Semver range of compatible MJ versions |
-| `dependencies` | object | No | Map of app name to semver range (string) or `{ version, repository }` object. The object form includes a GitHub URL for auto-installing uninstalled dependencies. Transitive dependencies are resolved and auto-installed by the CLI. |
+| `dependencies` | object | No | Map of app name to semver range for required peer apps. Transitive dependencies are resolved and auto-installed by the CLI. |
 
 #### Database Schema
 
@@ -274,7 +278,7 @@ The MJ `config` package will expose a generic config loader where you provide a 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `migrations.directory` | string | No | Relative path to migrations. Default: `"migrations"`. |
-| `migrations.engine` | string | No | Migration engine. Default: `"skyway"` (Flyway-compatible format). |
+| `migrations.engine` | string | No | Only `"flyway"` supported. Default: `"flyway"`. |
 
 #### Packages
 
@@ -340,24 +344,15 @@ Rules:
 
 ### Entity Naming Convention
 
-To prevent entity name collisions across apps and with MJ core, app entities MUST use a prefix. MJ already has an `EntityNamePrefix` field on the `SchemaInfo` table — the app's migration sets this for its schema, and all entities in that schema are prefixed accordingly:
+To prevent entity name collisions across apps and with MJ core, app entities MUST use a prefix based on the app name:
 
 ```
-{EntityNamePrefix}: {EntityName}
+{AppDisplayName}: {EntityName}
 ```
 
 Examples: `Acme CRM: Contacts`, `Acme CRM: Deals`, `Acme CRM: Pipeline Stages`
 
-The app's initial migration should set the `EntityNamePrefix` on the `SchemaInfo` row for its schema:
-
-```sql
--- Set the entity name prefix for this app's schema
-UPDATE __mj.SchemaInfo
-SET EntityNamePrefix = 'Acme CRM'
-WHERE SchemaName = 'acme_crm';
-```
-
-This mirrors the `MJ: ` prefix convention used by newer MJ core entities and ensures uniqueness in the global `Entity` metadata table. The prefix is stored in MJ metadata (not invented by convention), so the system can enforce and display it consistently.
+This mirrors the `MJ: ` prefix convention used by newer MJ core entities and ensures uniqueness in the global `Entity` metadata table.
 
 ### Cross-Schema References
 
@@ -377,19 +372,19 @@ CREATE TABLE ${flyway:defaultSchema}.Contact (
 Rules:
 - Apps MAY reference `__mj` schema entities via foreign keys
 - Apps MAY reference other installed app schemas (declared in `dependencies`)
-- Apps MUST NOT perform DDL modifications (ALTER TABLE, DROP TABLE, CREATE INDEX, etc.) on tables in `__mj` or other app schemas. However, apps ARE expected to INSERT rows into `__mj` metadata tables (Entity, EntityField, Action, Application, etc.) as DML — this is how apps register their metadata with the MJ system. This is trust-based — the CLI does not enforce it via migration scanning, but violating the DDL prohibition voids compatibility guarantees.
+- Apps MUST NOT modify tables in `__mj` or other app schemas (this is trust-based — the CLI does not enforce it via migration scanning, but violating this voids compatibility guarantees)
 - The `__mj` reference is always literal (not a placeholder) — it's the well-known core schema
-- Cross-app references are supported: app A's migrations MAY reference entities/tables defined by app B (via FK constraints or metadata UUIDs), provided B is declared in A's `dependencies`
+- Cross-app metadata references are supported: app A's metadata MAY use `@lookup:` to reference entities defined by app B, provided B is declared in A's `dependencies`
 
 ### Entity Registration with MJ Core
 
-When an app creates tables in its schema, those tables must be registered as MJ entities so they participate in the metadata system (RunView, entity objects, etc.). **Entity registration happens entirely through migrations**, not through a separate metadata sync step:
+When an app creates tables in its schema, those tables are registered as MJ entities so they participate in the metadata system (RunView, entity objects, etc.):
 
-1. App migrations create tables, views, and stored procedures in the app's schema
-2. App migrations INSERT rows into `__mj.Entity`, `__mj.EntityField`, and related metadata tables to register those objects with the MJ metadata system
+1. App's `metadata/entities/` directory declares entity metadata
+2. `mj sync push` registers entities in the MJ `Entity` and `EntityField` tables
 3. The app's entities are now visible to the MJ metadata system, living in a separate schema
 
-The app author is responsible for including **everything** in their migrations — tables, stored procedures, views, entity/field metadata registration, and any other DDL or DML. Unlike MJ core development where CodeGen generates sprocs, views, and metadata records, app migrations must be fully self-contained because CodeGen does not run on app schemas at install time. This means migration files will include both DDL (CREATE TABLE, CREATE VIEW, CREATE PROCEDURE) and DML (INSERT INTO `__mj.Entity`, INSERT INTO `__mj.EntityField`, etc.).
+The app author is responsible for including **all database objects** in their migrations — tables, stored procedures, views, and any other DDL. Unlike MJ core development where CodeGen generates sprocs and views, app migrations must be self-contained because CodeGen does not run on app schemas at install time.
 
 ### CodeGen Exclusion
 
@@ -418,11 +413,9 @@ module.exports = {
 
 ## Migrations
 
-### Migration Engine: Skyway
+### Flyway Integration
 
-MemberJunction uses **Skyway** — a TypeScript-native, open-source migration engine that is a drop-in replacement for Flyway ([github.com/MemberJunction/skyway](https://github.com/MemberJunction/skyway)). Skyway uses the same file naming conventions, database history table format, and placeholder syntax as Flyway, but is built natively in TypeScript and fixes several Flyway bugs (e.g., choking on JS/TS string templates in SQL, mishandling strings > 4000 chars).
-
-App migrations follow the same Skyway conventions as MJ core. The key difference: **the default schema is the app's schema**, not `__mj`.
+App migrations follow the same Flyway conventions as MJ core. The key difference: **the default schema is the app's schema**, not `__mj`.
 
 File naming convention:
 ```
@@ -436,34 +429,13 @@ V202602150000__v1.0.x__Add_Contact_Status.sql
 V202603010000__v1.1.x__Add_Deal_Pipeline.sql
 ```
 
-### Schema References in App Migrations
+### Schema Placeholder
 
-App migrations reference two schemas — the app's own schema and `__mj`. The rules are:
+Migrations MUST use `${flyway:defaultSchema}` for the app schema. When the CLI runs migrations, it sets `flyway.defaultSchema` to the app's schema name from the manifest.
 
-| Target | Syntax | Example |
-|--------|--------|---------|
-| **App's own tables** | `${flyway:defaultSchema}` | `CREATE TABLE ${flyway:defaultSchema}.Contact (...)` |
-| **MJ core metadata tables** | `__mj` (literal) | `INSERT INTO __mj.Entity (...)` |
+### Flyway History Table
 
-`${flyway:defaultSchema}` resolves to the app's schema name (e.g., `acme_crm`) because the CLI sets the default schema to the app schema when running migrations. (The `${flyway:defaultSchema}` placeholder name is retained for Flyway format compatibility.) It must NOT be used for `__mj` metadata tables — those are always referenced literally.
-
-#### Multi-Schema Placeholder Support
-
-`mj migrate` supports a `schemaPlaceholders` configuration that maps multiple schemas to named placeholders. This enables apps to use placeholder syntax for both their own schema and `__mj` if desired:
-
-```javascript
-// mj.config.cjs — schemaPlaceholders example
-schemaPlaceholders: [
-  { schema: '__mj', placeholder: '${mjSchema}' },
-  { schema: 'acme_crm', placeholder: '${flyway:defaultSchema}' }
-]
-```
-
-This is an optional convenience — app authors may use `__mj` literally (the default and simplest approach) or adopt `${mjSchema}` as a placeholder if they prefer all schema references to be parameterized. The CLI supports both patterns.
-
-### Migration History Table
-
-Each app gets its own migration history table within its schema (using the Flyway-compatible table format):
+Each app gets its own Flyway history table within its schema:
 ```
 acme_crm.flyway_schema_history
 ```
@@ -476,7 +448,7 @@ All MJ migration rules apply (see `/migrations/CLAUDE.md`), plus:
 
 1. Use `${flyway:defaultSchema}` for app tables — never hardcode the schema name
 2. Use `__mj` literally for core references
-3. Never perform DDL on `__mj` objects (DML inserts into `__mj` metadata tables are expected)
+3. Never modify `__mj` objects
 4. Hardcode UUIDs (not `NEWID()`)
 5. No `__mj_` timestamp columns — CodeGen adds these when it processes the consumer's schemas
 6. No FK indexes — CodeGen creates these when it processes the consumer's schemas
@@ -494,7 +466,7 @@ The app author runs CodeGen in their own development environment to generate the
 
 ### Baseline Migrations
 
-For major version jumps, apps MAY include a baseline migration using the `B` prefix (Flyway-compatible convention):
+For major version jumps, apps MAY include a baseline migration using the Flyway `B` prefix:
 
 ```
 B202602010000__v2.0_Baseline.sql    # Complete schema for fresh v2.0 installs
@@ -503,106 +475,124 @@ V202602150000__v2.1.x__Add_Feature.sql
 
 ---
 
-## Metadata in Migrations
+## Metadata Packaging
 
-### Core Principle
+### mj-sync Format
 
-An MJ Open App is defined entirely by its **migrations + npm packages**. There is no separate "metadata push" step at install time. All metadata — entity registrations, actions, prompts, agents, dashboards, application definitions — is delivered as DML (INSERT/UPDATE statements) within the app's migration files.
+App metadata uses the exact same mj-sync format as MJ core. The app's `metadata/` directory mirrors the structure used in `/metadata/` at the MJ repo root.
 
-### What Goes in Migrations
+### Directory Structure
 
-Migration files contain both DDL and DML:
-
-| Type | Examples |
-|---|---|
-| **DDL** | `CREATE TABLE`, `CREATE VIEW`, `CREATE PROCEDURE`, `CREATE SCHEMA` |
-| **DML — Metadata** | `INSERT INTO __mj.Entity`, `INSERT INTO __mj.EntityField`, `INSERT INTO __mj.Action`, `INSERT INTO __mj.Application`, etc. (always `__mj` literal — NOT `${flyway:defaultSchema}`) |
-| **DML — Seed Data** | Any initial data the app requires to function |
-
-### Example: Entity Registration in a Migration
-
-```sql
--- V202602010000__v1.0.x__Initial_Schema.sql
-
--- DDL: Create the table
-CREATE TABLE acme_crm.Contact (
-    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    FirstName NVARCHAR(100) NOT NULL,
-    LastName NVARCHAR(100) NOT NULL,
-    Email NVARCHAR(255) NULL,
-    CompanyName NVARCHAR(200) NULL,
-    CONSTRAINT PK_Contact PRIMARY KEY (ID)
-);
-
--- DML: Register the entity with MJ metadata system (use __mj literally, NOT ${flyway:defaultSchema})
-INSERT INTO __mj.Entity (
-    ID, Name, SchemaName, BaseTable, Description,
-    AllowCreateAPI, AllowUpdateAPI, AllowDeleteAPI,
-    TrackRecordChanges, IncludeInAPI
-) VALUES (
-    'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
-    'Acme CRM: Contacts', 'acme_crm', 'Contact',
-    'CRM contacts tracked by Acme CRM',
-    1, 1, 1, 1, 1
-);
-
--- DML: Register entity fields
-INSERT INTO __mj.EntityField (
-    ID, EntityID, Name, Type, Length, AllowsNull, Description
-) VALUES
-    ('B2C3D4E5-F6A7-8901-BCDE-F12345678901',
-     'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
-     'FirstName', 'nvarchar', 100, 0, 'Contact first name'),
-    -- ... additional fields ...
-;
+```
+metadata/
+├── .mj-sync.json                   # Root sync config with directoryOrder
+├── entities/
+│   ├── .mj-sync.json
+│   └── .crm-entities.json
+├── actions/
+│   ├── .mj-sync.json
+│   ├── .crm-actions.json
+│   └── templates/
+│       └── sync-contacts.md
+├── prompts/
+│   ├── .mj-sync.json
+│   ├── .crm-prompts.json
+│   └── templates/
+│       └── contact-summary.md
+├── agents/
+│   ├── .mj-sync.json
+│   └── .crm-agents.json
+├── applications/
+│   ├── .mj-sync.json
+│   └── .crm-application.json
+├── dashboards/
+│   ├── .mj-sync.json
+│   └── .crm-dashboards.json
+└── scheduled-jobs/
+    ├── .mj-sync.json
+    └── .crm-jobs.json
 ```
 
-### Example: Application Registration in a Migration
+### Root `.mj-sync.json`
 
-```sql
--- Register the MJ Application for nav/UI (use __mj literally for metadata tables)
-INSERT INTO __mj.Application (
-    ID, Name, Description, Icon, DefaultForNewUser, DefaultSequence
-) VALUES (
-    'D4E5F6A7-B8C9-0123-DEFG-456789ABCDEF',
-    'Acme CRM', 'Customer relationship management',
-    'fa-solid fa-handshake', 0, 500
-);
+```json
+{
+  "version": "1.0.0",
+  "push": { "autoCreateMissingRecords": true },
+  "directoryOrder": [
+    "entities", "action-categories", "actions",
+    "prompt-categories", "prompts",
+    "agent-types", "agents",
+    "applications", "dashboard-part-types", "dashboards",
+    "scheduled-jobs"
+  ]
+}
 ```
 
-### Author-Side Workflow (mj-sync as Dev Tooling)
+### Entity Registration Example
 
-App authors MAY use `mj-sync` in their development environment to manage metadata as JSON files and generate the DML that goes into migrations. This is a **dev-time convenience** — the `metadata/` directory is an optional authoring artifact, not a distributable.
-
-Typical author workflow:
-1. Author maintains metadata as JSON files in `metadata/` using mj-sync format
-2. Author runs `mj sync push` in their dev database to apply changes
-3. Author captures the resulting DML as migration statements
-4. The migration files are the canonical, distributable artifact
-
-The `metadata/` directory is never read or processed at install time on the consumer's system.
-
-### Upgrade Migrations
-
-When upgrading an app, the new version's migrations handle metadata changes too:
-
-```sql
--- V202603150000__v1.1.x__Add_Status_Field.sql
-
--- DDL: Add column to existing table
-ALTER TABLE acme_crm.Contact ADD Status NVARCHAR(20) NOT NULL DEFAULT 'Active';
-
--- DML: Register the new field with MJ metadata (always __mj for metadata tables)
-INSERT INTO __mj.EntityField (
-    ID, EntityID, Name, Type, Length, AllowsNull, DefaultValue, Description
-) VALUES (
-    'C3D4E5F6-A7B8-9012-CDEF-G23456789ABC',
-    'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
-    'Status', 'nvarchar', 20, 0, '''Active''', 'Contact status'
-);
+```json
+[
+  {
+    "fields": {
+      "Name": "Acme CRM: Contacts",
+      "SchemaName": "acme_crm",
+      "BaseTable": "Contact",
+      "Description": "CRM contacts tracked by Acme CRM",
+      "AllowCreateAPI": true,
+      "AllowUpdateAPI": true,
+      "AllowDeleteAPI": true,
+      "TrackRecordChanges": true,
+      "IncludeInAPI": true
+    }
+  }
+]
 ```
 
-Skyway ensures only new migrations run (via `flyway_schema_history` in the app's schema), so metadata registration is idempotent across upgrades.
+The `SchemaName` in entity metadata MUST match `schema.name` in the app manifest.
+
+### Application Registration Example
+
+```json
+{
+  "fields": {
+    "Name": "Acme CRM",
+    "Description": "Customer relationship management",
+    "Icon": "fa-solid fa-handshake",
+    "DefaultForNewUser": false,
+    "Color": "#2196f3",
+    "DefaultSequence": 500,
+    "DefaultNavItems": [
+      {
+        "Label": "Contacts",
+        "Icon": "fa-solid fa-address-book",
+        "ResourceType": "Custom",
+        "DriverClass": "AcmeCRMContactsResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Deals",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "AcmeCRMDealsResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": { "Application Entities": [] }
+}
+```
+
+### Metadata Merge Strategy
+
+When metadata is pushed during install or upgrade:
+
+- **New records** -> Created automatically
+- **Existing records (by primaryKey)** -> Updated with new field values
+- **Missing records** -> NOT deleted automatically (manual cleanup required)
+- **@lookup references** -> Resolved against the live database at push time
+
+Apps can safely push metadata on every upgrade — existing customizations to fields not managed by the app are preserved.
 
 ---
 
@@ -700,8 +690,9 @@ Server and client use different loading mechanisms due to fundamental platform d
 flowchart TD
     A["mj app install acme-crm"] --> B["CLI reads mj-app.json"]
     B --> C["Resolve dependency graph\n(topological sort)"]
-    C --> D["Run migrations via Skyway\n(DDL + metadata DML)"]
-    D --> F["Update package.json in\nMJAPI + MJExplorer"]
+    C --> D["Run migrations via Flyway"]
+    D --> E["Push metadata via mj sync push"]
+    E --> F["Update package.json in\nMJAPI + MJExplorer"]
     F --> G["npm install from repo root\n(single workspace install)"]
     G --> H["Update mj.config.cjs\nserver dynamicPackages"]
     H --> I["Generate\nopen-app-bootstrap.generated.ts\nin MJExplorer"]
@@ -744,10 +735,10 @@ module.exports = {
   dynamicPackages: {
     server: [
       {
-        PackageName: '@acme/mj-crm-server-bootstrap',
-        StartupExport: 'LoadAcmeCRMServer',
-        AppName: 'acme-crm',           // Links back to the Open App
-        Enabled: true                    // Can be toggled without removing
+        packageName: '@acme/mj-crm-server-bootstrap',
+        startupExport: 'LoadAcmeCRMServer',
+        appName: 'acme-crm',           // Links back to the Open App
+        enabled: true                    // Can be toggled without removing
       }
     ]
   }
@@ -923,13 +914,14 @@ mj app install https://github.com/acme/mj-crm [--version 1.2.0]
 5. **Install dependencies** — Auto-install any missing dependency apps (recursive, depth-first)
 6. **Check schema** — Verify `schema.name` doesn't already exist (and isn't claimed by another app)
 7. **Create schema** — `CREATE SCHEMA [acme_crm]` if `createIfNotExists` is true
-8. **Run migrations** — Execute Skyway against the app schema (sets default schema to the app schema, history table in app schema). Migrations include both DDL (tables, views, sprocs) and DML (entity/field/action/prompt metadata registrations in `__mj` tables).
-9. **Update package.json files** — Add server packages to `packages/MJAPI/package.json`, client packages to `packages/MJExplorer/package.json`
-10. **Run npm install** — Single `npm install` from repo root (npm workspaces resolve both)
-11. **Update server config** — Add entries to `dynamicPackages.server` in `mj.config.cjs`
-12. **Update client imports** — Regenerate `packages/MJExplorer/src/app/generated/open-app-bootstrap.generated.ts`
-13. **Execute hooks** — Run `postInstall` hook if defined
-14. **Record installation** — Create record in `MJ: Open Apps` table, create initial `MJ: Open App Install History` entry
+8. **Run migrations** — Execute Flyway against the app schema (sets `flyway.defaultSchema` to app schema, history table in app schema)
+9. **Push metadata** — Run `mj sync push` to register entities, actions, prompts, etc.
+10. **Update package.json files** — Add server packages to `packages/MJAPI/package.json`, client packages to `packages/MJExplorer/package.json`
+11. **Run npm install** — Single `npm install` from repo root (npm workspaces resolve both)
+12. **Update server config** — Add entries to `dynamicPackages.server` in `mj.config.cjs`
+13. **Update client imports** — Regenerate `packages/MJExplorer/src/app/generated/open-app-bootstrap.generated.ts`
+14. **Execute hooks** — Run `postInstall` hook if defined
+15. **Record installation** — Create record in `MJ: Open Apps` table, create initial `MJ: Open App Install History` entry
 
 ### Upgrade Flow
 
@@ -940,13 +932,14 @@ mj app upgrade acme-crm [--version 1.3.0]
 1. Fetch new manifest from target version
 2. Validate manifest and compatibility
 3. Check dependency compatibility with new version
-4. Run migrations (Skyway applies only new ones via `flyway_schema_history` in the app's schema). New migrations include both DDL changes and metadata DML updates.
-5. Update npm package versions in `packages/MJAPI/package.json` and `packages/MJExplorer/package.json`
-6. Run `npm install` from repo root
-7. Update `dynamicPackages.server` in `mj.config.cjs` if bootstrap packages changed
-8. Regenerate `open-app-bootstrap.generated.ts` if client bootstrap packages changed
-9. Execute `postUpgrade` hook
-10. Update version in `MJ: Open Apps`, create `MJ: Open App Install History` entry
+4. Run migrations (Flyway applies only new ones via `flyway_schema_history` in the app's schema)
+5. Push metadata (mj-sync updates existing, creates new records)
+6. Update npm package versions in `packages/MJAPI/package.json` and `packages/MJExplorer/package.json`
+7. Run `npm install` from repo root
+8. Update `dynamicPackages.server` in `mj.config.cjs` if bootstrap packages changed
+9. Regenerate `open-app-bootstrap.generated.ts` if client bootstrap packages changed
+10. Execute `postUpgrade` hook
+11. Update version in `MJ: Open Apps`, create `MJ: Open App Install History` entry
 
 ### Remove Flow
 
@@ -992,30 +985,58 @@ MJ tracks installed Open Apps in core `__mj` entities. These follow the `"MJ: "`
 ### Entity Relationship Diagram
 
 ```
+                    ┌──────────────────────┐
+                    │  MJ: App Registries  │
+                    │──────────────────────│
+                    │ ID                   │
+                    │ Name                 │
+                    │ URL                  │
+                    │ Type                 │
+                    │ Status               │
+                    └──────────┬───────────┘
+                               │ 1:N
+                               ▼
 ┌──────────────────────────────────────────────────────┐
 │                    MJ: Open Apps                      │
 │──────────────────────────────────────────────────────│
 │ ID, Name (unique), DisplayName, Description          │
 │ Version, Publisher, RepositoryURL                    │
 │ SchemaName (unique), MJVersionRange                  │
-│ ManifestJSON, Status                                 │
-└───┬──────────────────────────────────┬───────────────┘
-    │ 1:N                              │ 1:N
-    ▼                                  ▼
-┌────────────────────────┐   ┌──────────────────────┐
-│ MJ: Open App           │   │ MJ: Open App         │
-│ Install History        │   │ Dependencies         │
-│────────────────────────│   │──────────────────────│
-│ Version                │   │ DependsOnAppName     │
-│ PrevVersion            │   │ DependsOnAppID       │
-│ Action                 │   │ VersionRange         │
-│ Success                │   │ Status               │
-│ ErrorMessage           │   └──────────────────────┘
-│ ErrorPhase             │
-└────────────────────────┘
+│ ManifestJSON, Status, RegistryID                     │
+└───┬──────────────────┬───────────────────┬───────────┘
+    │ 1:N              │ 1:N               │ 1:N
+    ▼                  ▼                   ▼
+┌────────────────┐ ┌──────────────┐ ┌──────────────────┐
+│ MJ: Open App   │ │ MJ: Open App │ │ MJ: Open App     │
+│ Install History│ │ Packages     │ │ Dependencies     │
+│────────────────│ │──────────────│ │──────────────────│
+│ Version        │ │ PackageName  │ │ DependsOnAppName │
+│ PrevVersion    │ │ PackageType  │ │ DependsOnAppID   │
+│ Action         │ │ Role         │ │ VersionRange     │
+│ Success        │ │ StartupExport│ │ Status           │
+│ ErrorMessage   │ │ Registry     │ └──────────────────┘
+│ ErrorPhase     │ └──────────────┘
+└────────────────┘
 ```
 
-The data model is intentionally lean. Registry configuration lives in `mj.config.cjs` (not the database). Package details live in the manifest JSON and in `package.json` files (not the database). The DB only tracks what's installed, its audit history, and app-level dependency relationships.
+### MJ: App Registries
+
+Tracks known app registries (MJ Central, private registries, etc.).
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| ID | UNIQUEIDENTIFIER | No | NEWSEQUENTIALID() | Primary key |
+| Name | NVARCHAR(200) | No | | Registry display name |
+| URL | NVARCHAR(500) | No | | Base URL of the registry API |
+| Type | NVARCHAR(20) | No | 'Public' | Public, Private, or Local |
+| APIVersion | NVARCHAR(20) | No | 'v1' | API version string |
+| Description | NVARCHAR(MAX) | Yes | | Registry description |
+| AuthMethod | NVARCHAR(50) | Yes | | None, APIKey, OAuth, Token |
+| Status | NVARCHAR(20) | No | 'Active' | Active, Inactive, Error |
+
+**Constraints:** PK, UNIQUE(Name), CHECK(Type), CHECK(Status)
+
+**Default seed:** MJ Central pre-seeded with hardcoded UUID.
 
 ### MJ: Open Apps
 
@@ -1039,10 +1060,11 @@ Primary tracking entity for all Open Apps installed in this MJ instance.
 | Color | NVARCHAR(20) | Yes | | Hex color for UI |
 | ManifestJSON | NVARCHAR(MAX) | No | | Complete manifest JSON at current version |
 | ConfigurationSchemaJSON | NVARCHAR(MAX) | Yes | | JSON Schema for app config |
+| RegistryID | UNIQUEIDENTIFIER | Yes | | FK to AppRegistry |
 | InstalledByUserID | UNIQUEIDENTIFIER | No | | FK to User |
-| Status | NVARCHAR(20) | No | 'Active' | Active, Disabled, Error, Installing, Upgrading, Removing, Removed |
+| Status | NVARCHAR(20) | No | 'Active' | Active, Disabled, Error, Installing, Upgrading, Removing |
 
-**Constraints:** PK, UNIQUE(Name), UNIQUE(SchemaName), FK(InstalledByUserID -> User), CHECK(Status), CHECK(Name lowercase+hyphens only)
+**Constraints:** PK, UNIQUE(Name), UNIQUE(SchemaName), FK(RegistryID -> AppRegistry), FK(InstalledByUserID -> User), CHECK(Status), CHECK(Name lowercase+hyphens only)
 
 ### MJ: Open App Install History
 
@@ -1056,14 +1078,34 @@ Audit trail of every install, upgrade, and removal action.
 | PreviousVersion | NVARCHAR(50) | Yes | | Version before this action (NULL for initial install) |
 | Action | NVARCHAR(20) | No | | Install, Upgrade, Remove |
 | ManifestJSON | NVARCHAR(MAX) | No | | Manifest snapshot at this version |
-| Summary | NVARCHAR(MAX) | Yes | | Summary of what changed (migrations applied, packages updated, etc.) |
+| MigrationsSummary | NVARCHAR(MAX) | Yes | | Summary of migrations applied |
+| MetadataSummary | NVARCHAR(MAX) | Yes | | Summary of metadata changes |
+| PackagesSummary | NVARCHAR(MAX) | Yes | | Summary of npm package changes |
 | ExecutedByUserID | UNIQUEIDENTIFIER | No | | FK to User |
 | DurationSeconds | INT | Yes | | How long the operation took |
 | Success | BIT | No | 1 | Whether it succeeded |
 | ErrorMessage | NVARCHAR(MAX) | Yes | | Error details if failed |
-| ErrorPhase | NVARCHAR(50) | Yes | | Schema, Migration, Packages, Config, Hooks |
+| ErrorPhase | NVARCHAR(50) | Yes | | Schema, Migration, Metadata, Packages, Config, Hooks |
 
 **Constraints:** PK, FK(OpenAppID), FK(ExecutedByUserID), CHECK(Action), CHECK(ErrorPhase)
+
+### MJ: Open App Packages
+
+Tracks npm packages associated with each installed Open App.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| ID | UNIQUEIDENTIFIER | No | NEWSEQUENTIALID() | Primary key |
+| OpenAppID | UNIQUEIDENTIFIER | No | | FK to Open Apps |
+| PackageName | NVARCHAR(200) | No | | npm package name |
+| PackageVersion | NVARCHAR(50) | No | | Currently installed version |
+| PackageType | NVARCHAR(20) | No | | Server, Client, Shared |
+| Role | NVARCHAR(50) | No | | bootstrap, actions, engine, provider, module, components, library |
+| StartupExport | NVARCHAR(200) | Yes | | Named export to call at startup (bootstrap packages only) |
+| RegistryURL | NVARCHAR(500) | Yes | | npm registry URL (NULL = public npm) |
+| Status | NVARCHAR(20) | No | 'Installed' | Installed, Error, Pending |
+
+**Constraints:** PK, FK(OpenAppID), UNIQUE(OpenAppID, PackageName), CHECK(PackageType), CHECK(Status)
 
 ### MJ: Open App Dependencies
 
@@ -1086,14 +1128,14 @@ Tracks inter-app dependency relationships.
 | Existing Entity | Relationship |
 |----------------|-------------|
 | **Users** | OpenApp.InstalledByUserID, OpenAppInstallHistory.ExecutedByUserID |
-| **Applications** | Apps create Application records via migration DML (not FK — these are different concepts) |
-| **Entities** | App entities registered via migration DML into `__mj.Entity`, SchemaName links to app schema |
-| **Actions** | App actions registered via migration DML |
-| **AI Prompts** | App prompts registered via migration DML |
-| **AI Agents** | App agents registered via migration DML |
-| **Dashboards** | App dashboards registered via migration DML |
+| **Applications** | Apps create Application records via metadata sync (not FK — these are different concepts) |
+| **Entities** | App entities registered through metadata sync, SchemaName links to app schema |
+| **Actions** | App actions registered through metadata sync |
+| **AI Prompts** | App prompts registered through metadata sync |
+| **AI Agents** | App agents registered through metadata sync |
+| **Dashboards** | App dashboards registered through metadata sync |
 
-The `MJ: Open Apps` entity tracks **installation state**, while actual app content (entities, actions, etc.) lives in their respective MJ core metadata entities, registered there by the app's migration files. "Open Apps" and "Applications" are distinct concepts — an Application is a UI nav container; an Open App is a deployable unit of functionality that may *contain* one or more Applications.
+The `MJ: Open Apps` entity tracks **installation state**, while actual app content (entities, actions, etc.) lives in their respective MJ core metadata entities, linked implicitly by schema name and metadata ownership. "Open Apps" and "Applications" are distinct concepts — an Application is a UI nav container; an Open App is a deployable unit of functionality that may *contain* one or more Applications.
 
 ### Migration SQL
 
@@ -1105,7 +1147,46 @@ This is the actual migration that would ship with MJ core to create the tracking
 -- not part of any individual app. They track what Open Apps are installed in this instance.
 
 -----------------------------------------------------------------------
--- 1. Open Apps
+-- 1. App Registries
+-----------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.AppRegistry (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    Name NVARCHAR(200) NOT NULL,
+    URL NVARCHAR(500) NOT NULL,
+    Type NVARCHAR(20) NOT NULL DEFAULT 'Public',
+    APIVersion NVARCHAR(20) NOT NULL DEFAULT 'v1',
+    Description NVARCHAR(MAX) NULL,
+    AuthMethod NVARCHAR(50) NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Active',
+    CONSTRAINT PK_AppRegistry PRIMARY KEY (ID),
+    CONSTRAINT UQ_AppRegistry_Name UNIQUE (Name),
+    CONSTRAINT CK_AppRegistry_Type CHECK (Type IN ('Public', 'Private', 'Local')),
+    CONSTRAINT CK_AppRegistry_Status CHECK (Status IN ('Active', 'Inactive', 'Error'))
+);
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Known app registries (MJ Central, private registries, etc.)',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AppRegistry';
+GO
+
+-- Seed MJ Central as the default public registry
+INSERT INTO ${flyway:defaultSchema}.AppRegistry (ID, Name, URL, Type, APIVersion, Description, Status)
+VALUES (
+    'A0E1F2A3-B4C5-D6E7-F8A9-B0C1D2E3F4A5',
+    'MJ Central',
+    'https://central.memberjunction.org/api/v1',
+    'Public',
+    'v1',
+    'The official MemberJunction app registry and marketplace',
+    'Active'
+);
+GO
+
+-----------------------------------------------------------------------
+-- 2. Open Apps
 -----------------------------------------------------------------------
 CREATE TABLE ${flyway:defaultSchema}.OpenApp (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
@@ -1124,15 +1205,18 @@ CREATE TABLE ${flyway:defaultSchema}.OpenApp (
     Color NVARCHAR(20) NULL,
     ManifestJSON NVARCHAR(MAX) NOT NULL,
     ConfigurationSchemaJSON NVARCHAR(MAX) NULL,
+    RegistryID UNIQUEIDENTIFIER NULL,
     InstalledByUserID UNIQUEIDENTIFIER NOT NULL,
     Status NVARCHAR(20) NOT NULL DEFAULT 'Active',
     CONSTRAINT PK_OpenApp PRIMARY KEY (ID),
     CONSTRAINT UQ_OpenApp_Name UNIQUE (Name),
     CONSTRAINT UQ_OpenApp_Schema UNIQUE (SchemaName),
+    CONSTRAINT FK_OpenApp_Registry FOREIGN KEY (RegistryID)
+        REFERENCES ${flyway:defaultSchema}.AppRegistry(ID),
     CONSTRAINT FK_OpenApp_User FOREIGN KEY (InstalledByUserID)
         REFERENCES ${flyway:defaultSchema}.[User](ID),
     CONSTRAINT CK_OpenApp_Status CHECK (Status IN (
-        'Active', 'Disabled', 'Error', 'Installing', 'Upgrading', 'Removing', 'Removed'
+        'Active', 'Disabled', 'Error', 'Installing', 'Upgrading', 'Removing'
     )),
     CONSTRAINT CK_OpenApp_Name CHECK (Name NOT LIKE '%[^a-z0-9-]%')
 );
@@ -1146,7 +1230,7 @@ EXEC sp_addextendedproperty
 GO
 
 -----------------------------------------------------------------------
--- 2. Open App Install History (audit trail)
+-- 3. Open App Install History (audit trail)
 -----------------------------------------------------------------------
 CREATE TABLE ${flyway:defaultSchema}.OpenAppInstallHistory (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
@@ -1155,7 +1239,9 @@ CREATE TABLE ${flyway:defaultSchema}.OpenAppInstallHistory (
     PreviousVersion NVARCHAR(50) NULL,
     Action NVARCHAR(20) NOT NULL,
     ManifestJSON NVARCHAR(MAX) NOT NULL,
-    Summary NVARCHAR(MAX) NULL,
+    MigrationsSummary NVARCHAR(MAX) NULL,
+    MetadataSummary NVARCHAR(MAX) NULL,
+    PackagesSummary NVARCHAR(MAX) NULL,
     ExecutedByUserID UNIQUEIDENTIFIER NOT NULL,
     DurationSeconds INT NULL,
     Success BIT NOT NULL DEFAULT 1,
@@ -1170,7 +1256,7 @@ CREATE TABLE ${flyway:defaultSchema}.OpenAppInstallHistory (
         'Install', 'Upgrade', 'Remove'
     )),
     CONSTRAINT CK_OpenAppInstallHistory_Phase CHECK (ErrorPhase IS NULL OR ErrorPhase IN (
-        'Schema', 'Migration', 'Packages', 'Config', 'Hooks', 'Record'
+        'Schema', 'Migration', 'Metadata', 'Packages', 'Config', 'Hooks'
     ))
 );
 GO
@@ -1183,7 +1269,40 @@ EXEC sp_addextendedproperty
 GO
 
 -----------------------------------------------------------------------
--- 3. Open App Dependencies
+-- 4. Open App Packages
+-----------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.OpenAppPackage (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    OpenAppID UNIQUEIDENTIFIER NOT NULL,
+    PackageName NVARCHAR(200) NOT NULL,
+    PackageVersion NVARCHAR(50) NOT NULL,
+    PackageType NVARCHAR(20) NOT NULL,
+    Role NVARCHAR(50) NOT NULL,
+    StartupExport NVARCHAR(200) NULL,
+    RegistryURL NVARCHAR(500) NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Installed',
+    CONSTRAINT PK_OpenAppPackage PRIMARY KEY (ID),
+    CONSTRAINT FK_OpenAppPackage_App FOREIGN KEY (OpenAppID)
+        REFERENCES ${flyway:defaultSchema}.OpenApp(ID),
+    CONSTRAINT UQ_OpenAppPackage UNIQUE (OpenAppID, PackageName),
+    CONSTRAINT CK_OpenAppPackage_Type CHECK (PackageType IN (
+        'Server', 'Client', 'Shared'
+    )),
+    CONSTRAINT CK_OpenAppPackage_Status CHECK (Status IN (
+        'Installed', 'Error', 'Pending'
+    ))
+);
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'NPM packages associated with each installed Open App',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'OpenAppPackage';
+GO
+
+-----------------------------------------------------------------------
+-- 5. Open App Dependencies
 -----------------------------------------------------------------------
 CREATE TABLE ${flyway:defaultSchema}.OpenAppDependency (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
@@ -1217,8 +1336,7 @@ GO
 - Uses `${flyway:defaultSchema}` throughout — this resolves to `__mj` since these are core MJ tables
 - No `__mj_CreatedAt` / `__mj_UpdatedAt` columns — CodeGen adds those automatically
 - No FK indexes — CodeGen creates `IDX_AUTO_MJ_FKEY_*` indexes automatically
-- Registry configuration is managed in `mj.config.cjs`, not in the database
-- Package details are available in the manifest JSON (stored in `ManifestJSON` column) and in `package.json` files — no need to duplicate in a separate table
+- MJ Central is pre-seeded with a hardcoded UUID so it exists out of the box
 - The `SchemaName` UNIQUE constraint on `OpenApp` prevents two apps from claiming the same database schema
 - `OpenApp` timestamps (install/update times) are handled by CodeGen's `__mj_CreatedAt` / `__mj_UpdatedAt` columns — no separate business timestamp columns needed
 - The `OpenAppInstallHistory` table does not have `Rollback` as an action since rollback is not supported
@@ -1242,13 +1360,6 @@ module.exports = {
       token: process.env.GITHUB_TOKEN
     },
 
-    // App registries (MJ Central is built-in, add private registries here)
-    registries: [
-      // MJ Central is always available by default, no config needed
-      // Add private registries:
-      // { name: 'Acme Internal', url: 'https://apps.acme.com/api/v1', token: process.env.ACME_REGISTRY_TOKEN }
-    ],
-
     // CodeGen behavior for app schemas
     codeGenExclusions: {
       includeAppSchemas: false  // default: false
@@ -1267,14 +1378,9 @@ module.exports = {
 
 ### Environment Variables
 
-Apps MAY reference environment variables for sensitive configuration (API keys, credentials, etc.). The standard pattern is to use `process.env` references in `mj.config.cjs`:
-
-```javascript
-config: {
-  "acme-crm": {
-    apiKey: process.env.ACME_CRM_API_KEY
-  }
-}
+Apps MAY reference environment variables in metadata using `@env:` directives:
+```json
+{ "fields": { "APIKey": "@env:ACME_CRM_API_KEY" } }
 ```
 
 ---
@@ -1310,9 +1416,9 @@ mj app install https://github.com/acme/mj-crm # Install by URL (bypasses MJ Cent
 
 ## Security Considerations
 
-- **Schema isolation** — Apps own their database schema and MUST NOT alter the DDL structure (ALTER TABLE, DROP TABLE, etc.) of `__mj` or other app schemas. Apps DO insert rows into `__mj` metadata tables (Entity, EntityField, Action, etc.) as part of their migration DML — this is expected and required for metadata registration. This is trust-based — the CLI does not scan migration files for violations, but violating this convention voids compatibility guarantees. MJ Central may implement migration scanning for verified publisher badges.
+- **Schema isolation** — Apps own their database schema and MUST NOT modify `__mj` or other app schemas. This is trust-based — the CLI does not scan migration files for violations, but violating this convention voids compatibility guarantees. MJ Central may implement migration scanning for verified publisher badges.
 - **Code trust** — Apps run with full server privileges. Installing an app is a trust decision. MJ Central may offer verified publisher badges and security scanning.
-- **Metadata safety** — All metadata changes are delivered as explicit DML in migration files, making them auditable. Consumers can review exactly what INSERT/UPDATE statements will run in `__mj` metadata tables before applying.
+- **Metadata safety** — mj-sync validates before pushing. `@lookup` references are resolved against the live database. `@file:` references are scoped to the app's metadata directory.
 - **CodeGen exclusion** — App schemas are excluded from consumer CodeGen by default, preventing apps from affecting the consumer's generated code.
 - **Dynamic loading isolation** — A failed dynamic package load is caught and logged without crashing the server. The app's status is set to `Error` in the tracking table.
 
@@ -1328,7 +1434,7 @@ These items were originally open questions, now resolved:
 
 3. **MJ major version upgrades** — Apps declare compatible MJ versions via `mjVersionRange` (semver range). When MJ releases a breaking major version, app authors publish new versions with updated ranges. The CLI refuses to install/upgrade if the range doesn't match.
 
-4. **Cross-app references** — Supported. App A's migrations MAY reference entities/tables defined by app B (via FK constraints or metadata UUIDs), provided B is declared in A's `dependencies`. The CLI ensures dependencies are installed before dependents.
+4. **Cross-app metadata references** — Supported. App A's metadata MAY use `@lookup:` to reference entities defined by app B, provided B is declared in A's `dependencies`. The CLI ensures dependencies are installed before dependents.
 
 5. **Rollback strategy** — Not supported. Use database backups and git reversion to recover from failed operations. The `MJ: Open App Install History` table records which phase failed for diagnostics.
 
@@ -1349,4 +1455,4 @@ These items were originally open questions, now resolved:
 - **Hot Reload** — Metadata-only updates without server restart
 - **App-Scoped Permissions** — Fine-grained access control per app
 - **Alternative manifest formats** — YAML, JS, or `package.json` key via Cosmiconfig
-- **Migration scanning** — CLI-level validation that app migrations don't perform DDL on `__mj` or other app schemas (DML inserts into `__mj` metadata tables would be allowed)
+- **Migration scanning** — CLI-level validation that app migrations don't modify `__mj` or other app schemas
