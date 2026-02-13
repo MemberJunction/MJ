@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Payload Change Feedback Query",
       "Description": "Queries an AI agent to determine if suspicious payload changes were intentional. Used by PayloadFeedbackManager to validate content truncations, key removals, type changes, and pattern anomalies.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/payload-feedback/query-payload-changes.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -13,14 +13,14 @@
       "MaxRetries": 1,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 1
           },
@@ -28,14 +28,14 @@
             "ID": "41CC8096-1E61-483A-832F-7099B6F51286"
           },
           "sync": {
-            "lastModified": "2026-01-27T03:48:00.231Z",
-            "checksum": "b7f9171aaec23e10fa0d1925552a9455d156c4a5c046a442e530258dcbb7a1d5"
+            "lastModified": "2026-02-13T20:48:57.579Z",
+            "checksum": "27c24599c2101f4c3e0d2813b7dfd3fbdcad2de8616dea292fd460535f9e5820"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 2
           },
@@ -43,8 +43,8 @@
             "ID": "5303A2C1-564D-4611-BD54-0BA0C42FEA19"
           },
           "sync": {
-            "lastModified": "2026-01-27T03:48:00.253Z",
-            "checksum": "e9b1e0df1114ad130d76df24a66b3aee574595f779f023ff9d6b694d311f5ece"
+            "lastModified": "2026-02-13T20:48:57.580Z",
+            "checksum": "00e9bb2738251bd056e8e08389ec2df93ced4be02502e816052e46773c1e8f92"
           }
         }
       ]
@@ -53,8 +53,8 @@
       "ID": "4722AB06-5EEB-4022-87A3-D1F6A983329F"
     },
     "sync": {
-      "lastModified": "2026-01-27T03:48:00.169Z",
-      "checksum": "fe8d10cd7d6cdcc8f2e19f5c50d40bf8c60e95b81c6f944efd35adb48dfe7d04"
+      "lastModified": "2026-02-13T20:48:57.530Z",
+      "checksum": "e9ba4a480692c987521aa7d68d3e777b91742be46532b63ef2f0fb5b80cdd912"
     }
   }
 ]

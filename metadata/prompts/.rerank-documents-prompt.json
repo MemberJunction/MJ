@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Rerank Documents",
       "Description": "LLM-based document reranking for semantic search. Scores and ranks documents by relevance to a query for two-stage retrieval systems.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/system/rerank-documents.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -15,14 +15,14 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT 4.1-mini",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 4.1-mini",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -30,14 +30,14 @@
             "ID": "BB9E53A4-DE57-4F26-AFC8-D9DE2809496A"
           },
           "sync": {
-            "lastModified": "2026-01-27T03:48:07.730Z",
-            "checksum": "8a570a81f8212747eb2db2bfacd288640d41dcb1191e1753cb00699ef02fd362"
+            "lastModified": "2026-02-13T20:49:01.623Z",
+            "checksum": "9891ff90107e4d2c502cb884505068edd4b27f8bfe15c3106fd92c89c57ae9ac"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2
           },
@@ -45,8 +45,8 @@
             "ID": "1BFA1476-5C77-4B85-8E0B-88FD872EBDEA"
           },
           "sync": {
-            "lastModified": "2026-01-27T03:48:07.746Z",
-            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+            "lastModified": "2026-02-13T20:49:01.624Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
           }
         }
       ]
@@ -55,8 +55,8 @@
       "ID": "02F52CD9-2272-4267-ADF9-3317C4CD6AE2"
     },
     "sync": {
-      "lastModified": "2026-01-27T03:48:07.525Z",
-      "checksum": "1586b4c49b66d70023b599e078f1e938b3da7355a6b4acaca668056c71dc2926"
+      "lastModified": "2026-02-13T20:49:01.575Z",
+      "checksum": "5aca26630ccd74e5657e45dcf7cae4dbff78e198b16305f79cdefa00a6efeb6c"
     }
   }
 ]

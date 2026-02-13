@@ -1,18 +1,18 @@
 {
-  "entity": "Dashboards",
+  "entity": "MJ: Dashboards",
   "filePattern": "**/.*.json",
   "pull": {
     "lookupFields": {
       "CategoryID": {
-        "entity": "Dashboard Categories",
+        "entity": "MJ: Dashboard Categories",
         "field": "Name"
       },
       "UserID": {
-        "entity": "Users",
+        "entity": "MJ: Users",
         "field": "Name"
       },
       "ApplicationID": {
-        "entity": "Applications",
+        "entity": "MJ: Applications",
         "field": "Name"
       },
       "EnvironmentID": {

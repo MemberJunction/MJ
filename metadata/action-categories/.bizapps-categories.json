@@ -18,105 +18,105 @@
     "fields": {
       "Name": "CRM",
       "Description": "Customer Relationship Management system integrations for managing contacts, companies, deals, and sales activities",
-      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps&ParentID=null",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "19C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.613Z",
-      "checksum": "20d75db7776bc95b16f2a2117a78533de34767e0fcbf4cdb1d47fd3cebdfcba0"
+      "lastModified": "2026-02-13T21:08:31.932Z",
+      "checksum": "57eed41f912819e62cfd333219d4dd35e1b535f1d02affc573c9bff101cb36b5"
     }
   },
   {
     "fields": {
       "Name": "LMS",
       "Description": "Learning Management System integrations for managing users, courses, enrollments, and educational content",
-      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps&ParentID=null",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "25C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.614Z",
-      "checksum": "e3cef6106948e90300ac8d5ce80aa1ef8e19ecd1cd07535501a94dea03de374f"
+      "lastModified": "2026-02-13T21:08:31.933Z",
+      "checksum": "51f8038454b3152855233ac01833a3f8dcebc730c0e89c009e1471f14c9cda4a"
     }
   },
   {
     "fields": {
       "Name": "Accounting",
       "Description": "Accounting and financial system integrations for managing GL accounts, transactions, invoices, and financial reporting",
-      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps&ParentID=null",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "31C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.617Z",
-      "checksum": "497c17023fbf96db59202e670e40c68187be7e79fa80f0423eecfb8a52bf958e"
+      "lastModified": "2026-02-13T21:08:31.934Z",
+      "checksum": "54addf01619e87e223a26ecb375856cd17517bbc6d83ae37004c6527c2791a99"
     }
   },
   {
     "fields": {
       "Name": "HubSpot",
       "Description": "HubSpot CRM integration for managing contacts, companies, deals, tasks, and sales activities",
-      "ParentID": "@lookup:Action Categories.Name=CRM&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=CRM&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "3DC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.623Z",
-      "checksum": "b1ff0f9956c783892d7123998b21f1cd15c7bcf5a10e2af11cbbc41f2410edd3"
+      "lastModified": "2026-02-13T21:08:31.936Z",
+      "checksum": "92bdde3ad3c75d236a3b7244c5cde7c925d37d0677237f88d5c9188b5a148489"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds",
       "Description": "LearnWorlds LMS integration for managing online courses, user enrollments, progress tracking, and certificates",
-      "ParentID": "@lookup:Action Categories.Name=LMS&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=LMS&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "49C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.628Z",
-      "checksum": "b2fc2561bb151c39c56a3990b540cac6231bfce205506989b813d010c004d360"
+      "lastModified": "2026-02-13T21:08:31.937Z",
+      "checksum": "25a71afe51fd28108777d389ce2c13065e696bd69c5d929d938a975591316e7d"
     }
   },
   {
     "fields": {
       "Name": "QuickBooks",
       "Description": "QuickBooks accounting integration for managing GL accounts, journal entries, transactions, and financial reporting",
-      "ParentID": "@lookup:Action Categories.Name=Accounting&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "55C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.630Z",
-      "checksum": "57e6c3ac4fabe67e2fef387fa9e60f808d83ba4c9dbe9c96aaf80301049c570a"
+      "lastModified": "2026-02-13T21:08:31.940Z",
+      "checksum": "cb4950271c78f22647e125ceaf8db33768f378dda7975a947c16bc06ad8f80c4"
     }
   },
   {
     "fields": {
       "Name": "Business Central",
       "Description": "Microsoft Dynamics 365 Business Central integration for enterprise accounting, GL management, and financial operations",
-      "ParentID": "@lookup:Action Categories.Name=Accounting&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "61C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.632Z",
-      "checksum": "1d07f2797fe9c3e7180ed2add0cf1f3a769df93c815f0831146402c4aef677f7"
+      "lastModified": "2026-02-13T21:08:31.943Z",
+      "checksum": "fd38b54501f7ac47cccef330df607338f7d963068ca79422bbd141dad3c41986"
     }
   }
 ]
