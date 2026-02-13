@@ -189,9 +189,11 @@ function AddEntryToServerArray(content: string, entry: DynamicPackageEntry): str
  * Removes all entries with a given appName from the server array.
  */
 function RemoveEntriesForApp(content: string, appName: string): string {
-    // Match object blocks containing the appName
+    // Match entry-level object blocks containing the appName.
+    // Uses [^{}]* instead of [^}]* to prevent matching across nested object boundaries
+    // (e.g., matching from the outer dynamicPackages { instead of just the entry {).
     const pattern = new RegExp(
-        `\\s*\\{[^}]*AppName:\\s*'${EscapeRegex(appName)}'[^}]*\\},?`,
+        `\\s*\\{[^{}]*AppName:\\s*'${EscapeRegex(appName)}'[^{}]*\\},?`,
         'g'
     );
     return content.replace(pattern, '');
@@ -201,9 +203,10 @@ function RemoveEntriesForApp(content: string, appName: string): string {
  * Toggles enabled state for all entries with a given appName.
  */
 function ToggleEntriesForApp(content: string, appName: string, enabled: boolean): string {
-    // Find entries with the given appName and replace enabled value
+    // Find entries with the given appName and replace enabled value.
+    // Uses [^{}]* to prevent matching across nested object boundaries.
     const pattern = new RegExp(
-        `(AppName:\\s*'${EscapeRegex(appName)}'[^}]*Enabled:\\s*)(?:true|false)`,
+        `(AppName:\\s*'${EscapeRegex(appName)}'[^{}]*Enabled:\\s*)(?:true|false)`,
         'g'
     );
     return content.replace(pattern, `$1${enabled}`);

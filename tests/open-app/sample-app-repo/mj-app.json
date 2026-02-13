@@ -20,7 +20,15 @@
     "directory": "migrations",
     "engine": "skyway"
   },
-  "packages": {},
+  "packages": {
+    "server": [
+      {
+        "name": "is-odd",
+        "role": "bootstrap",
+        "startupExport": "registerSampleApp"
+      }
+    ]
+  },
   "categories": ["testing"],
   "tags": ["sample", "test"]
 }

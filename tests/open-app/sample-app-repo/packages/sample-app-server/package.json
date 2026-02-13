@@ -1,7 +1,6 @@
 {
-  "name": "@mj-test/sample-app-server",
+  "name": "@memberjunction/sample-open-app-server",
   "version": "1.0.0",
-  "private": true,
   "description": "Server bootstrap package for the MJ Sample Open App.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

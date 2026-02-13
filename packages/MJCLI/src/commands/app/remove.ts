@@ -23,6 +23,7 @@ export default class AppRemove extends Command {
   static flags = {
     'keep-data': Flags.boolean({ description: 'Keep the database schema and data' }),
     force: Flags.boolean({ description: 'Force removal even if other apps depend on this one' }),
+    yes: Flags.boolean({ char: 'y', description: 'Skip confirmation prompt' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
   };
 
@@ -30,14 +31,16 @@ export default class AppRemove extends Command {
     const { args, flags } = await this.parse(AppRemove);
     const spinner = ora();
 
-    const confirmed = await confirm({
-      message: `Are you sure you want to remove '${args.name}'?${flags['keep-data'] ? ' (data will be kept)' : ' This will DROP the app schema and all data.'}`,
-      default: false,
-    });
+    if (!flags.yes) {
+      const confirmed = await confirm({
+        message: `Are you sure you want to remove '${args.name}'?${flags['keep-data'] ? ' (data will be kept)' : ' This will DROP the app schema and all data.'}`,
+        default: false,
+      });
 
-    if (!confirmed) {
-      this.log(chalk.yellow('Removal cancelled.'));
-      return;
+      if (!confirmed) {
+        this.log(chalk.yellow('Removal cancelled.'));
+        return;
+      }
     }
 
     try {
