@@ -31,8 +31,10 @@ import { glob } from 'glob';
 export type EntityNamePatternKind =
     | 'GetEntityObject'
     | 'OpenEntityRecord'
+    | 'EntityNameMethod'     // Other methods that take entity name as first arg
     | 'EntityNameProperty'
-    | 'RegisterClass';
+    | 'RegisterClass'
+    | 'NameComparison';      // .Name === 'OldName' or .Entity === 'OldName'
 
 /**
  * A single finding: one string literal in source code that uses an old entity name.
@@ -117,6 +119,21 @@ const DEFAULT_EXCLUDE_PATTERNS: string[] = [
 const ENTITY_NAME_METHODS = new Set([
     'GetEntityObject',
     'OpenEntityRecord',
+    'navigateToEntity',
+    'BuildRelationshipViewParamsByEntityName',
+    'NewRecordValues',
+    'IsCurrentTab',
+]);
+
+/**
+ * Property names that, when used in a `=== 'OldName'` or `!== 'OldName'`
+ * comparison, indicate the string literal is an entity name.
+ */
+const ENTITY_NAME_COMPARISON_PROPS = new Set([
+    'Name',
+    'Entity',
+    'EntityName',
+    'LinkedEntity',
 ]);
 
 // ============================================================================
@@ -206,7 +223,8 @@ function getMethodName(expression: ts.Expression): string | null {
 
 /**
  * Determines if a string literal node is in a relevant AST context
- * (i.e., an argument to a known method or an EntityName property assignment).
+ * (i.e., an argument to a known method, an EntityName property assignment,
+ * or a comparison against a known entity-name property).
  */
 function classifyParentContext(node: ts.Node): EntityNamePatternKind | null {
     const parent = node.parent;
@@ -216,7 +234,10 @@ function classifyParentContext(node: ts.Node): EntityNamePatternKind | null {
     if (ts.isCallExpression(parent)) {
         const methodName = getMethodName(parent.expression);
         if (methodName && ENTITY_NAME_METHODS.has(methodName)) {
-            return methodName as EntityNamePatternKind;
+            // Return specific kind for the two original methods, generic for others
+            if (methodName === 'GetEntityObject') return 'GetEntityObject';
+            if (methodName === 'OpenEntityRecord') return 'OpenEntityRecord';
+            return 'EntityNameMethod';
         }
     }
 
@@ -236,6 +257,30 @@ function classifyParentContext(node: ts.Node): EntityNamePatternKind | null {
         }
     }
 
+    // Case 4: Comparison like .Name === 'OldName' or .Entity === 'OldName'
+    if (ts.isBinaryExpression(parent)) {
+        const op = parent.operatorToken.kind;
+        if (op === ts.SyntaxKind.EqualsEqualsEqualsToken || op === ts.SyntaxKind.ExclamationEqualsEqualsToken) {
+            // The other side of the comparison should be a property access ending in a known prop
+            const otherSide = parent.left === node ? parent.right : parent.left;
+            const propName = getTrailingPropertyName(otherSide);
+            if (propName && ENTITY_NAME_COMPARISON_PROPS.has(propName)) {
+                return 'NameComparison';
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Extracts the trailing property name from an expression.
+ * For `foo.bar.Name` returns 'Name', for `e.Name` returns 'Name'.
+ */
+function getTrailingPropertyName(expr: ts.Expression): string | null {
+    if (ts.isPropertyAccessExpression(expr)) {
+        return expr.name.text;
+    }
     return null;
 }
 

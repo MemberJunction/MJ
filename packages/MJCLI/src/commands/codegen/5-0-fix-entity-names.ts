@@ -1,35 +1,55 @@
 import { Command, Flags } from '@oclif/core';
 
-export default class FixEntityNames extends Command {
-    static description = 'Scan TypeScript files for hardcoded entity names that need "MJ: " prefix updates';
+export default class V50FixEntityNames extends Command {
+    static description = `[v5.0 Migration] Scan TypeScript files for hardcoded entity names that need "MJ: " prefix updates.
+
+Uses the TypeScript compiler AST to find entity name references in method calls
+(GetEntityObject, OpenEntityRecord, navigateToEntity, etc.), property assignments
+(EntityName: 'OldName'), comparison expressions (.Name === 'OldName'), and
+@RegisterClass decorators. Runs in dry-run mode by default; use --fix to apply.
+
+The rename map is built dynamically from entity_subclasses.ts by parsing all
+@RegisterClass(BaseEntity, 'MJ: XYZ') decorators (~272 entries).`;
 
     static examples = [
-        `<%= config.bin %> <%= command.id %>`,
-        `<%= config.bin %> <%= command.id %> --path packages/Angular`,
-        `<%= config.bin %> <%= command.id %> --fix`,
-        `<%= config.bin %> <%= command.id %> --fix --path packages/Angular/Explorer`,
+        {
+            description: 'Dry-run scan of the packages directory',
+            command: '<%= config.bin %> <%= command.id %> --path packages/',
+        },
+        {
+            description: 'Scan a single file',
+            command: '<%= config.bin %> <%= command.id %> --path packages/Angular/Explorer/dashboards/src/Actions/components/actions-overview.component.ts',
+        },
+        {
+            description: 'Apply fixes across the codebase',
+            command: '<%= config.bin %> <%= command.id %> --path packages/ --fix',
+        },
+        {
+            description: 'Quiet mode (summary only)',
+            command: '<%= config.bin %> <%= command.id %> --path packages/ -q',
+        },
     ];
 
     static flags = {
         path: Flags.string({
             char: 'p',
-            description: 'File or directory to scan (defaults to current directory)',
+            description: 'File or directory to scan. Accepts a single .ts file or a directory (scanned recursively). Defaults to the current working directory.',
         }),
         fix: Flags.boolean({
-            description: 'Apply fixes in place (default is dry-run / scan only)',
+            description: 'Apply fixes in place. Without this flag, the command runs in dry-run mode and only reports findings.',
             default: false,
         }),
         'entity-subclasses': Flags.string({
-            description: 'Path to entity_subclasses.ts for building rename map',
+            description: 'Explicit path to entity_subclasses.ts for building the rename map. If omitted, the tool searches common locations relative to the target path.',
         }),
         quiet: Flags.boolean({
             char: 'q',
-            description: 'Suppress detailed output, only show summary',
+            description: 'Suppress detailed per-file output; only show the final summary counts.',
             default: false,
         }),
         verbose: Flags.boolean({
             char: 'v',
-            description: 'Show detailed progress',
+            description: 'Show detailed progress including each file being scanned.',
             default: false,
         }),
     };
@@ -38,7 +58,7 @@ export default class FixEntityNames extends Command {
         const { scanEntityNames } = await import('@memberjunction/codegen-lib');
         type ScanResult = Awaited<ReturnType<typeof scanEntityNames>>;
 
-        const { flags } = await this.parse(FixEntityNames);
+        const { flags } = await this.parse(V50FixEntityNames);
 
         const result: ScanResult = await scanEntityNames({
             TargetPath: flags.path || process.cwd(),

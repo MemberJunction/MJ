@@ -72,6 +72,7 @@ export * from './Manifest/GenerateClassRegistrationsManifest'
 // Entity name scanning
 export * from './EntityNameScanner/EntityNameScanner'
 export * from './EntityNameScanner/MetadataNameScanner'
+export * from './EntityNameScanner/HtmlEntityNameScanner'
 
 // Main runner
 export * from './runCodeGen'

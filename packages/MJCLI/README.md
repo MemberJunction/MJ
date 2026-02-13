@@ -135,6 +135,136 @@ mj codegen manifest
 mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/manifest.ts
 ```
 
+#### v5.0 Entity Name Migration Commands
+
+Starting in MemberJunction v5.0, all 272 core entity names are being normalized with the `"MJ: "` prefix to prevent naming collisions on client systems (e.g., `"Actions"` becomes `"MJ: Actions"`). The database migration handles the rename automatically, but hardcoded entity name strings in your TypeScript source, Angular HTML templates, and metadata JSON files also need updating. These three commands automate that process.
+
+All three commands share the same workflow:
+1. **Dry-run first** (default) -- scans and reports what would change, without modifying any files.
+2. **Fix mode** (`--fix`) -- applies the changes in place.
+3. **Rename map** -- built dynamically by parsing `@RegisterClass(BaseEntity, 'MJ: XYZ')` decorators from `entity_subclasses.ts`. No hardcoded list to maintain.
+
+> These commands will be kept for 1-2 years to support the v5.0 upgrade window, then removed.
+
+##### mj codegen 5-0-fix-entity-names
+
+Scans **TypeScript source files** (`.ts`) using the TypeScript compiler AST to find hardcoded entity names that need the `"MJ: "` prefix. This is the most comprehensive scanner -- it understands code context, not just string matching.
+
+**Detected patterns:**
+
+| Pattern | Example |
+|---------|---------|
+| `GetEntityObject` calls | `md.GetEntityObject<T>('Actions')` |
+| `OpenEntityRecord` calls | `this.OpenEntityRecord('Entities', id)` |
+| `navigateToEntity` calls | `navigateToEntity('Templates')` |
+| `BuildRelationshipViewParamsByEntityName` calls | `BuildRelationshipViewParamsByEntityName('Roles')` |
+| `NewRecordValues` calls | `NewRecordValues('Users')` |
+| `IsCurrentTab` calls | `IsCurrentTab('Queries')` |
+| `EntityName:` property assignments | `EntityName: 'AI Agent Examples'` |
+| `.Name ===` / `.Entity ===` comparisons | `entity.Name === 'Actions'` |
+| `@RegisterClass` decorator (BaseEntity) | `@RegisterClass(BaseEntity, 'Actions')` |
+
+**Default exclusions:** `node_modules`, `dist`, `build`, `.git`, `__tests__`, `*.d.ts`, `*.spec.ts`, `*.test.ts`, `generated/`, `Demos/`
+
+```bash
+# Dry-run: scan entire packages/ directory
+mj codegen 5-0-fix-entity-names --path packages/
+
+# Dry-run: scan a single file
+mj codegen 5-0-fix-entity-names --path packages/Angular/Explorer/dashboards/src/Actions/components/actions-overview.component.ts
+
+# Apply fixes
+mj codegen 5-0-fix-entity-names --path packages/ --fix
+
+# Custom entity_subclasses.ts location
+mj codegen 5-0-fix-entity-names --path packages/ --entity-subclasses ./path/to/entity_subclasses.ts
+
+# Quiet mode (summary only)
+mj codegen 5-0-fix-entity-names --path packages/ -q
+```
+
+##### mj codegen 5-0-fix-html-entity-names
+
+Scans **Angular HTML template files** (`.html`) using targeted regex patterns for entity name references in template expressions and attribute values.
+
+**Detected patterns:**
+
+| Pattern | Example |
+|---------|---------|
+| Method calls in event/property bindings | `(click)="navigateToEntity('Actions')"` |
+| `OpenEntityRecord` / `openEntityRecord` | `(click)="OpenEntityRecord('Entities', id)"` |
+| `BuildRelationshipViewParamsByEntityName` | `[Params]="BuildRelationshipViewParamsByEntityName('Roles')"` |
+| `RowsEntityName` attribute | `RowsEntityName="Users"` |
+| `JoinEntityName` attribute | `JoinEntityName="Roles"` |
+
+**Default exclusions:** `node_modules`, `dist`, `build`, `.git`, `generated/`, `Demos/`
+
+```bash
+# Dry-run: scan Angular templates
+mj codegen 5-0-fix-html-entity-names --path packages/Angular/
+
+# Apply fixes
+mj codegen 5-0-fix-html-entity-names --path packages/Angular/ --fix
+
+# Verbose output showing individual file progress
+mj codegen 5-0-fix-html-entity-names --path packages/ -v
+```
+
+##### mj codegen 5-0-fix-metadata-names
+
+Scans **metadata JSON files** (including dotfiles like `.mj-sync.json`) for entity name references that need the `"MJ: "` prefix. Targets the `metadata/` directory used by `mj sync`.
+
+**Detected patterns:**
+
+| Pattern | Example |
+|---------|---------|
+| `@lookup:` entity name | `@lookup:Entities.Name=Dashboards` |
+| `@lookup:` value (in Entities lookups) | `@lookup:MJ: Entities.Name=Actions` |
+| Folder config `entity`/`entityName` | `.mj-sync.json` with `"entity": "Dashboards"` |
+| `relatedEntities` object keys | `"relatedEntities": { "Actions": [...] }` |
+| `fields.Name` in Entities folders | Entity record data files where Name is the entity name |
+
+```bash
+# Dry-run: scan metadata directory
+mj codegen 5-0-fix-metadata-names --path metadata/
+
+# Apply fixes
+mj codegen 5-0-fix-metadata-names --path metadata/ --fix
+
+# Scan a specific subdirectory
+mj codegen 5-0-fix-metadata-names --path metadata/resource-types
+
+# Scan and fix a single file
+mj codegen 5-0-fix-metadata-names --path metadata/entities/.audit-related-entities.json --fix
+```
+
+##### Common flags (all three commands)
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--path <dir\|file>` | `-p` | File or directory to scan. Defaults to current directory. |
+| `--fix` | | Apply fixes in place. Without this flag, runs in dry-run mode. |
+| `--entity-subclasses <path>` | | Path to `entity_subclasses.ts`. Auto-detected if omitted. |
+| `--quiet` | `-q` | Suppress detailed output, show summary only. |
+| `--verbose` | `-v` | Show detailed progress for each file scanned. |
+
+##### Recommended migration workflow
+
+```bash
+# 1. Scan everything first (dry-run)
+mj codegen 5-0-fix-entity-names --path packages/
+mj codegen 5-0-fix-html-entity-names --path packages/
+mj codegen 5-0-fix-metadata-names --path metadata/
+
+# 2. Review the output, then apply
+mj codegen 5-0-fix-entity-names --path packages/ --fix
+mj codegen 5-0-fix-html-entity-names --path packages/ --fix
+mj codegen 5-0-fix-metadata-names --path metadata/ --fix
+
+# 3. Build and test
+npm run build
+```
+
 ### mj sync
 
 Metadata synchronization between JSON files and the database.

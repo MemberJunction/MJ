@@ -1,35 +1,56 @@
 import { Command, Flags } from '@oclif/core';
 
-export default class FixMetadataNames extends Command {
-    static description = 'Scan metadata JSON files for entity names that need "MJ: " prefix updates (@lookup references, folder configs, relatedEntities keys)';
+export default class V50FixMetadataNames extends Command {
+    static description = `[v5.0 Migration] Scan metadata JSON files for entity names that need "MJ: " prefix updates.
+
+Targets the metadata/ directory used by "mj sync". Detects entity name references in
+@lookup: directives (both the entity name and lookup value), .mj-sync.json and
+.mj-folder.json config files (entity/entityName fields), relatedEntities object keys,
+and fields.Name values in Entities-managing folders. Runs in dry-run mode by default;
+use --fix to apply.
+
+The rename map is built dynamically from entity_subclasses.ts by parsing all
+@RegisterClass(BaseEntity, 'MJ: XYZ') decorators (~272 entries).`;
 
     static examples = [
-        `<%= config.bin %> <%= command.id %> --path metadata/`,
-        `<%= config.bin %> <%= command.id %> --path metadata/ --fix`,
-        `<%= config.bin %> <%= command.id %> --path metadata/resource-types`,
-        `<%= config.bin %> <%= command.id %> --path metadata/entities/.audit-related-entities.json --fix`,
+        {
+            description: 'Dry-run scan of the metadata directory',
+            command: '<%= config.bin %> <%= command.id %> --path metadata/',
+        },
+        {
+            description: 'Apply fixes to metadata files',
+            command: '<%= config.bin %> <%= command.id %> --path metadata/ --fix',
+        },
+        {
+            description: 'Scan a specific subdirectory',
+            command: '<%= config.bin %> <%= command.id %> --path metadata/resource-types',
+        },
+        {
+            description: 'Scan and fix a single metadata file',
+            command: '<%= config.bin %> <%= command.id %> --path metadata/entities/.audit-related-entities.json --fix',
+        },
     ];
 
     static flags = {
         path: Flags.string({
             char: 'p',
-            description: 'File or directory to scan (defaults to current directory)',
+            description: 'File or directory to scan. Accepts a single .json file or a directory (scanned recursively, including dotfiles like .mj-sync.json). Defaults to the current working directory.',
         }),
         fix: Flags.boolean({
-            description: 'Apply fixes in place (default is dry-run / scan only)',
+            description: 'Apply fixes in place. Without this flag, the command runs in dry-run mode and only reports findings.',
             default: false,
         }),
         'entity-subclasses': Flags.string({
-            description: 'Path to entity_subclasses.ts for building rename map',
+            description: 'Explicit path to entity_subclasses.ts for building the rename map. If omitted, the tool searches common locations relative to the target path.',
         }),
         quiet: Flags.boolean({
             char: 'q',
-            description: 'Suppress detailed output, only show summary',
+            description: 'Suppress detailed per-file output; only show the final summary counts.',
             default: false,
         }),
         verbose: Flags.boolean({
             char: 'v',
-            description: 'Show detailed progress',
+            description: 'Show detailed progress including each file being scanned.',
             default: false,
         }),
     };
@@ -38,7 +59,7 @@ export default class FixMetadataNames extends Command {
         const { scanMetadataNames } = await import('@memberjunction/codegen-lib');
         type ScanResult = Awaited<ReturnType<typeof scanMetadataNames>>;
 
-        const { flags } = await this.parse(FixMetadataNames);
+        const { flags } = await this.parse(V50FixMetadataNames);
 
         const result: ScanResult = await scanMetadataNames({
             TargetPath: flags.path || process.cwd(),
