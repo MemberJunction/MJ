@@ -366,10 +366,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         // Check scroll state after scrolling to bottom
         this.checkScroll();
       }, 100);
-    } else {
-      // Always check scroll state to update button visibility
-      this.checkScroll();
     }
+    // Removed synchronous checkScroll() from else branch to prevent
+    // ExpressionChangedAfterItHasBeenCheckedError. Calling detectChanges()
+    // inside ngAfterViewChecked re-enters change detection and causes
+    // Angular's verification pass to see inconsistent state.
+    // Scroll icon visibility is still updated via:
+    // 1. (scroll)="checkScroll()" on the scroll container (user scroll events)
+    // 2. setTimeout callback above (after programmatic scroll-to-bottom)
   }
 
   ngOnDestroy() {
@@ -1340,6 +1344,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(artifactId);
+    this.cdr.detectChanges();
   }
 
   exportConversation(): void {
@@ -1501,7 +1506,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // If versionId is provided, find the version number from display data (no lazy load needed)
     if (data.versionId) {
-      for (const [detailId, artifactList] of this.artifactsByDetailId.entries()) {
+      for (const artifactList of this.artifactsByDetailId.values()) {
         for (const artifactInfo of artifactList) {
           if (artifactInfo.artifactVersionId === data.versionId) {
             this.selectedVersionNumber = artifactInfo.versionNumber;
@@ -1519,6 +1524,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(data.artifactId);
+
+    // Trigger detectChanges after all state is settled (showArtifactPanel, permissions)
+    // to prevent ExpressionChangedAfterItHasBeenCheckedError from zone-triggered CD
+    // seeing partial state between the await boundaries
+    this.cdr.detectChanges();
   }
 
   async onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
@@ -2033,6 +2043,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Load permissions for the artifact
     await this.loadArtifactPermissions(artifactIdToOpen);
+    this.cdr.detectChanges();
 
     // Scroll to the message
     this.scrollToMessage(messageIdWithArtifact);
