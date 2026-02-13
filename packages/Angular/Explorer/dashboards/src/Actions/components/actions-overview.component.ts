@@ -249,7 +249,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
 
   public openAction(action: MJActionEntity): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
-    this.navigationService.OpenEntityRecord('Actions', key);
+    this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 
   public openCategory(categoryId: string): void {

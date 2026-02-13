@@ -161,7 +161,7 @@ export class NewActionPanelComponent implements OnInit, OnDestroy {
 
         // Open the full action record for editing
         const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
-        this.navigationService.OpenEntityRecord('Actions', key);
+        this.navigationService.OpenEntityRecord('MJ: Actions', key);
       } else {
         this.Errors['general'] = 'Failed to save action. Please try again.';
       }

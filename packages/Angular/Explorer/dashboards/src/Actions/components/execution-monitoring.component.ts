@@ -320,7 +320,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   public openAction(actionId: string): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: actionId }]);
-    this.navigationService.OpenEntityRecord('Actions', key);
+    this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 
   public getActionName(actionId: string): string {

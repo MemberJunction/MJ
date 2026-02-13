@@ -414,11 +414,11 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
     public openTemplate(template: MJTemplateEntity): void {
         const pk = new CompositeKey();
         pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'Templates')!, template);
-        this.navService.OpenEntityRecord('Templates', pk);
+        this.navService.OpenEntityRecord('MJ: Templates', pk);
     }
 
     public addNewTemplate(): void {
-        this.navService.OpenEntityRecord('Templates', new CompositeKey());
+        this.navService.OpenEntityRecord('MJ: Templates', new CompositeKey());
     }
 
     public getContentTypeIcon(type: string): string {

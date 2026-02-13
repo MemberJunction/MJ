@@ -854,7 +854,7 @@ export class EntityFormComponentExtended extends MJEntityFormComponent implement
     /** Navigate to an entity record in the Entity Explorer */
     public NavigateToEntity(entityInfo: EntityInfo): void {
         const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityInfo.ID }]);
-        this.sharedService.OpenEntityRecord('Entities', pkey);
+        this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
     }
 
     /**
@@ -970,7 +970,7 @@ export class EntityFormComponentExtended extends MJEntityFormComponent implement
         const related = this.getRelatedEntity(field);
         if (related) {
             const pkey = new CompositeKey([{ FieldName: 'ID', Value: related.ID }]);
-            this.sharedService.OpenEntityRecord('Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
         }
     }
 
@@ -980,7 +980,7 @@ export class EntityFormComponentExtended extends MJEntityFormComponent implement
     public openRelatedEntityFromField(entityId: string): void {
         if (entityId) {
             const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityId }]);
-            this.sharedService.OpenEntityRecord('Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
         }
     }
 

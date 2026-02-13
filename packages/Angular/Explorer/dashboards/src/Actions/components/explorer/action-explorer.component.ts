@@ -310,7 +310,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
 
   public onActionClick(action: ActionEntityExtended): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
-    this.navigationService.OpenEntityRecord('Actions', key);
+    this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 
   public onActionEdit(action: ActionEntityExtended): void {

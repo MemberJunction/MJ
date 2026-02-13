@@ -8,7 +8,7 @@ import { AIEngine } from "@memberjunction/aiengine";
  * Server-side extension of MJAIAgentExampleEntity that auto-generates embeddings
  * when the ExampleInput field changes, following the MJQueryEntity pattern.
  */
-@RegisterClass(BaseEntity, 'AI Agent Examples')
+@RegisterClass(BaseEntity, 'MJ: AI Agent Examples')
 export class AIAgentExampleEntityExtended extends MJAIAgentExampleEntity {
     /**
      * Override EmbedTextLocal to use helper
