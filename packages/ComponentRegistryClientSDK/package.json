@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/component-registry-client-sdk",
   "type": "module",
-  "version": "4.3.1",
+  "version": "4.4.0",
   "description": "MemberJunction: Component Registry Client SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,9 +20,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "4.3.1",
-    "@memberjunction/core": "4.3.1",
-    "@memberjunction/interactive-component-types": "4.3.1"
+    "@memberjunction/global": "4.4.0",
+    "@memberjunction/core": "4.4.0",
+    "@memberjunction/interactive-component-types": "4.4.0"
   },
   "repository": {
     "type": "git",

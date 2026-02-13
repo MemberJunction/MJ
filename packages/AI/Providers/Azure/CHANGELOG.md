@@ -1,5 +1,12 @@
 # @memberjunction/ai-azure
 
+## 4.4.0
+
+### Patch Changes
+
+- @memberjunction/ai@4.4.0
+- @memberjunction/global@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes

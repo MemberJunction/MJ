@@ -1,5 +1,20 @@
 # @memberjunction/ng-react
 
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-vectors-memory@4.4.0
+  - @memberjunction/ng-notifications@4.4.0
+  - @memberjunction/graphql-dataprovider@4.4.0
+  - @memberjunction/interactive-component-types@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/react-runtime@4.4.0
+  - @memberjunction/global@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes
