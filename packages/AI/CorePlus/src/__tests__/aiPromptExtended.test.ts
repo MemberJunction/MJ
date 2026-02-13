@@ -34,7 +34,11 @@ vi.mock('@memberjunction/core-entities', () => ({
         get Dirty() { return false; }
         async LoadFromData(data: unknown) { return true; }
         async InnerLoad(key: unknown) { return true; }
-        ValidateResultSelectorPromptIDNotEqualID(result: { Errors: unknown[] }) {}
+        ValidateResultSelectorPromptIDNotEqualID(result: { Errors: unknown[] }) {
+            if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
+                result.Errors.push({ FieldName: 'ResultSelectorPromptID', Message: 'Cannot equal ID', Value: this.ResultSelectorPromptID, Type: 'Failure' });
+            }
+        }
     },
     MJTemplateParamEntity: class MJTemplateParamEntity {
         TemplateID: string = '';

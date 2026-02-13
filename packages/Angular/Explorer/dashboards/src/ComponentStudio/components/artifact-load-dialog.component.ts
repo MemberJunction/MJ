@@ -198,7 +198,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     // User email filter
     if (this.userEmail?.trim()) {
       const md = new Metadata();
-      const schemaName = md.EntityByName("Users")?.SchemaName || "__mj";
+      const schemaName = md.EntityByName("MJ: Users")?.SchemaName || "__mj";
       filters.push(`UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`);
     }
 

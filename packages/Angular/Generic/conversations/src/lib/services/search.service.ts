@@ -400,7 +400,7 @@ export class SearchService {
     // Build filter using same logic as TasksFullViewComponent
     const md = new Metadata();
     const cd = md.EntityByName('MJ: Conversation Details');
-    const c = md.EntityByName('Conversations');
+    const c = md.EntityByName('MJ: Conversations');
 
     if (!cd || !c) {
       console.warn('⚠️ Missing metadata for Conversations or Conversation Details');

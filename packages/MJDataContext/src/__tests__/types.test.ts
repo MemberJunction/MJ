@@ -93,7 +93,7 @@ describe('MJDataContext', () => {
       item.Type = 'view';
       item.RecordName = 'Active Users';
       item.EntityName = 'MJ: Users';
-      expect(item.Description).toBe('View: Active Users, From Entity: Users');
+      expect(item.Description).toBe('View: Active Users, From Entity: MJ: Users');
     });
 
     it('should generate correct Description for query type', () => {

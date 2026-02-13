@@ -118,6 +118,7 @@ const DEFAULT_EXCLUDE_PATTERNS: string[] = [
  */
 const ENTITY_NAME_METHODS = new Set([
     'GetEntityObject',
+    'EntityByName',
     'OpenEntityRecord',
     'navigateToEntity',
     'BuildRelationshipViewParamsByEntityName',

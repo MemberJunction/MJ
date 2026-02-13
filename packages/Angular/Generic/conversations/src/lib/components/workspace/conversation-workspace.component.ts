@@ -454,7 +454,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // by the user
     const md = new Metadata();
     const cd = md.EntityByName('MJ: Conversation Details');
-    const c = md.EntityByName('Conversations');
+    const c = md.EntityByName('MJ: Conversations');
     if (!cd || !c) {
       console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
       this.tasksFilter = `ParentID IS NULL AND UserID = '${this.currentUser.ID}'`; // Fallback to user-owned tasks only
