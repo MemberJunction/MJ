@@ -314,8 +314,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
             const u = this.ConvertBackToMJFields(d.CurrentUser);
-            const roles = u.UserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
-            u.UserRoles_UserIDArray = roles;
+            const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
+            u.MJUserRoles_UserIDArray = roles;
             return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
     }
@@ -2169,7 +2169,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        UserRoles_UserIDArray {
+        MJUserRoles_UserIDArray {
             ${this.userRoleInfoString()}
         }
     }

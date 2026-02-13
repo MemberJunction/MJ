@@ -822,7 +822,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             };
             
             // Use inherited DeleteRecord method from ResolverBase
-            const deletedQuery = await this.DeleteRecord('Queries', key, deleteOptions, provider, context.userPayload, pubSub);
+            const deletedQuery = await this.DeleteRecord('MJ: Queries', key, deleteOptions, provider, context.userPayload, pubSub);
             
             if (deletedQuery) {
                 return {

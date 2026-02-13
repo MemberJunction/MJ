@@ -376,7 +376,7 @@ export class FileResolver extends FileResolverBase {
     const providerEntity = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
-    const [sameName] = await this.findBy(provider, 'Files', { Name: input.Name, ProviderID: input.ProviderID }, context.userPayload.userRecord);
+    const [sameName] = await this.findBy(provider, 'MJ: Files', { Name: input.Name, ProviderID: input.ProviderID }, context.userPayload.userRecord);
     const NameExists = Boolean(sameName);
 
     const success = fileEntity.NewRecord(FieldValueCollection.FromObject({ ...input, Status: 'Pending' }));
