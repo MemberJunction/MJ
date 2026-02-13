@@ -1,7 +1,7 @@
 import { Command } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { buildStubDataProvider } from '../../utils/open-app-context.js';
+import { buildDataProvider } from '../../utils/open-app-context.js';
 import { getValidatedConfig } from '../../config.js';
 
 export default class AppCheckUpdates extends Command {
@@ -18,7 +18,7 @@ export default class AppCheckUpdates extends Command {
       const { ListInstalledApps, GetLatestVersion } = await import('@memberjunction/mj-open-app-engine');
       const config = getValidatedConfig();
 
-      const dataProvider = buildStubDataProvider();
+      const dataProvider = await buildDataProvider();
       const apps = await ListInstalledApps(dataProvider);
 
       if (apps.length === 0) {

@@ -119,6 +119,14 @@ GO
 
 
 
+
+
+
+
+
+
+
+
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (

@@ -1,6 +1,6 @@
 import { Args, Command } from '@oclif/core';
 import chalk from 'chalk';
-import { buildStubDataProvider } from '../../utils/open-app-context.js';
+import { buildDataProvider } from '../../utils/open-app-context.js';
 
 export default class AppInfo extends Command {
   static description = 'Show detailed information about an installed MJ Open App';
@@ -21,7 +21,7 @@ export default class AppInfo extends Command {
 
     try {
       const { FindInstalledApp } = await import('@memberjunction/mj-open-app-engine');
-      const dataProvider = buildStubDataProvider();
+      const dataProvider = await buildDataProvider();
       const app = await FindInstalledApp(dataProvider, args.name);
 
       if (!app) {

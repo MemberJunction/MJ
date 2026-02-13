@@ -24,6 +24,7 @@ export * from './engines/UserInfoEngine';
 export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';
 export * from './engines/MCPEngine';
+export * from './engines/OpenAppEngine';
 
 export * from './artifact-extraction/artifact-extract-rules';
 export * from './artifact-extraction/artifact-extractor';

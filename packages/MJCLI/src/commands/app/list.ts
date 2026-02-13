@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
-import { buildStubDataProvider } from '../../utils/open-app-context.js';
+import { buildDataProvider } from '../../utils/open-app-context.js';
 
 interface InstalledAppRow {
   Name: string;
@@ -26,7 +26,7 @@ export default class AppList extends Command {
 
     try {
       const { ListInstalledApps } = await import('@memberjunction/mj-open-app-engine');
-      const dataProvider = buildStubDataProvider();
+      const dataProvider = await buildDataProvider();
       const apps = await ListInstalledApps(dataProvider);
 
       if (apps.length === 0) {

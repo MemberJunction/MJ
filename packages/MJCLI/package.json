@@ -76,6 +76,7 @@
     "fast-glob": "^3.3.3",
     "figlet": "^1.10.0",
     "fs-extra": "^11.3.3",
+    "mssql": "^12.2.0",
     "node-flyway": "0.0.13",
     "ora-classic": "^5.4.2",
     "recast": "^0.23.11",
