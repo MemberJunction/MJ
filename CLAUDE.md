@@ -1334,6 +1334,64 @@ Each nav item with `ResourceType: "Custom"` requires a corresponding component:
 4. Call the load function from the module's `public-api.ts`
 5. Register the component in the module's declarations and exports
 
+## Browser Testing with Playwright CLI
+
+### Overview
+MemberJunction uses `@playwright/cli` (Playwright CLI) for browser-based testing and UI interaction during development. The CLI uses an accessibility-snapshot approach that is token-efficient for AI agents.
+
+### Persistent Browser Profile (Auth Caching)
+To avoid re-authenticating every time you launch a browser session, use the `--profile` flag to store session data (MSAL tokens, cookies, localStorage) persistently:
+
+```bash
+# First-time launch (requires manual login in the headed browser):
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Subsequent launches reuse cached auth automatically:
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+```
+
+**Key points:**
+- The `.playwright-cli/` directory is gitignored — profile data stays local
+- After authenticating once, MSAL tokens are cached in the profile directory
+- Sessions typically persist for 30+ days (same as the VSCode debug browser)
+- If auth expires, just log in once in the headed browser to refresh the cache
+
+### Common Commands
+```bash
+# Open browser with persistent auth
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Take a snapshot (get element refs for interaction)
+npx playwright-cli snapshot
+
+# Click an element by ref
+npx playwright-cli click <ref>
+
+# Type text
+npx playwright-cli type "some text"
+
+# Press a key
+npx playwright-cli press Enter
+
+# Run arbitrary Playwright code
+npx playwright-cli run-code "async (page) => { return await page.title(); }"
+
+# Check console logs
+npx playwright-cli console info
+
+# Close browser
+npx playwright-cli close
+```
+
+### Workflow for UI Bug Investigation
+1. Start MJAPI and MJExplorer servers
+2. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
+3. Authenticate once if needed (cached for future sessions)
+4. Use `snapshot` to inspect the page, `click`/`type` to interact
+5. Use `console info` / `console error` to check for issues
+6. Make code fixes, rebuild affected packages, reload the browser
+7. Re-test to verify the fix
+
 ## Active Technologies
 - TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk` (601-mcp-oauth)
 - N/A (token validation only, no new persistent state) (601-mcp-oauth)

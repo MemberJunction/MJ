@@ -4,7 +4,8 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment } from '@memberjunction/ng-conversations';
+import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
+import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 /**
@@ -224,7 +225,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
-    private activeTasksService: ActiveTasksService
+    private activeTasksService: ActiveTasksService,
+    private uiCommandHandler: UICommandHandlerService
   ) {
     super();
   }
@@ -294,6 +296,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
           this.onExternalNavigation(currentUrl);
         }
       });
+
+    // Subscribe to actionable commands (open:resource) from the UI command handler service.
+    // open:url commands are handled directly by the service; open:resource needs NavigationService.
+    this.uiCommandHandler.actionableCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(command => this.handleActionableCommand(command));
 
     // Enable URL updates after initialization
     this.skipUrlUpdate = false;
@@ -923,5 +931,54 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /**
+   * Handle actionable commands that require app-specific navigation (open:resource).
+   * open:url commands are already handled directly by UICommandHandlerService.
+   */
+  private handleActionableCommand(command: ActionableCommand): void {
+    if (command.type === 'open:resource') {
+      const resourceCommand = command as OpenResourceCommand;
+      if (resourceCommand.resourceType === 'Record' && resourceCommand.entityName) {
+        const compositeKey = new CompositeKey([{
+          FieldName: 'ID',
+          Value: resourceCommand.resourceId
+        }]);
+        this.navigationService.OpenEntityRecord(resourceCommand.entityName, compositeKey);
+      } else if (resourceCommand.resourceType === 'Report' || resourceCommand.resourceType === 'Dashboard') {
+        // Reports and dashboards from agents are stored as conversation artifacts.
+        // Find the most recent artifact in the active conversation and open it.
+        this.openMostRecentArtifact();
+      }
+    }
+  }
+
+  /**
+   * Open the most recent artifact in the active conversation's artifact viewer.
+   * Used for open:resource commands with resourceType Report/Dashboard where
+   * the resourceId is an agent-internal ID, not a database artifact ID.
+   */
+  private openMostRecentArtifact(): void {
+    if (!this.chatArea) return;
+
+    // Find the last artifact across all messages
+    const artifactMap = this.chatArea.artifactsByDetailId;
+    let latestArtifact: { artifactId: string; versionId?: string } | null = null;
+    for (const artifacts of artifactMap.values()) {
+      if (artifacts.length > 0) {
+        const last = artifacts[artifacts.length - 1];
+        latestArtifact = {
+          artifactId: last.artifactId,
+          versionId: last.artifactVersionId
+        };
+      }
+    }
+
+    if (latestArtifact) {
+      this.chatArea.onArtifactClicked(latestArtifact);
+    } else {
+      console.warn('No artifacts found in conversation to open for Report/Dashboard command');
+    }
   }
 }

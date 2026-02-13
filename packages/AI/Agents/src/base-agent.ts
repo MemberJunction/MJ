@@ -7508,6 +7508,12 @@ The context is now within limits. Please retry your request with the recovered c
             ? this.resolveMediaPlaceholdersInPayload(payload)
             : payload;
 
+        // For root agents: resolve media placeholders in actionable commands
+        // (e.g., open:url commands where the URL is a ${media:xxx} placeholder)
+        const resolvedActionableCommands = (finalStep.actionableCommands && isRootAgent)
+            ? this.resolveMediaPlaceholdersInPayload(finalStep.actionableCommands)
+            : finalStep.actionableCommands;
+
         // For root agents: process message for media placeholders
         // This promotes referenced media (sets persist=true) and strips media HTML tags
         // so images display via ConversationDetailAttachment instead of embedded in message
@@ -7569,7 +7575,7 @@ The context is now within limits. Please retry your request with the recovered c
             payload: resolvedPayload,
             agentRun: this._agentRun!,
             responseForm: finalStep.responseForm,
-            actionableCommands: finalStep.actionableCommands,
+            actionableCommands: resolvedActionableCommands,
             automaticCommands: finalStep.automaticCommands,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
