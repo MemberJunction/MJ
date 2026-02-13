@@ -1,10 +1,10 @@
 # @memberjunction/server-bootstrap
 
-MemberJunction 3.0 Server Bootstrap - Encapsulates all server initialization logic into a single, simple function.
+MemberJunction Server Bootstrap - Encapsulates all server initialization logic into a single, simple function.
 
 ## Overview
 
-In MemberJunction 3.0, server applications (MJAPI) become **minimal bootstrapping files** (~6 lines of code) that import all functionality from NPM packages. This package provides the `createMJServer()` function that handles all the complex initialization logic.
+In MemberJunction 3.0, server applications (MJAPI) became **minimal bootstrapping files** (~6 lines of code) that import all functionality from NPM packages. This package provides the `createMJServer()` function that handles all the complex initialization logic.
 
 ```mermaid
 graph TD
@@ -42,7 +42,7 @@ npm install @memberjunction/server-bootstrap
 
 ## Usage
 
-### Basic Usage (Minimal MJAPI 3.0)
+### Basic Usage (Minimal MJAPI)
 
 Create your `packages/api/src/index.ts`:
 
@@ -117,7 +117,7 @@ module.exports = {
 
   graphqlPort: process.env.PORT || 4000,
 
-  // 3.0 Code Generation Configuration
+  // Code Generation Configuration
   codeGeneration: {
     outputMode: 'packages',
     packageScope: '@mycompany',
