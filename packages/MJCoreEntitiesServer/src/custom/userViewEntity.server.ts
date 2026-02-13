@@ -114,7 +114,7 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
     protected BuildTemplateData(entityInfo: EntityInfo): Record<string, unknown> {
         const processedViews: string[] = [entityInfo.BaseView];
         const md = this.ProviderToUse as unknown as IMetadataProvider;
-        const listsEntity = md.Entities.find(e => e.Name === "Lists");
+        const listsEntity = md.Entities.find(e => e.Name === "MJ: Lists");
         const listDetailsEntity = md.Entities.find(e => e.Name === "MJ: List Details");
 
         // Build fields description

@@ -471,7 +471,7 @@ export class ActionFormComponentExtended extends MJActionFormComponent implement
     }
 
     navigateToLibrary(libraryId: string) {
-        this.navigateToEntity('Libraries', libraryId);
+        this.navigateToEntity('MJ: Libraries', libraryId);
     }
 
     // Actions

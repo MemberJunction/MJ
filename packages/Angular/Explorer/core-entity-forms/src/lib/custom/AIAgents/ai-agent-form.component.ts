@@ -2719,7 +2719,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
             
             // 1. First save Templates (they have no dependencies)
             const templateRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'Templates'
+                p.entityObject.EntityInfo.Name === 'MJ: Templates'
             );
             for (const templateRecord of templateRecords) {
                 templateRecord.entityObject.TransactionGroup = transactionGroup;
@@ -2810,7 +2810,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
 
             // 5. Save all other pending records (AI Agent Actions, AI Agent Prompts, etc.)
             const otherRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name !== 'Templates' &&
+                p.entityObject.EntityInfo.Name !== 'MJ: Templates' &&
                 p.entityObject.EntityInfo.Name !== 'MJ: Template Contents' &&
                 p.entityObject.EntityInfo.Name !== 'MJ: AI Prompts'
             );

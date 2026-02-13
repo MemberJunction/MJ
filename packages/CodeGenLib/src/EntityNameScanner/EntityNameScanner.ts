@@ -127,10 +127,14 @@ const ENTITY_NAME_METHODS = new Set([
 
 /**
  * Property names that, when used in a `=== 'OldName'` or `!== 'OldName'`
- * comparison, indicate the string literal is an entity name.
+ * comparison, unambiguously indicate the string literal is an entity name.
+ *
+ * NOTE: `Name` is intentionally excluded — it's too generic and produces
+ * false positives (e.g., action parameter lookups like `p.Name === 'Users'`).
+ * Instead, `.Name` comparisons are handled by targeted AST checks in
+ * classifyParentContext (Cases 5 and 6) that verify the surrounding context.
  */
 const ENTITY_NAME_COMPARISON_PROPS = new Set([
-    'Name',
     'Entity',
     'EntityName',
     'LinkedEntity',
@@ -257,14 +261,26 @@ function classifyParentContext(node: ts.Node): EntityNamePatternKind | null {
         }
     }
 
-    // Case 4: Comparison like .Name === 'OldName' or .Entity === 'OldName'
+    // Case 4: Comparison like .Entity === 'OldName' or .LinkedEntity === 'OldName'
+    // (unambiguous property names only — see ENTITY_NAME_COMPARISON_PROPS)
     if (ts.isBinaryExpression(parent)) {
         const op = parent.operatorToken.kind;
         if (op === ts.SyntaxKind.EqualsEqualsEqualsToken || op === ts.SyntaxKind.ExclamationEqualsEqualsToken) {
-            // The other side of the comparison should be a property access ending in a known prop
             const otherSide = parent.left === node ? parent.right : parent.left;
             const propName = getTrailingPropertyName(otherSide);
             if (propName && ENTITY_NAME_COMPARISON_PROPS.has(propName)) {
+                return 'NameComparison';
+            }
+
+            // Case 5: .EntityInfo.Name === 'OldName'
+            // The property chain must include EntityInfo before the trailing .Name
+            if (propName === 'Name' && isEntityInfoNameChain(otherSide)) {
+                return 'NameComparison';
+            }
+
+            // Case 6: .Entities.find(e => e.Name === 'OldName') or .Entities.filter(...)
+            // The comparison is inside a .find()/.filter() callback on an Entities array
+            if (propName === 'Name' && isEntitiesArrayCallback(parent)) {
                 return 'NameComparison';
             }
         }
@@ -282,6 +298,69 @@ function getTrailingPropertyName(expr: ts.Expression): string | null {
         return expr.name.text;
     }
     return null;
+}
+
+/**
+ * Checks if an expression is a `.EntityInfo.Name` property chain.
+ * Matches patterns like `p.entityObject.EntityInfo.Name`, `entity.EntityInfo.Name`, etc.
+ */
+function isEntityInfoNameChain(expr: ts.Expression): boolean {
+    // expr should be a PropertyAccessExpression ending in .Name
+    if (!ts.isPropertyAccessExpression(expr)) return false;
+    if (expr.name.text !== 'Name') return false;
+
+    // The object before .Name should be a PropertyAccessExpression ending in .EntityInfo
+    const parent = expr.expression;
+    if (ts.isPropertyAccessExpression(parent) && parent.name.text === 'EntityInfo') {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Checks if a binary expression is inside a `.find()` or `.filter()` callback
+ * on an array property named `Entities`.
+ *
+ * Matches patterns like:
+ *   md.Entities.find(e => e.Name === 'OldName')
+ *   this.metadata.Entities.filter(e => e.Name !== 'OldName')
+ */
+function isEntitiesArrayCallback(binaryExpr: ts.BinaryExpression): boolean {
+    // Walk up: BinaryExpression -> ArrowFunction body (or ReturnStatement)
+    // -> ArrowFunction -> CallExpression arguments -> CallExpression
+    let current: ts.Node = binaryExpr;
+
+    // Walk up past parenthesized expressions and return statements
+    while (current.parent) {
+        current = current.parent;
+
+        if (ts.isArrowFunction(current)) {
+            // The arrow function should be an argument to .find() or .filter()
+            const callParent = current.parent;
+            if (ts.isCallExpression(callParent)) {
+                const callee = callParent.expression;
+                if (ts.isPropertyAccessExpression(callee)) {
+                    const methodName = callee.name.text;
+                    if (methodName === 'find' || methodName === 'filter') {
+                        // Check the object being called on ends with .Entities
+                        const obj = callee.expression;
+                        const objProp = getTrailingPropertyName(obj);
+                        if (objProp === 'Entities') {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false; // Found an arrow function but it's not the right pattern
+        }
+
+        // Stop walking if we hit a statement or declaration boundary
+        if (ts.isBlock(current) || ts.isSourceFile(current)) {
+            return false;
+        }
+    }
+
+    return false;
 }
 
 /**

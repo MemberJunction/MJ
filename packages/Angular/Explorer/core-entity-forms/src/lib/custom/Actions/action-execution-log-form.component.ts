@@ -190,13 +190,13 @@ export class ActionExecutionLogFormComponentExtended extends MJActionExecutionLo
 
     navigateToAction() {
         if (this.record.ActionID) {
-            this.navigateToEntity('Actions', this.record.ActionID);
+            this.navigateToEntity('MJ: Actions', this.record.ActionID);
         }
     }
 
     navigateToUser() {
         if (this.record.UserID) {
-            this.navigateToEntity('Users', this.record.UserID);
+            this.navigateToEntity('MJ: Users', this.record.UserID);
         }
     }
 

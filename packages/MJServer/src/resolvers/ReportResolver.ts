@@ -87,7 +87,7 @@ export class ReportResolverExtended extends ResolverBase {
       const cde = md.Entities.find((e) => e.Name === 'MJ: Conversation Details');
       if (!cde) throw new Error('Unable to find Conversation Details Entity metadata');
 
-      const cd = md.Entities.find((e) => e.Name === 'Conversations');
+      const cd = md.Entities.find((e) => e.Name === 'MJ: Conversations');
       if (!cd) throw new Error('Unable to find Conversations Entity metadata');
 
       const sql = `SELECT

@@ -262,7 +262,7 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
 
         // First check if we already have this template in pending records (newly created)
         const pendingTemplate = this.PendingRecords.find(p => 
-            p.entityObject.EntityInfo.Name === 'Templates' && 
+            p.entityObject.EntityInfo.Name === 'MJ: Templates' && 
             p.entityObject.Get('ID') === this.record.TemplateID
         );
         
@@ -1194,7 +1194,7 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
 
             // First, save any templates that need to be saved (they must be saved before AI Prompts)
             const templateRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'Templates'
+                p.entityObject.EntityInfo.Name === 'MJ: Templates'
             );
             
             for (const templateRecord of templateRecords) {
@@ -1228,7 +1228,7 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
 
             // Then save all other pending records (excluding templates which we already saved)
             const otherRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name !== 'Templates'
+                p.entityObject.EntityInfo.Name !== 'MJ: Templates'
             );
             
             for (const record of otherRecords) {

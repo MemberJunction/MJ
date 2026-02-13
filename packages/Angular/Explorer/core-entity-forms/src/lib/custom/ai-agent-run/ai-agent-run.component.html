@@ -247,7 +247,7 @@
                     <label>Conversation ID</label>
                     <span>
                       @if (record.ConversationID) {
-                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Conversations', record.ConversationID)">
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: Conversations', record.ConversationID)">
                           {{ record.ConversationID }}
                         </a>
                       }
@@ -260,7 +260,7 @@
                     <label>User</label>
                     <span>
                       @if (record.UserID) {
-                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Users', record.UserID)">
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: Users', record.UserID)">
                           {{ record.User || 'N/A' }}
                         </a>
                       }
@@ -292,7 +292,7 @@
                     <label>Override Vendor</label>
                     <span>
                       @if (record.OverrideVendorID) {
-                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Vendors', record.OverrideVendorID)">
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Vendors', record.OverrideVendorID)">
                           {{ record.OverrideVendor || 'N/A' }}
                         </a>
                       }

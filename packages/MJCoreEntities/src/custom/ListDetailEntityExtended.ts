@@ -49,7 +49,7 @@ export class ListDetailEntityExtended extends MJListDetailEntity  {
         if (!effectiveEntityInfo) {
             // Try to get entity info from the List's EntityID
             const md = new Metadata();
-            const list = md.Entities.find(e => e.Name === 'Lists');
+            const list = md.Entities.find(e => e.Name === 'MJ: Lists');
             if (!list) {
                 throw new Error('Cannot determine entity info. Provide entityInfo parameter or call SetRecordIDFromEntity first.');
             }

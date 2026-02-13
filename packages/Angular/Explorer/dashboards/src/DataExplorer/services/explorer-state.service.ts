@@ -618,7 +618,7 @@ export class ExplorerStateService {
       }
 
       // Get the Entities entity ID for favoriting
-      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
+      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'MJ: Entities');
       if (!entitiesEntity) return false;
 
       // Create User Favorite record
@@ -720,7 +720,7 @@ export class ExplorerStateService {
       if (!userId) return;
 
       // Get the Entities entity to filter favorites
-      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
+      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'MJ: Entities');
       if (!entitiesEntity) return;
 
       // Use UserInfoEngine for cached access to user favorites
@@ -918,7 +918,7 @@ export class ExplorerStateService {
       if (!userId) return;
 
       // Get the Entities entity to exclude entity favorites
-      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
+      const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'MJ: Entities');
       const entitiesEntityId = entitiesEntity?.ID || '';
 
       // Use UserInfoEngine for cached access to user favorites

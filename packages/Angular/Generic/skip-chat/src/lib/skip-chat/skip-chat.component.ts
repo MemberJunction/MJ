@@ -1194,7 +1194,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         if (this.LinkedEntity === 'MJ: User Views') {
           dci.Type = 'view';
           dci.ViewID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
-        } else if (this.LinkedEntity === 'Queries') {
+        } else if (this.LinkedEntity === 'MJ: Queries') {
           dci.Type = 'query';
           dci.QueryID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
         } else {
