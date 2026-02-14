@@ -39,6 +39,15 @@ alias gcb='git checkout -b'
 alias gpl='git pull'
 alias gps='git push'
 
+# ─── Browser automation shortcuts ────────────────────────────────────────────
+alias pwc='playwright-cli'                                         # short alias
+alias pwopen='playwright-cli open http://localhost:4200'           # open Explorer headless
+alias pwsnap='playwright-cli snapshot'                             # take accessibility snapshot
+alias pwclose='playwright-cli close'                               # close browser session
+alias pwlist='playwright-cli list'                                 # list active sessions
+alias pwscreen='playwright-cli screenshot'                         # take screenshot
+alias pwconsole='playwright-cli console'                           # check console output
+
 # ─── General shortcuts ───────────────────────────────────────────────────────
 alias ll='ls -alh'
 alias ..='cd ..'
@@ -55,9 +64,17 @@ echo "  sql / sqlmj → sqlcmd connected to $DB_HOST"
 echo "  sqldbs      → list all databases"
 echo "  sqlq        → run inline query"
 echo "  db-bootstrap→ create MJ database + run migrations"
+echo "  auth-setup  → configure Auth0 credentials"
 echo "  mjapi       → start MJAPI (host :4100)"
 echo "  mjui        → start Explorer (host :4300)"
 echo "  mjcd        → cd to /workspace/MJ"
 echo "  tb / tbf    → turbo build / turbo build --filter"
+echo "  ─────────── Browser Automation ─────────"
+echo "  pwopen      → open headless browser → Explorer"
+echo "  pwsnap      → accessibility snapshot"
+echo "  pwclose     → close browser session"
+echo "  pwscreen    → take screenshot"
+echo "  pwconsole   → check JS console output"
+echo "  pwlist      → list active browser sessions"
 echo "  ─────────────────────────────────────────"
 echo ""

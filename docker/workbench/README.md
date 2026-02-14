@@ -1,12 +1,12 @@
 # Workbench
 
-A Docker Compose environment that pairs **Claude Code** with a dedicated **SQL Server 2022** instance, giving you (or an AI agent) a fully self-contained MemberJunction development environment.
+A Docker Compose environment that pairs **Claude Code** with a dedicated **SQL Server 2022** instance and **headless Chromium browser**, giving you (or an AI agent) a fully self-contained MemberJunction development environment with end-to-end browser automation capabilities.
 
 ```mermaid
 graph TB
     subgraph "Docker Compose Network"
         SQL["sql-claude<br/>SQL Server 2022 Dev Ed<br/>Container port 1433"]
-        DEV["claude-dev<br/>Node 24 &bull; Claude Code &bull; MJ CLI<br/>Flyway &bull; Turbo &bull; Angular CLI<br/>Playwright &bull; GitHub CLI"]
+        DEV["claude-dev<br/>Node 24 &bull; Claude Code &bull; MJ CLI<br/>Playwright CLI &bull; Chromium &bull; Flyway<br/>Turbo &bull; Angular CLI &bull; GitHub CLI"]
         DEV -->|queries| SQL
     end
 
@@ -43,7 +43,7 @@ docker compose version  # Should print "Docker Compose version v2.x"
 
 ### Step 2: Allocate Enough Memory
 
-Docker Desktop limits how much RAM the containers can use. The workbench needs at least **6 GB** (SQL Server alone wants 2 GB).
+Docker Desktop limits how much RAM the containers can use. The workbench needs at least **8 GB** (SQL Server needs 2 GB, and Chromium needs headroom).
 
 **macOS / Windows:**
 1. Open Docker Desktop
@@ -93,10 +93,12 @@ sequenceDiagram
     end
     SQL-->>Script: Healthy!
     Script->>Dev: Start claude-dev
-    Dev->>Dev: Auto-update Claude Code & MJ CLI
+    Dev->>Dev: Auto-update Claude Code, MJ CLI, Playwright CLI
     Dev->>Dev: Clone MJ repo (next branch)
     Dev->>Dev: npm install
     Dev->>Dev: Create .env for MJAPI
+    Dev->>Dev: Symlink .env → packages/MJAPI/.env
+    Dev->>Dev: Prompt for Auth0 setup (first boot)
     Dev-->>Script: Ready!
     Script-->>You: "Claude Dev Workbench Ready"
 ```
@@ -109,7 +111,47 @@ docker exec -it claude-dev zsh
 
 You'll see a welcome banner with all available shortcuts. You're now inside the container with a full development environment.
 
-### Step 6: Start Claude Code
+### Step 6: Auth0 Setup (First Boot)
+
+On first boot, the entrypoint detects that Auth0 credentials are missing and prompts you:
+
+```
+  Auth0 credentials not found in .env.
+  MJAPI and MJExplorer need Auth0 to authenticate users.
+
+  Run Auth0 setup now? [Y/n] Y
+
+  ┌─────────────────────────────────────────┐
+  │     MJ Workbench — Auth0 Setup          │
+  └─────────────────────────────────────────┘
+
+  Auth0 Domain (e.g. myapp.us.auth0.com): ____
+  Auth0 Client ID: ____
+  Auth0 Client Secret: ____
+  Test User Email (for browser automation login): ____
+  Test User Password: ____
+```
+
+This script (`auth-setup`) does three things:
+1. **Saves credentials** to `/workspace/MJ/.env` (both `AUTH0_*` for MJAPI and `TEST_*` for automation)
+2. **Creates Angular environment files** (`environment.ts`, `environment.development.ts`, `environment.staging.ts`) with your Auth0 domain and client ID
+3. **Symlinks** the repo root `.env` to `packages/MJAPI/.env` so MJAPI reads it directly
+
+You can re-run `auth-setup` at any time to update credentials.
+
+#### Auth0 Tenant Prerequisites
+
+Your Auth0 tenant needs a **Single Page Application** (SPA) configured with:
+
+| Setting | Values |
+|---------|--------|
+| Allowed Callback URLs | `http://localhost:4200`, `http://localhost:4300` |
+| Allowed Logout URLs | `http://localhost:4200`, `http://localhost:4300` |
+| Allowed Web Origins | `http://localhost:4200`, `http://localhost:4300` |
+
+And a **test user account** with email/password for browser automation.
+
+### Step 7: Start Claude Code
 
 ```bash
 cc                          # launch Claude Code (autonomous mode)
@@ -119,8 +161,9 @@ Claude Code is now running inside the container with full access to:
 - The MJ repo at `/workspace/MJ`
 - SQL Server at `sql-claude`
 - All build tools (npm, turbo, Angular CLI, etc.)
+- Headless Chromium browser via Playwright CLI
 
-### Step 7: Bootstrap the Database (Optional)
+### Step 8: Bootstrap the Database (Optional)
 
 If you want a full MJ database with schema and metadata:
 
@@ -149,11 +192,13 @@ graph LR
     B --> C[Start Claude Code]
     C --> D[Work on features]
     D --> E[Test / build]
-    E --> F[Commit & push]
+    E --> F[Browser test]
+    F --> G[Commit & push]
 
     style A fill:#f0f0f0,color:#333
     style C fill:#4a9eff,color:#fff
     style D fill:#4a9eff,color:#fff
+    style F fill:#e91e63,color:#fff
 ```
 
 **Start (if containers are stopped):**
@@ -171,6 +216,90 @@ docker exec -it claude-dev zsh
 docker compose down           # stops containers, keeps data
 docker compose down -v        # stops containers AND deletes all data (fresh start)
 ```
+
+---
+
+## Browser Automation
+
+The workbench includes Microsoft's [Playwright CLI](https://github.com/microsoft/playwright-cli) (`@playwright/cli`) and headless Chromium. This enables Claude Code to do full-stack browser automation — navigating the UI, filling forms, clicking buttons, taking screenshots, and checking console errors — all without a visible browser window.
+
+### How It Works
+
+```mermaid
+graph LR
+    CC["Claude Code"] -->|"playwright-cli<br/>commands"| BR["Headless<br/>Chromium"]
+    BR -->|"HTTP :4200"| EX["MJExplorer<br/>Angular App"]
+    EX -->|"GraphQL :4000"| API["MJAPI<br/>Server"]
+    API -->|"SQL :1433"| DB["SQL Server"]
+
+    style CC fill:#4a9eff,color:#fff
+    style BR fill:#e91e63,color:#fff
+    style EX fill:#22c55e,color:#fff
+    style API fill:#f59e0b,color:#fff
+```
+
+### Quick Example
+
+```bash
+# Start the stack
+mjapi &                                     # MJAPI in background
+mjui &                                      # Explorer in background
+# Wait for compilation to finish...
+
+# Open the browser and interact
+playwright-cli open http://localhost:4200    # Launch headless Chromium
+playwright-cli snapshot                     # Get accessible element refs
+playwright-cli fill e5 "admin@test.com"     # Fill the email field
+playwright-cli fill e7 "password123"        # Fill the password field
+playwright-cli click e9                     # Click the login button
+playwright-cli snapshot                     # See the logged-in state
+playwright-cli screenshot --filename=home.png  # Save a screenshot
+playwright-cli console error                # Check for JS errors
+playwright-cli close                        # Close the browser
+```
+
+### Auth0 Login Automation
+
+Claude Code can automate the Auth0 login flow using the test credentials stored in `.env`:
+
+```bash
+# Read credentials from .env
+source /workspace/MJ/.env
+# TEST_UID and TEST_PWD are available as environment variables
+
+# Use in playwright-cli
+playwright-cli open http://localhost:4200
+playwright-cli snapshot                     # Find the login form elements
+playwright-cli fill e3 "$TEST_UID"          # Email field
+playwright-cli fill e5 "$TEST_PWD"          # Password field
+playwright-cli click e7                     # Submit
+```
+
+### Browser Automation Aliases
+
+| Type this | What it does |
+|-----------|-------------|
+| `pwc` | Short alias for `playwright-cli` |
+| `pwopen` | Open headless browser pointing at Explorer (:4200) |
+| `pwsnap` | Take accessibility snapshot (element refs) |
+| `pwclose` | Close the browser session |
+| `pwscreen` | Take a screenshot |
+| `pwconsole` | Show browser console output |
+| `pwlist` | List active browser sessions |
+
+### Desktop vs Docker Differences
+
+| Aspect | Desktop | Docker Workbench |
+|--------|---------|-----------------|
+| Display mode | `--headed` (visible window) | Headless (no display) |
+| Interaction style | Visual + snapshot | Snapshot-driven |
+| Ports | MJAPI :4001, Explorer :4201 | MJAPI :4000, Explorer :4200 |
+| Auth caching | `.playwright-cli/profile` dir | Fresh per session (or use `--persistent`) |
+| Screenshots | Open in OS viewer | Read with `Read` tool or copy to host |
+
+### Chromium Memory
+
+Chromium uses `/dev/shm` (shared memory) for inter-process communication. The Docker default of 64MB is too small and causes tab crashes. The workbench sets `shm_size: '2gb'` in `docker-compose.yml` to prevent this.
 
 ---
 
@@ -220,6 +349,7 @@ When you enter the container (`docker exec -it claude-dev zsh`), these shortcuts
 | `mjmig` | Run database migrations (`mj migrate`) |
 | `mjb` | Build all packages (`npm run build`) |
 | `db-bootstrap` | Create MJ database + run all migrations |
+| `auth-setup` | Configure Auth0 credentials + generate environment files |
 
 ### Build Tools
 
@@ -237,6 +367,66 @@ When you enter the container (`docker exec -it claude-dev zsh`), these shortcuts
 | `gl` | Last 20 commits (one line each) |
 | `gco branch-name` | `git checkout` |
 | `gcb new-branch` | `git checkout -b` |
+
+### Browser Automation
+
+| Type this | What it does |
+|-----------|-------------|
+| `pwc` | Short alias for `playwright-cli` |
+| `pwopen` | Open headless Chromium → MJ Explorer |
+| `pwsnap` | Take accessibility snapshot |
+| `pwclose` | Close browser session |
+| `pwscreen` | Take screenshot |
+| `pwconsole` | Check browser console output |
+| `pwlist` | List active browser sessions |
+
+---
+
+## Auth0 Configuration
+
+### What You Need
+
+A test Auth0 tenant with:
+1. A **Single Page Application** (SPA) configured with:
+   - **Allowed Callback URLs**: `http://localhost:4200`, `http://localhost:4300`
+   - **Allowed Logout URLs**: `http://localhost:4200`, `http://localhost:4300`
+   - **Allowed Web Origins**: `http://localhost:4200`, `http://localhost:4300`
+2. A **test user account** for browser automation
+
+### How Setup Works
+
+```mermaid
+flowchart TD
+    A["auth-setup script"] --> B["Prompts for 5 values"]
+    B --> C["Updates /workspace/MJ/.env"]
+    C --> D["Symlinks .env → packages/MJAPI/.env"]
+    C --> E["Generates environment.ts"]
+    C --> F["Generates environment.development.ts"]
+    C --> G["Generates environment.staging.ts"]
+
+    D --> H["MJAPI reads AUTH0_DOMAIN,<br/>AUTH0_CLIENT_ID,<br/>AUTH0_CLIENT_SECRET"]
+    E --> I["MJExplorer reads AUTH0_DOMAIN,<br/>AUTH0_CLIENTID from environment"]
+    F --> I
+
+    style A fill:#4a9eff,color:#fff
+```
+
+### Credential Mapping
+
+| You Enter | Saved As | Used By |
+|-----------|---------|---------|
+| Auth0 Domain | `AUTH0_DOMAIN` + `TEST_AUTH0_DOMAIN` | MJAPI (.env), Explorer (environment.ts) |
+| Client ID | `AUTH0_CLIENT_ID` + `TEST_AUTH0_CLIENT_ID` | MJAPI (.env), Explorer (environment.ts as `AUTH0_CLIENTID`) |
+| Client Secret | `AUTH0_CLIENT_SECRET` + `TEST_AUTH0_CLIENT_SECRET` | MJAPI (.env) |
+| Test Email | `TEST_UID` | Claude Code (browser automation login) |
+| Test Password | `TEST_PWD` | Claude Code (browser automation login) |
+
+### Re-running Setup
+
+```bash
+auth-setup                  # Interactive prompts, overwrites previous values
+auth-setup --check          # Silent check: exit 0 if configured, exit 1 if not
+```
 
 ---
 
@@ -278,12 +468,37 @@ The standalone `flyway` CLI is also available if you need to run Flyway directly
 
 ---
 
-## Auto-Update
+## File Persistence
 
-Every time the container starts (including restarts), the entrypoint automatically updates Claude Code and the MJ CLI to their latest versions:
+### What Persists Across Restarts
+
+The `/workspace` directory is a **bind mount** from the host filesystem (`docker/workbench/workspace/`). Everything inside persists automatically:
+
+| What | Location | Persists? |
+|------|----------|-----------|
+| MJ source code | `/workspace/MJ/` | Yes (host mount) |
+| `.env` files | `/workspace/MJ/.env` | Yes (host mount) |
+| Angular environments | `/workspace/MJ/packages/MJExplorer/src/environments/` | Yes (host mount) |
+| node_modules | `/workspace/MJ/node_modules/` | Yes (host mount) |
+| Claude Code settings | `/root/.claude/` | Yes (named volume) |
+| GitHub CLI auth | `/root/.config/gh/` | Yes (named volume) |
+| SQL Server data | SQL container volume | Yes (named volume) |
+
+### Fresh Start
 
 ```bash
-npm update -g @anthropic-ai/claude-code @memberjunction/cli
+docker compose down -v     # removes containers AND all data volumes
+./start.sh                 # rebuild everything from scratch
+```
+
+---
+
+## Auto-Update
+
+Every time the container starts (including restarts), the entrypoint automatically updates Claude Code, the MJ CLI, and Playwright CLI to their latest versions:
+
+```bash
+npm update -g @anthropic-ai/claude-code @memberjunction/cli @playwright/cli
 ```
 
 This means you always have the latest tools without needing to rebuild the Docker image.
@@ -322,25 +537,29 @@ Here's what happens the very first time a container starts (subsequent starts ar
 
 ```mermaid
 flowchart TD
-    A[Container starts] --> B[Update Claude Code + MJ CLI]
+    A[Container starts] --> B[Update Claude Code + MJ CLI + Playwright CLI]
     B --> C{MJ repo exists?}
     C -->|No| D[Clone MJ repo from next branch]
     D --> E[Run npm install]
     E --> F[Create .env for MJAPI]
-    F --> G[Drop into zsh]
-    C -->|Yes| H[Fetch latest from origin/next]
-    H --> I{On next branch?}
-    I -->|Yes| J[Auto-pull latest]
-    I -->|No| K[Notify: new commits available]
-    J --> G
-    K --> G
+    F --> G[Symlink .env → packages/MJAPI/.env]
+    G --> H{Auth0 in .env?}
+    H -->|No| I[Run auth-setup interactively]
+    I --> J[Drop into zsh]
+    H -->|Yes| J
+    C -->|Yes| K[Fetch latest from origin/next]
+    K --> L{On next branch?}
+    L -->|Yes| M[Auto-pull latest]
+    L -->|No| N[Notify: new commits available]
+    M --> G
+    N --> G
 ```
 
 ---
 
 ## Permissions
 
-The container includes pre-approved permissions for common dev commands (`claude-settings.json`), so Claude Code can run npm, git, sqlcmd, turbo, etc. without asking for confirmation each time.
+The container includes pre-approved permissions for common dev commands (`claude-settings.json`), so Claude Code can run npm, git, sqlcmd, turbo, playwright-cli, etc. without asking for confirmation each time.
 
 For fully autonomous operation (no permission prompts at all), use the `cc` alias which adds `--dangerously-skip-permissions`.
 
@@ -356,6 +575,10 @@ Docker Desktop isn't running. Start it from your Applications folder (macOS) or 
 
 Usually a memory issue. Check Docker Desktop > Settings > Resources and increase RAM to at least 8 GB.
 
+### Chromium tabs crash immediately
+
+This is a shared memory issue. The `shm_size: '2gb'` setting in `docker-compose.yml` should prevent this. If you still see crashes, try increasing it to `4gb`.
+
 ### "Port 1444 is already in use"
 
 Something else is using that port. Either stop the other service or change the port in `docker-compose.yml`:
@@ -364,9 +587,19 @@ ports:
   - "1555:1433"    # change 1444 to something else
 ```
 
+### Auth0 login fails
+
+1. Run `auth-setup` to verify your credentials
+2. Check that your Auth0 SPA application has `http://localhost:4200` in its Allowed Callback URLs
+3. Verify the test user exists and has a password set in Auth0
+
+### Angular environment files missing
+
+If `npm start` fails with missing environment files, run `auth-setup` to regenerate them.
+
 ### Build takes forever
 
-The first build downloads ~2 GB of dependencies (Node, Chromium, SQL tools, Flyway). Subsequent builds use Docker's cache and are much faster. If you need to force a full rebuild:
+The first build downloads ~2.5 GB of dependencies (Node, Chromium, SQL tools, Flyway, Playwright). Subsequent builds use Docker's cache and are much faster. If you need to force a full rebuild:
 
 ```bash
 docker compose build --no-cache
@@ -388,10 +621,12 @@ docker compose down -v     # removes containers AND all data volumes
 | Node.js 24 | JavaScript/TypeScript runtime |
 | Claude Code | AI coding assistant (auto-updated) |
 | @memberjunction/cli | MJ CLI for migrations, codegen, etc. (auto-updated) |
+| Playwright CLI (`@playwright/cli`) | Token-efficient browser automation CLI for AI agents (auto-updated) |
+| Chromium | Headless browser for Playwright CLI |
+| Xvfb | Virtual framebuffer for edge cases requiring a display |
 | Flyway 10.20.1 | Database migration engine (standalone + bundled JRE) |
 | Turbo | Monorepo build orchestration |
 | Angular CLI | Angular development tools |
-| Playwright + Chromium | Browser testing |
 | GitHub CLI (`gh`) | GitHub operations from the command line |
 | Oh-My-Zsh | Enhanced shell with plugins and aliases |
 | jq | Command-line JSON processor |
@@ -404,10 +639,11 @@ docker compose down -v     # removes containers AND all data volumes
 |------|---------|
 | `Dockerfile` | Container image definition |
 | `docker-compose.yml` | Compose stack (SQL Server + Claude) |
-| `entrypoint.sh` | Auto-update, MJ clone, npm install, shell startup |
+| `entrypoint.sh` | Auto-update, MJ clone, npm install, Auth0 check, shell startup |
+| `auth-setup.sh` | Interactive Auth0 credential setup + Angular environment generation |
 | `db-bootstrap.sh` | Database creation and migration script |
-| `.zshrc` | Oh-My-Zsh config with all aliases |
+| `.zshrc` | Oh-My-Zsh config with all aliases (including browser automation) |
 | `.env.database` | SQL + MJAPI connection details (committed, docker-internal only) |
 | `.env.example` | Template for user-specific settings |
-| `claude-settings.json` | Pre-approved Claude Code permissions |
+| `claude-settings.json` | Pre-approved Claude Code permissions (includes playwright-cli) |
 | `start.sh` | One-command setup script |

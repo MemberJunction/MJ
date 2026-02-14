@@ -13,15 +13,16 @@ This directory contains Docker configurations for MemberJunction. When working w
 - SSH debugging on port 2222 (password: `Docker!`)
 
 ### docker/workbench/
-**Purpose**: Claude Code workbench with dedicated SQL Server for autonomous development and testing.
+**Purpose**: Claude Code workbench with dedicated SQL Server, headless browser, and Auth0 integration for autonomous development and testing.
 
-- `docker-compose.yml` spins up two containers: `sql-claude` (SQL Server 2022) and `claude-dev` (Node 24 + Claude Code + MJ CLI)
+- `docker-compose.yml` spins up two containers: `sql-claude` (SQL Server 2022) and `claude-dev` (Node 24 + Claude Code + MJ CLI + Playwright CLI + Chromium)
 - SQL Server SA credentials: `sa` / `Claude2Sql99` (docker-internal only, not a real password)
 - SQL Server accessible from host at `localhost:1444`
-- Claude Code and MJ CLI auto-update on every container start via `entrypoint.sh`
+- Claude Code, MJ CLI, and Playwright CLI auto-update on every container start via `entrypoint.sh`
 - MJ repo is auto-cloned to `/workspace/MJ` on first start (from `next` branch)
-- Pre-configured permissions in `claude-settings.json` allow npm, git, sqlcmd, mj, and other common commands
+- Pre-configured permissions in `claude-settings.json` allow npm, git, sqlcmd, mj, playwright-cli, and other common commands
 - Oh-My-Zsh with aliases: `cc` = `claude --dangerously-skip-permissions`
+- Chromium gets 2GB shared memory (`shm_size: '2gb'`) to prevent tab crashes
 
 **Starting the workbench:**
 ```bash
@@ -43,6 +44,95 @@ sql                         # Interactive sqlcmd as SA
 sqlq "SELECT name FROM sys.databases"  # Inline query
 sqldbs                      # List all databases
 ```
+
+## Auth0 Configuration
+
+The workbench uses Auth0 for authentication. On first boot (or when Auth0 credentials are missing from `.env`), the `auth-setup` script runs interactively to collect:
+
+- `AUTH0_DOMAIN` / `TEST_AUTH0_DOMAIN` — Your Auth0 tenant domain
+- `AUTH0_CLIENT_ID` / `TEST_AUTH0_CLIENT_ID` — SPA application client ID
+- `AUTH0_CLIENT_SECRET` / `TEST_AUTH0_CLIENT_SECRET` — Application secret
+- `TEST_UID` — Test user email for browser automation login
+- `TEST_PWD` — Test user password for browser automation login
+
+**How credentials flow:**
+1. User provides values via `auth-setup` interactive prompts
+2. Values are saved to `/workspace/MJ/.env` (both `AUTH0_*` and `TEST_*` prefixed)
+3. `.env` is symlinked to `packages/MJAPI/.env` so MJAPI reads the same file
+4. Angular environment files (`environment.ts`, `environment.development.ts`) are generated with `AUTH0_DOMAIN` and `AUTH0_CLIENTID`
+5. All changes persist across container restarts (files are on the host-mounted `/workspace` volume)
+
+**To reconfigure:** Run `auth-setup` at any time.
+
+**Browser automation login:** Claude Code can read `TEST_UID` and `TEST_PWD` from `.env` to automate Auth0 login in the headless browser.
+
+## Headless Browser Automation
+
+The workbench includes Microsoft's Playwright CLI (`@playwright/cli`) and headless Chromium for full-stack browser automation.
+
+### How It Works
+
+```mermaid
+graph LR
+    CC["Claude Code"] -->|"playwright-cli"| BR["Headless Chromium"]
+    BR -->|"HTTP"| EX["MJExplorer :4200"]
+    EX -->|"GraphQL"| API["MJAPI :4000"]
+    API -->|"SQL"| DB["SQL Server :1433"]
+
+    style CC fill:#4a9eff,color:#fff
+    style BR fill:#e91e63,color:#fff
+```
+
+### Workflow for UI Testing
+
+```bash
+# 1. Start the MJ stack
+mjapi &                                     # Start MJAPI in background
+mjui &                                      # Start Explorer in background
+# Wait for both to be ready...
+
+# 2. Open headless browser
+playwright-cli open http://localhost:4200
+
+# 3. Interact with the page
+playwright-cli snapshot                     # Get element refs
+playwright-cli click e15                    # Click elements
+playwright-cli fill e7 "test@example.com"   # Fill forms
+playwright-cli screenshot                   # Capture visual state
+playwright-cli console error                # Check for JS errors
+
+# 4. Make code changes, rebuild
+# Angular library changes: Vite auto-reloads the browser
+# Server-side changes: restart MJAPI
+
+# 5. Re-test
+playwright-cli reload
+playwright-cli snapshot
+
+# 6. Clean up
+playwright-cli close
+```
+
+### Shell Aliases
+
+| Alias | Command | Purpose |
+|-------|---------|---------|
+| `pwc` | `playwright-cli` | Short alias |
+| `pwopen` | `playwright-cli open http://localhost:4200` | Open Explorer headless |
+| `pwsnap` | `playwright-cli snapshot` | Accessibility snapshot |
+| `pwclose` | `playwright-cli close` | Close browser |
+| `pwscreen` | `playwright-cli screenshot` | Take screenshot |
+| `pwconsole` | `playwright-cli console` | JS console output |
+| `pwlist` | `playwright-cli list` | List active sessions |
+
+### Key Differences from Desktop
+
+| Aspect | Desktop | Docker Workbench |
+|--------|---------|-----------------|
+| Display | `--headed` (visible window) | Headless (no display, snapshot-driven) |
+| Ports | MJAPI :4001, Explorer :4201 | MJAPI :4000, Explorer :4200 |
+| Auth profile | `.playwright-cli/profile` | Fresh session per run (or `--persistent`) |
+| Screenshots | Viewable in OS | Saved to filesystem, read with Read tool |
 
 ## MJ Repository and Branch Workflow
 
@@ -99,6 +189,22 @@ git push -u origin claude/<new-task-name>
 ### GitHub Authentication
 Run `gh auth login` once inside the container. The credential is persisted in the `gh-config` Docker volume across restarts.
 
+## File Persistence
+
+The `/workspace` directory is a bind mount from the host (`docker/workbench/workspace/`). **All changes inside `/workspace/MJ/` persist across container restarts**, including:
+
+- `.env` files (Auth0 credentials, DB config)
+- Angular environment files
+- Code changes and git history
+- npm `node_modules/`
+
+Named Docker volumes also persist:
+- `claude-settings` — Claude Code config (`/root/.claude/`)
+- `gh-config` — GitHub CLI auth tokens (`/root/.config/gh/`)
+- `sql-claude-data` — SQL Server database files
+
+**To start completely fresh:** `docker compose down -v` removes all volumes.
+
 ## When to Use Each
 
 | Scenario | Use |
@@ -108,6 +214,9 @@ Run `gh auth login` once inside the container. The credential is persisted in th
 | Automated testing with Claude | `docker/workbench/` |
 | CI/CD pipeline with Claude | `docker/workbench/` |
 | Database experimentation | `docker/workbench/` |
+| Headless browser automation | `docker/workbench/` |
+| End-to-end UI testing | `docker/workbench/` |
+| Auth0 login flow testing | `docker/workbench/` |
 
 ## Managing the Workbench via Slash Command
 

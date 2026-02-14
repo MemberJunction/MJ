@@ -1,6 +1,6 @@
 FROM node:24-bookworm
 
-# Install system dependencies
+# Install system dependencies (includes xvfb for headless browser fallback)
 RUN apt-get update && apt-get install -y \
     git \
     ripgrep \
@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     jq \
     gnupg2 \
     apt-transport-https \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
@@ -34,6 +35,9 @@ RUN npm install -g @angular/cli turbo
 
 # Install Playwright with Chromium and all system dependencies
 RUN npx playwright install --with-deps chromium
+
+# Install Playwright CLI (Microsoft's token-efficient browser automation for AI agents)
+RUN npm install -g @playwright/cli@latest
 
 # Install Claude Code globally (latest for Opus 4.6+ support)
 RUN npm install -g @anthropic-ai/claude-code@latest
@@ -62,7 +66,8 @@ COPY claude-settings.json /root/.claude/settings.json
 # Copy scripts
 COPY entrypoint.sh /entrypoint.sh
 COPY db-bootstrap.sh /usr/local/bin/db-bootstrap
-RUN chmod +x /entrypoint.sh /usr/local/bin/db-bootstrap
+COPY auth-setup.sh /usr/local/bin/auth-setup
+RUN chmod +x /entrypoint.sh /usr/local/bin/db-bootstrap /usr/local/bin/auth-setup
 
 # Set zsh as default shell
 ENV SHELL=/bin/zsh

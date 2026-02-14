@@ -5,13 +5,15 @@ MJ_REPO="https://github.com/MemberJunction/MJ.git"
 MJ_DIR="/workspace/MJ"
 
 # ─── Auto-update global packages on container start ─────────────────────────
-echo "Checking for updates to Claude Code and MJ CLI..."
-npm update -g @anthropic-ai/claude-code @memberjunction/cli 2>/dev/null || true
+echo "Checking for updates to Claude Code, MJ CLI, and Playwright CLI..."
+npm update -g @anthropic-ai/claude-code @memberjunction/cli @playwright/cli 2>/dev/null || true
 
 CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
 MJ_VERSION=$(mj --version 2>/dev/null || echo "unknown")
-echo "  Claude Code: ${CLAUDE_VERSION}"
-echo "  MJ CLI:      ${MJ_VERSION}"
+PW_VERSION=$(playwright-cli --version 2>/dev/null || echo "unknown")
+echo "  Claude Code:    ${CLAUDE_VERSION}"
+echo "  MJ CLI:         ${MJ_VERSION}"
+echo "  Playwright CLI: ${PW_VERSION}"
 echo ""
 
 # ─── Clone or update MJ repository ──────────────────────────────────────────
@@ -73,6 +75,42 @@ GRAPHQL_PORT=4000
 ENVEOF
     echo "  Created $MJ_DIR/.env"
     echo ""
+fi
+
+# ─── Ensure .env symlink for MJAPI package ──────────────────────────────────
+MJAPI_ENV="$MJ_DIR/packages/MJAPI/.env"
+if [ -f "$MJ_DIR/.env" ] && [ ! -L "$MJAPI_ENV" ]; then
+    # Remove existing non-symlink .env if present
+    if [ -f "$MJAPI_ENV" ]; then
+        mv "$MJAPI_ENV" "$MJAPI_ENV.bak"
+    fi
+    ln -sf "$MJ_DIR/.env" "$MJAPI_ENV"
+    echo "  Symlinked .env → packages/MJAPI/.env"
+fi
+
+# ─── Auth0 setup: prompt on first run or when credentials are missing ────────
+if [ -d "$MJ_DIR" ]; then
+    if ! auth-setup --check 2>/dev/null; then
+        echo ""
+        echo "  Auth0 credentials not found in .env."
+        echo "  MJAPI and MJExplorer need Auth0 to authenticate users."
+        echo ""
+        # Check if we're in an interactive terminal
+        if [ -t 0 ]; then
+            read -rp "  Run Auth0 setup now? [Y/n] " SETUP_ANSWER
+            SETUP_ANSWER=${SETUP_ANSWER:-Y}
+            if [[ "$SETUP_ANSWER" =~ ^[Yy] ]]; then
+                auth-setup
+            else
+                echo ""
+                echo "  Skipped. Run 'auth-setup' later to configure Auth0."
+                echo ""
+            fi
+        else
+            echo "  Non-interactive terminal detected. Run 'auth-setup' manually."
+            echo ""
+        fi
+    fi
 fi
 
 # ─── Drop into zsh ──────────────────────────────────────────────────────────
