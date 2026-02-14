@@ -33,11 +33,10 @@ ENV PATH="$PATH:/opt/mssql-tools18/bin"
 # Install Angular CLI and Turbo globally
 RUN npm install -g @angular/cli turbo
 
-# Install Playwright with Chromium and all system dependencies
-RUN npx playwright install --with-deps chromium
-
-# Install Playwright CLI (Microsoft's token-efficient browser automation for AI agents)
+# Install Playwright CLI first, then install Chromium using the CLI's bundled
+# Playwright version so the browser revision matches what playwright-cli expects.
 RUN npm install -g @playwright/cli@latest
+RUN cd /usr/local/lib/node_modules/@playwright/cli && npx playwright install --with-deps chromium
 
 # Install Claude Code globally (latest for Opus 4.6+ support)
 RUN npm install -g @anthropic-ai/claude-code@latest
@@ -45,9 +44,16 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 # Install MemberJunction CLI globally
 RUN npm install -g @memberjunction/cli
 
-# Install Flyway CLI (with bundled JRE for linux-x64)
+# Install Flyway CLI (architecture-aware: bundled JRE on x64, platform-independent + system JRE on ARM64)
 ARG FLYWAY_VERSION=10.20.1
-RUN curl -fsSL "https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz" -o /tmp/flyway.tar.gz \
+RUN ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then \
+         apt-get update && apt-get install -y --no-install-recommends default-jre-headless && rm -rf /var/lib/apt/lists/* \
+         && FLYWAY_SUFFIX="" ; \
+       else \
+         FLYWAY_SUFFIX="-linux-x64" ; \
+       fi \
+    && curl -fsSL "https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}${FLYWAY_SUFFIX}.tar.gz" -o /tmp/flyway.tar.gz \
     && tar -xzf /tmp/flyway.tar.gz -C /opt \
     && ln -s "/opt/flyway-${FLYWAY_VERSION}/flyway" /usr/local/bin/flyway \
     && rm /tmp/flyway.tar.gz

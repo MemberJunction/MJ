@@ -18,6 +18,8 @@ This directory contains Docker configurations for MemberJunction. When working w
 - `docker-compose.yml` spins up two containers: `sql-claude` (SQL Server 2022) and `claude-dev` (Node 24 + Claude Code + MJ CLI + Playwright CLI + Chromium)
 - SQL Server SA credentials: `sa` / `Claude2Sql99` (docker-internal only, not a real password)
 - SQL Server accessible from host at `localhost:1444`
+- Host ports are configurable: `MJAPI_HOST_PORT` (default 4000), `EXPLORER_HOST_PORT` (default 4200)
+- To avoid conflicts with local dev servers, set `MJAPI_HOST_PORT=4100` and `EXPLORER_HOST_PORT=4300` in `.env`
 - Claude Code, MJ CLI, and Playwright CLI auto-update on every container start via `entrypoint.sh`
 - MJ repo is auto-cloned to `/workspace/MJ` on first start (from `next` branch)
 - Pre-configured permissions in `claude-settings.json` allow npm, git, sqlcmd, mj, playwright-cli, and other common commands
@@ -47,7 +49,21 @@ sqldbs                      # List all databases
 
 ## Auth0 Configuration
 
-The workbench uses Auth0 for authentication. On first boot (or when Auth0 credentials are missing from `.env`), the `auth-setup` script runs interactively to collect:
+The workbench uses Auth0 for authentication. Credentials can be provided two ways:
+
+### Option A: Pre-fill in `.env` (Recommended — No Interactive Prompts)
+Set these variables in `docker/workbench/.env` before starting the container:
+```
+TEST_AUTH0_DOMAIN=your-tenant.us.auth0.com
+TEST_AUTH0_CLIENT_ID=your-client-id
+TEST_AUTH0_CLIENT_SECRET=your-client-secret
+TEST_UID=test@example.com
+TEST_PWD=your-test-password
+```
+The entrypoint auto-configures everything (MJAPI `.env`, Angular environment files, symlinks) without prompting.
+
+### Option B: Interactive Setup
+On first boot (when Auth0 credentials are missing), the `auth-setup` script runs interactively to collect:
 
 - `AUTH0_DOMAIN` / `TEST_AUTH0_DOMAIN` — Your Auth0 tenant domain
 - `AUTH0_CLIENT_ID` / `TEST_AUTH0_CLIENT_ID` — SPA application client ID
@@ -56,7 +72,7 @@ The workbench uses Auth0 for authentication. On first boot (or when Auth0 creden
 - `TEST_PWD` — Test user password for browser automation login
 
 **How credentials flow:**
-1. User provides values via `auth-setup` interactive prompts
+1. User provides values via `.env` or `auth-setup` interactive prompts
 2. Values are saved to `/workspace/MJ/.env` (both `AUTH0_*` and `TEST_*` prefixed)
 3. `.env` is symlinked to `packages/MJAPI/.env` so MJAPI reads the same file
 4. Angular environment files (`environment.ts`, `environment.development.ts`) are generated with `AUTH0_DOMAIN` and `AUTH0_CLIENTID`
@@ -65,6 +81,9 @@ The workbench uses Auth0 for authentication. On first boot (or when Auth0 creden
 **To reconfigure:** Run `auth-setup` at any time.
 
 **Browser automation login:** Claude Code can read `TEST_UID` and `TEST_PWD` from `.env` to automate Auth0 login in the headless browser.
+
+### Auth0 Allowed URLs (Port Range)
+The Auth0 SPA application should have `http://localhost:4200` through `http://localhost:4205` configured as Allowed Callback URLs, Allowed Logout URLs, and Allowed Web Origins. This range supports running multiple workbench instances simultaneously (via `EXPLORER_HOST_PORT` env var override).
 
 ## Headless Browser Automation
 
@@ -130,7 +149,7 @@ playwright-cli close
 | Aspect | Desktop | Docker Workbench |
 |--------|---------|-----------------|
 | Display | `--headed` (visible window) | Headless (no display, snapshot-driven) |
-| Ports | MJAPI :4001, Explorer :4201 | MJAPI :4000, Explorer :4200 |
+| Ports | MJAPI :4001, Explorer :4201 | MJAPI :4000, Explorer :4200 (configurable) |
 | Auth profile | `.playwright-cli/profile` | Fresh session per run (or `--persistent`) |
 | Screenshots | Viewable in OS | Saved to filesystem, read with Read tool |
 
