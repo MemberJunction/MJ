@@ -82,22 +82,22 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   /** Check if user can create AI Agents */
   public get UserCanCreateAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Create');
+    return this.checkEntityPermission('MJ: AI Agents', 'Create');
   }
 
   /** Check if user can read AI Agents */
   public get UserCanReadAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Read');
+    return this.checkEntityPermission('MJ: AI Agents', 'Read');
   }
 
   /** Check if user can update AI Agents */
   public get UserCanUpdateAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Update');
+    return this.checkEntityPermission('MJ: AI Agents', 'Update');
   }
 
   /** Check if user can delete AI Agents */
   public get UserCanDeleteAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Delete');
+    return this.checkEntityPermission('MJ: AI Agents', 'Delete');
   }
 
   /**
@@ -516,7 +516,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   public openAgentRecord(agentId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agentId }]);
-    this.navigationService.OpenEntityRecord('AI Agents', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Agents', compositeKey);
   }
 
   /**
@@ -582,7 +582,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
       // Navigate to the new agent record
       const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agent.ID }]);
-      this.navigationService.OpenEntityRecord('AI Agents', compositeKey);
+      this.navigationService.OpenEntityRecord('MJ: AI Agents', compositeKey);
 
       MJNotificationService.Instance.CreateSimpleNotification(
         `Agent "${agent.Name}" created successfully`,

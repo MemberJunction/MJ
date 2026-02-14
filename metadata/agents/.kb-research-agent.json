@@ -15,7 +15,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Knowledge Base Research Agent Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Knowledge Base Research Agent Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -23,24 +23,24 @@
             "ID": "63FDABF2-CDED-4AA2-AA8F-5F564B15D8C2"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.016Z",
-            "checksum": "c151b9bc854fb6b995bbc6a56afa21833da10f40d6159b0cfe6dd8983cddc45d"
+            "lastModified": "2026-02-13T21:09:23.419Z",
+            "checksum": "f51ee8174ef1e04c7ca1b48adae6f240d258d97a7b1fbff16aab015da424a347"
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Betty",
+            "ActionID": "@lookup:MJ: Actions.Name=Betty",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "21D2E6E0-3331-4DAF-B401-E0D5545CDE34"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.018Z",
-            "checksum": "aa0fca193addf7fae93dcddb62eb65f236b634b536aac13b37f1cccbc599a4f2"
+            "lastModified": "2026-02-13T21:09:23.421Z",
+            "checksum": "9efe4320881d6a1b52a2919fe6143d3ec3ce03b5fde5a0548e5ab8dbd7c273d9"
           }
         }
       ],
@@ -48,7 +48,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "codeAnalysis[]"
@@ -61,8 +61,8 @@
             "ID": "B3CD28BD-4F31-4ED8-BB27-198A90D4E07A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.019Z",
-            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+            "lastModified": "2026-02-13T21:09:23.424Z",
+            "checksum": "7a24335c70b69b4d6a23b08097fc0c497fa9f09fefafdb6b1af9f1e4ef0a56d9"
           }
         }
       ]

@@ -12,7 +12,7 @@
  * ```typescript
  * const wm = WarningManager.Instance;
  * wm.RecordEntityDeprecationWarning('User Preferences', 'BaseEntity::constructor');
- * wm.RecordFieldDeprecationWarning('AI Prompts', 'OldField', 'AIPromptEntity::validate');
+ * wm.RecordFieldDeprecationWarning('MJ: AI Prompts', 'OldField', 'MJAIPromptEntity::validate');
  * wm.RecordFieldNotFoundWarning('Users', 'DeletedColumn', 'BaseEntity::SetMany');
  * // Warnings will be flushed automatically after debounce period
  * ```
@@ -199,7 +199,7 @@ export class WarningManager {
      *
      * @param entityName - The name of the entity containing the deprecated field
      * @param fieldName - The name of the deprecated field
-     * @param callerName - The name of the caller (e.g., 'AIPromptEntity::validate')
+     * @param callerName - The name of the caller (e.g., 'MJAIPromptEntity::validate')
      * @returns true if this warning should be emitted immediately (when ShowAll is true)
      */
     public RecordFieldDeprecationWarning(entityName: string, fieldName: string, callerName: string): boolean {

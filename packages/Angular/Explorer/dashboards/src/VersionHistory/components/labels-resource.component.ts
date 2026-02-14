@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
-import { ResourceData, VersionLabelEntityType, VersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJVersionLabelEntityType, MJVersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
 import { EntityLinkClickEvent } from '@memberjunction/ng-versions';
 interface ScopeStat {
     Scope: string;
@@ -46,7 +46,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     public ViewMode: 'card' | 'list' = 'card';
 
     // Detail panel
-    public SelectedLabel: VersionLabelEntityType | null = null;
+    public SelectedLabel: MJVersionLabelEntityType | null = null;
     public ShowDetailPanel = false;
 
     // Stats
@@ -58,8 +58,8 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     // Grouped data
     public ScopeStats: ScopeStat[] = [];
     public StatusStats: StatusStat[] = [];
-    public Labels: VersionLabelEntityType[] = [];
-    public FilteredLabels: VersionLabelEntityType[] = [];
+    public Labels: MJVersionLabelEntityType[] = [];
+    public FilteredLabels: MJVersionLabelEntityType[] = [];
     public ItemCountMap = new Map<string, number>();
 
     // Filters
@@ -128,9 +128,9 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
             ]);
 
             if (labelsResult.Success) {
-                this.Labels = labelsResult.Results as VersionLabelEntityType[];
+                this.Labels = labelsResult.Results as MJVersionLabelEntityType[];
                 const items = itemsResult.Success
-                    ? itemsResult.Results as VersionLabelItemEntityType[]
+                    ? itemsResult.Results as MJVersionLabelItemEntityType[]
                     : [];
                 this.ItemCountMap = this.buildItemCountMap(items);
                 this.computeStats();
@@ -145,7 +145,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
         }
     }
 
-    private buildItemCountMap(items: VersionLabelItemEntityType[]): Map<string, number> {
+    private buildItemCountMap(items: MJVersionLabelItemEntityType[]): Map<string, number> {
         const counts = new Map<string, number>();
         for (const item of items) {
             const labelId = item.VersionLabelID ?? '';
@@ -257,7 +257,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
         this.cdr.markForCheck();
     }
 
-    private sortLabels(labels: VersionLabelEntityType[]): VersionLabelEntityType[] {
+    private sortLabels(labels: MJVersionLabelEntityType[]): MJVersionLabelEntityType[] {
         const dir = this.SortDirection === 'asc' ? 1 : -1;
         return [...labels].sort((a, b) => {
             switch (this.SortField) {
@@ -337,7 +337,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
         }
     }
 
-    public OnLabelClick(label: VersionLabelEntityType): void {
+    public OnLabelClick(label: MJVersionLabelEntityType): void {
         this.SelectedLabel = label;
         this.ShowDetailPanel = true;
         this.cdr.markForCheck();
@@ -471,11 +471,11 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
         return `${(ms / 1000).toFixed(1)}s`;
     }
 
-    public IsGroupParent(label: VersionLabelEntityType): boolean {
+    public IsGroupParent(label: MJVersionLabelEntityType): boolean {
         return !label.RecordID && !label.ParentID && !!label.EntityID;
     }
 
-    public GetChildLabels(parentId: string | undefined): VersionLabelEntityType[] {
+    public GetChildLabels(parentId: string | undefined): MJVersionLabelEntityType[] {
         if (!parentId) return [];
         return this.Labels.filter(l => l.ParentID === parentId);
     }

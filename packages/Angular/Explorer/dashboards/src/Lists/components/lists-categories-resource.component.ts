@@ -1,12 +1,12 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, ListCategoryEntity, ListEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJListCategoryEntity, MJListEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 interface CategoryViewModel {
-  category: ListCategoryEntity;
+  category: MJListCategoryEntity;
   listCount: number;
   childCount: number;
   depth: number;
@@ -914,14 +914,14 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   private destroy$ = new Subject<void>();
 
   isLoading = true;
-  categories: ListCategoryEntity[] = [];
+  categories: MJListCategoryEntity[] = [];
   categoryViewModels: CategoryViewModel[] = [];
-  selectedCategory: ListCategoryEntity | null = null;
-  selectedCategoryLists: ListEntity[] = [];
+  selectedCategory: MJListCategoryEntity | null = null;
+  selectedCategoryLists: MJListEntity[] = [];
 
   // Dialog
   showDialog = false;
-  editingCategory: ListCategoryEntity | null = null;
+  editingCategory: MJListCategoryEntity | null = null;
   dialogName = '';
   dialogDescription = '';
   dialogParentId: string | null = null;
@@ -933,10 +933,10 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   // Delete confirmation dialog
   showDeleteConfirm = false;
   deleteConfirmMessage = '';
-  private categoryToDelete: ListCategoryEntity | null = null;
+  private categoryToDelete: MJListCategoryEntity | null = null;
 
-  private listsByCategoryId: Map<string, ListEntity[]> = new Map();
-  private categoryMap: Map<string, ListCategoryEntity> = new Map();
+  private listsByCategoryId: Map<string, MJListEntity[]> = new Map();
+  private categoryMap: Map<string, MJListCategoryEntity> = new Map();
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -965,13 +965,13 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
       const [categoriesResult, listsResult] = await rv.RunViews([
         {
-          EntityName: 'List Categories',
+          EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object',
           CacheLocal: true  // Categories rarely change, cache for performance
         },
         {
-          EntityName: 'Lists',
+          EntityName: 'MJ: Lists',
           ExtraFilter: userId ? `UserID = '${userId}'` : '',
           ResultType: 'entity_object'
         }
@@ -982,8 +982,8 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         return;
       }
 
-      this.categories = categoriesResult.Results as ListCategoryEntity[];
-      const lists = listsResult.Results as ListEntity[];
+      this.categories = categoriesResult.Results as MJListCategoryEntity[];
+      const lists = listsResult.Results as MJListEntity[];
 
       // Build category map
       this.categoryMap.clear();
@@ -1015,7 +1015,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   private buildCategoryViewModels() {
     this.categoryViewModels = [];
 
-    const buildVm = (category: ListCategoryEntity, depth: number): CategoryViewModel => {
+    const buildVm = (category: MJListCategoryEntity, depth: number): CategoryViewModel => {
       const lists = this.listsByCategoryId.get(category.ID) || [];
       const children = this.categories.filter(c => c.ParentID === category.ID);
 
@@ -1028,7 +1028,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
       };
     };
 
-    const processCategory = (category: ListCategoryEntity, depth: number) => {
+    const processCategory = (category: MJListCategoryEntity, depth: number) => {
       this.categoryViewModels.push(buildVm(category, depth));
       const children = this.categories.filter(c => c.ParentID === category.ID);
       for (const child of children) {
@@ -1045,7 +1045,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   private buildAvailableParents() {
     this.availableParents = [{ ID: null, displayName: '(Top Level)' }];
 
-    const addCategory = (cat: ListCategoryEntity, prefix: string) => {
+    const addCategory = (cat: MJListCategoryEntity, prefix: string) => {
       // Exclude the editing category and its descendants
       if (this.editingCategory && this.isDescendantOf(cat, this.editingCategory)) {
         return;
@@ -1065,7 +1065,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     }
   }
 
-  private isDescendantOf(category: ListCategoryEntity, ancestor: ListCategoryEntity): boolean {
+  private isDescendantOf(category: MJListCategoryEntity, ancestor: MJListCategoryEntity): boolean {
     if (category.ID === ancestor.ID) return true;
     if (!category.ParentID) return false;
     const parent = this.categoryMap.get(category.ParentID);
@@ -1076,11 +1076,11 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     return this.categoryViewModels.filter(vm => !vm.category.ParentID);
   }
 
-  getChildCategories(parent: ListCategoryEntity): CategoryViewModel[] {
+  getChildCategories(parent: MJListCategoryEntity): CategoryViewModel[] {
     return this.categoryViewModels.filter(vm => vm.category.ParentID === parent.ID);
   }
 
-  hasChildren(category: ListCategoryEntity): boolean {
+  hasChildren(category: MJListCategoryEntity): boolean {
     return this.categories.some(c => c.ParentID === category.ID);
   }
 
@@ -1103,12 +1103,12 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     }
   }
 
-  selectCategory(category: ListCategoryEntity) {
+  selectCategory(category: MJListCategoryEntity) {
     this.selectedCategory = category;
     this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
   }
 
-  getParentCategoryName(category: ListCategoryEntity): string | null {
+  getParentCategoryName(category: MJListCategoryEntity): string | null {
     if (!category.ParentID) return null;
     return this.categoryMap.get(category.ParentID)?.Name || null;
   }
@@ -1214,12 +1214,12 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
     try {
       const md = new Metadata();
-      let category: ListCategoryEntity;
+      let category: MJListCategoryEntity;
 
       if (this.editingCategory) {
         category = this.editingCategory;
       } else {
-        category = await md.GetEntityObject<ListCategoryEntity>('List Categories');
+        category = await md.GetEntityObject<MJListCategoryEntity>('MJ: List Categories');
         category.UserID = md.CurrentUser!.ID;
       }
 

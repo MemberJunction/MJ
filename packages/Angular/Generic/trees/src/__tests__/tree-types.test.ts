@@ -62,10 +62,10 @@ describe('createDefaultBranchConfig', () => {
 
   it('should allow overrides', () => {
     const config = createDefaultBranchConfig({
-      EntityName: 'Query Categories',
+      EntityName: 'MJ: Query Categories',
       DefaultIcon: 'fa-solid fa-database'
     });
-    expect(config.EntityName).toBe('Query Categories');
+    expect(config.EntityName).toBe('MJ: Query Categories');
     expect(config.DefaultIcon).toBe('fa-solid fa-database');
     expect(config.DisplayField).toBe('Name'); // default preserved
   });
@@ -84,7 +84,7 @@ describe('createDefaultLeafConfig', () => {
 
   it('should allow overrides', () => {
     const config = createDefaultLeafConfig({
-      EntityName: 'Queries',
+      EntityName: 'MJ: Queries',
       ParentField: 'CategoryID'
     });
     expect(config.EntityName).toBe('Queries');

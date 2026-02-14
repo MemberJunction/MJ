@@ -1,13 +1,13 @@
 import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { ResourcePermissionEntity, UserEntity, UserNotificationEntity } from "../../generated/entity_subclasses";
+import { MJResourcePermissionEntity, MJUserEntity, MJUserNotificationEntity } from "../../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
 
 /**
  * Subclass for the Resource Permissiosn entity that implements some workflow logic
  */
-@RegisterClass(BaseEntity, 'Resource Permissions')  
-export class ResourcePermissionEntityExtended extends ResourcePermissionEntity  {
+@RegisterClass(BaseEntity, 'MJ: Resource Permissions')
+export class ResourcePermissionEntityExtended extends MJResourcePermissionEntity  {
     /**
      * This override encapsulates some busienss logic for the Resource Permissions entity as follows:
      * 1) Whenever a new permission record is created that has a status of "Requested", we generate a new Notifications record for the owner of the resource being requested
@@ -52,17 +52,17 @@ export class ResourcePermissionEntityExtended extends ResourcePermissionEntity  
                 // after we call super.Save() to actually save the record
                 if (await super.Save(options)) {
                     // now proceed with workflow logic if we saved
-                    const notification = await p.GetEntityObject<UserNotificationEntity>('User Notifications', this.ContextCurrentUser);
+                    const notification = await p.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications', this.ContextCurrentUser);
                     if (newRequest) {
                         // notify the owner of the resource that a new request was made
-                        const user = await p.GetEntityObject<UserEntity>('Users', this.ContextCurrentUser);
+                        const user = await p.GetEntityObject<MJUserEntity>('MJ: Users', this.ContextCurrentUser);
                         await user.Load(this.UserID);
                         notification.Title = `New Request for Access to ${this.ResourceType}`;
                         notification.Message = `A new request for access to ${this.ResourceType} record "${recordName}" has been made by ${user.Name} (${user.Email})`;
                         notification.ResourceTypeID = rtEntityRecord.ID; // the resource type here is Entity Record which means that the user who gets this notification can easily click on THIS record to approve/reject/etc
                         notification.ResourceRecordID = this.ID;
                         notification.ResourceConfiguration = JSON.stringify({
-                            Entity: "Resource Permissions",  
+                            Entity: "MJ: Resource Permissions",
                             ResourceRecordID: this.ResourceRecordID, // saving the resource record here to make it easy to find the request from the notification
                             ResourcePermissionID: this.ID // saving the resource permission here to make it easy to find the request from the notification
                         });

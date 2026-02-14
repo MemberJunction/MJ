@@ -1,12 +1,12 @@
 import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
-import { APIScopeEntity } from '@memberjunction/core-entities';
+import { MJAPIScopeEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLEncryptionClient } from '@memberjunction/graphql-dataprovider';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 /** Scope selection item */
 interface ScopeItem {
-    scope: APIScopeEntity;
+    scope: MJAPIScopeEntity;
     selected: boolean;
 }
 

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
@@ -749,7 +749,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef
   ) {}
 
-  get filteredConversations(): ConversationEntity[] {
+  get filteredConversations(): MJConversationEntity[] {
     if (!this.searchQuery || this.searchQuery.trim() === '') {
       return this.conversationData.conversations;
     }
@@ -848,7 +848,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.pinnedExpanded = !this.pinnedExpanded;
   }
 
-  selectConversation(conversation: ConversationEntity): void {
+  selectConversation(conversation: MJConversationEntity): void {
     this.conversationSelected.emit(conversation.ID);
     // Clear unread notifications when conversation is opened
     this.notificationService.markConversationAsRead(conversation.ID);
@@ -860,7 +860,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.newConversationRequested.emit();
   }
 
-  async renameConversation(conversation: ConversationEntity): Promise<void> {
+  async renameConversation(conversation: MJConversationEntity): Promise<void> {
     try {
       const result = await this.dialogService.input({
         title: 'Edit Conversation',
@@ -895,7 +895,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  async deleteConversation(conversation: ConversationEntity): Promise<void> {
+  async deleteConversation(conversation: MJConversationEntity): Promise<void> {
     try {
       const confirmed = await this.dialogService.confirm({
         title: 'Delete Conversation',
@@ -922,7 +922,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.openMenuConversationId = null;
   }
 
-  async togglePin(conversation: ConversationEntity, event?: Event): Promise<void> {
+  async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
     try {
       await this.conversationData.togglePin(conversation.ID, this.currentUser);
@@ -999,7 +999,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  handleConversationClick(conversation: ConversationEntity): void {
+  handleConversationClick(conversation: MJConversationEntity): void {
     if (this.isSelectionMode) {
       this.toggleConversationSelection(conversation.ID);
     } else {

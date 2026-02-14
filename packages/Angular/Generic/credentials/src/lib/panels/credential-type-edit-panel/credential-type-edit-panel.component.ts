@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit } from '@angular/core';
-import { CredentialTypeEntity } from '@memberjunction/core-entities';
+import { MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -23,11 +23,11 @@ interface SchemaField {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CredentialTypeEditPanelComponent implements OnInit {
-    @Input() credentialType: CredentialTypeEntity | null = null;
+    @Input() credentialType: MJCredentialTypeEntity | null = null;
     @Input() isOpen = false;
 
     @Output() close = new EventEmitter<void>();
-    @Output() saved = new EventEmitter<CredentialTypeEntity>();
+    @Output() saved = new EventEmitter<MJCredentialTypeEntity>();
     @Output() deleted = new EventEmitter<string>();
 
     public isLoading = false;
@@ -59,7 +59,7 @@ export class CredentialTypeEditPanelComponent implements OnInit {
         return this.name.trim().length > 0 && this.category.length > 0;
     }
 
-    public async open(credentialType: CredentialTypeEntity | null): Promise<void> {
+    public async open(credentialType: MJCredentialTypeEntity | null): Promise<void> {
         this.isLoading = true;
         this.isOpen = true;
         this.credentialType = credentialType;
@@ -85,7 +85,7 @@ export class CredentialTypeEditPanelComponent implements OnInit {
         this.schemaFields = [];
     }
 
-    private populateFromType(credentialType: CredentialTypeEntity): void {
+    private populateFromType(credentialType: MJCredentialTypeEntity): void {
         this.name = credentialType.Name || '';
         this.description = credentialType.Description || '';
         this.category = credentialType.Category || 'Integration';
@@ -203,10 +203,10 @@ export class CredentialTypeEditPanelComponent implements OnInit {
         this.cdr.markForCheck();
 
         try {
-            let entity: CredentialTypeEntity;
+            let entity: MJCredentialTypeEntity;
 
             if (this.isNew) {
-                entity = await this._metadata.GetEntityObject<CredentialTypeEntity>('MJ: Credential Types');
+                entity = await this._metadata.GetEntityObject<MJCredentialTypeEntity>('MJ: Credential Types');
             } else {
                 entity = this.credentialType!;
             }

@@ -219,8 +219,6 @@ import { FormsModule } from '@angular/forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
-import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
 import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
@@ -334,9 +332,7 @@ imports: [
     LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    MJTabStripModule,
-    ContainerDirectivesModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
+    LinkDirectivesModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
 ],
 exports: [
 ]
@@ -818,13 +814,20 @@ ${indentedFormHTML}
             // Calculate section key before generation (may be replaced later if duplicate)
             const sectionKey = this.camelCase(tabName);
 
-            const component = await RelatedEntityDisplayComponentGeneratorBase.GetComponent(relatedEntity, contextUser);
-            const generateResults = await component.Generate({
-                Entity: entity,
-                RelationshipInfo: relatedEntity,
-                TabName: tabName,
-                SectionKey: sectionKey  // Pass section key for IsSectionExpanded() calls
-            });
+            let generateResults: GenerationResult;
+            try {
+                const component = await RelatedEntityDisplayComponentGeneratorBase.GetComponent(relatedEntity, contextUser);
+                generateResults = await component.Generate({
+                    Entity: entity,
+                    RelationshipInfo: relatedEntity,
+                    TabName: tabName,
+                    SectionKey: sectionKey  // Pass section key for IsSectionExpanded() calls
+                });
+            }
+            catch (genErr) {
+                logStatus(`   WARNING: Skipping related entity tab "${tabName}" for entity "${entity.Name}" — component generation failed: ${genErr instanceof Error ? genErr.message : genErr}`);
+                continue; // Skip this tab, keep generating the rest
+            }
             // Add proper indentation for collapsible panel body (12 spaces for div content)
             const componentCodeWithIndent = generateResults.TemplateOutput.split('\n').map(l => `            ${l}`).join('\n')
 

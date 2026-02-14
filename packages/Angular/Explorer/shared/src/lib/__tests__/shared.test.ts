@@ -44,8 +44,8 @@ vi.mock('@memberjunction/core', () => ({
 vi.mock('@memberjunction/core-entities', () => ({
   ResourcePermissionEngine: { Instance: { ResourceTypes: [] } },
   UserInfoEngine: { Instance: { GetSetting: vi.fn(), SetSetting: vi.fn() } },
-  ResourceTypeEntity: class {},
-  UserNotificationEntity: class {},
+  MJResourceTypeEntity: class {},
+  MJUserNotificationEntity: class {},
   ArtifactMetadataEngine: { Instance: { Config: vi.fn() } },
   DashboardEngine: { Instance: { Config: vi.fn() } },
   ViewColumnInfo: class {},
@@ -259,7 +259,7 @@ describe('SharedService resource type mapping', () => {
     const svc = new SharedService(notif as never, mjNotif as never, injector as never);
 
     expect(svc.mapResourceTypeNameToRouteSegment('Records')).toBe('record');
-    expect(svc.mapResourceTypeNameToRouteSegment('User Views')).toBe('view');
+    expect(svc.mapResourceTypeNameToRouteSegment('MJ: User Views')).toBe('view');
     expect(svc.mapResourceTypeNameToRouteSegment('Dashboards')).toBe('dashboard');
     expect(svc.mapResourceTypeNameToRouteSegment('Reports')).toBe('report');
     expect(svc.mapResourceTypeNameToRouteSegment('Search Results')).toBe('search');

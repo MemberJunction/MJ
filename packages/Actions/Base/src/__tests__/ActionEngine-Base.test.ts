@@ -26,42 +26,42 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-    ActionCategoryEntity: class ActionCategoryEntity {
+    MJActionCategoryEntity: class MJActionCategoryEntity {
         ID: string = '';
         ParentID: string | null = null;
     },
-    ActionEntity: class ActionEntity {
+    MJActionEntity: class MJActionEntity {
         ID: string = '';
         Name: string = '';
         CategoryID: string = '';
     },
-    ActionExecutionLogEntity: class ActionExecutionLogEntity {},
-    ActionFilterEntity: class ActionFilterEntity {},
-    ActionLibraryEntity: class ActionLibraryEntity {
+    MJActionExecutionLogEntity: class MJActionExecutionLogEntity {},
+    MJActionFilterEntity: class MJActionFilterEntity {},
+    MJActionLibraryEntity: class MJActionLibraryEntity {
         ActionID: string = '';
     },
-    ActionParamEntity: class ActionParamEntity {
+    MJActionParamEntity: class MJActionParamEntity {
         ActionID: string = '';
     },
-    ActionResultCodeEntity: class ActionResultCodeEntity {
+    MJActionResultCodeEntity: class MJActionResultCodeEntity {
         ActionID: string = '';
     },
-    EntityActionEntity: class EntityActionEntity {
+    MJEntityActionEntity: class MJEntityActionEntity {
         ID: string = '';
         EntityID: string = '';
         Entity: string = '';
         Status: string = '';
     },
-    EntityActionFilterEntity: class EntityActionFilterEntity {
+    MJEntityActionFilterEntity: class MJEntityActionFilterEntity {
         EntityActionID: string = '';
     },
-    EntityActionInvocationEntity: class EntityActionInvocationEntity {
+    MJEntityActionInvocationEntity: class MJEntityActionInvocationEntity {
         EntityActionID: string = '';
         InvocationType: string = '';
         Status: string = '';
     },
-    EntityActionInvocationTypeEntity: class EntityActionInvocationTypeEntity {},
-    EntityActionParamEntity: class EntityActionParamEntity {
+    MJEntityActionInvocationTypeEntity: class MJEntityActionInvocationTypeEntity {},
+    MJEntityActionParamEntity: class MJEntityActionParamEntity {
         EntityActionID: string = '';
     }
 }));

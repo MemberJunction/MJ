@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { table } from 'table';
-import { AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import type { RunSummary, StepDetail, ErrorAnalysis } from '../services/AgentAuditService';
 
 export type AuditOutputFormat = 'compact' | 'json' | 'table' | 'markdown';
@@ -12,7 +12,7 @@ export class AuditFormatter {
   /**
    * Format list of agent runs
    */
-  formatRunList(runs: AIAgentRunEntity[], format: AuditOutputFormat): string {
+  formatRunList(runs: MJAIAgentRunEntity[], format: AuditOutputFormat): string {
     if (runs.length === 0) {
       return chalk.yellow('No runs found matching the specified criteria.');
     }
@@ -32,7 +32,7 @@ export class AuditFormatter {
   /**
    * Format run list as compact text
    */
-  private formatRunListCompact(runs: AIAgentRunEntity[]): string {
+  private formatRunListCompact(runs: MJAIAgentRunEntity[]): string {
     let output = chalk.bold(`Found ${runs.length} run(s):\n\n`);
 
     runs.forEach(run => {
@@ -51,7 +51,7 @@ export class AuditFormatter {
   /**
    * Format run list as table
    */
-  private formatRunListTable(runs: AIAgentRunEntity[]): string {
+  private formatRunListTable(runs: MJAIAgentRunEntity[]): string {
     const headers = [
       chalk.bold('Run ID'),
       chalk.bold('Agent'),

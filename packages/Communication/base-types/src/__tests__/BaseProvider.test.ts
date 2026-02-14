@@ -11,9 +11,9 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    CommunicationProviderEntity: class {},
-    CommunicationProviderMessageTypeEntity: class {},
-    CommunicationRunEntity: class {},
+    MJCommunicationProviderEntity: class {},
+    MJCommunicationProviderMessageTypeEntity: class {},
+    MJCommunicationRunEntity: class {},
     TemplateEntityExtended: class {},
 }));
 

@@ -3,7 +3,7 @@
     "fields": {
       "Name": "rerank-v3.5",
       "Description": "Cohere Rerank v3.5 - Latest semantic reranking model with state-of-the-art performance for English content. Optimized for RAG retrieval quality improvement.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Reranker",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
       "PowerRank": 100,
       "IsActive": true,
       "SpeedRank": 0,
@@ -39,15 +39,15 @@
       "ID": "1AF4B81D-B7A2-41E4-8514-E72A619E63DE"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.560Z",
-      "checksum": "65b5b691639977f0590170fba28d74ef3789a6082b00ebcef3e2c4ee60f823c0"
+      "lastModified": "2026-02-13T21:08:31.455Z",
+      "checksum": "e2e0872917c631bf49aa95a112e34233f1e43b21f18c2356b0ded52bd70e2435"
     }
   },
   {
     "fields": {
       "Name": "rerank-multilingual-v3.0",
       "Description": "Cohere Rerank Multilingual v3.0 - Semantic reranking model supporting 100+ languages for global RAG deployments.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Reranker",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
       "PowerRank": 80,
       "IsActive": true,
       "SpeedRank": 0,
@@ -83,8 +83,8 @@
       "ID": "2E8F662B-3842-41E1-87BF-3C14541BF93B"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.555Z",
-      "checksum": "f0bd7197e468d5c6ed36615bbce9d6162ab3a52e42dfab9b08bdf81b9a310e5a"
+      "lastModified": "2026-02-13T21:08:31.458Z",
+      "checksum": "9e41002d02f78716a1e15c6d1fa367b913503b2b65f8f40a509dab7e8d0747f4"
     }
   }
 ]

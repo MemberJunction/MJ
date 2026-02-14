@@ -6,7 +6,7 @@ import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity, ConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
@@ -119,8 +119,8 @@ export class ConversationAgentService {
    */
   async processMessage(
     conversationId: string,
-    message: ConversationDetailEntity,
-    conversationHistory: ConversationDetailEntity[],
+    message: MJConversationDetailEntity,
+    conversationHistory: MJConversationDetailEntity[],
     conversationDetailId: string,
     onProgress?: AgentExecutionProgressCallback
   ): Promise<ExecuteAgentResult | null> {
@@ -218,7 +218,7 @@ export class ConversationAgentService {
    */
   public findConfigurationPresetFromHistory(
     agentId: string,
-    conversationHistory: ConversationDetailEntity[]
+    conversationHistory: MJConversationDetailEntity[]
   ): string | undefined {
     // Search backwards through history for User messages that @mention this agent with a configId
     const userMentionWithConfig = conversationHistory
@@ -260,7 +260,7 @@ export class ConversationAgentService {
    * compatibility with other callers that may need client-side message building.
    */
   private async buildAgentMessages(
-    history: ConversationDetailEntity[]
+    history: MJConversationDetailEntity[]
   ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
 
@@ -351,7 +351,7 @@ export class ConversationAgentService {
     artifactsByDetailId: Map<string, string[]>
   ): Promise<boolean> {
     try {
-      const junctionResult = await rv.RunView<ConversationDetailArtifactEntity>({
+      const junctionResult = await rv.RunView<MJConversationDetailArtifactEntity>({
         EntityName: 'MJ: Conversation Detail Artifacts',
         ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
         ResultType: 'entity_object'
@@ -365,7 +365,7 @@ export class ConversationAgentService {
         }
 
         // Batch load all artifact versions
-        const versionResult = await rv.RunView<ArtifactVersionEntity>({
+        const versionResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
           ResultType: 'entity_object'
@@ -404,7 +404,7 @@ export class ConversationAgentService {
       const filter = `ConversationDetailID IN ('${messageIds.join("','")}')`;
       console.log('[AgentService] loadAttachmentsForMessages - filter:', filter);
 
-      const attachmentResult = await rv.RunView<ConversationDetailAttachmentEntity>({
+      const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
         EntityName: 'MJ: Conversation Detail Attachments',
         ExtraFilter: filter,
         OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
@@ -443,9 +443,9 @@ export class ConversationAgentService {
   }
 
   /**
-   * Convert a ConversationDetailAttachmentEntity to AttachmentData format
+   * Convert a MJConversationDetailAttachmentEntity to AttachmentData format
    */
-  private convertToAttachmentData(att: ConversationDetailAttachmentEntity): AttachmentData | null {
+  private convertToAttachmentData(att: MJConversationDetailAttachmentEntity): AttachmentData | null {
     // Get the content - either inline data or file URL
     let content: string | null = null;
 
@@ -519,8 +519,8 @@ export class ConversationAgentService {
   async invokeSubAgent(
     agentName: string,
     conversationId: string,
-    message: ConversationDetailEntity,
-    conversationHistory: ConversationDetailEntity[],
+    message: MJConversationDetailEntity,
+    conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
     conversationDetailId: string,
     payload?: any,
@@ -613,7 +613,7 @@ export class ConversationAgentService {
   async checkAgentContinuityIntent(
     agentId: string,
     latestMessage: string,
-    conversationHistory: ConversationDetailEntity[],
+    conversationHistory: MJConversationDetailEntity[],
     context: ArtifactLookupContext
   ): Promise<IntentCheckResult> {
     if (!this._aiClient) {
@@ -780,7 +780,7 @@ ${compactHistory}${artifactContext}
    */
   private findAllAgentArtifacts(
     agentId: string,
-    conversationDetails: ConversationDetailEntity[],
+    conversationDetails: MJConversationDetailEntity[],
     context: ArtifactLookupContext
   ): Array<{
     artifactId: string;

@@ -207,12 +207,21 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
         const md = new Metadata();
         const e = md.EntityByName(entityName);
         if (!e)
-            throw new Error("Could not find entity " + entityName);
+            throw new Error(`Could not find entity "${entityName}". Verify the entity name is correct and includes any required prefix (e.g., "MJ: ").`);
 
         // now find the field in e that matches the related entity
         const field = e.Fields.find(f => f.RelatedEntity === relatedEntityName);
-        if (!field)
-            throw new Error("Could not find a foreign key field in entity " + entityName + " that links to " + relatedEntityName);
+        if (!field) {
+            const fkFields = e.Fields.filter(f => f.RelatedEntity && f.RelatedEntity.length > 0);
+            const available = fkFields.length > 0
+                ? fkFields.map(f => `${f.Name} -> ${f.RelatedEntity}`).join(', ')
+                : '(none)';
+            throw new Error(
+                `Could not find a foreign key field in entity "${entityName}" that links to "${relatedEntityName}". ` +
+                `Available FK fields: [${available}]. ` +
+                `Check if the entity name in DisplayComponentConfiguration JSON needs updating (e.g., adding "MJ: " prefix).`
+            );
+        }
 
         return field;
     }

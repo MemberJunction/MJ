@@ -54,7 +54,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    TemplateContentEntity: class {},
+    MJTemplateContentEntity: class {},
     TemplateEntityExtended: class {},
 }));
 

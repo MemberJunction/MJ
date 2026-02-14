@@ -11,7 +11,7 @@ import {
     LogStatusEx,
     IsVerboseLoggingEnabled
 } from '@memberjunction/core';
-import { ScheduledJobEntity, ScheduledJobRunEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { ScheduledJobResult, NotificationChannel } from '@memberjunction/scheduling-base-types';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
@@ -174,12 +174,12 @@ export class SchedulingEngine extends SchedulingEngineBase {
     public async ExecuteScheduledJobs(
         contextUser: UserInfo,
         evalTime: Date = new Date()
-    ): Promise<ScheduledJobRunEntity[]> {
+    ): Promise<MJScheduledJobRunEntity[]> {
         await this.Config(false, contextUser);
 
         console.log(`📅 Polling: Checking ${this.ScheduledJobs.length} job(s) at ${evalTime.toISOString()}`);
 
-        const runs: ScheduledJobRunEntity[] = [];
+        const runs: MJScheduledJobRunEntity[] = [];
 
         for (const job of this.ScheduledJobs) {
             console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt?.toISOString() || 'NULL'}, Status=${job.Status}`);
@@ -218,7 +218,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
     public async ExecuteScheduledJob(
         jobId: string,
         contextUser: UserInfo
-    ): Promise<ScheduledJobRunEntity> {
+    ): Promise<MJScheduledJobRunEntity> {
         await this.Config(false, contextUser);
 
         const job = this.ScheduledJobs.find(j => j.ID === jobId);
@@ -237,7 +237,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @returns True if the job should execute now
      * @private
      */
-    private isJobDue(job: ScheduledJobEntity, evalTime: Date): boolean {
+    private isJobDue(job: MJScheduledJobEntity, evalTime: Date): boolean {
         // Check date range
         if (job.StartAt && evalTime < job.StartAt) {
             return false;
@@ -264,9 +264,9 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @private
      */
     private async executeJob(
-        job: ScheduledJobEntity,
+        job: MJScheduledJobEntity,
         contextUser: UserInfo
-    ): Promise<ScheduledJobRunEntity> {
+    ): Promise<MJScheduledJobRunEntity> {
         // Try to acquire lock for this job
         const lockAcquired = await this.tryAcquireLock(job);
 
@@ -368,11 +368,11 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @private
      */
     private async createJobRun(
-        job: ScheduledJobEntity,
+        job: MJScheduledJobEntity,
         contextUser: UserInfo
-    ): Promise<ScheduledJobRunEntity> {
+    ): Promise<MJScheduledJobRunEntity> {
         const md = new Metadata();
-        const run = await md.GetEntityObject<ScheduledJobRunEntity>(
+        const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser
         );
@@ -395,7 +395,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @private
      */
     private async updateJobStatistics(
-        job: ScheduledJobEntity,
+        job: MJScheduledJobEntity,
         success: boolean,
         runId: string
     ): Promise<void> {
@@ -424,7 +424,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @private
      */
     private async sendNotificationsIfNeeded(
-        job: ScheduledJobEntity,
+        job: MJScheduledJobEntity,
         context: ScheduledJobExecutionContext,
         result: ScheduledJobResult,
         plugin: BaseScheduledJob
@@ -466,7 +466,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @returns True if lock acquired, false if already locked
      * @private
      */
-    private async tryAcquireLock(job: ScheduledJobEntity): Promise<boolean> {
+    private async tryAcquireLock(job: MJScheduledJobEntity): Promise<boolean> {
         // Check if already locked and not stale
         console.log(`    🔒 tryAcquireLock: job.LockToken=${job.LockToken?.substring(0, 8) || 'NULL'}, ExpectedCompletionAt=${job.ExpectedCompletionAt?.toISOString() || 'NULL'}`);
 
@@ -542,7 +542,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @param job - The job to unlock
      * @private
      */
-    private async releaseLock(job: ScheduledJobEntity): Promise<void> {
+    private async releaseLock(job: MJScheduledJobEntity): Promise<void> {
         try {
             job.LockToken = null;
             job.LockedAt = null;
@@ -560,7 +560,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @param job - The job with stale lock
      * @private
      */
-    private async cleanupStaleLock(job: ScheduledJobEntity): Promise<void> {
+    private async cleanupStaleLock(job: MJScheduledJobEntity): Promise<void> {
         this.log(`Cleaning up stale lock on job ${job.Name} (locked by ${job.LockedByInstance})`);
         await this.releaseLock(job);
     }
@@ -574,11 +574,11 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * @private
      */
     private async createQueuedJobRun(
-        job: ScheduledJobEntity,
+        job: MJScheduledJobEntity,
         contextUser: UserInfo
-    ): Promise<ScheduledJobRunEntity> {
+    ): Promise<MJScheduledJobRunEntity> {
         const md = new Metadata();
-        const run = await md.GetEntityObject<ScheduledJobRunEntity>(
+        const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser
         );

@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, CommunicationRunEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCommunicationRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
@@ -236,7 +236,7 @@ import { RunView } from '@memberjunction/core';
   `]
 })
 export class CommunicationRunsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    public runs: CommunicationRunEntity[] = [];
+    public runs: MJCommunicationRunEntity[] = [];
     public isLoading = false;
     public summary = {
         active: 0,
@@ -266,24 +266,24 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
             const yesterdayIso = yesterday.toISOString();
 
             const [runsResult, activeResult, completedResult, failedResult] = await Promise.all([
-                rv.RunView<CommunicationRunEntity>({
-                    EntityName: 'Communication Runs',
+                rv.RunView<MJCommunicationRunEntity>({
+                    EntityName: 'MJ: Communication Runs',
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 50,
                     ResultType: 'entity_object'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Runs',
+                    EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `Status = 'In-Progress'`,
                     ResultType: 'count_only'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Runs',
+                    EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `EndedAt >= '${yesterdayIso}' AND Status = 'Complete'`,
                     ResultType: 'count_only'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Runs',
+                    EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `EndedAt >= '${yesterdayIso}' AND Status = 'Failed'`,
                     ResultType: 'count_only'
                 })

@@ -92,7 +92,7 @@ export class MetadataExporter {
    *
    * Note: This method only creates the Query record.
    * QueryFields and QueryParameters are automatically extracted
-   * by QueryEntity.server.ts using AI analysis of the SQL template.
+   * by MJQueryEntity.server.ts using AI analysis of the SQL template.
    * This happens asynchronously during the Save() operation.
    *
    * @param query - Validated query to transform
@@ -119,7 +119,7 @@ export class MetadataExporter {
         UsesTemplate: true,
         Status: 'Pending'
       }
-      // relatedEntities removed - QueryEntity.server.ts handles extraction automatically
+      // relatedEntities removed - MJQueryEntity.server.ts handles extraction automatically
     };
   }
 

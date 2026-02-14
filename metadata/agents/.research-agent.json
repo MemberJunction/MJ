@@ -15,7 +15,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Database Research Agent Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Database Research Agent Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -23,8 +23,8 @@
             "ID": "9C9ECAB8-139C-4452-8EF3-896D2E1834CE"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.216Z",
-            "checksum": "60a33c8fb6e42dfaa4433b03606f9384560c43c9492c035db2a9642406fd0ced"
+            "lastModified": "2026-02-13T21:09:23.779Z",
+            "checksum": "acc85c8f0d888c6a0282c8574d49029f09cb83db712027e5df23adff99ecf22e"
           }
         }
       ],
@@ -55,33 +55,33 @@
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Entity Details",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Entity Details",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "E7BC67D1-22F6-47AC-9A3E-8EEA172BB349"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.217Z",
-            "checksum": "ea25c32d3cbb8186836a49d1e4d21e6680a679448673493a9fea14c5b075ce28"
+            "lastModified": "2026-02-13T21:09:23.780Z",
+            "checksum": "92455f8e2545c27c8abcae2c023f2fd838e5b780c9430bf238fe308effa4eccd"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Execute Research Query",
+            "ActionID": "@lookup:MJ: Actions.Name=Execute Research Query",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "ED43ED4D-2701-4978-A971-A00106E8757F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.218Z",
-            "checksum": "64ddd6dc6f8d3402dcf7f00b1c93af3a87c607fca040a5c319e5268a937d1b3b"
+            "lastModified": "2026-02-13T21:09:23.782Z",
+            "checksum": "3a9ed68c620a32ff70c017ae8b88472a30d1336bf7c27e3244dc11e382c1f6e1"
           }
         }
       ],
@@ -89,7 +89,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "codeAnalysis[]"
@@ -102,8 +102,8 @@
             "ID": "78270AE2-0FCD-4E07-B6A8-C581D18F31FA"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.219Z",
-            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+            "lastModified": "2026-02-13T21:09:23.783Z",
+            "checksum": "7a24335c70b69b4d6a23b08097fc0c497fa9f09fefafdb6b1af9f1e4ef0a56d9"
           }
         }
       ]
@@ -132,7 +132,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=File Research Agent Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=File Research Agent Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -140,94 +140,94 @@
             "ID": "CDC20F26-DE77-42D1-A30F-A3B34EBA8106"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.221Z",
-            "checksum": "5a2182f648313def831c7576bc0c12a2c0fd652b905849f47d9fa0f52552a8c8"
+            "lastModified": "2026-02-13T21:09:23.784Z",
+            "checksum": "a0299f22aa169549335d6cdf89d03a7160d2cd9286d0e61cb7370489ab859570"
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=List Storage Providers",
+            "ActionID": "@lookup:MJ: Actions.Name=List Storage Providers",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "1755B56E-6648-4198-9B70-0DFED107F827"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.222Z",
-            "checksum": "a618bbd787f3b93611f5958a64b3b0b8c6dd43951020ec2768c7196c625feeb0"
+            "lastModified": "2026-02-13T21:09:23.786Z",
+            "checksum": "d5aa14a7c5f9035cb4e0e07d10c65f090ab35be8c9253f74c22579d358350009"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Search Storage Files",
+            "ActionID": "@lookup:MJ: Actions.Name=Search Storage Files",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "5CBAF259-2028-4643-981F-6B740B7C4CB2"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.223Z",
-            "checksum": "0bdad7bbf184d19aa9529f3b85fec1e6d22c6af2ea1cd7d6f7930990fc0eae45"
+            "lastModified": "2026-02-13T21:09:23.787Z",
+            "checksum": "72af72676482a925a3600f90d656724e28706b9b5bfc476a2fe023f28c63642d"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=File Storage: Get File Content",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Get File Content",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "1A53B7ED-BCF4-4656-AF5C-277E21E12F36"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.225Z",
-            "checksum": "79e6ecd6ccac6f845e9112da735e51bd4ceaa1fe6d5c1b416a6548c3b8a6c2e7"
+            "lastModified": "2026-02-13T21:09:23.788Z",
+            "checksum": "156be663b226c216b0044a5c7c3c1889ed12420d3df927c20f37308323c8c3d8"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=File Storage: Get Object Metadata",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Get Object Metadata",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "BECD0806-3A02-4A0B-A747-058BF2EC7054"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.226Z",
-            "checksum": "3677d9d052e782b20e830e60adfeaf5037a6bb68e3da458af4a7c97c32e63843"
+            "lastModified": "2026-02-13T21:09:23.789Z",
+            "checksum": "2a4c4c91755c857e3d95b9bf27d8f1e5e81b19d20fd22bcc51aca8b7d6209d7b"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=File Storage: Get Download URL",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Get Download URL",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "99897734-2055-4DEF-A0A2-519E2CE8EA37"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.321Z",
-            "checksum": "ba62e17453bfe466b52fd4c9a5fd6a340664b63c9f1922076262b9b8e9354905"
+            "lastModified": "2026-02-13T21:09:23.979Z",
+            "checksum": "70392b7e30347ac8cbbd2b30ef17ae520fdb35f2fec9fce5434df3afe65bdcaa"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=File Storage: List Objects",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: List Objects",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "3E42D14C-B739-4ADA-AA40-9DE95CEDCC24"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.322Z",
-            "checksum": "f11dda88bcb54c44e86a1918da081c5159567e619c8bf1587f89b85051eba14d"
+            "lastModified": "2026-02-13T21:09:23.981Z",
+            "checksum": "78558c71cbfb2759018a8685d77bf0601f4b14529fbec57cdf2a096e31cecf2c"
           }
         }
       ],
@@ -235,7 +235,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "codeAnalysis[]"
@@ -248,8 +248,8 @@
             "ID": "4DFF6A3D-E25F-42E6-A5D1-52AFA4B00C81"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.324Z",
-            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+            "lastModified": "2026-02-13T21:09:23.983Z",
+            "checksum": "7a24335c70b69b4d6a23b08097fc0c497fa9f09fefafdb6b1af9f1e4ef0a56d9"
           }
         }
       ]
@@ -278,7 +278,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Web Research Agent Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Web Research Agent Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -286,38 +286,38 @@
             "ID": "A43CFA03-C714-4BEF-80CE-C0D120EF6EB8"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.325Z",
-            "checksum": "76094ed674174e2dee3bd89cdf8cff3c0bf69e281f58f04a329a28a1a5621840"
+            "lastModified": "2026-02-13T21:09:23.984Z",
+            "checksum": "3c22c7ecf42f908a837b49562eb78590665772e6e6815256c87f3666bc3e4f8b"
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "206B25BD-3E23-48DF-96D6-651A8459BEDD"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.326Z",
-            "checksum": "f77f9c9fa004ae6fe97329180928ccb5cbb16fe7ec0f427da2e4e7b789861c22"
+            "lastModified": "2026-02-13T21:09:23.986Z",
+            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Summarize Content",
+            "ActionID": "@lookup:MJ: Actions.Name=Summarize Content",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "6D3D1967-346E-494F-B448-D0B23F88FCD7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.327Z",
-            "checksum": "7e3b060f9a0e037ae13cb53ef8029b0256a01f1ddc1cc5530d19e3733e35fd15"
+            "lastModified": "2026-02-13T21:09:23.990Z",
+            "checksum": "28de8aa9430f37322c1e2c0ddb40b974147cfb2cffe72933bb32c9644037993b"
           }
         }
       ],
@@ -325,7 +325,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "codeAnalysis[]"
@@ -338,8 +338,8 @@
             "ID": "E23ACB34-4865-4F9A-89D0-9C1E19DCCF7B"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.329Z",
-            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+            "lastModified": "2026-02-13T21:09:23.992Z",
+            "checksum": "7a24335c70b69b4d6a23b08097fc0c497fa9f09fefafdb6b1af9f1e4ef0a56d9"
           }
         }
       ]
@@ -380,7 +380,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Research Agent - Main Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Research Agent - Main Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -388,12 +388,12 @@
             "ID": "D66B33D5-9066-4563-BF1B-88F28DFD2BCA"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.330Z",
-            "checksum": "d3e59885d711b5ee7d246160bb55a814655ca2997a9078c2b6d85e654204df5b"
+            "lastModified": "2026-02-13T21:09:23.994Z",
+            "checksum": "fe936dc4b6cea51a3508ebb5889c66106b72b0e272783d1aa863d0e9c11b5039"
           }
         }
       ],
-      "AI Agents": [
+      "MJ: AI Agents": [
         {
           "fields": {
             "Name": "Research Report Writer",
@@ -418,7 +418,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "PromptID": "@lookup:AI Prompts.Name=Research Report Writer Prompt",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Research Report Writer Prompt",
                   "ExecutionOrder": 0,
                   "Status": "Active"
                 },
@@ -426,108 +426,108 @@
                   "ID": "A11D2711-6A5B-4FF9-B5B3-F2F506F1EEF2"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.468Z",
-                  "checksum": "0ba0ec6b2096698c875dd34a22d3a559babf675db8af6cc09edd4d47e4e24b26"
+                  "lastModified": "2026-02-13T21:09:24.316Z",
+                  "checksum": "45c5d6f57f10a25584b97f628b100fa5b6e2a5f708539b3f5357bd4b159c6d79"
                 }
               }
             ],
-            "AI Agent Actions": [
+            "MJ: AI Agent Actions": [
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Create SVG Sketch Diagram",
+                  "ActionID": "@lookup:MJ: Actions.Name=Create SVG Sketch Diagram",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "9D2DACDB-49F0-4783-91D9-A2EF348B87DC"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.470Z",
-                  "checksum": "ec9f229c2517250eccf2c61e9980cdd79af3d83fe12ee1d4944caec93cc34cda"
+                  "lastModified": "2026-02-13T21:09:24.320Z",
+                  "checksum": "035a11491e2249b2a75c1ec416c1e4d5bb6a0f645f9c5abfd80afcde8106e8f8"
                 }
               },
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Create SVG Chart",
+                  "ActionID": "@lookup:MJ: Actions.Name=Create SVG Chart",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "4F3EA387-6CCC-4364-BB0C-C8ACAF1C5343"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.471Z",
-                  "checksum": "017773054aa09786b5f74ab920886a056cdf03e44cae1cb59be41cbf8a328544"
+                  "lastModified": "2026-02-13T21:09:24.322Z",
+                  "checksum": "65b9fff5cee41368bebd88a9eead48e77f9f8036d3c7c58b28dfe5f4b162179e"
                 }
               },
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Create SVG Diagram",
+                  "ActionID": "@lookup:MJ: Actions.Name=Create SVG Diagram",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "F5D1AF9E-09DA-4DD1-82CB-175120DD7498"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.472Z",
-                  "checksum": "8b98c2634ae3f74b0db43356a707a2e10507926e674a3c8d8d52eda5610b402c"
+                  "lastModified": "2026-02-13T21:09:24.324Z",
+                  "checksum": "44bc09ae37cb92f15ab38fd6bd7649ea3ce68c87ea5208894a52004c9577413a"
                 }
               },
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Create SVG Network",
+                  "ActionID": "@lookup:MJ: Actions.Name=Create SVG Network",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "A6A64D5E-1061-4845-B539-9CC5355B5227"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.473Z",
-                  "checksum": "ec7ea85529946cba92e7caf6aa886fa1113345c1a6eb050f417f691f2197ee80"
+                  "lastModified": "2026-02-13T21:09:24.326Z",
+                  "checksum": "2a7601288aeee54aef3d7097b3451c8880c1dfe5a4d83b0e75417ddeeac095ce"
                 }
               },
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Create SVG Word Cloud",
+                  "ActionID": "@lookup:MJ: Actions.Name=Create SVG Word Cloud",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "B6A57192-803F-46B4-9A91-ABBE99ABA551"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.474Z",
-                  "checksum": "0ba70a5528f6d5333a949199b5c874ba28300d40250c7e68479c69fdcf812489"
+                  "lastModified": "2026-02-13T21:09:24.328Z",
+                  "checksum": "7b428e942e75794088e08f6d8c10900fa27aacbb7b124074c87ace8068d10722"
                 }
               },
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Create Mermaid Diagram",
+                  "ActionID": "@lookup:MJ: Actions.Name=Create Mermaid Diagram",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "9FD498B7-423E-4039-8AE3-10260202549C"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.475Z",
-                  "checksum": "f80fec83ab753821ee8a23c7cbba8eca982e54743e23c7688d397cd311450d5b"
+                  "lastModified": "2026-02-13T21:09:24.330Z",
+                  "checksum": "ad8e9698c7683cbe4ac9e924c47b03e348026b0d8c118e1270a1b4bb60bf60d0"
                 }
               },
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Generate Image",
+                  "ActionID": "@lookup:MJ: Actions.Name=Generate Image",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "13D6F266-04A0-467A-8A71-96D9CE4AA4BC"
                 },
                 "sync": {
-                  "lastModified": "2026-01-13T23:45:24.319Z",
-                  "checksum": "79e6bc17002f1592f4f4b2e362be1f2e982048b8904ff97e9b663424c51fda38"
+                  "lastModified": "2026-02-13T21:09:24.332Z",
+                  "checksum": "4a9447b3f1107b741f1dd561bb10bf06fdccd154626325f10a5dc0f340a43b78"
                 }
               }
             ],
@@ -535,7 +535,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "SubAgentID": "@lookup:AI Agents.Name=Infographic Agent",
+                  "SubAgentID": "@lookup:MJ: AI Agents.Name=Infographic Agent",
                   "Status": "Active",
                   "SubAgentOutputMapping": {
                     "*": "visualizations"
@@ -548,14 +548,14 @@
                   "ID": "75E27303-EA65-4EC6-A104-DF63359BCA61"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.477Z",
-                  "checksum": "71d4fa11bd0a8bba8548f3de08095e59049e6f5f7d39980e368ffd699b0da40f"
+                  "lastModified": "2026-02-13T21:09:24.334Z",
+                  "checksum": "17458349dd91d48f7b30de9bc4145fa773281a833b7e7ecc356c65b9b5851b15"
                 }
               },
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+                  "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
                   "Status": "Active",
                   "SubAgentOutputMapping": {
                     "*": "codeAnalysis[]"
@@ -568,8 +568,8 @@
                   "ID": "26243E8B-A3F5-48F6-81DE-3B9F74E63531"
                 },
                 "sync": {
-                  "lastModified": "2025-12-30T23:07:35.478Z",
-                  "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+                  "lastModified": "2026-02-13T21:09:24.338Z",
+                  "checksum": "7a24335c70b69b4d6a23b08097fc0c497fa9f09fefafdb6b1af9f1e4ef0a56d9"
                 }
               }
             ]
@@ -587,7 +587,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Web Research Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Web Research Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "webResearch"
@@ -600,14 +600,14 @@
             "ID": "EC2EE264-31B8-42CE-AE9A-9177ACFC2947"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.304Z",
-            "checksum": "a74175c37d10a15a4df7a375dd1b5e83d04ba571b2bd847f11efecbe77bf6bfa"
+            "lastModified": "2026-02-13T21:09:23.946Z",
+            "checksum": "d022b2499d931486a92ca2f7545251784094b06d3039ea29a3db8a3bfbfb2597"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Database Research Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "databaseResearch"
@@ -620,14 +620,14 @@
             "ID": "8DB9A71A-FD38-43A3-BE9C-759F4332ADD8"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.369Z",
-            "checksum": "4325ea6d8bf53a8b7760faf203eb13aa8110614634fb918602f20d908d0952f5"
+            "lastModified": "2026-02-13T21:09:24.079Z",
+            "checksum": "f4c5f1b81ee8ed6ea0e773750e749d4d18f0558c8d305c77432fdff77309c537"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=File Research Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=File Research Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "fileResearch"
@@ -640,14 +640,14 @@
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.370Z",
-            "checksum": "778f461a7f68241e59b4cbd204dfd34a181b5ca7dda21f323310b82eeea2bb18"
+            "lastModified": "2026-02-13T21:09:24.082Z",
+            "checksum": "df068f78bea808462e7cfe001eba20f86ea38804bc45bc2ff2c52d0a08f203fa"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Knowledge Base Research Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Knowledge Base Research Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "knowledgeBaseResearch"
@@ -660,8 +660,8 @@
             "ID": "950F921A-6C52-4170-8FFC-EDF166D3675C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.382Z",
-            "checksum": "50c7be18f9c36704dd901d7c0f3396a8c16d1d350a5be68a52aa96632fd41c04"
+            "lastModified": "2026-02-13T21:09:24.110Z",
+            "checksum": "d2b0ba4a0d7d1f9573df968bccca4debb94c6098ec2c6f63ffa55c7cb7aa9941"
           }
         }
       ],

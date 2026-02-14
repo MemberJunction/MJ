@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { AIPromptCategoryEntity, AIPromptTypeEntity } from '@memberjunction/core-entities';
+import { MJAIPromptCategoryEntity, MJAIPromptTypeEntity } from '@memberjunction/core-entities';
 
 interface PromptFilter {
   searchTerm: string;
@@ -25,8 +25,8 @@ interface PromptWithTemplate {
 export class PromptFilterPanelComponent implements OnInit {
   @Input() prompts: PromptWithTemplate[] = [];
   @Input() filteredPrompts: PromptWithTemplate[] = [];
-  @Input() categories: AIPromptCategoryEntity[] = [];
-  @Input() types: AIPromptTypeEntity[] = [];
+  @Input() categories: MJAIPromptCategoryEntity[] = [];
+  @Input() types: MJAIPromptTypeEntity[] = [];
   @Input() filters: PromptFilter = {
     searchTerm: '',
     categoryId: 'all',
@@ -77,7 +77,7 @@ export class PromptFilterPanelComponent implements OnInit {
     this.closePanel.emit();
   }
 
-  public updateCategories(categories: AIPromptCategoryEntity[]): void {
+  public updateCategories(categories: MJAIPromptCategoryEntity[]): void {
     this.categories = categories;
     this.buildFilterOptions();
   }

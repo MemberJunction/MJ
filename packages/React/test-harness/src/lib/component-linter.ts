@@ -9,7 +9,7 @@ const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeo
 import { ComponentSpec, ComponentQueryDataRequirement, SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
 import type { EntityFieldInfo, EntityInfo, RunQueryResult, RunViewResult } from '@memberjunction/core';
 import { Metadata } from '@memberjunction/core';
-import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
 import { ComponentExecutionOptions } from './component-runner';

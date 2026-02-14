@@ -300,7 +300,7 @@ export class UserViewResource extends BaseResourceComponent {
     override async GetResourceDisplayName(data: ResourceData): Promise<string> {
         if (data.ResourceRecordID) {
             const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
-            const name = await this.metadata.GetEntityRecordName('User Views', compositeKey);
+            const name = await this.metadata.GetEntityRecordName('MJ: User Views', compositeKey);
             return name ? name : `View: ${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {

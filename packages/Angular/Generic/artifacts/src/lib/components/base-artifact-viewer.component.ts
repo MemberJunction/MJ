@@ -1,5 +1,5 @@
 import { Component, Input, Type } from '@angular/core';
-import { ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 
 /**
@@ -59,7 +59,7 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
   /**
    * The artifact version to display
    */
-  @Input() artifactVersion!: ArtifactVersionEntity;
+  @Input() artifactVersion!: MJArtifactVersionEntity;
 
   /**
    * Optional: Custom height for the viewer (defaults to auto)

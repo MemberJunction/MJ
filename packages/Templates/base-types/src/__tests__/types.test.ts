@@ -12,16 +12,16 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  TemplateCategoryEntity: class {},
-  TemplateContentEntity: class { TemplateID = ''; },
-  TemplateContentTypeEntity: class {},
+  MJTemplateCategoryEntity: class {},
+  MJTemplateContentEntity: class { TemplateID = ''; },
+  MJTemplateContentTypeEntity: class {},
   TemplateEntityExtended: class {
     ID = '';
     Name = '';
     Content: unknown[] = [];
     Params: unknown[] = [];
   },
-  TemplateParamEntity: class { TemplateID = ''; },
+  MJTemplateParamEntity: class { TemplateID = ''; },
 }));
 
 import { TemplateRenderResult } from '../types';

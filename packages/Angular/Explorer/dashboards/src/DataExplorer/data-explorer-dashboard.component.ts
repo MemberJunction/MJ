@@ -8,7 +8,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
-import { ApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
+import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -747,8 +747,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.applicationEntityIds.clear();
 
     const rv = new RunView();
-    const result = await rv.RunView<ApplicationEntityEntity>({
-      EntityName: 'Application Entities',
+    const result = await rv.RunView<MJApplicationEntityEntity>({
+      EntityName: 'MJ: Application Entities',
       ExtraFilter: `ApplicationID = '${applicationId}'`,
       ResultType: 'entity_object'
     });
@@ -1048,7 +1048,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       if (event.saveAsNew || !this.selectedViewEntity) {
         // Create new view
-        const newView = await md.GetEntityObject<UserViewEntityExtended>('User Views');
+        const newView = await md.GetEntityObject<UserViewEntityExtended>('MJ: User Views');
         newView.Name = event.name || 'Custom';
         newView.Description = event.description;
         newView.EntityID = this.selectedEntity.ID;
@@ -1069,7 +1069,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         newView.SmartFilterPrompt = event.smartFilterPrompt;
 
         // Set traditional filter state (Kendo-compatible JSON format)
-        // The UserViewEntity.Save() will auto-generate WhereClause from FilterState
+        // The MJUserViewEntity.Save() will auto-generate WhereClause from FilterState
         if (event.filterState) {
           newView.FilterState = JSON.stringify(event.filterState);
         }
@@ -1107,7 +1107,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedViewEntity.SmartFilterPrompt = event.smartFilterPrompt;
 
         // Update traditional filter state (Kendo-compatible JSON format)
-        // The UserViewEntity.Save() will auto-generate WhereClause from FilterState
+        // The MJUserViewEntity.Save() will auto-generate WhereClause from FilterState
         if (event.filterState) {
           this.selectedViewEntity.FilterState = JSON.stringify(event.filterState);
         } else {

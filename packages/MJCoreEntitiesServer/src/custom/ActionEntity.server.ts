@@ -1,5 +1,5 @@
 import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
-import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
@@ -31,7 +31,7 @@ interface GeneratedCodeExtended extends GeneratedCode {
 /**
  * Server-Only custom sub-class for Actions entity. This sub-class handles the process of auto-generation code for the Actions entity.
  */
-@RegisterClass(BaseEntity, 'Actions') // high priority make sure this class is used ahead of other things
+@RegisterClass(BaseEntity, 'MJ: Actions') // high priority make sure this class is used ahead of other things
 export class ActionEntityServerEntity extends ActionEntityExtended {
     constructor(Entity: EntityInfo) {
         super(Entity); // call super
@@ -129,12 +129,12 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
     protected async manageLibraries(codeLibraries: ActionLibrary[], wasNewRecord: boolean): Promise<void> {
         // new code was generated, we need to sync up the ActionLibraries table with the libraries used in the code for this Action
         // get a list of existing ActionLibrary records that match this Action
-        const existingLibraries: ActionLibraryEntity[] = [];
+        const existingLibraries: MJActionLibraryEntity[] = [];
         if (!wasNewRecord) {
             const rv = this.RunViewProviderToUse;
             const libResult = await rv.RunView(
                 {
-                    EntityName: 'Action Libraries',
+                    EntityName: 'MJ: Action Libraries',
                     ExtraFilter: `ActionID = '${this.ID}'`,
                     ResultType: 'entity_object'
                 },
@@ -156,7 +156,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         for (const lib of librariesToAdd) {
             const libMetadata = md.Libraries.find(l => l.Name.trim().toLowerCase() === lib.LibraryName.trim().toLowerCase());
             if (libMetadata) {
-                const newLib = await md.GetEntityObject<ActionLibraryEntity>('Action Libraries', this.ContextCurrentUser);
+                const newLib = await md.GetEntityObject<MJActionLibraryEntity>('MJ: Action Libraries', this.ContextCurrentUser);
                 newLib.ActionID = this.ID;
                 newLib.LibraryID = libMetadata.ID;
                 newLib.ItemsUsed = lib.ItemsUsed.join(',');
@@ -351,7 +351,7 @@ ${JSON.stringify(parentAction.Params.map(p => {
 
         // Use the entity's provider instead of creating new Metadata instance
         const md = this.ProviderToUse as any as IMetadataProvider;
-        const parent = await md.GetEntityObject<ActionEntityExtended>('Actions', this.ContextCurrentUser);
+        const parent = await md.GetEntityObject<ActionEntityExtended>('MJ: Actions', this.ContextCurrentUser);
         if (await parent.Load(this.ParentID)) {
             return parent;
         }
@@ -368,8 +368,8 @@ ${JSON.stringify(parentAction.Params.map(p => {
         try {
             // First, get existing parameters
             const rv = this.RunViewProviderToUse;
-            const existingParams = await rv.RunView<ActionParamEntity>({
-                EntityName: 'Action Params',
+            const existingParams = await rv.RunView<MJActionParamEntity>({
+                EntityName: 'MJ: Action Params',
                 ExtraFilter: `ActionID='${this.ID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -396,7 +396,7 @@ ${JSON.stringify(parentAction.Params.map(p => {
 
             // Add new parameters
             for (const param of paramsToAdd) {
-                const newParam = await md.GetEntityObject<ActionParamEntity>('Action Params', this.ContextCurrentUser);
+                const newParam = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params', this.ContextCurrentUser);
                 newParam.ActionID = this.ID;
                 newParam.Name = param.Name;
                 const t = param.Type;
@@ -473,8 +473,8 @@ ${JSON.stringify(parentAction.Params.map(p => {
         try {
             // First, get existing result codes
             const rv = this.RunViewProviderToUse;
-            const existingCodes = await rv.RunView<ActionResultCodeEntity>({
-                EntityName: 'Action Result Codes',
+            const existingCodes = await rv.RunView<MJActionResultCodeEntity>({
+                EntityName: 'MJ: Action Result Codes',
                 ExtraFilter: `ActionID='${this.ID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -501,7 +501,7 @@ ${JSON.stringify(parentAction.Params.map(p => {
 
             // Add new result codes
             for (const resultCode of codesToAdd) {
-                const newCode = await md.GetEntityObject<ActionResultCodeEntity>('Action Result Codes', this.ContextCurrentUser);
+                const newCode = await md.GetEntityObject<MJActionResultCodeEntity>('MJ: Action Result Codes', this.ContextCurrentUser);
                 newCode.ActionID = this.ID;
                 newCode.ResultCode = resultCode.ResultCode;
                 newCode.Description = resultCode.Description;

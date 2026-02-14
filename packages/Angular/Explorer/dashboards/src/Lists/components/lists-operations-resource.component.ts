@@ -1,14 +1,14 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
-import { ResourceData, ListEntity, ListDetailEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJListEntity, MJListDetailEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, RunView, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { ListSetOperationsService, VennData, VennIntersection, SetOperation, SetOperationResult } from '../services/list-set-operations.service';
 import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 interface ListSelection {
-  list: ListEntity;
+  list: MJListEntity;
   entityName: string;
   color: string;
 }
@@ -1292,8 +1292,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
   maxLists = 4;
   selectedLists: ListSelection[] = [];
-  availableLists: ListEntity[] = [];
-  filteredAvailableLists: ListEntity[] = [];
+  availableLists: MJListEntity[] = [];
+  filteredAvailableLists: MJListEntity[] = [];
   listSearchTerm = '';
   showListDropdown = false;
 
@@ -1320,7 +1320,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   // Add to existing list dialog
   showAddToListDialog = false;
   addToListSearchTerm = '';
-  filteredAddToListOptions: ListEntity[] = [];
+  filteredAddToListOptions: MJListEntity[] = [];
   selectedTargetListId: string | null = null;
 
   private entityIdFromSelectedLists: string | null = null;
@@ -1365,8 +1365,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     const rv = new RunView();
     const md = new Metadata();
 
-    const result = await rv.RunView<ListEntity>({
-      EntityName: 'Lists',
+    const result = await rv.RunView<MJListEntity>({
+      EntityName: 'MJ: Lists',
       ExtraFilter: `UserID = '${md.CurrentUser?.ID}'`,
       OrderBy: 'Name',
       ResultType: 'entity_object'
@@ -1449,7 +1449,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.filteredAvailableLists = filtered.slice(0, 10);
   }
 
-  addList(list: ListEntity) {
+  addList(list: MJListEntity) {
     const color = this.setOperationsService.getColorForIndex(this.selectedLists.length);
 
     this.selectedLists.push({
@@ -1739,7 +1739,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const md = new Metadata();
 
       // Create the list
-      const list = await md.GetEntityObject<ListEntity>('Lists', md.CurrentUser);
+      const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
       list.Name = this.newListName;
       list.Description = this.newListDescription || null;
       list.EntityID = entityId;
@@ -1755,7 +1755,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const tg = await md.CreateTransactionGroup();
 
       for (const recordId of this.recordsToAdd) {
-        const detail = await md.GetEntityObject<ListDetailEntity>('List Details', md.CurrentUser);
+        const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
         detail.ListID = list.ID;
         detail.RecordID = recordId;
         detail.Sequence = 0;
@@ -1874,7 +1874,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const tg = await md.CreateTransactionGroup();
 
       for (const recordId of this.recordsToAdd) {
-        const detail = await md.GetEntityObject<ListDetailEntity>('List Details', md.CurrentUser);
+        const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
         detail.ListID = this.selectedTargetListId;
         detail.RecordID = recordId;
         detail.Sequence = 0;
@@ -1974,7 +1974,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
       if (!setting) {
         // Create new setting
-        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = this.USER_SETTING_KEY;
       }

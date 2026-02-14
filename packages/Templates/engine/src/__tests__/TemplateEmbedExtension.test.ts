@@ -14,7 +14,7 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    TemplateContentEntity: class {
+    MJTemplateContentEntity: class {
         ID = '';
         TemplateText = '';
         Type = '';

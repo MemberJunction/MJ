@@ -86,6 +86,36 @@ GRANT EXEC ON __mj.GetProgrammaticName to public
 
 GO
 
+---------------------------
+-- StripToAlphanumeric: Removes ALL non-alphanumeric characters from a string.
+-- Unlike GetProgrammaticName (which replaces them with underscores), this function
+-- strips them entirely. Used to clean schema prefixes like "MJ: " → "MJ" before
+-- concatenation with table names in vwEntities ClassName/CodeName computations.
+DROP FUNCTION IF EXISTS __mj.StripToAlphanumeric
+GO
+CREATE FUNCTION __mj.StripToAlphanumeric(@input NVARCHAR(MAX))
+RETURNS NVARCHAR(MAX)
+AS
+BEGIN
+    DECLARE @output NVARCHAR(MAX) = '';
+    DECLARE @i INT = 1;
+    DECLARE @currentChar NCHAR(1);
+
+    WHILE @i <= LEN(@input)
+    BEGIN
+        SET @currentChar = SUBSTRING(@input, @i, 1);
+        IF @currentChar LIKE '[A-Za-z0-9]'
+            SET @output = @output + @currentChar;
+        SET @i = @i + 1;
+    END;
+
+    RETURN @output;
+END;
+GO
+GRANT EXEC ON __mj.StripToAlphanumeric to public
+
+GO
+
 DROP VIEW IF EXISTS [__mj].[vwTablePrimaryKeys] 
 GO 
 CREATE VIEW [__mj].[vwTablePrimaryKeys] AS
@@ -198,20 +228,45 @@ DROP VIEW IF EXISTS [__mj].vwEntities
 GO
 CREATE VIEW [__mj].vwEntities
 AS
-SELECT 
+SELECT
 	e.*,
-	__mj.GetProgrammaticName(REPLACE(e.Name,' ','')) AS CodeName, /*For just the CodeName for the entity, we remove spaces before we convert to a programmatic name as many entity names have spaces automatically added to them and it is not needed to make those into _ characters*/
-	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS ClassName,
+	/* CodeName: Derived from entity Name with clean prefix handling.
+	   When a schema has EntityNamePrefix configured, we strip the prefix from the Name,
+	   prepend the alphanumeric-only version of the prefix, then remove spaces.
+	   This produces clean names like "MJAIModels" instead of "MJ_AIModels". */
+	__mj.GetProgrammaticName(
+		ISNULL(__mj.StripToAlphanumeric(si.EntityNamePrefix), '') +
+		REPLACE(
+			IIF(si.EntityNamePrefix IS NOT NULL,
+				REPLACE(e.Name, si.EntityNamePrefix, ''),
+				e.Name
+			),
+			' ',
+			''
+		)
+	) AS CodeName,
+	/* ClassName: Incorporates schema EntityNamePrefix for cross-schema collision prevention.
+	   When a schema has EntityNamePrefix configured, the cleaned prefix is prepended to
+	   BaseTable + NameSuffix. For schemas without a prefix, behavior is unchanged. */
+	__mj.GetProgrammaticName(
+		ISNULL(__mj.StripToAlphanumeric(si.EntityNamePrefix), '') +
+		e.BaseTable +
+		ISNULL(e.NameSuffix, '')
+	) AS ClassName,
 	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS BaseTableCodeName,
 	par.Name ParentEntity,
 	par.BaseTable ParentBaseTable,
 	par.BaseView ParentBaseView
-FROM 
+FROM
 	[__mj].Entity e
-LEFT OUTER JOIN 
+LEFT OUTER JOIN
 	[__mj].Entity par
 ON
 	e.ParentID = par.ID
+LEFT OUTER JOIN
+	[__mj].SchemaInfo si
+ON
+	e.SchemaName = si.SchemaName
 GO
 
 DROP VIEW IF EXISTS [__mj].vwEntityFields
@@ -1436,9 +1491,9 @@ LEFT OUTER JOIN -- left join since can have table level constraints
 LEFT OUTER JOIN
   __mj.vwGeneratedCodes gc 
   ON -- EITHER JOIN ON EntityField or Entity depending on which type of constraint we have here
-  (   (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
+  (   (ef.ID IS NOT NULL AND gc.LinkedEntity='MJ: Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
         OR
-      (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
+      (ef.ID IS NULL and gc.LinkedEntity='MJ: Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
   ) AND -- MUST MATCH Source=definition
   cc.definition = gc.Source
 GO

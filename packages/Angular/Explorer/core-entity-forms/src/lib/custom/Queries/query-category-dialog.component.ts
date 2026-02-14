@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { QueryCategoryEntity } from '@memberjunction/core-entities';
+import { MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -20,11 +20,11 @@ interface CategoryNode {
 export class QueryCategoryDialogComponent implements OnInit {
     @Input() isVisible = false;
     @Output() isVisibleChange = new EventEmitter<boolean>();
-    @Output() onCategoryCreated = new EventEmitter<QueryCategoryEntity>();
+    @Output() onCategoryCreated = new EventEmitter<MJQueryCategoryEntity>();
     
     public categoryName = '';
     public selectedParentId: string | null = null;
-    public categories: QueryCategoryEntity[] = [];
+    public categories: MJQueryCategoryEntity[] = [];
     public categoryTree: CategoryNode[] = [];
     public flattenedCategories: CategoryNode[] = [];
     public isCreating = false;
@@ -36,8 +36,8 @@ export class QueryCategoryDialogComponent implements OnInit {
     async loadCategories() {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<QueryCategoryEntity>({
-                EntityName: 'Query Categories',
+            const result = await rv.RunView<MJQueryCategoryEntity>({
+                EntityName: 'MJ: Query Categories',
                 OrderBy: 'Name',
                 ResultType: 'entity_object'
             });
@@ -52,7 +52,7 @@ export class QueryCategoryDialogComponent implements OnInit {
         }
     }
     
-    private buildCategoryTree(categories: QueryCategoryEntity[]): CategoryNode[] {
+    private buildCategoryTree(categories: MJQueryCategoryEntity[]): CategoryNode[] {
         const categoryMap = new Map<string, CategoryNode>();
         const rootCategories: CategoryNode[] = [];
         
@@ -114,7 +114,7 @@ export class QueryCategoryDialogComponent implements OnInit {
         
         try {
             const md = new Metadata();
-            const newCategory = await md.GetEntityObject<QueryCategoryEntity>('Query Categories');
+            const newCategory = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
             newCategory.Name = this.categoryName.trim();
             newCategory.ParentID = this.selectedParentId;
             newCategory.UserID = md.CurrentUser.ID;

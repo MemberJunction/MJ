@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, E
 import { FormControl } from '@angular/forms';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { ActionEntity, ActionCategoryEntity, ActionParamEntity, ActionResultCodeEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionCategoryEntity, MJActionParamEntity, MJActionResultCodeEntity } from '@memberjunction/core-entities';
 
 export interface ActionGalleryConfig {
   selectionMode?: boolean;
@@ -24,9 +24,9 @@ export interface CategoryNode {
   icon?: string;
 }
 
-export interface ActionWithDetails extends ActionEntity {
-  parameters?: ActionParamEntity[];
-  resultCodes?: ActionResultCodeEntity[];
+export interface ActionWithDetails extends MJActionEntity {
+  parameters?: MJActionParamEntity[];
+  resultCodes?: MJActionResultCodeEntity[];
   expanded?: boolean;
   selected?: boolean;
 }
@@ -50,16 +50,16 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
   };
   
   @Input() preSelectedActions: string[] = [];
-  @Output() actionSelected = new EventEmitter<ActionEntity>();
-  @Output() actionsSelected = new EventEmitter<ActionEntity[]>();
-  @Output() actionTestRequested = new EventEmitter<ActionEntity>();
+  @Output() actionSelected = new EventEmitter<MJActionEntity>();
+  @Output() actionsSelected = new EventEmitter<MJActionEntity[]>();
+  @Output() actionTestRequested = new EventEmitter<MJActionEntity>();
   
   @ViewChild('searchInput', { static: false }) searchInput: ElementRef<HTMLInputElement>;
   
   // State management
   private destroy$ = new Subject<void>();
   actions$ = new BehaviorSubject<ActionWithDetails[]>([]);
-  categories$ = new BehaviorSubject<ActionCategoryEntity[]>([]);
+  categories$ = new BehaviorSubject<MJActionCategoryEntity[]>([]);
   filteredActions$ = new BehaviorSubject<ActionWithDetails[]>([]);
   categoryTree$ = new BehaviorSubject<CategoryNode[]>([]);
   selectedCategory$ = new BehaviorSubject<string>('all');
@@ -127,13 +127,13 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
       // Load actions and categories in parallel
       const [actionsResult, categoriesResult] = await rv.RunViews([
         {
-          EntityName: 'Actions',
+          EntityName: 'MJ: Actions',
           ResultType: 'entity_object',
           OrderBy: 'Category, Name',
           MaxRows: 5000
         },
         {
-          EntityName: 'Action Categories',
+          EntityName: 'MJ: Action Categories',
           ResultType: 'entity_object',
           OrderBy: 'Name',
           MaxRows: 1000
@@ -141,8 +141,8 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
       ]);
       
       if (actionsResult.Success && categoriesResult.Success) {
-        const actions = actionsResult.Results as ActionEntity[] || [];
-        const categories = categoriesResult.Results as ActionCategoryEntity[] || [];
+        const actions = actionsResult.Results as MJActionEntity[] || [];
+        const categories = categoriesResult.Results as MJActionCategoryEntity[] || [];
         
         // Process actions
         const actionsWithDetails = actions.map(action => ({
@@ -168,7 +168,7 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     }
   }
   
-  private buildCategoryTree(categories: ActionCategoryEntity[], actions: ActionEntity[]) {
+  private buildCategoryTree(categories: MJActionCategoryEntity[], actions: MJActionEntity[]) {
     // Count actions per category
     this.categoryCounts.clear();
     actions.forEach(action => {
@@ -316,14 +316,14 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     try {
       const [paramsResult, resultCodesResult] = await rv.RunViews([
         {
-          EntityName: 'Action Params',
+          EntityName: 'MJ: Action Params',
           ExtraFilter: `ActionID='${action.ID}'`,
           OrderBy: 'Sequence',
           ResultType: 'entity_object',
           MaxRows: 100
         },
         {
-          EntityName: 'Action Result Codes',
+          EntityName: 'MJ: Action Result Codes',
           ExtraFilter: `ActionID='${action.ID}'`,
           OrderBy: 'ResultCode',
           ResultType: 'entity_object',
@@ -332,11 +332,11 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
       ]);
       
       if (paramsResult.Success) {
-        action.parameters = paramsResult.Results as ActionParamEntity[] || [];
+        action.parameters = paramsResult.Results as MJActionParamEntity[] || [];
       }
       
       if (resultCodesResult.Success) {
-        action.resultCodes = resultCodesResult.Results as ActionResultCodeEntity[] || [];
+        action.resultCodes = resultCodesResult.Results as MJActionResultCodeEntity[] || [];
       }
     } catch (error) {
       console.error('Error loading action details:', error);
@@ -375,7 +375,7 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     }
   }
   
-  testAction(action: ActionEntity, event: Event) {
+  testAction(action: MJActionEntity, event: Event) {
     event.stopPropagation();
     
     if (this.config.enableQuickTest) {
@@ -393,12 +393,12 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     }
   }
   
-  getSelectedActions(): ActionEntity[] {
+  getSelectedActions(): MJActionEntity[] {
     const selected = this.selectedActions$.value;
     return this.actions$.value.filter(a => selected.has(a.ID));
   }
   
-  getActionIcon(action: ActionEntity): string {
+  getActionIcon(action: MJActionEntity): string {
     const typeIcons: { [key: string]: string } = {
       'Create': 'fa-plus-circle',
       'Update': 'fa-edit',

@@ -27,7 +27,7 @@ describe('RunViewParams', () => {
     describe('Equals', () => {
         it('should return true for same reference', () => {
             const params = new RunViewParams();
-            params.EntityName = 'Users';
+            params.EntityName = 'MJ: Users';
 
             expect(RunViewParams.Equals(params, params)).toBe(true);
         });
@@ -48,14 +48,14 @@ describe('RunViewParams', () => {
 
         it('should return true for equivalent params', () => {
             const a: RunViewParams = {
-                EntityName: 'Users',
+                EntityName: 'MJ: Users',
                 ExtraFilter: "IsActive=1",
                 OrderBy: 'Name ASC',
                 MaxRows: 100,
                 ResultType: 'simple'
             };
             const b: RunViewParams = {
-                EntityName: 'Users',
+                EntityName: 'MJ: Users',
                 ExtraFilter: "IsActive=1",
                 OrderBy: 'Name ASC',
                 MaxRows: 100,
@@ -66,46 +66,46 @@ describe('RunViewParams', () => {
         });
 
         it('should return false for different EntityName', () => {
-            const a: RunViewParams = { EntityName: 'Users' };
-            const b: RunViewParams = { EntityName: 'Roles' };
+            const a: RunViewParams = { EntityName: 'MJ: Users' };
+            const b: RunViewParams = { EntityName: 'MJ: Roles' };
 
             expect(RunViewParams.Equals(a, b)).toBe(false);
         });
 
         it('should return false for different ExtraFilter', () => {
-            const a: RunViewParams = { EntityName: 'Users', ExtraFilter: 'A=1' };
-            const b: RunViewParams = { EntityName: 'Users', ExtraFilter: 'B=2' };
+            const a: RunViewParams = { EntityName: 'MJ: Users', ExtraFilter: 'A=1' };
+            const b: RunViewParams = { EntityName: 'MJ: Users', ExtraFilter: 'B=2' };
 
             expect(RunViewParams.Equals(a, b)).toBe(false);
         });
 
         it('should return false for different MaxRows', () => {
-            const a: RunViewParams = { EntityName: 'Users', MaxRows: 10 };
-            const b: RunViewParams = { EntityName: 'Users', MaxRows: 20 };
+            const a: RunViewParams = { EntityName: 'MJ: Users', MaxRows: 10 };
+            const b: RunViewParams = { EntityName: 'MJ: Users', MaxRows: 20 };
 
             expect(RunViewParams.Equals(a, b)).toBe(false);
         });
 
         it('should return false for different ResultType', () => {
-            const a: RunViewParams = { EntityName: 'Users', ResultType: 'simple' };
-            const b: RunViewParams = { EntityName: 'Users', ResultType: 'entity_object' };
+            const a: RunViewParams = { EntityName: 'MJ: Users', ResultType: 'simple' };
+            const b: RunViewParams = { EntityName: 'MJ: Users', ResultType: 'entity_object' };
 
             expect(RunViewParams.Equals(a, b)).toBe(false);
         });
 
         it('should compare Fields arrays', () => {
-            const a: RunViewParams = { EntityName: 'Users', Fields: ['ID', 'Name'] };
-            const b: RunViewParams = { EntityName: 'Users', Fields: ['ID', 'Name'] };
-            const c: RunViewParams = { EntityName: 'Users', Fields: ['ID'] };
+            const a: RunViewParams = { EntityName: 'MJ: Users', Fields: ['ID', 'Name'] };
+            const b: RunViewParams = { EntityName: 'MJ: Users', Fields: ['ID', 'Name'] };
+            const c: RunViewParams = { EntityName: 'MJ: Users', Fields: ['ID'] };
 
             expect(RunViewParams.Equals(a, b)).toBe(true);
             expect(RunViewParams.Equals(a, c)).toBe(false);
         });
 
         it('should compare CacheLocal and CacheLocalTTL', () => {
-            const a: RunViewParams = { EntityName: 'Users', CacheLocal: true, CacheLocalTTL: 5000 };
-            const b: RunViewParams = { EntityName: 'Users', CacheLocal: true, CacheLocalTTL: 5000 };
-            const c: RunViewParams = { EntityName: 'Users', CacheLocal: false };
+            const a: RunViewParams = { EntityName: 'MJ: Users', CacheLocal: true, CacheLocalTTL: 5000 };
+            const b: RunViewParams = { EntityName: 'MJ: Users', CacheLocal: true, CacheLocalTTL: 5000 };
+            const c: RunViewParams = { EntityName: 'MJ: Users', CacheLocal: false };
 
             expect(RunViewParams.Equals(a, b)).toBe(true);
             expect(RunViewParams.Equals(a, c)).toBe(false);
@@ -163,7 +163,7 @@ describe('RunView', () => {
         it('should delegate to the provider', async () => {
             const rv = new RunView();
             const params: RunViewParams = {
-                EntityName: 'Users',
+                EntityName: 'MJ: Users',
                 ExtraFilter: "IsActive=1"
             };
 
@@ -176,7 +176,7 @@ describe('RunView', () => {
 
         it('should pass contextUser to provider', async () => {
             const rv = new RunView();
-            const params: RunViewParams = { EntityName: 'Users' };
+            const params: RunViewParams = { EntityName: 'MJ: Users' };
             const contextUser = { ID: 'u-1' } as never;
 
             await rv.RunView(params, contextUser);
@@ -189,8 +189,8 @@ describe('RunView', () => {
         it('should delegate to the provider', async () => {
             const rv = new RunView();
             const params: RunViewParams[] = [
-                { EntityName: 'Users' },
-                { EntityName: 'Roles' }
+                { EntityName: 'MJ: Users' },
+                { EntityName: 'MJ: Roles' }
             ];
 
             await rv.RunViews(params);

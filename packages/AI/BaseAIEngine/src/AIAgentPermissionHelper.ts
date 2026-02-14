@@ -1,5 +1,5 @@
 import { LogError, UserInfo } from "@memberjunction/core";
-import { AIAgentEntity } from "@memberjunction/core-entities";
+import { MJAIAgentEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "./BaseAIEngine";
 
 /**
@@ -156,13 +156,13 @@ export class AIAgentPermissionHelper {
     public static async GetAccessibleAgents(
         user: UserInfo,
         permission: 'view' | 'run' | 'edit' | 'delete'
-    ): Promise<AIAgentEntity[]> {
+    ): Promise<MJAIAgentEntity[]> {
         try {
             // Ensure AIEngineBase is loaded with cached metadata
             await AIEngineBase.Instance.Config(false, user);
 
             // Filter agents from cached metadata based on permissions
-            const accessibleAgents: AIAgentEntity[] = [];
+            const accessibleAgents: MJAIAgentEntity[] = [];
 
             for (const agent of AIEngineBase.Instance.Agents) {
                 const hasAccess = await this.HasPermission(agent.ID, user, permission);

@@ -8,10 +8,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ScopeEvaluator } from '../ScopeEvaluator';
 import { UserInfo } from '../__mocks__/core';
 import {
-    APIScopeEntity,
-    APIApplicationScopeEntity,
-    APIKeyScopeEntity,
-    APIKeyApplicationEntity,
+    MJAPIScopeEntity,
+    MJAPIApplicationScopeEntity,
+    MJAPIKeyScopeEntity,
+    MJAPIKeyApplicationEntity,
 } from '../__mocks__/core-entities';
 import {
     setMockBaseScopes,
@@ -41,7 +41,7 @@ describe('ScopeEvaluator', () => {
 
         // Default: single active scope
         setMockBaseScopes([
-            new APIScopeEntity({ ID: 'scope-1', FullPath: 'entity:read', IsActive: true }),
+            new MJAPIScopeEntity({ ID: 'scope-1', FullPath: 'entity:read', IsActive: true }),
         ]);
     });
 
@@ -68,7 +68,7 @@ describe('ScopeEvaluator', () => {
     describe('EvaluateAccess() - application binding', () => {
         it('should deny if key is bound to a different application', async () => {
             setMockBaseKeyApplications([
-                new APIKeyApplicationEntity({ APIKeyID: 'key-1', ApplicationID: 'other-app' }),
+                new MJAPIKeyApplicationEntity({ APIKeyID: 'key-1', ApplicationID: 'other-app' }),
             ]);
 
             const result = await evaluator.EvaluateAccess(baseRequest, contextUser as never);
@@ -78,16 +78,16 @@ describe('ScopeEvaluator', () => {
 
         it('should proceed if key is bound to the requested application', async () => {
             setMockBaseKeyApplications([
-                new APIKeyApplicationEntity({ APIKeyID: 'key-1', ApplicationID: 'app-1' }),
+                new MJAPIKeyApplicationEntity({ APIKeyID: 'key-1', ApplicationID: 'app-1' }),
             ]);
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
             ]);
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -100,13 +100,13 @@ describe('ScopeEvaluator', () => {
         it('should allow global keys (no application bindings)', async () => {
             setMockBaseKeyApplications([]);
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
             ]);
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -143,13 +143,13 @@ describe('ScopeEvaluator', () => {
 
         it('should allow if app ceiling includes the exact resource', async () => {
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
             ]);
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -163,7 +163,7 @@ describe('ScopeEvaluator', () => {
 
         it('should deny if app ceiling has a deny rule', async () => {
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: true, Priority: 0,
                 }),
@@ -176,13 +176,13 @@ describe('ScopeEvaluator', () => {
 
         it('should support wildcard patterns in app ceiling', async () => {
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: 'User*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
             ]);
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -194,7 +194,7 @@ describe('ScopeEvaluator', () => {
 
         it('should deny if wildcard does not match resource', async () => {
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Admin*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -213,7 +213,7 @@ describe('ScopeEvaluator', () => {
         beforeEach(() => {
             setMockBaseKeyApplications([]);
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -238,7 +238,7 @@ describe('ScopeEvaluator', () => {
 
         it('should allow if key scope includes the resource', async () => {
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -251,7 +251,7 @@ describe('ScopeEvaluator', () => {
 
         it('should deny if key scope has deny rule', async () => {
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: true, Priority: 0,
                 }),
@@ -264,7 +264,7 @@ describe('ScopeEvaluator', () => {
 
         it('should support Exclude pattern type (grant when NOT matching)', async () => {
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: 'AdminData', PatternType: 'Exclude', IsDeny: false, Priority: 0,
                 }),
@@ -276,7 +276,7 @@ describe('ScopeEvaluator', () => {
 
         it('should deny with Exclude pattern type when resource matches', async () => {
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Exclude', IsDeny: false, Priority: 0,
                 }),
@@ -295,7 +295,7 @@ describe('ScopeEvaluator', () => {
         beforeEach(() => {
             setMockBaseKeyApplications([]);
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -304,11 +304,11 @@ describe('ScopeEvaluator', () => {
 
         it('should respect priority (higher priority wins)', async () => {
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-deny', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: true, Priority: 0,
                 }),
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-allow', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 10,
                 }),
@@ -320,11 +320,11 @@ describe('ScopeEvaluator', () => {
 
         it('should prefer deny at same priority', async () => {
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-allow', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-deny', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: true, Priority: 0,
                 }),
@@ -336,17 +336,17 @@ describe('ScopeEvaluator', () => {
 
         it('should prioritize app ceiling rules too', async () => {
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-deny', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: true, Priority: 0,
                 }),
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-allow', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 10,
                 }),
             ]);
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -365,13 +365,13 @@ describe('ScopeEvaluator', () => {
         it('should include evaluated rules in result', async () => {
             setMockBaseKeyApplications([]);
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
             ]);
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -393,18 +393,18 @@ describe('ScopeEvaluator', () => {
 
     describe('EvaluateAccess() - agent scope', () => {
         it('should evaluate agent:execute scope', async () => {
-            const agentScope = new APIScopeEntity({ ID: 'scope-agent', FullPath: 'agent:execute', IsActive: true });
+            const agentScope = new MJAPIScopeEntity({ ID: 'scope-agent', FullPath: 'agent:execute', IsActive: true });
             setMockBaseScopes([agentScope]);
 
             setMockBaseKeyApplications([]);
             setMockBaseApplicationScopes([
-                new APIApplicationScopeEntity({
+                new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-agent',
                     ResourcePattern: 'Skip*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
             ]);
             setMockBaseKeyScopes([
-                new APIKeyScopeEntity({
+                new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-agent',
                     ResourcePattern: 'Skip*', PatternType: 'Include', IsDeny: false, Priority: 0,
                 }),
@@ -428,8 +428,8 @@ describe('ScopeEvaluator', () => {
     describe('GetKeyApplications()', () => {
         it('should return key applications from Base', async () => {
             setMockBaseKeyApplications([
-                new APIKeyApplicationEntity({ APIKeyID: 'key-1', ApplicationID: 'app-1' }),
-                new APIKeyApplicationEntity({ APIKeyID: 'key-1', ApplicationID: 'app-2' }),
+                new MJAPIKeyApplicationEntity({ APIKeyID: 'key-1', ApplicationID: 'app-1' }),
+                new MJAPIKeyApplicationEntity({ APIKeyID: 'key-1', ApplicationID: 'app-2' }),
             ]);
 
             const apps = await evaluator.GetKeyApplications('key-1', contextUser as never);

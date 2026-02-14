@@ -35,7 +35,7 @@ function createMockField(overrides: Record<string, unknown> = {}): Record<string
 function createMockEntity(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     ID: 'entity-1',
-    Name: 'TestEntity',
+    Name: 'MJTestEntity',
     SchemaName: 'dbo',
     Description: 'A test entity',
     Status: 'Active',
@@ -107,7 +107,7 @@ describe('entityInfoToERDNode', () => {
     const node = entityInfoToERDNode(entity as never);
 
     expect(node.id).toBe('entity-1');
-    expect(node.name).toBe('TestEntity');
+    expect(node.name).toBe('MJTestEntity');
     expect(node.schemaName).toBe('dbo');
     expect(node.description).toBe('A test entity');
     expect(node.status).toBe('Active');

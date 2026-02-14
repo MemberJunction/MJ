@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RoleInfo, RunView } from '@memberjunction/core';
-import { AIAgentPermissionEntity, UserEntity } from '@memberjunction/core-entities';
+import { MJAIAgentPermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
@@ -24,7 +24,7 @@ export interface PermissionRow {
     EffectiveCanDelete: boolean;
     Comments: string | null;
     /** The underlying entity object for save/delete operations */
-    Entity: AIAgentPermissionEntity;
+    Entity: MJAIAgentPermissionEntity;
 }
 
 /**
@@ -34,13 +34,13 @@ export interface PermissionRow {
  */
 @Injectable()
 export class AgentPermissionsService {
-    private users: UserEntity[] = [];
+    private users: MJUserEntity[] = [];
     private roles: RoleInfo[] = [];
-    private permissions: AIAgentPermissionEntity[] = [];
+    private permissions: MJAIAgentPermissionEntity[] = [];
 
-    public get Users(): UserEntity[] { return this.users; }
+    public get Users(): MJUserEntity[] { return this.users; }
     public get Roles(): RoleInfo[] { return this.roles; }
-    public get Permissions(): AIAgentPermissionEntity[] { return this.permissions; }
+    public get Permissions(): MJAIAgentPermissionEntity[] { return this.permissions; }
 
     /**
      * Load all data needed for the permissions panel.
@@ -76,11 +76,11 @@ export class AgentPermissionsService {
         canEdit: boolean,
         canDelete: boolean,
         comments: string | null,
-        existingEntity?: AIAgentPermissionEntity
+        existingEntity?: MJAIAgentPermissionEntity
     ): Promise<boolean> {
         const md = new Metadata();
         const entity = existingEntity ||
-            await md.GetEntityObject<AIAgentPermissionEntity>('MJ: AI Agent Permissions');
+            await md.GetEntityObject<MJAIAgentPermissionEntity>('MJ: AI Agent Permissions');
 
         entity.AgentID = agent.ID;
         entity.UserID = grantType === 'user' ? granteeId : null;
@@ -97,7 +97,7 @@ export class AgentPermissionsService {
     /**
      * Delete a permission record.
      */
-    public async DeletePermission(entity: AIAgentPermissionEntity): Promise<boolean> {
+    public async DeletePermission(entity: MJAIAgentPermissionEntity): Promise<boolean> {
         return entity.Delete();
     }
 
@@ -109,14 +109,14 @@ export class AgentPermissionsService {
         const cached = this.users.find(u => u.ID === ownerUserId);
         if (cached) return cached.Name;
         const md = new Metadata();
-        const userEntity = await md.GetEntityObject<UserEntity>('Users');
+        const userEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
         const loaded = await userEntity.Load(ownerUserId);
         return loaded ? userEntity.Name : 'Unknown';
     }
 
-    private async loadPermissions(agentId: string): Promise<AIAgentPermissionEntity[]> {
+    private async loadPermissions(agentId: string): Promise<MJAIAgentPermissionEntity[]> {
         const rv = new RunView();
-        const result = await rv.RunView<AIAgentPermissionEntity>({
+        const result = await rv.RunView<MJAIAgentPermissionEntity>({
             EntityName: 'MJ: AI Agent Permissions',
             ExtraFilter: `AgentID='${agentId}'`,
             ResultType: 'entity_object'
@@ -126,8 +126,8 @@ export class AgentPermissionsService {
 
     private async loadUsers(): Promise<void> {
         const rv = new RunView();
-        const result = await rv.RunView<UserEntity>({
-            EntityName: 'Users',
+        const result = await rv.RunView<MJUserEntity>({
+            EntityName: 'MJ: Users',
             ExtraFilter: 'IsActive=1',
             OrderBy: 'Name',
             ResultType: 'entity_object'

@@ -8,9 +8,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock the core-entities dependency (AuditAnalyzer imports AIAgentRunStepEntity for type only)
+// Mock the core-entities dependency (AuditAnalyzer imports MJAIAgentRunStepEntity for type only)
 vi.mock('@memberjunction/core-entities', () => ({
-    AIAgentRunStepEntity: class {},
+    MJAIAgentRunStepEntity: class {},
 }));
 
 import { AuditAnalyzer } from '../lib/audit-analyzer';

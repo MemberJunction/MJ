@@ -11,7 +11,7 @@ import {
 import { LibraryConfiguration, ExternalLibraryConfig, LibraryLoadOptions as ConfigLoadOptions } from '../types/library-config';
 import { getCoreRuntimeLibraries, isCoreRuntimeLibrary } from './core-libraries';
 import { resourceManager } from './resource-manager';
-import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 import { LibraryDependencyResolver } from './library-dependency-resolver';
 import { LoadedLibraryState, DependencyResolutionOptions } from '../types/dependency-types';
 import { LibraryRegistry } from './library-registry';
@@ -537,7 +537,7 @@ export class LibraryLoader {
    */
   static async loadLibraryWithDependencies(
     libraryName: string,
-    allLibraries: ComponentLibraryEntity[],
+    allLibraries: MJComponentLibraryEntity[],
     requestedBy: string = 'user',
     options?: DependencyResolutionOptions
   ): Promise<any> {
@@ -662,7 +662,7 @@ export class LibraryLoader {
    */
   static async loadLibrariesWithDependencies(
     libraryNames: string[],
-    allLibraries: ComponentLibraryEntity[],
+    allLibraries: MJComponentLibraryEntity[],
     requestedBy: string = 'user',
     options?: DependencyResolutionOptions
   ): Promise<Map<string, any>> {

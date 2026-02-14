@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIVendorEntity, AIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJAIVendorEntity, MJAIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -58,8 +58,8 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   // Data - Keep as AIModelEntityExtended to preserve getters
   public models: AIModelEntityExtended[] = [];
   public filteredModels: AIModelEntityExtended[] = [];
-  public vendors: AIVendorEntity[] = [];
-  public modelTypes: AIModelTypeEntity[] = [];
+  public vendors: MJAIVendorEntity[] = [];
+  public modelTypes: MJAIModelTypeEntity[] = [];
 
   // Filtering
   public searchTerm = '';
@@ -509,7 +509,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   public openModel(modelId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: modelId }]);
-    this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
   }
 
   /**
@@ -548,7 +548,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public async createNewModel(): Promise<void> {
     try {
       const md = new Metadata();
-      const newModel = await md.GetEntityObject<AIModelEntityExtended>('AI Models');
+      const newModel = await md.GetEntityObject<AIModelEntityExtended>('MJ: AI Models');
       
       if (newModel) {
         newModel.Name = 'New AI Model';
@@ -556,7 +556,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         
         if (await newModel.Save()) {
           const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: newModel.ID }]);
-          this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+          this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
 
           // Reload the data
           await this.loadInitialData();

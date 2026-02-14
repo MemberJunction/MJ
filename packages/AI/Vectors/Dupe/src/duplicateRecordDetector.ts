@@ -3,7 +3,7 @@ import { PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, Ru
 import { LogStatus } from "@memberjunction/core";
 import { BaseResponse, VectorDBBase } from "@memberjunction/ai-vectordb";
 import { MJGlobal } from "@memberjunction/global";
-import { AIModelEntity, DuplicateRunDetailEntity, DuplicateRunDetailMatchEntity, DuplicateRunEntity, EntityDocumentEntity, ListDetailEntity, ListEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { MJAIModelEntity, MJDuplicateRunDetailEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunEntity, MJEntityDocumentEntity, MJListDetailEntity, MJListEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
 import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
 
@@ -27,14 +27,14 @@ export class DuplicateRecordDetector extends VectorBase {
         let vectorizer = new EntityVectorSyncer();
         vectorizer.CurrentUser = super.CurrentUser;
 
-        let entityDocument: EntityDocumentEntity | null = await vectorizer.GetEntityDocument(params.EntityDocumentID);
+        let entityDocument: MJEntityDocumentEntity | null = await vectorizer.GetEntityDocument(params.EntityDocumentID);
         if(!entityDocument){
             throw Error(`No Entity Document found with ID ${params.EntityDocumentID}`);
             //Update: No longer creating an entity docuement if one is not found
             //If an entitiy document is not found, that is our indicator that the
             //underlying entity's records have not been vectorized yet
-            //const defaultVectorDB: VectorDatabaseEntity = super.getVectorDatabase();
-            //const defaultAIModel: AIModelEntity = super.getAIModel();
+            //const defaultVectorDB: MJVectorDatabaseEntity = super.getVectorDatabase();
+            //const defaultAIModel: MJAIModelEntity = super.getAIModel();
             //entityDocument = await this.createEntityDocumentForEntity(params.EntityID, defaultVectorDB, defaultAIModel);
         }
 
@@ -60,16 +60,16 @@ export class DuplicateRecordDetector extends VectorBase {
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
         await vectorizer.VectorizeEntity(request, super.CurrentUser);
 
-        const list: ListEntity = await this.getListEntity(params.ListID);
-        let duplicateRun: DuplicateRunEntity = params.Options?.DuplicateRunID ? await this.getDuplicateRunEntity(params.Options?.DuplicateRunID) : await this.getDuplicateRunEntityByListID(list.ID);
-        //let duplicateRun: DuplicateRunEntity = await this.createDuplicateRunRecord(entityDocument, list.ID);
-        const duplicateRunDetails: DuplicateRunDetailEntity[] = await this.createDuplicateRunDetailRecordsByListID(list.ID, duplicateRun.ID);
+        const list: MJListEntity = await this.getListEntity(params.ListID);
+        let duplicateRun: MJDuplicateRunEntity = params.Options?.DuplicateRunID ? await this.getDuplicateRunEntity(params.Options?.DuplicateRunID) : await this.getDuplicateRunEntityByListID(list.ID);
+        //let duplicateRun: MJDuplicateRunEntity = await this.createDuplicateRunRecord(entityDocument, list.ID);
+        const duplicateRunDetails: MJDuplicateRunDetailEntity[] = await this.createDuplicateRunDetailRecordsByListID(list.ID, duplicateRun.ID);
         //await this.createListDetailsForDupeRun(params.RecordIDs, list.ID);
 
         LogStatus(`Using vector database ${entityDocument.VectorDatabaseID} and AI Model ${entityDocument.AIModelID}`);
 
-        const vectorDB: VectorDatabaseEntity = super.GetVectorDatabase(entityDocument.VectorDatabaseID);
-        const aiModel: AIModelEntity = super.GetAIModel(entityDocument.AIModelID);
+        const vectorDB: MJVectorDatabaseEntity = super.GetVectorDatabase(entityDocument.VectorDatabaseID);
+        const aiModel: MJAIModelEntity = super.GetAIModel(entityDocument.AIModelID);
 
         LogStatus(`AIModel driver class: ${aiModel.DriverClass}`);
         LogStatus(`VectorDB class key: ${vectorDB.ClassKey}`);
@@ -138,7 +138,7 @@ export class DuplicateRecordDetector extends VectorBase {
             results.push(queryResult);
 
             //now update all of the dupe run detail records
-            let dupeRunDetail: DuplicateRunDetailEntity = duplicateRunDetails.find((detail: DuplicateRunDetailEntity) => detail.RecordID === compositeKey.Values());
+            let dupeRunDetail: MJDuplicateRunDetailEntity = duplicateRunDetails.find((detail: MJDuplicateRunDetailEntity) => detail.RecordID === compositeKey.Values());
             if(dupeRunDetail){
                 const matchRecords = await this.createDuplicateRunDetailMatchesForRecord(dupeRunDetail.ID, queryResult);
                 queryResult.DuplicateRunDetailMatchRecordIDs = matchRecords.map((match) => match.ID);
@@ -191,9 +191,9 @@ export class DuplicateRecordDetector extends VectorBase {
         return rvResult.Results;
     }
 
-    private async createDuplicateRunRecord(entityDocument: EntityDocumentEntity, listID: string): Promise<DuplicateRunEntity> {
+    private async createDuplicateRunRecord(entityDocument: MJEntityDocumentEntity, listID: string): Promise<MJDuplicateRunEntity> {
         const md: Metadata = new Metadata();
-        let duplicateRun: DuplicateRunEntity = await md.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
+        let duplicateRun: MJDuplicateRunEntity = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
         duplicateRun.NewRecord();
         duplicateRun.EntityID = entityDocument.EntityID;
         duplicateRun.StartedByUserID = super.CurrentUser.ID;
@@ -210,11 +210,11 @@ export class DuplicateRecordDetector extends VectorBase {
         return duplicateRun;
     }
 
-    private async createDuplicateRunDetailRecords(recordIDs: CompositeKey[], duplicateRunID: string): Promise<DuplicateRunDetailEntity[]> {
-        let results: DuplicateRunDetailEntity[] = [];
+    private async createDuplicateRunDetailRecords(recordIDs: CompositeKey[], duplicateRunID: string): Promise<MJDuplicateRunDetailEntity[]> {
+        let results: MJDuplicateRunDetailEntity[] = [];
         const md: Metadata = new Metadata();
         for(const recordID of recordIDs){
-            let runDetail: DuplicateRunDetailEntity = await md.GetEntityObject<DuplicateRunDetailEntity>('Duplicate Run Details');
+            let runDetail: MJDuplicateRunDetailEntity = await md.GetEntityObject<MJDuplicateRunDetailEntity>('MJ: Duplicate Run Details');
             runDetail.NewRecord();
             runDetail.DuplicateRunID = duplicateRunID;
             runDetail.RecordID = recordID.ToString();
@@ -229,10 +229,10 @@ export class DuplicateRecordDetector extends VectorBase {
         return results;
     }
 
-    private async createDuplicateRunDetailRecordsByListID(listID: string, duplicateRunID: string): Promise<DuplicateRunDetailEntity[]> {
-        let results: DuplicateRunDetailEntity[] = [];
+    private async createDuplicateRunDetailRecordsByListID(listID: string, duplicateRunID: string): Promise<MJDuplicateRunDetailEntity[]> {
+        let results: MJDuplicateRunDetailEntity[] = [];
         const viewResults = await super.RunView.RunView({
-            EntityName: 'List Details',
+            EntityName: 'MJ: List Details',
             ExtraFilter: `ListID = '${listID}'`,
             ResultType: 'entity_object'},
             super.CurrentUser);
@@ -243,9 +243,9 @@ export class DuplicateRecordDetector extends VectorBase {
 
 
         const md: Metadata = new Metadata();
-        const listDetails: ListDetailEntity[] = viewResults.Results as ListDetailEntity[];
+        const listDetails: MJListDetailEntity[] = viewResults.Results as MJListDetailEntity[];
         for(const listDetail of listDetails){
-            let runDetail: DuplicateRunDetailEntity = await md.GetEntityObject<DuplicateRunDetailEntity>('Duplicate Run Details');
+            let runDetail: MJDuplicateRunDetailEntity = await md.GetEntityObject<MJDuplicateRunDetailEntity>('MJ: Duplicate Run Details');
             runDetail.NewRecord();
             runDetail.DuplicateRunID = duplicateRunID;
             runDetail.RecordID = listDetail.RecordID;
@@ -256,16 +256,16 @@ export class DuplicateRecordDetector extends VectorBase {
                 results.push(runDetail);
             }
             else{
-                LogError("Failed to save DuplicateRunDetailEntity", undefined, runDetail.LatestResult);
+                LogError("Failed to save MJDuplicateRunDetailEntity", undefined, runDetail.LatestResult);
             }
         }
 
         return results;
     }
 
-    private async getListEntity(listID: string): Promise<ListEntity> {
+    private async getListEntity(listID: string): Promise<MJListEntity> {
         const md: Metadata = new Metadata();
-        let list: ListEntity = await md.GetEntityObject<ListEntity>('Lists');
+        let list: MJListEntity = await md.GetEntityObject<MJListEntity>('MJ: Lists');
         list.ContextCurrentUser = super.CurrentUser;
         const success = await list.Load(listID);
         if(!success){
@@ -275,9 +275,9 @@ export class DuplicateRecordDetector extends VectorBase {
         return list;
     }
 
-    private async getDuplicateRunEntity(DupeRunID: string): Promise<DuplicateRunEntity> {
+    private async getDuplicateRunEntity(DupeRunID: string): Promise<MJDuplicateRunEntity> {
         const md: Metadata = new Metadata();
-        let dupeRun: DuplicateRunEntity = await md.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
+        let dupeRun: MJDuplicateRunEntity = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
         dupeRun.ContextCurrentUser = super.CurrentUser;
         const success = await dupeRun.Load(DupeRunID);
         if(!success){
@@ -287,8 +287,8 @@ export class DuplicateRecordDetector extends VectorBase {
         return dupeRun;
     }
 
-    private async getDuplicateRunEntityByListID(listID: string): Promise<DuplicateRunEntity> {
-        const entity = await super.RunViewForSingleValue<DuplicateRunEntity>('Duplicate Runs', `SourceListID = '${listID}'`);
+    private async getDuplicateRunEntityByListID(listID: string): Promise<MJDuplicateRunEntity> {
+        const entity = await super.RunViewForSingleValue<MJDuplicateRunEntity>('MJ: Duplicate Runs', `SourceListID = '${listID}'`);
         if(!entity){
             throw new Error(`Failed to load Duplicate Run record for List ${listID}`);
         }
@@ -296,9 +296,9 @@ export class DuplicateRecordDetector extends VectorBase {
         return entity;
     }
 
-    private async createListForDupeRun(entityDocument: EntityDocumentEntity): Promise<ListEntity> {
+    private async createListForDupeRun(entityDocument: MJEntityDocumentEntity): Promise<MJListEntity> {
         const md: Metadata = new Metadata();
-        const list: ListEntity = await md.GetEntityObject<ListEntity>('Lists');
+        const list: MJListEntity = await md.GetEntityObject<MJListEntity>('MJ: Lists');
         list.NewRecord();
         list.Name = `Potential Duplicate Run`;
         list.Description = `Potential Duplicate Run for ${entityDocument.Entity} Entity`;
@@ -313,11 +313,11 @@ export class DuplicateRecordDetector extends VectorBase {
         return list;
     }
 
-    private async createDuplicateRunDetailMatchesForRecord(DuplicateRunDetailID: string, duplicateResult: PotentialDuplicateResult): Promise<DuplicateRunDetailMatchEntity[]> {
+    private async createDuplicateRunDetailMatchesForRecord(DuplicateRunDetailID: string, duplicateResult: PotentialDuplicateResult): Promise<MJDuplicateRunDetailMatchEntity[]> {
         const md: Metadata = new Metadata();
-        let matchRecords: DuplicateRunDetailMatchEntity[] = [];
+        let matchRecords: MJDuplicateRunDetailMatchEntity[] = [];
         for(const dupe of duplicateResult.Duplicates){
-            const match: DuplicateRunDetailMatchEntity = await md.GetEntityObject<DuplicateRunDetailMatchEntity>('Duplicate Run Detail Matches');
+            const match: MJDuplicateRunDetailMatchEntity = await md.GetEntityObject<MJDuplicateRunDetailMatchEntity>('MJ: Duplicate Run Detail Matches');
             match.NewRecord();
             match.DuplicateRunDetailID = DuplicateRunDetailID;
             match.MatchRecordID = dupe.ToString();
@@ -336,7 +336,7 @@ export class DuplicateRecordDetector extends VectorBase {
         return matchRecords;
     }
 
-    private async mergeRecords(dupeResponse: PotentialDuplicateResponse, entityDocument: EntityDocumentEntity): Promise<void> {
+    private async mergeRecords(dupeResponse: PotentialDuplicateResponse, entityDocument: MJEntityDocumentEntity): Promise<void> {
         const md: Metadata = new Metadata();
         for(const dupeResult of dupeResponse.PotentialDuplicateResult){
             for(const [index, dupe] of dupeResult.Duplicates.entries()){
@@ -353,7 +353,7 @@ export class DuplicateRecordDetector extends VectorBase {
                     mergeParams.RecordsToMerge = [dupe];
                     let result = await md.MergeRecords(mergeParams, super.CurrentUser);
                     if(result.Success){
-                        let dupeRunMatchRecord: DuplicateRunDetailMatchEntity = await md.GetEntityObject<DuplicateRunDetailMatchEntity>('Duplicate Run Detail Matches', super.CurrentUser);
+                        let dupeRunMatchRecord: MJDuplicateRunDetailMatchEntity = await md.GetEntityObject<MJDuplicateRunDetailMatchEntity>('MJ: Duplicate Run Detail Matches', super.CurrentUser);
                         let loadResult = await dupeRunMatchRecord.Load(dupeResult.DuplicateRunDetailMatchRecordIDs[index]);
                         if(!loadResult){
                             LogError(`Failed to load Duplicate Run Match record ${dupeResult.DuplicateRunDetailMatchRecordIDs[index]}`);

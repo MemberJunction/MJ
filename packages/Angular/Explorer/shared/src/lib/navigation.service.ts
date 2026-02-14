@@ -331,7 +331,7 @@ export class NavigationService implements OnDestroy {
       ApplicationId: appId,
       Title: viewName,
       Configuration: {
-        resourceType: 'User Views',
+        resourceType: 'MJ: User Views',
         viewId,
         recordId: viewId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
@@ -474,7 +474,7 @@ export class NavigationService implements OnDestroy {
       ApplicationId: appId,
       Title: `${entityName}${filterSuffix}`,
       Configuration: {
-        resourceType: 'User Views',
+        resourceType: 'MJ: User Views',
         Entity: entityName,
         ExtraFilter: extraFilter,
         isDynamic: true,

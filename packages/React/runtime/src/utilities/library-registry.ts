@@ -5,7 +5,7 @@
  */
 
 import { UserInfo } from "@memberjunction/core";
-import { ComponentLibraryEntity, ComponentMetadataEngine } from "@memberjunction/core-entities";
+import { MJComponentLibraryEntity, ComponentMetadataEngine } from "@memberjunction/core-entities";
 
 /**
  * Library definition in the registry
@@ -36,13 +36,13 @@ export interface LibraryDefinition {
 export class LibraryRegistry {
   private static libraries: Map<string, LibraryDefinition> = new Map();
   private static _configured: boolean = false;
-  public static async Config(forceRefresh: boolean = false, componentLibraries: ComponentLibraryEntity[]) {
+  public static async Config(forceRefresh: boolean = false, componentLibraries: MJComponentLibraryEntity[]) {
     if (!this._configured || forceRefresh) {
       // next up, we need to map the component metadata to the library definitions 
       // with two steps - first step is that we need to group the libraries in the engine
       // by name and then we'll have all the versions for that particular library we can break
       // into versions in our structure
-      const libraryGroups = new Map<string, ComponentLibraryEntity[]>();
+      const libraryGroups = new Map<string, MJComponentLibraryEntity[]>();
       for (const lib of componentLibraries) {
         if (!libraryGroups.has(lib.Name.toLowerCase())) {
           libraryGroups.set(lib.Name.toLowerCase(), []);
@@ -50,7 +50,7 @@ export class LibraryRegistry {
         libraryGroups.get(lib.Name.toLowerCase())!.push(lib);
       }
 
-      // now we have grouped libraries using the ComponentLibraryEntity type, and next up
+      // now we have grouped libraries using the MJComponentLibraryEntity type, and next up
       // we can map this to our internal structure of LibraryDefinition
       for (const [name, versions] of libraryGroups) {
         const libDef: LibraryDefinition = {

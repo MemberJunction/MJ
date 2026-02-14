@@ -19,13 +19,13 @@ import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
 import {
-    MCPServerEntity,
-    MCPServerConnectionEntity,
-    MCPServerToolEntity,
-    ActionEntity,
-    ActionCategoryEntity,
-    ActionParamEntity,
-    ActionResultCodeEntity
+    MJMCPServerEntity,
+    MJMCPServerConnectionEntity,
+    MJMCPServerToolEntity,
+    MJActionEntity,
+    MJActionCategoryEntity,
+    MJActionParamEntity,
+    MJActionResultCodeEntity
 } from '@memberjunction/core-entities';
 
 import { RateLimiterRegistry, RateLimiter } from './RateLimiter.js';
@@ -719,7 +719,7 @@ export class MCPClientManager {
 
                 if (existing) {
                     // Update existing tool
-                    const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+                    const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                         MCPClientManager.ENTITY_MCP_TOOLS,
                         contextUser
                     );
@@ -737,7 +737,7 @@ export class MCPClientManager {
                     }
                 } else {
                     // Add new tool
-                    const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+                    const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                         MCPClientManager.ENTITY_MCP_TOOLS,
                         contextUser
                     );
@@ -761,7 +761,7 @@ export class MCPClientManager {
             let deprecated = 0;
             for (const existing of existingTools) {
                 if (!seenToolNames.has(existing.ToolName) && existing.Status === 'Active') {
-                    const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+                    const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                         MCPClientManager.ENTITY_MCP_TOOLS,
                         contextUser
                     );
@@ -827,7 +827,7 @@ export class MCPClientManager {
             const rv = new RunView();
 
             // Load the server
-            const serverResult = await rv.RunView<MCPServerEntity>({
+            const serverResult = await rv.RunView<MJMCPServerEntity>({
                 EntityName: MCPClientManager.ENTITY_MCP_SERVERS,
                 ExtraFilter: `ID='${serverId}'`,
                 ResultType: 'entity_object'
@@ -862,7 +862,7 @@ export class MCPClientManager {
             }
 
             // Load all tools for this server
-            const toolsResult = await rv.RunView<MCPServerToolEntity>({
+            const toolsResult = await rv.RunView<MJMCPServerToolEntity>({
                 EntityName: MCPClientManager.ENTITY_MCP_TOOLS,
                 ExtraFilter: `MCPServerID='${serverId}' AND Status='Active'`,
                 ResultType: 'entity_object'
@@ -1005,8 +1005,8 @@ export class MCPClientManager {
             : 'ParentID IS NULL';
 
         // Try to find existing category
-        const existingResult = await rv.RunView<ActionCategoryEntity>({
-            EntityName: 'Action Categories',
+        const existingResult = await rv.RunView<MJActionCategoryEntity>({
+            EntityName: 'MJ: Action Categories',
             ExtraFilter: `Name='${name}' AND ${parentFilter}`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -1016,7 +1016,7 @@ export class MCPClientManager {
         }
 
         // Create new category
-        const category = await md.GetEntityObject<ActionCategoryEntity>('Action Categories', contextUser);
+        const category = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories', contextUser);
         category.NewRecord();
         category.Name = name;
         category.Description = description;
@@ -1042,19 +1042,19 @@ export class MCPClientManager {
      * @returns Result with created flag and param counts
      */
     private async syncActionForTool(
-        tool: MCPServerToolEntity,
+        tool: MJMCPServerToolEntity,
         categoryId: string,
         contextUser: UserInfo
     ): Promise<{ created: boolean; paramsCreated: number; paramsUpdated: number; paramsDeleted: number }> {
         const md = new Metadata();
         const rv = new RunView();
 
-        let action: ActionEntity;
+        let action: MJActionEntity;
         let created = false;
 
         // Check if tool already has a linked action
         if (tool.GeneratedActionID) {
-            const actionEntity = await md.GetEntityObject<ActionEntity>('Actions', contextUser);
+            const actionEntity = await md.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser);
             const loaded = await actionEntity.Load(tool.GeneratedActionID);
             if (loaded) {
                 action = actionEntity;
@@ -1065,8 +1065,8 @@ export class MCPClientManager {
             }
         } else {
             // Check if an action with this name already exists in the category
-            const existingResult = await rv.RunView<ActionEntity>({
-                EntityName: 'Actions',
+            const existingResult = await rv.RunView<MJActionEntity>({
+                EntityName: 'MJ: Actions',
                 ExtraFilter: `Name='${tool.ToolName.replace(/'/g, "''")}' AND CategoryID='${categoryId}'`,
                 ResultType: 'entity_object'
             }, contextUser);
@@ -1090,7 +1090,7 @@ export class MCPClientManager {
 
         // Update the tool's GeneratedActionID and GeneratedActionCategoryID if needed
         if (tool.GeneratedActionID !== action.ID || tool.GeneratedActionCategoryID !== categoryId) {
-            const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+            const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                 MCPClientManager.ENTITY_MCP_TOOLS,
                 contextUser
             );
@@ -1126,13 +1126,13 @@ export class MCPClientManager {
      * @returns The created Action entity
      */
     private async createActionForTool(
-        tool: MCPServerToolEntity,
+        tool: MJMCPServerToolEntity,
         categoryId: string,
         contextUser: UserInfo
-    ): Promise<ActionEntity> {
+    ): Promise<MJActionEntity> {
         const md = new Metadata();
 
-        const action = await md.GetEntityObject<ActionEntity>('Actions', contextUser);
+        const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser);
         action.NewRecord();
         action.Name = tool.ToolName;
         action.Description = tool.ToolDescription || `MCP Tool: ${tool.ToolName}`;
@@ -1179,8 +1179,8 @@ export class MCPClientManager {
         }
 
         // Get existing params for this action
-        const existingResult = await rv.RunView<ActionParamEntity>({
-            EntityName: 'Action Params',
+        const existingResult = await rv.RunView<MJActionParamEntity>({
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID='${actionId}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -1214,7 +1214,7 @@ export class MCPClientManager {
                 }
             } else {
                 // Create new param
-                const param = await md.GetEntityObject<ActionParamEntity>('Action Params', contextUser);
+                const param = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params', contextUser);
                 param.NewRecord();
                 param.ActionID = actionId;
                 param.Name = paramName;
@@ -1309,8 +1309,8 @@ export class MCPClientManager {
         let updated = 0;
 
         // Get existing output params for this action
-        const existingResult = await rv.RunView<ActionParamEntity>({
-            EntityName: 'Action Params',
+        const existingResult = await rv.RunView<MJActionParamEntity>({
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID='${actionId}' AND Type='Output'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -1343,7 +1343,7 @@ export class MCPClientManager {
                 }
             } else {
                 // Create new output param
-                const param = await md.GetEntityObject<ActionParamEntity>('Action Params', contextUser);
+                const param = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params', contextUser);
                 param.NewRecord();
                 param.ActionID = actionId;
                 param.Name = paramDef.Name;
@@ -1375,8 +1375,8 @@ export class MCPClientManager {
         const rv = new RunView();
 
         // Get existing result codes for this action
-        const existingResult = await rv.RunView<ActionResultCodeEntity>({
-            EntityName: 'Action Result Codes',
+        const existingResult = await rv.RunView<MJActionResultCodeEntity>({
+            EntityName: 'MJ: Action Result Codes',
             ExtraFilter: `ActionID='${actionId}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -1404,7 +1404,7 @@ export class MCPClientManager {
                 }
             } else {
                 // Create new result code
-                const code = await md.GetEntityObject<ActionResultCodeEntity>('Action Result Codes', contextUser);
+                const code = await md.GetEntityObject<MJActionResultCodeEntity>('MJ: Action Result Codes', contextUser);
                 code.NewRecord();
                 code.ActionID = actionId;
                 code.ResultCode = codeDef.ResultCode;
@@ -2102,7 +2102,7 @@ export class MCPClientManager {
 
             // Permissions exist - check if user has explicit access
             const md = new Metadata();
-            const userRolesSchema = md.EntityByName("User Roles")?.SchemaName ?? '__mj';
+            const userRolesSchema = md.EntityByName("MJ: User Roles")?.SchemaName ?? '__mj';
             const userPermissions = await rv.RunView<MCPConnectionPermission>({
                 EntityName: MCPClientManager.ENTITY_MCP_PERMISSIONS,
                 ExtraFilter: `MCPServerConnectionID = '${connectionId}' AND (UserID = '${contextUser.ID}' OR RoleID IN (SELECT RoleID FROM [${userRolesSchema}].vwUserRoles WHERE UserID = '${contextUser.ID}'))`,
@@ -2147,7 +2147,7 @@ export class MCPClientManager {
     ): Promise<void> {
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerConnectionEntity>(
+            const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>(
                 MCPClientManager.ENTITY_MCP_CONNECTIONS,
                 contextUser
             );
@@ -2173,7 +2173,7 @@ export class MCPClientManager {
     private async updateServerLastSync(serverId: string, contextUser: UserInfo): Promise<void> {
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerEntity>(
+            const entity = await md.GetEntityObject<MJMCPServerEntity>(
                 MCPClientManager.ENTITY_MCP_SERVERS,
                 contextUser
             );

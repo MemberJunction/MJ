@@ -1,15 +1,15 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseEntity, RunView, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
-import { AICredentialBindingEntity, CredentialEntity } from '@memberjunction/core-entities';
+import { MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from './BaseAIEngine';
 
 /**
- * Extended AICredentialBindingEntity class that validates credential types match vendor expectations.
+ * Extended MJAICredentialBindingEntity class that validates credential types match vendor expectations.
  * When a credential is bound, this validates that the credential's CredentialTypeID matches the
  * CredentialTypeID expected by the vendor (as declared on the AIVendor record).
  */
 @RegisterClass(BaseEntity, 'MJ: AI Credential Bindings')
-export class AICredentialBindingEntityExtended extends AICredentialBindingEntity {
+export class AICredentialBindingEntityExtended extends MJAICredentialBindingEntity {
 
     /**
      * Async validation that checks credential type compatibility.
@@ -180,13 +180,13 @@ export class AICredentialBindingEntityExtended extends AICredentialBindingEntity
      * Loads the credential using RunView.
      * Credentials are not cached in AIEngineBase, so we need to query them.
      */
-    private async loadCredential(): Promise<CredentialEntity | null> {
+    private async loadCredential(): Promise<MJCredentialEntity | null> {
         if (!this.CredentialID) {
             return null;
         }
 
         const rv = new RunView();
-        const result = await rv.RunView<CredentialEntity>({
+        const result = await rv.RunView<MJCredentialEntity>({
             EntityName: 'MJ: Credentials',
             ResultType: 'entity_object',
             CacheLocal: true // load all records and use cache for speed, filter client side below

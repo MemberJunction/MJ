@@ -6,7 +6,7 @@
 import { vi } from 'vitest';
 import { APIKeyEngine, GetAPIKeyEngine, ResetAPIKeyEngine } from './APIKeyEngine';
 import { UserInfo, setMockRunViewResult, clearMockRunViewResults, setMockEntity, clearMockEntities } from './__mocks__/core';
-import { APIKeyEntity, APIApplicationEntity, UserEntity } from './__mocks__/core-entities';
+import { MJAPIKeyEntity, MJAPIApplicationEntity, MJUserEntity } from './__mocks__/core-entities';
 
 // Note: Mocking is handled by resolve.alias in vitest.config.ts
 // @memberjunction/core -> ./__mocks__/core.ts
@@ -105,7 +105,7 @@ describe('APIKeyEngine', () => {
 
         beforeEach(() => {
             // Mock the API key entity
-            const mockApiKey = new APIKeyEntity({
+            const mockApiKey = new MJAPIKeyEntity({
                 ID: 'key-id',
                 Hash: engine.HashAPIKey(validRawKey),
                 UserID: 'user-id',
@@ -119,7 +119,7 @@ describe('APIKeyEngine', () => {
             });
 
             // Mock the user entity
-            const mockUser = new UserEntity({
+            const mockUser = new MJUserEntity({
                 ID: 'user-id',
                 Email: 'user@example.com',
                 Name: 'Test User',
@@ -155,7 +155,7 @@ describe('APIKeyEngine', () => {
         });
 
         it('should reject revoked key', async () => {
-            const revokedKey = new APIKeyEntity({
+            const revokedKey = new MJAPIKeyEntity({
                 ID: 'revoked-key-id',
                 Hash: engine.HashAPIKey(validRawKey),
                 UserID: 'user-id',
@@ -177,7 +177,7 @@ describe('APIKeyEngine', () => {
         });
 
         it('should reject expired key', async () => {
-            const expiredKey = new APIKeyEntity({
+            const expiredKey = new MJAPIKeyEntity({
                 ID: 'expired-key-id',
                 Hash: engine.HashAPIKey(validRawKey),
                 UserID: 'user-id',
@@ -215,7 +215,7 @@ describe('APIKeyEngine', () => {
         });
 
         it('should reject inactive user', async () => {
-            const inactiveUser = new UserEntity({
+            const inactiveUser = new MJUserEntity({
                 ID: 'user-id',
                 Email: 'user@example.com',
                 Name: 'Inactive User',
@@ -239,7 +239,7 @@ describe('APIKeyEngine', () => {
         describe('application binding', () => {
             beforeEach(() => {
                 // Mock application
-                const mockApp = new APIApplicationEntity({
+                const mockApp = new MJAPIApplicationEntity({
                     ID: 'app-id',
                     Name: 'MCPServer',
                     IsActive: true
@@ -326,7 +326,7 @@ describe('APIKeyEngine', () => {
 
         beforeEach(() => {
             // Mock valid API key
-            const mockApiKey = new APIKeyEntity({
+            const mockApiKey = new MJAPIKeyEntity({
                 ID: 'key-id',
                 Hash: validHash,
                 UserID: 'user-id',
@@ -339,7 +339,7 @@ describe('APIKeyEngine', () => {
             });
 
             // Mock application
-            const mockApp = new APIApplicationEntity({
+            const mockApp = new MJAPIApplicationEntity({
                 ID: 'app-id',
                 Name: 'MCPServer',
                 IsActive: true
@@ -400,7 +400,7 @@ describe('APIKeyEngine', () => {
         });
 
         it('should reject inactive application', async () => {
-            const inactiveApp = new APIApplicationEntity({
+            const inactiveApp = new MJAPIApplicationEntity({
                 ID: 'app-id',
                 Name: 'MCPServer',
                 IsActive: false
@@ -530,7 +530,7 @@ describe('APIKeyEngine', () => {
 
     describe('GetApplicationByName()', () => {
         it('should return application by name', async () => {
-            const mockApp = new APIApplicationEntity({
+            const mockApp = new MJAPIApplicationEntity({
                 ID: 'app-id',
                 Name: 'MCPServer',
                 IsActive: true
@@ -559,7 +559,7 @@ describe('APIKeyEngine', () => {
         });
 
         it('should cache application lookups', async () => {
-            const mockApp = new APIApplicationEntity({
+            const mockApp = new MJAPIApplicationEntity({
                 ID: 'app-id',
                 Name: 'MCPServer',
                 IsActive: true
@@ -588,7 +588,7 @@ describe('APIKeyEngine', () => {
 
     describe('ClearCache()', () => {
         it('should clear all caches', async () => {
-            const mockApp = new APIApplicationEntity({
+            const mockApp = new MJAPIApplicationEntity({
                 ID: 'app-id',
                 Name: 'MCPServer',
                 IsActive: true

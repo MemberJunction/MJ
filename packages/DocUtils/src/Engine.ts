@@ -2,7 +2,7 @@ import axios from 'axios';
 import { JSDOM } from 'jsdom';
 
 import { BaseEngine, BaseEnginePropertyConfig, LogError, UserInfo, BaseEntity, IMetadataProvider } from "@memberjunction/core";
-import { LibraryEntity, LibraryItemEntity } from "@memberjunction/core-entities";
+import { MJLibraryEntity, MJLibraryItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from '@memberjunction/global';
 
 
@@ -10,8 +10,8 @@ import { RegisterClass } from '@memberjunction/global';
  * Represents a single item within a library/package that is used to provide documentation for the MemberJunction system. For example a library would be something like
  * @memberjunction/core and an item within that library might be the BaseEntity or BaseEngine class.
  */
-@RegisterClass(BaseEntity, "Library Items")
-export class LibraryItemEntityExtended extends LibraryItemEntity {
+@RegisterClass(BaseEntity, "MJ: Library Items")
+export class LibraryItemEntityExtended extends MJLibraryItemEntity {
     URL: string;
     HTMLContent: string;
 
@@ -35,8 +35,8 @@ export class LibraryItemEntityExtended extends LibraryItemEntity {
     }
 }
 
-@RegisterClass(BaseEntity, "Libraries")
-export class LibraryEntityExtended extends LibraryEntity {
+@RegisterClass(BaseEntity, "MJ: Libraries")
+export class LibraryEntityExtended extends MJLibraryEntity {
     private _items: LibraryItemEntityExtended[] = [];
     public get Items(): LibraryItemEntityExtended[] {
         return this._items;
@@ -65,12 +65,12 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
-                EntityName: 'Libraries',
+                EntityName: 'MJ: Libraries',
                 PropertyName: '_Libraries',
                 CacheLocal: true
             },
             {
-                EntityName: 'Library Items',
+                EntityName: 'MJ: Library Items',
                 PropertyName: '_LibraryItems',
                 CacheLocal: true
             },

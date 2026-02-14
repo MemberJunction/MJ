@@ -2,7 +2,7 @@ import { Component, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { ResourceData, RoleEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJRoleEntity } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
@@ -28,9 +28,9 @@ interface FilterOptions {
 @RegisterClass(BaseDashboard, 'RoleManagement')
 export class RoleManagementComponent extends BaseDashboard implements OnDestroy {
   // State management
-  public roles: RoleEntity[] = [];
-  public filteredRoles: RoleEntity[] = [];
-  public selectedRole: RoleEntity | null = null;
+  public roles: MJRoleEntity[] = [];
+  public filteredRoles: MJRoleEntity[] = [];
+  public selectedRole: MJRoleEntity | null = null;
   public isLoading = false;
   public error: string | null = null;
 
@@ -109,10 +109,10 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
-  private async loadRoles(): Promise<RoleEntity[]> {
+  private async loadRoles(): Promise<MJRoleEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<RoleEntity>({
-      EntityName: 'Roles',
+    const result = await rv.RunView<MJRoleEntity>({
+      EntityName: 'MJ: Roles',
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
@@ -167,7 +167,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     };
   }
   
-  public isSystemRole(role: RoleEntity): boolean {
+  public isSystemRole(role: MJRoleEntity): boolean {
     // System roles typically have certain naming patterns or flags
     const systemRoleNames = ['Administrator', 'User', 'Guest', 'Developer'];
     return systemRoleNames.includes(role.Name || '');
@@ -205,7 +205,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     this.showRoleDialog = true;
   }
   
-  public editRole(role: RoleEntity): void {
+  public editRole(role: MJRoleEntity): void {
     this.roleDialogData = {
       role: role,
       mode: 'edit'
@@ -213,7 +213,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     this.showRoleDialog = true;
   }
   
-  public confirmDeleteRole(role: RoleEntity): void {
+  public confirmDeleteRole(role: MJRoleEntity): void {
     this.selectedRole = role;
     this.showDeleteConfirm = true;
   }
@@ -223,7 +223,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     
     try {
       // Load role entity to delete
-      const role = await this.metadata.GetEntityObject<RoleEntity>('Roles');
+      const role = await this.metadata.GetEntityObject<MJRoleEntity>('MJ: Roles');
       const loadResult = await role.Load(this.selectedRole.ID);
       
       if (loadResult) {
@@ -247,18 +247,18 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
   
-  public getRoleIcon(role: RoleEntity): string {
+  public getRoleIcon(role: MJRoleEntity): string {
     if (this.isSystemRole(role)) {
       return 'fa-shield-halved';
     }
     return 'fa-user-tag';
   }
   
-  public getRoleTypeLabel(role: RoleEntity): string {
+  public getRoleTypeLabel(role: MJRoleEntity): string {
     return this.isSystemRole(role) ? 'System' : 'Custom';
   }
   
-  public getRoleTypeClass(role: RoleEntity): string {
+  public getRoleTypeClass(role: MJRoleEntity): string {
     return this.isSystemRole(role) ? 'badge-system' : 'badge-custom';
   }
   

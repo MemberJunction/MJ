@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-container-directives",
   "version": "4.4.0",
-  "description": "MemberJunction: Angular Container Directives - Fill Container for Auto-Resizing, and plain container just for element identification/binding",
+  "description": "DEPRECATED: Angular Container Directives - Fill Container for Auto-Resizing, and plain container for element identification/binding. Will be removed in a future release.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [

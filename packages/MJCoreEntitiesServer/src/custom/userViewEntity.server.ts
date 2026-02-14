@@ -14,7 +14,7 @@ interface SmartFilterResponse {
     userExplanationMessage: string;
 }
 
-@RegisterClass(BaseEntity, 'User Views')
+@RegisterClass(BaseEntity, 'MJ: User Views')
 export class UserViewEntity_Server extends UserViewEntityExtended  {
     /**
      * This property is hard-coded to true in this class because we DO support smart filters in this class. If you want to disable smart filters for a specific view you can override this property in your subclass and set it to false.
@@ -114,8 +114,8 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
     protected BuildTemplateData(entityInfo: EntityInfo): Record<string, unknown> {
         const processedViews: string[] = [entityInfo.BaseView];
         const md = this.ProviderToUse as unknown as IMetadataProvider;
-        const listsEntity = md.Entities.find(e => e.Name === "Lists");
-        const listDetailsEntity = md.Entities.find(e => e.Name === "List Details");
+        const listsEntity = md.Entities.find(e => e.Name === "MJ: Lists");
+        const listDetailsEntity = md.Entities.find(e => e.Name === "MJ: List Details");
 
         // Build fields description
         const fieldsDescription = entityInfo.Fields.map(f => {

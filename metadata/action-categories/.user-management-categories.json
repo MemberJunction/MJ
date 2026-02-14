@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "User Management",
-      "ParentID": "@lookup:Action Categories.Name=System",
+      "ParentID": "@lookup:MJ: Action Categories.Name=System",
       "Description": "Actions related to user creation, role assignment, and permission management",
       "Status": "Active"
     },
@@ -10,14 +10,14 @@
       "ID": "32CA0D54-ABCB-431F-A4A3-476C14FBC147"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.758Z",
-      "checksum": "cd6c339299beaa3760f4c85add5424c7f5438a5d8daec90b995519e8e9395fc8"
+      "lastModified": "2026-02-13T21:08:32.039Z",
+      "checksum": "8a7e282691c24562c9c09b74503275741a4009025e18732033628cb43deeab01"
     }
   },
   {
     "fields": {
       "Name": "Security",
-      "ParentID": "@lookup:Action Categories.Name=System",
+      "ParentID": "@lookup:MJ: Action Categories.Name=System",
       "Description": "Actions related to security, authentication, and permission checking",
       "Status": "Active"
     },
@@ -25,8 +25,8 @@
       "ID": "580E3E85-CFD0-4812-AC05-30256EA89C40"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.759Z",
-      "checksum": "6422f1614c4d532cf0c2468c3033842b4ef2a7a6012a227db3d293071020655f"
+      "lastModified": "2026-02-13T21:08:32.040Z",
+      "checksum": "a8db0b78741a917e384902b202f4e856456ef7349437222e99d5b2e2b5e135c6"
     }
   }
 ]

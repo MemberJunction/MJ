@@ -4,7 +4,7 @@
  */
 
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { ScheduledJobEntity, ScheduledJobTypeEntity, ScheduledJobRunEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity, MJScheduledJobTypeEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 
 /**
  * Base engine for scheduling system with metadata caching
@@ -18,9 +18,9 @@ import { ScheduledJobEntity, ScheduledJobTypeEntity, ScheduledJobRunEntity } fro
  * For actual job execution, use SchedulingEngine from @memberjunction/scheduling-engine.
  */
 export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
-    private _scheduledJobTypes: ScheduledJobTypeEntity[] = [];
-    private _scheduledJobs: ScheduledJobEntity[] = [];
-    private _scheduledJobRuns: ScheduledJobRunEntity[] = [];
+    private _scheduledJobTypes: MJScheduledJobTypeEntity[] = [];
+    private _scheduledJobs: MJScheduledJobEntity[] = [];
+    private _scheduledJobRuns: MJScheduledJobRunEntity[] = [];
     private _activePollingInterval: number | null = 10000; // Default 10 seconds, null when no jobs
 
     /**
@@ -80,49 +80,49 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
     /**
      * Get all scheduled job types
      */
-    public get ScheduledJobTypes(): ScheduledJobTypeEntity[] {
+    public get ScheduledJobTypes(): MJScheduledJobTypeEntity[] {
         return this._scheduledJobTypes;
     }
 
     /**
      * Get scheduled jobs (active only by default, unless includeAllJobs was set in Config)
      */
-    public get ScheduledJobs(): ScheduledJobEntity[] {
+    public get ScheduledJobs(): MJScheduledJobEntity[] {
         return this._scheduledJobs;
     }
 
     /**
      * Get recent scheduled job runs (only populated if includeRuns was set in Config)
      */
-    public get ScheduledJobRuns(): ScheduledJobRunEntity[] {
+    public get ScheduledJobRuns(): MJScheduledJobRunEntity[] {
         return this._scheduledJobRuns;
     }
 
     /**
      * Find a job type by name
      */
-    public GetJobTypeByName(name: string): ScheduledJobTypeEntity | undefined {
+    public GetJobTypeByName(name: string): MJScheduledJobTypeEntity | undefined {
         return this._scheduledJobTypes.find(jt => jt.Name === name);
     }
 
     /**
      * Find a job type by driver class
      */
-    public GetJobTypeByDriverClass(driverClass: string): ScheduledJobTypeEntity | undefined {
+    public GetJobTypeByDriverClass(driverClass: string): MJScheduledJobTypeEntity | undefined {
         return this._scheduledJobTypes.find(jt => jt.DriverClass === driverClass);
     }
 
     /**
      * Get all jobs of a specific type
      */
-    public GetJobsByType(jobTypeId: string): ScheduledJobEntity[] {
+    public GetJobsByType(jobTypeId: string): MJScheduledJobEntity[] {
         return this._scheduledJobs.filter(j => j.JobTypeID === jobTypeId);
     }
 
     /**
      * Get runs for a specific job
      */
-    public GetRunsForJob(jobId: string): ScheduledJobRunEntity[] {
+    public GetRunsForJob(jobId: string): MJScheduledJobRunEntity[] {
         return this._scheduledJobRuns.filter(r => r.ScheduledJobID === jobId);
     }
 

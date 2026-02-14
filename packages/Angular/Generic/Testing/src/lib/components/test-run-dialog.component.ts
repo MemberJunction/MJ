@@ -4,7 +4,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TestEngineBase, TestVariableDefinition, TestTypeVariablesSchema, TestVariablesConfig } from '@memberjunction/testing-engine-base';
 import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { TestEntity, TestSuiteEntity, TestSuiteTestEntity, TestTypeEntity } from '@memberjunction/core-entities';
+import { MJTestEntity, MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 
@@ -1829,10 +1829,10 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   preselectedName = '';
 
   // Data
-  allTests: TestEntity[] = [];
-  allSuites: TestSuiteEntity[] = [];
-  filteredTests: TestEntity[] = [];
-  filteredSuites: TestSuiteEntity[] = [];
+  allTests: MJTestEntity[] = [];
+  allSuites: MJTestSuiteEntity[] = [];
+  filteredTests: MJTestEntity[] = [];
+  filteredSuites: MJTestSuiteEntity[] = [];
 
   // Selective test execution for suites (progressive disclosure)
   showAdvancedOptions = false;
@@ -2004,7 +2004,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   /**
    * Load available variables for a test based on its TestType's VariablesSchema
    */
-  private loadVariablesForTest(test: TestEntity): void {
+  private loadVariablesForTest(test: MJTestEntity): void {
     this.availableVariables = [];
     this.showVariablesSection = false;
 
@@ -2015,7 +2015,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     }
 
     // Parse the type's VariablesSchema
-    const variablesSchemaJson = (testType as TestTypeEntity & { VariablesSchema?: string }).VariablesSchema;
+    const variablesSchemaJson = (testType as MJTestTypeEntity & { VariablesSchema?: string }).VariablesSchema;
     if (!variablesSchemaJson) {
       return;
     }
@@ -2026,7 +2026,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     }
 
     // Parse the test's Variables config to check which are exposed
-    const testVariablesJson = (test as TestEntity & { Variables?: string }).Variables;
+    const testVariablesJson = (test as MJTestEntity & { Variables?: string }).Variables;
     const testConfig = testVariablesJson ? SafeJSONParse(testVariablesJson) as TestVariablesConfig | null : null;
 
     // Build the available variables list

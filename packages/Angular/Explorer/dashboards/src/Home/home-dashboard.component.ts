@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { ResourceData, UserFavoriteEntity, UserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -52,7 +52,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public showConfigDialog = false;
 
   // Favorites
-  public favorites: UserFavoriteEntity[] = [];
+  public favorites: MJUserFavoriteEntity[] = [];
   public favoritesLoading = true;
 
   // Recents
@@ -60,7 +60,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public recentsLoading = true;
 
   // Notifications
-  public unreadNotifications: UserNotificationEntity[] = [];
+  public unreadNotifications: MJUserNotificationEntity[] = [];
   public notificationsLoading = true;
 
   // Sidebar state - default closed on all screen sizes
@@ -300,7 +300,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Navigate to a favorite item using NavigationService
    */
-  onFavoriteClick(favorite: UserFavoriteEntity): void {
+  onFavoriteClick(favorite: MJUserFavoriteEntity): void {
     // Navigate based on entity type using NavigationService
     const entityName = favorite.Entity?.toLowerCase();
     const recordId = favorite.RecordID;
@@ -352,9 +352,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Navigate to a notification using NavigationService
    */
-  onNotificationClick(notification: UserNotificationEntity): void {
+  onNotificationClick(notification: MJUserNotificationEntity): void {
     // Navigate to the notifications view using NavigationService
-    this.navigationService.OpenDynamicView('User Notifications');
+    this.navigationService.OpenDynamicView('MJ: User Notifications');
   }
 
   /**
@@ -390,7 +390,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Get icon for a favorite based on its entity type (cached)
    */
-  getFavoriteIcon(favorite: UserFavoriteEntity): string {
+  getFavoriteIcon(favorite: MJUserFavoriteEntity): string {
     const cacheKey = favorite.ID;
     if (this.favoriteIconCache.has(cacheKey)) {
       return this.favoriteIconCache.get(cacheKey)!;
@@ -432,7 +432,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Track function for favorites
    */
-  trackByFavorite(_index: number, item: UserFavoriteEntity): string {
+  trackByFavorite(_index: number, item: MJUserFavoriteEntity): string {
     return item.ID;
   }
 
@@ -461,7 +461,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Track function for notifications
    */
-  trackByNotification(_index: number, item: UserNotificationEntity): string {
+  trackByNotification(_index: number, item: MJUserNotificationEntity): string {
     return item.ID;
   }
 }

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 
 /**
  * Tabular list view of agent steps and paths.
@@ -213,13 +213,13 @@ import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-e
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AgentStepListComponent {
-  @Input() Steps: AIAgentStepEntity[] = [];
-  @Input() Paths: AIAgentStepPathEntity[] = [];
+  @Input() Steps: MJAIAgentStepEntity[] = [];
+  @Input() Paths: MJAIAgentStepPathEntity[] = [];
   @Input() SelectedStepID: string | null = null;
 
-  @Output() StepClicked = new EventEmitter<AIAgentStepEntity>();
+  @Output() StepClicked = new EventEmitter<MJAIAgentStepEntity>();
 
-  getConfiguredItem(step: AIAgentStepEntity): string {
+  getConfiguredItem(step: MJAIAgentStepEntity): string {
     switch (step.StepType) {
       case 'Action': return step.Action || '—';
       case 'Prompt': return step.Prompt || '—';

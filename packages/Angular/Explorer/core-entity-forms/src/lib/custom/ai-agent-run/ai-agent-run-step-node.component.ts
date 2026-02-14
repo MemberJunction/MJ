@@ -99,7 +99,7 @@ export class AIAgentRunStepNodeComponent {
       
       switch (stepType.trim().toLowerCase()) {
         case 'actions':
-          entityName = 'Action Execution Logs';
+          entityName = 'MJ: Action Execution Logs';
           break;
         case 'prompt':
           entityName = 'MJ: AI Prompt Runs';
@@ -114,7 +114,7 @@ export class AIAgentRunStepNodeComponent {
       
       switch (this.item.type.trim().toLowerCase()) {
         case 'actions':
-          entityName = 'Action Execution Logs';
+          entityName = 'MJ: Action Execution Logs';
           break;
         case 'prompt':
           entityName = 'MJ: AI Prompt Runs';

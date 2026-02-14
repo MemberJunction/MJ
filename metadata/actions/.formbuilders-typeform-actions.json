@@ -3,14 +3,14 @@
     "fields": {
       "Name": "Get Typeform Responses",
       "Description": "Retrieves responses from a Typeform with filtering, pagination, and search capabilities. Supports date ranges, completion status filters, and automatic pagination through all responses.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "GetTypeformResponsesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-inbox"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -331,7 +331,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -413,22 +413,22 @@
       "ID": "D836BB77-87A7-4DE6-97A2-3CD2C595D774"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.552Z",
-      "checksum": "f1458b4b362b4f12e8f2a110f0e0175394bea848b3bf0946445bb6b2f98a55aa"
+      "lastModified": "2026-02-13T21:09:09.160Z",
+      "checksum": "3cd83bbc25e083dfd97834667223f235b47b2386888035e5ef629a1617839ee9"
     }
   },
   {
     "fields": {
       "Name": "Get Single Typeform Response",
       "Description": "Retrieves details of a specific Typeform response by its unique response token. Includes all answers, metadata, hidden fields, and calculated values.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "GetSingleTypeformResponseAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-lines"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -620,7 +620,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -702,22 +702,22 @@
       "ID": "55839007-830E-427C-BD78-DBCE2779F9A7"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.553Z",
-      "checksum": "4672ee82dd3e7c8f7c10c3a3f3a285a6ccfb2fdebe52201d55655306b8a2edba"
+      "lastModified": "2026-02-13T21:09:09.160Z",
+      "checksum": "b88e0a28e14d18bd2a99175a10766475ed694a05bf126fbe6262dec1bbe05af0"
     }
   },
   {
     "fields": {
       "Name": "Get Typeform Response Statistics",
       "Description": "Calculates comprehensive statistics from Typeform responses including completion rates, response trends, popular answers, and time-based analytics. Useful for dashboards and reporting.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "GetTypeformStatisticsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-chart-line"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1015,7 +1015,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1082,22 +1082,22 @@
       "ID": "3F0B0F0C-67AA-488F-87FC-6544BAC0A4F7"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.554Z",
-      "checksum": "73b7a52d3e9b884b30ad967ae0285b719821cb2f6cf87182229218f2da341ee7"
+      "lastModified": "2026-02-13T21:09:09.161Z",
+      "checksum": "66f26ca369cf261cfafafebbfb88212dc96ef47ca4c037d3f8abd1df3095669f"
     }
   },
   {
     "fields": {
       "Name": "Export Typeform Responses to CSV",
       "Description": "Exports Typeform responses to CSV format for use in spreadsheets, data analysis tools, or archival. Supports custom delimiters and optional metadata columns.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "ExportTypeformCSVAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-csv"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1328,7 +1328,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1410,22 +1410,22 @@
       "ID": "938271CC-322F-4C9D-B46D-3FE7BEA547BA"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.555Z",
-      "checksum": "b1fbc9f434b4174206de40bc49f19821baf120f2842aaa3df1ca6d0310383a36"
+      "lastModified": "2026-02-13T21:09:09.162Z",
+      "checksum": "8792e7b9e8f870e0a431eaf39eb4cbd4a2fc6293ce598a2cf14028b10cdca203"
     }
   },
   {
     "fields": {
       "Name": "Watch for New Typeform Responses",
       "Description": "Polls Typeform for new responses since the last check. Returns only new submissions and updates the last checked timestamp. Perfect for triggering workflows, sending notifications, or syncing data to other systems.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "WatchNewTypeformResponsesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-eye"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1688,7 +1688,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1770,22 +1770,22 @@
       "ID": "4F62A5F8-D444-4E02-ADB5-02F1EE40D7CB"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.556Z",
-      "checksum": "ddf59347502ef2736b73aa050d95ce6d9265b073279fd43fec75aa7c7e414a00"
+      "lastModified": "2026-02-13T21:09:09.164Z",
+      "checksum": "7b2db4baac5ee2a2ba950d17cb1b25b834cc16a935e33938b4972818d63aa0bf"
     }
   },
   {
     "fields": {
       "Name": "Get Typeform Details",
       "Description": "Retrieves complete details of a Typeform including title, fields, logic jumps, settings, theme, and metadata. Use this to inspect or backup form configurations.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "GetTypeformAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-clipboard-list"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1976,7 +1976,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2043,22 +2043,22 @@
       "ID": "16A482D2-980C-4F48-9877-861B154A4283"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.557Z",
-      "checksum": "75713cfad11b10bfea55f50e3963a420751702b15f43b782a09419bcfd85359c"
+      "lastModified": "2026-02-13T21:09:09.164Z",
+      "checksum": "530664d499bd735a3719e8551273b4b9291e77be249a026eb8aeed3e94a166ec"
     }
   },
   {
     "fields": {
       "Name": "Create Typeform",
       "Description": "Creates a new Typeform with specified title, fields, and settings. Supports all field types including text, email, multiple choice, rating, and more. Returns the new form ID and shareable link.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "CreateTypeformAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-plus-circle"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2272,7 +2272,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2354,22 +2354,22 @@
       "ID": "B90D8199-AC89-4761-BFFC-9D23261BA458"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.559Z",
-      "checksum": "83e7d2a01d88debd113a18314a7a6e024a142c01a2f9fa47b30a8c4734943862"
+      "lastModified": "2026-02-13T21:09:09.165Z",
+      "checksum": "80d5bd2278a7e7cc2a7d6421b5ab97dccbe1ab716174d909b6b8945b178522c0"
     }
   },
   {
     "fields": {
       "Name": "Update Typeform",
       "Description": "Updates an existing Typeform. WARNING: Uses PUT which replaces all form data - fields not included will be deleted. Set MergeWithExisting=true to safely update only specified properties while preserving others.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "UpdateTypeformAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-pen-to-square"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2601,7 +2601,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2683,22 +2683,22 @@
       "ID": "98469B26-1518-46FD-8606-4BB6DC7D0833"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.560Z",
-      "checksum": "4f3a8d681567c50fb3bf6c32ac51df02bd8c79254bc7f4499b7879c7494a0a6f"
+      "lastModified": "2026-02-13T21:09:09.166Z",
+      "checksum": "a9e1c3f732530ef2f8ed5e23502fd4ffd937416544ff8fb70c36df7de548a2e1"
     }
   },
   {
     "fields": {
       "Name": "Get Typeform Forms",
       "Description": "Retrieves a list of all TypeForms for a company including form IDs, titles, and basic metadata. Use this to discover available forms before processing submissions.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "GetTypeformFormsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-list"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2723,22 +2723,22 @@
       "ID": "AF24645E-E420-488F-8247-D95365F1EF95"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.561Z",
-      "checksum": "39514374cca8cf48980a1b2c4012498179b07692f8813e1b19754fde793d8ec1"
+      "lastModified": "2026-02-13T21:09:09.167Z",
+      "checksum": "a1d652571b7cebcaea2a38a1011f6cd037f52c2ae52986560925add2ff02f30e"
     }
   },
   {
     "fields": {
       "Name": "Typeform Get File Content",
       "Description": "Downloads file content from Typeform using the file URL from response data. Returns file content in base64, text, or binary format with metadata.",
-      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Typeform&Parent=Form Builders",
       "DriverClass": "TypeformGetFileContentAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-download"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2799,8 +2799,8 @@
       "ID": "8AB5241D-53F6-4388-991A-2CAECDE4E5BF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:23.562Z",
-      "checksum": "242efae2f6ba534a48eaf392bb65e5fcee230869f894beea47277381407c2a45"
+      "lastModified": "2026-02-13T21:09:09.168Z",
+      "checksum": "c1d07c9c94d337d5b5ac81228c261e6b4934f8222a60debe868db1d5aef07e61"
     }
   }
 ]

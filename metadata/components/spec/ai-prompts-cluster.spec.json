@@ -11,7 +11,7 @@
     "mode": "views",
     "entities": [
       {
-        "name": "AI Prompts",
+        "name": "MJ: AI Prompts",
         "displayFields": ["Name", "Description", "TemplateText", "CategoryID", "Category", "TypeID", "Type", "Status", "PromptRole", "ResponseFormat", "Template"],
         "filterFields": ["Status", "CategoryID", "TypeID", "PromptRole"],
         "sortFields": ["Name", "CreatedAt", "UpdatedAt"],

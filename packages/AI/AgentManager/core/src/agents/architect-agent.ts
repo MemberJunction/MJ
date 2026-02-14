@@ -1,6 +1,6 @@
 import { BaseAgent, PayloadManager } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
-import { ActionEntity } from "@memberjunction/core-entities";
+import { MJActionEntity } from "@memberjunction/core-entities";
 import { RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -294,8 +294,8 @@ export class AgentArchitectAgent extends BaseAgent {
 
             // Query database for these action IDs
             const filter = actionIds.map(id => `ID='${id}'`).join(' OR ');
-            const result = await rv.RunView<ActionEntity>({
-                EntityName: 'Actions',
+            const result = await rv.RunView<MJActionEntity>({
+                EntityName: 'MJ: Actions',
                 ExtraFilter: filter,
                 ResultType: 'entity_object'
             }, params.contextUser);

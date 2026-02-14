@@ -12,11 +12,11 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  TestTypeEntity: class {},
-  TestEntity: class {},
-  TestSuiteEntity: class {},
-  TestRubricEntity: class {},
-  TestSuiteTestEntity: class {},
+  MJTestTypeEntity: class {},
+  MJTestEntity: class {},
+  MJTestSuiteEntity: class {},
+  MJTestRubricEntity: class {},
+  MJTestSuiteTestEntity: class {},
 }));
 
 import { TestEngineBase } from '../TestEngineBase';

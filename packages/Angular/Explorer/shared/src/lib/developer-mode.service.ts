@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { UserEntity, UserSettingEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
 /**
@@ -37,7 +37,7 @@ export class DeveloperModeService {
     private _isEnabled$ = new BehaviorSubject<boolean>(false);
     private _isDeveloper$ = new BehaviorSubject<boolean>(false);
     private _initialized = false;
-    private _currentUser: UserEntity | null = null;
+    private _currentUser: MJUserEntity | null = null;
 
     // Role names that qualify as "developer"
     private static readonly DEVELOPER_ROLES = [
@@ -88,7 +88,7 @@ export class DeveloperModeService {
      * Initialize service with current user.
      * Call this after login/authentication completes.
      */
-    public async Initialize(user: UserEntity): Promise<void> {
+    public async Initialize(user: MJUserEntity): Promise<void> {
         if (this._initialized) {
             return;
         }
@@ -186,13 +186,13 @@ export class DeveloperModeService {
     /**
      * Check if user has a developer role by querying User Roles entity
      */
-    private async CheckDeveloperRole(user: UserEntity): Promise<boolean> {
+    private async CheckDeveloperRole(user: MJUserEntity): Promise<boolean> {
         try {
             const rv = new RunView();
 
             // Get user's roles via the User Roles junction table
             const userRolesResult = await rv.RunView<{ RoleID: string }>({
-                EntityName: 'User Roles',
+                EntityName: 'MJ: User Roles',
                 ExtraFilter: `UserID='${user.ID}'`,
                 ResultType: 'simple',
                 Fields: ['RoleID']
@@ -206,7 +206,7 @@ export class DeveloperModeService {
 
             // Get the role names
             const rolesResult = await rv.RunView<{ Name: string }>({
-                EntityName: 'Roles',
+                EntityName: 'MJ: Roles',
                 ExtraFilter: `ID IN (${roleIds.map(id => `'${id}'`).join(',')})`,
                 ResultType: 'simple',
                 Fields: ['Name']

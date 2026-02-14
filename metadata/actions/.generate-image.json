@@ -7,10 +7,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-image",
-      "CategoryID": "@lookup:Action Categories.Name=AI"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -265,7 +265,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -347,8 +347,8 @@
       "ID": "048FF309-C2CD-44D8-8A8E-8C771ADA8284"
     },
     "sync": {
-      "lastModified": "2026-01-19T06:08:25.435Z",
-      "checksum": "7dcd22e621ded27865e800d317de05d7da25ebd8f86dc5c3302dc324758f5465"
+      "lastModified": "2026-02-13T21:09:10.623Z",
+      "checksum": "6ff71b8f764d374486f67b0b6bf39b31ea4a7c63a1723c64b9273c75b235e7f5"
     }
   }
 ]

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 
 /**
@@ -16,10 +16,10 @@ import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 })
 export class ConversationDataService {
   // The list of conversations - shared across all components
-  public conversations: ConversationEntity[] = [];
+  public conversations: MJConversationEntity[] = [];
 
   // Observable for conversation list changes (for components that need reactive updates)
-  private _conversations$ = new BehaviorSubject<ConversationEntity[]>([]);
+  private _conversations$ = new BehaviorSubject<MJConversationEntity[]>([]);
   public readonly conversations$ = this._conversations$.asObservable();
 
   // Search query for filtering - shared across sidebars
@@ -35,14 +35,14 @@ export class ConversationDataService {
    * @param id The conversation ID
    * @returns The conversation entity or null if not found
    */
-  getConversationById(id: string): ConversationEntity | null {
+  getConversationById(id: string): MJConversationEntity | null {
     return this.conversations.find(c => c.ID === id) || null;
   }
 
   /**
    * Gets filtered conversations based on search query
    */
-  get filteredConversations(): ConversationEntity[] {
+  get filteredConversations(): MJConversationEntity[] {
     if (!this.searchQuery || this.searchQuery.trim() === '') {
       return this.conversations;
     }
@@ -56,7 +56,7 @@ export class ConversationDataService {
   /**
    * Gets pinned conversations
    */
-  get pinnedConversations(): ConversationEntity[] {
+  get pinnedConversations(): MJConversationEntity[] {
     return this.conversations.filter(c => c.IsPinned);
   }
 
@@ -79,7 +79,7 @@ export class ConversationDataService {
    * Adds a conversation to the list
    * @param conversation The conversation to add
    */
-  addConversation(conversation: ConversationEntity): void {
+  addConversation(conversation: MJConversationEntity): void {
     this.conversations = [conversation, ...this.conversations];
     this._conversations$.next(this.conversations);
   }
@@ -90,7 +90,7 @@ export class ConversationDataService {
    * @param id The conversation ID
    * @param updates The fields to update
    */
-  updateConversationInPlace(id: string, updates: Partial<ConversationEntity>): void {
+  updateConversationInPlace(id: string, updates: Partial<MJConversationEntity>): void {
     const conversation = this.conversations.find(c => c.ID === id);
     if (conversation) {
       Object.assign(conversation, updates);
@@ -144,9 +144,9 @@ export class ConversationDataService {
       const rv = new RunView();
       const filter = `EnvironmentID='${environmentId}' AND UserID='${currentUser.ID}' AND (IsArchived IS NULL OR IsArchived=0)`;
 
-      const result = await rv.RunView<ConversationEntity>(
+      const result = await rv.RunView<MJConversationEntity>(
         {
-          EntityName: 'Conversations',
+          EntityName: 'MJ: Conversations',
           ExtraFilter: filter,
           OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
           MaxRows: 1000,
@@ -186,9 +186,9 @@ export class ConversationDataService {
     currentUser: UserInfo,
     description?: string,
     projectId?: string
-  ): Promise<ConversationEntity> {
+  ): Promise<MJConversationEntity> {
     const md = new Metadata();
-    const conversation = await md.GetEntityObject<ConversationEntity>('Conversations', currentUser);
+    const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);
 
     conversation.Name = name;
     conversation.EnvironmentID = environmentId;
@@ -213,7 +213,7 @@ export class ConversationDataService {
    */
   async deleteConversation(id: string, currentUser: UserInfo): Promise<boolean> {
     const md = new Metadata();
-    const conversation = await md.GetEntityObject<ConversationEntity>('Conversations', currentUser);
+    const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);
 
     const loaded = await conversation.Load(id);
     if (!loaded) {
@@ -278,11 +278,11 @@ export class ConversationDataService {
    */
   async saveConversation(
     id: string,
-    updates: Partial<ConversationEntity>,
+    updates: Partial<MJConversationEntity>,
     currentUser: UserInfo
   ): Promise<boolean> {
     const md = new Metadata();
-    const conversation = await md.GetEntityObject<ConversationEntity>('Conversations', currentUser);
+    const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);
 
     const loaded = await conversation.Load(id);
     if (!loaded) {

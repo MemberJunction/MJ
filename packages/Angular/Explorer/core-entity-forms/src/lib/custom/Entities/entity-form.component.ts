@@ -16,12 +16,12 @@ import {
     CompositeKey,
     RunView
 } from '@memberjunction/core';
-import { EntityEntity } from '@memberjunction/core-entities';
+import { MJEntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
-import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form.component';
+import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
 
 export type ExplorerSection =
     | 'overview'
@@ -119,7 +119,7 @@ export interface GroupedIncomingRelationship {
  * - Visual ERD integration for relationship exploration
  * - Slide-in detail panels for contextual information
  */
-@RegisterClass(BaseFormComponent, 'Entities')
+@RegisterClass(BaseFormComponent, 'MJ: Entities')
 @Component({
   standalone: false,
     selector: 'mj-entity-form',
@@ -127,11 +127,11 @@ export interface GroupedIncomingRelationship {
     styleUrls: ['./entity-form.component.css', '../../../shared/form-styles.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class EntityFormComponentExtended extends EntityFormComponent implements OnInit, OnDestroy {
+export class EntityFormComponentExtended extends MJEntityFormComponent implements OnInit, OnDestroy {
     private sharedService = inject(SharedService);
 
     /** The Entity record being displayed */
-    public record!: EntityEntity;
+    public record!: MJEntityEntity;
 
     /** Runtime EntityInfo metadata (populated from record.ID) */
     public entity: EntityInfo | null = null;
@@ -854,7 +854,7 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     /** Navigate to an entity record in the Entity Explorer */
     public NavigateToEntity(entityInfo: EntityInfo): void {
         const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityInfo.ID }]);
-        this.sharedService.OpenEntityRecord('Entities', pkey);
+        this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
     }
 
     /**
@@ -970,7 +970,7 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         const related = this.getRelatedEntity(field);
         if (related) {
             const pkey = new CompositeKey([{ FieldName: 'ID', Value: related.ID }]);
-            this.sharedService.OpenEntityRecord('Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
         }
     }
 
@@ -980,7 +980,7 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     public openRelatedEntityFromField(entityId: string): void {
         if (entityId) {
             const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityId }]);
-            this.sharedService.OpenEntityRecord('Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
         }
     }
 

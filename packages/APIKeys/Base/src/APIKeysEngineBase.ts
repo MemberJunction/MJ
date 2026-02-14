@@ -6,11 +6,11 @@
 
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import {
-    APIApplicationEntity,
-    APIApplicationScopeEntity,
-    APIKeyApplicationEntity,
-    APIKeyScopeEntity,
-    APIScopeEntity
+    MJAPIApplicationEntity,
+    MJAPIApplicationScopeEntity,
+    MJAPIKeyApplicationEntity,
+    MJAPIKeyScopeEntity,
+    MJAPIScopeEntity
 } from "@memberjunction/core-entities";
 import { RegisterForStartup } from "@memberjunction/core";
 
@@ -32,12 +32,12 @@ const DEFAULT_UI_CONFIG: APIScopeUIConfig = {
 };
 
 /**
- * Parse the UIConfig JSON string from an APIScopeEntity.
+ * Parse the UIConfig JSON string from an MJAPIScopeEntity.
  * Returns default values if parsing fails or value is null.
  * @param scope - The API Scope entity
  * @returns Parsed UIConfig with defaults applied
  */
-export function parseAPIScopeUIConfig(scope: APIScopeEntity): APIScopeUIConfig {
+export function parseAPIScopeUIConfig(scope: MJAPIScopeEntity): APIScopeUIConfig {
     if (!scope.UIConfig) {
         return { ...DEFAULT_UI_CONFIG };
     }
@@ -76,17 +76,17 @@ export function parseAPIScopeUIConfig(scope: APIScopeEntity): APIScopeUIConfig {
 @RegisterForStartup()
 export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
     // Cached entity arrays
-    private _scopes: APIScopeEntity[] = [];
-    private _applications: APIApplicationEntity[] = [];
-    private _applicationScopes: APIApplicationScopeEntity[] = [];
-    private _keyApplications: APIKeyApplicationEntity[] = [];
-    private _keyScopes: APIKeyScopeEntity[] = [];
+    private _scopes: MJAPIScopeEntity[] = [];
+    private _applications: MJAPIApplicationEntity[] = [];
+    private _applicationScopes: MJAPIApplicationScopeEntity[] = [];
+    private _keyApplications: MJAPIKeyApplicationEntity[] = [];
+    private _keyScopes: MJAPIKeyScopeEntity[] = [];
 
     // Lookup caches for fast access
-    private _scopesByPath: Map<string, APIScopeEntity> = new Map();
-    private _scopesById: Map<string, APIScopeEntity> = new Map();
-    private _applicationsByName: Map<string, APIApplicationEntity> = new Map();
-    private _applicationsById: Map<string, APIApplicationEntity> = new Map();
+    private _scopesByPath: Map<string, MJAPIScopeEntity> = new Map();
+    private _scopesById: Map<string, MJAPIScopeEntity> = new Map();
+    private _applicationsByName: Map<string, MJAPIApplicationEntity> = new Map();
+    private _applicationsById: Map<string, MJAPIApplicationEntity> = new Map();
 
     /**
      * Configure the engine and load all API key metadata.
@@ -160,14 +160,14 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * All API Scopes loaded from the database.
      * Scopes define hierarchical access control paths (e.g., 'entity:read', 'agent:execute').
      */
-    public get Scopes(): APIScopeEntity[] {
+    public get Scopes(): MJAPIScopeEntity[] {
         return this._scopes;
     }
 
     /**
      * Only active API Scopes.
      */
-    public get ActiveScopes(): APIScopeEntity[] {
+    public get ActiveScopes(): MJAPIScopeEntity[] {
         return this._scopes.filter(s => s.IsActive);
     }
 
@@ -175,7 +175,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * All API Applications loaded from the database.
      * Applications represent registered clients that can use API keys.
      */
-    public get Applications(): APIApplicationEntity[] {
+    public get Applications(): MJAPIApplicationEntity[] {
         return this._applications;
     }
 
@@ -183,7 +183,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * All API Application Scopes loaded from the database.
      * These define the scope ceiling for each application.
      */
-    public get ApplicationScopes(): APIApplicationScopeEntity[] {
+    public get ApplicationScopes(): MJAPIApplicationScopeEntity[] {
         return this._applicationScopes;
     }
 
@@ -191,7 +191,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * All API Key Application bindings loaded from the database.
      * These define which keys are bound to which applications.
      */
-    public get KeyApplications(): APIKeyApplicationEntity[] {
+    public get KeyApplications(): MJAPIKeyApplicationEntity[] {
         return this._keyApplications;
     }
 
@@ -199,7 +199,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * All API Key Scopes loaded from the database.
      * These define scope rules for individual API keys.
      */
-    public get KeyScopes(): APIKeyScopeEntity[] {
+    public get KeyScopes(): MJAPIKeyScopeEntity[] {
         return this._keyScopes;
     }
 
@@ -213,7 +213,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param fullPath - The full path of the scope
      * @returns The scope entity or undefined if not found
      */
-    public GetScopeByPath(fullPath: string): APIScopeEntity | undefined {
+    public GetScopeByPath(fullPath: string): MJAPIScopeEntity | undefined {
         return this._scopesByPath.get(fullPath);
     }
 
@@ -222,7 +222,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param id - The scope ID
      * @returns The scope entity or undefined if not found
      */
-    public GetScopeById(id: string): APIScopeEntity | undefined {
+    public GetScopeById(id: string): MJAPIScopeEntity | undefined {
         return this._scopesById.get(id);
     }
 
@@ -231,7 +231,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param name - The application name
      * @returns The application entity or undefined if not found
      */
-    public GetApplicationByName(name: string): APIApplicationEntity | undefined {
+    public GetApplicationByName(name: string): MJAPIApplicationEntity | undefined {
         return this._applicationsByName.get(name.toLowerCase());
     }
 
@@ -240,7 +240,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param id - The application ID
      * @returns The application entity or undefined if not found
      */
-    public GetApplicationById(id: string): APIApplicationEntity | undefined {
+    public GetApplicationById(id: string): MJAPIApplicationEntity | undefined {
         return this._applicationsById.get(id);
     }
 
@@ -249,7 +249,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param applicationId - The application ID
      * @returns Array of application scope entities
      */
-    public GetApplicationScopesByApplicationId(applicationId: string): APIApplicationScopeEntity[] {
+    public GetApplicationScopesByApplicationId(applicationId: string): MJAPIApplicationScopeEntity[] {
         return this._applicationScopes.filter(as => as.ApplicationID === applicationId);
     }
 
@@ -259,7 +259,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param scopeId - The scope ID
      * @returns Array of matching application scope entities
      */
-    public GetApplicationScopeRules(applicationId: string, scopeId: string): APIApplicationScopeEntity[] {
+    public GetApplicationScopeRules(applicationId: string, scopeId: string): MJAPIApplicationScopeEntity[] {
         return this._applicationScopes.filter(
             as => as.ApplicationID === applicationId && as.ScopeID === scopeId
         );
@@ -270,7 +270,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param apiKeyId - The API key ID
      * @returns Array of key application binding entities
      */
-    public GetKeyApplicationsByKeyId(apiKeyId: string): APIKeyApplicationEntity[] {
+    public GetKeyApplicationsByKeyId(apiKeyId: string): MJAPIKeyApplicationEntity[] {
         return this._keyApplications.filter(ka => ka.APIKeyID === apiKeyId);
     }
 
@@ -279,7 +279,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param apiKeyId - The API key ID
      * @returns Array of key scope entities
      */
-    public GetKeyScopesByKeyId(apiKeyId: string): APIKeyScopeEntity[] {
+    public GetKeyScopesByKeyId(apiKeyId: string): MJAPIKeyScopeEntity[] {
         return this._keyScopes.filter(ks => ks.APIKeyID === apiKeyId);
     }
 
@@ -289,7 +289,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @param scopeId - The scope ID
      * @returns Array of matching key scope entities
      */
-    public GetKeyScopeRules(apiKeyId: string, scopeId: string): APIKeyScopeEntity[] {
+    public GetKeyScopeRules(apiKeyId: string, scopeId: string): MJAPIKeyScopeEntity[] {
         return this._keyScopes.filter(
             ks => ks.APIKeyID === apiKeyId && ks.ScopeID === scopeId
         );

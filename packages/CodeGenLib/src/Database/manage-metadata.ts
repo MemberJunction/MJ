@@ -1,7 +1,7 @@
 import sql from 'mssql';
 import { configInfo, currentWorkingDirectory, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
-import { ApplicationEntity } from "@memberjunction/core-entities";
+import { MJApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
@@ -3143,9 +3143,9 @@ NumberedRows AS (
                if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
                   // only do this if the configuration setting is set to add new entities to applications for schema names
                   for (const appUUID of apps) {
-                     const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
+                     const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.MJApplicationEntity
                                        (ApplicationID, EntityID, Sequence) VALUES
-                                       ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+                                       ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.MJApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
                      await this.LogSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                   }
                }
@@ -3291,9 +3291,9 @@ NumberedRows AS (
       if (apps && apps.length > 0) {
          if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
             for (const appUUID of apps) {
-               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
+               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.MJApplicationEntity
                                     (ApplicationID, EntityID, Sequence) VALUES
-                                    ('${appUUID}', '${entityId}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+                                    ('${appUUID}', '${entityId}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.MJApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
                await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
             }
          }
@@ -3998,7 +3998,7 @@ NumberedRows AS (
    }
 
    /**
-    * Applies entity importance analysis to ApplicationEntity records.
+    * Applies entity importance analysis to MJApplicationEntity records.
     * Only called for NEW entities to set DefaultForNewUser.
     */
    protected async applyEntityImportance(
@@ -4008,7 +4008,7 @@ NumberedRows AS (
    ): Promise<void> {
       const defaultForNewUser = importance.defaultForNewUser ? 1 : 0;
       const updateSQL = `
-         UPDATE [${mj_core_schema()}].ApplicationEntity
+         UPDATE [${mj_core_schema()}].MJApplicationEntity
          SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = GETUTCDATE()
          WHERE EntityID = '${entityId}'
       `;

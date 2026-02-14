@@ -20,8 +20,8 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-  EntityDocumentEntity: vi.fn(),
-  EntityDocumentTypeEntity: vi.fn(),
+  MJEntityDocumentEntity: vi.fn(),
+  MJEntityDocumentTypeEntity: vi.fn(),
 }));
 
 import { EntityDocumentCache } from '../models/EntityDocumentCache';
@@ -182,8 +182,8 @@ describe('EntityDocumentCache', () => {
 
       expect(mockRunViews).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ EntityName: 'Entity Documents' }),
-          expect.objectContaining({ EntityName: 'Entity Document Types' }),
+          expect.objectContaining({ EntityName: 'MJ: Entity Documents' }),
+          expect.objectContaining({ EntityName: 'MJ: Entity Document Types' }),
         ]),
         mockUser
       );
