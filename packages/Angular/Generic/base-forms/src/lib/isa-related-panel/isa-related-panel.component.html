@@ -1,0 +1,29 @@
+<!-- ISA Related Panel: side panel container for all related IS-A entity cards -->
+@if (HasItems && !EditMode) {
+  <div class="mj-isa-panel" [class.mj-isa-panel--collapsed]="Collapsed">
+
+    <!-- Collapsed state: icon-only strip -->
+    @if (Collapsed) {
+      <div class="mj-isa-panel__collapsed-strip">
+        @for (item of RelatedItems; track item.EntityName) {
+          <div class="mj-isa-panel__collapsed-icon" [title]="item.EntityName">
+            <i class="fa-solid fa-link"></i>
+          </div>
+        }
+      </div>
+    } @else {
+      <!-- Expanded state: full card list -->
+      <div class="mj-isa-panel__cards">
+        @for (item of RelatedItems; track item.EntityName) {
+          <mj-isa-related-card
+            [EntityName]="item.EntityName"
+            [PrimaryKey]="SharedPrimaryKey"
+            [CurrentRecordName]="CurrentRecordName"
+            [Relationship]="item.Relationship"
+            (Navigate)="OnCardNavigate($event)">
+          </mj-isa-related-card>
+        }
+      </div>
+    }
+  </div>
+}

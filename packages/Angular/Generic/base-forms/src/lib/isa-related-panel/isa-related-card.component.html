@@ -1,0 +1,76 @@
+<!-- ISA Related Card: compact summary of one sibling/child entity record -->
+<div class="mj-isa-card" [class.mj-isa-card--loading]="IsLoading" [class.mj-isa-card--error]="LoadError">
+
+  <!-- Card Header -->
+  <div class="mj-isa-card__header">
+    <div class="mj-isa-card__header-left">
+      <i [class]="IconClass" class="mj-isa-card__icon"></i>
+      <span class="mj-isa-card__entity-name">{{ DisplayName }}</span>
+      @if (RecordName) {
+        <span class="mj-isa-card__record-name">{{ RecordName }}</span>
+      }
+    </div>
+    <a href="#" class="mj-isa-card__open-link" (click)="OnOpenClick($event)">Open &rarr;</a>
+  </div>
+
+  <!-- Loading State -->
+  @if (IsLoading) {
+    <div class="mj-isa-card__body mj-isa-card__body--loading">
+      <div class="mj-isa-card__loading-bar"></div>
+      <div class="mj-isa-card__loading-bar mj-isa-card__loading-bar--short"></div>
+    </div>
+  }
+
+  <!-- Error State -->
+  @if (LoadError && !IsLoading) {
+    <div class="mj-isa-card__body mj-isa-card__body--error">
+      <span class="mj-isa-card__error-text">Unable to load record</span>
+    </div>
+  }
+
+  <!-- Field Values -->
+  @if (!IsLoading && !LoadError && RelatedRecord) {
+    <div class="mj-isa-card__body">
+      @for (field of DefaultFields; track field.Label) {
+        <div class="mj-isa-card__field">
+          <span class="mj-isa-card__field-label">{{ field.Label }}</span>
+          <span class="mj-isa-card__field-value"
+                [class.mj-isa-card__field-value--bool-yes]="field.IsBooleanTrue"
+                [class.mj-isa-card__field-value--bool-no]="field.IsBooleanFalse">
+            {{ field.Value }}
+          </span>
+        </div>
+      }
+    </div>
+
+    <!-- Expand/Collapse for extra fields -->
+    @if (ExtraFields.length > 0) {
+      <div class="mj-isa-card__expand-row">
+        <button class="mj-isa-card__expand-btn" (click)="ToggleExpand()">
+          @if (!Expanded) {
+            Show {{ ExtraFields.length }} more field{{ ExtraFields.length > 1 ? 's' : '' }}
+            <i class="fa-solid fa-chevron-down mj-isa-card__expand-chevron"></i>
+          } @else {
+            Show fewer fields
+            <i class="fa-solid fa-chevron-up mj-isa-card__expand-chevron"></i>
+          }
+        </button>
+      </div>
+
+      @if (Expanded) {
+        <div class="mj-isa-card__extra-fields">
+          @for (field of ExtraFields; track field.Label) {
+            <div class="mj-isa-card__field">
+              <span class="mj-isa-card__field-label">{{ field.Label }}</span>
+              <span class="mj-isa-card__field-value"
+                    [class.mj-isa-card__field-value--bool-yes]="field.IsBooleanTrue"
+                    [class.mj-isa-card__field-value--bool-no]="field.IsBooleanFalse">
+                {{ field.Value }}
+              </span>
+            </div>
+          }
+        </div>
+      }
+    }
+  }
+</div>
