@@ -824,6 +824,11 @@ export class EntityFormComponentExtended extends MJEntityFormComponent implement
         return this.entity?.IsParentType === true;
     }
 
+    /** Whether this entity allows overlapping subtypes (multiple children per parent record) */
+    public get HasOverlappingSubtypes(): boolean {
+        return this.entity?.HasOverlappingSubtypes === true;
+    }
+
     /** The parent chain for IS-A child entities */
     public get ParentChain(): EntityInfo[] {
         return this.entity?.ParentChain ?? [];

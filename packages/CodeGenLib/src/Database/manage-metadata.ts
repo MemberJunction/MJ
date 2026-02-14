@@ -101,6 +101,30 @@ export interface ISARelationshipConfig {
 }
 
 /**
+ * Configuration for setting arbitrary Entity-table attributes on a specific entity,
+ * identified by BaseTable + SchemaName. This is processed after entity discovery so
+ * any column on the Entity table can be set declaratively from the config file.
+ *
+ * Example usage in database-metadata-config.json:
+ * ```json
+ * {
+ *   "Entities": [
+ *     { "BaseTable": "Person", "SchemaName": "MySchema", "AllowMultipleSubtypes": true },
+ *     { "BaseTable": "AuditLog", "SchemaName": "MySchema", "TrackRecordChanges": false }
+ *   ]
+ * }
+ * ```
+ */
+export interface EntityConfig {
+   /** The base table name of the entity */
+   BaseTable: string;
+   /** The schema containing the base table */
+   SchemaName: string;
+   /** Any additional Entity-table columns to set, keyed by column name */
+   [key: string]: unknown;
+}
+
+/**
  * Base class for managing metadata within the CodeGen system. This class can be sub-classed to extend/override base class functionality. Make sure to use the RegisterClass decorator from the @memberjunction/global package
  * to properly register your subclass with a priority of 1+ to ensure it gets instantiated.
  */
@@ -208,7 +232,7 @@ export class ManageMetadataBase {
       }
 
       // Schema-as-key format: iterate over keys, skip metadata and special section keys
-      const metadataKeys = new Set(['$schema', 'description', 'version', 'VirtualEntities', 'ISARelationships', 'Tables']);
+      const metadataKeys = new Set(['$schema', 'description', 'version', 'VirtualEntities', 'ISARelationships', 'Entities', 'Tables']);
       for (const key of Object.keys(config)) {
          if (metadataKeys.has(key)) continue;
 
@@ -263,6 +287,20 @@ export class ManageMetadataBase {
          ParentEntity: rel.ParentEntity as string,
          SchemaName: (rel.SchemaName as string) || undefined,
       }));
+   }
+
+   /**
+    * Extracts the top-level "Entities" array from the additionalSchemaInfo config file.
+    * Each entry identifies an entity by BaseTable + SchemaName and declares arbitrary
+    * Entity-table attributes to set (e.g., AllowMultipleSubtypes, TrackRecordChanges).
+    */
+   protected extractEntitiesFromConfig(config: Record<string, unknown>): EntityConfig[] {
+      const entities = config.Entities;
+      if (!Array.isArray(entities)) return [];
+
+      return entities
+         .filter((e: Record<string, unknown>) => typeof e.BaseTable === 'string' && typeof e.SchemaName === 'string')
+         .map((e: Record<string, unknown>) => ({ ...e, BaseTable: e.BaseTable as string, SchemaName: e.SchemaName as string }));
    }
 
    /**
@@ -327,24 +365,93 @@ export class ManageMetadataBase {
             // Skip if already set correctly
             if (existingParentId === parentId) {
                logStatus(`    > IS-A: "${childName}" already has ParentID set to "${parentName}", skipping`);
-               continue;
-            }
-
-            // Set ParentID on the child entity
-            await pool.request()
-               .input('ParentID', parentId)
-               .input('ChildID', childId)
-               .query(`UPDATE [${schema}].Entity SET ParentID = @ParentID WHERE ID = @ChildID`);
-
-            if (existingParentId) {
-               logStatus(`    > IS-A: Updated "${childName}" ParentID from previous value to "${parentName}"`);
             } else {
-               logStatus(`    > IS-A: Set "${childName}" ParentID to "${parentName}"`);
+               // Set ParentID on the child entity
+               await pool.request()
+                  .input('ParentID', parentId)
+                  .input('ChildID', childId)
+                  .query(`UPDATE [${schema}].Entity SET ParentID = @ParentID WHERE ID = @ChildID`);
+
+               if (existingParentId) {
+                  logStatus(`    > IS-A: Updated "${childName}" ParentID from previous value to "${parentName}"`);
+               } else {
+                  logStatus(`    > IS-A: Set "${childName}" ParentID to "${parentName}"`);
+               }
+               updatedCount++;
             }
-            updatedCount++;
          } catch (err) {
             const errMessage = err instanceof Error ? err.message : String(err);
             logError(`    > IS-A config: Failed to set ParentID for "${rel.ChildEntity}": ${errMessage}`);
+         }
+      }
+
+      return { success: true, updatedCount };
+   }
+
+   /**
+    * Processes Entity attribute configurations from the additionalSchemaInfo config.
+    * For each entry in the top-level "Entities" array, looks up the entity by
+    * BaseTable + SchemaName and applies any declared attribute updates to the Entity table.
+    * Reserved keys (BaseTable, SchemaName) are excluded from the UPDATE statement.
+    * Must run AFTER entities are created.
+    */
+   protected async processEntityConfigs(pool: sql.ConnectionPool): Promise<{ success: boolean; updatedCount: number }> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return { success: true, updatedCount: 0 };
+
+      const entityConfigs = this.extractEntitiesFromConfig(config as Record<string, unknown>);
+      if (entityConfigs.length === 0) return { success: true, updatedCount: 0 };
+
+      let updatedCount = 0;
+      const schema = mj_core_schema();
+      const reservedKeys = new Set(['BaseTable', 'SchemaName']);
+
+      for (const ec of entityConfigs) {
+         try {
+            // Collect the attribute columns to update (everything except BaseTable/SchemaName)
+            const attrs = Object.entries(ec).filter(([key]) => !reservedKeys.has(key));
+            if (attrs.length === 0) {
+               logStatus(`    > Entities config: "${ec.SchemaName}.${ec.BaseTable}" has no attributes to set — skipping`);
+               continue;
+            }
+
+            // Look up the entity by BaseTable + SchemaName
+            const entityResult = await pool.request()
+               .input('BaseTable', ec.BaseTable)
+               .input('SchemaName', ec.SchemaName)
+               .query(`
+                  SELECT TOP 1 ID, Name
+                  FROM [${schema}].vwEntities
+                  WHERE BaseTable = @BaseTable AND SchemaName = @SchemaName
+               `);
+
+            if (entityResult.recordset.length === 0) {
+               logError(`    > Entities config: entity for "${ec.SchemaName}.${ec.BaseTable}" not found — skipping`);
+               continue;
+            }
+
+            const entityId = entityResult.recordset[0].ID;
+            const entityName = entityResult.recordset[0].Name;
+
+            // Build a parameterized UPDATE with one SET clause per attribute
+            const request = pool.request().input('EntityID', entityId);
+            const setClauses: string[] = [];
+            for (const [key, value] of attrs) {
+               const paramName = `attr_${key}`;
+               // Convert boolean values to SQL BIT (1/0)
+               const sqlValue = typeof value === 'boolean' ? (value ? 1 : 0) : value;
+               request.input(paramName, sqlValue);
+               setClauses.push(`[${key}] = @${paramName}`);
+            }
+
+            await request.query(`UPDATE [${schema}].Entity SET ${setClauses.join(', ')} WHERE ID = @EntityID`);
+
+            const attrSummary = attrs.map(([k, v]) => `${k}=${v}`).join(', ');
+            logStatus(`    > Entities config: Set ${attrSummary} on "${entityName}"`);
+            updatedCount++;
+         } catch (err) {
+            const errMessage = err instanceof Error ? err.message : String(err);
+            logError(`    > Entities config: Failed to update "${ec.SchemaName}.${ec.BaseTable}": ${errMessage}`);
          }
       }
 
@@ -548,6 +655,13 @@ export class ManageMetadataBase {
       const isaConfigResult = await this.processISARelationshipConfig(pool);
       if (isaConfigResult.updatedCount > 0) {
          logStatus(`    > Set ParentID on ${isaConfigResult.updatedCount} IS-A child entit${isaConfigResult.updatedCount === 1 ? 'y' : 'ies'} from config`);
+      }
+
+      // Config-driven Entity attribute updates (e.g., AllowMultipleSubtypes, TrackRecordChanges)
+      // Must run AFTER entities exist
+      const entityConfigResult = await this.processEntityConfigs(pool);
+      if (entityConfigResult.updatedCount > 0) {
+         logStatus(`    > Updated attributes on ${entityConfigResult.updatedCount} entit${entityConfigResult.updatedCount === 1 ? 'y' : 'ies'} from config`);
       }
 
       start = new Date();
@@ -3143,9 +3257,9 @@ NumberedRows AS (
                if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
                   // only do this if the configuration setting is set to add new entities to applications for schema names
                   for (const appUUID of apps) {
-                     const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.MJApplicationEntity
+                     const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
                                        (ApplicationID, EntityID, Sequence) VALUES
-                                       ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.MJApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+                                       ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
                      await this.LogSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                   }
                }
@@ -3183,7 +3297,12 @@ NumberedRows AS (
          }
       }
       catch (e) {
-         LogError(`Failed to create new entity ${newEntity?.TableName}`);
+         const errMsg = e instanceof Error ? e.message : String(e);
+         const errStack = e instanceof Error ? e.stack : '';
+         LogError(`Failed to create new entity ${newEntity?.TableName}: ${errMsg}`);
+         if (errStack) {
+            LogError(`   Stack trace: ${errStack}`);
+         }
       }
    }
 
@@ -3291,9 +3410,9 @@ NumberedRows AS (
       if (apps && apps.length > 0) {
          if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
             for (const appUUID of apps) {
-               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.MJApplicationEntity
+               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
                                     (ApplicationID, EntityID, Sequence) VALUES
-                                    ('${appUUID}', '${entityId}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.MJApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+                                    ('${appUUID}', '${entityId}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
                await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
             }
          }
@@ -3998,7 +4117,7 @@ NumberedRows AS (
    }
 
    /**
-    * Applies entity importance analysis to MJApplicationEntity records.
+    * Applies entity importance analysis to ApplicationEntity records.
     * Only called for NEW entities to set DefaultForNewUser.
     */
    protected async applyEntityImportance(
@@ -4008,7 +4127,7 @@ NumberedRows AS (
    ): Promise<void> {
       const defaultForNewUser = importance.defaultForNewUser ? 1 : 0;
       const updateSQL = `
-         UPDATE [${mj_core_schema()}].MJApplicationEntity
+         UPDATE [${mj_core_schema()}].ApplicationEntity
          SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = GETUTCDATE()
          WHERE EntityID = '${entityId}'
       `;

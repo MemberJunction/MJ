@@ -3160,7 +3160,21 @@ export class SQLServerDataProvider
 
       if (!bNewRecord) oldData = entity.GetAll(true); // get all the OLD values, only do for existing records, for new records, not relevant
 
-      const logRecordChangeSQL = this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
+      // Capture the diff for overlapping subtype Record Change propagation.
+      // Must happen before finalizeSave() resets OldValues, since the diff would be lost.
+      const newData = entity.GetAll(false);
+      if (!bNewRecord && oldData) {
+        const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
+        const diffKeys = diffChanges ? Object.keys(diffChanges) : [];
+        if (diffKeys.length > 0) {
+          entity._lastSaveRecordChangeData = {
+            changesJSON: JSON.stringify(diffChanges),
+            changesDescription: this.CreateUserDescriptionOfChanges(diffChanges)
+          };
+        }
+      }
+
+      const logRecordChangeSQL = this.GetLogRecordChangeSQL(newData, oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
       if (logRecordChangeSQL === null) {
         // if we don't have any record changes to log, just return the simple SQL to run which will do nothing but update __mj_UpdatedAt
         // this can happen if a subclass overrides the Dirty() flag to make the object dirty due to factors outside of the
@@ -5488,9 +5502,39 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Discovers ALL IS-A child entities that have records with the given primary key.
+   * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
+   * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
+   *
+   * @param entityInfo The parent entity whose children to search
+   * @param recordPKValue The primary key value to find in child tables
+   * @param contextUser Optional context user for audit/permission purposes
+   * @returns Array of child entity names found (empty if none)
+   */
+  public async FindISAChildEntities(
+    entityInfo: EntityInfo,
+    recordPKValue: string,
+    contextUser?: UserInfo
+  ): Promise<{ ChildEntityName: string }[]> {
+    const childEntities = entityInfo.ChildEntities;
+    if (childEntities.length === 0) return [];
+
+    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
+    if (!unionSQL) return [];
+
+    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
+    if (results && results.length > 0) {
+      return results
+        .filter((r: Record<string, string>) => r.EntityName)
+        .map((r: Record<string, string>) => ({ ChildEntityName: r.EntityName }));
+    }
+    return [];
+  }
+
+  /**
    * Builds a UNION ALL query that checks each child entity's base table for a record
    * with the given primary key. Returns the first match (disjoint subtypes guarantee
-   * at most one result).
+   * at most one result) unless used with overlapping subtypes.
    */
   private buildChildDiscoverySQL(
     childEntities: EntityInfo[],
@@ -5510,6 +5554,137 @@ export class SQLServerDataProvider
 
     if (unionParts.length === 0) return '';
     return unionParts.join(' UNION ALL ');
+  }
+
+  /**************************************************************************
+   * IS-A Overlapping Subtype — Record Change Propagation
+   *
+   * When saving through one branch of an overlapping hierarchy, propagate
+   * ancestor-level Record Change entries to all active sibling branches.
+   * Executes as a single SQL batch within the active IS-A transaction.
+   **************************************************************************/
+
+  /**
+   * Propagates Record Change entries to sibling branches in an overlapping IS-A hierarchy.
+   * Walks the active save chain from the leaf upward, and at each overlapping branch point,
+   * generates SQL to create Record Change entries for all sibling entities that have
+   * records with the same PK. The entire propagation executes as one SQL batch.
+   *
+   * @param entity The leaf entity (IS-A initiator) whose save chain to walk
+   * @param transaction The active IS-A transaction handle
+   * @param contextUser The user performing the save
+   */
+  public async PropagateISARecordChanges(
+    entity: BaseEntity,
+    transaction: unknown,
+    contextUser?: UserInfo
+  ): Promise<void> {
+    const sqlParts: string[] = [];
+    let varIndex = 0;
+    const pkValue = entity.PrimaryKey.Values();
+    const safePKValue = pkValue.replace(/'/g, "''");
+    const userId = contextUser?.ID ?? entity.ContextCurrentUser?.ID ?? '';
+    const safeUserId = userId.replace(/'/g, "''");
+
+    // Walk up the active chain looking for overlapping branch points
+    let current: BaseEntity | null = entity;
+
+    while (current?.ISAParent) {
+      const parent = current.ISAParent;
+      const parentInfo = parent.EntityInfo;
+
+      if (parentInfo.AllowMultipleSubtypes
+          && parentInfo.TrackRecordChanges
+          && parent._lastSaveRecordChangeData?.changesJSON) {
+
+        const activeChildName = current.EntityInfo.Name;
+        const changeData = parent._lastSaveRecordChangeData;
+        const safeChangesJSON = changeData.changesJSON.replace(/'/g, "''");
+        const safeChangesDesc = changeData.changesDescription.replace(/'/g, "''");
+
+        for (const siblingInfo of parentInfo.ChildEntities) {
+          if (siblingInfo.Name === activeChildName) continue; // skip active branch
+
+          // Recursively enumerate sibling's entire sub-tree from metadata
+          const subTree = this.getFullSubTree(siblingInfo);
+
+          for (const entityInTree of subTree) {
+            if (!entityInTree.TrackRecordChanges) continue;
+
+            const varName = `@_rc_prop_${varIndex++}`;
+            sqlParts.push(this.buildSiblingRecordChangeSQL(
+              varName,
+              entityInTree,
+              safeChangesJSON,
+              safeChangesDesc,
+              safePKValue,
+              safeUserId
+            ));
+          }
+        }
+      }
+
+      current = parent; // walk up
+    }
+
+    // Execute as single batch in existing transaction
+    if (sqlParts.length > 0) {
+      const batch = sqlParts.join('\n');
+      const txn = transaction instanceof sql.Transaction ? transaction : undefined;
+      await this.ExecuteSQL(batch, undefined, {
+        connectionSource: txn,
+        description: 'IS-A overlapping subtype Record Change propagation',
+        isMutation: true
+      }, contextUser);
+    }
+  }
+
+  /**
+   * Recursively enumerates an entity's entire sub-tree from metadata.
+   * No DB queries — uses EntityInfo.ChildEntities which is populated from metadata.
+   */
+  private getFullSubTree(entityInfo: EntityInfo): EntityInfo[] {
+    const result: EntityInfo[] = [entityInfo];
+    for (const child of entityInfo.ChildEntities) {
+      result.push(...this.getFullSubTree(child));
+    }
+    return result;
+  }
+
+  /**
+   * Generates a single block of SQL for one sibling entity in the Record Change
+   * propagation batch. Uses SELECT...FOR JSON to get the full record, then
+   * conditionally inserts a Record Change entry if the record exists.
+   */
+  private buildSiblingRecordChangeSQL(
+    varName: string,
+    entityInfo: EntityInfo,
+    safeChangesJSON: string,
+    safeChangesDesc: string,
+    safePKValue: string,
+    safeUserId: string
+  ): string {
+    const schema = entityInfo.SchemaName || '__mj';
+    const view = entityInfo.BaseView;
+    const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+    const safeEntityName = entityInfo.Name.replace(/'/g, "''");
+
+    return `
+DECLARE ${varName} NVARCHAR(MAX) = (
+    SELECT * FROM [${schema}].[${view}] WHERE [${pkName}] = '${safePKValue}'
+    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+);
+IF ${varName} IS NOT NULL
+    EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
+        @EntityName='${safeEntityName}',
+        @RecordID='${safePKValue}',
+        @UserID='${safeUserId}',
+        @Type='Update',
+        @ChangesJSON='${safeChangesJSON}',
+        @ChangesDescription='${safeChangesDesc}',
+        @FullRecordJSON=${varName},
+        @Status='Complete',
+        @Comments=NULL;`;
   }
 
   public async BeginTransaction() {

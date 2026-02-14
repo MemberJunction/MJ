@@ -258,6 +258,9 @@ export class MjFormToolbarComponent implements DoCheck {
    * Walks Record.ISAChild → ISAChild.ISAChild → ... collecting each child entity.
    * This differs from ChildEntities (metadata) because it represents the SPECIFIC
    * child type that exists for THIS record, not all possible subtypes.
+   *
+   * For overlapping subtype parents, this is empty (ISAChild returns null) —
+   * use OverlappingChildren instead.
    */
   get ChildChain(): BaseEntity[] {
     if (!this.Record) return [];
@@ -275,9 +278,23 @@ export class MjFormToolbarComponent implements DoCheck {
     return this.Record?.ISAChild != null;
   }
 
+  /**
+   * For overlapping subtype parents (AllowMultipleSubtypes = true), returns the
+   * list of child entity type names that have records for this PK.
+   * Populated by InitializeChildEntity() during record load.
+   */
+  get OverlappingChildren(): { entityName: string }[] {
+    return this.Record?.ISAChildren ?? [];
+  }
+
+  /** Whether the current record has overlapping child types discovered */
+  get HasOverlappingChildren(): boolean {
+    return this.OverlappingChildren.length > 0;
+  }
+
   /** Whether this entity is part of any IS-A hierarchy (parent or child side) */
   get IsInHierarchy(): boolean {
-    return this.HasParentEntities || this.HasLoadedChild;
+    return this.HasParentEntities || this.HasLoadedChild || this.HasOverlappingChildren;
   }
 
   /** Display-friendly names of dirty fields for the edit banner */
@@ -470,6 +487,21 @@ export class MjFormToolbarComponent implements DoCheck {
     this.Navigate.emit({
       Kind: 'entity-hierarchy',
       EntityName: childEntity.EntityInfo.Name,
+      PrimaryKey: this.Record.PrimaryKey,
+      Direction: 'child'
+    });
+  }
+
+  /**
+   * Navigate to an overlapping child entity record.
+   * Used when the parent has AllowMultipleSubtypes = true and multiple child
+   * types coexist for the same PK.
+   */
+  OnOverlappingChildClick(childEntityName: string, event: MouseEvent): void {
+    if (!this.Record) return;
+    this.Navigate.emit({
+      Kind: 'entity-hierarchy',
+      EntityName: childEntityName,
       PrimaryKey: this.Record.PrimaryKey,
       Direction: 'child'
     });

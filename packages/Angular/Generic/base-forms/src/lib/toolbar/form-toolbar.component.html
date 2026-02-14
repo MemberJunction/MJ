@@ -102,7 +102,7 @@
         <!-- Current entity (always shown) -->
         <span class="mj-entity-badge mj-entity-badge--current">{{ EntityInfo?.Name }}</span>
 
-        <!-- Child chain (immediate child → ... → leaf) -->
+        <!-- Child chain (disjoint: immediate child → ... → leaf) -->
         @for (child of ChildChain; track child.EntityInfo.ID) {
           <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
           <a class="mj-entity-badge mj-entity-badge--child"
@@ -111,6 +111,21 @@
             <i class="fa-solid fa-arrow-down"></i>
             {{ child.EntityInfo.Name }}
           </a>
+        }
+
+        <!-- Overlapping children (multiple child types coexist) -->
+        @if (HasOverlappingChildren) {
+          <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+          <span class="mj-entity-badge-group">
+            @for (child of OverlappingChildren; track child.entityName) {
+              <a class="mj-entity-badge mj-entity-badge--overlapping"
+                 [title]="'Navigate to: ' + child.entityName"
+                 (click)="OnOverlappingChildClick(child.entityName, $event)">
+                <i class="fa-solid fa-clone"></i>
+                {{ child.entityName }}
+              </a>
+            }
+          </span>
         }
       </div>
     }

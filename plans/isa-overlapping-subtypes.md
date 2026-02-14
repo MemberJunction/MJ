@@ -548,7 +548,7 @@ No indexes needed — this column is read at metadata load time, not queried at 
 
 ### Phase 1: Database Schema & Metadata
 
-- [ ] **1.1** Create migration file adding `AllowMultipleSubtypes BIT NOT NULL DEFAULT 0` to Entity table
+- [x] **1.1** Create migration file adding `AllowMultipleSubtypes BIT NOT NULL DEFAULT 0` to Entity table
 - [ ] **1.2** Run CodeGen to sync EntityField metadata and regenerate entity classes
 - [ ] **1.3** Verify `MJEntityEntity` class has `AllowMultipleSubtypes` getter/setter in generated code
 
@@ -558,9 +558,9 @@ No indexes needed — this column is read at metadata load time, not queried at 
 
 **File**: `packages/MJCore/src/generic/entityInfo.ts`
 
-- [ ] **2.1** Add `AllowMultipleSubtypes` property to `EntityInfo` class (read from metadata)
-- [ ] **2.2** Update `ChildEntities` JSDoc to reference the new overlapping behavior
-- [ ] **2.3** Add computed property `HasOverlappingSubtypes: boolean` (alias for readability in consuming code)
+- [x] **2.1** Add `AllowMultipleSubtypes` property to `EntityInfo` class (read from metadata)
+- [x] **2.2** Update `ChildEntities` JSDoc to reference the new overlapping behavior
+- [x] **2.3** Add computed property `HasOverlappingSubtypes: boolean` (alias for readability in consuming code)
 
 ---
 
@@ -568,7 +568,7 @@ No indexes needed — this column is read at metadata load time, not queried at 
 
 **File**: `packages/MJCore/src/generic/baseEntity.ts`
 
-- [ ] **3.1** Modify `_InnerSave()` guard condition to check `AllowMultipleSubtypes`:
+- [x] **3.1** Modify `_InnerSave()` guard condition to check `AllowMultipleSubtypes`:
 
 ```typescript
 // Current:
@@ -585,10 +585,10 @@ if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
 }
 ```
 
-- [ ] **3.2** Update `EnforceDisjointSubtype()` JSDoc to note it is only called for disjoint parents
-- [ ] **3.3** Add unit test: create two child types (Member + Volunteer) for same Person PK when `AllowMultipleSubtypes = true` -> succeeds
-- [ ] **3.4** Add unit test: create two child types for same PK when `AllowMultipleSubtypes = false` -> still fails (existing behavior preserved)
-- [ ] **3.5** Add `_lastSaveRecordChangeData` transient property to `BaseEntity`:
+- [x] **3.2** Update `EnforceDisjointSubtype()` JSDoc to note it is only called for disjoint parents
+- [x] **3.3** Add unit test: create two child types (Member + Volunteer) for same Person PK when `AllowMultipleSubtypes = true` -> succeeds
+- [x] **3.4** Add unit test: create two child types for same PK when `AllowMultipleSubtypes = false` -> still fails (existing behavior preserved)
+- [x] **3.5** Add `_lastSaveRecordChangeData` transient property to `BaseEntity`:
     ```typescript
     /** @internal Transient — holds Record Change data from last save for sibling propagation */
     public _lastSaveRecordChangeData: {
@@ -596,7 +596,7 @@ if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
         changesDescription: string;
     } | null = null;
     ```
-- [ ] **3.6** Update `PrepareSave()` in `SQLServerDataProvider` to populate `_lastSaveRecordChangeData` after computing the diff via `DiffObjects()`, before `finalizeSave()` resets OldValues
+- [x] **3.6** Update `PrepareSave()` in `SQLServerDataProvider` to populate `_lastSaveRecordChangeData` after computing the diff via `DiffObjects()`, before `finalizeSave()` resets OldValues
 
 ---
 
@@ -604,7 +604,7 @@ if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
 
 **File**: `packages/SQLServerDataProvider/src/SQLServerDataProvider.ts`
 
-- [ ] **4.1** Add `FindISAChildEntities` method (plural) that returns `{ ChildEntityName: string }[]`:
+- [x] **4.1** Add `FindISAChildEntities` method (plural) that returns `{ ChildEntityName: string }[]`:
 
 ```typescript
 /**
@@ -633,15 +633,15 @@ public async FindISAChildEntities(
 }
 ```
 
-- [ ] **4.2** Add `FindISAChildEntities` to `IEntityDataProvider` interface (optional method, like `FindISAChildEntity`)
+- [x] **4.2** Add `FindISAChildEntities` to `IEntityDataProvider` interface (optional method, like `FindISAChildEntity`)
 
 **File**: `packages/GraphQLDataProvider/src/GraphQLDataProvider.ts`
 
-- [ ] **4.3** Add `FindISAChildEntities` to GraphQL provider (calls server resolver)
+- [x] **4.3** Add `FindISAChildEntities` to GraphQL provider (calls server resolver)
 
 **File**: `packages/MJServer/src/resolvers/`
 
-- [ ] **4.4** Add `FindISAChildEntities` GraphQL query resolver in `ISAEntityResolver` (or existing resolver file)
+- [x] **4.4** Add `FindISAChildEntities` GraphQL query resolver in `ISAEntityResolver` (or existing resolver file)
 
 ---
 
@@ -649,9 +649,9 @@ public async FindISAChildEntities(
 
 **File**: `packages/MJCore/src/generic/baseEntity.ts`
 
-- [ ] **5.1** Add `_childEntities: { entityName: string }[] | null` field alongside existing `_childEntity`
+- [x] **5.1** Add `_childEntities: { entityName: string }[] | null` field alongside existing `_childEntity`
 
-- [ ] **5.2** Modify `InitializeChildEntity()` to branch on `AllowMultipleSubtypes`:
+- [x] **5.2** Modify `InitializeChildEntity()` to branch on `AllowMultipleSubtypes`:
 
 ```typescript
 protected async InitializeChildEntity(): Promise<void> {
@@ -673,7 +673,7 @@ protected async InitializeChildEntity(): Promise<void> {
 }
 ```
 
-- [ ] **5.3** Implement `discoverOverlappingChildren()`:
+- [x] **5.3** Implement `discoverOverlappingChildren()`:
 
 ```typescript
 private async discoverOverlappingChildren(): Promise<void> {
@@ -689,7 +689,7 @@ private async discoverOverlappingChildren(): Promise<void> {
 }
 ```
 
-- [ ] **5.4** Add public accessor `ISAChildren`:
+- [x] **5.4** Add public accessor `ISAChildren`:
 
 ```typescript
 /**
@@ -702,9 +702,9 @@ get ISAChildren(): { entityName: string }[] | null {
 }
 ```
 
-- [ ] **5.5** Update `ISAChild` getter to return null for overlapping parents (no single child to chain to)
-- [ ] **5.6** Update `LeafEntity` getter: for overlapping parents, return `this` (the parent is the leaf from its own perspective)
-- [ ] **5.7** Update save delegation: skip leaf delegation when `AllowMultipleSubtypes = true` on this entity (save just this entity, not a child chain downward)
+- [x] **5.5** Update `ISAChild` getter to return null for overlapping parents (no single child to chain to)
+- [x] **5.6** Update `LeafEntity` getter: for overlapping parents, return `this` (the parent is the leaf from its own perspective)
+- [x] **5.7** Update save delegation: skip leaf delegation when `AllowMultipleSubtypes = true` on this entity (save just this entity, not a child chain downward)
 
 ---
 
@@ -712,7 +712,7 @@ get ISAChildren(): { entityName: string }[] | null {
 
 **File**: `packages/MJCore/src/generic/baseEntity.ts`
 
-- [ ] **6.1** Modify delete orchestration in `_InnerDelete()`: after deleting the child record, check if parent has `AllowMultipleSubtypes = true`. If so, query for remaining children before deciding to delete parent:
+- [x] **6.1** Modify delete orchestration in `_InnerDelete()`: after deleting the child record, check if parent has `AllowMultipleSubtypes = true`. If so, query for remaining children before deciding to delete parent:
 
 ```typescript
 // In the IS-A delete chain, after deleting child's own record:
@@ -735,9 +735,9 @@ if (this._parentEntity) {
 }
 ```
 
-- [ ] **6.2** Add unit test: delete Member when Volunteer exists for same Person -> Person preserved
-- [ ] **6.3** Add unit test: delete Member when no other children exist -> Person also deleted
-- [ ] **6.4** Add unit test: delete in disjoint hierarchy -> unchanged behavior (full chain delete)
+- [x] **6.2** Add unit test: delete Member when Volunteer exists for same Person -> Person preserved
+- [x] **6.3** Add unit test: delete Member when no other children exist -> Person also deleted
+- [x] **6.4** Add unit test: delete in disjoint hierarchy -> unchanged behavior (full chain delete)
 
 ---
 
@@ -745,7 +745,7 @@ if (this._parentEntity) {
 
 **Files**: `packages/MJCore/src/generic/baseEntity.ts`, `packages/SQLServerDataProvider/src/SQLServerDataProvider.ts`
 
-- [ ] **7.1** Add `PropagateRecordChangesToSiblingBranches()` method to `BaseEntity`, called by IS-A initiator after all chain saves complete but before transaction commit:
+- [x] **7.1** Add `PropagateRecordChangesToSiblingBranches()` method to `BaseEntity`, called by IS-A initiator after all chain saves complete but before transaction commit:
 
 ```typescript
 protected async PropagateRecordChangesToSiblingBranches(): Promise<void> {
@@ -791,7 +791,7 @@ protected async PropagateRecordChangesToSiblingBranches(): Promise<void> {
 }
 ```
 
-- [ ] **7.2** Add `getFullSubTree()` helper that recursively enumerates an entity's entire sub-tree from metadata (no DB queries):
+- [x] **7.2** Add `getFullSubTree()` helper that recursively enumerates an entity's entire sub-tree from metadata (no DB queries):
 
 ```typescript
 private getFullSubTree(entityInfo: EntityInfo): EntityInfo[] {
@@ -803,7 +803,7 @@ private getFullSubTree(entityInfo: EntityInfo): EntityInfo[] {
 }
 ```
 
-- [ ] **7.3** Add `buildSiblingRecordChangeSQL()` helper that generates a single block of the SQL batch for one sibling entity:
+- [x] **7.3** Add `buildSiblingRecordChangeSQL()` helper that generates a single block of the SQL batch for one sibling entity:
 
 ```sql
 DECLARE @_rc_prop_N NVARCHAR(MAX) = (
@@ -820,13 +820,13 @@ IF @_rc_prop_N IS NOT NULL
         @Status='Complete', @Comments=NULL;
 ```
 
-- [ ] **7.4** Wire `PropagateRecordChangesToSiblingBranches()` into `_InnerSave()`, after all chain saves complete and before transaction commit — only called by the IS-A initiator
+- [x] **7.4** Wire `PropagateRecordChangesToSiblingBranches()` into `_InnerSave()`, after all chain saves complete and before transaction commit — only called by the IS-A initiator
 
-- [ ] **7.5** Add unit test: save through Member chain -> verify Speaker and Volunteer get Record Change entries with Person-only ChangesJSON
-- [ ] **7.6** Add unit test: save through PremiumMember -> verify BasicMember gets Member-level ChangesJSON and Speaker gets Person-level ChangesJSON (multi-level overlapping)
-- [ ] **7.7** Add unit test: sibling with no record for PK -> no Record Change created (IF NULL skipped)
-- [ ] **7.8** Add unit test: `TrackRecordChanges = false` on sibling entity -> skipped in propagation
-- [ ] **7.9** Add unit test: disjoint hierarchy -> no sibling propagation (existing behavior preserved)
+- [x] **7.5** Add unit test: save through Member chain -> verify Speaker and Volunteer get Record Change entries with Person-only ChangesJSON
+- [x] **7.6** Add unit test: save through PremiumMember -> verify BasicMember gets Member-level ChangesJSON and Speaker gets Person-level ChangesJSON (multi-level overlapping)
+- [x] **7.7** Add unit test: sibling with no record for PK -> no Record Change created (IF NULL skipped)
+- [x] **7.8** Add unit test: `TrackRecordChanges = false` on sibling entity -> skipped in propagation
+- [x] **7.9** Add unit test: disjoint hierarchy -> no sibling propagation (existing behavior preserved)
 
 ---
 
@@ -834,15 +834,15 @@ IF @_rc_prop_N IS NOT NULL
 
 **File**: `packages/Angular/Explorer/core-entity-forms/`
 
-- [ ] **8.1** Update IS-A breadcrumb/badges: when entity is a parent with `AllowMultipleSubtypes = true`, show badge "Overlapping Subtypes" (or similar) instead of standard "Parent Type" badge
-- [ ] **8.2** Update child types panel: for overlapping parents, show which child types have records for the current PK (loaded via `ISAChildren`)
-- [ ] **8.3** When loading a parent entity record in overlapping mode, display a "Related Types" panel listing the child type records with navigation links (instead of auto-routing to a single leaf)
+- [x] **8.1** Update IS-A breadcrumb/badges: when entity is a parent with `AllowMultipleSubtypes = true`, show badge "Overlapping Subtypes" (or similar) instead of standard "Parent Type" badge
+- [x] **8.2** Update child types panel: for overlapping parents, show which child types have records for the current PK (loaded via `ISAChildren`)
+- [x] **8.3** When loading a parent entity record in overlapping mode, display a "Related Types" panel listing the child type records with navigation links (instead of auto-routing to a single leaf)
 
 ---
 
 ### Phase 9: Documentation Updates
 
-- [ ] **9.1** Update `packages/MJCore/docs/isa-relationships.md`:
+- [x] **9.1** Update `packages/MJCore/docs/isa-relationships.md`:
   - Add section on overlapping subtypes
   - Update behavior matrix
   - Update child discovery section
@@ -850,10 +850,10 @@ IF @_rc_prop_N IS NOT NULL
   - Add Record Changes propagation section
   - Add cross-branch validation guidance
   - Add setup instructions for overlapping entities
-- [ ] **9.2** Update the original plan doc `plans/entity-system-enhancements-virtual-and-supertype.md`:
+- [x] **9.2** Update the original plan doc `plans/entity-system-enhancements-virtual-and-supertype.md`:
   - Mark Future Work item 1 (overlapping subtypes) as implemented
   - Add cross-reference to this plan
-- [ ] **9.3** Update `packages/MJCore/readme.md` to mention overlapping subtypes capability
+- [x] **9.3** ~~Update `packages/MJCore/readme.md`~~ — No MJCore readme exists; skipped
 
 ---
 

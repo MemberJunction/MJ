@@ -2666,5 +2666,49 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return null;
         }
     }
+
+    /**
+     * Discovers ALL IS-A child entities that have records matching the given PK.
+     * Used for overlapping subtype parents (AllowMultipleSubtypes = true).
+     * Calls the server-side FindISAChildEntities resolver via GraphQL.
+     *
+     * @param entityInfo The parent entity to check children for
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user (unused on client, present for interface parity)
+     * @returns Array of child entity names found (empty if none)
+     */
+    public async FindISAChildEntities(
+        entityInfo: EntityInfo,
+        recordPKValue: string,
+        contextUser?: UserInfo
+    ): Promise<{ ChildEntityName: string }[]> {
+        if (!entityInfo.IsParentType) return [];
+
+        const gql = `query FindISAChildEntities($EntityName: String!, $RecordID: String!) {
+            FindISAChildEntities(EntityName: $EntityName, RecordID: $RecordID) {
+                Success
+                ChildEntityNames
+                ErrorMessage
+            }
+        }`;
+
+        try {
+            const result = await this.ExecuteGQL(gql, {
+                EntityName: entityInfo.Name,
+                RecordID: recordPKValue
+            });
+
+            if (result?.FindISAChildEntities?.Success && result.FindISAChildEntities.ChildEntityNames) {
+                return result.FindISAChildEntities.ChildEntityNames.map(
+                    (name: string) => ({ ChildEntityName: name })
+                );
+            }
+            return [];
+        }
+        catch (e) {
+            LogError(`FindISAChildEntities failed for ${entityInfo.Name}: ${e}`);
+            return [];
+        }
+    }
 }
 

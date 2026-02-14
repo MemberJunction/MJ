@@ -161,6 +161,8 @@ meeting.ParentEntityFieldNames; // Set<string> — cached set of parent field na
 | `ParentChain` | `EntityInfo[]` | All ancestors, immediate parent first |
 | `IsChildType` | `boolean` | `true` if `ParentID` is set |
 | `IsParentType` | `boolean` | `true` if any child entities exist |
+| `AllowMultipleSubtypes` | `boolean` | `true` if overlapping child types allowed (default: `false`) |
+| `HasOverlappingSubtypes` | `boolean` | `true` if `IsParentType && AllowMultipleSubtypes` |
 | `AllParentFields` | `EntityFieldInfo[]` | All non-PK, non-timestamp fields from parent chain |
 | `ParentEntityFieldNames` | `Set<string>` | Cached set of parent field names (for fast lookup) |
 
@@ -412,6 +414,92 @@ await pub.Save();
 //         entity 'Meetings'. An entity can only be one child type."
 ```
 
+### Overlapping Subtypes
+
+When `Entity.AllowMultipleSubtypes = true` on a parent entity, the disjoint enforcement is bypassed and **multiple child types can coexist** for the same parent record. This models real-world identity hierarchies:
+
+```
+Person (AllowMultipleSubtypes = true)
+  ├── Member      (John can be a Member AND a Volunteer)
+  ├── Volunteer
+  └── Speaker
+```
+
+#### How It Differs from Disjoint
+
+| Behavior | Disjoint (default) | Overlapping |
+|----------|-------------------|-------------|
+| Child types per PK | Exactly one | Multiple |
+| `ISAChild` on parent | Returns the one child | Returns `null` |
+| `ISAChildren` on parent | `null` | `[{entityName: 'Members'}, ...]` |
+| `LeafEntity` on parent | Walks to deepest child | Returns `this` (stops here) |
+| Save delegation | Delegates to leaf | No delegation (save just this entity) |
+| Delete cascade | Always cascades to parent | Cascades only if no siblings remain |
+| `EnforceDisjointSubtype` | Called on CREATE | Skipped |
+
+#### Discovering Overlapping Children
+
+After a record is loaded for an overlapping parent, `InitializeChildEntity()` calls `FindISAChildEntities` (plural) to discover ALL child types:
+
+```typescript
+const person = await md.GetEntityObject<PersonEntity>('Persons');
+await person.Load(someId);
+
+person.ISAChild;      // null — no single child to chain to
+person.ISAChildren;   // [{entityName: 'Members'}, {entityName: 'Volunteers'}]
+person.LeafEntity;    // person itself (stops at overlapping parent)
+```
+
+To work with a specific child type, load it directly:
+
+```typescript
+const member = await md.GetEntityObject<MemberEntity>('Members');
+await member.Load(someId);  // Loads with same PK
+member.ISAParent;  // PersonEntity instance (normal parent chain)
+```
+
+#### Delete Safety for Overlapping Subtypes
+
+When deleting a child of an overlapping parent, the framework checks for remaining siblings before cascading:
+
+```typescript
+// Person has both a Member and a Volunteer record
+const member = await md.GetEntityObject<MemberEntity>('Members');
+await member.Load(personId);
+await member.Delete();
+// → Deletes Member row
+// → Checks: does Person still have other children? YES (Volunteer exists)
+// → Person is PRESERVED
+
+const volunteer = await md.GetEntityObject<VolunteerEntity>('Volunteers');
+await volunteer.Load(personId);
+await volunteer.Delete();
+// → Deletes Volunteer row
+// → Checks: does Person still have other children? NO
+// → Person is also DELETED (cascade)
+```
+
+#### Record Change Propagation
+
+When `TrackRecordChanges = true` on entities in an overlapping hierarchy, saving through one branch automatically propagates Record Change entries to sibling branches. This ensures all branches stay aware of ancestor-level changes.
+
+For example, saving a Member record that modifies Person.Name:
+1. The save chain writes `Person → Member` as normal
+2. After all chain saves complete (but before transaction commit), the framework walks up looking for overlapping branch points with tracked changes
+3. For each overlapping parent that changed, it generates Record Change entries for all sibling branches (e.g., Volunteers, Speakers)
+4. The SQL batch executes within the same transaction for atomicity
+
+#### Setting Up Overlapping Subtypes
+
+```sql
+-- Enable overlapping subtypes on the parent entity
+UPDATE [__mj].[Entity]
+SET AllowMultipleSubtypes = 1
+WHERE Name = 'Persons';
+```
+
+No other changes are needed — the existing IS-A infrastructure handles everything else automatically.
+
 ## NewRecord & ID Propagation
 
 When creating a new IS-A child record, the UUID is automatically shared across the entire chain:
@@ -654,6 +742,20 @@ interface IEntityDataProvider {
         recordPKValue: string,
         contextUser?: UserInfo
     ): Promise<{ ChildEntityName: string } | null>
+
+    // IS-A overlapping child discovery (optional)
+    FindISAChildEntities?(
+        entityInfo: EntityInfo,
+        recordPKValue: string,
+        contextUser?: UserInfo
+    ): Promise<{ ChildEntityName: string }[]>
+
+    // IS-A record change propagation for overlapping subtypes (optional)
+    PropagateISARecordChanges?(
+        entity: BaseEntity,
+        transaction: unknown,
+        contextUser?: UserInfo
+    ): Promise<void>
 }
 ```
 
@@ -665,9 +767,14 @@ class BaseEntity {
     get ISAParent(): BaseEntity | null;
 
     // IS-A child entity reference (downward link)
+    // Returns null for overlapping parents — use ISAChildren instead
     get ISAChild(): BaseEntity | null;
 
-    // Walk to deepest child (returns this if no children)
+    // Overlapping children (AllowMultipleSubtypes = true parents only)
+    // Returns list of child entity names with records for this PK, or null
+    get ISAChildren(): { entityName: string }[] | null;
+
+    // Walk to deepest child (returns this if no children or overlapping parent)
     get LeafEntity(): BaseEntity;
 
     // Walk to topmost parent (returns this if no parents)
@@ -699,5 +806,7 @@ class BaseEntity {
 | Delete blocked on parent | Child records exist | Delete children first or enable `CascadeDeletes` |
 | `_parentEntity` is null | Entity not properly initialized | Ensure `GetEntityObject()` is used (not direct constructor) |
 | `ISAChild` is null after Load | Provider doesn't implement `FindISAChildEntity` | Update provider or use `ResolveLeafEntity()` static method |
+| `ISAChild` is null on overlapping parent | Expected — overlapping parents return null for `ISAChild` | Use `ISAChildren` to get the list of child entity names |
 | Save on branch entity not saving all fields | Child entity not discovered | Ensure record was loaded with `Load()` (not just `SetMany()`) |
 | Child discovery adds latency | Extra query per Load for parent-type entities | PK lookups are sub-ms; consider Phase 5 optimization for high-traffic |
+| Parent not deleted after child delete | Other child records still exist (overlapping) | Expected — parent preserved while any child references it |

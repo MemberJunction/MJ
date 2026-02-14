@@ -658,6 +658,25 @@ export abstract class BaseEntity<T = unknown> {
     private _childEntityDiscoveryDone: boolean = false;
 
     /**
+     * For overlapping subtype parents (AllowMultipleSubtypes = true), stores the
+     * list of child entity type names that have records for this PK. Populated
+     * during InitializeChildEntity() for overlapping parents. Null for disjoint
+     * parents or entities that haven't been loaded yet.
+     */
+    private _childEntities: { entityName: string }[] | null = null;
+
+    /**
+     * @internal Transient — holds Record Change data captured during PrepareSave()
+     * for propagation to sibling branches in overlapping subtype hierarchies.
+     * Set by the data provider after DiffObjects() computes the diff, before
+     * finalizeSave() resets OldValues. Consumed by PropagateRecordChangesToSiblingBranches().
+     */
+    public _lastSaveRecordChangeData: {
+        changesJSON: string;
+        changesDescription: string;
+    } | null = null;
+
+    /**
      * Opaque provider-level transaction handle. Used by IS-A save/delete orchestration
      * to share a single SQL transaction across the parent chain.
      * On client (GraphQLDataProvider), this remains null.
@@ -690,12 +709,31 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Returns the child entity in the IS-A composition chain, or null if this
-     * entity has no child record or hasn't been loaded yet.
+     * entity has no child record, hasn't been loaded yet, or is an overlapping
+     * subtype parent (use `ISAChildren` instead for overlapping parents).
      *
      * Example: For a MeetingEntity where a Webinar record exists with the same PK,
      * `ISAChild` returns the WebinarEntity instance.
      */
-    get ISAChild(): BaseEntity | null { return this._childEntity; }
+    get ISAChild(): BaseEntity | null {
+        // For overlapping parents, there is no single child to chain to
+        if (this.EntityInfo?.AllowMultipleSubtypes && this._childEntities !== null) {
+            return null;
+        }
+        return this._childEntity;
+    }
+
+    /**
+     * For overlapping subtype parents (AllowMultipleSubtypes = true), returns
+     * the list of child entity type names that have records for this PK.
+     * For disjoint parents or non-parent entities, returns null (use `ISAChild` instead).
+     *
+     * Example: For a PersonEntity with AllowMultipleSubtypes=true, might return
+     * [{entityName: 'Members'}, {entityName: 'Volunteers'}, {entityName: 'Speakers'}].
+     */
+    get ISAChildren(): { entityName: string }[] | null {
+        return this._childEntities;
+    }
 
     /**
      * @deprecated Use `ISAParent` instead. Kept for backward compatibility.
@@ -756,16 +794,23 @@ export abstract class BaseEntity<T = unknown> {
 
         if (!this.EntityInfo?.IsParentType) return;
 
-        const childEntityName = await this.discoverChildEntityName();
-        if (!childEntityName) return;
+        if (this.EntityInfo.AllowMultipleSubtypes) {
+            // Overlapping: discover all children, store as list, don't auto-chain
+            await this.discoverOverlappingChildren();
+        } else {
+            // Disjoint: discover single child, auto-chain (current behavior)
+            const childEntityName = await this.discoverChildEntityName();
+            if (!childEntityName) return;
 
-        await this.createAndLinkChildEntity(childEntityName);
+            await this.createAndLinkChildEntity(childEntityName);
+        }
     }
 
     /**
      * Uses the provider's FindISAChildEntity method (single UNION ALL query) to
      * determine which child entity type, if any, has a record with our PK value.
      * Returns the child entity name or null if no child exists.
+     * Used for disjoint (non-overlapping) parent entities.
      */
     private async discoverChildEntityName(): Promise<string | null> {
         const provider = this.ProviderToUse;
@@ -777,6 +822,25 @@ export abstract class BaseEntity<T = unknown> {
             this._contextCurrentUser
         );
         return result?.ChildEntityName ?? null;
+    }
+
+    /**
+     * Discovers ALL child entity types that have records with our PK value.
+     * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where
+     * multiple children can coexist. Stores the result in _childEntities but does
+     * NOT auto-chain to any single child — the caller must use GetEntityObject
+     * to load a specific child type when needed.
+     */
+    private async discoverOverlappingChildren(): Promise<void> {
+        const provider = this.ProviderToUse;
+        if (!provider?.FindISAChildEntities) return;
+
+        const results = await provider.FindISAChildEntities(
+            this.EntityInfo,
+            this.PrimaryKey.Values(),
+            this._contextCurrentUser
+        );
+        this._childEntities = results.map(r => ({ entityName: r.ChildEntityName }));
     }
 
     /**
@@ -852,10 +916,18 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Returns the leaf (most-derived) entity in the IS-A chain, walking
      * downward through child references. Returns `this` if no child exists.
+     *
+     * For overlapping subtype parents (AllowMultipleSubtypes = true), returns
+     * `this` because there is no single child chain to follow — the parent
+     * is the leaf from its own perspective.
      */
     get LeafEntity(): BaseEntity {
         let current: BaseEntity = this;
         while (current._childEntity) {
+            // Stop at overlapping parents — they don't chain to a single child
+            if (current.EntityInfo?.AllowMultipleSubtypes && current._childEntities !== null) {
+                break;
+            }
             current = current._childEntity;
         }
         return current;
@@ -1679,9 +1751,11 @@ export abstract class BaseEntity<T = unknown> {
         this.init();
         this._everSaved = false; // Reset save state for new record
 
-        // Clear child entity — new records don't have children yet
+        // Clear child entity state — new records don't have children yet
         this._childEntity = null;
+        this._childEntities = null;
         this._childEntityDiscoveryDone = false;
+        this._lastSaveRecordChangeData = null;
 
         // Generate UUID for non-auto-increment uniqueidentifier primary keys
         if (this.EntityInfo.PrimaryKeys.length === 1) {
@@ -1829,9 +1903,14 @@ export abstract class BaseEntity<T = unknown> {
 
             // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
             // isn't already claimed by another child type (e.g., can't create Meeting
-            // if a Publication already exists with the same Product ID)
+            // if a Publication already exists with the same Product ID).
+            // Skipped when the parent entity has AllowMultipleSubtypes = true,
+            // which permits overlapping child types (e.g., Person -> Member + Volunteer).
             if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
-                await this.EnforceDisjointSubtype();
+                const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
+                if (parentEntityInfo && !parentEntityInfo.AllowMultipleSubtypes) {
+                    await this.EnforceDisjointSubtype();
+                }
             }
 
             if (_options.IgnoreDirtyState || initialDirtyState || _options.ReplayOnly) {
@@ -1876,6 +1955,12 @@ export abstract class BaseEntity<T = unknown> {
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
                             const result = this.finalizeSave(data, saveSubType);
+
+                            // IS-A: propagate Record Changes to sibling branches for overlapping subtypes
+                            // Must happen after all chain saves (finalizeSave) but before transaction commit
+                            if (isISAInitiator && this.ProviderTransaction) {
+                                await this.PropagateRecordChangesToSiblingBranches();
+                            }
 
                             // IS-A: commit transaction after successful save (only the initiator commits)
                             if (isISAInitiator && this.ProviderTransaction) {
@@ -1932,6 +2017,74 @@ export abstract class BaseEntity<T = unknown> {
 
             return false;
         }
+    }
+
+    /**
+     * Determines whether the parent entity should be deleted after this child entity
+     * has been deleted. For overlapping subtype parents (AllowMultipleSubtypes = true),
+     * the parent is preserved if other child records still exist. For disjoint parents
+     * (default), always returns true to continue the cascade.
+     */
+    private async shouldDeleteParentAfterChildDelete(): Promise<boolean> {
+        if (!this._parentEntity) return false;
+
+        const parentInfo = this._parentEntity.EntityInfo;
+        if (!parentInfo.AllowMultipleSubtypes) {
+            // Disjoint: always cascade delete to parent (existing behavior)
+            return true;
+        }
+
+        // Overlapping: check if other children still reference this parent
+        const provider = this.ProviderToUse;
+        if (!provider?.FindISAChildEntities) {
+            // Provider doesn't support child discovery — err on the side of caution
+            return true;
+        }
+
+        const remainingChildren = await provider.FindISAChildEntities(
+            parentInfo,
+            this.PrimaryKey.Values(),
+            this._contextCurrentUser
+        );
+
+        // If no remaining children, safe to delete parent
+        return remainingChildren.length === 0;
+    }
+
+    /**
+     * Propagates Record Change entries to sibling branches in overlapping IS-A hierarchies.
+     * Called by the IS-A initiator (leaf entity) after all chain saves complete but before
+     * the transaction commits. Delegates to the provider's PropagateISARecordChanges method,
+     * which generates a single SQL batch from metadata and executes within the active transaction.
+     *
+     * Only triggers when there are overlapping branch points with tracked changes in the chain.
+     */
+    private async PropagateRecordChangesToSiblingBranches(): Promise<void> {
+        const provider = this.ProviderToUse;
+        if (!provider?.PropagateISARecordChanges) return;
+
+        // Quick check: is there anything to propagate?
+        // Walk up and see if any ancestor has overlapping subtypes with tracked changes
+        let hasWork = false;
+        let current: BaseEntity | null = this;
+        while (current?.ISAParent) {
+            const parent = current.ISAParent;
+            if (parent.EntityInfo.AllowMultipleSubtypes
+                && parent.EntityInfo.TrackRecordChanges
+                && parent._lastSaveRecordChangeData?.changesJSON) {
+                hasWork = true;
+                break;
+            }
+            current = parent;
+        }
+
+        if (!hasWork) return;
+
+        await provider.PropagateISARecordChanges(
+            this,
+            this.ProviderTransaction,
+            this._contextCurrentUser
+        );
     }
 
     /**
@@ -2456,17 +2609,23 @@ export abstract class BaseEntity<T = unknown> {
                 if (await this.ProviderToUse.Delete(this, _options, this.ActiveUser)) {
                     // IS-A: after own delete succeeds, cascade to parent chain
                     if (hasParentChain) {
-                        const parentDeleteOptions = new EntityDeleteOptions();
-                        parentDeleteOptions.SkipEntityAIActions = _options.SkipEntityAIActions;
-                        parentDeleteOptions.SkipEntityActions = _options.SkipEntityActions;
-                        parentDeleteOptions.ReplayOnly = _options.ReplayOnly;
-                        parentDeleteOptions.IsParentEntityDelete = true;
+                        // For overlapping subtypes, check if other children still reference
+                        // the parent before deleting it. If siblings exist, preserve the parent.
+                        const shouldDeleteParent = await this.shouldDeleteParentAfterChildDelete();
 
-                        const parentResult = await this._parentEntity.Delete(parentDeleteOptions);
-                        if (!parentResult) {
-                            // Parent delete failed — rollback if we started the transaction
-                            await this.RollbackISATransaction(isISAInitiator);
-                            return false;
+                        if (shouldDeleteParent) {
+                            const parentDeleteOptions = new EntityDeleteOptions();
+                            parentDeleteOptions.SkipEntityAIActions = _options.SkipEntityAIActions;
+                            parentDeleteOptions.SkipEntityActions = _options.SkipEntityActions;
+                            parentDeleteOptions.ReplayOnly = _options.ReplayOnly;
+                            parentDeleteOptions.IsParentEntityDelete = true;
+
+                            const parentResult = await this._parentEntity.Delete(parentDeleteOptions);
+                            if (!parentResult) {
+                                // Parent delete failed — rollback if we started the transaction
+                                await this.RollbackISATransaction(isISAInitiator);
+                                return false;
+                            }
                         }
                     }
 
@@ -2668,6 +2827,10 @@ export abstract class BaseEntity<T = unknown> {
      * A parent record can only be ONE child type at a time. Checks all sibling
      * child types (excluding self) for records with the same PK value.
      * Throws if a sibling child record is found.
+     *
+     * Only called when the parent entity has `AllowMultipleSubtypes = false` (default).
+     * When `AllowMultipleSubtypes = true`, this check is skipped entirely, allowing
+     * overlapping subtypes (e.g., a Person can be both a Member and a Volunteer).
      *
      * Only runs on Database providers — client-side (Network/GraphQL) skips this
      * because the server-side save will perform the check authoritatively.

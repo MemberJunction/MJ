@@ -34738,6 +34738,9 @@ export class MJEntity_ {
     @MaxLength(510)
     DisplayName?: string;
         
+    @Field(() => Boolean, {description: `When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`}) 
+    AllowMultipleSubtypes: boolean;
+        
     @Field({nullable: true}) 
     CodeName?: string;
         
@@ -35062,6 +35065,9 @@ export class CreateMJEntityInput {
 
     @Field({ nullable: true })
     DisplayName: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowMultipleSubtypes?: boolean;
 }
     
 
@@ -35228,6 +35234,9 @@ export class UpdateMJEntityInput {
 
     @Field({ nullable: true })
     DisplayName?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowMultipleSubtypes?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

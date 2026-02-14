@@ -181,6 +181,34 @@ export interface IEntityDataProvider {
     FindISAChildEntity?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string } | null>;
 
     /**
+     * Discovers ALL IS-A child entities that have records with the given primary key.
+     * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
+     * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
+     *
+     * @param entityInfo The parent entity's EntityInfo (to find its child entity types)
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user for server-side operations
+     * @returns Array of child entity names found (empty if none)
+     */
+    FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
+
+    /**
+     * Propagates Record Change entries to sibling branches in an overlapping IS-A hierarchy.
+     * Walks the active save chain looking for overlapping branch points and creates
+     * Record Change entries for all sibling branches that have records with the same PK.
+     * Executes as a single SQL batch within the provided transaction for atomicity.
+     *
+     * Only called by the IS-A initiator (leaf entity) after all chain saves complete
+     * but before the transaction commits. Only implemented by server-side providers
+     * (SQLServerDataProvider); client-side providers skip this (server handles it).
+     *
+     * @param entity The leaf entity (IS-A initiator) whose save chain to walk
+     * @param transaction The active IS-A transaction handle
+     * @param contextUser The user performing the save
+     */
+    PropagateISARecordChanges?(entity: BaseEntity, transaction: unknown, contextUser?: UserInfo): Promise<void>;
+
+    /**
      * Begin an independent provider-level transaction for IS-A chain orchestration.
      * Returns a provider-specific transaction object (e.g., sql.Transaction for SQLServer).
      * Separate from the provider's internal transaction management (TransactionGroup system).
