@@ -31,6 +31,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: claude-dev
+    shm_size: '2gb'     # Chromium needs this (default 64MB causes tab crashes)
     env_file:
       - .env.database
     environment:
@@ -50,9 +51,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 3g
+          memory: 4g          # Increased: browser + MJAPI + Explorer need headroom
         reservations:
-          memory: 512m
+          memory: 1g
     stdin_open: true
     tty: true
     working_dir: /workspace
