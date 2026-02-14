@@ -3135,7 +3135,7 @@ export class SQLServerDataProvider
    *           Fields marked with Encrypt=true will have their values encrypted
    *           before being included in the SQL statement.
    */
-  private async GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<{ fullSQL: string; simpleSQL: string }> {
+  private async GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<{ fullSQL: string; simpleSQL: string; overlappingChangeData?: { changesJSON: string; changesDescription: string } }> {
     // Generate the stored procedure parameters - now returns an object with structured SQL
     // This is async because it may need to encrypt field values
     const spParams = await this.generateSPParams(entity, !bNewRecord, user);
@@ -3151,6 +3151,7 @@ export class SQLServerDataProvider
     
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
     let sSQL: string = '';
+    let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
       let oldData = null;
@@ -3162,12 +3163,13 @@ export class SQLServerDataProvider
 
       // Capture the diff for overlapping subtype Record Change propagation.
       // Must happen before finalizeSave() resets OldValues, since the diff would be lost.
+      // Returned to Save() which handles propagation — this is a backend-only concern.
       const newData = entity.GetAll(false);
       if (!bNewRecord && oldData) {
         const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
         const diffKeys = diffChanges ? Object.keys(diffChanges) : [];
         if (diffKeys.length > 0) {
-          entity._lastSaveRecordChangeData = {
+          overlappingChangeData = {
             changesJSON: JSON.stringify(diffChanges),
             changesDescription: this.CreateUserDescriptionOfChanges(diffChanges)
           };
@@ -3217,7 +3219,7 @@ export class SQLServerDataProvider
       // not doing track changes for this entity, keep it simple
       sSQL = sSimpleSQL;
     }
-    return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
+    return { fullSQL: sSQL, simpleSQL: sSimpleSQL, overlappingChangeData };
   }
 
   /**
@@ -3486,6 +3488,23 @@ export class SQLServerDataProvider
               if (options.SkipEntityActions !== true) this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
 
               entityResult.Success = true;
+
+              // IS-A overlapping subtypes: propagate Record Change entries to sibling branches.
+              // Runs after this entity's save succeeds. Skips the active child branch (if this
+              // is a parent save in a chain) so siblings don't get duplicate entries.
+              if (sqlDetails.overlappingChangeData
+                  && entity.EntityInfo.AllowMultipleSubtypes
+                  && entity.EntityInfo.TrackRecordChanges) {
+                await this.PropagateRecordChangesToSiblings(
+                  entity.EntityInfo,
+                  sqlDetails.overlappingChangeData,
+                  entity.PrimaryKey.Values(),
+                  user?.ID ?? '',
+                  options.ISAActiveChildEntityName,
+                  entity.ProviderTransaction as sql.Transaction ?? undefined
+                );
+              }
+
               return result[0];
             } else {
               if (bNewRecord) {
@@ -5565,78 +5584,80 @@ export class SQLServerDataProvider
    **************************************************************************/
 
   /**
-   * Propagates Record Change entries to sibling branches in an overlapping IS-A hierarchy.
-   * Walks the active save chain from the leaf upward, and at each overlapping branch point,
-   * generates SQL to create Record Change entries for all sibling entities that have
-   * records with the same PK. The entire propagation executes as one SQL batch.
+   * Propagates Record Change entries to sibling branches of an overlapping IS-A parent.
+   * Called from Save() after a successful save of an entity with AllowMultipleSubtypes.
+   * Generates a single SQL batch that creates Record Change entries for all child entities
+   * (and their sub-trees) except the active branch that triggered this parent save.
    *
-   * @param entity The leaf entity (IS-A initiator) whose save chain to walk
-   * @param transaction The active IS-A transaction handle
-   * @param contextUser The user performing the save
+   * @param parentInfo The overlapping parent entity's metadata
+   * @param changeData The diff data (changesJSON and changesDescription) from the save
+   * @param pkValue The shared primary key value
+   * @param userId The ID of the user performing the save
+   * @param activeChildEntityName The child entity that initiated this parent save (skipped).
+   *        Undefined when saving the parent directly — all children get propagated to.
+   * @param transaction The active IS-A transaction, or undefined for standalone saves
    */
-  public async PropagateISARecordChanges(
-    entity: BaseEntity,
-    transaction: unknown,
-    contextUser?: UserInfo
+  private async PropagateRecordChangesToSiblings(
+    parentInfo: EntityInfo,
+    changeData: { changesJSON: string; changesDescription: string },
+    pkValue: string,
+    userId: string,
+    activeChildEntityName: string | undefined,
+    transaction: sql.Transaction | undefined
   ): Promise<void> {
     const sqlParts: string[] = [];
     let varIndex = 0;
-    const pkValue = entity.PrimaryKey.Values();
+
     const safePKValue = pkValue.replace(/'/g, "''");
-    const userId = contextUser?.ID ?? entity.ContextCurrentUser?.ID ?? '';
     const safeUserId = userId.replace(/'/g, "''");
+    const safeChangesJSON = changeData.changesJSON.replace(/'/g, "''");
+    const safeChangesDesc = changeData.changesDescription.replace(/'/g, "''");
 
-    // Walk up the active chain looking for overlapping branch points
-    let current: BaseEntity | null = entity;
+    for (const childInfo of parentInfo.ChildEntities) {
+      // Skip the active branch (the child that initiated the parent save).
+      // When activeChildEntityName is undefined (direct save on parent), propagate to ALL children.
+      if (activeChildEntityName && this.isEntityOrAncestorOf(childInfo, activeChildEntityName)) continue;
 
-    while (current?.ISAParent) {
-      const parent = current.ISAParent;
-      const parentInfo = parent.EntityInfo;
+      // Recursively enumerate this child's entire sub-tree from metadata
+      const subTree = this.getFullSubTree(childInfo);
 
-      if (parentInfo.AllowMultipleSubtypes
-          && parentInfo.TrackRecordChanges
-          && parent._lastSaveRecordChangeData?.changesJSON) {
+      for (const entityInTree of subTree) {
+        if (!entityInTree.TrackRecordChanges) continue;
 
-        const activeChildName = current.EntityInfo.Name;
-        const changeData = parent._lastSaveRecordChangeData;
-        const safeChangesJSON = changeData.changesJSON.replace(/'/g, "''");
-        const safeChangesDesc = changeData.changesDescription.replace(/'/g, "''");
-
-        for (const siblingInfo of parentInfo.ChildEntities) {
-          if (siblingInfo.Name === activeChildName) continue; // skip active branch
-
-          // Recursively enumerate sibling's entire sub-tree from metadata
-          const subTree = this.getFullSubTree(siblingInfo);
-
-          for (const entityInTree of subTree) {
-            if (!entityInTree.TrackRecordChanges) continue;
-
-            const varName = `@_rc_prop_${varIndex++}`;
-            sqlParts.push(this.buildSiblingRecordChangeSQL(
-              varName,
-              entityInTree,
-              safeChangesJSON,
-              safeChangesDesc,
-              safePKValue,
-              safeUserId
-            ));
-          }
-        }
+        const varName = `@_rc_prop_${varIndex++}`;
+        sqlParts.push(this.buildSiblingRecordChangeSQL(
+          varName,
+          entityInTree,
+          safeChangesJSON,
+          safeChangesDesc,
+          safePKValue,
+          safeUserId
+        ));
       }
-
-      current = parent; // walk up
     }
 
-    // Execute as single batch in existing transaction
+    // Execute as single batch
     if (sqlParts.length > 0) {
       const batch = sqlParts.join('\n');
-      const txn = transaction instanceof sql.Transaction ? transaction : undefined;
       await this.ExecuteSQL(batch, undefined, {
-        connectionSource: txn,
+        connectionSource: transaction,
         description: 'IS-A overlapping subtype Record Change propagation',
         isMutation: true
-      }, contextUser);
+      });
     }
+  }
+
+  /**
+   * Checks whether a given entity matches the target name, or is an ancestor
+   * of the target (i.e., the target is somewhere in its descendant sub-tree).
+   * Used to identify and skip the active branch during sibling propagation.
+   */
+  private isEntityOrAncestorOf(entityInfo: EntityInfo, targetName: string): boolean {
+    if (entityInfo.Name === targetName) return true;
+    for (const child of entityInfo.ChildEntities) {
+      if (this.isEntityOrAncestorOf(child, targetName)) return true;
+    }
+    return false;
   }
 
   /**
@@ -5669,6 +5690,12 @@ export class SQLServerDataProvider
     const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
     const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
+    // Build RecordID in CompositeKey format: "FieldCodeName|Value" (or "F1|V1||F2|V2" for composite PKs)
+    // Must match the format used by the main save flow (concatPKIDString in GetSaveSQLWithDetails)
+    const recordID = entityInfo.PrimaryKeys
+      .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
+      .join(CompositeKey.DefaultFieldDelimiter);
+
     return `
 DECLARE ${varName} NVARCHAR(MAX) = (
     SELECT * FROM [${schema}].[${view}] WHERE [${pkName}] = '${safePKValue}'
@@ -5677,7 +5704,7 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
         @EntityName='${safeEntityName}',
-        @RecordID='${safePKValue}',
+        @RecordID='${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
         @ChangesJSON='${safeChangesJSON}',

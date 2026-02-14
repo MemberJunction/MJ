@@ -750,12 +750,9 @@ interface IEntityDataProvider {
         contextUser?: UserInfo
     ): Promise<{ ChildEntityName: string }[]>
 
-    // IS-A record change propagation for overlapping subtypes (optional)
-    PropagateISARecordChanges?(
-        entity: BaseEntity,
-        transaction: unknown,
-        contextUser?: UserInfo
-    ): Promise<void>
+    // IS-A record change propagation for overlapping subtypes is handled
+    // internally by the server-side provider (e.g., SQLServerDataProvider)
+    // during CommitISATransaction(). BaseEntity has no awareness of this.
 }
 ```
 

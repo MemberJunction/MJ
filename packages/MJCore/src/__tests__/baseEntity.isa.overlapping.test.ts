@@ -451,137 +451,9 @@ describe('Delete safety for overlapping subtypes', () => {
 });
 
 // ─── Record Change Propagation ──────────────────────────────────────────
-
-describe('Record change propagation for overlapping subtypes', () => {
-    it('_lastSaveRecordChangeData is null by default', () => {
-        const person = createEntity(personEntityInfo);
-        expect(person._lastSaveRecordChangeData).toBeNull();
-    });
-
-    it('_lastSaveRecordChangeData can be set and read', () => {
-        const person = createEntity(personEntityInfo);
-        person._lastSaveRecordChangeData = {
-            changesJSON: '{"Name": "New Name"}',
-            changesDescription: 'Changed Name',
-        };
-        expect(person._lastSaveRecordChangeData).toEqual({
-            changesJSON: '{"Name": "New Name"}',
-            changesDescription: 'Changed Name',
-        });
-    });
-
-    it('PropagateRecordChangesToSiblingBranches skips when no overlapping branch points', async () => {
-        // Create a disjoint chain: Product → Meeting
-        const product = createEntity(productEntityInfo);
-        const meeting = createEntity(meetingEntityInfo);
-        meeting.SetTestParentEntity(product);
-        meeting.SetTestParentFieldNames(meetingEntityInfo.ParentEntityFieldNames);
-
-        const mockProvider = {
-            PropagateISARecordChanges: vi.fn(),
-            ProviderType: 'Database',
-        };
-        (meeting as unknown as { _provider: unknown })._provider = mockProvider;
-
-        // Invoke PropagateRecordChangesToSiblingBranches via the private method
-        // Since Product is NOT overlapping, the quick-check walk should find no work
-        const propagateMethod = (meeting as unknown as {
-            PropagateRecordChangesToSiblingBranches: () => Promise<void>
-        }).PropagateRecordChangesToSiblingBranches;
-
-        await propagateMethod.call(meeting);
-
-        // Provider's PropagateISARecordChanges should NOT have been called
-        expect(mockProvider.PropagateISARecordChanges).not.toHaveBeenCalled();
-    });
-
-    it('PropagateRecordChangesToSiblingBranches triggers when overlapping branch point has changes', async () => {
-        const { person, member } = createOverlappingChain();
-        member.SetTestParentEntity(person);
-        member.SetTestParentFieldNames(memberEntityInfo.ParentEntityFieldNames);
-
-        // Set record change data on the overlapping parent (Person)
-        person._lastSaveRecordChangeData = {
-            changesJSON: '{"Name": "Updated Person"}',
-            changesDescription: 'Changed Name',
-        };
-
-        // Person needs TrackRecordChanges = true (set in mock data)
-        expect(personEntityInfo.TrackRecordChanges).toBe(true);
-        expect(personEntityInfo.AllowMultipleSubtypes).toBe(true);
-
-        const mockProvider = {
-            PropagateISARecordChanges: vi.fn().mockResolvedValue(undefined),
-            ProviderType: 'Database',
-        };
-        (member as unknown as { _provider: unknown })._provider = mockProvider;
-
-        // Set a transaction handle (propagation only runs when ProviderTransaction is set,
-        // but the method itself delegates to the provider regardless)
-        member.ProviderTransaction = { id: 'mock-txn' };
-
-        const propagateMethod = (member as unknown as {
-            PropagateRecordChangesToSiblingBranches: () => Promise<void>
-        }).PropagateRecordChangesToSiblingBranches;
-
-        await propagateMethod.call(member);
-
-        // Provider's PropagateISARecordChanges SHOULD have been called
-        expect(mockProvider.PropagateISARecordChanges).toHaveBeenCalledWith(
-            member,
-            { id: 'mock-txn' },
-            mockUser
-        );
-    });
-
-    it('PropagateRecordChangesToSiblingBranches skips when no changes at branch point', async () => {
-        const { person, member } = createOverlappingChain();
-        member.SetTestParentEntity(person);
-        member.SetTestParentFieldNames(memberEntityInfo.ParentEntityFieldNames);
-
-        // Person has NO _lastSaveRecordChangeData (no changes at this level)
-        expect(person._lastSaveRecordChangeData).toBeNull();
-
-        const mockProvider = {
-            PropagateISARecordChanges: vi.fn(),
-            ProviderType: 'Database',
-        };
-        (member as unknown as { _provider: unknown })._provider = mockProvider;
-
-        const propagateMethod = (member as unknown as {
-            PropagateRecordChangesToSiblingBranches: () => Promise<void>
-        }).PropagateRecordChangesToSiblingBranches;
-
-        await propagateMethod.call(member);
-
-        // No changes to propagate → provider not called
-        expect(mockProvider.PropagateISARecordChanges).not.toHaveBeenCalled();
-    });
-
-    it('PropagateRecordChangesToSiblingBranches skips when provider lacks method', async () => {
-        const { person, member } = createOverlappingChain();
-        member.SetTestParentEntity(person);
-        member.SetTestParentFieldNames(memberEntityInfo.ParentEntityFieldNames);
-
-        person._lastSaveRecordChangeData = {
-            changesJSON: '{"Name": "Test"}',
-            changesDescription: 'Test',
-        };
-
-        // Provider without PropagateISARecordChanges method
-        const mockProvider = {
-            ProviderType: 'Database',
-        };
-        (member as unknown as { _provider: unknown })._provider = mockProvider;
-
-        const propagateMethod = (member as unknown as {
-            PropagateRecordChangesToSiblingBranches: () => Promise<void>
-        }).PropagateRecordChangesToSiblingBranches;
-
-        // Should not throw — gracefully skips
-        await expect(propagateMethod.call(member)).resolves.toBeUndefined();
-    });
-});
+// Record Change propagation is now an internal concern of SQLServerDataProvider.
+// BaseEntity no longer has _lastSaveRecordChangeData or PropagateRecordChangesToSiblingBranches.
+// Provider-level propagation tests belong in the SQLServerDataProvider test suite.
 
 // ─── NewRecord Clears Overlapping State ─────────────────────────────────
 
@@ -593,18 +465,6 @@ describe('NewRecord clears overlapping subtype state', () => {
         person.NewRecord();
 
         expect(person.GetTestChildEntities()).toBeNull();
-    });
-
-    it('NewRecord resets _lastSaveRecordChangeData to null', () => {
-        const person = createEntity(personEntityInfo);
-        person._lastSaveRecordChangeData = {
-            changesJSON: '{"Name": "Test"}',
-            changesDescription: 'Test',
-        };
-
-        person.NewRecord();
-
-        expect(person._lastSaveRecordChangeData).toBeNull();
     });
 
     it('NewRecord resets _childEntityDiscoveryDone to false', () => {

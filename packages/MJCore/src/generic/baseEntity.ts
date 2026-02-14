@@ -666,17 +666,6 @@ export abstract class BaseEntity<T = unknown> {
     private _childEntities: { entityName: string }[] | null = null;
 
     /**
-     * @internal Transient — holds Record Change data captured during PrepareSave()
-     * for propagation to sibling branches in overlapping subtype hierarchies.
-     * Set by the data provider after DiffObjects() computes the diff, before
-     * finalizeSave() resets OldValues. Consumed by PropagateRecordChangesToSiblingBranches().
-     */
-    public _lastSaveRecordChangeData: {
-        changesJSON: string;
-        changesDescription: string;
-    } | null = null;
-
-    /**
      * Opaque provider-level transaction handle. Used by IS-A save/delete orchestration
      * to share a single SQL transaction across the parent chain.
      * On client (GraphQLDataProvider), this remains null.
@@ -1755,8 +1744,6 @@ export abstract class BaseEntity<T = unknown> {
         this._childEntity = null;
         this._childEntities = null;
         this._childEntityDiscoveryDone = false;
-        this._lastSaveRecordChangeData = null;
-
         // Generate UUID for non-auto-increment uniqueidentifier primary keys
         if (this.EntityInfo.PrimaryKeys.length === 1) {
             const pk = this.EntityInfo.PrimaryKeys[0];
@@ -1888,8 +1875,9 @@ export abstract class BaseEntity<T = unknown> {
                 parentSaveOptions.SkipOldValuesCheck = _options.SkipOldValuesCheck;
                 parentSaveOptions.SkipAsyncValidation = _options.SkipAsyncValidation;
                 parentSaveOptions.IsParentEntitySave = true;
+                parentSaveOptions.ISAActiveChildEntityName = this.EntityInfo.Name;
 
-                const parentResult = await this._parentEntity.Save(parentSaveOptions); // we know parent entity exists hre 
+                const parentResult = await this._parentEntity.Save(parentSaveOptions); // we know parent entity exists hre
                 if (!parentResult) {
                     // Parent save failed — rollback if we started the transaction
                     await this.RollbackISATransaction(isISAInitiator);
@@ -1955,12 +1943,6 @@ export abstract class BaseEntity<T = unknown> {
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
                             const result = this.finalizeSave(data, saveSubType);
-
-                            // IS-A: propagate Record Changes to sibling branches for overlapping subtypes
-                            // Must happen after all chain saves (finalizeSave) but before transaction commit
-                            if (isISAInitiator && this.ProviderTransaction) {
-                                await this.PropagateRecordChangesToSiblingBranches();
-                            }
 
                             // IS-A: commit transaction after successful save (only the initiator commits)
                             if (isISAInitiator && this.ProviderTransaction) {
@@ -2049,42 +2031,6 @@ export abstract class BaseEntity<T = unknown> {
 
         // If no remaining children, safe to delete parent
         return remainingChildren.length === 0;
-    }
-
-    /**
-     * Propagates Record Change entries to sibling branches in overlapping IS-A hierarchies.
-     * Called by the IS-A initiator (leaf entity) after all chain saves complete but before
-     * the transaction commits. Delegates to the provider's PropagateISARecordChanges method,
-     * which generates a single SQL batch from metadata and executes within the active transaction.
-     *
-     * Only triggers when there are overlapping branch points with tracked changes in the chain.
-     */
-    private async PropagateRecordChangesToSiblingBranches(): Promise<void> {
-        const provider = this.ProviderToUse;
-        if (!provider?.PropagateISARecordChanges) return;
-
-        // Quick check: is there anything to propagate?
-        // Walk up and see if any ancestor has overlapping subtypes with tracked changes
-        let hasWork = false;
-        let current: BaseEntity | null = this;
-        while (current?.ISAParent) {
-            const parent = current.ISAParent;
-            if (parent.EntityInfo.AllowMultipleSubtypes
-                && parent.EntityInfo.TrackRecordChanges
-                && parent._lastSaveRecordChangeData?.changesJSON) {
-                hasWork = true;
-                break;
-            }
-            current = parent;
-        }
-
-        if (!hasWork) return;
-
-        await provider.PropagateISARecordChanges(
-            this,
-            this.ProviderTransaction,
-            this._contextCurrentUser
-        );
     }
 
     /**
