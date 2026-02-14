@@ -23,7 +23,7 @@ alias mjba='npm run build'                # build all from root
 alias mjapi='cd /workspace/MJ && npm run start:api'
 alias mjui='cd /workspace/MJ && npm run start:explorer'
 alias mjcg='cd /workspace/MJ && mj codegen'
-alias mjmig='cd /workspace/MJ && mj migrate'
+alias mjmig='cd /workspace/MJ && flyway migrate -url="jdbc:sqlserver://${DB_HOST:-sql-claude}:1433;databaseName=${DB_DATABASE:-MJ_Workbench};trustServerCertificate=true" -user="${CODEGEN_DB_USERNAME:-sa}" -password="${CODEGEN_DB_PASSWORD:-Claude2Sql99}" -schemas=__mj -createSchemas=true -baselineVersion=202602061600 -baselineOnMigrate=true -locations="filesystem:/workspace/MJ/migrations"'
 alias mjcd='cd /workspace/MJ'
 
 # ─── Build shortcuts ─────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ alias gps='git push'
 
 # ─── Browser automation shortcuts ────────────────────────────────────────────
 alias pwc='playwright-cli'                                         # short alias
-alias pwopen='playwright-cli open http://localhost:4200'           # open Explorer headless
+alias pwopen='playwright-cli open --browser chromium http://localhost:4200'  # open Explorer headless
 alias pwsnap='playwright-cli snapshot'                             # take accessibility snapshot
 alias pwclose='playwright-cli close'                               # close browser session
 alias pwlist='playwright-cli list'                                 # list active sessions
@@ -65,8 +65,8 @@ echo "  sqldbs      → list all databases"
 echo "  sqlq        → run inline query"
 echo "  db-bootstrap→ create MJ database + run migrations"
 echo "  auth-setup  → configure Auth0 credentials"
-echo "  mjapi       → start MJAPI (host :4100)"
-echo "  mjui        → start Explorer (host :4300)"
+echo "  mjapi       → start MJAPI (default host :4000)"
+echo "  mjui        → start Explorer (default host :4200)"
 echo "  mjcd        → cd to /workspace/MJ"
 echo "  tb / tbf    → turbo build / turbo build --filter"
 echo "  ─────────── Browser Automation ─────────"
