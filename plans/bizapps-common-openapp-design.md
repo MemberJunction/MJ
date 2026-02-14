@@ -739,21 +739,53 @@ metadata/
 
 ## Relationship to Existing MJ Entities
 
+### Codebase Analysis (February 2026)
+
+A thorough audit of Company and Employee usage across the entire MJ codebase reveals they are far less embedded than one might expect:
+
+#### Company: Lightweight, Two-Domain Usage
+
+- **5 tables** have direct CompanyID FKs (Employee, CompanyIntegration, MCPServerConnection, AIAgentNote, AIAgentExample)
+- **MJCore framework (baseEntity, RunView, Metadata, ProviderBase) has ZERO references to Company** — the core runtime doesn't know it exists
+- **Two actual runtime uses**:
+  1. Integration credential lookup — CompanyID → CompanyIntegration → API keys for external systems
+  2. AI Agent memory scoping — CompanyID as one dimension in 8-level priority scoping for agent notes/examples
+- **NOT a tenant key** — CompanyID does not appear on Users, Entities, Conversations, AI Agents, Dashboards, Roles, Permissions, Actions, Templates, or any other core table
+- 6 fields total. Very lightweight entity.
+
+#### Employee: Mostly Vestigial
+
+- **4 entities** reference EmployeeID: User (nullable), EmployeeRole, EmployeeSkill, EmployeeCompanyIntegration
+- **UserInfo carries Employee fields on every login** (EmployeeFirstLast, EmployeeEmail, etc. via vwUsers auto-JOIN) — but **no code anywhere reads these fields to make business decisions**. They flow through and nobody consumes them.
+- **EmployeeRole, EmployeeSkill, EmployeeCompanyIntegration**: exist in schema with generated CRUD forms, but have **zero custom code references**
+- **Only active runtime consumer**: the User Onboarding Agent, which optionally creates an Employee during onboarding if `isEmployee=true`
+- **No Angular component, no dashboard, no engine** does anything with Employee data
+
 ### Person vs Employee
 
-MJ's existing `Employee` entity is designed for internal organizational structure — the people who work at the organization running MJ. `Person` in MJ Commons represents anyone who interacts with the system externally: members, volunteers, speakers, reviewers, etc.
+MJ's `Employee` is designed for internal org structure — the staff who run the organization. It's structurally embedded (User table has EmployeeID FK, vwUsers always JOINs it) but functionally passive — no runtime code makes decisions based on Employee data.
 
-**Recommended approach**: Keep them separate initially. A future enhancement could make Employee IsA Person (since an employee IS a person), but that's a significant change to existing MJ core and should be a separate initiative.
+MJ Commons' `Person` represents anyone who interacts with the system externally: members, volunteers, speakers, reviewers, mentors, etc.
 
-**Bridging**: PersonOrganizationRole with RoleType='Employee' can link a Person to an Organization for external org charts, while MJ's Employee handles internal staff. Users who are both staff and members would have both an Employee record (internal) and a Person record (external), linked via their shared User record.
+**Decision: Keep them separate.** There is no urgency to unify because:
+- Employee is so lightly used that coexistence is trivial
+- No deep coupling to untangle
+- Users who are both staff and members would have both an Employee record (internal) and a Person record (external), linked via their shared User record
+- A future enhancement could make Employee IsA Person, but it's not blocking and can wait
 
 ### Organization vs Company
 
-Same pattern. MJ's `Company` represents the organization running MJ. MJ Commons' `Organization` represents external organizations (member orgs, chapters, sponsors). Keep separate, bridge via relationships.
+Same pattern. MJ's `Company` (6 fields, lightweight) represents the org running MJ and its subsidiaries. Its only runtime purpose is integration credential scoping and AI agent memory scoping.
+
+MJ Commons' `Organization` represents external organizations (member orgs, chapters, sponsors, partners). Completely separate domain, no overlap in purpose.
+
+**Decision: Keep them separate.** Company continues to serve its two infrastructure roles. Organization serves the business application layer.
 
 ### Skills
 
-MJ already has a hierarchical `Skill` entity with `EmployeeSkill` junction. MJ Commons should add a `PersonSkill` junction entity to connect Person records to the existing Skill taxonomy. This enables the AI matching engines to use skills for reviewer-topic matching, mentor-mentee matching, and volunteer-opportunity matching.
+MJ already has a hierarchical `Skill` entity with `EmployeeSkill` junction — but EmployeeSkill has **zero custom code usage**. The Skill taxonomy infrastructure is solid but idle.
+
+MJ Commons should add a `PersonSkill` junction entity to connect Person records to the existing Skill taxonomy. This activates the dormant Skills infrastructure and becomes the foundation for all AI matching engines (reviewer-topic matching, mentor-mentee matching, volunteer-opportunity matching).
 
 | Field | Type | Description |
 |---|---|---|
