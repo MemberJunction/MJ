@@ -20,7 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import { buildEntityNameMap } from './EntityNameScanner';
+import { resolveEntityNameMap } from './EntityNameScanner';
 
 // ============================================================================
 // Public Types
@@ -258,32 +258,6 @@ function replaceAll(text: string, search: string, replacement: string): string {
 // ============================================================================
 
 /**
- * Resolves the path to entity_subclasses.ts, trying common locations.
- */
-function resolveEntitySubclassesPath(basePath: string, explicitPath?: string): string {
-    if (explicitPath) {
-        const resolved = path.resolve(explicitPath);
-        if (fs.existsSync(resolved)) return resolved;
-        throw new Error(`Specified entity subclasses path does not exist: ${explicitPath}`);
-    }
-
-    const candidates = [
-        path.resolve(basePath, 'packages/MJCoreEntities/src/generated/entity_subclasses.ts'),
-        path.resolve(basePath, '../packages/MJCoreEntities/src/generated/entity_subclasses.ts'),
-        path.resolve(basePath, '../../packages/MJCoreEntities/src/generated/entity_subclasses.ts'),
-    ];
-
-    for (const candidate of candidates) {
-        if (fs.existsSync(candidate)) return candidate;
-    }
-
-    throw new Error(
-        `Could not find entity_subclasses.ts. Searched:\n${candidates.map(c => `  - ${c}`).join('\n')}\n` +
-        `Use --entity-subclasses to specify the path explicitly.`
-    );
-}
-
-/**
  * Scans HTML template files for hardcoded entity names that need the "MJ: " prefix,
  * and optionally fixes them in place.
  */
@@ -306,17 +280,10 @@ export async function scanHtmlEntityNames(
         };
     }
 
-    // Build rename map
+    // Build rename map (tries .ts file first, falls back to embedded rename map)
     let renameMap: Map<string, string>;
     try {
-        const entitySubclassesPath = resolveEntitySubclassesPath(targetPath, options.EntitySubclassesPath);
-        if (verbose) {
-            console.log(`Building rename map from: ${entitySubclassesPath}`);
-        }
-        renameMap = buildEntityNameMap(entitySubclassesPath);
-        if (verbose) {
-            console.log(`Loaded ${renameMap.size} entity name mappings`);
-        }
+        renameMap = resolveEntityNameMap(targetPath, options.EntitySubclassesPath, verbose);
     } catch (err) {
         return {
             Success: false,

@@ -1,15 +1,16 @@
 import { Command, Flags } from '@oclif/core';
 
 export default class V50FixEntityNames extends Command {
-    static description = `[v5.0 Migration] Scan TypeScript files for hardcoded entity names that need "MJ: " prefix updates.
+    static description = `[v5.0 Migration] Scan TypeScript files for entity names AND class names that need updating.
 
-Uses the TypeScript compiler AST to find entity name references in method calls
-(GetEntityObject, OpenEntityRecord, navigateToEntity, etc.), property assignments
-(EntityName: 'OldName'), comparison expressions (.Name === 'OldName'), and
-@RegisterClass decorators. Runs in dry-run mode by default; use --fix to apply.
+Three strategies are applied:
+  1. Class name renames (regex) — ActionEntity -> MJActionEntity, ActionSchema -> MJActionSchema, etc.
+  2. Multi-word entity name renames (regex) — 'AI Models' -> 'MJ: AI Models'
+  3. Single-word entity name renames (AST) — 'Actions' -> 'MJ: Actions' in GetEntityObject, OpenEntityRecord,
+     navigateToEntity, EntityName: assignments, .Name === comparisons, @RegisterClass decorators.
 
-The rename map is built dynamically from entity_subclasses.ts by parsing all
-@RegisterClass(BaseEntity, 'MJ: XYZ') decorators (~272 entries).`;
+The rename map (272 entries) is built from entity_subclasses.ts @RegisterClass decorators plus
+an embedded rename map for class name prefixes. Runs in dry-run mode by default; use --fix to apply.`;
 
     static examples = [
         {
@@ -72,10 +73,20 @@ The rename map is built dynamically from entity_subclasses.ts by parsing all
         }
 
         if (!flags.quiet) {
-            this.log(`\nScanned ${result.FilesScanned} files, found ${result.Findings.length} entity name(s) needing update`);
+            this.log(`\nScanned ${result.FilesScanned} files, found ${result.Findings.length} reference(s) needing update`);
             this.log(`Rename map: ${result.RenameMapSize} entity name mappings loaded`);
 
             if (result.Findings.length > 0) {
+                // Strategy breakdown
+                const classNameCount = result.Findings.filter((f: { PatternKind: string }) => f.PatternKind === 'ClassName').length;
+                const multiWordCount = result.Findings.filter((f: { PatternKind: string }) => f.PatternKind === 'MultiWordEntityName').length;
+                const astCount = result.Findings.length - classNameCount - multiWordCount;
+
+                this.log(`\n  Strategy breakdown:`);
+                if (classNameCount > 0) this.log(`    Class name renames:          ${classNameCount}`);
+                if (multiWordCount > 0) this.log(`    Multi-word entity names:     ${multiWordCount}`);
+                if (astCount > 0)       this.log(`    Single-word entity names:    ${astCount}`);
+
                 // Group by file for readable output
                 const byFile = new Map<string, typeof result.Findings>();
                 for (const f of result.Findings) {
