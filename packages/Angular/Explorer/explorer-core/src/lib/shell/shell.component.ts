@@ -1606,24 +1606,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Handle navigation item click with shift-key and double-click detection
+   * Handle navigation item click with shift-key detection
    */
   onNavItemClick(event: NavItemClickEvent): void {
     if (!this.activeApp) {
       return;
     }
 
-    const { item, shiftKey, dblClick } = event;
+    const { item, shiftKey } = event;
 
     // Close mobile nav if open
     this.mobileNavOpen = false;
 
-    // Use NavigationService with forceNewTab option if shift was pressed or double-clicked
+    // Use NavigationService with forceNewTab option if shift was pressed
     this.navigationService.OpenNavItem(
       this.activeApp.ID,
       item,
       this.activeApp.GetColor(),
-      { forceNewTab: shiftKey || dblClick }
+      { forceNewTab: shiftKey }
     );
   }
 
