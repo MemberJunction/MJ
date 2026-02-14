@@ -20,6 +20,8 @@
             [PrimaryKey]="SharedPrimaryKey"
             [CurrentRecordName]="CurrentRecordName"
             [Relationship]="item.Relationship"
+            [Depth]="item.Depth"
+            [Children]="item.Children"
             (Navigate)="OnCardNavigate($event)">
           </mj-isa-related-card>
         }

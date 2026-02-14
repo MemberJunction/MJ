@@ -7,6 +7,7 @@ import {
   BaseEntity, EntityInfo, EntityFieldInfo, Metadata, CompositeKey
 } from '@memberjunction/core';
 import { EntityHierarchyNavigationEvent } from '../types/navigation-events';
+import { IsaRelatedItem } from './isa-hierarchy-utils';
 
 /**
  * Represents a single field value displayed in the ISA related card.
@@ -48,6 +49,12 @@ export class MjIsaRelatedCardComponent implements OnInit, OnChanges {
 
   /** The relationship type label */
   @Input() Relationship: 'sibling' | 'child' = 'sibling';
+
+  /** Depth in the IS-A hierarchy (0 = direct child/sibling, 1 = grandchild, etc.) */
+  @Input() Depth = 0;
+
+  /** Child items nested under this entity (rendered as sub-cards within this card) */
+  @Input() Children: IsaRelatedItem[] = [];
 
   /** Emitted when user clicks "Open" to navigate to this related record */
   @Output() Navigate = new EventEmitter<EntityHierarchyNavigationEvent>();

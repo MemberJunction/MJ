@@ -1,5 +1,8 @@
 <!-- ISA Related Card: compact summary of one sibling/child entity record -->
-<div class="mj-isa-card" [class.mj-isa-card--loading]="IsLoading" [class.mj-isa-card--error]="LoadError">
+<div class="mj-isa-card"
+     [class.mj-isa-card--loading]="IsLoading"
+     [class.mj-isa-card--error]="LoadError"
+     [class.mj-isa-card--nested]="Depth > 0">
 
   <!-- Card Header -->
   <div class="mj-isa-card__header">
@@ -72,5 +75,22 @@
         </div>
       }
     }
+  }
+
+  <!-- Nested sub-cards for IS-A children (e.g., Gold Members inside Members) -->
+  @if (Children.length > 0 && !IsLoading) {
+    <div class="mj-isa-card__children">
+      @for (child of Children; track child.EntityName) {
+        <mj-isa-related-card
+          [EntityName]="child.EntityName"
+          [PrimaryKey]="PrimaryKey"
+          [CurrentRecordName]="CurrentRecordName"
+          [Relationship]="'child'"
+          [Depth]="Depth + 1"
+          [Children]="child.Children"
+          (Navigate)="Navigate.emit($event)">
+        </mj-isa-related-card>
+      }
+    </div>
   }
 </div>

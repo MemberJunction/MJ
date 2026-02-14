@@ -102,30 +102,10 @@
         <!-- Current entity (always shown) -->
         <span class="mj-entity-badge mj-entity-badge--current">{{ EntityInfo?.Name }}</span>
 
-        <!-- Child chain (disjoint: immediate child → ... → leaf) -->
-        @for (child of ChildChain; track child.EntityInfo.ID) {
-          <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
-          <a class="mj-entity-badge mj-entity-badge--child"
-             [title]="'Navigate to child: ' + child.EntityInfo.Name"
-             (click)="OnChildBadgeClick(child, $event)">
-            <i class="fa-solid fa-arrow-down"></i>
-            {{ child.EntityInfo.Name }}
-          </a>
-        }
-
-        <!-- Overlapping children (multiple child types coexist) -->
-        @if (HasOverlappingChildren) {
-          <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
-          <span class="mj-entity-badge-group">
-            @for (child of OverlappingChildren; track child.entityName) {
-              <a class="mj-entity-badge mj-entity-badge--overlapping"
-                 [title]="'Navigate to: ' + child.entityName"
-                 (click)="OnOverlappingChildClick(child.entityName, $event)">
-                <i class="fa-solid fa-clone"></i>
-                {{ child.entityName }}
-              </a>
-            }
-          </span>
+        <!-- Descendant tree (recursive: inline for single paths, branching for multiple) -->
+        @if (DescendantTree.length > 0) {
+          <ng-container [ngTemplateOutlet]="descendantTreeTpl"
+            [ngTemplateOutletContext]="{ items: DescendantTree }"></ng-container>
         }
       </div>
     }
@@ -243,3 +223,39 @@
     </div>
   </div>
 }
+
+<!-- Recursive template for IS-A descendant tree rendering.
+     Single child at a level → inline with chevron.
+     Multiple children at a level → tree branch with CSS connector lines. -->
+<ng-template #descendantTreeTpl let-items="items">
+  @if (items.length === 1) {
+    <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+    <a class="mj-entity-badge mj-entity-badge--child"
+       [title]="'Navigate to: ' + items[0].EntityName"
+       (click)="OnDescendantBadgeClick(items[0].EntityName, $event)">
+      <i class="fa-solid fa-arrow-down"></i>
+      {{ items[0].EntityName }}
+    </a>
+    @if (items[0].Children.length > 0) {
+      <ng-container [ngTemplateOutlet]="descendantTreeTpl"
+        [ngTemplateOutletContext]="{ items: items[0].Children }"></ng-container>
+    }
+  } @else if (items.length > 1) {
+    <div class="mj-descendant-chains">
+      @for (item of items; track item.EntityName) {
+        <div class="mj-descendant-chain">
+          <a class="mj-entity-badge mj-entity-badge--child"
+             [title]="'Navigate to: ' + item.EntityName"
+             (click)="OnDescendantBadgeClick(item.EntityName, $event)">
+            <i class="fa-solid fa-arrow-down"></i>
+            {{ item.EntityName }}
+          </a>
+          @if (item.Children.length > 0) {
+            <ng-container [ngTemplateOutlet]="descendantTreeTpl"
+              [ngTemplateOutletContext]="{ items: item.Children }"></ng-container>
+          }
+        </div>
+      }
+    </div>
+  }
+</ng-template>

@@ -5,16 +5,7 @@ import {
 } from '@angular/core';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { FormNavigationEvent, EntityHierarchyNavigationEvent } from '../types/navigation-events';
-
-/**
- * Represents one related IS-A entity to display in the panel.
- */
-export interface IsaRelatedItem {
-  /** The entity name (e.g., "Members", "Speakers") */
-  EntityName: string;
-  /** Relationship to the current form's entity */
-  Relationship: 'sibling' | 'child';
-}
+import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from './isa-hierarchy-utils';
 
 /**
  * Container panel that discovers and displays IS-A related entity records
@@ -27,7 +18,9 @@ export interface IsaRelatedItem {
  * **Data flow**:
  * - Receives the current `Record` (BaseEntity) as input
  * - Inspects `EntityInfo.ParentEntityInfo` and `ISAChildren` to discover related records
- * - Renders an `<mj-isa-related-card>` for each related entity
+ * - Builds a tree structure for nested sub-card rendering
+ * - Renders an `<mj-isa-related-card>` for each root-level related entity
+ *   (grandchildren render as nested sub-cards inside their parent card)
  *
  * @example
  * ```html
@@ -60,7 +53,7 @@ export class MjIsaRelatedPanelComponent implements OnChanges {
   /** Emitted for navigation to a related record */
   @Output() Navigate = new EventEmitter<FormNavigationEvent>();
 
-  /** List of related IS-A entities to display cards for */
+  /** Root-level related IS-A entities to display cards for (children nested inside) */
   RelatedItems: IsaRelatedItem[] = [];
 
   /** Whether there are any related IS-A items to show */
@@ -89,9 +82,9 @@ export class MjIsaRelatedPanelComponent implements OnChanges {
   /**
    * Discover IS-A related entities by examining the current record's
    * entity hierarchy. Finds siblings (other children of the same parent)
-   * and direct children.
+   * and all descendants (children, grandchildren, etc.) as a tree.
    */
-  private DiscoverRelatedItems(): void {
+  private async DiscoverRelatedItems(): Promise<void> {
     this.RelatedItems = [];
 
     if (!this.Record) return;
@@ -104,16 +97,9 @@ export class MjIsaRelatedPanelComponent implements OnChanges {
       this.DiscoverSiblingsFromParent(entityInfo);
     }
 
-    // Case 2: Current entity is a parent type with overlapping subtypes —
-    // show children from ISAChildren
-    if (entityInfo.IsParentType && entityInfo.AllowMultipleSubtypes) {
-      this.DiscoverOverlappingChildren();
-    }
-
-    // Case 3: Current entity is a parent type with disjoint subtype —
-    // show the single child if it exists
-    if (entityInfo.IsParentType && !entityInfo.AllowMultipleSubtypes) {
-      this.DiscoverDisjointChild();
+    // Case 2: Current entity is a parent type — discover all descendants as tree
+    if (entityInfo.IsParentType) {
+      await this.DiscoverDescendants();
     }
 
     this.cdr.markForCheck();
@@ -122,8 +108,7 @@ export class MjIsaRelatedPanelComponent implements OnChanges {
   /**
    * When viewing a child entity (e.g., Member), find sibling entities
    * (e.g., Speaker) that also have records with the same parent PK.
-   * Uses the parent's ISAChildren if the parent uses overlapping subtypes,
-   * or the parent's ISAChild for disjoint.
+   * Uses the parent's ISAChildren if the parent uses overlapping subtypes.
    */
   private DiscoverSiblingsFromParent(entityInfo: EntityInfo): void {
     const parent = this.Record?.ISAParent;
@@ -132,52 +117,32 @@ export class MjIsaRelatedPanelComponent implements OnChanges {
     const parentInfo = entityInfo.ParentEntityInfo!;
 
     if (parentInfo.AllowMultipleSubtypes) {
-      // Overlapping: ISAChildren on the parent gives us all active children
       const children = parent.ISAChildren;
       if (children) {
         for (const child of children) {
-          // Skip ourselves
           if (child.entityName !== entityInfo.Name) {
             this.RelatedItems.push({
               EntityName: child.entityName,
-              Relationship: 'sibling'
+              Relationship: 'sibling',
+              Depth: 0,
+              Children: []
             });
           }
         }
       }
-    } else {
-      // Disjoint: there can only be one child, so no siblings
-      // Nothing to add
     }
   }
 
   /**
-   * When viewing an overlapping parent (e.g., Person with AllowMultipleSubtypes),
-   * show all active child records.
+   * Recursively discover all IS-A descendants and build a tree structure.
+   * Root-level children appear as top-level cards; grandchildren nest inside.
    */
-  private DiscoverOverlappingChildren(): void {
-    const children = this.Record?.ISAChildren;
-    if (!children) return;
+  private async DiscoverDescendants(): Promise<void> {
+    if (!this.Record) return;
 
-    for (const child of children) {
-      this.RelatedItems.push({
-        EntityName: child.entityName,
-        Relationship: 'child'
-      });
-    }
-  }
-
-  /**
-   * When viewing a disjoint parent entity, show the single child if present.
-   */
-  private DiscoverDisjointChild(): void {
-    const child = this.Record?.ISAChild;
-    if (!child) return;
-
-    this.RelatedItems.push({
-      EntityName: child.EntityInfo.Name,
-      Relationship: 'child'
-    });
+    const descendants = await DiscoverISADescendants(this.Record);
+    const tree = BuildDescendantTree(descendants);
+    this.RelatedItems.push(...tree);
   }
 
   /** Relay navigation events from child cards */

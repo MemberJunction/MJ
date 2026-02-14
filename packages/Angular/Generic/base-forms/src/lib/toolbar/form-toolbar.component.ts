@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, Templa
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import { FormNavigationEvent } from '../types/navigation-events';
+import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from '../isa-related-panel/isa-hierarchy-utils';
 import { FormWidthMode, FormContext } from '../types/form-types';
 import {
   BeforeSaveEventArgs,
@@ -170,11 +171,18 @@ export class MjFormToolbarComponent implements DoCheck {
   ShowDeleteDialog = false;
   ShowDiscardDialog = false;
 
+  /** Computed descendant tree for breadcrumb display */
+  DescendantTree: IsaRelatedItem[] = [];
+  private _lastRecordForChains: BaseEntity | null = null;
+  private _chainsLoading = false;
+
   // ---- Lifecycle ----
 
   ngDoCheck(): void {
-    if (!this._formRef) return;
-    this.SyncFromFormRef();
+    if (this._formRef) {
+      this.SyncFromFormRef();
+    }
+    this.CheckDescendantChains();
   }
 
   /**
@@ -294,7 +302,7 @@ export class MjFormToolbarComponent implements DoCheck {
 
   /** Whether this entity is part of any IS-A hierarchy (parent or child side) */
   get IsInHierarchy(): boolean {
-    return this.HasParentEntities || this.HasLoadedChild || this.HasOverlappingChildren;
+    return this.HasParentEntities || this.HasLoadedChild || this.HasOverlappingChildren || this.DescendantTree.length > 0;
   }
 
   /** Display-friendly names of dirty fields for the edit banner */
@@ -315,6 +323,64 @@ export class MjFormToolbarComponent implements DoCheck {
       if (name) return String(name);
     }
     return this.Record.PrimaryKey.ToConcatenatedString();
+  }
+
+  // ---- Descendant Chain Computation ----
+
+  /**
+   * Check if descendant chains need recomputation (called from DoCheck).
+   * Only triggers async computation when the record identity changes.
+   */
+  private CheckDescendantChains(): void {
+    if (!this.Record) {
+      if (this.DescendantTree.length > 0) {
+        this.DescendantTree = [];
+        this._lastRecordForChains = null;
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+    if (this.Record !== this._lastRecordForChains && !this._chainsLoading) {
+      this.ComputeDescendantChains();
+    }
+  }
+
+  /**
+   * Asynchronously discover all IS-A descendants and convert to chains
+   * for breadcrumb display. Each chain is a root-to-leaf path of entity names.
+   */
+  private ComputeDescendantChains(): void {
+    this._lastRecordForChains = this.Record;
+
+    if (!this.Record?.EntityInfo?.IsParentType) {
+      this.DescendantTree = [];
+      return;
+    }
+
+    this._chainsLoading = true;
+
+    DiscoverISADescendants(this.Record).then(descendants => {
+      this.DescendantTree = BuildDescendantTree(descendants);
+      this._chainsLoading = false;
+      this.cdr.markForCheck();
+    }).catch(() => {
+      this.DescendantTree = [];
+      this._chainsLoading = false;
+      this.cdr.markForCheck();
+    });
+  }
+
+  /**
+   * Navigate to a descendant entity record in the IS-A hierarchy.
+   */
+  OnDescendantBadgeClick(entityName: string, event: MouseEvent): void {
+    if (!this.Record) return;
+    this.Navigate.emit({
+      Kind: 'entity-hierarchy',
+      EntityName: entityName,
+      PrimaryKey: this.Record.PrimaryKey,
+      Direction: 'child'
+    });
   }
 
   // ---- Actions ----
