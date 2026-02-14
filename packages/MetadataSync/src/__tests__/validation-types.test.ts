@@ -235,7 +235,7 @@ describe('Type interfaces shape validation', () => {
       file: '/path/to/users.json',
     };
 
-    expect(dep.entityName).toBe('Users');
+    expect(dep.entityName).toBe('MJ: Users');
     expect(dep.dependsOn.size).toBe(2);
     expect(dep.dependsOn.has('Roles')).toBe(true);
   });

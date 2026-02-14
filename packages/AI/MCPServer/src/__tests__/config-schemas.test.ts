@@ -182,7 +182,7 @@ describe('Entity Tool Schema', () => {
             delete: false,
             runView: true,
         });
-        expect(result.entityName).toBe('Users');
+        expect(result.entityName).toBe('MJ: Users');
         expect(result.schemaName).toBe('__mj');
         expect(result.get).toBe(true);
         expect(result.runView).toBe(true);
