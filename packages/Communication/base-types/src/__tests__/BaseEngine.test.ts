@@ -29,12 +29,12 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-    CommunicationBaseMessageTypeEntity: class {},
-    CommunicationLogEntity: class {},
-    CommunicationProviderMessageTypeEntity: class {},
-    CommunicationRunEntity: class {},
-    EntityCommunicationFieldEntity: class {},
-    EntityCommunicationMessageTypeEntity: class {},
+    MJCommunicationBaseMessageTypeEntity: class {},
+    MJCommunicationLogEntity: class {},
+    MJCommunicationProviderMessageTypeEntity: class {},
+    MJCommunicationRunEntity: class {},
+    MJEntityCommunicationFieldEntity: class {},
+    MJEntityCommunicationMessageTypeEntity: class {},
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -126,7 +126,7 @@ describe('CommunicationEngineBase', () => {
 
             const result = await (engine as unknown as Record<string, Function>)['StartRun']();
 
-            expect(mockGetEntityObject).toHaveBeenCalledWith('Communication Runs', expect.anything());
+            expect(mockGetEntityObject).toHaveBeenCalledWith('MJ: Communication Runs', expect.anything());
             expect(result).toBe(mockRun);
             expect(mockRun.Status).toBe('Pending');
             expect(mockRun.Direction).toBe('Sending');

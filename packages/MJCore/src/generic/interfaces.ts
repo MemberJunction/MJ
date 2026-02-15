@@ -181,6 +181,18 @@ export interface IEntityDataProvider {
     FindISAChildEntity?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string } | null>;
 
     /**
+     * Discovers ALL IS-A child entities that have records with the given primary key.
+     * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
+     * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
+     *
+     * @param entityInfo The parent entity's EntityInfo (to find its child entity types)
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user for server-side operations
+     * @returns Array of child entity names found (empty if none)
+     */
+    FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
+
+    /**
      * Begin an independent provider-level transaction for IS-A chain orchestration.
      * Returns a provider-specific transaction object (e.g., sql.Transaction for SQLServer).
      * Separate from the provider's internal transaction management (TransactionGroup system).
@@ -248,6 +260,14 @@ export class EntitySaveOptions {
      * - SQLServerDataProvider: real save using shared ProviderTransaction
      */
     IsParentEntitySave?: boolean = false;
+
+    /**
+     * The entity name of the child that initiated this parent save in an IS-A chain.
+     * Used by server-side providers to skip the active branch when propagating
+     * Record Change entries to sibling branches of overlapping parents.
+     * Only set when IsParentEntitySave is true.
+     */
+    ISAActiveChildEntityName?: string;
 }
 
 /**

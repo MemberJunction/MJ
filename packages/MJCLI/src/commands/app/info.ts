@@ -2,6 +2,12 @@ import { Args, Command } from '@oclif/core';
 import chalk from 'chalk';
 import { buildContextUser } from '../../utils/open-app-context.js';
 
+/**
+ * CLI command: `mj app info <name>`.
+ *
+ * Displays detailed metadata about an installed Open App including
+ * publisher, version, schema, license, and description.
+ */
 export default class AppInfo extends Command {
   static description = 'Show detailed information about an installed MJ Open App';
 
@@ -20,7 +26,7 @@ export default class AppInfo extends Command {
     const { args } = await this.parse(AppInfo);
 
     try {
-      const { FindInstalledApp } = await import('@memberjunction/mj-open-app-engine');
+      const { FindInstalledApp } = await import('@memberjunction/open-app-engine');
       const contextUser = await buildContextUser();
       const app = await FindInstalledApp(contextUser, args.name);
 
@@ -49,6 +55,7 @@ export default class AppInfo extends Command {
 
 }
 
+/** Returns the status string with color-coding based on app state. */
 function FormatStatus(status: string): string {
   switch (status) {
     case 'Active': return chalk.green(status);

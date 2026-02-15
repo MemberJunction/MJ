@@ -25,7 +25,7 @@ import { SettingsDialogService } from './services/settings-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 
 /**
@@ -85,7 +85,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   userIconClass: string | null = null;
   userName = '';
   userEmail = '';
-  private userEntity: UserEntity | null = null;
+  private userEntity: MJUserEntity | null = null;
 
   // User menu plugin system
   private userMenu: BaseUserMenu | null = null;
@@ -379,7 +379,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
           const md = new Metadata();
           const currentUserInfo = md.CurrentUser;
-          const userEntity = await md.GetEntityObject<any>('Users');
+          const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
           this.applyUserAvatar(userEntity);
         }
@@ -1606,24 +1606,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Handle navigation item click with shift-key and double-click detection
+   * Handle navigation item click with shift-key detection
    */
   onNavItemClick(event: NavItemClickEvent): void {
     if (!this.activeApp) {
       return;
     }
 
-    const { item, shiftKey, dblClick } = event;
+    const { item, shiftKey } = event;
 
     // Close mobile nav if open
     this.mobileNavOpen = false;
 
-    // Use NavigationService with forceNewTab option if shift was pressed or double-clicked
+    // Use NavigationService with forceNewTab option if shift was pressed
     this.navigationService.OpenNavItem(
       this.activeApp.ID,
       item,
       this.activeApp.GetColor(),
-      { forceNewTab: shiftKey || dblClick }
+      { forceNewTab: shiftKey }
     );
   }
 
@@ -1920,8 +1920,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
       this.userEmail = currentUserInfo.Email || '';
 
-      // Load the full UserEntity to access avatar fields
-      const currentUserEntity = await md.GetEntityObject<UserEntity>('Users');
+      // Load the full MJUserEntity to access avatar fields
+      const currentUserEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
       await currentUserEntity.Load(currentUserInfo.ID);
 
       // Store reference for user menu

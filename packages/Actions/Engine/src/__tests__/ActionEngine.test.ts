@@ -53,20 +53,20 @@ vi.mock('@memberjunction/core', () => {
 
 // Mock @memberjunction/core-entities
 vi.mock('@memberjunction/core-entities', () => ({
-    ActionExecutionLogEntity: class {},
-    ActionFilterEntity: class {},
-    ActionParamEntity: class {},
-    ActionResultCodeEntity: class {},
-    ActionCategoryEntity: class {},
-    ActionEntity: class {},
-    ActionLibraryEntity: class {},
-    EntityActionParamEntity: class {},
-    EntityActionFilterEntity: class {},
-    EntityActionInvocationEntity: class {},
-    EntityActionInvocationTypeEntity: class {},
-    EntityActionEntity: class {},
-    CompanyIntegrationEntity: class {},
-    IntegrationEntity: class {},
+    MJActionExecutionLogEntity: class {},
+    MJActionFilterEntity: class {},
+    MJActionParamEntity: class {},
+    MJActionResultCodeEntity: class {},
+    MJActionCategoryEntity: class {},
+    MJActionEntity: class {},
+    MJActionLibraryEntity: class {},
+    MJEntityActionParamEntity: class {},
+    MJEntityActionFilterEntity: class {},
+    MJEntityActionInvocationEntity: class {},
+    MJEntityActionInvocationTypeEntity: class {},
+    MJEntityActionEntity: class {},
+    MJCompanyIntegrationEntity: class {},
+    MJIntegrationEntity: class {},
 }));
 
 // Mock @memberjunction/global

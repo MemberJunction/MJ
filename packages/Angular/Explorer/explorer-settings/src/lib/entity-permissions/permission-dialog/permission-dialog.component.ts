@@ -2,23 +2,23 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, S
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
-import { EntityPermissionEntity, EntityEntity, RoleEntity } from '@memberjunction/core-entities';
+import { MJEntityPermissionEntity, MJEntityEntity, MJRoleEntity } from '@memberjunction/core-entities';
 
 export interface PermissionDialogData {
-  entity: EntityEntity;
-  roles: RoleEntity[];
-  existingPermissions: EntityPermissionEntity[];
+  entity: MJEntityEntity;
+  roles: MJRoleEntity[];
+  existingPermissions: MJEntityPermissionEntity[];
 }
 
 export interface PermissionDialogResult {
   action: 'save' | 'cancel';
-  entity?: EntityEntity;
+  entity?: MJEntityEntity;
 }
 
 interface RolePermissions {
   roleId: string;
   roleName: string;
-  entityPermission: EntityPermissionEntity;
+  entityPermission: MJEntityPermissionEntity;
   isNew: boolean;
 }
 
@@ -43,7 +43,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
   public isLoading = false;
   public error: string | null = null;
   public rolePermissions: RolePermissions[] = [];
-  public availableRoles: RoleEntity[] = [];
+  public availableRoles: MJRoleEntity[] = [];
 
   constructor() {
     this.permissionForm = this.fb.group({});
@@ -138,9 +138,9 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.cdr.detectChanges();
   }
 
-  public async addRolePermission(role: RoleEntity): Promise<void> {
+  public async addRolePermission(role: MJRoleEntity): Promise<void> {
     // Create new EntityPermission entity
-    const entityPermission = await this.metadata.GetEntityObject<EntityPermissionEntity>('Entity Permissions');
+    const entityPermission = await this.metadata.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions');
     entityPermission.NewRecord();
     entityPermission.EntityID = this.data!.entity.ID;
     entityPermission.RoleID = role.ID;

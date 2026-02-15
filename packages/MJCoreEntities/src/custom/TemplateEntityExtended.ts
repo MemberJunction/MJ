@@ -1,22 +1,22 @@
 import { BaseEntity, ValidationResult } from "@memberjunction/core";
-import { TemplateContentEntity, TemplateEntity, TemplateParamEntity } from "../generated/entity_subclasses";
+import { MJTemplateContentEntity, MJTemplateEntity, MJTemplateParamEntity } from "../generated/entity_subclasses";
 import { RegisterClass } from "@memberjunction/global";
 
-@RegisterClass(BaseEntity, 'Templates')
-export class TemplateEntityExtended extends TemplateEntity {
-    private _Content: TemplateContentEntity[] = [];
-    public get Content(): TemplateContentEntity[] {
+@RegisterClass(BaseEntity, 'MJ: Templates')
+export class TemplateEntityExtended extends MJTemplateEntity {
+    private _Content: MJTemplateContentEntity[] = [];
+    public get Content(): MJTemplateContentEntity[] {
         return this._Content;
     }
-    public set Content(value: TemplateContentEntity[]) {
+    public set Content(value: MJTemplateContentEntity[]) {
         this._Content = value;
     }
 
-    private _Params: TemplateParamEntity[] = [];
-    public get Params(): TemplateParamEntity[] {
+    private _Params: MJTemplateParamEntity[] = [];
+    public get Params(): MJTemplateParamEntity[] {
         return this._Params;
     }
-    public set Params(value: TemplateParamEntity[]) {
+    public set Params(value: MJTemplateParamEntity[]) {
         this._Params = value;
     }
 
@@ -25,7 +25,7 @@ export class TemplateEntityExtended extends TemplateEntity {
      * @param type
      * @returns
      */
-    public GetContentByType(type: string): TemplateContentEntity[] {
+    public GetContentByType(type: string): MJTemplateContentEntity[] {
         return this.Content.filter(c => c.Type.trim().toLowerCase() === type.trim().toLowerCase());
     }
 
@@ -34,7 +34,7 @@ export class TemplateEntityExtended extends TemplateEntity {
      * @param type If provided, returns the highest priority content of the specified type
      * @returns
      */
-    public GetHighestPriorityContent(type?: string): TemplateContentEntity {
+    public GetHighestPriorityContent(type?: string): MJTemplateContentEntity {
         if (type) {
             return this.Content.filter(c => c.Type.trim().toLowerCase() === type.trim().toLowerCase())
                 .sort((a, b) => a.Priority - b.Priority)[0];
@@ -50,7 +50,7 @@ export class TemplateEntityExtended extends TemplateEntity {
      * and content-specific parameters for the given contentId.
      *
      * @param contentId - The ID of the template content. If not provided, returns only global parameters.
-     * @returns Array of TemplateParamEntity objects that apply to the specified content
+     * @returns Array of MJTemplateParamEntity objects that apply to the specified content
      *
      * @example
      * // Get all parameters for a specific content
@@ -60,7 +60,7 @@ export class TemplateEntityExtended extends TemplateEntity {
      * // Get only global parameters (that apply to all contents)
      * const globalParams = template.GetParametersForContent();
      */
-    public GetParametersForContent(contentId?: string): TemplateParamEntity[] {
+    public GetParametersForContent(contentId?: string): MJTemplateParamEntity[] {
         if (!contentId) {
             // Return only global parameters (TemplateContentID is null)
             return this.Params.filter(p => !p.TemplateContentID);

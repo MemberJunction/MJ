@@ -1,15 +1,15 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef, HostListener } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, ListCategoryEntity } from '@memberjunction/core-entities';
-import { ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
 interface BrowseListItem {
-  list: ListEntity;
+  list: MJListEntity;
   itemCount: number;
   entityName: string;
   ownerName: string;
@@ -18,7 +18,7 @@ interface BrowseListItem {
 }
 
 interface CategoryNode {
-  category: ListCategoryEntity | null;
+  category: MJListCategoryEntity | null;
   lists: BrowseListItem[];
   children: CategoryNode[];
   isExpanded: boolean;
@@ -1684,7 +1684,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   allLists: BrowseListItem[] = [];
   filteredLists: BrowseListItem[] = [];
-  categories: ListCategoryEntity[] = [];
+  categories: MJListCategoryEntity[] = [];
   categoryTree: CategoryNode[] = [];
   flatCategories: Array<{ ID: string; displayName: string }> = [];
   availableEntities: Array<{ ID: string; Name: string }> = [];
@@ -1711,7 +1711,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   // Create/Edit dialog state
   showCreateDialog = false;
-  editingList: ListEntity | null = null;
+  editingList: MJListEntity | null = null;
   newListName = '';
   newListDescription = '';
   selectedEntityId = '';
@@ -1723,7 +1723,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   // Delete confirmation state
   showDeleteConfirm = false;
   deleteListName = '';
-  listToDelete: ListEntity | null = null;
+  listToDelete: MJListEntity | null = null;
 
   // Operation states
   isSaving = false;
@@ -1735,7 +1735,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   private entityColorMap: Map<string, string> = new Map();
   private entityIconMap: Map<string, string> = new Map();
-  private categoryMap: Map<string, ListCategoryEntity> = new Map();
+  private categoryMap: Map<string, MJListCategoryEntity> = new Map();
   private currentUserId = '';
 
   constructor(
@@ -1795,22 +1795,22 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       // Load all lists, categories, details, and users in parallel
       const [listsResult, categoriesResult, detailsResult, usersResult] = await rv.RunViews([
         {
-          EntityName: 'Lists',
+          EntityName: 'MJ: Lists',
           OrderBy: 'Name',
           ResultType: 'entity_object'
         },
         {
-          EntityName: 'List Categories',
+          EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
         },
         {
-          EntityName: 'List Details',
+          EntityName: 'MJ: List Details',
           Fields: ['ListID'],
           ResultType: 'simple'
         },
         {
-          EntityName: 'Users',
+          EntityName: 'MJ: Users',
           Fields: ['ID', 'Name'],
           ResultType: 'simple'
         }
@@ -1821,8 +1821,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         return;
       }
 
-      const lists = listsResult.Results as ListEntity[];
-      this.categories = (categoriesResult.Results || []) as ListCategoryEntity[];
+      const lists = listsResult.Results as MJListEntity[];
+      this.categories = (categoriesResult.Results || []) as MJListCategoryEntity[];
       const details = (detailsResult.Results || []) as Array<{ ListID: string }>;
       const users = (usersResult.Results || []) as Array<{ ID: string; Name: string }>;
 
@@ -1896,11 +1896,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
   }
 
-  private buildFlatCategories(categories: ListCategoryEntity[]): Array<{ ID: string; displayName: string }> {
+  private buildFlatCategories(categories: MJListCategoryEntity[]): Array<{ ID: string; displayName: string }> {
     const result: Array<{ ID: string; displayName: string }> = [];
     const topLevel = categories.filter(c => !c.ParentID);
 
-    const processCategory = (cat: ListCategoryEntity, level: number) => {
+    const processCategory = (cat: MJListCategoryEntity, level: number) => {
       const indent = '\u00A0\u00A0'.repeat(level);
       result.push({ ID: cat.ID, displayName: `${indent}${cat.Name}` });
 
@@ -2187,7 +2187,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       const md = new Metadata();
       const rv = new RunView();
 
-      const newList = await md.GetEntityObject<ListEntity>('Lists');
+      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
       newList.Name = `${listToDuplicate.Name} (Copy)`;
       newList.Description = listToDuplicate.Description;
       newList.EntityID = listToDuplicate.EntityID;
@@ -2200,8 +2200,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         return;
       }
 
-      const itemsResult = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const itemsResult = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
         ResultType: 'entity_object'
       });
@@ -2209,7 +2209,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       if (itemsResult.Success && itemsResult.Results.length > 0) {
         let copiedCount = 0;
         for (const item of itemsResult.Results) {
-          const newItem = await md.GetEntityObject<ListDetailEntity>('List Details');
+          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details');
           newItem.ListID = newList.ID;
           newItem.RecordID = item.RecordID;
           newItem.Sequence = item.Sequence;
@@ -2294,12 +2294,12 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
     try {
       const md = new Metadata();
-      let list: ListEntity;
+      let list: MJListEntity;
 
       if (this.editingList) {
         list = this.editingList;
       } else {
-        list = await md.GetEntityObject<ListEntity>('Lists');
+        list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
         list.UserID = md.CurrentUser!.ID;
         list.EntityID = this.selectedEntityId;
       }

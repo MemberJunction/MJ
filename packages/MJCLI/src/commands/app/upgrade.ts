@@ -3,6 +3,12 @@ import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
 
+/**
+ * CLI command: `mj app upgrade <name>`.
+ *
+ * Upgrades an installed Open App to a newer version, running new migrations,
+ * updating packages, and recording upgrade history.
+ */
 export default class AppUpgrade extends Command {
   static description = 'Upgrade an installed MJ Open App to a newer version';
 
@@ -28,7 +34,7 @@ export default class AppUpgrade extends Command {
     const spinner = ora();
 
     try {
-      const { UpgradeApp } = await import('@memberjunction/mj-open-app-engine');
+      const { UpgradeApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await UpgradeApp(

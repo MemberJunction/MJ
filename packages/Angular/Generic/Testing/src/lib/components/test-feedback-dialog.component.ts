@@ -1,7 +1,7 @@
 import { Component, OnInit, Input } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { Metadata, UserInfo, RunView } from '@memberjunction/core';
-import { TestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 
 export interface TestFeedbackDialogData {
   testRunId: string;
@@ -377,7 +377,7 @@ export class TestFeedbackDialogComponent implements OnInit {
   isSaving = false;
   isLoading = false;
   errorMessage = '';
-  existingFeedback: TestRunFeedbackEntity | null = null;
+  existingFeedback: MJTestRunFeedbackEntity | null = null;
 
   private metadata = new Metadata();
 
@@ -404,7 +404,7 @@ export class TestFeedbackDialogComponent implements OnInit {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TestRunFeedbackEntity>({
+      const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `TestRunID='${this.data.testRunId}' AND ReviewerUserID='${this.data.currentUser.ID}'`,
         ResultType: 'entity_object'
@@ -454,14 +454,14 @@ export class TestFeedbackDialogComponent implements OnInit {
     this.errorMessage = '';
 
     try {
-      let feedback: TestRunFeedbackEntity;
+      let feedback: MJTestRunFeedbackEntity;
 
       if (this.existingFeedback) {
         // Update existing feedback
         feedback = this.existingFeedback;
       } else {
         // Create new feedback entity
-        feedback = await this.metadata.GetEntityObject<TestRunFeedbackEntity>(
+        feedback = await this.metadata.GetEntityObject<MJTestRunFeedbackEntity>(
           'MJ: Test Run Feedbacks',
           this.data.currentUser
         );

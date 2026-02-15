@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { Metadata } from '@memberjunction/core';
-import { QueryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity } from '@memberjunction/core-entities';
 import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction/ng-query-viewer';
 
 /**
@@ -126,7 +126,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     public queryId: string | null = null;
     public showToolbar = true;
 
-    private queryEntity: QueryEntity | null = null;
+    private queryEntity: MJQueryEntity | null = null;
     private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
     constructor(cdr: ChangeDetectorRef) {
@@ -158,7 +158,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
             if (queryId) {
                 // Load query by ID to verify it exists
-                this.queryEntity = await md.GetEntityObject<QueryEntity>('Queries');
+                this.queryEntity = await md.GetEntityObject<MJQueryEntity>('MJ: Queries');
                 const loaded = await this.queryEntity.Load(queryId);
 
                 if (!loaded) {

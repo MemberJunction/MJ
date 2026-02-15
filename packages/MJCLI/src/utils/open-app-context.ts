@@ -81,6 +81,10 @@ export async function closeConnectionPool(): Promise<void> {
 // System User
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Resolves the system user for Open App operations.
+ * Falls back to Owner user, then first active user if no system user exists.
+ */
 function getSystemUserInfo(): UserInfo {
   const sysUser = UserCache.Instance.GetSystemUser();
   if (sysUser) {
@@ -181,6 +185,7 @@ interface OrchestratorContextShape {
   };
 }
 
+/** Reads the current MJ version from MJGlobal's package.json. */
 function getMJVersion(): string {
   try {
     const { readFileSync } = require('node:fs');

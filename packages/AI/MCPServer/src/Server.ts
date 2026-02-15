@@ -36,7 +36,7 @@ import { ActionEntityExtended, RunActionParams } from "@memberjunction/actions-b
 import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
-import { ActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionParamEntity } from "@memberjunction/core-entities";
 // OAuth authentication imports
 import {
     MCPSessionContext as OAuthMCPSessionContext,
@@ -765,7 +765,7 @@ async function registerAllTools(
         name: "Get_Single_Entity",
         description: "Retrieves complete details for a single entity including all fields, relationships, and metadata. Use Get_Entity_List first to find entity names.",
         parameters: z.object({
-            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'AI Models')")
+            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'MJ: AI Models')")
         }),
         scopeInfo: (props) => ({ scopePath: 'entity:read', resource: props.entityName as string || '*' }),
         async execute(params: Record<string, unknown>) {
@@ -1435,7 +1435,7 @@ async function loadActionTools(
                         categoryId: action.CategoryID,
                         type: action.Type,
                         status: action.Status,
-                        paramCount: actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action.ID).length
+                        paramCount: actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action.ID).length
                     })));
                 }
             });
@@ -1488,13 +1488,13 @@ async function loadActionTools(
                         }
 
                         // Build action params
-                        const actionParams = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action!.ID);
+                        const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action!.ID);
                         const paramsRecord = props.params as Record<string, unknown> | undefined;
                         const runParams: RunActionParams = {
                             Action: action,
                             ContextUser: sessionUser,
                             Filters: [],
-                            Params: actionParams.map((p: ActionParamEntity) => ({
+                            Params: actionParams.map((p: MJActionParamEntity) => ({
                                 Name: p.Name,
                                 Value: paramsRecord?.[p.Name] ?? p.DefaultValue,
                                 Type: (p.Type as 'Input' | 'Output' | 'Both') || 'Input'
@@ -1544,12 +1544,12 @@ async function loadActionTools(
                         return JSON.stringify({ error: "Action not found" });
                     }
 
-                    const params = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action!.ID);
+                    const params = actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action!.ID);
                     return JSON.stringify({
                         actionId: action.ID,
                         actionName: action.Name,
                         description: action.Description,
-                        params: params.map((p: ActionParamEntity) => ({
+                        params: params.map((p: MJActionParamEntity) => ({
                             name: p.Name,
                             description: p.Description,
                             type: p.Type,
@@ -1629,7 +1629,7 @@ function addActionExecuteTool(
     sessionContext: MCPSessionContext
 ): void {
     const actionEngine = ActionEngineServer.Instance;
-    const actionParams = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action.ID);
+    const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action.ID);
 
     // Build Zod schema for action parameters
     const paramSchema: Record<string, z.ZodTypeAny> = {};
@@ -1680,7 +1680,7 @@ function addActionExecuteTool(
                     Action: action,
                     ContextUser: sessionUser,
                     Filters: [],
-                    Params: actionParams.map((p: ActionParamEntity) => ({
+                    Params: actionParams.map((p: MJActionParamEntity) => ({
                         Name: p.Name,
                         Value: props[p.Name] ?? p.DefaultValue,
                         Type: (p.Type as 'Input' | 'Output' | 'Both') || 'Input'
@@ -2225,7 +2225,7 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 try {
                     const rv = new RunView();
                     const result = await rv.RunView({
-                        EntityName: 'Queries',
+                        EntityName: 'MJ: Queries',
                         ExtraFilter: `Status = 'Active'`,
                         OrderBy: 'Name',
                         Fields: ['ID', 'Name', 'Description', 'CategoryID', 'Status'],
@@ -2599,7 +2599,7 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
                 const sessionUser = sessionContext.user;
                 const rv = new RunView();
                 const result = await rv.RunView({
-                    EntityName: 'Communication Providers',
+                    EntityName: 'MJ: Communication Providers',
                     OrderBy: 'Name',
                     Fields: ['ID', 'Name', 'Description', 'Status', 'SupportsSending']
                 }, sessionUser);

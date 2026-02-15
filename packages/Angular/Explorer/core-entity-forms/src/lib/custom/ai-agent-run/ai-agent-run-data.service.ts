@@ -1,12 +1,12 @@
 import { BehaviorSubject, Observable } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 
 export interface AgentRunData {
-  steps: AIAgentRunStepEntity[];
-  subRuns: AIAgentRunEntity[];
-  actionLogs: ActionExecutionLogEntity[];
-  promptRuns: AIPromptRunEntity[];
+  steps: MJAIAgentRunStepEntity[];
+  subRuns: MJAIAgentRunEntity[];
+  actionLogs: MJActionExecutionLogEntity[];
+  promptRuns: MJAIPromptRunEntity[];
 }
 
 /**
@@ -15,10 +15,10 @@ export interface AgentRunData {
  */
 export class AIAgentRunDataHelper {
   // Data subjects
-  private stepsSubject$ = new BehaviorSubject<AIAgentRunStepEntity[]>([]);
-  private subRunsSubject$ = new BehaviorSubject<AIAgentRunEntity[]>([]);
-  private actionLogsSubject$ = new BehaviorSubject<ActionExecutionLogEntity[]>([]);
-  private promptRunsSubject$ = new BehaviorSubject<AIPromptRunEntity[]>([]);
+  private stepsSubject$ = new BehaviorSubject<MJAIAgentRunStepEntity[]>([]);
+  private subRunsSubject$ = new BehaviorSubject<MJAIAgentRunEntity[]>([]);
+  private actionLogsSubject$ = new BehaviorSubject<MJActionExecutionLogEntity[]>([]);
+  private promptRunsSubject$ = new BehaviorSubject<MJAIPromptRunEntity[]>([]);
   private loadingSubject$ = new BehaviorSubject<boolean>(false);
   private errorSubject$ = new BehaviorSubject<string | null>(null);
   
@@ -35,8 +35,8 @@ export class AIAgentRunDataHelper {
   private readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minute TTL
   
   private subAgentDataCache = new Map<string, {
-    steps: AIAgentRunStepEntity[];
-    promptRuns: AIPromptRunEntity[];
+    steps: MJAIAgentRunStepEntity[];
+    promptRuns: MJAIPromptRunEntity[];
     timestamp: number;
   }>();
   
@@ -82,7 +82,7 @@ export class AIAgentRunDataHelper {
     const rv = new RunView();
     
     // First, get all steps to determine what additional data we need
-    const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+    const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID='${agentRunId}'`,
       OrderBy: '__mj_CreatedAt, StepNumber'
@@ -92,7 +92,7 @@ export class AIAgentRunDataHelper {
       throw new Error('Failed to load agent run steps');
     }
     
-    const steps = stepsResult.Results as AIAgentRunStepEntity[] || [];
+    const steps = stepsResult.Results as MJAIAgentRunStepEntity[] || [];
     
     // Build filters for batch loading
     const actionLogIds = steps
@@ -123,7 +123,7 @@ export class AIAgentRunDataHelper {
     // Add action logs query if needed
     if (actionLogIds.length > 0) {
       batchQueries.push({
-        EntityName: 'Action Execution Logs',
+        EntityName: 'MJ: Action Execution Logs',
         ExtraFilter: `ID IN ('${actionLogIds.join("','")}')`,
         OrderBy: 'StartedAt'
       });
@@ -146,7 +146,7 @@ export class AIAgentRunDataHelper {
     
     // Sub-runs
     const subRuns = batchResults[resultIndex].Success 
-      ? (batchResults[resultIndex].Results as AIAgentRunEntity[] || [])
+      ? (batchResults[resultIndex].Results as MJAIAgentRunEntity[] || [])
       : [];
     resultIndex++;
     
@@ -155,13 +155,13 @@ export class AIAgentRunDataHelper {
     
     // Action logs
     const actionLogs = actionLogIds.length > 0 && batchResults[resultIndex]?.Success
-      ? (batchResults[resultIndex].Results as ActionExecutionLogEntity[] || [])
+      ? (batchResults[resultIndex].Results as MJActionExecutionLogEntity[] || [])
       : [];
     if (actionLogIds.length > 0) resultIndex++;
     
     // Prompt runs
     const promptRuns = promptRunIds.length > 0 && batchResults[resultIndex]?.Success
-      ? (batchResults[resultIndex].Results as AIPromptRunEntity[] || [])
+      ? (batchResults[resultIndex].Results as MJAIPromptRunEntity[] || [])
       : [];
     
     // Update all subjects
@@ -174,7 +174,7 @@ export class AIAgentRunDataHelper {
   /**
    * Load sub-agent data (for expanding sub-agent nodes)
    */
-  async loadSubAgentData(subAgentRunId: string): Promise<{ steps: AIAgentRunStepEntity[], promptRuns: AIPromptRunEntity[] }> {
+  async loadSubAgentData(subAgentRunId: string): Promise<{ steps: MJAIAgentRunStepEntity[], promptRuns: MJAIPromptRunEntity[] }> {
     // Check cache first
     const cachedData = this.subAgentDataCache.get(subAgentRunId);
     if (cachedData) {
@@ -193,7 +193,7 @@ export class AIAgentRunDataHelper {
     const rv = new RunView();
     
     // Load steps first to determine what else we need
-    const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+    const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
       OrderBy: '__mj_CreatedAt, StepNumber'
@@ -211,11 +211,11 @@ export class AIAgentRunDataHelper {
       .map(s => s.TargetLogID)
       .filter(id => id != null);
     
-    let promptRuns: AIPromptRunEntity[] = [];
+    let promptRuns: MJAIPromptRunEntity[] = [];
     
     // Load prompt runs if needed
     if (promptRunIds.length > 0) {
-      const promptResult = await rv.RunView<AIPromptRunEntity>({
+      const promptResult = await rv.RunView<MJAIPromptRunEntity>({
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID IN ('${promptRunIds.join("','")}')`,
         OrderBy: '__mj_CreatedAt'

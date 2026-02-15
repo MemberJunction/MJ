@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowConnection } from '../interfaces/flow-types';
 
 /** Step type accent color mapping */
@@ -34,20 +34,20 @@ const STEP_TYPE_ICONS: Record<string, string> = {
 })
 export class AgentPropertiesPanelComponent {
   // ── Inputs ──────────────────────────────────────────────────
-  @Input() Step: AIAgentStepEntity | null = null;
+  @Input() Step: MJAIAgentStepEntity | null = null;
   @Input() SelectedConnection: FlowConnection | null = null;
-  @Input() PathEntity: AIAgentStepPathEntity | null = null;
+  @Input() PathEntity: MJAIAgentStepPathEntity | null = null;
   @Input() ReadOnly = false;
   @Input() Actions: Array<{ ID: string; Name: string; IconClass?: string | null }> = [];
   @Input() Prompts: Array<{ ID: string; Name: string }> = [];
   @Input() Agents: Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }> = [];
-  @Input() AllSteps: AIAgentStepEntity[] = [];
+  @Input() AllSteps: MJAIAgentStepEntity[] = [];
 
   // ── Outputs ─────────────────────────────────────────────────
-  @Output() StepChanged = new EventEmitter<AIAgentStepEntity>();
-  @Output() PathChanged = new EventEmitter<AIAgentStepPathEntity>();
-  @Output() DeleteStepRequested = new EventEmitter<AIAgentStepEntity>();
-  @Output() DeletePathRequested = new EventEmitter<AIAgentStepPathEntity>();
+  @Output() StepChanged = new EventEmitter<MJAIAgentStepEntity>();
+  @Output() PathChanged = new EventEmitter<MJAIAgentStepPathEntity>();
+  @Output() DeleteStepRequested = new EventEmitter<MJAIAgentStepEntity>();
+  @Output() DeletePathRequested = new EventEmitter<MJAIAgentStepPathEntity>();
   @Output() CloseRequested = new EventEmitter<void>();
 
   // ── Collapsible section state ─────────────────────────────

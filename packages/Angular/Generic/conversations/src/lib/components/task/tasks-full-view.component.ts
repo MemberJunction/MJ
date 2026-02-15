@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 
 import { UserInfo, RunView } from '@memberjunction/core';
-import { TaskEntity, TaskDependencyEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
@@ -141,13 +141,13 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
   @Output() taskSelected = new EventEmitter<string | null>(); // Emits task ID when drill-down occurs, null when returning to list
 
-  public allTasks: TaskEntity[] = [];
-  public filteredTasks: TaskEntity[] = [];
-  public subTasks: TaskEntity[] = [];
-  public subTasksWithParent: TaskEntity[] = []; // Includes parent for Gantt hierarchy
-  public taskDependencies: TaskDependencyEntity[] = []; // Dependencies for Gantt links
+  public allTasks: MJTaskEntity[] = [];
+  public filteredTasks: MJTaskEntity[] = [];
+  public subTasks: MJTaskEntity[] = [];
+  public subTasksWithParent: MJTaskEntity[] = []; // Includes parent for Gantt hierarchy
+  public taskDependencies: MJTaskDependencyEntity[] = []; // Dependencies for Gantt links
   public agentRunMap = new Map<string, string>(); // Maps TaskID -> AgentRunID
-  public selectedTask: TaskEntity | null = null;
+  public selectedTask: MJTaskEntity | null = null;
   public showDetailAnimation: boolean = false;
   public isLoading: boolean = false;
   private aiEngineConfigured: boolean = false;
@@ -186,7 +186,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       console.log('📝 Tasks filter SQL:', this.baseFilter);
 
       // Load all tasks with the provided filter
-      const tasksResult = await rv.RunView<TaskEntity>(
+      const tasksResult = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
           ExtraFilter: this.baseFilter,
@@ -231,7 +231,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     }
   }
 
-  public async onTaskClick(task: TaskEntity): Promise<void> {
+  public async onTaskClick(task: MJTaskEntity): Promise<void> {
     console.log('Task clicked:', task);
     this.selectedTask = task;
     this.showDetailAnimation = true;
@@ -243,7 +243,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     await this.loadTaskHierarchy(task);
   }
 
-  private async loadTaskHierarchy(task: TaskEntity): Promise<void> {
+  private async loadTaskHierarchy(task: MJTaskEntity): Promise<void> {
     try {
       const rv = new RunView();
 
@@ -252,7 +252,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       const rootId = task.RootParentID || task.ID;
 
       // Load all tasks where RootParentID matches, or tasks that are the root itself
-      const hierarchyResult = await rv.RunView<TaskEntity>(
+      const hierarchyResult = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
           ExtraFilter: `RootParentID='${rootId}' OR ID='${rootId}'`,
@@ -299,7 +299,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       // Use subquery to find all tasks with this RootParentID
       // Note: Using __mj as the default schema - this is the standard MJ schema
       const schema = '__mj';
-      const depsResult = await rv.RunView<TaskDependencyEntity>(
+      const depsResult = await rv.RunView<MJTaskDependencyEntity>(
         {
           EntityName: 'MJ: Task Dependencies',
           ExtraFilter: `
@@ -325,7 +325,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     }
   }
 
-  private async loadAgentRuns(tasks: TaskEntity[]): Promise<void> {
+  private async loadAgentRuns(tasks: MJTaskEntity[]): Promise<void> {
     try {
       // Clear existing map
       this.agentRunMap.clear();
@@ -347,7 +347,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       // Use a subquery to avoid passing large ID lists
       const taskIds = tasks.map(t => `'${t.ID}'`).join(',');
 
-      const agentRunsResult = await rv.RunView<AIAgentRunEntity>(
+      const agentRunsResult = await rv.RunView<MJAIAgentRunEntity>(
         {
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `
@@ -411,7 +411,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     this.taskSelected.emit(null);
   }
 
-  public onSubTaskClick(subTask: TaskEntity): void {
+  public onSubTaskClick(subTask: MJTaskEntity): void {
     console.log('Sub-task clicked:', subTask);
     // Could drill down further if needed
   }

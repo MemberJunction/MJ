@@ -34,8 +34,8 @@ vi.mock('@memberjunction/aiengine', () => ({
 vi.mock('@memberjunction/ai', () => ({ BaseReranker: class {} }));
 vi.mock('@memberjunction/ai-core-plus', () => ({ AIModelEntityExtended: class {} }));
 vi.mock('@memberjunction/core-entities', () => ({
-    AIAgentNoteEntity: class { ID = ''; Note = ''; Type = ''; Get(_f: string) { return ''; } },
-    AIAgentRunStepEntity: class {}
+    MJAIAgentNoteEntity: class { ID = ''; Note = ''; Type = ''; Get(_f: string) { return ''; } },
+    MJAIAgentRunStepEntity: class {}
 }));
 
 import { RerankerService, RerankObservabilityOptions } from '../RerankerService';

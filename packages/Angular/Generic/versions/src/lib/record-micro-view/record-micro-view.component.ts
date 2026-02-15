@@ -205,7 +205,7 @@ export class MjRecordMicroViewComponent implements OnInit {
     private async loadRecordChangeJson(changeId: string): Promise<Record<string, unknown> | null> {
         const rv = new RunView();
         const result = await rv.RunView<RecordChangeSimple>({
-            EntityName: 'Record Changes',
+            EntityName: 'MJ: Record Changes',
             ExtraFilter: `ID = '${changeId}'`,
             Fields: ['FullRecordJSON'],
             ResultType: 'simple'

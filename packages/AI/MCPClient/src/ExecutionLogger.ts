@@ -8,7 +8,7 @@
  */
 
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MCPToolExecutionLogEntity } from '@memberjunction/core-entities';
+import { MJMCPToolExecutionLogEntity } from '@memberjunction/core-entities';
 import type { MCPLoggingConfig, MCPToolCallResult, MCPExecutionLogEntry } from './types.js';
 
 /**
@@ -69,7 +69,7 @@ export class ExecutionLogger {
 
         try {
             const md = new Metadata();
-            const logEntity = await md.GetEntityObject<MCPToolExecutionLogEntity>(
+            const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>(
                 ExecutionLogger.LOG_ENTITY_NAME,
                 contextUser
             );
@@ -133,7 +133,7 @@ export class ExecutionLogger {
 
         try {
             const md = new Metadata();
-            const logEntity = await md.GetEntityObject<MCPToolExecutionLogEntity>(
+            const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>(
                 ExecutionLogger.LOG_ENTITY_NAME,
                 contextUser
             );
@@ -205,7 +205,7 @@ export class ExecutionLogger {
 
         try {
             const md = new Metadata();
-            const logEntity = await md.GetEntityObject<MCPToolExecutionLogEntity>(
+            const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>(
                 ExecutionLogger.LOG_ENTITY_NAME,
                 contextUser
             );
@@ -400,7 +400,7 @@ export class ExecutionLogger {
 
             for (const log of result.Results) {
                 try {
-                    const logEntity = await md.GetEntityObject<MCPToolExecutionLogEntity>(
+                    const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>(
                         ExecutionLogger.LOG_ENTITY_NAME,
                         contextUser
                     );

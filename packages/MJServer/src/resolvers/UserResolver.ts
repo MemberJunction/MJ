@@ -30,7 +30,7 @@ export class UserResolver extends MJUserResolverBase {
         __mj_CreatedAt: userRecord.__mj_CreatedAt,
         __mj_UpdatedAt: userRecord.__mj_UpdatedAt,
         // Include the UserRoles sub-array for the GraphQL response
-        UserRoles_UserIDArray: userRecord.UserRoles?.map((r: { ID: string; UserID: string; RoleID: string; RoleName?: string; __mj_CreatedAt?: Date; __mj_UpdatedAt?: Date }) => ({
+        MJUserRoles_UserIDArray: userRecord.UserRoles?.map((r: { ID: string; UserID: string; RoleID: string; RoleName?: string; __mj_CreatedAt?: Date; __mj_UpdatedAt?: Date }) => ({
           ID: r.ID,
           UserID: r.UserID,
           RoleID: r.RoleID,
@@ -41,7 +41,7 @@ export class UserResolver extends MJUserResolverBase {
         })) || [],
       };
       console.log('CurrentUser (from userRecord)', userData.Email);
-      return this.MapFieldNamesToCodeNames('Users', userData);
+      return this.MapFieldNamesToCodeNames('MJ: Users', userData);
     }
 
     // Fall back to email lookup for JWT-based auth
@@ -56,8 +56,8 @@ export class UserResolver extends MJUserResolverBase {
     await this.CheckAPIKeyScopeAuthorization('user:read', ID.toString(), userPayload);
 
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
-    const retVal = super.safeFirstArrayElement(await this.findBy(provider, 'Users', { ID }, userPayload.userRecord));
-    return this.MapFieldNamesToCodeNames('Users', retVal);
+    const retVal = super.safeFirstArrayElement(await this.findBy(provider, 'MJ: Users', { ID }, userPayload.userRecord));
+    return this.MapFieldNamesToCodeNames('MJ: Users', retVal);
   }
 
   @Query(() => MJUser_)
@@ -66,8 +66,8 @@ export class UserResolver extends MJUserResolverBase {
     await this.CheckAPIKeyScopeAuthorization('user:read', EmployeeID.toString(), userPayload);
 
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
-    const retVal = super.safeFirstArrayElement(await this.findBy(provider, 'Users', { EmployeeID }, userPayload.userRecord));
-    return this.MapFieldNamesToCodeNames('Users', retVal);
+    const retVal = super.safeFirstArrayElement(await this.findBy(provider, 'MJ: Users', { EmployeeID }, userPayload.userRecord));
+    return this.MapFieldNamesToCodeNames('MJ: Users', retVal);
   }
 
   @Query(() => MJUser_)
@@ -78,8 +78,8 @@ export class UserResolver extends MJUserResolverBase {
     // const searchEmail = userEmailMap[Email] ?? Email;
     const searchEmail = Email;
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
-    const returnVal = super.safeFirstArrayElement(await this.findBy(provider, 'Users', { Email: searchEmail }, userPayload.userRecord));
-    return this.MapFieldNamesToCodeNames('Users', returnVal);
+    const returnVal = super.safeFirstArrayElement(await this.findBy(provider, 'MJ: Users', { Email: searchEmail }, userPayload.userRecord));
+    return this.MapFieldNamesToCodeNames('MJ: Users', returnVal);
   }
 }
 export default UserResolver;

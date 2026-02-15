@@ -3,6 +3,12 @@ import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
 
+/**
+ * CLI command: `mj app disable <name>`.
+ *
+ * Disables an installed Open App by commenting out its config entries and
+ * client imports. The app data and packages remain in place.
+ */
 export default class AppDisable extends Command {
   static description = 'Disable an installed MJ Open App without removing it';
 
@@ -22,7 +28,7 @@ export default class AppDisable extends Command {
     const spinner = ora(`Disabling ${args.name}...`).start();
 
     try {
-      const { DisableApp } = await import('@memberjunction/mj-open-app-engine');
+      const { DisableApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this);
 
       const result = await DisableApp(args.name, context);

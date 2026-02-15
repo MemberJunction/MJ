@@ -1,7 +1,7 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
 import { DialogService, DialogRef, WindowService, WindowRef, WindowSettings } from '@progress/kendo-angular-dialog';
 import { Observable } from 'rxjs';
-import { ActionEntity, AIAgentPromptEntity,  } from '@memberjunction/core-entities';
+import { MJActionEntity, MJAIAgentPromptEntity,  } from '@memberjunction/core-entities';
 import { AddActionDialogComponent } from './add-action-dialog.component';
 import { PromptSelectorDialogComponent, PromptSelectorConfig, PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AgentPromptAdvancedSettingsDialogComponent, AgentPromptAdvancedSettingsFormData } from './agent-prompt-advanced-settings-dialog.component';
@@ -44,7 +44,7 @@ export class AIAgentManagementService {
     agentName: string;
     existingActionIds: string[];
     viewContainerRef?: ViewContainerRef;
-  }): Observable<ActionEntity[]> {
+  }): Observable<MJActionEntity[]> {
     const windowSettings: WindowSettings = {
       title: `Add Actions to ${config.agentName}`,
       content: AddActionDialogComponent,
@@ -211,8 +211,8 @@ export class AIAgentManagementService {
    * @returns Observable that emits the form data when dialog is closed, or null if cancelled
    */
   openAgentPromptAdvancedSettingsDialog(config: {
-    agentPrompt: AIAgentPromptEntity;
-    allAgentPrompts: AIAgentPromptEntity[];
+    agentPrompt: MJAIAgentPromptEntity;
+    allAgentPrompts: MJAIAgentPromptEntity[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<AgentPromptAdvancedSettingsFormData | null> {
     const windowSettings: WindowSettings = {

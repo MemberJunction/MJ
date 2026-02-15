@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { Metadata } from '@memberjunction/core';
-import { ScheduledJobRunEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { BaseJobAction } from './BaseJobAction';
 
 /**
@@ -64,7 +64,7 @@ export class ExecuteScheduledJobNowAction extends BaseJobAction {
 
             // Create a job run record
             const md = new Metadata();
-            const jobRun = await md.GetEntityObject<ScheduledJobRunEntity>('MJ: Scheduled Job Runs', params.ContextUser);
+            const jobRun = await md.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', params.ContextUser);
 
             jobRun.NewRecord();
             jobRun.ScheduledJobID = job.ID;

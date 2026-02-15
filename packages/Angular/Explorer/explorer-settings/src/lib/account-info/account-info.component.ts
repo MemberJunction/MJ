@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 
 /**
  * Displays read-only account information for the current user.
@@ -14,7 +14,7 @@ import { UserEntity } from '@memberjunction/core-entities';
 })
 export class AccountInfoComponent implements OnInit {
   IsLoading = true;
-  CurrentUser: UserEntity | null = null;
+  CurrentUser: MJUserEntity | null = null;
   ErrorMessage = '';
 
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
@@ -32,7 +32,7 @@ export class AccountInfoComponent implements OnInit {
       const userInfo = md.CurrentUser;
 
       // Load full user entity for additional details
-      const user = await md.GetEntityObject<UserEntity>('Users');
+      const user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
       const loaded = await user.Load(userInfo.ID);
 
       if (loaded) {

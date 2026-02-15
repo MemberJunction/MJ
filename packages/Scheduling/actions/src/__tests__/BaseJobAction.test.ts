@@ -29,7 +29,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  ScheduledJobEntity: class {},
+  MJScheduledJobEntity: class {},
 }));
 
 import { BaseJobAction } from '../BaseJobAction';

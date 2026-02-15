@@ -1,7 +1,7 @@
 import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/core';
 
 import { RunView } from '@memberjunction/core';
-import { FileEntity } from '@memberjunction/core-entities';
+import { MJFileEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { SharedService } from '@memberjunction/ng-shared';
 import { z } from 'zod';
@@ -60,9 +60,9 @@ const FileDownloadQuerySchema = z.object({
   styleUrls: ['./files-grid.css'],
 })
 export class FilesGridComponent implements OnInit, OnChanges {
-  public files: FileEntity[] = [];
+  public files: MJFileEntity[] = [];
   public isLoading: boolean = false;
-  public editFile: FileEntity | undefined;
+  public editFile: MJFileEntity | undefined;
 
   constructor(private sharedService: SharedService) {}
 
@@ -81,7 +81,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
   /**
    * Resets the edited file.
    *
-   * This method reverts any changes made to the edited file by calling the Revert method of the FileEntity class. It then sets the editFile property to undefined, indicating that there is no longer an edited file.
+   * This method reverts any changes made to the edited file by calling the Revert method of the MJFileEntity class. It then sets the editFile property to undefined, indicating that there is no longer an edited file.
    *
    * @returns void
    */
@@ -114,13 +114,13 @@ export class FilesGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Downloads a file using the provided FileEntity.
+   * Downloads a file using the provided MJFileEntity.
    *
-   * @param file - The FileEntity representing the file to be downloaded.
+   * @param file - The MJFileEntity representing the file to be downloaded.
    * @returns Promise<void> - A promise that resolves when the file download is complete.
    * @throws Error - If there is an error during the file download process.
    */
-  public downloadFile = async (file: FileEntity) => {
+  public downloadFile = async (file: MJFileEntity) => {
     this.isLoading = true;
     const result = await GraphQLDataProvider.ExecuteGQL(FileDownloadQuery, {
       FileID: file.ID,
@@ -143,10 +143,10 @@ export class FilesGridComponent implements OnInit, OnChanges {
   /**
    * Determines whether a file can be deleted based on its status and creation time.
    *
-   * @param file - The FileEntity representing the file to be checked.
+   * @param file - The MJFileEntity representing the file to be checked.
    * @returns boolean - True if the file can be deleted, false otherwise.
    */
-  public canBeDeleted(file: FileEntity): boolean {
+  public canBeDeleted(file: MJFileEntity): boolean {
     const status = file.Status;
     const deletable = status === 'Uploaded' || Date.now() - +file.__mj_CreatedAt > 10 * 60 * 60;
     // console.log({ status, deletable, ID: file.ID, CreatedAt: file.CreatedAt });
@@ -154,13 +154,13 @@ export class FilesGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Deletes a file using the provided FileEntity.
+   * Deletes a file using the provided MJFileEntity.
    *
-   * @param file - The FileEntity representing the file to be deleted.
+   * @param file - The MJFileEntity representing the file to be deleted.
    * @returns Promise<void> - A promise that resolves when the file deletion is complete.
    * @throws Error - If there is an error during the file deletion process.
    */
-  public deleteFile = async (file: FileEntity) => {
+  public deleteFile = async (file: MJFileEntity) => {
     this.isLoading = true;
     const ID = file.ID;
     const Name = file.Name;
@@ -199,12 +199,12 @@ export class FilesGridComponent implements OnInit, OnChanges {
 
     const rv = new RunView();
     const result = await rv.RunView({
-      EntityName: 'Files',
+      EntityName: 'MJ: Files',
       ResultType: 'entity_object',
       ...(this.CategoryID !== undefined && { ExtraFilter: `CategoryID='${this.CategoryID}'` }),
     });
     if (result.Success) {
-      this.files = <FileEntity[]>result.Results ?? [];
+      this.files = <MJFileEntity[]>result.Results ?? [];
     } else {
       throw new Error('Error loading files: ' + result.ErrorMessage);
     }

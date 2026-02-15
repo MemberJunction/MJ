@@ -12,7 +12,7 @@
  */
 
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -205,7 +205,7 @@ export abstract class BaseAgentType {
      * @async
      * @static
      * @method GetAgentTypeInstance
-     * @param {AIAgentTypeEntity} agentType - The agent type entity to instantiate
+     * @param {MJAIAgentTypeEntity} agentType - The agent type entity to instantiate
      * 
      * @returns {Promise<BaseAgentType>} An instance of the agent type class
      * 
@@ -213,7 +213,7 @@ export abstract class BaseAgentType {
      * @param agentType 
      * @returns 
      */
-    public static async GetAgentTypeInstance(agentType: AIAgentTypeEntity): Promise<BaseAgentType> {
+    public static async GetAgentTypeInstance(agentType: MJAIAgentTypeEntity): Promise<BaseAgentType> {
         try {
             const agentTypeInstance = await this.getAgentTypeInstance(agentType);
             return agentTypeInstance;
@@ -231,7 +231,7 @@ export abstract class BaseAgentType {
      * agent type classes. It uses the DriverClass field. If DriverClass is not specified
      * it throws an error.
      * 
-     * @param {AIAgentTypeEntity} agentType - The agent type entity to instantiate
+     * @param {MJAIAgentTypeEntity} agentType - The agent type entity to instantiate
      * 
      * @returns {Promise<BaseAgentType | null>} Instance of the agent type class
      * 
@@ -241,7 +241,7 @@ export abstract class BaseAgentType {
      * 
      * @protected
      */
-    protected static async getAgentTypeInstance(agentType: AIAgentTypeEntity): Promise<BaseAgentType | null> {
+    protected static async getAgentTypeInstance(agentType: MJAIAgentTypeEntity): Promise<BaseAgentType | null> {
         // Use DriverClass 
         if (!agentType.DriverClass) {
             throw new Error(`Agent type '${agentType.Name}' does not have a DriverClass specified. Please ensure the agent type is properly configured.`);

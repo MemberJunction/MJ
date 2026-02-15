@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
@@ -72,7 +72,7 @@ export class AgentFilterPanelComponent implements OnInit {
       
       // Add agent types to options
       const agentTypes = aiEngine.AgentTypes;
-      agentTypes.forEach((type: AIAgentTypeEntity) => {
+      agentTypes.forEach((type: MJAIAgentTypeEntity) => {
         this.agentTypeOptions.push({
           text: type.Name,
           value: type.ID

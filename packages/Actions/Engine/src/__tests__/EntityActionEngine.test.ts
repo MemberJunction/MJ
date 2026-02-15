@@ -43,18 +43,18 @@ vi.mock('@memberjunction/core', () => ({
 
 // Mock @memberjunction/core-entities
 vi.mock('@memberjunction/core-entities', () => ({
-    ActionParamEntity: class { ID = ''; Name = ''; ValueType = ''; Value = ''; Type = ''; ActionID = ''; },
-    EntityActionParamEntity: class { ActionParamID = ''; ValueType = ''; Value = ''; EntityActionID = ''; },
-    ActionResultCodeEntity: class {},
-    ActionExecutionLogEntity: class {},
-    ActionFilterEntity: class {},
-    ActionCategoryEntity: class {},
-    ActionEntity: class {},
-    ActionLibraryEntity: class {},
-    EntityActionFilterEntity: class {},
-    EntityActionInvocationEntity: class {},
-    EntityActionInvocationTypeEntity: class {},
-    EntityActionEntity: class {},
+    MJActionParamEntity: class { ID = ''; Name = ''; ValueType = ''; Value = ''; Type = ''; ActionID = ''; },
+    MJEntityActionParamEntity: class { ActionParamID = ''; ValueType = ''; Value = ''; EntityActionID = ''; },
+    MJActionResultCodeEntity: class {},
+    MJActionExecutionLogEntity: class {},
+    MJActionFilterEntity: class {},
+    MJActionCategoryEntity: class {},
+    MJActionEntity: class {},
+    MJActionLibraryEntity: class {},
+    MJEntityActionFilterEntity: class {},
+    MJEntityActionInvocationEntity: class {},
+    MJEntityActionInvocationTypeEntity: class {},
+    MJEntityActionEntity: class {},
 }));
 
 // Mock @memberjunction/actions-base
@@ -248,7 +248,7 @@ describe('EntityActionInvocationBase', () => {
 
         it('should handle Entity Object valueType', async () => {
             const invocation = new EntityActionInvocationSingleRecord();
-            const entityObject = { ID: 'entity-1', Name: 'TestEntity' };
+            const entityObject = { ID: 'entity-1', Name: 'MJTestEntity' };
 
             const params = [{ ID: 'p1', Name: 'entity', Type: 'Input' }];
             const entityActionParams = [
@@ -262,7 +262,7 @@ describe('EntityActionInvocationBase', () => {
 
         it('should handle Entity Field valueType', async () => {
             const invocation = new EntityActionInvocationSingleRecord();
-            const entityObject = { ID: 'entity-1', Name: 'TestEntity', Status: 'Active' };
+            const entityObject = { ID: 'entity-1', Name: 'MJTestEntity', Status: 'Active' };
 
             const params = [{ ID: 'p1', Name: 'status', Type: 'Input' }];
             const entityActionParams = [
@@ -328,7 +328,7 @@ describe('EntityActionInvocationBase', () => {
 
         it('should pass entity object via EntityActionContext', async () => {
             const invocation = new EntityActionInvocationSingleRecord();
-            const entity = { Name: 'TestEntity' };
+            const entity = { Name: 'MJTestEntity' };
 
             const result = await invocation.SafeEvalScript(
                 'entity-test',
@@ -336,7 +336,7 @@ describe('EntityActionInvocationBase', () => {
                 entity as never
             );
 
-            expect(result).toBe('TestEntity');
+            expect(result).toBe('MJTestEntity');
         });
     });
 });

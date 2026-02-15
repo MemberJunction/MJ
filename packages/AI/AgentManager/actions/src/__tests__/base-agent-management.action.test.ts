@@ -44,8 +44,8 @@ vi.mock('@memberjunction/actions', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  AIAgentTypeEntity: vi.fn(),
-  AIAgentPromptEntity: vi.fn(),
+  MJAIAgentTypeEntity: vi.fn(),
+  MJAIAgentPromptEntity: vi.fn(),
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({

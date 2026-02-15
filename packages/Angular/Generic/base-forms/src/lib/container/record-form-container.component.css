@@ -42,10 +42,22 @@ mj-record-form-container {
   box-sizing: border-box;
 }
 
+/* Widen max-width when ISA side panel is present */
+.mj-forms-panels--has-isa-panel {
+  max-width: 1240px;
+}
+
 .mj-forms-panels--full-width {
   max-width: none;
   padding-left: 24px;
   padding-right: 24px;
+}
+
+/* Flex row layout: form panels + optional ISA side panel */
+.mj-forms-layout-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
 }
 
 /* All panels in a single flex container — CSS order drives sequencing */
@@ -53,6 +65,8 @@ mj-record-form-container {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  min-width: 0;
 }
 
 /* Hide related entity panels in edit mode (variant host class on mj-collapsible-panel) */

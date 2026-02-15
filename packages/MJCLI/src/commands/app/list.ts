@@ -2,6 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import { buildContextUser } from '../../utils/open-app-context.js';
 
+/** Minimal shape for rendering the app list table. */
 interface InstalledAppRow {
   Name: string;
   Version: string;
@@ -10,6 +11,12 @@ interface InstalledAppRow {
   Publisher: string;
 }
 
+/**
+ * CLI command: `mj app list`.
+ *
+ * Displays a table of all installed Open Apps with name, version, and status.
+ * Use `--verbose` to include schema and publisher columns.
+ */
 export default class AppList extends Command {
   static description = 'List all installed MJ Open Apps';
 
@@ -25,7 +32,7 @@ export default class AppList extends Command {
     const { flags } = await this.parse(AppList);
 
     try {
-      const { ListInstalledApps } = await import('@memberjunction/mj-open-app-engine');
+      const { ListInstalledApps } = await import('@memberjunction/open-app-engine');
       const contextUser = await buildContextUser();
       const apps = await ListInstalledApps(contextUser);
 
@@ -43,6 +50,7 @@ export default class AppList extends Command {
   }
 }
 
+/** Formats installed apps into a fixed-width table string with color-coded status. */
 function FormatAppTable(
   apps: InstalledAppRow[],
   verbose?: boolean
@@ -67,6 +75,7 @@ function FormatAppTable(
   return lines.join('\n');
 }
 
+/** Pads an array of column values to fixed widths for table alignment. */
 function PadColumns(values: string[]): string {
   const widths = [30, 12, 12, 20, 30];
   return values.map((v, i) => v.padEnd(widths[i] ?? 20)).join('  ');

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, AfterViewInit } from '@angular/core';
-import { TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { MJTemplateEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
@@ -22,20 +22,20 @@ export interface TemplateEditorConfig {
     styleUrls: ['./template-editor.component.css']
 })
 export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, AfterViewInit {
-    @Input() template: TemplateEntity | null = null;
+    @Input() template: MJTemplateEntity | null = null;
     @Input() config: TemplateEditorConfig = {
         allowEdit: true,
         showRunButton: false,
         compactMode: false
     };
     
-    @Output() contentChange = new EventEmitter<TemplateContentEntity[]>();
-    @Output() runTemplate = new EventEmitter<TemplateEntity>();
+    @Output() contentChange = new EventEmitter<MJTemplateContentEntity[]>();
+    @Output() runTemplate = new EventEmitter<MJTemplateEntity>();
     
-    public templateContents: TemplateContentEntity[] = [];
+    public templateContents: MJTemplateContentEntity[] = [];
     public selectedContentIndex: number = 0;
     public isAddingNewContent: boolean = false;
-    public newTemplateContent: TemplateContentEntity | null = null;
+    public newTemplateContent: MJTemplateContentEntity | null = null;
     public hasUnsavedChanges: boolean = false;
     public contentTypeOptions: Array<{text: string, value: string}> = [];
     public supportedLanguages: LanguageDescription[] = languages;
@@ -155,8 +155,8 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
                 // Load existing template contents for saved templates
                 try {
                     const rv = new RunView();
-                    const results = await rv.RunView<TemplateContentEntity>({
-                        EntityName: 'Template Contents',
+                    const results = await rv.RunView<MJTemplateContentEntity>({
+                        EntityName: 'MJ: Template Contents',
                         ExtraFilter: `TemplateID='${this.template.ID}'`,
                         OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
                         ResultType: 'entity_object'
@@ -194,7 +194,7 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
     }
 
     async createDefaultTemplateContent() {
-        const defaultContent = await this._metadata.GetEntityObject<TemplateContentEntity>('Template Contents');
+        const defaultContent = await this._metadata.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
         defaultContent.TemplateID = this.template!.ID;
         defaultContent.Priority = 1;
         defaultContent.IsActive = true;
@@ -256,7 +256,7 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
     async addNewTemplateContent() {
         if (!this.config.allowEdit) return;
         
-        this.newTemplateContent = await this._metadata.GetEntityObject<TemplateContentEntity>('Template Contents');
+        this.newTemplateContent = await this._metadata.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
         this.newTemplateContent.TemplateID = this.template!.ID;
         this.newTemplateContent.Priority = this.templateContents.length + 1;
         this.newTemplateContent.IsActive = true;
@@ -324,7 +324,7 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
         }
     }
 
-    get currentTemplateContent(): TemplateContentEntity | null {
+    get currentTemplateContent(): MJTemplateContentEntity | null {
         if (this.isAddingNewContent) {
             return this.newTemplateContent;
         }

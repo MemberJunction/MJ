@@ -4,6 +4,12 @@ import chalk from 'chalk';
 import { buildContextUser } from '../../utils/open-app-context.js';
 import { getValidatedConfig } from '../../config.js';
 
+/**
+ * CLI command: `mj app check-updates`.
+ *
+ * Queries GitHub for the latest version tag of each installed Open App
+ * and reports which apps have newer versions available.
+ */
 export default class AppCheckUpdates extends Command {
   static description = 'Check for available upgrades for installed MJ Open Apps';
 
@@ -15,7 +21,7 @@ export default class AppCheckUpdates extends Command {
     const spinner = ora('Checking for updates...').start();
 
     try {
-      const { ListInstalledApps, GetLatestVersion } = await import('@memberjunction/mj-open-app-engine');
+      const { ListInstalledApps, GetLatestVersion } = await import('@memberjunction/open-app-engine');
       const config = getValidatedConfig();
 
       const contextUser = await buildContextUser();

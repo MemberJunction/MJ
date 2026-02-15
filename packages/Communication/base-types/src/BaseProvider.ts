@@ -1,6 +1,6 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJCommunicationProviderEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
 import { ProviderCredentialsBase } from "./CredentialUtils";
 
 /**
@@ -31,7 +31,7 @@ export class Message {
     /**
      * The type of message to send
      */
-    public MessageType: CommunicationProviderMessageTypeEntity;
+    public MessageType: MJCommunicationProviderMessageTypeEntity;
 
     /**
      * The sender of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social
@@ -142,7 +142,7 @@ export abstract class ProcessedMessage extends Message {
  * MessageResult class, holds information and functionality specific to a single message result
  */
 export class MessageResult {
-    public Run?: CommunicationRunEntity;
+    public Run?: MJCommunicationRunEntity;
     public Message: ProcessedMessage;
     public Success: boolean;
     public Error: string;
@@ -961,13 +961,13 @@ export abstract class BaseCommunicationProvider {
 
 }
 
-@RegisterClass(BaseEntity, 'Communication Providers') // sub-class to extend the properties of the base entity
-export class CommunicationProviderEntityExtended extends CommunicationProviderEntity {
-    private _ProviderMessageTypes: CommunicationProviderMessageTypeEntity[];
-    public get MessageTypes(): CommunicationProviderMessageTypeEntity[] {
+@RegisterClass(BaseEntity, 'MJ: Communication Providers') // sub-class to extend the properties of the base entity
+export class CommunicationProviderEntityExtended extends MJCommunicationProviderEntity {
+    private _ProviderMessageTypes: MJCommunicationProviderMessageTypeEntity[];
+    public get MessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
         return this._ProviderMessageTypes;
     }
-    public set MessageTypes(value: CommunicationProviderMessageTypeEntity[]) {
+    public set MessageTypes(value: MJCommunicationProviderMessageTypeEntity[]) {
         this._ProviderMessageTypes = value;
     }
 }

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { ActionResult } from '../action-test-harness/action-test-harness.component';
 
 /**
@@ -23,23 +23,23 @@ import { ActionResult } from '../action-test-harness/action-test-harness.compone
 })
 export class ActionTestHarnessDialogComponent implements OnInit {
     // Private backing fields
-    private _action!: ActionEntity;
-    private _actionParams: ActionParamEntity[] = [];
+    private _action!: MJActionEntity;
+    private _actionParams: MJActionParamEntity[] = [];
     private _isOpen = false;
 
     @Input()
-    set Action(value: ActionEntity) {
+    set Action(value: MJActionEntity) {
         this._action = value;
     }
-    get Action(): ActionEntity {
+    get Action(): MJActionEntity {
         return this._action;
     }
 
     @Input()
-    set ActionParams(value: ActionParamEntity[]) {
+    set ActionParams(value: MJActionParamEntity[]) {
         this._actionParams = value || [];
     }
-    get ActionParams(): ActionParamEntity[] {
+    get ActionParams(): MJActionParamEntity[] {
         return this._actionParams;
     }
 

@@ -4,38 +4,38 @@
  */
 
 import {
-    APIApplicationEntity,
-    APIApplicationScopeEntity,
-    APIKeyApplicationEntity,
-    APIKeyScopeEntity,
-    APIScopeEntity
+    MJAPIApplicationEntity,
+    MJAPIApplicationScopeEntity,
+    MJAPIKeyApplicationEntity,
+    MJAPIKeyScopeEntity,
+    MJAPIScopeEntity
 } from '@memberjunction/core-entities';
 
 // ---- Configurable state ----
-let _scopes: APIScopeEntity[] = [];
-let _applications: APIApplicationEntity[] = [];
-let _applicationScopes: APIApplicationScopeEntity[] = [];
-let _keyApplications: APIKeyApplicationEntity[] = [];
-let _keyScopes: APIKeyScopeEntity[] = [];
+let _scopes: MJAPIScopeEntity[] = [];
+let _applications: MJAPIApplicationEntity[] = [];
+let _applicationScopes: MJAPIApplicationScopeEntity[] = [];
+let _keyApplications: MJAPIKeyApplicationEntity[] = [];
+let _keyScopes: MJAPIKeyScopeEntity[] = [];
 
 // ---- Test helpers ----
-export function setMockBaseScopes(scopes: APIScopeEntity[]): void {
+export function setMockBaseScopes(scopes: MJAPIScopeEntity[]): void {
     _scopes = scopes;
 }
 
-export function setMockBaseApplications(apps: APIApplicationEntity[]): void {
+export function setMockBaseApplications(apps: MJAPIApplicationEntity[]): void {
     _applications = apps;
 }
 
-export function setMockBaseApplicationScopes(appScopes: APIApplicationScopeEntity[]): void {
+export function setMockBaseApplicationScopes(appScopes: MJAPIApplicationScopeEntity[]): void {
     _applicationScopes = appScopes;
 }
 
-export function setMockBaseKeyApplications(keyApps: APIKeyApplicationEntity[]): void {
+export function setMockBaseKeyApplications(keyApps: MJAPIKeyApplicationEntity[]): void {
     _keyApplications = keyApps;
 }
 
-export function setMockBaseKeyScopes(keyScopes: APIKeyScopeEntity[]): void {
+export function setMockBaseKeyScopes(keyScopes: MJAPIKeyScopeEntity[]): void {
     _keyScopes = keyScopes;
 }
 
@@ -59,41 +59,41 @@ export class APIKeysEngineBase {
         // No-op in mock
     }
 
-    get Scopes(): APIScopeEntity[] {
+    get Scopes(): MJAPIScopeEntity[] {
         return _scopes;
     }
 
-    get Applications(): APIApplicationEntity[] {
+    get Applications(): MJAPIApplicationEntity[] {
         return _applications;
     }
 
-    GetScopeByPath(fullPath: string): APIScopeEntity | undefined {
+    GetScopeByPath(fullPath: string): MJAPIScopeEntity | undefined {
         return _scopes.find(s => s.FullPath === fullPath && s.IsActive);
     }
 
-    GetScopeById(id: string): APIScopeEntity | undefined {
+    GetScopeById(id: string): MJAPIScopeEntity | undefined {
         return _scopes.find(s => s.ID === id);
     }
 
-    GetApplicationByName(name: string): APIApplicationEntity | undefined {
+    GetApplicationByName(name: string): MJAPIApplicationEntity | undefined {
         return _applications.find(a => a.Name.toLowerCase() === name.toLowerCase());
     }
 
-    GetApplicationById(id: string): APIApplicationEntity | undefined {
+    GetApplicationById(id: string): MJAPIApplicationEntity | undefined {
         return _applications.find(a => a.ID === id);
     }
 
-    GetApplicationScopeRules(applicationId: string, scopeId: string): APIApplicationScopeEntity[] {
+    GetApplicationScopeRules(applicationId: string, scopeId: string): MJAPIApplicationScopeEntity[] {
         return _applicationScopes.filter(
             rule => rule.ApplicationID === applicationId && rule.ScopeID === scopeId
         );
     }
 
-    GetKeyApplicationsByKeyId(apiKeyId: string): APIKeyApplicationEntity[] {
+    GetKeyApplicationsByKeyId(apiKeyId: string): MJAPIKeyApplicationEntity[] {
         return _keyApplications.filter(ka => ka.APIKeyID === apiKeyId);
     }
 
-    GetKeyScopeRules(apiKeyId: string, scopeId: string): APIKeyScopeEntity[] {
+    GetKeyScopeRules(apiKeyId: string, scopeId: string): MJAPIKeyScopeEntity[] {
         return _keyScopes.filter(
             ks => ks.APIKeyID === apiKeyId && ks.ScopeID === scopeId
         );

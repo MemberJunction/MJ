@@ -1,5 +1,23 @@
 # @memberjunction/ai-agents
 
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-engine-base@4.4.0
+  - @memberjunction/ai-core-plus@4.4.0
+  - @memberjunction/aiengine@4.4.0
+  - @memberjunction/ai-prompts@4.4.0
+  - @memberjunction/ai-reranker@4.4.0
+  - @memberjunction/actions-base@4.4.0
+  - @memberjunction/actions@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/ai@4.4.0
+  - @memberjunction/global@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes

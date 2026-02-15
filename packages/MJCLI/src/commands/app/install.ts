@@ -3,6 +3,13 @@ import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
 
+/**
+ * CLI command: `mj app install <source>`.
+ *
+ * Installs an Open App from a GitHub repository URL, executing the full
+ * install flow (manifest validation, dependency resolution, schema creation,
+ * migration execution, npm package management, and config updates).
+ */
 export default class AppInstall extends Command {
   static description = 'Install an MJ Open App from a GitHub repository';
 
@@ -29,7 +36,7 @@ export default class AppInstall extends Command {
     const spinner = ora();
 
     try {
-      const { InstallApp } = await import('@memberjunction/mj-open-app-engine');
+      const { InstallApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await InstallApp(

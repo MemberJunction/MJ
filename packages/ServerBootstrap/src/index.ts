@@ -12,7 +12,7 @@
  */
 
 import { serve, MJServerOptions } from '@memberjunction/server';
-import { DynamicLoader, type DynamicPackageLoad } from '@memberjunction/global';
+import { DynamicPackageLoader, type DynamicPackageLoad } from '@memberjunction/global';
 import { cosmiconfigSync } from 'cosmiconfig';
 
 /**
@@ -89,7 +89,7 @@ async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void
  * Loads dynamic packages from installed Open Apps.
  *
  * Reads the `dynamicPackages.server` array from mj.config.cjs and uses
- * DynamicLoader to import each enabled package at runtime. This allows
+ * DynamicPackageLoader to import each enabled package at runtime. This allows
  * Open App server packages to register their classes via @RegisterClass
  * decorators without requiring manual import statements.
  *
@@ -104,7 +104,7 @@ async function loadDynamicOpenAppPackages(configResult: { config: Record<string,
   }
 
   console.log('Loading Open App dynamic packages...');
-  const results = await DynamicLoader.LoadPackages(serverPackages);
+  const results = await DynamicPackageLoader.LoadPackages(serverPackages);
 
   for (const result of results) {
     if (result.Success) {

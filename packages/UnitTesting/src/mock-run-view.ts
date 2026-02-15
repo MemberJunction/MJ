@@ -23,7 +23,7 @@ let _mockResponses: RunViewMockMap = new Map();
  * ```ts
  * mockRunView(new Map([
  *   ['Users', [{ ID: '1', Name: 'Test User' }]],
- *   ['AI Models', [{ ID: '2', Name: 'GPT-4' }]],
+ *   ['MJ: AI Models', [{ ID: '2', Name: 'GPT-4' }]],
  * ]));
  * ```
  */

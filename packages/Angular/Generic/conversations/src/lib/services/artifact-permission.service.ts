@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { ArtifactPermissionEntity, ArtifactEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
+import { MJArtifactPermissionEntity, MJArtifactEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService } from './collection-permission.service';
 
 export interface ArtifactPermission {
@@ -41,7 +41,7 @@ export class ArtifactPermissionService {
      */
     async loadPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermission[]> {
         const rv = new RunView();
-        const result = await rv.RunView<ArtifactPermissionEntity>({
+        const result = await rv.RunView<MJArtifactPermissionEntity>({
             EntityName: 'MJ: Artifact Permissions',
             ExtraFilter: `ArtifactID='${artifactId}'`,
             OrderBy: '__mj_CreatedAt ASC',
@@ -103,7 +103,7 @@ export class ArtifactPermissionService {
         currentUser: UserInfo
     ): Promise<ArtifactPermission | null> {
         const rv = new RunView();
-        const result = await rv.RunView<ArtifactPermissionEntity>({
+        const result = await rv.RunView<MJArtifactPermissionEntity>({
             EntityName: 'MJ: Artifact Permissions',
             ExtraFilter: `ArtifactID='${artifactId}' AND UserID='${userId}'`,
             MaxRows: 1,
@@ -195,9 +195,9 @@ export class ArtifactPermissionService {
         permissions: ArtifactPermissionSet,
         sharedByUserId: string,
         currentUser: UserInfo
-    ): Promise<ArtifactPermissionEntity> {
+    ): Promise<MJArtifactPermissionEntity> {
         const md = new Metadata();
-        const permission = await md.GetEntityObject<ArtifactPermissionEntity>(
+        const permission = await md.GetEntityObject<MJArtifactPermissionEntity>(
             'MJ: Artifact Permissions',
             currentUser
         );
@@ -226,7 +226,7 @@ export class ArtifactPermissionService {
         currentUser: UserInfo
     ): Promise<boolean> {
         const md = new Metadata();
-        const permission = await md.GetEntityObject<ArtifactPermissionEntity>(
+        const permission = await md.GetEntityObject<MJArtifactPermissionEntity>(
             'MJ: Artifact Permissions',
             currentUser
         );
@@ -244,7 +244,7 @@ export class ArtifactPermissionService {
      */
     async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
         const md = new Metadata();
-        const permission = await md.GetEntityObject<ArtifactPermissionEntity>(
+        const permission = await md.GetEntityObject<MJArtifactPermissionEntity>(
             'MJ: Artifact Permissions',
             currentUser
         );
@@ -309,9 +309,9 @@ export class ArtifactPermissionService {
     /**
      * Helper: Get artifact record
      */
-    private async getArtifact(artifactId: string, currentUser: UserInfo): Promise<ArtifactEntity | null> {
+    private async getArtifact(artifactId: string, currentUser: UserInfo): Promise<MJArtifactEntity | null> {
         const rv = new RunView();
-        const result = await rv.RunView<ArtifactEntity>({
+        const result = await rv.RunView<MJArtifactEntity>({
             EntityName: 'MJ: Artifacts',
             ExtraFilter: `ID='${artifactId}'`,
             MaxRows: 1,
@@ -330,9 +330,9 @@ export class ArtifactPermissionService {
     private async getArtifactCollections(
         artifactId: string,
         currentUser: UserInfo
-    ): Promise<CollectionArtifactEntity[]> {
+    ): Promise<MJCollectionArtifactEntity[]> {
         const rv = new RunView();
-        const result = await rv.RunView<CollectionArtifactEntity>({
+        const result = await rv.RunView<MJCollectionArtifactEntity>({
             EntityName: 'MJ: Collection Artifacts',
             ExtraFilter: `ArtifactVersionID IN (
                 SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
@@ -378,7 +378,7 @@ export class ArtifactPermissionService {
         }
     }
 
-    private mapToPermission(entity: ArtifactPermissionEntity): ArtifactPermission {
+    private mapToPermission(entity: MJArtifactPermissionEntity): ArtifactPermission {
         return {
             id: entity.ID,
             artifactId: entity.ArtifactID,

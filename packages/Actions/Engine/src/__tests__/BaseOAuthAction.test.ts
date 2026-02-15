@@ -15,8 +15,8 @@ vi.mock('@memberjunction/core', () => ({
 
 // Mock @memberjunction/core-entities
 vi.mock('@memberjunction/core-entities', () => ({
-    CompanyIntegrationEntity: class {},
-    IntegrationEntity: class {},
+    MJCompanyIntegrationEntity: class {},
+    MJIntegrationEntity: class {},
 }));
 
 // Mock @memberjunction/actions-base

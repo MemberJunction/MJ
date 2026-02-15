@@ -1,4 +1,4 @@
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 
 /**
  * View mode for task display

@@ -14,9 +14,9 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  ScheduledJobEntity: class {},
-  ScheduledJobTypeEntity: class {},
-  ScheduledJobRunEntity: class {},
+  MJScheduledJobEntity: class {},
+  MJScheduledJobTypeEntity: class {},
+  MJScheduledJobRunEntity: class {},
 }));
 
 import { SchedulingEngineBase } from '../SchedulingEngineBase';

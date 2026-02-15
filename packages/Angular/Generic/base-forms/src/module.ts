@@ -9,6 +9,8 @@ import { MjRecordFormContainerComponent } from './lib/container/record-form-cont
 import { MjSectionManagerComponent } from './lib/section-manager/section-manager.component';
 import { SectionLoaderComponent } from './lib/section-loader-component';
 import { ExplorerEntityDataGridComponent } from './lib/explorer-entity-data-grid.component';
+import { MjIsaRelatedCardComponent } from './lib/isa-related-panel/isa-related-card.component';
+import { MjIsaRelatedPanelComponent } from './lib/isa-related-panel/isa-related-panel.component';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
@@ -40,7 +42,9 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
     MjRecordFormContainerComponent,
     MjSectionManagerComponent,
     SectionLoaderComponent,
-    ExplorerEntityDataGridComponent
+    ExplorerEntityDataGridComponent,
+    MjIsaRelatedCardComponent,
+    MjIsaRelatedPanelComponent
   ],
   imports: [
     CommonModule,
@@ -56,7 +60,9 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
     MjRecordFormContainerComponent,
     MjSectionManagerComponent,
     SectionLoaderComponent,
-    ExplorerEntityDataGridComponent
+    ExplorerEntityDataGridComponent,
+    MjIsaRelatedCardComponent,
+    MjIsaRelatedPanelComponent
   ]
 })
 export class BaseFormsModule { }

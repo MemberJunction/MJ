@@ -4,6 +4,12 @@ import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
 
+/**
+ * CLI command: `mj app remove <name>`.
+ *
+ * Removes an installed Open App, optionally preserving its database schema
+ * and data. Prompts for confirmation unless `--yes` is passed.
+ */
 export default class AppRemove extends Command {
   static description = 'Remove an installed MJ Open App';
 
@@ -44,7 +50,7 @@ export default class AppRemove extends Command {
     }
 
     try {
-      const { RemoveApp } = await import('@memberjunction/mj-open-app-engine');
+      const { RemoveApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await RemoveApp(

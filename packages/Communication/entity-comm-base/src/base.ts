@@ -1,11 +1,11 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, RunViewParams, UserInfo } from "@memberjunction/core";
-import { EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
+import { MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { Message, ProcessedMessage, CommunicationEngineBase } from '@memberjunction/communication-types';
 
-@RegisterClass(BaseEntity, 'Entity Communication Message Types')
-export class EntityCommunicationMessageTypeExtended extends EntityCommunicationMessageTypeEntity {
-    public CommunicationFields: EntityCommunicationFieldEntity[] = [];
+@RegisterClass(BaseEntity, 'MJ: Entity Communication Message Types')
+export class EntityCommunicationMessageTypeExtended extends MJEntityCommunicationMessageTypeEntity {
+    public CommunicationFields: MJEntityCommunicationFieldEntity[] = [];
 }
 
 
@@ -44,13 +44,13 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
 
     private _Metadata: {
         EntityCommunicationMessageTypes: EntityCommunicationMessageTypeExtended[],
-        EntityCommunicationFields: EntityCommunicationFieldEntity[]
+        EntityCommunicationFields: MJEntityCommunicationFieldEntity[]
     } = {EntityCommunicationMessageTypes: [], EntityCommunicationFields: []};
 
     public get EntityCommunicationMessageTypes(): EntityCommunicationMessageTypeExtended[] {
         return this._Metadata.EntityCommunicationMessageTypes;
     }
-    public get EntityCommunicationFields(): EntityCommunicationFieldEntity[] {
+    public get EntityCommunicationFields(): MJEntityCommunicationFieldEntity[] {
         return this._Metadata.EntityCommunicationFields;
     }
 

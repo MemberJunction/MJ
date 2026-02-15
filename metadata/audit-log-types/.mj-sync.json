@@ -1,5 +1,5 @@
 {
-  "entity": "Audit Log Types",
+  "entity": "MJ: Audit Log Types",
   "filePattern": "**/.*.json",
   "defaults": {
   },
@@ -17,11 +17,11 @@
     "externalizeFields": [],
     "lookupFields": {
       "ParentID": {
-        "entity": "Audit Log Types",
+        "entity": "MJ: Audit Log Types",
         "field": "ID"
       },
       "AuthorizationID": {
-        "entity": "Authorizations",
+        "entity": "MJ: Authorizations",
         "field": "ID"
       }
     },

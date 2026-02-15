@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactTypeEntity, ArtifactVersionEntity, CollectionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactTypeEntity, MJArtifactVersionEntity, MJCollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
 
@@ -159,17 +159,17 @@ export class ArtifactCreateModalComponent implements OnChanges {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  @Output() saved = new EventEmitter<ArtifactEntity>();
+  @Output() saved = new EventEmitter<MJArtifactEntity>();
   @Output() cancelled = new EventEmitter<void>();
 
   public formData = {
     name: '',
     description: '',
     content: '',
-    selectedType: null as ArtifactTypeEntity | null
+    selectedType: null as MJArtifactTypeEntity | null
   };
 
-  public artifactTypes: ArtifactTypeEntity[] = [];
+  public artifactTypes: MJArtifactTypeEntity[] = [];
   public isLoadingTypes: boolean = false;
   public isSaving: boolean = false;
   public errorMessage: string = '';
@@ -196,7 +196,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
     this.isLoadingTypes = true;
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactTypeEntity>(
+      const result = await rv.RunView<MJArtifactTypeEntity>(
         {
           EntityName: 'MJ: Artifact Types',
           ExtraFilter: 'IsEnabled=1',
@@ -234,7 +234,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
     try {
       // Validate permission to add artifacts to collection
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await collection.Load(this.collectionId);
 
       // Check if user has Edit permission on collection
@@ -253,7 +253,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       }
 
       // Step 1: Create the artifact
-      const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+      const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
       artifact.Name = this.formData.name.trim();
       artifact.Description = this.formData.description.trim() || null;
       artifact.TypeID = this.formData.selectedType!.ID;
@@ -268,7 +268,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       }
 
       // Step 2: Create the first version
-      const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
+      const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
       version.ArtifactID = artifact.ID;
       version.VersionNumber = 1;
       version.Content = this.formData.content.trim();

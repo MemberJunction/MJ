@@ -9,7 +9,7 @@
  * - NewRecord clears child entity
  * - Shared instance chain integrity
  *
- * Uses a concrete TestEntity subclass with mock EntityInfo.
+ * Uses a concrete MJTestEntity subclass with mock EntityInfo.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
@@ -29,7 +29,7 @@ import {
 
 // ─── Test subclass exposing private fields for testing ────────────────────
 
-class TestEntity extends BaseEntity {
+class MJTestEntity extends BaseEntity {
     public SetTestParentEntity(parent: BaseEntity | null): void {
         (this as unknown as { _parentEntity: BaseEntity | null })._parentEntity = parent;
     }
@@ -104,8 +104,8 @@ afterAll(() => {
     Metadata.Provider = null as unknown as ProviderBase;
 });
 
-function createEntity(entityInfo: EntityInfo): TestEntity {
-    const entity = new TestEntity(entityInfo);
+function createEntity(entityInfo: EntityInfo): MJTestEntity {
+    const entity = new MJTestEntity(entityInfo);
     entity.ContextCurrentUser = mockUser;
     return entity;
 }
@@ -114,7 +114,7 @@ function createEntity(entityInfo: EntityInfo): TestEntity {
  * Creates a fully wired 3-level IS-A chain: Product → Meeting → Webinar
  * with shared instance references (mimics what InitializeChildEntity does).
  */
-function createFullChain(): { product: TestEntity; meeting: TestEntity; webinar: TestEntity } {
+function createFullChain(): { product: MJTestEntity; meeting: MJTestEntity; webinar: MJTestEntity } {
     const product = createEntity(productEntityInfo);
     const meeting = createEntity(meetingEntityInfo);
     const webinar = createEntity(webinarEntityInfo);
@@ -336,7 +336,7 @@ describe('BaseEntity NewRecord clears child entity', () => {
         const { product, meeting } = createFullChain();
         expect(product.GetTestChildEntity()).toBe(meeting);
 
-        (product as TestEntity).NewRecord();
+        (product as MJTestEntity).NewRecord();
 
         expect(product.GetTestChildEntity()).toBeNull();
     });
@@ -345,7 +345,7 @@ describe('BaseEntity NewRecord clears child entity', () => {
         const { product } = createFullChain();
         expect(product.GetTestChildDiscoveryDone()).toBe(true);
 
-        (product as TestEntity).NewRecord();
+        (product as MJTestEntity).NewRecord();
 
         expect(product.GetTestChildDiscoveryDone()).toBe(false);
     });
@@ -353,7 +353,7 @@ describe('BaseEntity NewRecord clears child entity', () => {
     it('NewRecord on middle entity clears its own child and propagates to parent', () => {
         const { product, meeting } = createFullChain();
 
-        (meeting as TestEntity).NewRecord();
+        (meeting as MJTestEntity).NewRecord();
 
         // Meeting's child should be cleared
         expect(meeting.GetTestChildEntity()).toBeNull();

@@ -5,13 +5,15 @@ MJ_REPO="https://github.com/MemberJunction/MJ.git"
 MJ_DIR="/workspace/MJ"
 
 # ─── Auto-update global packages on container start ─────────────────────────
-echo "Checking for updates to Claude Code and MJ CLI..."
-npm update -g @anthropic-ai/claude-code @memberjunction/cli 2>/dev/null || true
+echo "Checking for updates to Claude Code, MJ CLI, and Playwright CLI..."
+npm update -g @anthropic-ai/claude-code @memberjunction/cli @playwright/cli 2>/dev/null || true
 
 CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
 MJ_VERSION=$(mj --version 2>/dev/null || echo "unknown")
-echo "  Claude Code: ${CLAUDE_VERSION}"
-echo "  MJ CLI:      ${MJ_VERSION}"
+PW_VERSION=$(playwright-cli --version 2>/dev/null || echo "unknown")
+echo "  Claude Code:    ${CLAUDE_VERSION}"
+echo "  MJ CLI:         ${MJ_VERSION}"
+echo "  Playwright CLI: ${PW_VERSION}"
 echo ""
 
 # ─── Clone or update MJ repository ──────────────────────────────────────────
@@ -73,6 +75,98 @@ GRAPHQL_PORT=4000
 ENVEOF
     echo "  Created $MJ_DIR/.env"
     echo ""
+fi
+
+# ─── Ensure .env symlink for MJAPI package ──────────────────────────────────
+MJAPI_ENV="$MJ_DIR/packages/MJAPI/.env"
+if [ -f "$MJ_DIR/.env" ] && [ ! -L "$MJAPI_ENV" ]; then
+    # Remove existing non-symlink .env if present
+    if [ -f "$MJAPI_ENV" ]; then
+        mv "$MJAPI_ENV" "$MJAPI_ENV.bak"
+    fi
+    ln -sf "$MJ_DIR/.env" "$MJAPI_ENV"
+    echo "  Symlinked .env → packages/MJAPI/.env"
+fi
+
+# ─── Auth0 setup: auto-configure from env vars or prompt interactively ────────
+if [ -d "$MJ_DIR" ]; then
+    if ! auth-setup --check 2>/dev/null; then
+        # Check if Auth0 credentials were passed as environment variables
+        if [ -n "$TEST_AUTH0_DOMAIN" ] && [ -n "$TEST_AUTH0_CLIENT_ID" ] && [ -n "$TEST_AUTH0_CLIENT_SECRET" ]; then
+            echo "  Auth0 credentials found in environment variables — auto-configuring..."
+            # Write Auth0 vars to MJ .env (same format as auth-setup)
+            ENV_FILE="$MJ_DIR/.env"
+            cat >> "$ENV_FILE" << EOF
+
+# ─── Auth0 Configuration (auto-configured from environment) ──────────────────
+AUTH0_DOMAIN=${TEST_AUTH0_DOMAIN}
+AUTH0_CLIENT_ID=${TEST_AUTH0_CLIENT_ID}
+AUTH0_CLIENT_SECRET=${TEST_AUTH0_CLIENT_SECRET}
+
+# Test credentials for browser automation (used by Claude Code for headless login)
+TEST_AUTH0_DOMAIN=${TEST_AUTH0_DOMAIN}
+TEST_AUTH0_CLIENT_ID=${TEST_AUTH0_CLIENT_ID}
+TEST_AUTH0_CLIENT_SECRET=${TEST_AUTH0_CLIENT_SECRET}
+TEST_UID=${TEST_UID}
+TEST_PWD=${TEST_PWD}
+EOF
+            echo "  Auth0 domain:    ${TEST_AUTH0_DOMAIN}"
+            echo "  Client ID:       ${TEST_AUTH0_CLIENT_ID:0:8}..."
+            echo "  Test user:       ${TEST_UID}"
+
+            # Generate Angular environment files
+            ENVIRONMENTS_DIR="$MJ_DIR/packages/MJExplorer/src/environments"
+            mkdir -p "$ENVIRONMENTS_DIR"
+
+            for ENV_VARIANT in \
+                "environment.ts:production:true:DOCKER" \
+                "environment.development.ts:development:false:DEV" \
+                "environment.staging.ts:staging:false:STAGING"; do
+                IFS=':' read -r FNAME NODE_ENV PROD APP_INSTANCE <<< "$ENV_VARIANT"
+                cat > "$ENVIRONMENTS_DIR/$FNAME" << ENVTS
+export const environment = {
+  GRAPHQL_URI: 'http://localhost:4000/',
+  GRAPHQL_WS_URI: 'ws://localhost:4000/',
+  REDIRECT_URI: 'http://localhost:4200/',
+  AUTH_TYPE: 'auth0',
+  NODE_ENV: '${NODE_ENV}',
+  AUTOSAVE_DEBOUNCE_MS: 1200,
+  SEARCH_DEBOUNCE_MS: 800,
+  MIN_SEARCH_LENGTH: 3,
+  MJ_CORE_SCHEMA_NAME: '__mj',
+  production: ${PROD},
+  APPLICATION_NAME: 'MemberJunction Explorer',
+  APPLICATION_INSTANCE: '${APP_INSTANCE}',
+  AUTH0_DOMAIN: '${TEST_AUTH0_DOMAIN}',
+  AUTH0_CLIENTID: '${TEST_AUTH0_CLIENT_ID}',
+} as const;
+ENVTS
+            done
+            echo "  Angular environment files generated."
+        else
+            echo ""
+            echo "  Auth0 credentials not found in .env."
+            echo "  MJAPI and MJExplorer need Auth0 to authenticate users."
+            echo ""
+            # Check if we're in an interactive terminal
+            if [ -t 0 ]; then
+                read -rp "  Run Auth0 setup now? [Y/n] " SETUP_ANSWER
+                SETUP_ANSWER=${SETUP_ANSWER:-Y}
+                if [[ "$SETUP_ANSWER" =~ ^[Yy] ]]; then
+                    auth-setup
+                else
+                    echo ""
+                    echo "  Skipped. Run 'auth-setup' later to configure Auth0."
+                    echo ""
+                fi
+            else
+                echo "  Non-interactive terminal detected. Run 'auth-setup' manually."
+                echo "  Or pass TEST_AUTH0_DOMAIN, TEST_AUTH0_CLIENT_ID, TEST_AUTH0_CLIENT_SECRET,"
+                echo "  TEST_UID, and TEST_PWD in your workbench .env file."
+                echo ""
+            fi
+        fi
+    fi
 fi
 
 # ─── Drop into zsh ──────────────────────────────────────────────────────────

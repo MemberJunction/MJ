@@ -7,7 +7,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
-import { MCPServerConnectionEntity, CredentialTypeEntity } from '@memberjunction/core-entities';
+import { MJMCPServerConnectionEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { MCPConnectionData, MCPServerData } from '../mcp-dashboard.component';
 import { CredentialDialogComponent, CredentialDialogResult } from '@memberjunction/ng-credentials';
 
@@ -40,7 +40,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
     public connectionForm: FormGroup;
     public credentials: Array<{ ID: string; Name: string }> = [];
     public companies: Array<{ ID: string; Name: string }> = [];
-    public credentialTypes: CredentialTypeEntity[] = [];
+    public credentialTypes: MJCredentialTypeEntity[] = [];
     public IsSaving = false;
     public IsLoadingDropdowns = false;
     public ErrorMessage: string | null = null;
@@ -151,7 +151,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                     ResultType: 'entity_object'
                 },
                 {
-                    EntityName: 'Companies',
+                    EntityName: 'MJ: Companies',
                     Fields: ['ID', 'Name'],
                     OrderBy: 'Name',
                     ResultType: 'simple'
@@ -162,7 +162,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                 this.credentials = credResult.Results as Array<{ ID: string; Name: string }> || [];
             }
             if (typeResult.Success) {
-                this.credentialTypes = typeResult.Results as CredentialTypeEntity[] || [];
+                this.credentialTypes = typeResult.Results as MJCredentialTypeEntity[] || [];
             }
             if (companyResult.Success) {
                 this.companies = companyResult.Results as Array<{ ID: string; Name: string }> || [];
@@ -229,7 +229,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
 
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
+            const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
 
             if (this.IsEditMode && this.connection) {
                 await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.connection.ID }]));

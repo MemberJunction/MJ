@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView } from "@memberjunction/core";
-import { ListDetailEntity } from "@memberjunction/core-entities";
+import { MJListDetailEntity } from "@memberjunction/core-entities";
 
 /**
  * Action to remove records from a list.
@@ -81,8 +81,8 @@ export class RemoveRecordsFromListAction extends BaseAction {
       }
 
       // Find records to delete
-      const detailsResult = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const detailsResult = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: filter,
         ResultType: 'entity_object'
       }, params.ContextUser);

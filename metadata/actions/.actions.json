@@ -9,7 +9,7 @@
       "IconClass": "fa-solid fa-tag"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -68,7 +68,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -118,7 +118,7 @@
       "Status": "Active"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -138,7 +138,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -188,7 +188,7 @@
       "Status": "Active"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -208,7 +208,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -257,10 +257,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-envelope",
-      "CategoryID": "@lookup:Action Categories.Name=Communication"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -370,7 +370,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -407,8 +407,8 @@
       "ID": "DC4C7E64-2D93-43E4-9F02-F5D7E702784A"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.035Z",
-      "checksum": "161dca5b89ed0a8fd9cdcb49236abdcd7f491589b88e20e0747fc882bdb3dd9a"
+      "lastModified": "2026-02-13T21:08:34.316Z",
+      "checksum": "4faf9353db8a663acbcfc7eb9083b8c76690bff91356910ba283aefbd9b41f0c"
     }
   },
   {
@@ -419,10 +419,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-cloud-sun",
-      "CategoryID": "@lookup:Action Categories.Name=Demo"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Demo"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -512,7 +512,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -579,8 +579,8 @@
       "ID": "6C88FED2-679A-4FDD-A31A-7F38D0457F22"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.036Z",
-      "checksum": "ca5aae5ec5eb97e81240cb7de153cef57431b919d0521b4faad2e9343311ec3d"
+      "lastModified": "2026-02-13T21:08:34.317Z",
+      "checksum": "c599dec3863eeea0db87c52bbfbeeaad1beacd6ce90e771f289d92e2030a10cd"
     }
   },
   {
@@ -591,10 +591,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-chart-area",
-      "CategoryID": "@lookup:Action Categories.Name=Demo"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Demo"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -648,7 +648,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -715,8 +715,8 @@
       "ID": "296E03AE-6EDC-4C5E-9506-BC98ACCDA2E1"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.038Z",
-      "checksum": "0095f16a15ccfd3104423b35e9f22c1b59ea4805012a1875c8b4b135cd8e5f8c"
+      "lastModified": "2026-02-13T21:08:34.318Z",
+      "checksum": "abf896269188141727f567fb5b316124650af4936b390316a9cc146a4033d472"
     }
   },
   {
@@ -726,10 +726,10 @@
       "DriverClass": "__CalculateExpression",
       "Type": "Custom",
       "Status": "Active",
-      "CategoryID": "@lookup:Action Categories.Name=Demo"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Demo"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -749,7 +749,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -801,8 +801,8 @@
       "ID": "22F9505E-3BEB-400E-A49F-A74D135C5A93"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.039Z",
-      "checksum": "73a45f2c9703c59a983edd95f21a7b351bb7dd2974696ac1a632b89c7deafac0"
+      "lastModified": "2026-02-13T21:08:34.320Z",
+      "checksum": "58cde5a4815564053b78ff91dc71da79b0197363784d0acfe83288167b36b04b"
     }
   },
   {
@@ -813,10 +813,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-palette",
-      "CategoryID": "@lookup:Action Categories.Name=Demo"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Demo"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -836,7 +836,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -918,8 +918,8 @@
       "ID": "D402FFD6-C7D1-48AD-A3AC-CF8BEE0A3127"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.040Z",
-      "checksum": "4677554635724623954fb699f1fa6e5eb9e0d38f225682b640ff4e76098998f9"
+      "lastModified": "2026-02-13T21:08:34.321Z",
+      "checksum": "bde64146c2637146df4a7296dcc8474832816a178b2b488b8b0b7c55bf1c37f9"
     }
   },
   {
@@ -930,10 +930,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-microscope",
-      "CategoryID": "@lookup:Action Categories.Name=Demo"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Demo"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -972,7 +972,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1024,8 +1024,8 @@
       "ID": "154255C2-76D4-492C-88D9-C80614EDD703"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.041Z",
-      "checksum": "9e9781f3e050763d41efd16da5112bc37e5c7ea7d48cb638db808e0b32d0381a"
+      "lastModified": "2026-02-13T21:08:34.324Z",
+      "checksum": "ba9b4589b89478df99f02eb8097dcaa5cb8f2096e16d228f87a2962ee1611c90"
     }
   },
   {
@@ -1035,10 +1035,10 @@
       "DriverClass": "__UnitConverter",
       "Type": "Custom",
       "Status": "Active",
-      "CategoryID": "@lookup:Action Categories.Name=Demo"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Demo"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1094,7 +1094,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1191,8 +1191,8 @@
       "ID": "F1D24791-38AA-4389-8103-3D04AADC6BED"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.042Z",
-      "checksum": "2b8e86212a996b9a6f98ffc3f08b43f99589ae267d340258cf0a390170a4e595"
+      "lastModified": "2026-02-13T21:08:34.327Z",
+      "checksum": "0bd316fc0d437d4639a7358f10693c703476f8ff22771bdbd8ae64089c970ac2"
     }
   },
   {
@@ -1203,10 +1203,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-calendar-alt",
-      "CategoryID": "@lookup:Action Categories.Name=Utilities"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1318,7 +1318,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1415,8 +1415,8 @@
       "ID": "25A3DA96-66C7-43CE-B39B-DE0D4DD5FFBA"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.294Z",
-      "checksum": "a198aa60c82967c2e0fab73b790b3fb0c314d926332cf22b7a919003f8d0361d"
+      "lastModified": "2026-02-13T21:08:34.513Z",
+      "checksum": "8041193b838c1e33b54fd77bb284ad29ded22dd4a24ad36727161699f8a9f0bc"
     }
   },
   {
@@ -1426,10 +1426,10 @@
       "DriverClass": "__IPGeolocation",
       "Type": "Custom",
       "Status": "Active",
-      "CategoryID": "@lookup:Action Categories.Name=Utilities"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1449,7 +1449,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1516,8 +1516,8 @@
       "ID": "F138FA8A-79A2-4989-8B99-2544B6091D79"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.295Z",
-      "checksum": "4b07faff939e3b39b3fab188fcfae28bd4ee335e014883420152e0f579446c9f"
+      "lastModified": "2026-02-13T21:08:34.515Z",
+      "checksum": "b25866671615d20e8bd4461e5f9083eb3efc386fb7b082aeeb7665819b6cdfb0"
     }
   },
   {
@@ -1528,10 +1528,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-users",
-      "CategoryID": "@lookup:Action Categories.Name=Utilities"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1606,7 +1606,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1703,8 +1703,8 @@
       "ID": "08E0742A-5DB9-4A5F-BA47-ED39374EE213"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.296Z",
-      "checksum": "e3f71199ff83687a2f5b72426743b441b9a067796582bbd49dbeb90825ed57c7"
+      "lastModified": "2026-02-13T21:08:34.516Z",
+      "checksum": "5a75a12532c51c216a62a7c6739485ca372f8866b052ae06e9ee11cdf08d541f"
     }
   },
   {
@@ -1715,10 +1715,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-search",
-      "CategoryID": "@lookup:Action Categories.Name=Web"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Web"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1895,7 +1895,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1992,8 +1992,8 @@
       "ID": "82169F64-8566-4AE7-9C87-190A885C98A9"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.298Z",
-      "checksum": "d588a8899fb00140c76062839ee66e32bd16767dd16f874db559eae6faccf058"
+      "lastModified": "2026-02-13T21:08:34.517Z",
+      "checksum": "b4b2c52e822bad801c324cdc26e5242e302d1312c152492df806099c8c8d6536"
     }
   },
   {
@@ -2004,10 +2004,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-globe",
-      "CategoryID": "@lookup:Action Categories.Name=Web"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Web"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2103,7 +2103,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2230,8 +2230,8 @@
       "ID": "81F96534-03F5-49E9-81B0-D8902A7645A3"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.299Z",
-      "checksum": "3119517ad5361163be761f87de85255ad137629eb9b16c268bfb5bbc98ee6967"
+      "lastModified": "2026-02-13T21:08:34.518Z",
+      "checksum": "bde17a4f06c902f9d998cfd7cac02e4d6712d778d83ea599b6c4e5d1d46dac6c"
     }
   },
   {
@@ -2242,10 +2242,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-check-double",
-      "CategoryID": "@lookup:Action Categories.Name=Web"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Web"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2340,7 +2340,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2407,8 +2407,8 @@
       "ID": "D0FABBEF-C505-446B-B746-B5A38541985A"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.301Z",
-      "checksum": "4bd075a0cbc55fa7075c51fcc078164065a9052a0dc72f8ff9d5ee10826203ed"
+      "lastModified": "2026-02-13T21:08:34.520Z",
+      "checksum": "805f3ffb2f17963c48df0f63cb66e67ad0294f7dd1c3f20c2b398441dd1a306f"
     }
   },
   {
@@ -2419,10 +2419,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-tags",
-      "CategoryID": "@lookup:Action Categories.Name=Web"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Web"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2537,7 +2537,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2664,8 +2664,8 @@
       "ID": "A2455679-1370-4298-AC9E-0BA48DE2432E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.302Z",
-      "checksum": "5b538a4b08f645fff8cd1182e3736805945651f1eee313d8ab32dd2b464d1fee"
+      "lastModified": "2026-02-13T21:08:34.521Z",
+      "checksum": "60881f65dd76b38f768adf4c7d0eb63b620b79c7e6cf5e9d58f633f52a506568"
     }
   },
   {
@@ -2676,10 +2676,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-qrcode",
-      "CategoryID": "@lookup:Action Categories.Name=Utilities"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2812,7 +2812,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2939,8 +2939,8 @@
       "ID": "2C9DCA8E-76E2-4F01-9A0D-C1678C364FBB"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.303Z",
-      "checksum": "624eb5e94254c68995947404118bcad0d3ae8fb548a399f7b97c3f4d875628bb"
+      "lastModified": "2026-02-13T21:08:34.523Z",
+      "checksum": "1f977bf5f63b6d5f1344999f37c3fb6885ad60a77168e0239af9f9c97aaee858"
     }
   },
   {
@@ -2949,11 +2949,11 @@
       "Description": "Generic action for creating new entity records in the database. Accepts entity name and field values as parameters.",
       "DriverClass": "CreateRecordAction",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "Status": "Active"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3009,7 +3009,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3091,8 +3091,8 @@
       "ID": "2504E288-ADF7-4913-A627-AA14276BAA55"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.304Z",
-      "checksum": "b7fb1c946a0aaebde4f050905f0a77c3d6ad3d22763281dd9bf4e85edcb38fd3"
+      "lastModified": "2026-02-13T21:08:34.524Z",
+      "checksum": "39de4431631e4b98808df1777878fd9e82a24a3c4b0124ae810a7625619e0d19"
     }
   },
   {
@@ -3101,11 +3101,11 @@
       "Description": "Generic action for retrieving entity records from the database. Accepts entity name and primary key values as parameters.",
       "DriverClass": "GetRecordAction",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "Status": "Active"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3161,7 +3161,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3258,8 +3258,8 @@
       "ID": "49E30665-1A90-45CA-9129-C33959A51B4F"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.305Z",
-      "checksum": "f8424bfa884772808e3be633de7998767511e9c72c47e9ea06a051699e88a791"
+      "lastModified": "2026-02-13T21:08:34.525Z",
+      "checksum": "a1cd772ecb74c715a2933bf7b566b526e420ca7cbb3ce26e7dad6af8443cb24d"
     }
   },
   {
@@ -3267,12 +3267,12 @@
       "Name": "Update Record",
       "Description": "Generic action for updating existing entity records in the database. Accepts entity name, primary key, and field values as parameters.",
       "DriverClass": "UpdateRecordAction",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "Type": "Custom",
       "Status": "Active"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3346,7 +3346,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3473,8 +3473,8 @@
       "ID": "FCAAD325-0D33-4E48-BC25-49C0E3587062"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.412Z",
-      "checksum": "2ee9d278ea5f8f175a4e0cbcbcd290c8e0fc21f194f9193935b98c554583e58f"
+      "lastModified": "2026-02-13T21:08:34.610Z",
+      "checksum": "f86dcf4c348cb76a479bb8465ff3aa07fa4a45f7d82a5b4ce2b9893107268b89"
     }
   },
   {
@@ -3483,11 +3483,11 @@
       "Description": "Generic action for deleting entity records from the database. Accepts entity name and primary key values as parameters.",
       "DriverClass": "DeleteRecordAction",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "Status": "Active"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3543,7 +3543,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3670,13 +3670,13 @@
       "ID": "C03F2547-5154-4627-8E12-FBDEB7580346"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.414Z",
-      "checksum": "f757fdfcf3325f770f299e4d6d9d934ccaa14acb4b385f78a35aadf8bb36071c"
+      "lastModified": "2026-02-13T21:08:34.611Z",
+      "checksum": "72cdcf1e06513f8fb08fa6cb13b9774a140144b16a08965f220aa3081c4097c1"
     }
   },
   {
     "fields": {
-      "CategoryID": "@lookup:Action Categories.Name=Data Enrichment",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
       "Name": "Apollo Enrichment - Contacts",
       "Description": "Enriches contact records with verified email addresses, employment history, and education details using Apollo.io API. Matches contacts by name and email combinations and provides comprehensive contact enrichment.",
       "Type": "Custom",
@@ -3687,7 +3687,7 @@
       "DriverClass": "ApolloEnrichmentContactsAction"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3959,7 +3959,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4116,13 +4116,13 @@
       "ID": "BE9B9B7F-791B-4E97-AC17-7E93B52B237C"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.415Z",
-      "checksum": "c04aa369c6f9c8ce843cc6f98e287d2be2206db4cfc165ccde1de6cd6ea95e2c"
+      "lastModified": "2026-02-13T21:08:34.613Z",
+      "checksum": "6be95de38efd013077a3cf1c0ec2d31deff1401677c7d01e377eb2bb9c7005b2"
     }
   },
   {
     "fields": {
-      "CategoryID": "@lookup:Action Categories.Name=Data Enrichment",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
       "Name": "Apollo Enrichment - Accounts",
       "Description": "Enriches account/organization records with company information, technologies used, and associated contacts using Apollo.io API. Processes accounts by domain name and automatically discovers contacts within each organization.",
       "Type": "Custom",
@@ -4133,7 +4133,7 @@
       "DriverClass": "ApolloEnrichmentAccountsAction"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4225,7 +4225,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4322,8 +4322,8 @@
       "ID": "E57641A1-B7C2-4EAB-BB17-8C9631E89095"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.416Z",
-      "checksum": "e592536526682832f18aa6f25ab015b12189c560058c881ab0d71f9c7862e0f3"
+      "lastModified": "2026-02-13T21:08:34.614Z",
+      "checksum": "fa9b93a3efaca316c5d4a7b058a47b2dc22de919922c7626980cc14366a5bc8f"
     }
   }
 ]

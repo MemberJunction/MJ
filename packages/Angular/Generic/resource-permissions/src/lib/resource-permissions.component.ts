@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, Input } from '@angular/core';
 import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RoleInfo, RunView } from '@memberjunction/core';
-import { ResourcePermissionEngine, ResourcePermissionEntity, UserEntity } from '@memberjunction/core-entities';
+import { ResourcePermissionEngine, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -74,10 +74,10 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
    */
   @Input() ExcludedUserEmails: string[] = [];
 
-  public AllUsers: UserEntity[] = [];
+  public AllUsers: MJUserEntity[] = [];
   public AllRoles: RoleInfo[] = [];
 
-  public SelectedUser: UserEntity | null = null;
+  public SelectedUser: MJUserEntity | null = null;
   public SelectedRole: RoleInfo | null = null;
   public SelectedType: 'User' | 'Role' = 'Role';
   public SelectedPermissionLevel: 'View' | 'Edit' | 'Owner' = 'View';
@@ -92,7 +92,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     }
   }
 
-  public resourcePermissions: ResourcePermissionEntity[] = [];
+  public resourcePermissions: MJResourcePermissionEntity[] = [];
   async ngAfterViewInit() {
     if (!this.ResourceTypeID || !this.ResourceRecordID) {
       throw new Error('ResourceTypeID and ResourceRecordID must be set');
@@ -108,8 +108,8 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     
     const p = this.ProviderToUse;
     const rv = new RunView(<IRunViewProvider><any>p)
-    const result = await rv.RunView<UserEntity>({
-      EntityName: "Users",
+    const result = await rv.RunView<MJUserEntity>({
+      EntityName: "MJ: Users",
       ResultType: "entity_object",
       OrderBy: "Name",
       ExtraFilter: "IsActive=1"
@@ -127,16 +127,16 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     this._Loading = false;
   }
 
-  private _pendingDeletes: ResourcePermissionEntity[] = [];
-  public deletePermission(permission: ResourcePermissionEntity) {
+  private _pendingDeletes: MJResourcePermissionEntity[] = [];
+  public deletePermission(permission: MJResourcePermissionEntity) {
     this._pendingDeletes.push(permission);
     this.resourcePermissions = this.resourcePermissions.filter((p) => p !== permission);
   }
 
-  private _pendingAdds: ResourcePermissionEntity[] = [];
+  private _pendingAdds: MJResourcePermissionEntity[] = [];
   public async addPermission() {
     const p = this.ProviderToUse;
-    const permission = await p.GetEntityObject<ResourcePermissionEntity>("Resource Permissions", p.CurrentUser);
+    const permission = await p.GetEntityObject<MJResourcePermissionEntity>("MJ: Resource Permissions", p.CurrentUser);
     permission.ResourceTypeID = this.ResourceTypeID;
     permission.ResourceRecordID = this.ResourceRecordID;
     permission.Type = this.SelectedType;

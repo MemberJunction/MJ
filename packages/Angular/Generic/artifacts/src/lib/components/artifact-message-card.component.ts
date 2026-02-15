@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -183,12 +183,12 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   @Input() artifactId!: string;
   @Input() versionNumber?: number;
   @Input() currentUser!: UserInfo;
-  @Input() artifact?: ArtifactEntity; // Optional - if provided, skips loading
-  @Input() artifactVersion?: ArtifactVersionEntity; // Optional - if provided, skips loading
-  @Output() actionPerformed = new EventEmitter<{action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity}>();
+  @Input() artifact?: MJArtifactEntity; // Optional - if provided, skips loading
+  @Input() artifactVersion?: MJArtifactVersionEntity; // Optional - if provided, skips loading
+  @Output() actionPerformed = new EventEmitter<{action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}>();
 
-  public _artifact: ArtifactEntity | null = null;
-  public _currentVersion: ArtifactVersionEntity | null = null;
+  public _artifact: MJArtifactEntity | null = null;
+  public _currentVersion: MJArtifactVersionEntity | null = null;
   public loading = true;
   public error = false;
 
@@ -209,11 +209,11 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   }
 
   // Getters to access the internal properties
-  public get artifactEntity(): ArtifactEntity | null {
+  public get artifactEntity(): MJArtifactEntity | null {
     return this._artifact;
   }
 
-  public get currentVersion(): ArtifactVersionEntity | null {
+  public get currentVersion(): MJArtifactVersionEntity | null {
     return this._currentVersion;
   }
 
@@ -235,7 +235,7 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
 
       // Load artifact directly
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactEntity>({
+      const result = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Conversation Artifacts',
         ExtraFilter: `ID='${this.artifactId}'`,
         MaxRows: 1,
@@ -267,7 +267,7 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
         ? `ArtifactID='${this._artifact.ID}' AND VersionNumber=${this.versionNumber}`
         : `ArtifactID='${this._artifact.ID}'`;
 
-      const result = await rv.RunView<ArtifactVersionEntity>({
+      const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: filter,
         OrderBy: 'VersionNumber DESC',

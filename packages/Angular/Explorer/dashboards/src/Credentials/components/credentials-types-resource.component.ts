@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
-import { ResourceData, CredentialTypeEntity, CredentialEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCredentialTypeEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
@@ -14,7 +14,7 @@ interface FieldSchemaProperty {
     required: boolean;
 }
 
-interface TypeWithStats extends CredentialTypeEntity {
+interface TypeWithStats extends MJCredentialTypeEntity {
     credentialCount: number;
     activeCount: number;
     expiringCount: number;
@@ -32,7 +32,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     public isLoading = true;
     public types: TypeWithStats[] = [];
     public filteredTypes: TypeWithStats[] = [];
-    public credentials: CredentialEntity[] = [];
+    public credentials: MJCredentialEntity[] = [];
     public selectedType: TypeWithStats | null = null;
     public schemaProperties: FieldSchemaProperty[] = [];
 
@@ -139,8 +139,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             ]);
 
             if (typeResult.Success) {
-                const baseTypes = typeResult.Results as CredentialTypeEntity[];
-                this.credentials = credResult.Success ? credResult.Results as CredentialEntity[] : [];
+                const baseTypes = typeResult.Results as MJCredentialTypeEntity[];
+                this.credentials = credResult.Success ? credResult.Results as MJCredentialEntity[] : [];
 
                 // Calculate stats for each type
                 this.types = baseTypes.map(type => this.enrichTypeWithStats(type));
@@ -176,7 +176,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    private enrichTypeWithStats(type: CredentialTypeEntity): TypeWithStats {
+    private enrichTypeWithStats(type: MJCredentialTypeEntity): TypeWithStats {
         const typeCredentials = this.credentials.filter(c => c.CredentialTypeID === type.ID);
         const now = new Date();
         const thirtyDaysFromNow = new Date();
@@ -265,7 +265,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
 
     // === Panel Event Handlers ===
 
-    public onTypeSaved(type: CredentialTypeEntity): void {
+    public onTypeSaved(type: MJCredentialTypeEntity): void {
         const existingIndex = this.types.findIndex(t => t.ID === type.ID);
         const enrichedType = this.enrichTypeWithStats(type);
 

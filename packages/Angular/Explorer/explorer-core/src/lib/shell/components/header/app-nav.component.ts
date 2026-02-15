@@ -9,7 +9,6 @@ import { Subject, takeUntil } from 'rxjs';
 export interface NavItemClickEvent {
   item: NavItem;
   shiftKey: boolean;
-  dblClick: boolean;
 }
 
 /**
@@ -231,8 +230,7 @@ export class AppNavComponent implements OnInit, OnDestroy {
   onNavClick(item: NavItem, event?: MouseEvent): void {
     this.navItemClick.emit({
       item,
-      shiftKey: event?.shiftKey || false,
-      dblClick: false
+      shiftKey: event?.shiftKey || false
     });
   }
 
@@ -258,15 +256,4 @@ export class AppNavComponent implements OnInit, OnDestroy {
     this.navItemDismiss.emit(item);
   }
 
-  /**
-   * Handle nav item double-click (opens in new tab)
-   */
-  onNavDblClick(item: NavItem, event?: MouseEvent): void {
-    event?.preventDefault();
-    this.navItemClick.emit({
-      item,
-      shiftKey: event?.shiftKey || false,
-      dblClick: true
-    });
-  }
 }

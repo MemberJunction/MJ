@@ -2,12 +2,12 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
 import { LogStatusEx, RunView, UserInfo } from '@memberjunction/core';
-import { AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
 
 export interface AgentWithStatus {
-  run: AIAgentRunEntity;
+  run: MJAIAgentRunEntity;
   status: AgentStatus;
   confidence: number | null;
 }
@@ -113,7 +113,7 @@ export class AgentStateService implements OnDestroy {
       }
 
       LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - Executing RunView for AI Agent Runs`, verboseOnly: true});
-      const result = await rv.RunView<AIAgentRunEntity>(
+      const result = await rv.RunView<MJAIAgentRunEntity>(
         {
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: filter,
@@ -144,7 +144,7 @@ export class AgentStateService implements OnDestroy {
   /**
    * Maps an agent run to include status and confidence information
    */
-  private mapRunToAgentWithStatus(run: AIAgentRunEntity): AgentWithStatus {
+  private mapRunToAgentWithStatus(run: MJAIAgentRunEntity): AgentWithStatus {
     const status = this.determineAgentStatus(run);
     const confidence = this.extractConfidence(run);
 
@@ -158,7 +158,7 @@ export class AgentStateService implements OnDestroy {
   /**
    * Determines the agent status based on the run entity
    */
-  private determineAgentStatus(run: AIAgentRunEntity): AgentStatus {
+  private determineAgentStatus(run: MJAIAgentRunEntity): AgentStatus {
     const status = run.Status?.toLowerCase() || 'running';
 
     // Check for errors
@@ -198,7 +198,7 @@ export class AgentStateService implements OnDestroy {
   /**
    * Extracts confidence score from agent run if available
    */
-  private extractConfidence(run: AIAgentRunEntity): number | null {
+  private extractConfidence(run: MJAIAgentRunEntity): number | null {
     // Try to parse confidence from Result or other fields
     // This is a placeholder - adjust based on actual data structure
     try {

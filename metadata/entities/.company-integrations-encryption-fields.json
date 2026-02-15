@@ -5,11 +5,11 @@
       "Fields encrypted: AccessToken, RefreshToken, APIKey, ClientSecret"
     ],
     "fields": {
-      "Name": "Company Integrations",
+      "Name": "MJ: Company Integrations",
       "BaseView": "vwCompanyIntegrations"
     },
     "relatedEntities": {
-      "Entity Fields": [
+      "MJ: Entity Fields": [
         {
           "fields": {
             "Encrypt": true,
@@ -21,7 +21,7 @@
             "AccessToken field - encrypted, server-only access"
           ],
           "primaryKey": {
-            "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=AccessToken"
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integrations&Name=AccessToken"
           },
           "sync": {
             "lastModified": "2025-12-30T23:07:38.868Z",
@@ -39,7 +39,7 @@
             "RefreshToken field - encrypted, server-only access"
           ],
           "primaryKey": {
-            "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=RefreshToken"
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integrations&Name=RefreshToken"
           },
           "sync": {
             "lastModified": "2025-12-30T23:07:38.889Z",
@@ -57,7 +57,7 @@
             "APIKey field - encrypted, server-only access"
           ],
           "primaryKey": {
-            "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=APIKey"
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integrations&Name=APIKey"
           },
           "sync": {
             "lastModified": "2025-12-30T23:07:38.911Z",
@@ -75,7 +75,7 @@
             "ClientSecret field - encrypted, server-only access"
           ],
           "primaryKey": {
-            "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=ClientSecret"
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integrations&Name=ClientSecret"
           },
           "sync": {
             "lastModified": "2025-12-30T23:07:38.926Z",
@@ -85,7 +85,7 @@
       ]
     },
     "primaryKey": {
-      "ID": "@lookup:Entities.Name=Company Integrations"
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integrations"
     }
   }
 ]

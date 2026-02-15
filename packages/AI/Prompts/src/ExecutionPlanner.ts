@@ -1,5 +1,5 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { AIPromptModelEntity } from '@memberjunction/core-entities';
+import { MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIModelEntityExtended, AIPromptEntityExtended, TemplateMessageRole } from '@memberjunction/ai-core-plus';
@@ -33,7 +33,7 @@ export class ExecutionPlanner {
    */
   public createExecutionPlan(
     prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
@@ -124,7 +124,7 @@ export class ExecutionPlanner {
    */
   private createSingleExecutionPlan(
     prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
@@ -179,7 +179,7 @@ export class ExecutionPlanner {
    */
   private createStaticCountPlan(
     prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
@@ -250,7 +250,7 @@ export class ExecutionPlanner {
    */
   private createConfigParamPlan(
     prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
@@ -331,7 +331,7 @@ export class ExecutionPlanner {
    */
   private createModelSpecificPlan(
     prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
@@ -399,7 +399,7 @@ export class ExecutionPlanner {
    */
   private selectBestModel(
     prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     configurationId?: string,
   ): AIModelEntityExtended | null {
@@ -456,7 +456,7 @@ export class ExecutionPlanner {
    */
   private getAvailableModels(
     prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
+    promptModels: MJAIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     configurationId?: string,
   ): AIModelEntityExtended[] {
@@ -492,7 +492,7 @@ export class ExecutionPlanner {
    * @param promptModel - The prompt model configuration
    * @returns number - Number of parallel executions for this model
    */
-  private getModelParallelCount(promptModel: AIPromptModelEntity): number {
+  private getModelParallelCount(promptModel: MJAIPromptModelEntity): number {
     switch (promptModel.ParallelizationMode) {
       case 'StaticCount':
         return promptModel.ParallelCount || 1;

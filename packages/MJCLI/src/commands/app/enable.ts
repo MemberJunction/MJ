@@ -3,6 +3,12 @@ import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
 
+/**
+ * CLI command: `mj app enable <name>`.
+ *
+ * Re-enables a previously disabled Open App by restoring its config
+ * entries and client imports.
+ */
 export default class AppEnable extends Command {
   static description = 'Re-enable a disabled MJ Open App';
 
@@ -22,7 +28,7 @@ export default class AppEnable extends Command {
     const spinner = ora(`Enabling ${args.name}...`).start();
 
     try {
-      const { EnableApp } = await import('@memberjunction/mj-open-app-engine');
+      const { EnableApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this);
 
       const result = await EnableApp(args.name, context);

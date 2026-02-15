@@ -9,7 +9,7 @@ import {
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
 import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
-import { TestEntity, TestSuiteEntity, TestSuiteTestEntity, TestTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJTestEntity, MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestingDialogService } from '@memberjunction/ng-testing';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
@@ -1806,10 +1806,10 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   // Raw cached data
-  private allTests: TestEntity[] = [];
-  AllSuites: TestSuiteEntity[] = [];
-  private allSuiteTests: TestSuiteTestEntity[] = [];
-  AllTestTypes: TestTypeEntity[] = [];
+  private allTests: MJTestEntity[] = [];
+  AllSuites: MJTestSuiteEntity[] = [];
+  private allSuiteTests: MJTestSuiteTestEntity[] = [];
+  AllTestTypes: MJTestTypeEntity[] = [];
   private testRunStats: TestRunStatRow[] = [];
 
   // Computed card data
@@ -1840,7 +1840,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   FilteredSuites: SuiteCardData[] = [];
   FilteredTests: TestCardData[] = [];
   FilteredSuiteTree: SuiteTreeNode[] = [];
-  FilteredTestTypes: TestTypeEntity[] = [];
+  FilteredTestTypes: MJTestTypeEntity[] = [];
 
   // Counts
   TotalItemCount = 0;
@@ -2197,7 +2197,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
     this.suiteCards = this.AllSuites.map(suite => this.buildSingleSuiteCard(suite));
   }
 
-  private buildSingleSuiteCard(suite: TestSuiteEntity): SuiteCardData {
+  private buildSingleSuiteCard(suite: MJTestSuiteEntity): SuiteCardData {
     const suiteTestLinks = this.allSuiteTests.filter(st => st.SuiteID === suite.ID);
     const testIds = new Set(suiteTestLinks.map(st => st.TestID));
     const runsForSuite = this.testRunStats.filter(r => testIds.has(r.TestID));
@@ -2227,7 +2227,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
     };
   }
 
-  private buildSuiteTestPreviews(suiteTestLinks: TestSuiteTestEntity[]): SuiteTestItem[] {
+  private buildSuiteTestPreviews(suiteTestLinks: MJTestSuiteTestEntity[]): SuiteTestItem[] {
     return suiteTestLinks
       .sort((a, b) => a.Sequence - b.Sequence)
       .slice(0, 5)
@@ -2247,7 +2247,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
     this.testCards = this.allTests.map(test => this.buildSingleTestCard(test));
   }
 
-  private buildSingleTestCard(test: TestEntity): TestCardData {
+  private buildSingleTestCard(test: MJTestEntity): TestCardData {
     const runsForTest = this.testRunStats.filter(r => r.TestID === test.ID);
     const lastRun = runsForTest.length > 0 ? runsForTest[0] : null; // already sorted DESC
     const passedRuns = runsForTest.filter(r => r.Status === 'Passed');
@@ -2582,7 +2582,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
 
   private async saveNewTest(): Promise<void> {
     const md = new Metadata();
-    const test = await md.GetEntityObject<TestEntity>('MJ: Tests');
+    const test = await md.GetEntityObject<MJTestEntity>('MJ: Tests');
     test.NewRecord();
     test.Name = this.FormName.trim();
     test.Description = this.FormDescription.trim() || null;
@@ -2600,7 +2600,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
 
   private async saveNewSuite(): Promise<void> {
     const md = new Metadata();
-    const suite = await md.GetEntityObject<TestSuiteEntity>('MJ: Test Suites');
+    const suite = await md.GetEntityObject<MJTestSuiteEntity>('MJ: Test Suites');
     suite.NewRecord();
     suite.Name = this.FormName.trim();
     suite.Description = this.FormDescription.trim() || null;

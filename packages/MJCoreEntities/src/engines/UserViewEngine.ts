@@ -55,7 +55,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
-                EntityName: 'User Views',
+                EntityName: 'MJ: User Views',
                 PropertyName: '_views',
                 CacheLocal: true
             }

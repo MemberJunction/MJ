@@ -1876,7 +1876,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   /**
    * Determines if a field should be shown by default when no saved view exists.
-   * This logic is aligned with UserViewEntity.SetDefaultsFromEntity() to ensure
+   * This logic is aligned with MJUserViewEntity.SetDefaultsFromEntity() to ensure
    * consistent column visibility between initial load and saved views.
    */
   private shouldShowField(field: EntityFieldInfo): boolean {
@@ -1889,7 +1889,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
 
     // Only show fields explicitly marked as DefaultInView
-    // This aligns with UserViewEntity.SetDefaultsFromEntity() behavior
+    // This aligns with MJUserViewEntity.SetDefaultsFromEntity() behavior
     // ensuring users see the same columns before and after saving a view
     return field.DefaultInView === true;
   }

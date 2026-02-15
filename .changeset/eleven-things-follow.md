@@ -1,5 +1,5 @@
 ---
-"@memberjunction/mj-open-app-engine": minor
+"@memberjunction/open-app-engine": minor
 "@memberjunction/cli": minor
 "@memberjunction/global": minor
 "@memberjunction/server-bootstrap": minor

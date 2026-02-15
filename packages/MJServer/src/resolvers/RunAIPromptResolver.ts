@@ -156,7 +156,7 @@ export class RunAIPromptResolver extends ResolverBase {
             }
 
             // Load the AI prompt entity
-            const promptEntity = await p.GetEntityObject<AIPromptEntityExtended>('AI Prompts', currentUser);
+            const promptEntity = await p.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts', currentUser);
             await promptEntity.Load(promptId);
             
             if (!promptEntity.IsSaved) {

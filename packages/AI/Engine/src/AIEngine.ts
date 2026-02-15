@@ -8,18 +8,18 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, ActionEntity,
-         AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity,
-         AIModelActionEntity, AIPromptModelEntity, AIPromptTypeEntity,
-         AIResultCacheEntity, AIVendorTypeDefinitionEntity, ArtifactTypeEntity,
-         EntityAIActionEntity, VectorDatabaseEntity, AIAgentPromptEntity,
-         AIAgentTypeEntity, AIVendorEntity, AIModelVendorEntity, AIModelTypeEntity,
-         AIModelCostEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity,
-         AIConfigurationEntity, AIConfigurationParamEntity, AIAgentStepEntity,
-         AIAgentStepPathEntity, AIAgentRelationshipEntity, AIAgentPermissionEntity,
-         AIAgentDataSourceEntity, AIAgentConfigurationEntity, AIAgentExampleEntity,
-         AICredentialBindingEntity, AIModalityEntity, AIAgentModalityEntity,
-         AIModelModalityEntity } from "@memberjunction/core-entities";
+import { MJAIActionEntity, MJActionEntity,
+         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+         MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
+         MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
+         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
+         MJAIAgentTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
+         MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
+         MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
+         MJAIAgentStepPathEntity, MJAIAgentRelationshipEntity, MJAIAgentPermissionEntity,
+         MJAIAgentDataSourceEntity, MJAIAgentConfigurationEntity, MJAIAgentExampleEntity,
+         MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
+         MJAIModelModalityEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -78,7 +78,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     private _exampleVectorService: SimpleVectorService<ExampleEmbeddingMetadata> | null = null;
 
     // Actions loaded from database
-    private _actions: ActionEntity[] = [];
+    private _actions: MJActionEntity[] = [];
 
     // Embedding caches to track which items have embeddings generated
     private _agentEmbeddingsCache: Map<string, boolean> = new Map();
@@ -112,23 +112,23 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
     // Delegate all AIEngineBase public getters
     public get Agents(): AIAgentEntityExtended[] { return this.Base.Agents; }
-    public get AgentRelationships(): AIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
-    public get AgentTypes(): AIAgentTypeEntity[] { return this.Base.AgentTypes; }
-    public get AgentActions(): AIAgentActionEntity[] { return this.Base.AgentActions; }
-    public get AgentPrompts(): AIAgentPromptEntity[] { return this.Base.AgentPrompts; }
-    public get AgentConfigurations(): AIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
-    public get AgentNoteTypes(): AIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
-    public get AgentPermissions(): AIAgentPermissionEntity[] { return this.Base.AgentPermissions; }
-    public get AgentNotes(): AIAgentNoteEntity[] { return this.Base.AgentNotes; }
-    public get AgentExamples(): AIAgentExampleEntity[] { return this.Base.AgentExamples; }
-    public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
-    public get Vendors(): AIVendorEntity[] { return this.Base.Vendors; }
-    public get ModelVendors(): AIModelVendorEntity[] { return this.Base.ModelVendors; }
-    public get CredentialBindings(): AICredentialBindingEntity[] { return this.Base.CredentialBindings; }
+    public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
+    public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
+    public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
+    public get AgentPrompts(): MJAIAgentPromptEntity[] { return this.Base.AgentPrompts; }
+    public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
+    public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
+    public get AgentPermissions(): MJAIAgentPermissionEntity[] { return this.Base.AgentPermissions; }
+    public get AgentNotes(): MJAIAgentNoteEntity[] { return this.Base.AgentNotes; }
+    public get AgentExamples(): MJAIAgentExampleEntity[] { return this.Base.AgentExamples; }
+    public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
+    public get Vendors(): MJAIVendorEntity[] { return this.Base.Vendors; }
+    public get ModelVendors(): MJAIModelVendorEntity[] { return this.Base.ModelVendors; }
+    public get CredentialBindings(): MJAICredentialBindingEntity[] { return this.Base.CredentialBindings; }
     public GetCredentialBindingsForTarget(
         bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
         targetId: string
-    ): AICredentialBindingEntity[] {
+    ): MJAICredentialBindingEntity[] {
         return this.Base.GetCredentialBindingsForTarget(bindingType, targetId);
     }
     public HasCredentialBindings(
@@ -137,42 +137,42 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     ): boolean {
         return this.Base.HasCredentialBindings(bindingType, targetId);
     }
-    public get ModelTypes(): AIModelTypeEntity[] { return this.Base.ModelTypes; }
+    public get ModelTypes(): MJAIModelTypeEntity[] { return this.Base.ModelTypes; }
     public get Prompts(): AIPromptEntityExtended[] { return this.Base.Prompts; }
-    public get PromptModels(): AIPromptModelEntity[] { return this.Base.PromptModels; }
-    public get PromptTypes(): AIPromptTypeEntity[] { return this.Base.PromptTypes; }
+    public get PromptModels(): MJAIPromptModelEntity[] { return this.Base.PromptModels; }
+    public get PromptTypes(): MJAIPromptTypeEntity[] { return this.Base.PromptTypes; }
     public get PromptCategories(): AIPromptCategoryEntityExtended[] { return this.Base.PromptCategories; }
     public get Models(): AIModelEntityExtended[] { return this.Base.Models; }
-    public get ArtifactTypes(): ArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
+    public get ArtifactTypes(): MJArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
     public get LanguageModels(): AIModelEntityExtended[] { return this.Base.LanguageModels; }
-    public get VectorDatabases(): VectorDatabaseEntity[] { return this.Base.VectorDatabases; }
-    public get ModelCosts(): AIModelCostEntity[] { return this.Base.ModelCosts; }
-    public get ModelPriceTypes(): AIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
-    public get ModelPriceUnitTypes(): AIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
-    public get Configurations(): AIConfigurationEntity[] { return this.Base.Configurations; }
-    public get ConfigurationParams(): AIConfigurationParamEntity[] { return this.Base.ConfigurationParams; }
-    public get AgentDataSources(): AIAgentDataSourceEntity[] { return this.Base.AgentDataSources; }
-    public get AgentSteps(): AIAgentStepEntity[] { return this.Base.AgentSteps; }
-    public get AgentStepPaths(): AIAgentStepPathEntity[] { return this.Base.AgentStepPaths; }
-    public get ModelActions(): AIModelActionEntity[] { return this.Base.ModelActions; }
+    public get VectorDatabases(): MJVectorDatabaseEntity[] { return this.Base.VectorDatabases; }
+    public get ModelCosts(): MJAIModelCostEntity[] { return this.Base.ModelCosts; }
+    public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
+    public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
+    public get Configurations(): MJAIConfigurationEntity[] { return this.Base.Configurations; }
+    public get ConfigurationParams(): MJAIConfigurationParamEntity[] { return this.Base.ConfigurationParams; }
+    public get AgentDataSources(): MJAIAgentDataSourceEntity[] { return this.Base.AgentDataSources; }
+    public get AgentSteps(): MJAIAgentStepEntity[] { return this.Base.AgentSteps; }
+    public get AgentStepPaths(): MJAIAgentStepPathEntity[] { return this.Base.AgentStepPaths; }
+    public get ModelActions(): MJAIModelActionEntity[] { return this.Base.ModelActions; }
     /** @deprecated Use the new Action system instead */
-    public get Actions(): AIActionEntity[] { return this.Base.Actions; }
+    public get Actions(): MJAIActionEntity[] { return this.Base.Actions; }
     /** @deprecated Use the new Action system instead */
-    public get EntityAIActions(): EntityAIActionEntity[] { return this.Base.EntityAIActions; }
+    public get EntityAIActions(): MJEntityAIActionEntity[] { return this.Base.EntityAIActions; }
 
     // Modality getters - delegated from AIEngineBase
-    public get Modalities(): AIModalityEntity[] { return this.Base.Modalities; }
-    public get AgentModalities(): AIAgentModalityEntity[] { return this.Base.AgentModalities; }
-    public get ModelModalities(): AIModelModalityEntity[] { return this.Base.ModelModalities; }
+    public get Modalities(): MJAIModalityEntity[] { return this.Base.Modalities; }
+    public get AgentModalities(): MJAIAgentModalityEntity[] { return this.Base.AgentModalities; }
+    public get ModelModalities(): MJAIModelModalityEntity[] { return this.Base.ModelModalities; }
 
     // Modality helper methods - delegated from AIEngineBase
-    public GetModalityByName(name: string): AIModalityEntity | undefined {
+    public GetModalityByName(name: string): MJAIModalityEntity | undefined {
         return this.Base.GetModalityByName(name);
     }
-    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         return this.Base.GetAgentModalities(agentId, direction);
     }
-    public GetModelModalitiesByDirection(modelId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+    public GetModelModalitiesByDirection(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         return this.Base.GetModelModalities(modelId, direction);
     }
     public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
@@ -195,35 +195,35 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
         return this.Base.GetHighestPowerLLM(vendorName, contextUser);
     }
-    public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): AIModelCostEntity | null {
+    public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): MJAIModelCostEntity | null {
         return this.Base.GetActiveModelCost(modelID, vendorID, processingType);
     }
     public GetSubAgents(
         agentID: string,
         status?: AIAgentEntityExtended['Status'],
-        relationshipStatus?: AIAgentRelationshipEntity['Status']
+        relationshipStatus?: MJAIAgentRelationshipEntity['Status']
     ): AIAgentEntityExtended[] {
         return this.Base.GetSubAgents(agentID, status, relationshipStatus);
     }
     public GetAgentByName(agentName: string): AIAgentEntityExtended {
         return this.Base.GetAgentByName(agentName);
     }
-    public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): AIAgentConfigurationEntity[] {
+    public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
         return this.Base.GetAgentConfigurationPresets(agentId, activeOnly);
     }
-    public GetDefaultAgentConfigurationPreset(agentId: string): AIAgentConfigurationEntity | undefined {
+    public GetDefaultAgentConfigurationPreset(agentId: string): MJAIAgentConfigurationEntity | undefined {
         return this.Base.GetDefaultAgentConfigurationPreset(agentId);
     }
-    public GetAgentConfigurationPresetByName(agentId: string, presetName: string): AIAgentConfigurationEntity | undefined {
+    public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
         return this.Base.GetAgentConfigurationPresetByName(agentId, presetName);
     }
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
         return this.Base.AgenteNoteTypeIDByName(agentNoteTypeName);
     }
-    public GetConfigurationParams(configurationId: string): AIConfigurationParamEntity[] {
+    public GetConfigurationParams(configurationId: string): MJAIConfigurationParamEntity[] {
         return this.Base.GetConfigurationParams(configurationId);
     }
-    public GetConfigurationParam(configurationId: string, paramName: string): AIConfigurationParamEntity | null {
+    public GetConfigurationParam(configurationId: string, paramName: string): MJAIConfigurationParamEntity | null {
         return this.Base.GetConfigurationParam(configurationId, paramName);
     }
     /**
@@ -232,10 +232,10 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Delegates to AIEngineBase.GetConfigurationChain.
      *
      * @param configurationId - The ID of the configuration to get the chain for
-     * @returns Array of AIConfigurationEntity objects representing the inheritance chain
+     * @returns Array of MJAIConfigurationEntity objects representing the inheritance chain
      * @throws Error if a circular reference is detected in the configuration hierarchy
      */
-    public GetConfigurationChain(configurationId: string): AIConfigurationEntity[] {
+    public GetConfigurationChain(configurationId: string): MJAIConfigurationEntity[] {
         return this.Base.GetConfigurationChain(configurationId);
     }
     /**
@@ -244,21 +244,21 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Delegates to AIEngineBase.GetConfigurationParamsWithInheritance.
      *
      * @param configurationId - The ID of the configuration to get parameters for
-     * @returns Array of AIConfigurationParamEntity objects, with child overrides applied
+     * @returns Array of MJAIConfigurationParamEntity objects, with child overrides applied
      */
-    public GetConfigurationParamsWithInheritance(configurationId: string): AIConfigurationParamEntity[] {
+    public GetConfigurationParamsWithInheritance(configurationId: string): MJAIConfigurationParamEntity[] {
         return this.Base.GetConfigurationParamsWithInheritance(configurationId);
     }
-    public GetAgentSteps(agentId: string, status?: string): AIAgentStepEntity[] {
+    public GetAgentSteps(agentId: string, status?: string): MJAIAgentStepEntity[] {
         return this.Base.GetAgentSteps(agentId, status);
     }
-    public GetAgentStepByID(stepId: string): AIAgentStepEntity | null {
+    public GetAgentStepByID(stepId: string): MJAIAgentStepEntity | null {
         return this.Base.GetAgentStepByID(stepId);
     }
-    public GetPathsFromStep(stepId: string): AIAgentStepPathEntity[] {
+    public GetPathsFromStep(stepId: string): MJAIAgentStepPathEntity[] {
         return this.Base.GetPathsFromStep(stepId);
     }
-    public async CheckResultCache(prompt: string): Promise<AIResultCacheEntity | null> {
+    public async CheckResultCache(prompt: string): Promise<MJAIResultCacheEntity | null> {
         return this.Base.CheckResultCache(prompt);
     }
     public async CacheResult(model: AIModelEntityExtended, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
@@ -312,10 +312,10 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Get all available actions loaded from the database.
      * Loaded during Config() - will be empty before AIEngine.Config() completes.
-     * NOTE: This returns ActionEntity (MJ Action system), not the deprecated AIActionEntity.
+     * NOTE: This returns MJActionEntity (MJ Action system), not the deprecated MJAIActionEntity.
      * For deprecated AI Actions, see the inherited Actions property.
      */
-    public get SystemActions(): ActionEntity[] {
+    public get SystemActions(): MJActionEntity[] {
         return this._actions;
     }
 
@@ -594,7 +594,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Takes in a note and packages up the metadata for the vector service
      * @param note 
      */
-    protected packageNoteMetadata(note: AIAgentNoteEntity): NoteEmbeddingMetadata {
+    protected packageNoteMetadata(note: MJAIAgentNoteEntity): NoteEmbeddingMetadata {
         return {
             id: note.ID,
             agentId: note.AgentID,
@@ -610,7 +610,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Updates the vector service to the latest vector containd within the specified agent note that is passed in
      * @param note 
      */
-    public AddOrUpdateSingleNoteEmbedding(note: AIAgentNoteEntity) {
+    public AddOrUpdateSingleNoteEmbedding(note: MJAIAgentNoteEntity) {
         if (this._noteVectorService) {
             this._noteVectorService.AddOrUpdateVector(note.ID, JSON.parse(note.EmbeddingVector),  this.packageNoteMetadata(note));
         }
@@ -623,7 +623,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Takes in an example and packages up the metadata for the vector service
      * @param example
      */
-    protected packageExampleMetadata(example: AIAgentExampleEntity): ExampleEmbeddingMetadata {
+    protected packageExampleMetadata(example: MJAIAgentExampleEntity): ExampleEmbeddingMetadata {
         return {
             id: example.ID,
             agentId: example.AgentID,
@@ -641,7 +641,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Updates the vector service to the latest vector contained within the specified agent example that is passed in
      * @param example
      */
-    public AddOrUpdateSingleExampleEmbedding(example: AIAgentExampleEntity) {
+    public AddOrUpdateSingleExampleEmbedding(example: MJAIAgentExampleEntity) {
         if (this._exampleVectorService) {
             this._exampleVectorService.AddOrUpdateVector(example.ID, JSON.parse(example.EmbeddingVector), this.packageExampleMetadata(example));
         }
@@ -1310,7 +1310,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * @deprecated This method is related to deprecated AI Actions. Use AIPromptRunner instead.
      */
-    protected GetStringOutputFromActionResults(action: AIActionEntity, result: BaseResult): string {
+    protected GetStringOutputFromActionResults(action: MJAIActionEntity, result: BaseResult): string {
         switch (action.Name.trim().toLowerCase()) {
             case 'classify':
                 const classifyResult = <ClassifyResult>result;

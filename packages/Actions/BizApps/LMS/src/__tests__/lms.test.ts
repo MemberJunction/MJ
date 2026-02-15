@@ -20,7 +20,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    CompanyIntegrationEntity: class CompanyIntegrationEntity {
+    MJCompanyIntegrationEntity: class MJCompanyIntegrationEntity {
         CompanyID: string = '';
         APIKey: string | null = null;
         AccessToken: string | null = null;

@@ -52,9 +52,9 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-  VersionLabelEntity: class {},
-  VersionLabelItemEntity: class {},
-  RecordChangeEntity: class {},
+  MJVersionLabelEntity: class {},
+  MJVersionLabelItemEntity: class {},
+  MJRecordChangeEntity: class {},
 }));
 
 // ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ describe('LabelManager', () => {
 
   it('should throw when Record scope lacks RecordKey', async () => {
     await expect(
-      manager.CreateLabel({ Name: 'test', Scope: 'Record', EntityName: 'Users' }, user)
+      manager.CreateLabel({ Name: 'test', Scope: 'Record', EntityName: 'MJ: Users' }, user)
     ).rejects.toThrow('Record scope requires RecordKey');
   });
 });

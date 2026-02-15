@@ -2,11 +2,11 @@
   "fields": {
     "Name": "Testing Dashboard",
     "Description": "Dashboard for managing and monitoring test suites, test runs, and evaluation results for the MemberJunction testing framework",
-    "UserID": "@lookup:Users.Name=System",
+    "UserID": "@lookup:MJ: Users.Name=System",
     "CategoryID": null,
     "Type": "Code",
     "Scope": "App",
-    "ApplicationID": "@lookup:Applications.Name=Testing",
+    "ApplicationID": "@lookup:MJ: Applications.Name=Testing",
     "DriverClass": "TestingDashboard",
     "UIConfigDetails": "{}",
     "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -18,15 +18,15 @@
           "DashboardID": "@parent:ID",
           "UserID": null,
           "Scope": "App",
-          "ApplicationID": "@lookup:Applications.Name=Testing",
+          "ApplicationID": "@lookup:MJ: Applications.Name=Testing",
           "DisplayOrder": 1
         },
         "primaryKey": {
           "ID": "6CE58F99-2EB5-4B5C-AE07-C66286B568F5"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.461Z",
-          "checksum": "916123f3b1c27d70eabb43371a9aec447093e52b4c89c44a1f076b976ce29b92"
+          "lastModified": "2026-02-13T21:09:37.054Z",
+          "checksum": "273b41749385734f1803e7df52d13cfa63141951dcc3a170709857be0eaaeac6"
         }
       }
     ]
@@ -35,7 +35,7 @@
     "ID": "362A0BE3-2745-4C91-B648-98232B3DD049"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.450Z",
-    "checksum": "61aee2729b248f08331cb78d04c1f2206abd1e057f60ef30a3203cf803158d37"
+    "lastModified": "2026-02-13T21:09:37.044Z",
+    "checksum": "5fc1513e814536ba9fee16633b67ec4f150678b77df1c99fecc4f01a27142a2d"
   }
 }

@@ -48,7 +48,7 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
 
     // Tree configuration for User View Categories (branches) and User Views (leaves)
     public ViewCategoryConfig: TreeBranchConfig = {
-        EntityName: 'User View Categories',
+        EntityName: 'MJ: User View Categories',
         DisplayField: 'Name',
         IDField: 'ID',
         ParentIDField: 'ParentID',
@@ -58,7 +58,7 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
     };
 
     public ViewLeafConfig: TreeLeafConfig = {
-        EntityName: 'User Views',
+        EntityName: 'MJ: User Views',
         DisplayField: 'Name',
         IDField: 'ID',
         ParentField: 'CategoryID',

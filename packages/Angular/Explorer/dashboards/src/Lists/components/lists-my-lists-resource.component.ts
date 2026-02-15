@@ -2,19 +2,19 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { ListEntity, ListCategoryEntity, ListDetailEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListCategoryEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 interface ListViewModel {
-  list: ListEntity;
+  list: MJListEntity;
   itemCount: number;
   entityName: string;
 }
 
 interface CategoryNode {
-  category: ListCategoryEntity | null;
+  category: MJListCategoryEntity | null;
   lists: ListViewModel[];
   children: CategoryNode[];
   isExpanded: boolean;
@@ -1286,7 +1286,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
   allLists: ListViewModel[] = [];
   filteredLists: ListViewModel[] = [];
-  categories: ListCategoryEntity[] = [];
+  categories: MJListCategoryEntity[] = [];
   categoryTree: CategoryNode[] = [];
   flatCategories: Array<{ ID: string | null; displayName: string }> = [];
   availableEntities: Array<{ ID: string; Name: string }> = [];
@@ -1296,11 +1296,11 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   showContextMenu = false;
   contextMenuX = 0;
   contextMenuY = 0;
-  selectedContextList: ListEntity | null = null;
+  selectedContextList: MJListEntity | null = null;
 
   // Create/Edit dialog
   showCreateDialog = false;
-  editingList: ListEntity | null = null;
+  editingList: MJListEntity | null = null;
   newListName = '';
   newListDescription = '';
   selectedEntityId = '';
@@ -1312,13 +1312,13 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   // Delete confirmation
   showDeleteConfirm = false;
   deleteListName = '';
-  listToDelete: ListEntity | null = null;
+  listToDelete: MJListEntity | null = null;
 
   // Operation states
   isSaving = false;
   isDeleting = false;
 
-  private categoryMap: Map<string, ListCategoryEntity> = new Map();
+  private categoryMap: Map<string, MJListCategoryEntity> = new Map();
   private entityColorMap: Map<string, string> = new Map();
   private entityIconMap: Map<string, string> = new Map();
 
@@ -1381,18 +1381,18 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       // Load lists, categories, and item counts in parallel
       const [listsResult, categoriesResult, detailsResult] = await rv.RunViews([
         {
-          EntityName: 'Lists',
+          EntityName: 'MJ: Lists',
           ExtraFilter: `UserID = '${userId}'`,
           OrderBy: 'Name',
           ResultType: 'entity_object'
         },
         {
-          EntityName: 'List Categories',
+          EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
         },
         {
-          EntityName: 'List Details',
+          EntityName: 'MJ: List Details',
           ExtraFilter: `ListID IN (SELECT ID FROM __mj.List WHERE UserID = '${userId}')`,
           ResultType: 'simple'
         }
@@ -1403,8 +1403,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         return;
       }
 
-      const lists = listsResult.Results as ListEntity[];
-      this.categories = categoriesResult.Results as ListCategoryEntity[];
+      const lists = listsResult.Results as MJListEntity[];
+      this.categories = categoriesResult.Results as MJListCategoryEntity[];
       const details = detailsResult.Results as Array<{ ListID: string }>;
 
       // Build category map
@@ -1454,11 +1454,11 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     }
   }
 
-  private buildFlatCategories(categories: ListCategoryEntity[]): Array<{ ID: string; displayName: string }> {
+  private buildFlatCategories(categories: MJListCategoryEntity[]): Array<{ ID: string; displayName: string }> {
     const result: Array<{ ID: string; displayName: string }> = [];
     const topLevel = categories.filter(c => !c.ParentID);
 
-    const processCategory = (cat: ListCategoryEntity, level: number) => {
+    const processCategory = (cat: MJListCategoryEntity, level: number) => {
       const indent = '\u00A0\u00A0'.repeat(level);
       result.push({ ID: cat.ID, displayName: `${indent}${cat.Name}` });
 
@@ -1596,12 +1596,12 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     return d.toLocaleDateString();
   }
 
-  openList(list: ListEntity) {
+  openList(list: MJListEntity) {
     const appId = this.Data?.Configuration?.applicationId || '';
     this.tabService.OpenList(list.ID, list.Name, appId);
   }
 
-  openListMenu(event: Event, list: ListEntity) {
+  openListMenu(event: Event, list: MJListEntity) {
     event.stopPropagation();
     const mouseEvent = event as MouseEvent;
     this.selectedContextList = list;
@@ -1686,7 +1686,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       const md = new Metadata();
       const rv = new RunView();
 
-      const newList = await md.GetEntityObject<ListEntity>('Lists');
+      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
       newList.Name = `${listToDuplicate.Name} (Copy)`;
       newList.Description = listToDuplicate.Description;
       newList.EntityID = listToDuplicate.EntityID;
@@ -1699,8 +1699,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         return;
       }
 
-      const itemsResult = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const itemsResult = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
         ResultType: 'entity_object'
       });
@@ -1708,7 +1708,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       if (itemsResult.Success && itemsResult.Results.length > 0) {
         let copiedCount = 0;
         for (const item of itemsResult.Results) {
-          const newItem = await md.GetEntityObject<ListDetailEntity>('List Details');
+          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details');
           newItem.ListID = newList.ID;
           newItem.RecordID = item.RecordID;
           newItem.Sequence = item.Sequence;
@@ -1794,12 +1794,12 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
     try {
       const md = new Metadata();
-      let list: ListEntity;
+      let list: MJListEntity;
 
       if (this.editingList) {
         list = this.editingList;
       } else {
-        list = await md.GetEntityObject<ListEntity>('Lists');
+        list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
         list.UserID = md.CurrentUser!.ID;
         list.EntityID = this.selectedEntityId;
       }

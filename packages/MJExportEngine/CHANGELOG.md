@@ -1,5 +1,7 @@
 # @memberjunction/export-engine
 
+## 4.4.0
+
 ## 4.3.1
 
 ## 4.3.0

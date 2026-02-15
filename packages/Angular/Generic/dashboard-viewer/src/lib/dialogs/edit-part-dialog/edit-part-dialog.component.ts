@@ -11,7 +11,7 @@ import {
     AfterViewInit
 } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
-import { DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import { PanelConfig, DashboardPanel } from '../../models/dashboard-types';
 import { BaseConfigPanel, ConfigPanelResult } from '../../config-panels/base-config-panel';
 
@@ -69,7 +69,7 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
     /**
      * The part type being configured
      */
-    @Input() PartType: DashboardPartTypeEntity | null = null;
+    @Input() PartType: MJDashboardPartTypeEntity | null = null;
 
     /**
      * The panel being edited

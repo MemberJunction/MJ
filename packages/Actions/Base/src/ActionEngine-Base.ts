@@ -1,5 +1,5 @@
 import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
-import { ActionCategoryEntity, ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { ActionEntityExtended } from "./ActionEntity-Extended";
 
 
@@ -75,14 +75,14 @@ export class ActionResult {
    public Success: boolean;
 
    /**
-    * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the ActionResultCodeEntity
+    * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the MJActionResultCodeEntity
     */
-   public Result?: ActionResultCodeEntity;
+   public Result?: MJActionResultCodeEntity;
 
    /**
     * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
     */
-   public LogEntry?: ActionExecutionLogEntity;
+   public LogEntry?: MJActionExecutionLogEntity;
 
    /**
     * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
@@ -144,20 +144,20 @@ export class RunActionParams<TContext = any> {
    /**
     * The action entity to be run.
     */
-   public Action: ActionEntity;
+   public Action: MJActionEntity;
 
    /**
     * The user context for the action.
     */
    public ContextUser: UserInfo;
    /**
-    * Optional, if true, an ActionExecutionLogEntity will not be created for this action run.
+    * Optional, if true, an MJActionExecutionLogEntity will not be created for this action run.
     */
    public SkipActionLog?: boolean;
    /**
     * Optional, a list of filters that should be run before the action is executed.
     */
-   public Filters: ActionFilterEntity[];
+   public Filters: MJActionFilterEntity[];
    /**
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
@@ -199,11 +199,11 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
    }
 
     private _Actions: ActionEntityExtended[];
-    private _ActionCategories: ActionCategoryEntity[];
-    private _Filters: ActionFilterEntity[];
-    private _Params: ActionParamEntity[];
-    private _ActionResultCodes: ActionResultCodeEntity[];
-    private _ActionLibraries: ActionLibraryEntity[];
+    private _ActionCategories: MJActionCategoryEntity[];
+    private _Filters: MJActionFilterEntity[];
+    private _Params: MJActionParamEntity[];
+    private _ActionResultCodes: MJActionResultCodeEntity[];
+    private _ActionLibraries: MJActionLibraryEntity[];
 
    /**
     * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
@@ -214,32 +214,32 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
       const config: Array<Partial<BaseEnginePropertyConfig>> = [
          {
-               EntityName: 'Actions',
+               EntityName: 'MJ: Actions',
                PropertyName: '_Actions',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Categories',
+               EntityName: 'MJ: Action Categories',
                PropertyName: '_ActionCategories',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Filters',
+               EntityName: 'MJ: Action Filters',
                PropertyName: '_Filters',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Result Codes',
+               EntityName: 'MJ: Action Result Codes',
                PropertyName: '_ActionResultCodes',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Params',
+               EntityName: 'MJ: Action Params',
                PropertyName: '_Params',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Libraries',
+               EntityName: 'MJ: Action Libraries',
                PropertyName: '_ActionLibraries',
                CacheLocal: true
          }];
@@ -275,19 +275,19 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     public get Actions(): ActionEntityExtended[] {
       return this._Actions;
     }
-    public get ActionCategories(): ActionCategoryEntity[] {
+    public get ActionCategories(): MJActionCategoryEntity[] {
       return this._ActionCategories;
     }
-    public get ActionParams(): ActionParamEntity[] {
+    public get ActionParams(): MJActionParamEntity[] {
       return this._Params;
     }
-    public get ActionFilters(): ActionFilterEntity[] {
+    public get ActionFilters(): MJActionFilterEntity[] {
       return this._Filters;
     }
-    public get ActionResultCodes(): ActionResultCodeEntity[] {
+    public get ActionResultCodes(): MJActionResultCodeEntity[] {
       return this._ActionResultCodes;
     }
-    public get ActionLibraries(): ActionLibraryEntity[] {
+    public get ActionLibraries(): MJActionLibraryEntity[] {
       return this._ActionLibraries;
     }
 
