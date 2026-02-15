@@ -18,7 +18,6 @@
   "dependencies": {
     "@memberjunction/core": "4.4.0",
     "@memberjunction/global": "4.4.0",
-    "@skyway/core": "file:../../../../skyway/packages/core",
     "semver": "^7.7.1",
     "simple-git": "^3.27.0",
     "zod": "^3.24.3"

@@ -4,10 +4,39 @@
  * Uses Skyway — a TypeScript-native, Flyway-compatible migration engine —
  * to execute app migrations against the app's own schema, using a per-app
  * flyway_schema_history table.
+ *
+ * Skyway is loaded dynamically at runtime so this module compiles even when
+ * `@skyway/core` is not installed (e.g. in CI builds that don't need it).
  */
-import { Skyway } from '@skyway/core';
-import type { SkywayConfig } from '@skyway/core';
 import path from 'node:path';
+
+/**
+ * Minimal type definition for Skyway config so we don't need
+ * `@skyway/core` at compile time.
+ */
+interface SkywayConfig {
+    Database: {
+        Server: string;
+        Port: number;
+        Database: string;
+        User: string;
+        Password: string;
+        Options?: { TrustServerCertificate?: boolean };
+    };
+    Migrations: {
+        Locations: string[];
+        DefaultSchema: string;
+        BaselineVersion: string;
+        BaselineOnMigrate: boolean;
+    };
+    Placeholders?: Record<string, string>;
+}
+
+/** Minimal interface for the Skyway instance returned at runtime. */
+interface SkywayInstance {
+    Migrate(): Promise<{ MigrationsApplied: number; Details: { Success: boolean; Migration: { Filename: string } }[] }>;
+    Close(): Promise<void>;
+}
 
 /**
  * Options for running migrations.
@@ -74,9 +103,10 @@ export interface MigrationRunResult {
 export async function RunAppMigrations(options: MigrationRunOptions): Promise<MigrationRunResult> {
     const { MigrationsDir, SchemaName, DatabaseConfig, Verbose } = options;
 
-    let skyway: Skyway | undefined;
+    let skyway: SkywayInstance | undefined;
 
     try {
+        const { Skyway } = await import('@skyway/core');
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig);
 
         if (Verbose) {
@@ -85,12 +115,12 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             console.log(`  Server: ${DatabaseConfig.Host}:${DatabaseConfig.Port}`);
         }
 
-        skyway = new Skyway(config);
+        skyway = new Skyway(config) as SkywayInstance;
         const result = await skyway.Migrate();
 
         const appliedFiles = result.Details
-            .filter(d => d.Success)
-            .map(d => d.Migration.Filename);
+            .filter((d: { Success: boolean }) => d.Success)
+            .map((d: { Migration: { Filename: string } }) => d.Migration.Filename);
 
         return {
             Success: true,
