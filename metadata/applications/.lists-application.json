@@ -7,7 +7,7 @@
     "Color": "#009688",
     "DefaultSequence": 50,
     "Status": "Active",
-    "NavigationStyle": "Both",
+    "NavigationStyle": "App Switcher",
     "HideNavBarIconWhenActive": true,
     "TopNavLocation": "Left of User Menu",
     "DefaultNavItems": [
