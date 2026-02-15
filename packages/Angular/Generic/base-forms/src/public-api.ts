@@ -36,3 +36,6 @@ export * from './lib/container/record-form-container.component';
 export * from './lib/section-manager/section-manager.component';
 export * from './lib/section-loader-component';
 export * from './lib/explorer-entity-data-grid.component';
+export * from './lib/isa-related-panel/isa-hierarchy-utils';
+export * from './lib/isa-related-panel/isa-related-card.component';
+export * from './lib/isa-related-panel/isa-related-panel.component';

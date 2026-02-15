@@ -1,7 +1,7 @@
 import { parentPort, threadId, workerData } from 'node:worker_threads';
 import type { WorkerData } from '../BatchWorker';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
+import { MJTemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { LogError, ValidationResult } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -19,7 +19,7 @@ export async function VectorizeEntity(): Promise<void> {
   }
 
   const template: TemplateEntityExtended = context.template;
-  const templateContent: TemplateContentEntity = context.templateContent;
+  const templateContent: MJTemplateContentEntity = context.templateContent;
   TemplateEngineServer.Instance.SetupNunjucks();
   const startTime = Date.now();
   //console.log('\t##### Annotator started #####', { threadId, now: Date.now() % 10_000, elapsed: Date.now() - context.executionId });

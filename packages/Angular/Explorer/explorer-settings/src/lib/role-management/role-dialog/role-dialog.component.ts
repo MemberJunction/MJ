@@ -2,16 +2,16 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, S
 
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
-import { RoleEntity } from '@memberjunction/core-entities';
+import { MJRoleEntity } from '@memberjunction/core-entities';
 
 export interface RoleDialogData {
-  role?: RoleEntity;
+  role?: MJRoleEntity;
   mode: 'create' | 'edit';
 }
 
 export interface RoleDialogResult {
   action: 'save' | 'cancel';
-  role?: RoleEntity;
+  role?: MJRoleEntity;
 }
 
 @Component({
@@ -118,14 +118,14 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.error = null;
 
     try {
-      let role: RoleEntity;
+      let role: MJRoleEntity;
 
       if (this.isEditMode && this.data?.role) {
         // Edit existing role
         role = this.data.role;
       } else {
         // Create new role
-        role = await this.metadata.GetEntityObject<RoleEntity>('Roles');
+        role = await this.metadata.GetEntityObject<MJRoleEntity>('MJ: Roles');
         role.NewRecord();
       }
 

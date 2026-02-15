@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAccountingAction } from '../../base/base-accounting-action';
 import { UserInfo } from '@memberjunction/core';
-import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -160,7 +160,7 @@ export abstract class QuickBooksBaseAction extends BaseAccountingAction {
     /**
      * Gets the appropriate QuickBooks API URL based on configuration
      */
-    protected async getQuickBooksAPIUrl(integration: CompanyIntegrationEntity): Promise<string> {
+    protected async getQuickBooksAPIUrl(integration: MJCompanyIntegrationEntity): Promise<string> {
         // First, check if there's a URL in the Integration entity
         // The Integration property should be loaded via the view, not accessed as a sub-property
         const integrationNavURL = (integration as any).IntegrationNavigationBaseURL;

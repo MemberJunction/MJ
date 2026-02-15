@@ -1,10 +1,10 @@
 import { BaseEntity, CodeNameFromString } from "@memberjunction/core";
-import { ActionEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { MJActionEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { ActionEngineBase } from "./ActionEngine-Base";
 
-@RegisterClass(BaseEntity, 'Actions') // high priority make sure this class is used ahead of other things
-export class ActionEntityExtended extends ActionEntity {
+@RegisterClass(BaseEntity, 'MJ: Actions') // high priority make sure this class is used ahead of other things
+export class ActionEntityExtended extends MJActionEntity {
     /**
      * Returns true if this action is a core MemberJunction framework action, false otherwise.
      */
@@ -19,11 +19,11 @@ export class ActionEntityExtended extends ActionEntity {
         return CodeNameFromString(this.Name);
     }
 
-    private _resultCodes: ActionResultCodeEntity[] = null;
+    private _resultCodes: MJActionResultCodeEntity[] = null;
     /**
      * Provides a list of possible result codes for this action.
      */
-    public get ResultCodes(): ActionResultCodeEntity[] {
+    public get ResultCodes(): MJActionResultCodeEntity[] {
         if (!this._resultCodes) {
             // load the result codes
             this._resultCodes = ActionEngineBase.Instance.ActionResultCodes.filter(c => c.ActionID === this.ID);
@@ -31,8 +31,8 @@ export class ActionEntityExtended extends ActionEntity {
         return this._resultCodes;
     }
 
-    private _params: ActionParamEntity[] = null;
-    public get Params(): ActionParamEntity[] {
+    private _params: MJActionParamEntity[] = null;
+    public get Params(): MJActionParamEntity[] {
         if (!this._params) {
             // load the inputs
             this._params = ActionEngineBase.Instance.ActionParams.filter(i => i.ActionID === this.ID);
@@ -40,8 +40,8 @@ export class ActionEntityExtended extends ActionEntity {
         return this._params;
     }
 
-    private _libs: ActionLibraryEntity[] = null;
-    public get Libraries(): ActionLibraryEntity[] {
+    private _libs: MJActionLibraryEntity[] = null;
+    public get Libraries(): MJActionLibraryEntity[] {
         if (!this._libs) {
             // load the inputs
             this._libs = ActionEngineBase.Instance.ActionLibraries.filter(l => l.ActionID === this.ID);

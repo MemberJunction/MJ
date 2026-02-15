@@ -5,7 +5,7 @@
 
 import { TestEngine } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
-import { TestEntity } from '@memberjunction/core-entities';
+import { MJTestEntity } from '@memberjunction/core-entities';
 import { ValidateFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
@@ -50,7 +50,7 @@ export class ValidateCommand {
             const engine = TestEngine.Instance;
             await engine.Config(false, contextUser);
 
-            let testsToValidate: TestEntity[];
+            let testsToValidate: MJTestEntity[];
 
             if (testId) {
                 // Validate specific test
@@ -117,7 +117,7 @@ export class ValidateCommand {
     /**
      * Validate a single test
      */
-    private validateTest(test: TestEntity, engine: TestEngine): ValidationResult {
+    private validateTest(test: MJTestEntity, engine: TestEngine): ValidationResult {
         const result: ValidationResult = {
             testName: test.Name,
             testId: test.ID,

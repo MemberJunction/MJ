@@ -21,9 +21,26 @@ export class ISAChildEntityResult {
 }
 
 /**
+ * Result type for the IS-A child entities discovery query (plural).
+ * Returns all child entity type names that have records matching the given
+ * parent entity's primary key. Used for overlapping subtype parents.
+ */
+@ObjectType()
+export class ISAChildEntitiesResult {
+    @Field(() => Boolean)
+    Success: boolean;
+
+    @Field(() => [String], { nullable: true })
+    ChildEntityNames?: string[];
+
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
+}
+
+/**
  * Resolver for IS-A entity hierarchy discovery.
  *
- * Provides a GraphQL endpoint for client-side code to discover child entity
+ * Provides GraphQL endpoints for client-side code to discover child entity
  * records in an IS-A hierarchy. This enables bidirectional chain construction
  * where a loaded entity discovers its more-derived child type.
  */
@@ -83,6 +100,65 @@ export class ISAEntityResolver {
             }
 
             return { Success: true };
+        }
+        catch (e) {
+            return {
+                Success: false,
+                ErrorMessage: e instanceof Error ? e.message : String(e)
+            };
+        }
+    }
+
+    /**
+     * Discovers ALL IS-A child entities that have records with the given primary
+     * key value. Used for overlapping subtype parents (AllowMultipleSubtypes = true)
+     * where multiple children can coexist. The server executes a single UNION ALL
+     * query across all child entity tables for maximum efficiency.
+     *
+     * @param EntityName The parent entity name to check children for
+     * @param RecordID The primary key value to search for in child tables
+     * @returns Array of child entity names found (empty if none)
+     */
+    @Query(() => ISAChildEntitiesResult)
+    async FindISAChildEntities(
+        @Arg('EntityName', () => String) EntityName: string,
+        @Arg('RecordID', () => String) RecordID: string,
+        @Ctx() { providers, userPayload }: AppContext
+    ): Promise<ISAChildEntitiesResult> {
+        try {
+            const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === EntityName);
+
+            if (!entityInfo) {
+                return {
+                    Success: false,
+                    ErrorMessage: `Entity '${EntityName}' not found`
+                };
+            }
+
+            if (!entityInfo.IsParentType) {
+                return { Success: true, ChildEntityNames: [] };
+            }
+
+            const entityProvider = provider as unknown as IEntityDataProvider;
+            if (!entityProvider.FindISAChildEntities) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Provider does not support FindISAChildEntities'
+                };
+            }
+
+            const results = await entityProvider.FindISAChildEntities(
+                entityInfo,
+                RecordID,
+                userPayload?.userRecord
+            );
+
+            return {
+                Success: true,
+                ChildEntityNames: results.map(r => r.ChildEntityName)
+            };
         }
         catch (e) {
             return {

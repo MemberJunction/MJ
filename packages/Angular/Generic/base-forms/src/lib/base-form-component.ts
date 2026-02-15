@@ -12,7 +12,7 @@ import {
 } from '@memberjunction/core';
 import { MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
 import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
-import { ListEntity } from '@memberjunction/core-entities';
+import { MJListEntity } from '@memberjunction/core-entities';
 
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormSectionInfo } from './base-form-section-info';
@@ -524,7 +524,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     }
   }
 
-  public async GetListsCanAddTo(): Promise<ListEntity[]> {
+  public async GetListsCanAddTo(): Promise<MJListEntity[]> {
     if (!this.record) {
       LogError('Unable to fetch List records: Record not found');
       return [];
@@ -533,8 +533,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     const rv = new RunView();
     const md = new Metadata();
 
-    const rvResult: RunViewResult<ListEntity> = await rv.RunView({
-      EntityName: 'Lists',
+    const rvResult: RunViewResult<MJListEntity> = await rv.RunView({
+      EntityName: 'MJ: Lists',
       ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.record.EntityInfo.ID}'`,
       ResultType: 'entity_object'
     });

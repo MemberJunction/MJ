@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 4.4.0
+
+### Minor Changes
+
+- bef7f69: Migration for metadata sync
+
+### Patch Changes
+
+- 61079e9: just a plan
+  - @memberjunction/global@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes

@@ -8,7 +8,7 @@ services:
       SA_PASSWORD: "${SA_PASSWORD:-Claude2Sql99}"
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
-      MSSQL_MEMORY_LIMIT_MB: "2048"
+      MSSQL_MEMORY_LIMIT_MB: "3072"
     ports:
       - "1444:1433"
     volumes:
@@ -16,9 +16,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2560m
+          memory: 4g            # Baseline migration needs headroom (~96K line SQL)
         reservations:
-          memory: 512m
+          memory: 1g
     healthcheck:
       test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
       interval: 15s
@@ -31,14 +31,21 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: claude-dev
+    shm_size: '2gb'     # Chromium needs this (default 64MB causes tab crashes)
     env_file:
       - .env.database
     environment:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
       IS_SANDBOX: "1"
+      # Auth0 test credentials (from host .env, used by entrypoint for auto-setup)
+      TEST_AUTH0_DOMAIN: "${TEST_AUTH0_DOMAIN}"
+      TEST_AUTH0_CLIENT_ID: "${TEST_AUTH0_CLIENT_ID}"
+      TEST_AUTH0_CLIENT_SECRET: "${TEST_AUTH0_CLIENT_SECRET}"
+      TEST_UID: "${TEST_UID}"
+      TEST_PWD: "${TEST_PWD}"
     ports:
-      - "4100:4000"    # MJAPI (offset from local :4000)
-      - "4300:4200"    # Explorer (offset from local :4200)
+      - "${MJAPI_HOST_PORT:-4000}:4000"       # MJAPI  (default 4000; set MJAPI_HOST_PORT=4100 to avoid conflicts)
+      - "${EXPLORER_HOST_PORT:-4200}:4200"     # Explorer (default 4200; set EXPLORER_HOST_PORT=4300 to avoid conflicts)
     depends_on:
       sql-claude:
         condition: service_healthy
@@ -50,9 +57,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 3g
+          memory: 8g          # Build + browser + MJAPI + Explorer need headroom
         reservations:
-          memory: 512m
+          memory: 2g
     stdin_open: true
     tty: true
     working_dir: /workspace

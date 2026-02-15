@@ -1,18 +1,18 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
-import { EntityActionEntity, EntityActionFilterEntity, EntityActionInvocationEntity, EntityActionParamEntity } from "@memberjunction/core-entities";
+import { MJEntityActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { EntityActionEngineBase } from "./EntityActionEngine-Base";
 
-@RegisterClass(BaseEntity, 'Entity Actions')
-export class EntityActionEntityExtended extends EntityActionEntity {
-    private _filters: EntityActionFilterEntity[] = null;
-    private _invocations: EntityActionInvocationEntity[] = null;
-    private _params: EntityActionParamEntity[] = null;
+@RegisterClass(BaseEntity, 'MJ: Entity Actions')
+export class EntityActionEntityExtended extends MJEntityActionEntity {
+    private _filters: MJEntityActionFilterEntity[] = null;
+    private _invocations: MJEntityActionInvocationEntity[] = null;
+    private _params: MJEntityActionParamEntity[] = null;
 
     /**
      * Get the filters for this entity action
      */
-    public get Filters(): EntityActionFilterEntity[] {
+    public get Filters(): MJEntityActionFilterEntity[] {
         if (!this._filters) {
             // don't have the data loaded yet so get it from the EntityActionEngine
             this._filters = EntityActionEngineBase.Instance.Filters?.filter(f => f.EntityActionID === this.ID) ?? [];
@@ -23,7 +23,7 @@ export class EntityActionEntityExtended extends EntityActionEntity {
     /**
      * Get the invocations for this entity action
      */
-    public get Invocations(): EntityActionInvocationEntity[] {
+    public get Invocations(): MJEntityActionInvocationEntity[] {
         if (!this._invocations) {
             // load the data from the EntityActionEngine
             this._invocations = EntityActionEngineBase.Instance.Invocations?.filter(i => i.EntityActionID === this.ID) ?? [];
@@ -31,7 +31,7 @@ export class EntityActionEntityExtended extends EntityActionEntity {
         return this._invocations
     }
 
-    public get Params(): EntityActionParamEntity[] {
+    public get Params(): MJEntityActionParamEntity[] {
         if (!this._params) {
             // load the data from the EntityActionEngine
             this._params = EntityActionEngineBase.Instance.Params?.filter(p => p.EntityActionID === this.ID) ?? [];

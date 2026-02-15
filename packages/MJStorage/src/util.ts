@@ -1,4 +1,4 @@
-import { FileStorageProviderEntity, FileStorageAccountEntity } from '@memberjunction/core-entities';
+import { MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { LogStatus, UserInfo } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
@@ -36,7 +36,7 @@ export interface OAuthStorageConfig {
  */
 export interface UserStorageDriverOptions {
   /** The file storage provider entity */
-  providerEntity: FileStorageProviderEntity;
+  providerEntity: MJFileStorageProviderEntity;
   /** The user's ID for loading their OAuth tokens */
   userID: string;
   /** Context user for database operations */
@@ -103,9 +103,9 @@ export interface UserContextOptions {
  */
 export interface AccountStorageDriverOptions {
   /** The file storage account entity (contains CredentialID) */
-  accountEntity: FileStorageAccountEntity;
+  accountEntity: MJFileStorageAccountEntity;
   /** The file storage provider entity (contains driver configuration) */
-  providerEntity: FileStorageProviderEntity;
+  providerEntity: MJFileStorageProviderEntity;
   /** Context user for database operations and credential access */
   contextUser: UserInfo;
 }
@@ -232,7 +232,7 @@ export async function initializeDriverWithAccountCredentials(options: AccountSto
  */
 export interface ExtendedUserContextOptions extends UserContextOptions {
   /** Optional account entity for enterprise credential model */
-  accountEntity?: FileStorageAccountEntity;
+  accountEntity?: MJFileStorageAccountEntity;
 }
 
 /**
@@ -247,7 +247,7 @@ export interface ExtendedUserContextOptions extends UserContextOptions {
  * @param userContext - Optional user context, may include accountEntity for enterprise model
  * @returns An initialized FileStorageBase driver
  */
-async function initializeDriver(providerEntity: FileStorageProviderEntity, userContext?: ExtendedUserContextOptions): Promise<FileStorageBase> {
+async function initializeDriver(providerEntity: MJFileStorageProviderEntity, userContext?: ExtendedUserContextOptions): Promise<FileStorageBase> {
   // Enterprise model: Use account-based credentials if accountEntity is provided
   if (userContext?.accountEntity) {
     return initializeDriverWithAccountCredentials({
@@ -334,7 +334,7 @@ async function initializeDriver(providerEntity: FileStorageProviderEntity, userC
  * ```
  */
 export const createUploadUrl = async <TInput extends { ID: string; Name: string; ProviderID: string; ContentType?: string; ProviderKey?: string }>(
-  providerEntity: FileStorageProviderEntity,
+  providerEntity: MJFileStorageProviderEntity,
   input: TInput,
   userContext?: UserContextOptions,
 ): Promise<{
@@ -387,7 +387,7 @@ export const createUploadUrl = async <TInput extends { ID: string; Name: string;
  * ```
  */
 export const createDownloadUrl = async (
-  providerEntity: FileStorageProviderEntity,
+  providerEntity: MJFileStorageProviderEntity,
   providerKeyOrName: string,
   userContext?: UserContextOptions,
 ): Promise<string> => {
@@ -430,7 +430,7 @@ export const createDownloadUrl = async (
  * ```
  */
 export const moveObject = async (
-  providerEntity: FileStorageProviderEntity,
+  providerEntity: MJFileStorageProviderEntity,
   oldProviderKeyOrName: string,
   newProviderKeyOrName: string,
   userContext?: UserContextOptions,
@@ -470,7 +470,7 @@ export const moveObject = async (
  * ```
  */
 export const copyObject = async (
-  providerEntity: FileStorageProviderEntity,
+  providerEntity: MJFileStorageProviderEntity,
   sourceProviderKeyOrName: string,
   destinationProviderKeyOrName: string,
   userContext?: UserContextOptions,
@@ -511,7 +511,7 @@ export const copyObject = async (
  * ```
  */
 export const deleteObject = async (
-  providerEntity: FileStorageProviderEntity,
+  providerEntity: MJFileStorageProviderEntity,
   providerKeyOrName: string,
   userContext?: UserContextOptions,
 ): Promise<boolean> => {
@@ -572,7 +572,7 @@ export const deleteObject = async (
  * ```
  */
 export const listObjects = async (
-  providerEntity: FileStorageProviderEntity,
+  providerEntity: MJFileStorageProviderEntity,
   prefix: string,
   delimiter: string = '/',
   userContext?: UserContextOptions,
@@ -661,8 +661,8 @@ export interface CopyBetweenProvidersOptions {
  * ```
  */
 export const copyObjectBetweenProviders = async (
-  sourceProviderEntity: FileStorageProviderEntity,
-  destinationProviderEntity: FileStorageProviderEntity,
+  sourceProviderEntity: MJFileStorageProviderEntity,
+  destinationProviderEntity: MJFileStorageProviderEntity,
   sourcePath: string,
   destinationPath: string,
   options?: CopyBetweenProvidersOptions,
@@ -841,7 +841,7 @@ export interface SearchAcrossProvidersOptions {
  * ```
  */
 export const searchAcrossProviders = async (
-  providerEntities: FileStorageProviderEntity[],
+  providerEntities: MJFileStorageProviderEntity[],
   query: string,
   options?: SearchAcrossProvidersOptions,
 ): Promise<MultiProviderSearchResult> => {
@@ -951,9 +951,9 @@ export const searchAcrossProviders = async (
  */
 export interface AccountSearchInput {
   /** The file storage account entity */
-  accountEntity: FileStorageAccountEntity;
+  accountEntity: MJFileStorageAccountEntity;
   /** The file storage provider entity for this account */
-  providerEntity: FileStorageProviderEntity;
+  providerEntity: MJFileStorageProviderEntity;
 }
 
 /**

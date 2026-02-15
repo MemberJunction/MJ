@@ -1,6 +1,6 @@
 import { ApplicationInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { NewUserSetup } from "../Config/config";
-import { UserEntity, UserRoleEntity, UserApplicationEntity, UserApplicationEntityEntity, ApplicationEntityEntityType } from "@memberjunction/core-entities";
+import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityEntityType } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { logError, logStatus } from "./status_logging";
 import { RegisterClass } from "@memberjunction/global";
@@ -29,7 +29,7 @@ export class CreateNewUserBase {
                     if (newUserSetup.Email && newUserSetup.Email.length > 0) {
                         logStatus("Attempting to create new user: " + newUserSetup.Email);
                         const md = new Metadata();
-                        const user = <UserEntity>await md.GetEntityObject('Users', currentUser);
+                        const user = <MJUserEntity>await md.GetEntityObject('MJ: Users', currentUser);
                         user.NewRecord();
                         user.Name = newUserSetup.UserName ? newUserSetup.UserName : newUserSetup.Email;
                         user.FirstName = newUserSetup.FirstName;
@@ -46,7 +46,7 @@ export class CreateNewUserBase {
                                     logError("   Role not found: " + roleName + ", skipping");
                                     continue;
                                 }
-                                const userRole = <UserRoleEntity>await md.GetEntityObject('User Roles', currentUser);
+                                const userRole = <MJUserRoleEntity>await md.GetEntityObject('MJ: User Roles', currentUser);
                                 userRole.NewRecord();
                                 userRole.UserID = user.ID;
                                 userRole.RoleID = roleID;
@@ -69,7 +69,7 @@ export class CreateNewUserBase {
                                         continue;
                                     }
 
-                                    const userApplication: UserApplicationEntity = await md.GetEntityObject<UserApplicationEntity>('User Applications', currentUser);
+                                    const userApplication: MJUserApplicationEntity = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', currentUser);
                                     userApplication.NewRecord();
                                     userApplication.UserID = user.ID;
                                     userApplication.ApplicationID = application.ID;
@@ -79,10 +79,10 @@ export class CreateNewUserBase {
                                     if(userApplicationSaveResult){
                                         logStatus(`Created User Application ${appName} for new user ${user.Name}`);
                                         
-                                        //now create a UserApplicationEntity records for each entity in the application
+                                        //now create a MJUserApplicationEntity records for each entity in the application
                                         const rv: RunView = new RunView();
-                                        const rvResult: RunViewResult<ApplicationEntityEntityType> = await rv.RunView({
-                                            EntityName: 'Application Entities',
+                                        const rvResult: RunViewResult<MJApplicationEntityEntityType> = await rv.RunView({
+                                            EntityName: 'MJ: Application Entities',
                                             ExtraFilter: `ApplicationID = '${application.ID}' and DefaultForNewUser = 1`,
                                         }, currentUser);
 
@@ -94,7 +94,7 @@ export class CreateNewUserBase {
                                         LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${appName} for new user ${user.Name}`);
 
                                         for(const [index, appEntity] of rvResult.Results.entries()){
-                                            const userAppEntity: UserApplicationEntityEntity = await md.GetEntityObject<UserApplicationEntityEntity>('User Application Entities', currentUser);
+                                            const userAppEntity: MJUserApplicationEntityEntity = await md.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', currentUser);
                                             userAppEntity.NewRecord();
                                             userAppEntity.UserApplicationID = userApplication.ID;
                                             userAppEntity.EntityID = appEntity.EntityID!;

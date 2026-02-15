@@ -10,7 +10,7 @@ import {
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata } from '@memberjunction/core';
-import { ListEntity, ListCategoryEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
 import { ListManagementService } from '../../services/list-management.service';
 import {
   ListManagementDialogConfig,
@@ -81,7 +81,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
   // Data
   allLists: ListItemViewModel[] = [];
   filteredLists: ListItemViewModel[] = [];
-  categories: ListCategoryEntity[] = [];
+  categories: MJListCategoryEntity[] = [];
 
   // Create form state
   newListName = '';
@@ -92,7 +92,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
   private originalMembership = new Map<string, boolean>();
   public addedToLists: Set<string> = new Set();
   public removedFromLists: Set<string> = new Set();
-  public newlyCreatedLists: ListEntity[] = [];
+  public newlyCreatedLists: MJListEntity[] = [];
 
   // Cleanup
   private destroy$ = new Subject<void>();

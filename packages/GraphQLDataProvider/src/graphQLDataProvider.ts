@@ -314,8 +314,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
             const u = this.ConvertBackToMJFields(d.CurrentUser);
-            const roles = u.UserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
-            u.UserRoles_UserIDArray = roles;
+            const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
+            u.MJUserRoles_UserIDArray = roles;
             return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
     }
@@ -1181,7 +1181,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async GetRecordChanges(entityName: string, primaryKey: CompositeKey): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
-                EntityName: 'Record Changes',
+                EntityName: 'MJ: Record Changes',
                 ExtraFilter: `RecordID = '${primaryKey.Values()}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
@@ -2169,7 +2169,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        UserRoles_UserIDArray {
+        MJUserRoles_UserIDArray {
             ${this.userRoleInfoString()}
         }
     }
@@ -2664,6 +2664,50 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         catch (e) {
             LogError(`FindISAChildEntity failed for ${entityInfo.Name}: ${e}`);
             return null;
+        }
+    }
+
+    /**
+     * Discovers ALL IS-A child entities that have records matching the given PK.
+     * Used for overlapping subtype parents (AllowMultipleSubtypes = true).
+     * Calls the server-side FindISAChildEntities resolver via GraphQL.
+     *
+     * @param entityInfo The parent entity to check children for
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user (unused on client, present for interface parity)
+     * @returns Array of child entity names found (empty if none)
+     */
+    public async FindISAChildEntities(
+        entityInfo: EntityInfo,
+        recordPKValue: string,
+        contextUser?: UserInfo
+    ): Promise<{ ChildEntityName: string }[]> {
+        if (!entityInfo.IsParentType) return [];
+
+        const gql = `query FindISAChildEntities($EntityName: String!, $RecordID: String!) {
+            FindISAChildEntities(EntityName: $EntityName, RecordID: $RecordID) {
+                Success
+                ChildEntityNames
+                ErrorMessage
+            }
+        }`;
+
+        try {
+            const result = await this.ExecuteGQL(gql, {
+                EntityName: entityInfo.Name,
+                RecordID: recordPKValue
+            });
+
+            if (result?.FindISAChildEntities?.Success && result.FindISAChildEntities.ChildEntityNames) {
+                return result.FindISAChildEntities.ChildEntityNames.map(
+                    (name: string) => ({ ChildEntityName: name })
+                );
+            }
+            return [];
+        }
+        catch (e) {
+            LogError(`FindISAChildEntities failed for ${entityInfo.Name}: ${e}`);
+            return [];
         }
     }
 }

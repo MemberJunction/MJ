@@ -2,7 +2,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
 import { UserInfo, Metadata, RunView, BaseEntity } from "@memberjunction/core";
-import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-entities";
+import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(AutotagBase, 'AutotagEntity')
 export class AutotagEntity extends AutotagBase {
@@ -19,13 +19,13 @@ export class AutotagEntity extends AutotagBase {
     public async Autotag(contextUser: UserInfo): Promise<void> {
         this.contextUser = contextUser;
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Entity', this.contextUser);
-        const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
-        const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
+        const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
+        const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
         await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
     }
 
-    public async SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]> {
-        const contentItemsToProcess: ContentItemEntity[] = []
+    public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
+        const contentItemsToProcess: MJContentItemEntity[] = []
 
         for (const contentSource of contentSources) {
 
@@ -49,7 +49,7 @@ export class AutotagEntity extends AutotagBase {
                 URL: contentSource.URL
             }
             
-            const contentItems: ContentItemEntity[] = await this.getNewOrModifiedContentItems(contentSourceParams, this.contextUser);
+            const contentItems: MJContentItemEntity[] = await this.getNewOrModifiedContentItems(contentSourceParams, this.contextUser);
             if (contentItems && contentItems.length > 0) {
                 contentItemsToProcess.push(...contentItems);
             }
@@ -62,7 +62,7 @@ export class AutotagEntity extends AutotagBase {
         return contentItemsToProcess;
     }
 
-    public async getNewOrModifiedContentItems(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<ContentItemEntity[]> {
+    public async getNewOrModifiedContentItems(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<MJContentItemEntity[]> {
         const lastRunDate: Date = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, contextUser)
         const lastRunDateISOString: string = lastRunDate.toISOString();
         
@@ -78,7 +78,7 @@ export class AutotagEntity extends AutotagBase {
 
         const entityResults: BaseEntity[] = results.Results
         if (results.Results && results.Results.length > 0) {
-            const contentItems: ContentItemEntity[] = await this.setContentItemsFromEntityResults(entityResults, contentSourceParams, lastRunDate);
+            const contentItems: MJContentItemEntity[] = await this.setContentItemsFromEntityResults(entityResults, contentSourceParams, lastRunDate);
             return contentItems;
         }
         else {
@@ -86,8 +86,8 @@ export class AutotagEntity extends AutotagBase {
         }
     }
 
-    public async setContentItemsFromEntityResults(results: BaseEntity[], contentSourceParams: ContentSourceParams, lastRunDate: Date): Promise<ContentItemEntity[]> {
-        const contentItems: ContentItemEntity[] = [];
+    public async setContentItemsFromEntityResults(results: BaseEntity[], contentSourceParams: ContentSourceParams, lastRunDate: Date): Promise<MJContentItemEntity[]> {
+        const contentItems: MJContentItemEntity[] = [];
         for (const result of results) {
             const lastUpdatedAt = result.Get('__mj_UpdatedAt');
             if (lastUpdatedAt > lastRunDate) {
@@ -101,10 +101,10 @@ export class AutotagEntity extends AutotagBase {
         return contentItems;
     }
 
-    public async setNewContentItem(item: BaseEntity, contentSourceParams: ContentSourceParams): Promise<ContentItemEntity> {
+    public async setNewContentItem(item: BaseEntity, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> {
         const md = new Metadata();
         const text = this.getTextFromEntityResult(item);
-        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+        const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
         contentItem.NewRecord();
         contentItem.ContentSourceID = contentSourceParams.contentSourceID;
         contentItem.Name = contentSourceParams.name

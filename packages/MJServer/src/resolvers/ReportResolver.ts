@@ -1,7 +1,7 @@
 import { EntitySaveOptions, IRunReportProvider, Metadata, RunReport } from '@memberjunction/core';
 import { Arg, Ctx, Field, Int, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { ConversationDetailEntity, ReportEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJReportEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -84,10 +84,10 @@ export class ReportResolverExtended extends ResolverBase {
       const u = UserCache.Users.find((u) => u.Email?.trim().toLowerCase() === userPayload?.email?.trim().toLowerCase());
       if (!u) throw new Error('Unable to find user');
 
-      const cde = md.Entities.find((e) => e.Name === 'Conversation Details');
+      const cde = md.Entities.find((e) => e.Name === 'MJ: Conversation Details');
       if (!cde) throw new Error('Unable to find Conversation Details Entity metadata');
 
-      const cd = md.Entities.find((e) => e.Name === 'Conversations');
+      const cd = md.Entities.find((e) => e.Name === 'MJ: Conversations');
       if (!cd) throw new Error('Unable to find Conversations Entity metadata');
 
       const sql = `SELECT
@@ -106,7 +106,7 @@ export class ReportResolverExtended extends ResolverBase {
       if (!result || !result.recordset || result.recordset.length === 0) throw new Error('Unable to retrieve converation details');
       const skipData = <SkipAPIAnalysisCompleteResponse>JSON.parse(result.recordset[0].Message);
 
-      const report = await md.GetEntityObject<ReportEntity>('Reports', u);
+      const report = await md.GetEntityObject<MJReportEntity>('MJ: Reports', u);
       report.NewRecord();
       // support the legacy report title as old conversation details had a reportTitle property
       // but the new SkipData object has a title property, so favor the title property

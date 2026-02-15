@@ -266,8 +266,8 @@ ${fields}
       // so that we have a record of what was generated
       // we need to update the database for each of the generated field validators where there was a change in the CHECK constraint for the generation results
       const md = new Metadata();
-      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'Entity Fields')?.ID;
-      const entitiesEntityID = md.Entities.find(e=>e.Name === 'Entities')?.ID;
+      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'MJ: Entity Fields')?.ID;
+      const entitiesEntityID = md.Entities.find(e=>e.Name === 'MJ: Entities')?.ID;
 
       if (!skipDBUpdate) {
         // only do the database update stuff if we are not skipping the DB update, of course the .justGenerated flag SHOULD be false in all of the records

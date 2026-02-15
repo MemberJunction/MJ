@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 
 /**
  * Reusable task widget component that displays task information
@@ -349,12 +349,12 @@ import { TaskEntity } from '@memberjunction/core-entities';
   `]
 })
 export class TaskWidgetComponent {
-  @Input() task!: TaskEntity;
+  @Input() task!: MJTaskEntity;
   @Input() clickable: boolean = false;
   @Input() compact: boolean = false;
   @Input() showProgress: boolean = true;
   @Input() showDuration: boolean = true;
-  @Output() taskClick = new EventEmitter<TaskEntity>();
+  @Output() taskClick = new EventEmitter<MJTaskEntity>();
 
   get isActive(): boolean {
     return this.task.Status === 'In Progress';

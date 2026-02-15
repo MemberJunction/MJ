@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/skip-types
 
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-core-plus@4.4.0
+  - @memberjunction/interactive-component-types@4.4.0
+  - @memberjunction/data-context@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes

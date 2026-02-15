@@ -115,7 +115,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       id: 'applications',
       tabId: 'applications',
       sectionId: 'applications',
-      label: 'Application Settings',
+      label: 'MJ: Application Settings',
       keywords: ['applications', 'apps', 'switcher', 'order', 'visibility', 'menu'],
       description: 'Choose which applications appear in your app switcher'
     },

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { WindowModule } from '@progress/kendo-angular-dialog';
 import { ButtonModule } from '@progress/kendo-angular-buttons';
 import { UserInfo } from '@memberjunction/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService, CollectionPermission, PermissionSet } from '../../services/collection-permission.service';
 import { UserPickerComponent, UserSearchResult } from '../shared/user-picker.component';
 
@@ -222,7 +222,7 @@ interface PermissionDisplay extends CollectionPermission {
 })
 export class CollectionShareModalComponent implements OnInit, OnChanges {
     @Input() isOpen: boolean = false;
-    @Input() collection: CollectionEntity | null = null;
+    @Input() collection: MJCollectionEntity | null = null;
     @Input() currentUser!: UserInfo;
     @Input() currentUserPermissions: CollectionPermission | null = null;
 

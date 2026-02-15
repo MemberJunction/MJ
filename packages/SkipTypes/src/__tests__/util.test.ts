@@ -109,7 +109,7 @@ describe('SkipTypes util', () => {
     it('should map relationship properties', () => {
       const re = {
         EntityID: 'ent-1',
-        Entity: 'Users',
+        Entity: 'MJ: Users',
         EntityBaseView: 'vwUsers',
         EntityKeyField: 'ID',
         RelatedEntityID: 'ent-2',
@@ -123,7 +123,7 @@ describe('SkipTypes util', () => {
       };
 
       const result = MapEntityRelationshipInfoToSkipEntityRelationshipInfo(re as never);
-      expect(result.entity).toBe('Users');
+      expect(result.entity).toBe('MJ: Users');
       expect(result.relatedEntity).toBe('Orders');
       expect(result.type).toBe('OneToMany');
     });

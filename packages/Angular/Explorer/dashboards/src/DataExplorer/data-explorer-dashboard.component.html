@@ -57,7 +57,7 @@
       <div class="header-left">
         @if (selectedEntity) {
           <i [class]="getEntityIcon(selectedEntity)" class="entity-icon"></i>
-          <h2 class="entity-title">{{ selectedEntity.Name }}</h2>
+          <h2 class="entity-title">{{ selectedEntity.DisplayNameOrName }}</h2>
           @if (debouncedFilterText && filteredRecordCount !== totalRecordCount) {
             <span class="record-count">{{ filteredRecordCount | number }} of {{ totalRecordCount | number }} records</span>
           } @else {
@@ -339,12 +339,12 @@
                           <div
                             class="entity-list-item"
                             (click)="onEntitySelected(entity)"
-                            [title]="entity.Description || entity.Name">
+                            [title]="entity.Description || entity.DisplayNameOrName">
                             <div class="entity-list-icon">
                               <i [class]="getEntityIcon(entity)"></i>
                             </div>
                             <div class="entity-list-content">
-                              <span class="entity-list-name">{{ entity.Name }}</span>
+                              <span class="entity-list-name">{{ entity.DisplayNameOrName }}</span>
                             </div>
                             <button
                               class="favorite-btn"
@@ -371,12 +371,12 @@
                           <div
                             class="entity-list-item"
                             (click)="onEntitySelected(entity)"
-                            [title]="entity.Description || entity.Name">
+                            [title]="entity.Description || entity.DisplayNameOrName">
                             <div class="entity-list-icon">
                               <i [class]="getEntityIcon(entity)"></i>
                             </div>
                             <div class="entity-list-content">
-                              <span class="entity-list-name">{{ entity.Name }}</span>
+                              <span class="entity-list-name">{{ entity.DisplayNameOrName }}</span>
                             </div>
                             <button
                               class="favorite-btn favorited"
@@ -434,12 +434,12 @@
                   <div
                     class="entity-card"
                     (click)="onEntitySelected(entity)"
-                    [title]="entity.Description || entity.Name">
+                    [title]="entity.Description || entity.DisplayNameOrName">
                     <div class="entity-card-icon">
                       <i [class]="getEntityIcon(entity)"></i>
                     </div>
                     <div class="entity-card-content">
-                      <h4 class="entity-card-title">{{ entity.Name }}</h4>
+                      <h4 class="entity-card-title">{{ entity.DisplayNameOrName }}</h4>
                       @if (entity.Description) {
                         <p class="entity-card-description">{{ entity.Description }}</p>
                       }

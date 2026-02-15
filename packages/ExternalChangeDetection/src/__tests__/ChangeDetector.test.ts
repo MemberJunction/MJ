@@ -90,7 +90,7 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-  RecordChangeEntity: class {
+  MJRecordChangeEntity: class {
     ID = 'rc-1';
     EntityID = '';
     RecordID = '';
@@ -106,7 +106,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     ReplayRunID = '';
     Save = vi.fn().mockResolvedValue(true);
   },
-  RecordChangeReplayRunEntity: class {
+  MJRecordChangeReplayRunEntity: class {
     ID = 'run-1';
     StartedAt: Date | null = null;
     EndedAt: Date | null = null;

@@ -1,9 +1,9 @@
 import { BaseEntity, EntitySaveOptions } from "@memberjunction/core";
-import { ScheduledActionEntity, ScheduledActionParamEntity } from "../generated/entity_subclasses";
+import { MJScheduledActionEntity, MJScheduledActionParamEntity } from "../generated/entity_subclasses";
 import { RegisterClass } from "@memberjunction/global";
 
-@RegisterClass(BaseEntity, 'Scheduled Actions')
-export class ScheduledActionEntityExtended extends ScheduledActionEntity {
+@RegisterClass(BaseEntity, 'MJ: Scheduled Actions')
+export class ScheduledActionEntityExtended extends MJScheduledActionEntity {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // The purpose of this override is to generate the the CronExpression field in the ScheduledAction entity
         // based on the settings we have for Type/IntervalDays/DayOfWeek/DayOfMonth/Month
@@ -26,11 +26,11 @@ export class ScheduledActionEntityExtended extends ScheduledActionEntity {
         return await super.Save(options);
     }
 
-    private _params: ScheduledActionParamEntity[] = [];
-    public get Params(): ScheduledActionParamEntity[] {
+    private _params: MJScheduledActionParamEntity[] = [];
+    public get Params(): MJScheduledActionParamEntity[] {
         return this._params;
     }
-    public set Params(value: ScheduledActionParamEntity[]) {
+    public set Params(value: MJScheduledActionParamEntity[]) {
         this._params = value;
     }
 }

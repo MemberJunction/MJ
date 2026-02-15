@@ -7,7 +7,7 @@
 import { AuthorizationError } from 'type-graphql';
 import { GetAPIKeyEngine, AuthorizationResult, AuthorizationRequest } from '@memberjunction/api-keys';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIApplicationEntity } from '@memberjunction/core-entities';
+import { MJAPIKeyEntity, MJAPIApplicationEntity } from '@memberjunction/core-entities';
 
 /**
  * Application names used by the API Key authorization system
@@ -94,7 +94,7 @@ export async function CheckAPIKeyScope(
 
     // Get the API key to find the user ID
     const rv = new RunView();
-    const keyResult = await rv.RunView<APIKeyEntity>({
+    const keyResult = await rv.RunView<MJAPIKeyEntity>({
         EntityName: 'MJ: API Keys',
         ExtraFilter: `ID='${apiKeyId}'`,
         ResultType: 'entity_object'
@@ -115,7 +115,7 @@ export async function CheckAPIKeyScope(
     const apiKey = keyResult.Results[0];
 
     // Get the application by name
-    const appResult = await rv.RunView<APIApplicationEntity>({
+    const appResult = await rv.RunView<MJAPIApplicationEntity>({
         EntityName: 'MJ: API Applications',
         ExtraFilter: `Name='${applicationName}'`,
         ResultType: 'entity_object'
@@ -222,7 +222,7 @@ export async function CheckAPIKeyScopeAndLog(
     const rv = new RunView();
 
     // Get the API key
-    const keyResult = await rv.RunView<APIKeyEntity>({
+    const keyResult = await rv.RunView<MJAPIKeyEntity>({
         EntityName: 'MJ: API Keys',
         ExtraFilter: `ID='${apiKeyId}'`,
         ResultType: 'entity_object'
@@ -243,7 +243,7 @@ export async function CheckAPIKeyScopeAndLog(
     const apiKey = keyResult.Results[0];
 
     // Get the application
-    const appResult = await rv.RunView<APIApplicationEntity>({
+    const appResult = await rv.RunView<MJAPIApplicationEntity>({
         EntityName: 'MJ: API Applications',
         ExtraFilter: `Name='${applicationName}'`,
         ResultType: 'entity_object'

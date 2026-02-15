@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges } from '@angular/core';
 
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
@@ -263,7 +263,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
   `]
 })
 export class TaskDetailPanelComponent implements OnInit, OnChanges {
-  @Input() task!: TaskEntity;
+  @Input() task!: MJTaskEntity;
   @Input() agentRunId: string | null = null;
   @Output() closePanel = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
@@ -304,7 +304,7 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
   public openAgent(): void {
     if (this.task.AgentID) {
       this.openEntityRecord.emit({
-        entityName: 'AI Agents',
+        entityName: 'MJ: AI Agents',
         recordId: this.task.AgentID
       });
     }

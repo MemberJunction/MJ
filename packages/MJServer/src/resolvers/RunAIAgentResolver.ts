@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { ConversationDetailEntity, ConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIAgentEntityExtended, AIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -646,8 +646,8 @@ export class RunAIAgentResolver extends ResolverBase {
             const agentName = agent?.Name || 'Agent';
 
             // Load conversation detail to get conversation info
-            const detail = await md.GetEntityObject<ConversationDetailEntity>(
-                'Conversation Details',
+            const detail = await md.GetEntityObject<MJConversationDetailEntity>(
+                'MJ: Conversation Details',
                 contextUser
             );
             if (!(await detail.Load(conversationDetailId))) {
@@ -815,8 +815,8 @@ export class RunAIAgentResolver extends ResolverBase {
         const attachmentService = getAttachmentService();
 
         // Load the current conversation detail to get the conversation ID
-        const currentDetail = await md.GetEntityObject<ConversationDetailEntity>(
-            'Conversation Details',
+        const currentDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+            'MJ: Conversation Details',
             contextUser
         );
         if (!await currentDetail.Load(conversationDetailId)) {
@@ -826,8 +826,8 @@ export class RunAIAgentResolver extends ResolverBase {
         const conversationId = currentDetail.ConversationID;
 
         // Load recent conversation details (messages) for this conversation
-        const detailsResult = await rv.RunView<ConversationDetailEntity>({
-            EntityName: 'Conversation Details',
+        const detailsResult = await rv.RunView<MJConversationDetailEntity>({
+            EntityName: 'MJ: Conversation Details',
             ExtraFilter: `ConversationID='${conversationId}'`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: maxMessages,

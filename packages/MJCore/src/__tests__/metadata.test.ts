@@ -99,10 +99,10 @@ describe('Metadata', () => {
             Metadata.Provider = mockProvider as never;
             const md = new Metadata();
 
-            await md.GetEntityObject('Users');
+            await md.GetEntityObject('MJ: Users');
 
             // GetEntityObject always passes 3 args: (entityName, loadKey, contextUser)
-            expect(mockProvider.GetEntityObject).toHaveBeenCalledWith('Users', undefined, undefined);
+            expect(mockProvider.GetEntityObject).toHaveBeenCalledWith('MJ: Users', undefined, undefined);
         });
 
         it('should pass contextUser to provider', async () => {
@@ -111,14 +111,14 @@ describe('Metadata', () => {
             // contextUser must have the shape: ID, Name, Email, UserRoles
             const contextUser = { ID: 'u-1', Name: 'TestUser', Email: 'test@test.com', UserRoles: [] } as never;
 
-            await md.GetEntityObject('Users', contextUser);
+            await md.GetEntityObject('MJ: Users', contextUser);
 
             // When called with (entityName, contextUser), the overload resolves to
             // provider.GetEntityObject(entityName, undefined, wrappedContextUser)
             // contextUser gets wrapped into a UserInfo instance, so check positionally
             expect(mockProvider.GetEntityObject).toHaveBeenCalledTimes(1);
             const callArgs = mockProvider.GetEntityObject.mock.calls[0];
-            expect(callArgs[0]).toBe('Users');
+            expect(callArgs[0]).toBe('MJ: Users');
             expect(callArgs[1]).toBeUndefined();
             // Third arg is a UserInfo wrapping the contextUser object
             expect(callArgs[2]).toBeDefined();

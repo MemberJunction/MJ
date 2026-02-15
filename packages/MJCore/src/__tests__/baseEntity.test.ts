@@ -16,7 +16,7 @@ function createMockFieldInfo(overrides: Partial<EntityFieldInfo> = {}): EntityFi
         SkipValidation: false,
         AllowsNull: true,
         DefaultValue: null,
-        Entity: 'TestEntity',
+        Entity: 'MJTestEntity',
         IsSpecialDateField: false,
         ...overrides
     };

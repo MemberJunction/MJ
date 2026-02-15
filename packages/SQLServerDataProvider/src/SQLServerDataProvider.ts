@@ -84,13 +84,13 @@ import { QueryParameterProcessor } from './queryParameterProcessor';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import {
-  AuditLogEntity,
-  DuplicateRunEntity,
-  EntityAIActionEntity,
-  ListEntity,
-  RecordMergeDeletionLogEntity,
-  RecordMergeLogEntity,
-  UserFavoriteEntity,
+  MJAuditLogEntity,
+  MJDuplicateRunEntity,
+  MJEntityAIActionEntity,
+  MJListEntity,
+  MJRecordMergeDeletionLogEntity,
+  MJRecordMergeLogEntity,
+  MJUserFavoriteEntity,
   UserViewEntityExtended,
   ViewInfo,
 } from '@memberjunction/core-entities';
@@ -2648,7 +2648,7 @@ export class SQLServerDataProvider
     recordId: any | null,
     auditLogDescription: string | null,
     saveOptions: EntitySaveOptions
-  ): Promise<AuditLogEntity> {
+  ): Promise<MJAuditLogEntity> {
     try {
       const authorization = authorizationName
         ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase())
@@ -2660,7 +2660,7 @@ export class SQLServerDataProvider
         throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
       }
 
-      const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
+      const auditLog = await this.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = user.ID;
       auditLog.AuditLogTypeID = auditLogType.ID;
@@ -2738,7 +2738,7 @@ export class SQLServerDataProvider
 
       // if we're here that means we need to invert the status, which either means creating a record or deleting a record
       const e = this.Entities.find((e) => e.Name === entityName);
-      const ufEntity = <UserFavoriteEntity>await this.GetEntityObject('User Favorites', contextUser || this.CurrentUser);
+      const ufEntity = <MJUserFavoriteEntity>await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
       if (currentFavoriteId !== null) {
         // delete the record since we are setting isFavorite to FALSE
         await ufEntity.Load(currentFavoriteId);
@@ -2924,14 +2924,14 @@ export class SQLServerDataProvider
       throw new Error('User context is required to get record duplicates.');
     }
 
-    const listEntity: ListEntity = await this.GetEntityObject<ListEntity>('Lists');
+    const listEntity: MJListEntity = await this.GetEntityObject<MJListEntity>('MJ: Lists');
     listEntity.ContextCurrentUser = contextUser;
     const success = await listEntity.Load(params.ListID);
     if (!success) {
       throw new Error(`List with ID ${params.ListID} not found.`);
     }
 
-    const duplicateRun: DuplicateRunEntity = await this.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
+    const duplicateRun: MJDuplicateRunEntity = await this.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
     duplicateRun.NewRecord();
     duplicateRun.EntityID = params.EntityID;
     duplicateRun.StartedByUserID = contextUser.ID;
@@ -2966,7 +2966,7 @@ export class SQLServerDataProvider
       Request: request,
       OverallStatus: null,
     };
-    const mergeRecordLog: RecordMergeLogEntity = await this.StartMergeLogging(request, result, contextUser);
+    const mergeRecordLog: MJRecordMergeLogEntity = await this.StartMergeLogging(request, result, contextUser);
     try {
       /*
                 we will follow this process...
@@ -3050,10 +3050,10 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<RecordMergeLogEntity> {
+  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<MJRecordMergeLogEntity> {
     try {
       // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
-      const recordMergeLog = <RecordMergeLogEntity>await this.GetEntityObject('Record Merge Logs', contextUser);
+      const recordMergeLog = <MJRecordMergeLogEntity>await this.GetEntityObject('MJ: Record Merge Logs', contextUser);
       const entity = this.Entities.find((e) => e.Name === request.EntityName);
       if (!entity) throw new Error(`Entity ${result.Request.EntityName} not found in metadata`);
       if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
@@ -3076,7 +3076,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async CompleteMergeLogging(recordMergeLog: RecordMergeLogEntity, result: RecordMergeResult, contextUser?: UserInfo) {
+  protected async CompleteMergeLogging(recordMergeLog: MJRecordMergeLogEntity, result: RecordMergeResult, contextUser?: UserInfo) {
     try {
       // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
       if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
@@ -3089,7 +3089,7 @@ export class SQLServerDataProvider
       if (await recordMergeLog.Save()) {
         // top level saved, now let's create the deletion detail records for each of the records that were merged
         for (const d of result.RecordStatus) {
-          const recordMergeDeletionLog = <RecordMergeDeletionLogEntity>await this.GetEntityObject('Record Merge Deletion Logs', contextUser);
+          const recordMergeDeletionLog = <MJRecordMergeDeletionLogEntity>await this.GetEntityObject('MJ: Record Merge Deletion Logs', contextUser);
           recordMergeDeletionLog.NewRecord();
           recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
           recordMergeDeletionLog.DeletedRecordID = d.CompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
@@ -3135,7 +3135,7 @@ export class SQLServerDataProvider
    *           Fields marked with Encrypt=true will have their values encrypted
    *           before being included in the SQL statement.
    */
-  private async GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<{ fullSQL: string; simpleSQL: string }> {
+  private async GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<{ fullSQL: string; simpleSQL: string; overlappingChangeData?: { changesJSON: string; changesDescription: string } }> {
     // Generate the stored procedure parameters - now returns an object with structured SQL
     // This is async because it may need to encrypt field values
     const spParams = await this.generateSPParams(entity, !bNewRecord, user);
@@ -3149,8 +3149,9 @@ export class SQLServerDataProvider
       sSimpleSQL = execSQL;
     }
     
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
+    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
     let sSQL: string = '';
+    let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
       let oldData = null;
@@ -3160,7 +3161,22 @@ export class SQLServerDataProvider
 
       if (!bNewRecord) oldData = entity.GetAll(true); // get all the OLD values, only do for existing records, for new records, not relevant
 
-      const logRecordChangeSQL = this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
+      // Capture the diff for overlapping subtype Record Change propagation.
+      // Must happen before finalizeSave() resets OldValues, since the diff would be lost.
+      // Returned to Save() which handles propagation — this is a backend-only concern.
+      const newData = entity.GetAll(false);
+      if (!bNewRecord && oldData) {
+        const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
+        const diffKeys = diffChanges ? Object.keys(diffChanges) : [];
+        if (diffKeys.length > 0) {
+          overlappingChangeData = {
+            changesJSON: JSON.stringify(diffChanges),
+            changesDescription: this.CreateUserDescriptionOfChanges(diffChanges)
+          };
+        }
+      }
+
+      const logRecordChangeSQL = this.GetLogRecordChangeSQL(newData, oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
       if (logRecordChangeSQL === null) {
         // if we don't have any record changes to log, just return the simple SQL to run which will do nothing but update __mj_UpdatedAt
         // this can happen if a subclass overrides the Dirty() flag to make the object dirty due to factors outside of the
@@ -3203,7 +3219,7 @@ export class SQLServerDataProvider
       // not doing track changes for this entity, keep it simple
       sSQL = sSimpleSQL;
     }
-    return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
+    return { fullSQL: sSQL, simpleSQL: sSimpleSQL, overlappingChangeData };
   }
 
   /**
@@ -3214,7 +3230,7 @@ export class SQLServerDataProvider
    * @returns Array of AI action entities
    * @internal
    */
-  protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): EntityAIActionEntity[] {
+  protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): MJEntityAIActionEntity[] {
     return AIEngine.Instance.EntityAIActions.filter(
       (a) => a.EntityID === entityInfo.ID && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'),
     );
@@ -3472,6 +3488,23 @@ export class SQLServerDataProvider
               if (options.SkipEntityActions !== true) this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
 
               entityResult.Success = true;
+
+              // IS-A overlapping subtypes: propagate Record Change entries to sibling branches.
+              // Runs after this entity's save succeeds. Skips the active child branch (if this
+              // is a parent save in a chain) so siblings don't get duplicate entries.
+              if (sqlDetails.overlappingChangeData
+                  && entity.EntityInfo.AllowMultipleSubtypes
+                  && entity.EntityInfo.TrackRecordChanges) {
+                await this.PropagateRecordChangesToSiblings(
+                  entity.EntityInfo,
+                  sqlDetails.overlappingChangeData,
+                  entity.PrimaryKey.Values(),
+                  user?.ID ?? '',
+                  options.ISAActiveChildEntityName,
+                  entity.ProviderTransaction as sql.Transaction ?? undefined
+                );
+              }
+
               return result[0];
             } else {
               if (bNewRecord) {
@@ -4164,7 +4197,7 @@ export class SQLServerDataProvider
       return `@${f.CodeName}=${quotes}${kv.Value}${quotes}`;
     }).join(', ');
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
+    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
 
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
@@ -5488,9 +5521,39 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Discovers ALL IS-A child entities that have records with the given primary key.
+   * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
+   * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
+   *
+   * @param entityInfo The parent entity whose children to search
+   * @param recordPKValue The primary key value to find in child tables
+   * @param contextUser Optional context user for audit/permission purposes
+   * @returns Array of child entity names found (empty if none)
+   */
+  public async FindISAChildEntities(
+    entityInfo: EntityInfo,
+    recordPKValue: string,
+    contextUser?: UserInfo
+  ): Promise<{ ChildEntityName: string }[]> {
+    const childEntities = entityInfo.ChildEntities;
+    if (childEntities.length === 0) return [];
+
+    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
+    if (!unionSQL) return [];
+
+    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
+    if (results && results.length > 0) {
+      return results
+        .filter((r: Record<string, string>) => r.EntityName)
+        .map((r: Record<string, string>) => ({ ChildEntityName: r.EntityName }));
+    }
+    return [];
+  }
+
+  /**
    * Builds a UNION ALL query that checks each child entity's base table for a record
    * with the given primary key. Returns the first match (disjoint subtypes guarantee
-   * at most one result).
+   * at most one result) unless used with overlapping subtypes.
    */
   private buildChildDiscoverySQL(
     childEntities: EntityInfo[],
@@ -5510,6 +5573,145 @@ export class SQLServerDataProvider
 
     if (unionParts.length === 0) return '';
     return unionParts.join(' UNION ALL ');
+  }
+
+  /**************************************************************************
+   * IS-A Overlapping Subtype — Record Change Propagation
+   *
+   * When saving through one branch of an overlapping hierarchy, propagate
+   * ancestor-level Record Change entries to all active sibling branches.
+   * Executes as a single SQL batch within the active IS-A transaction.
+   **************************************************************************/
+
+  /**
+   * Propagates Record Change entries to sibling branches of an overlapping IS-A parent.
+   * Called from Save() after a successful save of an entity with AllowMultipleSubtypes.
+   * Generates a single SQL batch that creates Record Change entries for all child entities
+   * (and their sub-trees) except the active branch that triggered this parent save.
+   *
+   * @param parentInfo The overlapping parent entity's metadata
+   * @param changeData The diff data (changesJSON and changesDescription) from the save
+   * @param pkValue The shared primary key value
+   * @param userId The ID of the user performing the save
+   * @param activeChildEntityName The child entity that initiated this parent save (skipped).
+   *        Undefined when saving the parent directly — all children get propagated to.
+   * @param transaction The active IS-A transaction, or undefined for standalone saves
+   */
+  private async PropagateRecordChangesToSiblings(
+    parentInfo: EntityInfo,
+    changeData: { changesJSON: string; changesDescription: string },
+    pkValue: string,
+    userId: string,
+    activeChildEntityName: string | undefined,
+    transaction: sql.Transaction | undefined
+  ): Promise<void> {
+    const sqlParts: string[] = [];
+    let varIndex = 0;
+
+    const safePKValue = pkValue.replace(/'/g, "''");
+    const safeUserId = userId.replace(/'/g, "''");
+    const safeChangesJSON = changeData.changesJSON.replace(/'/g, "''");
+    const safeChangesDesc = changeData.changesDescription.replace(/'/g, "''");
+
+    for (const childInfo of parentInfo.ChildEntities) {
+      // Skip the active branch (the child that initiated the parent save).
+      // When activeChildEntityName is undefined (direct save on parent), propagate to ALL children.
+      if (activeChildEntityName && this.isEntityOrAncestorOf(childInfo, activeChildEntityName)) continue;
+
+      // Recursively enumerate this child's entire sub-tree from metadata
+      const subTree = this.getFullSubTree(childInfo);
+
+      for (const entityInTree of subTree) {
+        if (!entityInTree.TrackRecordChanges) continue;
+
+        const varName = `@_rc_prop_${varIndex++}`;
+        sqlParts.push(this.buildSiblingRecordChangeSQL(
+          varName,
+          entityInTree,
+          safeChangesJSON,
+          safeChangesDesc,
+          safePKValue,
+          safeUserId
+        ));
+      }
+    }
+
+    // Execute as single batch
+    if (sqlParts.length > 0) {
+      const batch = sqlParts.join('\n');
+      await this.ExecuteSQL(batch, undefined, {
+        connectionSource: transaction,
+        description: 'IS-A overlapping subtype Record Change propagation',
+        isMutation: true
+      });
+    }
+  }
+
+  /**
+   * Checks whether a given entity matches the target name, or is an ancestor
+   * of the target (i.e., the target is somewhere in its descendant sub-tree).
+   * Used to identify and skip the active branch during sibling propagation.
+   */
+  private isEntityOrAncestorOf(entityInfo: EntityInfo, targetName: string): boolean {
+    if (entityInfo.Name === targetName) return true;
+    for (const child of entityInfo.ChildEntities) {
+      if (this.isEntityOrAncestorOf(child, targetName)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Recursively enumerates an entity's entire sub-tree from metadata.
+   * No DB queries — uses EntityInfo.ChildEntities which is populated from metadata.
+   */
+  private getFullSubTree(entityInfo: EntityInfo): EntityInfo[] {
+    const result: EntityInfo[] = [entityInfo];
+    for (const child of entityInfo.ChildEntities) {
+      result.push(...this.getFullSubTree(child));
+    }
+    return result;
+  }
+
+  /**
+   * Generates a single block of SQL for one sibling entity in the Record Change
+   * propagation batch. Uses SELECT...FOR JSON to get the full record, then
+   * conditionally inserts a Record Change entry if the record exists.
+   */
+  private buildSiblingRecordChangeSQL(
+    varName: string,
+    entityInfo: EntityInfo,
+    safeChangesJSON: string,
+    safeChangesDesc: string,
+    safePKValue: string,
+    safeUserId: string
+  ): string {
+    const schema = entityInfo.SchemaName || '__mj';
+    const view = entityInfo.BaseView;
+    const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+    const safeEntityName = entityInfo.Name.replace(/'/g, "''");
+
+    // Build RecordID in CompositeKey format: "FieldCodeName|Value" (or "F1|V1||F2|V2" for composite PKs)
+    // Must match the format used by the main save flow (concatPKIDString in GetSaveSQLWithDetails)
+    const recordID = entityInfo.PrimaryKeys
+      .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
+      .join(CompositeKey.DefaultFieldDelimiter);
+
+    return `
+DECLARE ${varName} NVARCHAR(MAX) = (
+    SELECT * FROM [${schema}].[${view}] WHERE [${pkName}] = '${safePKValue}'
+    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+);
+IF ${varName} IS NOT NULL
+    EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
+        @EntityName='${safeEntityName}',
+        @RecordID='${recordID}',
+        @UserID='${safeUserId}',
+        @Type='Update',
+        @ChangesJSON='${safeChangesJSON}',
+        @ChangesDescription='${safeChangesDesc}',
+        @FullRecordJSON=${varName},
+        @Status='Complete',
+        @Comments=NULL;`;
   }
 
   public async BeginTransaction() {

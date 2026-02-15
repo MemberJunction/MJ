@@ -1,6 +1,6 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { ConversationDetailRatingEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailRatingEntity } from '@memberjunction/core-entities';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
 
 /**
@@ -155,7 +155,7 @@ export class ConversationMessageRatingComponent implements OnInit {
     /**
      * Process ratings data (from query or API)
      */
-    private ProcessRatings(ratings: RatingJSON[] | ConversationDetailRatingEntity[]): void {
+    private ProcessRatings(ratings: RatingJSON[] | MJConversationDetailRatingEntity[]): void {
         this.allRatings = ratings as RatingJSON[];
         this.thumbsUpCount = ratings.filter(r => r.Rating ? r.Rating >= 8 : false).length;
         this.thumbsDownCount = ratings.filter(r => r.Rating ? r.Rating <= 3 : false).length;
@@ -194,7 +194,7 @@ export class ConversationMessageRatingComponent implements OnInit {
     async LoadRatings(): Promise<void> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ConversationDetailRatingEntity>({
+            const result = await rv.RunView<MJConversationDetailRatingEntity>({
                 EntityName: 'MJ: Conversation Detail Ratings',
                 ExtraFilter: `ConversationDetailID='${this.conversationDetailId}'`,
                 ResultType: 'entity_object'
@@ -231,11 +231,11 @@ export class ConversationMessageRatingComponent implements OnInit {
     private async SaveRating(rating: number): Promise<void> {
         try {
             const md = new Metadata();
-            let ratingEntity: ConversationDetailRatingEntity;
+            let ratingEntity: MJConversationDetailRatingEntity;
 
             // Try to load existing rating
             const rv = new RunView();
-            const existing = await rv.RunView<ConversationDetailRatingEntity>({
+            const existing = await rv.RunView<MJConversationDetailRatingEntity>({
                 EntityName: 'MJ: Conversation Detail Ratings',
                 ExtraFilter: `ConversationDetailID='${this.conversationDetailId}' AND UserID='${this.currentUserId}'`,
                 MaxRows: 1,
@@ -256,7 +256,7 @@ export class ConversationMessageRatingComponent implements OnInit {
                 ratingEntity.Rating = rating;
             } else {
                 // Create new
-                ratingEntity = await md.GetEntityObject<ConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
+                ratingEntity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
                 ratingEntity.ConversationDetailID = this.conversationDetailId;
                 ratingEntity.UserID = this.currentUserId;
                 ratingEntity.Rating = rating;

@@ -28,7 +28,7 @@ import {
 
 // ─── Concrete test subclass of BaseEntity ──────────────────────────────────
 
-class TestEntity extends BaseEntity {
+class MJTestEntity extends BaseEntity {
     // Expose private _parentEntity for testing IS-A wiring without full Metadata setup
     public SetTestParentEntity(parent: BaseEntity | null): void {
         // Access private field via bracket notation — acceptable in test code
@@ -93,10 +93,10 @@ afterAll(() => {
 });
 
 /**
- * Helper: create a TestEntity with context user set, optionally with parent initialization.
+ * Helper: create a MJTestEntity with context user set, optionally with parent initialization.
  */
-function createEntity(entityInfo: EntityInfo): TestEntity {
-    const entity = new TestEntity(entityInfo);
+function createEntity(entityInfo: EntityInfo): MJTestEntity {
+    const entity = new MJTestEntity(entityInfo);
     entity.ContextCurrentUser = mockUser;
     return entity;
 }
@@ -104,8 +104,8 @@ function createEntity(entityInfo: EntityInfo): TestEntity {
 // ─── Set/Get Routing ───────────────────────────────────────────────────────
 
 describe('BaseEntity Set/Get routing for IS-A', () => {
-    let meetingEntity: TestEntity;
-    let productParent: TestEntity;
+    let meetingEntity: MJTestEntity;
+    let productParent: MJTestEntity;
 
     beforeEach(() => {
         // Create a meeting entity with a manually wired parent
@@ -149,8 +149,8 @@ describe('BaseEntity Set/Get routing for IS-A', () => {
 // ─── Dirty Tracking ────────────────────────────────────────────────────────
 
 describe('BaseEntity Dirty tracking for IS-A', () => {
-    let meetingEntity: TestEntity;
-    let productParent: TestEntity;
+    let meetingEntity: MJTestEntity;
+    let productParent: MJTestEntity;
 
     beforeEach(() => {
         productParent = createEntity(productEntityInfo);
@@ -209,8 +209,8 @@ describe('BaseEntity Dirty tracking for IS-A', () => {
 // ─── Validate ──────────────────────────────────────────────────────────────
 
 describe('BaseEntity Validate for IS-A', () => {
-    let meetingEntity: TestEntity;
-    let productParent: TestEntity;
+    let meetingEntity: MJTestEntity;
+    let productParent: MJTestEntity;
 
     beforeEach(() => {
         productParent = createEntity(productEntityInfo);
@@ -238,8 +238,8 @@ describe('BaseEntity Validate for IS-A', () => {
 // ─── NewRecord UUID Propagation ────────────────────────────────────────────
 
 describe('BaseEntity NewRecord for IS-A', () => {
-    let meetingEntity: TestEntity;
-    let productParent: TestEntity;
+    let meetingEntity: MJTestEntity;
+    let productParent: MJTestEntity;
 
     beforeEach(() => {
         productParent = createEntity(productEntityInfo);
@@ -267,7 +267,7 @@ describe('BaseEntity NewRecord for IS-A', () => {
 // ─── Virtual Entity CheckPermissions ───────────────────────────────────────
 
 describe('BaseEntity CheckPermissions for Virtual Entities', () => {
-    let virtualEntity: TestEntity;
+    let virtualEntity: MJTestEntity;
 
     beforeEach(() => {
         virtualEntity = createEntity(salesSummaryEntityInfo);
@@ -319,7 +319,7 @@ describe('BaseEntity CheckPermissions for Virtual Entities', () => {
 // ─── Regular Entity CheckPermissions ───────────────────────────────────────
 
 describe('BaseEntity CheckPermissions for regular entities', () => {
-    let entity: TestEntity;
+    let entity: MJTestEntity;
 
     beforeEach(() => {
         entity = createEntity(standaloneEntityInfo);
@@ -333,7 +333,7 @@ describe('BaseEntity CheckPermissions for regular entities', () => {
     });
 
     it('falls back to Metadata.Provider.CurrentUser when no context user set', () => {
-        const noUserEntity = new TestEntity(standaloneEntityInfo);
+        const noUserEntity = new MJTestEntity(standaloneEntityInfo);
         // Metadata.Provider.CurrentUser is set from beforeAll, so CheckPermissions
         // should still work by falling back to that user.
         const result = noUserEntity.CheckPermissions(EntityPermissionType.Read, false);
@@ -376,8 +376,8 @@ describe('BaseEntity.ProviderTransaction', () => {
 // ─── GetAll ────────────────────────────────────────────────────────────────
 
 describe('BaseEntity.GetAll for IS-A', () => {
-    let meetingEntity: TestEntity;
-    let productParent: TestEntity;
+    let meetingEntity: MJTestEntity;
+    let productParent: MJTestEntity;
 
     beforeEach(() => {
         productParent = createEntity(productEntityInfo);
@@ -403,8 +403,8 @@ describe('BaseEntity.GetAll for IS-A', () => {
 // ─── Revert ────────────────────────────────────────────────────────────────
 
 describe('BaseEntity.Revert for IS-A', () => {
-    let meetingEntity: TestEntity;
-    let productParent: TestEntity;
+    let meetingEntity: MJTestEntity;
+    let productParent: MJTestEntity;
 
     beforeEach(() => {
         productParent = createEntity(productEntityInfo);

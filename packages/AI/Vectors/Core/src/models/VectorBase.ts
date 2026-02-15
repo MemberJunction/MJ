@@ -1,6 +1,6 @@
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError } from "@memberjunction/core";
-import { VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { PageRecordsParams } from "../generic/VectorCore.types";
 import { AIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
@@ -85,7 +85,7 @@ export class VectorBase {
         return model;
     }
 
-    protected GetVectorDatabase(id?: string): VectorDatabaseEntity {
+    protected GetVectorDatabase(id?: string): MJVectorDatabaseEntity {
         if(AIEngine.Instance.VectorDatabases.length > 0){
             if(id){
                 let vectorDB = AIEngine.Instance.VectorDatabases.find(vd => vd.ID === id);

@@ -4,7 +4,7 @@ import type { MicroViewData, FieldChangeView, SlidePanelMode } from '../lib/type
 describe('MicroViewData type', () => {
   it('should be constructable with required fields', () => {
     const data: MicroViewData = {
-      EntityName: 'Users',
+      EntityName: 'MJ: Users',
       EntityID: 'entity-1',
       RecordID: 'rec-1',
       RecordChangeID: 'change-1',
@@ -18,7 +18,7 @@ describe('MicroViewData type', () => {
 
   it('should accept null FullRecordJSON', () => {
     const data: MicroViewData = {
-      EntityName: 'Users',
+      EntityName: 'MJ: Users',
       EntityID: 'entity-1',
       RecordID: 'rec-1',
       RecordChangeID: 'change-1',

@@ -1,5 +1,5 @@
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { TaskEntity, TaskDependencyEntity, TaskTypeEntity, ConversationDetailEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, UserNotificationEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { PubSubEngine } from 'type-graphql';
@@ -78,7 +78,7 @@ export class TaskOrchestrator {
 
         // Create the task type if it doesn't exist
         const md = new Metadata();
-        const taskType = await md.GetEntityObject<TaskTypeEntity>('MJ: Task Types', this.contextUser);
+        const taskType = await md.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', this.contextUser);
         taskType.Name = 'AI Agent Execution';
         taskType.Description = 'Task executed by an AI agent as part of conversation workflow';
 
@@ -96,7 +96,7 @@ export class TaskOrchestrator {
      * @param taskGraph Task graph from Conversation Manager
      * @param conversationDetailId ID of the conversation detail that triggered this
      * @param environmentId Environment ID
-     * @returns Object with parentTaskId and map of tempId -> actual TaskEntity ID
+     * @returns Object with parentTaskId and map of tempId -> actual MJTaskEntity ID
      */
     async createTasksFromGraph(
         taskGraph: TaskGraphResponse,
@@ -108,7 +108,7 @@ export class TaskOrchestrator {
         const tempIdToRealId = new Map<string, string>();
 
         // Create parent workflow task
-        const parentTask = await md.GetEntityObject<TaskEntity>('MJ: Tasks', this.contextUser);
+        const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         parentTask.Name = taskGraph.workflowName;
         parentTask.Description = taskGraph.reasoning || 'AI-orchestrated workflow';
         parentTask.TypeID = taskTypeId;
@@ -139,7 +139,7 @@ export class TaskOrchestrator {
 
         // Create all child tasks
         for (const taskDef of uniqueTasks) {
-            const task = await md.GetEntityObject<TaskEntity>('MJ: Tasks', this.contextUser);
+            const task = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
 
             // Find agent by name
             const agent = await this.findAgentByName(taskDef.agentName);
@@ -187,7 +187,7 @@ export class TaskOrchestrator {
                     continue;
                 }
 
-                const dependency = await md.GetEntityObject<TaskDependencyEntity>('MJ: Task Dependencies', this.contextUser);
+                const dependency = await md.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', this.contextUser);
                 dependency.TaskID = taskId;
                 dependency.DependsOnTaskID = dependsOnId;
                 dependency.DependencyType = 'Prerequisite';
@@ -271,7 +271,7 @@ export class TaskOrchestrator {
     private async findAgentByName(agentName: string): Promise<AIAgentEntityExtended | null> {
         const rv = new RunView();
         const result = await rv.RunView<AIAgentEntityExtended>({
-            EntityName: 'AI Agents',
+            EntityName: 'MJ: AI Agents',
             ExtraFilter: `Name='${agentName.replace(/'/g, "''")}'`,
             ResultType: 'entity_object'
         }, this.contextUser);
@@ -294,7 +294,7 @@ export class TaskOrchestrator {
 
         // Get parent task for progress updates
         const md = new Metadata();
-        const parentTask = await md.GetEntityObject<TaskEntity>('MJ: Tasks', this.contextUser);
+        const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         await parentTask.Load(parentTaskId);
 
         // Publish workflow start
@@ -341,11 +341,11 @@ export class TaskOrchestrator {
     /**
      * Find tasks that are ready to execute (pending with no incomplete dependencies)
      */
-    private async findEligibleTasks(parentTaskId: string): Promise<TaskEntity[]> {
+    private async findEligibleTasks(parentTaskId: string): Promise<MJTaskEntity[]> {
         const rv = new RunView();
 
         // Get all pending tasks for this parent
-        const tasksResult = await rv.RunView<TaskEntity>({
+        const tasksResult = await rv.RunView<MJTaskEntity>({
             EntityName: 'MJ: Tasks',
             ExtraFilter: `ParentID='${parentTaskId}' AND Status='Pending'`,
             ResultType: 'entity_object'
@@ -355,7 +355,7 @@ export class TaskOrchestrator {
             return [];
         }
 
-        const eligibleTasks: TaskEntity[] = [];
+        const eligibleTasks: MJTaskEntity[] = [];
 
         // Check each task for incomplete dependencies
         for (const task of tasksResult.Results) {
@@ -373,14 +373,14 @@ export class TaskOrchestrator {
      */
     private async updateParentTaskProgress(parentTaskId: string): Promise<void> {
         const md = new Metadata();
-        const parentTask = await md.GetEntityObject<TaskEntity>('MJ: Tasks', this.contextUser);
+        const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await parentTask.Load(parentTaskId);
         if (!loaded) return;
 
         const rv = new RunView();
 
         // Get all child tasks
-        const childrenResult = await rv.RunView<TaskEntity>({
+        const childrenResult = await rv.RunView<MJTaskEntity>({
             EntityName: 'MJ: Tasks',
             ExtraFilter: `ParentID='${parentTaskId}'`,
             ResultType: 'entity_object'
@@ -406,7 +406,7 @@ export class TaskOrchestrator {
      */
     private async completeParentTask(parentTaskId: string): Promise<void> {
         const md = new Metadata();
-        const parentTask = await md.GetEntityObject<TaskEntity>('MJ: Tasks', this.contextUser);
+        const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await parentTask.Load(parentTaskId);
         if (!loaded) return;
 
@@ -430,7 +430,7 @@ export class TaskOrchestrator {
         const rv = new RunView();
 
         // Get dependencies
-        const depsResult = await rv.RunView<TaskDependencyEntity>({
+        const depsResult = await rv.RunView<MJTaskDependencyEntity>({
             EntityName: 'MJ: Task Dependencies',
             ExtraFilter: `TaskID='${taskId}'`,
             ResultType: 'entity_object'
@@ -454,9 +454,9 @@ export class TaskOrchestrator {
     /**
      * Load a task by ID
      */
-    private async loadTask(taskId: string): Promise<TaskEntity | null> {
+    private async loadTask(taskId: string): Promise<MJTaskEntity | null> {
         const md = new Metadata();
-        const task = await md.GetEntityObject<TaskEntity>('MJ: Tasks', this.contextUser);
+        const task = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await task.Load(taskId);
         return loaded ? task : null;
     }
@@ -464,7 +464,7 @@ export class TaskOrchestrator {
     /**
      * Execute a single task
      */
-    private async executeTask(task: TaskEntity): Promise<TaskExecutionResult> {
+    private async executeTask(task: MJTaskEntity): Promise<TaskExecutionResult> {
         try {
             LogStatus(`Executing task: ${task.Name} (${task.ID})`);
 
@@ -475,7 +475,7 @@ export class TaskOrchestrator {
 
             // Load the agent entity
             const md = new Metadata();
-            const agentEntity = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', this.contextUser);
+            const agentEntity = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents', this.contextUser);
             const loaded = await agentEntity.Load(task.AgentID!);
             if (!loaded) {
                 throw new Error(`Agent with ID ${task.AgentID} not found`);
@@ -582,7 +582,7 @@ export class TaskOrchestrator {
     /**
      * Extract input payload from task metadata
      */
-    private extractInputPayload(task: TaskEntity): any | null {
+    private extractInputPayload(task: MJTaskEntity): any | null {
         if (!task.Description) return null;
 
         const metadataMatch = task.Description.match(/__TASK_METADATA__\n(.+?)(?:\n\n|$)/s);
@@ -604,7 +604,7 @@ export class TaskOrchestrator {
         const rv = new RunView();
 
         // Get dependencies
-        const depsResult = await rv.RunView<TaskDependencyEntity>({
+        const depsResult = await rv.RunView<MJTaskDependencyEntity>({
             EntityName: 'MJ: Task Dependencies',
             ExtraFilter: `TaskID='${taskId}'`,
             ResultType: 'entity_object'
@@ -636,7 +636,7 @@ export class TaskOrchestrator {
     /**
      * Build conversation messages with task input and dependent outputs formatted as markdown
      */
-    private async buildConversationMessages(task: TaskEntity): Promise<any[]> {
+    private async buildConversationMessages(task: MJTaskEntity): Promise<any[]> {
         const messages: any[] = [];
 
         // Start with task description/name as base content
@@ -702,7 +702,7 @@ export class TaskOrchestrator {
             const md = new Metadata();
 
             // Create Artifact header
-            const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.contextUser);
+            const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.contextUser);
             artifact.Name = `${agent.Name} - ${taskName} - ${new Date().toLocaleString()}`;
             artifact.Description = `Artifact generated by ${agent.Name} for task: ${taskName} (${output.type})`;
 
@@ -732,7 +732,7 @@ export class TaskOrchestrator {
             LogStatus(`Created artifact: ${artifact.Name} (${artifact.ID})`);
 
             // Create Artifact Version with content
-            const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.contextUser);
+            const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.contextUser);
             version.ArtifactID = artifact.ID;
             version.VersionNumber = 1;
 
@@ -771,7 +771,7 @@ export class TaskOrchestrator {
             }
 
             // Create M2M relationship linking artifact to conversation detail
-            const junction = await md.GetEntityObject<ConversationDetailArtifactEntity>(
+            const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
                 'MJ: Conversation Detail Artifacts',
                 this.contextUser
             );
@@ -795,7 +795,7 @@ export class TaskOrchestrator {
      * Create user notification for task graph completion
      * Notifies user that their multi-step workflow has completed
      */
-    private async createTaskGraphCompletionNotification(parentTask: TaskEntity): Promise<void> {
+    private async createTaskGraphCompletionNotification(parentTask: MJTaskEntity): Promise<void> {
         try {
             if (!parentTask.ConversationDetailID) {
                 LogStatus('Skipping notification - no conversation detail linked');
@@ -805,8 +805,8 @@ export class TaskOrchestrator {
             const md = new Metadata();
 
             // Load conversation detail to get conversation ID
-            const detail = await md.GetEntityObject<ConversationDetailEntity>(
-                'Conversation Details',
+            const detail = await md.GetEntityObject<MJConversationDetailEntity>(
+                'MJ: Conversation Details',
                 this.contextUser
             );
             if (!(await detail.Load(parentTask.ConversationDetailID))) {
@@ -815,7 +815,7 @@ export class TaskOrchestrator {
 
             // Count child tasks and success rate
             const rv = new RunView();
-            const tasksResult = await rv.RunView<TaskEntity>({
+            const tasksResult = await rv.RunView<MJTaskEntity>({
                 EntityName: 'MJ: Tasks',
                 ExtraFilter: `ParentID='${parentTask.ID}'`,
                 ResultType: 'entity_object'
@@ -826,8 +826,8 @@ export class TaskOrchestrator {
             const totalCount = childTasks.length;
 
             // Create notification
-            const notification = await md.GetEntityObject<UserNotificationEntity>(
-                'User Notifications',
+            const notification = await md.GetEntityObject<MJUserNotificationEntity>(
+                'MJ: User Notifications',
                 this.contextUser
             );
 

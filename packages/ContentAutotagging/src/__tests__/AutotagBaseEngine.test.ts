@@ -101,15 +101,15 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  ContentSourceEntity: vi.fn(),
-  ContentItemEntity: vi.fn(),
-  ContentFileTypeEntity: vi.fn(),
-  ContentProcessRunEntity: vi.fn(),
-  ContentTypeEntity: vi.fn(),
-  ContentSourceTypeEntity: vi.fn(),
-  ContentTypeAttributeEntity: vi.fn(),
-  ContentSourceParamEntity: vi.fn(),
-  ContentItemAttributeEntity: vi.fn(),
+  MJContentSourceEntity: vi.fn(),
+  MJContentItemEntity: vi.fn(),
+  MJContentFileTypeEntity: vi.fn(),
+  MJContentProcessRunEntity: vi.fn(),
+  MJContentTypeEntity: vi.fn(),
+  MJContentSourceTypeEntity: vi.fn(),
+  MJContentTypeAttributeEntity: vi.fn(),
+  MJContentSourceParamEntity: vi.fn(),
+  MJContentItemAttributeEntity: vi.fn(),
 }));
 
 vi.mock('pdf-parse', () => ({

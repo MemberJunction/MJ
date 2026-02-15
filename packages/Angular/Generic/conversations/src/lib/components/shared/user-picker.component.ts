@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angu
 
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 
 export interface UserSearchResult {
     id: string;
@@ -275,8 +275,8 @@ export class UserPickerComponent implements OnInit, OnDestroy {
                 LastName LIKE '%${escapedQuery}%'
             )${excludeFilter}`;
 
-            const result = await rv.RunView<UserEntity>({
-                EntityName: 'Users',
+            const result = await rv.RunView<MJUserEntity>({
+                EntityName: 'MJ: Users',
                 ExtraFilter: searchFilter,
                 OrderBy: 'Name ASC',
                 MaxRows: 20,

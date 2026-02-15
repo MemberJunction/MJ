@@ -4,7 +4,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
-import { AIAgentTypeEntity, AIAgentPromptEntity, AIAgentActionEntity, ActionEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity, MJAIAgentPromptEntity, MJAIAgentActionEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
@@ -33,9 +33,9 @@ export interface CreateAgentResult {
     /** Created agent entity (not saved to database) */
     Agent: AIAgentEntityExtended;
     /** Agent prompt link entities (not saved to database) */
-    AgentPrompts?: AIAgentPromptEntity[];
+    AgentPrompts?: MJAIAgentPromptEntity[];
     /** Agent action link entities (not saved to database) */
-    AgentActions?: AIAgentActionEntity[];
+    AgentActions?: MJAIAgentActionEntity[];
 }
 
 /**
@@ -113,9 +113,9 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
     public Form!: FormGroup;
     public IsLoading = true;
     public IsSubmitting = false;
-    public AgentTypes: AIAgentTypeEntity[] = [];
+    public AgentTypes: MJAIAgentTypeEntity[] = [];
     public LinkedPrompts: AIPromptEntityExtended[] = [];
-    public LinkedActions: ActionEntity[] = [];
+    public LinkedActions: MJActionEntity[] = [];
     public ShowAdvancedConfig = false;
     public ErrorMessage: string | null = null;
 
@@ -125,10 +125,10 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
 
     private destroy$ = new Subject<void>();
     private agentEntity: AIAgentEntityExtended | null = null;
-    private agentPromptLinks: AIAgentPromptEntity[] = [];
-    private agentActionLinks: AIAgentActionEntity[] = [];
+    private agentPromptLinks: MJAIAgentPromptEntity[] = [];
+    private agentActionLinks: MJAIAgentActionEntity[] = [];
     private availablePrompts: AIPromptEntityExtended[] = [];
-    private availableActions: ActionEntity[] = [];
+    private availableActions: MJActionEntity[] = [];
 
     constructor(
         private fb: FormBuilder,
@@ -200,20 +200,20 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
             // Load agent types from AIEngineBase
             const engine = AIEngineBase.Instance;
             await engine.Config(false);
-            this.AgentTypes = engine.AgentTypes as AIAgentTypeEntity[];
+            this.AgentTypes = engine.AgentTypes as MJAIAgentTypeEntity[];
 
             // Load available prompts and actions in parallel
             const rv = new RunView();
             const [promptsResult, actionsResult] = await rv.RunViews([
                 {
-                    EntityName: 'AI Prompts',
+                    EntityName: 'MJ: AI Prompts',
                     ExtraFilter: `Status = 'Active'`,
                     OrderBy: 'Name ASC',
                     MaxRows: 1000,
                     ResultType: 'entity_object'
                 },
                 {
-                    EntityName: 'Actions',
+                    EntityName: 'MJ: Actions',
                     ExtraFilter: `Status = 'Active'`,
                     OrderBy: 'Name ASC',
                     MaxRows: 1000,
@@ -225,7 +225,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
                 this.availablePrompts = promptsResult.Results as AIPromptEntityExtended[];
             }
             if (actionsResult.Success && actionsResult.Results) {
-                this.availableActions = actionsResult.Results as ActionEntity[];
+                this.availableActions = actionsResult.Results as MJActionEntity[];
             }
 
             // Set default type if not specified and types are available
@@ -247,7 +247,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
 
     private async createAgentEntity(): Promise<void> {
         const md = new Metadata();
-        this.agentEntity = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+        this.agentEntity = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
         this.agentEntity.NewRecord();
 
         // Set defaults
@@ -315,7 +315,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
         return this.availablePrompts;
     }
 
-    public get AvailableActions(): ActionEntity[] {
+    public get AvailableActions(): MJActionEntity[] {
         return this.availableActions;
     }
 
@@ -381,7 +381,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
 
         // Create link entity
         const md = new Metadata();
-        const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+        const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
         agentPrompt.NewRecord();
         agentPrompt.AgentID = this.agentEntity.ID;
         agentPrompt.PromptID = prompt.ID;
@@ -412,7 +412,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
 
     public ShowActionSelector = false;
     public ActionSearchQuery = '';
-    public FilteredActions: ActionEntity[] = [];
+    public FilteredActions: MJActionEntity[] = [];
 
     public OnOpenActionSelector(): void {
         this.ShowActionSelector = true;
@@ -451,7 +451,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
         this.FilteredActions = available.slice(0, 20);
     }
 
-    public async OnSelectAction(action: ActionEntity): Promise<void> {
+    public async OnSelectAction(action: MJActionEntity): Promise<void> {
         if (!this.agentEntity) return;
 
         // Add to linked actions
@@ -459,7 +459,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
 
         // Create link entity
         const md = new Metadata();
-        const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
+        const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
         agentAction.NewRecord();
         agentAction.AgentID = this.agentEntity.ID;
         agentAction.ActionID = action.ID;
@@ -469,7 +469,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
         this.OnCloseActionSelector();
     }
 
-    public RemoveAction(action: ActionEntity): void {
+    public RemoveAction(action: MJActionEntity): void {
         const index = this.LinkedActions.findIndex(a => a.ID === action.ID);
         if (index >= 0) {
             this.LinkedActions.splice(index, 1);

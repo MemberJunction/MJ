@@ -119,7 +119,7 @@ export class AITestHarnessWindowComponent implements OnInit {
                     this.agent = this.data.agent;
                     this.windowTitle = this.data.title || `Test Agent: ${this.agent.Name}`;
                 } else if (this.data.agentId) {
-                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
                     await agentEntity.Load(this.data.agentId);
                     if (agentEntity.IsSaved) {
                         this.agent = agentEntity;
@@ -135,7 +135,7 @@ export class AITestHarnessWindowComponent implements OnInit {
                     this.prompt = this.data.prompt;
                     this.windowTitle = this.data.title || `Test Prompt: ${this.prompt.Name}`;
                 } else if (this.data.promptId) {
-                    const promptEntity = await this.metadata.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
+                    const promptEntity = await this.metadata.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts');
                     await promptEntity.Load(this.data.promptId);
                     if (promptEntity.IsSaved) {
                         this.prompt = promptEntity;

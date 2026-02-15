@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
-import { ResourceData, CredentialEntity, CredentialTypeEntity, CredentialCategoryEntity, AuditLogEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCredentialEntity, MJCredentialTypeEntity, MJCredentialCategoryEntity, MJAuditLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
@@ -65,10 +65,10 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     public usageTrend: UsageTrendPoint[] = [];
 
     // Raw data
-    private credentials: CredentialEntity[] = [];
-    private types: CredentialTypeEntity[] = [];
-    private categoryList: CredentialCategoryEntity[] = [];
-    private auditLogs: AuditLogEntity[] = [];
+    private credentials: MJCredentialEntity[] = [];
+    private types: MJCredentialTypeEntity[] = [];
+    private categoryList: MJCredentialCategoryEntity[] = [];
+    private auditLogs: MJAuditLogEntity[] = [];
 
     // Permissions
     private _metadata = new Metadata();
@@ -178,7 +178,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
                     ResultType: 'entity_object'
                 },
                 {
-                    EntityName: 'Audit Logs',
+                    EntityName: 'MJ: Audit Logs',
                     ExtraFilter: `AuditLogType LIKE '%Credential%' AND ${dateFilter}`,
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: 100,
@@ -187,24 +187,24 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
             ]);
 
             if (credResult.Success) {
-                this.credentials = credResult.Results as CredentialEntity[];
+                this.credentials = credResult.Results as MJCredentialEntity[];
                 this.processCredentialStats();
             }
 
             if (typeResult.Success) {
-                this.types = typeResult.Results as CredentialTypeEntity[];
+                this.types = typeResult.Results as MJCredentialTypeEntity[];
                 this.credentialTypes = this.types.length;
                 this.processTypeStats();
             }
 
             if (categoryResult.Success) {
-                this.categoryList = categoryResult.Results as CredentialCategoryEntity[];
+                this.categoryList = categoryResult.Results as MJCredentialCategoryEntity[];
                 this.categories = this.categoryList.length;
                 this.processCategoryStats();
             }
 
             if (auditResult.Success) {
-                this.auditLogs = auditResult.Results as AuditLogEntity[];
+                this.auditLogs = auditResult.Results as MJAuditLogEntity[];
                 this.processActivityAndTrends();
             }
 

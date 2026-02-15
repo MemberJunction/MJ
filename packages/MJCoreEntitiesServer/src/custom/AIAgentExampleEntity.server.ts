@@ -1,15 +1,15 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
-import { AIAgentExampleEntity } from "@memberjunction/core-entities";
+import { MJAIAgentExampleEntity } from "@memberjunction/core-entities";
 import { EmbedTextLocalHelper } from "./util";
 import { AIEngine } from "@memberjunction/aiengine";
 
 /**
- * Server-side extension of AIAgentExampleEntity that auto-generates embeddings
- * when the ExampleInput field changes, following the QueryEntity pattern.
+ * Server-side extension of MJAIAgentExampleEntity that auto-generates embeddings
+ * when the ExampleInput field changes, following the MJQueryEntity pattern.
  */
-@RegisterClass(BaseEntity, 'AI Agent Examples')
-export class AIAgentExampleEntityExtended extends AIAgentExampleEntity {
+@RegisterClass(BaseEntity, 'MJ: AI Agent Examples')
+export class AIAgentExampleEntityExtended extends MJAIAgentExampleEntity {
     /**
      * Override EmbedTextLocal to use helper
      */

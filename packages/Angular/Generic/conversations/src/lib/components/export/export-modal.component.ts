@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ExportService, ExportFormat, ExportOptions } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
@@ -302,7 +302,7 @@ import { ToastService } from '../../services/toast.service';
 })
 export class ExportModalComponent {
   @Input() isVisible = false;
-  @Input() conversation?: ConversationEntity;
+  @Input() conversation?: MJConversationEntity;
   @Input() currentUser!: UserInfo;
   @Output() cancelled = new EventEmitter<void>();
   @Output() exported = new EventEmitter<void>();

@@ -2429,7 +2429,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       // Find model by name
       const rv = new RunView();
       const result = await rv.RunView<AIModelEntityExtended>({
-        EntityName: 'AI Models',
+        EntityName: 'MJ: AI Models',
         ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 
       });
       

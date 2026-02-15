@@ -1,10 +1,10 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
-import { TestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { CompositeKey } from '@memberjunction/core';
-import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFeedback/testrunfeedback.form.component';
+import { MJTestRunFeedbackFormComponent } from '../../generated/Entities/MJTestRunFeedback/mjtestrunfeedback.form.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Run Feedbacks')
 @Component({
@@ -56,8 +56,8 @@ import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFe
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestRunFeedbackFormComponentExtended extends TestRunFeedbackFormComponent {
-  public override record!: TestRunFeedbackEntity;
+export class TestRunFeedbackFormComponentExtended extends MJTestRunFeedbackFormComponent {
+  public override record!: MJTestRunFeedbackEntity;
 
   openTestRun() {
     if (this.record.TestRunID) {

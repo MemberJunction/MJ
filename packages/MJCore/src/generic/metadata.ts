@@ -188,13 +188,13 @@ export class Metadata {
      * if an entity has TrackRecordChanges = 1, which is the default for most entities. If TrackRecordChanges = 0, this method will return an empty array.
      * 
      * This method is defined in the @memberjunction/core package, which is lower level in the dependency 
-     * hierarchy than the @memberjunction/core-entities package where the RecordChangeEntity class is defined.
-     * For this reason, we are not using the RecordChangeEntity class here, but rather returning a generic type T.
-     * When you call this method, you can specify the type T to be the RecordChangeEntity class or any other class that matches the structure of the record changes.
+     * hierarchy than the @memberjunction/core-entities package where the MJRecordChangeEntity class is defined.
+     * For this reason, we are not using the MJRecordChangeEntity class here, but rather returning a generic type T.
+     * When you call this method, you can specify the type T to be the MJRecordChangeEntity class or any other class that matches the structure of the record changes.
      * For example:
      * ```typescript
      * const md = new Metadata();
-     * const changes: RecordChangeEntity[] = await md.GetRecordChanges<RecordChangeEntity>('MyEntity', myPrimaryKey);
+     * const changes: MJRecordChangeEntity[] = await md.GetRecordChanges<MJRecordChangeEntity>('MyEntity', myPrimaryKey);
      * ```
      * @param entityName 
      * @param primaryKey 
@@ -213,7 +213,7 @@ export class Metadata {
             }
             const rv = new RunView();
             const result = await rv.RunView<T>({
-                EntityName: "Record Changes",
+                EntityName: "MJ: Record Changes",
                 ExtraFilter: `Entity='${entityName}' AND RecordID='${primaryKey.ToConcatenatedString()}'`,
                 OrderBy: "ChangedAt DESC"
             }, contextUser);
@@ -335,7 +335,7 @@ export class Metadata {
      * 
      * @example
      * // Load by named field
-     * const user = await metadata.GetEntityObject<UserEntity>('Users', CompositeKey.FromKeyValuePair('Email', 'user@example.com'));
+     * const user = await metadata.GetEntityObject<MJUserEntity>('Users', CompositeKey.FromKeyValuePair('Email', 'user@example.com'));
      * 
      * @example
      * // Load with composite key

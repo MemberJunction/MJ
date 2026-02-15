@@ -1,5 +1,42 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-engine-base@4.4.0
+  - @memberjunction/ai-core-plus@4.4.0
+  - @memberjunction/actions-base@4.4.0
+  - @memberjunction/ng-base-application@4.4.0
+  - @memberjunction/ng-link-directives@4.4.0
+  - @memberjunction/ng-shared@4.4.0
+  - @memberjunction/ng-testing@4.4.0
+  - @memberjunction/ng-action-gallery@4.4.0
+  - @memberjunction/ng-actions@4.4.0
+  - @memberjunction/ng-agents@4.4.0
+  - @memberjunction/ng-ai-test-harness@4.4.0
+  - @memberjunction/ng-base-forms@4.4.0
+  - @memberjunction/ng-code-editor@4.4.0
+  - @memberjunction/ng-container-directives@4.4.0
+  - @memberjunction/ng-deep-diff@4.4.0
+  - @memberjunction/ng-entity-relationship-diagram@4.4.0
+  - @memberjunction/ng-entity-viewer@4.4.0
+  - @memberjunction/ng-flow-editor@4.4.0
+  - @memberjunction/ng-join-grid@4.4.0
+  - @memberjunction/ng-list-management@4.4.0
+  - @memberjunction/ng-notifications@4.4.0
+  - @memberjunction/ng-shared-generic@4.4.0
+  - @memberjunction/ng-timeline@4.4.0
+  - @memberjunction/graphql-dataprovider@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/templates-base-types@4.4.0
+  - @memberjunction/ng-tabstrip@4.4.0
+  - @memberjunction/ai@4.4.0
+  - @memberjunction/global@4.4.0
+
 ## 4.3.1
 
 ### Patch Changes

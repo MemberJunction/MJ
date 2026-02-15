@@ -30,7 +30,7 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
-import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationDataService } from '../../services/conversation-data.service';
@@ -116,8 +116,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     return this._activeTaskId;
   }
 
-  @Output() conversationChanged = new EventEmitter<ConversationEntity>();
-  @Output() artifactOpened = new EventEmitter<ArtifactEntity>();
+  @Output() conversationChanged = new EventEmitter<MJConversationEntity>();
+  @Output() artifactOpened = new EventEmitter<MJArtifactEntity>();
   @Output() navigationChanged = new EventEmitter<{
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
@@ -147,7 +147,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Share modal state
   public isArtifactShareModalOpen: boolean = false;
-  public artifactToShare: ArtifactEntity | null = null;
+  public artifactToShare: MJArtifactEntity | null = null;
 
   // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
@@ -183,7 +183,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   // LOCAL CONVERSATION STATE - enables multiple workspace instances
   // Each workspace manages its own selection state independently
   public selectedConversationId: string | null = null;
-  public selectedConversation: ConversationEntity | null = null;
+  public selectedConversation: MJConversationEntity | null = null;
   public selectedThreadId: string | null = null;
   public isNewUnsavedConversation: boolean = false;
   public pendingMessageToSend: string | null = null;
@@ -282,7 +282,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * Now includes pending message and attachments to ensure atomic state update
    */
   onConversationCreated(event: {
-    conversation: ConversationEntity;
+    conversation: MJConversationEntity;
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
   }): void {
@@ -453,8 +453,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Filter tasks by conversations the user owns or is a participant in, or tasks owned
     // by the user
     const md = new Metadata();
-    const cd = md.EntityByName('Conversation Details');
-    const c = md.EntityByName('Conversations');
+    const cd = md.EntityByName('MJ: Conversation Details');
+    const c = md.EntityByName('MJ: Conversations');
     if (!cd || !c) {
       console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
       this.tasksFilter = `ParentID IS NULL AND UserID = '${this.currentUser.ID}'`; // Fallback to user-owned tasks only
@@ -661,7 +661,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       if (!setting) {
         // Create new setting
-        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = this.USER_SETTING_SIDEBAR_KEY;
       }
@@ -1034,7 +1034,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.actionableCommandExecuted.emit(command);
   }
 
-  onTaskClicked(task: TaskEntity): void {
+  onTaskClicked(task: MJTaskEntity): void {
     // Switch to Tasks tab and set active task ID
     this.activeTab = 'tasks';
     this._activeTaskId = task.ID;
@@ -1157,7 +1157,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   async onArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
     const md = new Metadata();
-    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts');
+    const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 
     if (artifact) {

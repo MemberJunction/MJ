@@ -9,9 +9,9 @@ import {
     LogStatus,
 } from '@memberjunction/core';
 import {
-    VersionLabelEntity,
-    VersionLabelItemEntityType,
-    VersionLabelRestoreEntity,
+    MJVersionLabelEntity,
+    MJVersionLabelItemEntityType,
+    MJVersionLabelRestoreEntity,
 } from '@memberjunction/core-entities';
 import {
     RestoreItemResult,
@@ -61,7 +61,7 @@ export class RestoreEngine {
         const resolvedOptions = this.resolveDefaults(options);
 
         // Load the target label
-        const label = await loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
+        const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
         if (!label) throw new Error(`Version label '${labelId}' not found`);
 
         const labelName = label.Name;
@@ -130,7 +130,7 @@ export class RestoreEngine {
      * audit record in batches.
      */
     private async processRestoreItems(
-        sortedItems: VersionLabelItemEntityType[],
+        sortedItems: MJVersionLabelItemEntityType[],
         dryRun: boolean,
         restoreAuditId: string | null,
         contextUser: UserInfo
@@ -174,7 +174,7 @@ export class RestoreEngine {
         labelId: string,
         options: Required<RestoreOptions>,
         contextUser: UserInfo
-    ): Promise<VersionLabelItemEntityType[]> {
+    ): Promise<MJVersionLabelItemEntityType[]> {
         const rv = new RunView();
 
         let extraFilter = sqlEquals('VersionLabelID', labelId);
@@ -190,7 +190,7 @@ export class RestoreEngine {
             }
         }
 
-        const result = await rv.RunView<VersionLabelItemEntityType>({
+        const result = await rv.RunView<MJVersionLabelItemEntityType>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
             ExtraFilter: extraFilter,
             ResultType: 'simple',
@@ -215,9 +215,9 @@ export class RestoreEngine {
      * Filter label items to only include those matching a set of selected records.
      */
     private filterBySelectedRecords(
-        items: VersionLabelItemEntityType[],
+        items: MJVersionLabelItemEntityType[],
         selectedRecords: Array<{ EntityName: string; RecordID: string }>
-    ): VersionLabelItemEntityType[] {
+    ): MJVersionLabelItemEntityType[] {
         const selectedSet = new Set(
             selectedRecords.map(s => `${s.EntityName}::${s.RecordID}`)
         );
@@ -233,7 +233,7 @@ export class RestoreEngine {
      * Sort label items by entity dependency order so parents are restored
      * before their children.
      */
-    private sortByDependencyOrder(items: VersionLabelItemEntityType[]): VersionLabelItemEntityType[] {
+    private sortByDependencyOrder(items: MJVersionLabelItemEntityType[]): MJVersionLabelItemEntityType[] {
         const md = new Metadata();
 
         // Build a map of entityId -> dependency level
@@ -283,7 +283,7 @@ export class RestoreEngine {
      * Restore a single record to its labeled state.
      */
     private async restoreSingleItem(
-        item: VersionLabelItemEntityType,
+        item: MJVersionLabelItemEntityType,
         dryRun: boolean,
         contextUser: UserInfo
     ): Promise<RestoreItemResult> {
@@ -424,7 +424,7 @@ export class RestoreEngine {
     private async createPreRestoreLabel(
         targetLabelName: string,
         targetLabelScope: VersionLabelScope,
-        items: VersionLabelItemEntityType[],
+        items: MJVersionLabelItemEntityType[],
         contextUser: UserInfo
     ): Promise<string> {
         const label = await this.LabelMgr.CreateLabel({
@@ -470,7 +470,7 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<string> {
         const md = new Metadata();
-        const restore = await md.GetEntityObject<VersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, contextUser);
+        const restore = await md.GetEntityObject<MJVersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, contextUser);
 
         restore.VersionLabelID = labelId;
         restore.Status = 'In Progress';
@@ -500,7 +500,7 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const restore = await loadEntityById<VersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
+            const restore = await loadEntityById<MJVersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
             if (!restore) return;
 
             restore.CompletedItems = completedItems;
@@ -524,7 +524,7 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const restore = await loadEntityById<VersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
+            const restore = await loadEntityById<MJVersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
             if (!restore) return;
 
             restore.Status = status;

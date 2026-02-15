@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { LogError, LogStatus, CompositeKey } from '@memberjunction/core';
-import { AIConfigurationEntity, AIConfigurationParamEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJAIConfigurationEntity, MJAIConfigurationParamEntity, ResourceData } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -12,8 +12,8 @@ interface SystemConfigFilter {
   isDefault: string;
 }
 
-interface ConfigurationWithParams extends AIConfigurationEntity {
-  params?: AIConfigurationParamEntity[];
+interface ConfigurationWithParams extends MJAIConfigurationEntity {
+  params?: MJAIConfigurationParamEntity[];
   isExpanded?: boolean;
   compressionPrompt?: AIPromptEntityExtended | null;
   summarizationPrompt?: AIPromptEntityExtended | null;
@@ -38,7 +38,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
 
   public configurations: ConfigurationWithParams[] = [];
   public filteredConfigurations: ConfigurationWithParams[] = [];
-  public allParams: AIConfigurationParamEntity[] = [];
+  public allParams: MJAIConfigurationParamEntity[] = [];
   public allPrompts: AIPromptEntityExtended[] = [];
 
   public currentFilters: SystemConfigFilter = {
@@ -249,10 +249,10 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
 
   public onOpenPrompt(promptId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: promptId }]);
-    this.navigationService.OpenEntityRecord('AI Prompts', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', compositeKey);
   }
 
-  public onOpenParam(param: AIConfigurationParamEntity): void {
+  public onOpenParam(param: MJAIConfigurationParamEntity): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: param.ID }]);
     this.navigationService.OpenEntityRecord('MJ: AI Configuration Params', compositeKey);
   }
@@ -321,7 +321,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
     }
   }
 
-  public formatParamValue(param: AIConfigurationParamEntity): string {
+  public formatParamValue(param: MJAIConfigurationParamEntity): string {
     if (!param.Value) return '(not set)';
 
     switch (param.Type) {

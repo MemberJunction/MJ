@@ -29,13 +29,13 @@
                                     </span>
                                 }
                                 @if (prompt) {
-                                    <span class="prompt-name" (click)="navigateToEntity('AI Prompts', prompt.ID)" title="View Prompt">
+                                    <span class="prompt-name" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)" title="View Prompt">
                                         <i class="fa-solid fa-comment-dots"></i>
                                         {{ prompt.Name }}
                                     </span>
                                 }
                                 @if (model) {
-                                    <span class="model-name" (click)="navigateToEntity('AI Models', model.ID)" title="View Model">
+                                    <span class="model-name" (click)="navigateToEntity('MJ: AI Models', model.ID)" title="View Model">
                                         <i class="fa-solid fa-microchip"></i>
                                         {{ model.Name }}
                                     </span>
@@ -532,7 +532,7 @@
                                     @if (record.AgentID) {
                                         <div class="metric-row">
                                             <span class="metric-label">Agent:</span>
-                                            <span class="metric-value link" (click)="navigateToEntity('AI Agents', record.AgentID)">
+                                            <span class="metric-value link" (click)="navigateToEntity('MJ: AI Agents', record.AgentID)">
                                                 {{ record.Agent }}
                                                 <i class="fa-solid fa-external-link"></i>
                                             </span>
@@ -785,7 +785,7 @@
                                     @if (record.AgentID) {
                                         <div class="detail-field">
                                             <label>Agent</label>
-                                            <div class="detail-value clickable" (click)="navigateToEntity('AI Agents', record.AgentID)" title="View Agent">
+                                            <div class="detail-value clickable" (click)="navigateToEntity('MJ: AI Agents', record.AgentID)" title="View Agent">
                                                 <i class="fa-solid fa-robot"></i>
                                                 {{ record.Agent || 'Unknown' }}
                                                 <i class="fa-solid fa-external-link"></i>
@@ -995,7 +995,7 @@
                                     @if (record.JudgeID) {
                                         <div class="detail-field">
                                             <label>Judge Prompt</label>
-                                            <div class="detail-value clickable" (click)="navigateToEntity('AI Prompts', record.JudgeID)" title="View Judge Prompt">
+                                            <div class="detail-value clickable" (click)="navigateToEntity('MJ: AI Prompts', record.JudgeID)" title="View Judge Prompt">
                                                 <i class="fa-solid fa-gavel"></i>
                                                 {{ record.Judge || 'Unknown' }}
                                                 <i class="fa-solid fa-external-link"></i>

@@ -2,11 +2,11 @@
   "fields": {
     "Name": "Home",
     "Description": "Personalized home dashboard showing all available applications with quick access navigation",
-    "UserID": "@lookup:Users.Name=System",
+    "UserID": "@lookup:MJ: Users.Name=System",
     "CategoryID": null,
     "Type": "Code",
     "Scope": "App",
-    "ApplicationID": "@lookup:Applications.Name=Home",
+    "ApplicationID": "@lookup:MJ: Applications.Name=Home",
     "DriverClass": "HomeDashboard",
     "UIConfigDetails": "{}",
     "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -18,15 +18,15 @@
           "DashboardID": "@parent:ID",
           "UserID": null,
           "Scope": "App",
-          "ApplicationID": "@lookup:Applications.Name=Home",
+          "ApplicationID": "@lookup:MJ: Applications.Name=Home",
           "DisplayOrder": 1
         },
         "primaryKey": {
           "ID": "CFF1015F-4381-4B30-8670-C7A2FEF9B43B"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.424Z",
-          "checksum": "8d42a825f4e70402c81b387bbbaaed8a9898b6848919b0af48b1c1bbde0683cc"
+          "lastModified": "2026-02-13T21:09:37.028Z",
+          "checksum": "836b4e06894be8f3597833018b30dd3edc53d9c44bbfbc2b895ecfa0edb576e8"
         }
       }
     ]
@@ -35,7 +35,7 @@
     "ID": "5E425BD5-A7AE-486D-8A4B-B06D15B05B88"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.411Z",
-    "checksum": "9b7400481b8f97f55775baa1e338f6a74f6366b72e8d5b1853c36533e7f9f7eb"
+    "lastModified": "2026-02-13T21:09:37.021Z",
+    "checksum": "0e225ff5e1ebf3e62dddd75a2f7b2ccdaad337fa36e73ae5cd40f462db3610f0"
   }
 }

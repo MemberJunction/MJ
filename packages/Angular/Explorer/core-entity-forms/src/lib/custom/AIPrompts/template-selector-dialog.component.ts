@@ -4,7 +4,7 @@ import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
-import { TemplateEntity, TemplateCategoryEntity } from '@memberjunction/core-entities';
+import { MJTemplateEntity, MJTemplateCategoryEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface TemplateSelectorConfig {
@@ -24,7 +24,7 @@ export interface TemplateSelectorConfig {
 
 export interface TemplateSelectorResult {
   /** Selected templates */
-  selectedTemplates: TemplateEntity[];
+  selectedTemplates: MJTemplateEntity[];
   /** Whether user chose to create new */
   createNew?: boolean;
 }
@@ -51,9 +51,9 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   
   // Data and UI state
   isLoading$ = new BehaviorSubject<boolean>(false);
-  templates$ = new BehaviorSubject<TemplateEntity[]>([]);
-  filteredTemplates$ = new BehaviorSubject<TemplateEntity[]>([]);
-  categories$ = new BehaviorSubject<TemplateCategoryEntity[]>([]);
+  templates$ = new BehaviorSubject<MJTemplateEntity[]>([]);
+  filteredTemplates$ = new BehaviorSubject<MJTemplateEntity[]>([]);
+  categories$ = new BehaviorSubject<MJTemplateCategoryEntity[]>([]);
   
   // Search and filtering
   searchControl = new FormControl('');
@@ -129,8 +129,8 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
         filter += filter ? ` AND ${this.config.extraFilter}` : this.config.extraFilter;
       }
       
-      const result = await rv.RunView<TemplateEntity>({
-        EntityName: 'Templates',
+      const result = await rv.RunView<MJTemplateEntity>({
+        EntityName: 'MJ: Templates',
         ExtraFilter: filter,
         OrderBy: 'Name ASC',
         ResultType: 'entity_object',
@@ -155,8 +155,8 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     try {
       const rv = new RunView();
       
-      const result = await rv.RunView<TemplateCategoryEntity>({
-        EntityName: 'Template Categories',
+      const result = await rv.RunView<MJTemplateCategoryEntity>({
+        EntityName: 'MJ: Template Categories',
         ExtraFilter: '',
         OrderBy: 'Name ASC',
         ResultType: 'entity_object',
@@ -211,7 +211,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
 
   // === Selection Management ===
 
-  toggleTemplateSelection(template: TemplateEntity) {
+  toggleTemplateSelection(template: MJTemplateEntity) {
     if (this.config.multiSelect) {
       if (this.selectedTemplates.has(template.ID)) {
         this.selectedTemplates.delete(template.ID);
@@ -225,11 +225,11 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  isTemplateSelected(template: TemplateEntity): boolean {
+  isTemplateSelected(template: MJTemplateEntity): boolean {
     return this.selectedTemplates.has(template.ID);
   }
 
-  getSelectedTemplateObjects(): TemplateEntity[] {
+  getSelectedTemplateObjects(): MJTemplateEntity[] {
     const allTemplates = this.templates$.value;
     return allTemplates.filter(template => this.selectedTemplates.has(template.ID));
   }
@@ -240,21 +240,21 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
   }
 
-  getTemplateStatusColor(template: TemplateEntity): string {
+  getTemplateStatusColor(template: MJTemplateEntity): string {
     if (!template.IsActive) return '#6c757d';
     if (template.DisabledAt && new Date(template.DisabledAt) <= new Date()) return '#dc3545';
     if (template.ActiveAt && new Date(template.ActiveAt) > new Date()) return '#ffc107';
     return '#28a745';
   }
 
-  getTemplateStatusText(template: TemplateEntity): string {
+  getTemplateStatusText(template: MJTemplateEntity): string {
     if (!template.IsActive) return 'Inactive';
     if (template.DisabledAt && new Date(template.DisabledAt) <= new Date()) return 'Disabled';
     if (template.ActiveAt && new Date(template.ActiveAt) > new Date()) return 'Scheduled';
     return 'Active';
   }
 
-  getTemplatePreview(template: TemplateEntity): string {
+  getTemplatePreview(template: MJTemplateEntity): string {
     if (!template.Description) return 'No description available';
     return template.Description.length > 100 
       ? template.Description.substring(0, 100) + '...' 

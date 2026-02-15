@@ -9,7 +9,7 @@
     "mode": "views",
     "entities": [
       {
-        "name": "AI Models",
+        "name": "MJ: AI Models",
         "description": "Core AI model definitions and specifications",
         "displayFields": [
           "ID",
@@ -146,7 +146,7 @@
         "usageContext": "Vendor associations for models"
       },
       {
-        "name": "AI Model Types",
+        "name": "MJ: AI Model Types",
         "description": "Types/categories of AI models",
         "displayFields": [
           "ID",
@@ -187,7 +187,7 @@
         "usageContext": "Analytics and usage history"
       },
       {
-        "name": "AI Prompts",
+        "name": "MJ: AI Prompts",
         "description": "AI prompt definitions",
         "displayFields": [
           "ID",

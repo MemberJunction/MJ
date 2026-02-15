@@ -112,7 +112,7 @@ describe('FormStateService', () => {
 
   describe('getCurrentState', () => {
     it('should return default state for unknown entity', () => {
-      const state = service.getCurrentState('TestEntity');
+      const state = service.getCurrentState('MJTestEntity');
       expect(state.sections).toEqual({});
       expect(state.showEmptyFields).toBe(false);
       expect(state.widthMode).toBe('centered');
@@ -121,76 +121,76 @@ describe('FormStateService', () => {
 
   describe('getSectionState', () => {
     it('should return default section state for unknown section', () => {
-      const sectionState = service.getSectionState('TestEntity', 'details');
+      const sectionState = service.getSectionState('MJTestEntity', 'details');
       expect(sectionState.isExpanded).toBe(true);
     });
   });
 
   describe('isSectionExpanded', () => {
     it('should return default when no persisted state', () => {
-      expect(service.isSectionExpanded('TestEntity', 'details')).toBe(true);
+      expect(service.isSectionExpanded('MJTestEntity', 'details')).toBe(true);
     });
 
     it('should respect custom default when no persisted state', () => {
-      expect(service.isSectionExpanded('TestEntity', 'details', false)).toBe(false);
+      expect(service.isSectionExpanded('MJTestEntity', 'details', false)).toBe(false);
     });
 
     it('should return persisted value when state exists', () => {
-      service.setSectionExpanded('TestEntity', 'details', false);
-      expect(service.isSectionExpanded('TestEntity', 'details')).toBe(false);
+      service.setSectionExpanded('MJTestEntity', 'details', false);
+      expect(service.isSectionExpanded('MJTestEntity', 'details')).toBe(false);
     });
   });
 
   describe('setSectionExpanded', () => {
     it('should update section expanded state', () => {
-      service.setSectionExpanded('TestEntity', 'details', false);
-      expect(service.isSectionExpanded('TestEntity', 'details')).toBe(false);
+      service.setSectionExpanded('MJTestEntity', 'details', false);
+      expect(service.isSectionExpanded('MJTestEntity', 'details')).toBe(false);
 
-      service.setSectionExpanded('TestEntity', 'details', true);
-      expect(service.isSectionExpanded('TestEntity', 'details')).toBe(true);
+      service.setSectionExpanded('MJTestEntity', 'details', true);
+      expect(service.isSectionExpanded('MJTestEntity', 'details')).toBe(true);
     });
   });
 
   describe('toggleSection', () => {
     it('should toggle section expanded state', () => {
       // Default is expanded (true)
-      expect(service.isSectionExpanded('TestEntity', 'sec1')).toBe(true);
+      expect(service.isSectionExpanded('MJTestEntity', 'sec1')).toBe(true);
 
-      service.toggleSection('TestEntity', 'sec1');
-      expect(service.isSectionExpanded('TestEntity', 'sec1')).toBe(false);
+      service.toggleSection('MJTestEntity', 'sec1');
+      expect(service.isSectionExpanded('MJTestEntity', 'sec1')).toBe(false);
 
-      service.toggleSection('TestEntity', 'sec1');
-      expect(service.isSectionExpanded('TestEntity', 'sec1')).toBe(true);
+      service.toggleSection('MJTestEntity', 'sec1');
+      expect(service.isSectionExpanded('MJTestEntity', 'sec1')).toBe(true);
     });
   });
 
   describe('widthMode', () => {
     it('should default to centered', () => {
-      expect(service.getWidthMode('TestEntity')).toBe('centered');
+      expect(service.getWidthMode('MJTestEntity')).toBe('centered');
     });
 
     it('should set width mode', () => {
-      service.setWidthMode('TestEntity', 'full-width');
-      expect(service.getWidthMode('TestEntity')).toBe('full-width');
+      service.setWidthMode('MJTestEntity', 'full-width');
+      expect(service.getWidthMode('MJTestEntity')).toBe('full-width');
     });
 
     it('should toggle width mode', () => {
-      service.toggleWidthMode('TestEntity');
-      expect(service.getWidthMode('TestEntity')).toBe('full-width');
+      service.toggleWidthMode('MJTestEntity');
+      expect(service.getWidthMode('MJTestEntity')).toBe('full-width');
 
-      service.toggleWidthMode('TestEntity');
-      expect(service.getWidthMode('TestEntity')).toBe('centered');
+      service.toggleWidthMode('MJTestEntity');
+      expect(service.getWidthMode('MJTestEntity')).toBe('centered');
     });
   });
 
   describe('showEmptyFields', () => {
     it('should default to false', () => {
-      expect(service.getShowEmptyFields('TestEntity')).toBe(false);
+      expect(service.getShowEmptyFields('MJTestEntity')).toBe(false);
     });
 
     it('should set showEmptyFields', () => {
-      service.setShowEmptyFields('TestEntity', true);
-      expect(service.getShowEmptyFields('TestEntity')).toBe(true);
+      service.setShowEmptyFields('MJTestEntity', true);
+      expect(service.getShowEmptyFields('MJTestEntity')).toBe(true);
     });
   });
 
@@ -198,46 +198,46 @@ describe('FormStateService', () => {
     it('should expand all sections', () => {
       const keys = ['sec1', 'sec2', 'sec3'];
       // Collapse some first
-      service.setSectionExpanded('TestEntity', 'sec1', false);
-      service.setSectionExpanded('TestEntity', 'sec2', false);
+      service.setSectionExpanded('MJTestEntity', 'sec1', false);
+      service.setSectionExpanded('MJTestEntity', 'sec2', false);
 
-      service.expandAllSections('TestEntity', keys);
+      service.expandAllSections('MJTestEntity', keys);
       keys.forEach(key => {
-        expect(service.isSectionExpanded('TestEntity', key)).toBe(true);
+        expect(service.isSectionExpanded('MJTestEntity', key)).toBe(true);
       });
     });
 
     it('should collapse all sections', () => {
       const keys = ['sec1', 'sec2', 'sec3'];
-      service.collapseAllSections('TestEntity', keys);
+      service.collapseAllSections('MJTestEntity', keys);
       keys.forEach(key => {
-        expect(service.isSectionExpanded('TestEntity', key)).toBe(false);
+        expect(service.isSectionExpanded('MJTestEntity', key)).toBe(false);
       });
     });
   });
 
   describe('sectionOrder', () => {
     it('should return undefined by default', () => {
-      expect(service.getSectionOrder('TestEntity')).toBeUndefined();
+      expect(service.getSectionOrder('MJTestEntity')).toBeUndefined();
     });
 
     it('should set custom section order', () => {
       const order = ['sec3', 'sec1', 'sec2'];
-      service.setSectionOrder('TestEntity', order);
-      expect(service.getSectionOrder('TestEntity')).toEqual(order);
+      service.setSectionOrder('MJTestEntity', order);
+      expect(service.getSectionOrder('MJTestEntity')).toEqual(order);
     });
 
     it('should detect custom section order', () => {
-      expect(service.hasCustomSectionOrder('TestEntity')).toBe(false);
+      expect(service.hasCustomSectionOrder('MJTestEntity')).toBe(false);
 
-      service.setSectionOrder('TestEntity', ['sec1', 'sec2']);
-      expect(service.hasCustomSectionOrder('TestEntity')).toBe(true);
+      service.setSectionOrder('MJTestEntity', ['sec1', 'sec2']);
+      expect(service.hasCustomSectionOrder('MJTestEntity')).toBe(true);
     });
 
     it('should reset section order', () => {
-      service.setSectionOrder('TestEntity', ['sec1', 'sec2']);
-      service.resetSectionOrder('TestEntity');
-      expect(service.getSectionOrder('TestEntity')).toBeUndefined();
+      service.setSectionOrder('MJTestEntity', ['sec1', 'sec2']);
+      service.resetSectionOrder('MJTestEntity');
+      expect(service.getSectionOrder('MJTestEntity')).toBeUndefined();
     });
   });
 
@@ -245,37 +245,37 @@ describe('FormStateService', () => {
     it('should count expanded sections', () => {
       const keys = ['sec1', 'sec2', 'sec3'];
       // Default is all expanded
-      expect(service.getExpandedCount('TestEntity', keys)).toBe(3);
+      expect(service.getExpandedCount('MJTestEntity', keys)).toBe(3);
 
-      service.setSectionExpanded('TestEntity', 'sec1', false);
-      expect(service.getExpandedCount('TestEntity', keys)).toBe(2);
+      service.setSectionExpanded('MJTestEntity', 'sec1', false);
+      expect(service.getExpandedCount('MJTestEntity', keys)).toBe(2);
     });
   });
 
   describe('resetToDefaults', () => {
     it('should reset all state for entity', () => {
-      service.setSectionExpanded('TestEntity', 'sec1', false);
-      service.setWidthMode('TestEntity', 'full-width');
-      service.setShowEmptyFields('TestEntity', true);
+      service.setSectionExpanded('MJTestEntity', 'sec1', false);
+      service.setWidthMode('MJTestEntity', 'full-width');
+      service.setShowEmptyFields('MJTestEntity', true);
 
-      service.resetToDefaults('TestEntity');
+      service.resetToDefaults('MJTestEntity');
 
-      expect(service.getCurrentState('TestEntity').sections).toEqual({});
-      expect(service.getWidthMode('TestEntity')).toBe('centered');
-      expect(service.getShowEmptyFields('TestEntity')).toBe(false);
+      expect(service.getCurrentState('MJTestEntity').sections).toEqual({});
+      expect(service.getWidthMode('MJTestEntity')).toBe('centered');
+      expect(service.getShowEmptyFields('MJTestEntity')).toBe(false);
     });
   });
 
   describe('getState$ (observable)', () => {
     it('should emit state changes', async () => {
       const states: Array<{ widthMode: string }> = [];
-      const sub = service.getState$('TestEntity').subscribe(s => states.push(s));
+      const sub = service.getState$('MJTestEntity').subscribe(s => states.push(s));
 
       // Initial state emission
       expect(states.length).toBeGreaterThanOrEqual(1);
       expect(states[0].widthMode).toBe('centered');
 
-      service.setWidthMode('TestEntity', 'full-width');
+      service.setWidthMode('MJTestEntity', 'full-width');
       expect(states[states.length - 1].widthMode).toBe('full-width');
 
       sub.unsubscribe();

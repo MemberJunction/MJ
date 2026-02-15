@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { QueryEntity, QueryParameterEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Metadata } from '@memberjunction/core';
@@ -32,8 +32,8 @@ interface ParameterPair {
     styleUrls: ['./query-run-dialog.component.css']
 })
 export class QueryRunDialogComponent implements OnInit, OnChanges {
-    @Input() query: QueryEntity | null = null;
-    @Input() parameters: QueryParameterEntity[] = [];
+    @Input() query: MJQueryEntity | null = null;
+    @Input() parameters: MJQueryParameterEntity[] = [];
     @Input() isVisible = false;
     @Output() isVisibleChange = new EventEmitter<boolean>();
     @Output() onClose = new EventEmitter<void>();

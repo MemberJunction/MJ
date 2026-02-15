@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
 /**
@@ -295,12 +295,12 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
   `]
 })
 export class SimpleTaskViewerComponent implements OnChanges {
-  @Input() tasks: TaskEntity[] = [];
+  @Input() tasks: MJTaskEntity[] = [];
   @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
-  @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
-  public selectedTask: TaskEntity | null = null;
+  public selectedTask: MJTaskEntity | null = null;
   public detailPanelWidth: number = 400;
 
   private isResizing = false;
@@ -311,12 +311,12 @@ export class SimpleTaskViewerComponent implements OnChanges {
     // Tasks are already loaded
   }
 
-  public onTaskClick(task: TaskEntity): void {
+  public onTaskClick(task: MJTaskEntity): void {
     this.selectedTask = task;
     this.taskClicked.emit(task);
   }
 
-  public getAgentRunId(task: TaskEntity): string | null {
+  public getAgentRunId(task: MJTaskEntity): string | null {
     return this.agentRunMap?.get(task.ID) || null;
   }
 

@@ -51,7 +51,7 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 #### AI Prompts
 - **Name**: Unique prompt name
 - **Description**: Purpose of the prompt
-- **TypeID**: Use `@lookup:AI Prompt Types.Name=Chat`
+- **TypeID**: Use `@lookup:MJ: AI Prompt Types.Name=Chat`
 - **TemplateText**: Use `@file:` reference to template file
 - **Status**: Typically "Active"
 - **ResponseFormat**: Typically "JSON" for agent prompts
@@ -81,8 +81,8 @@ Agent prompt templates receive these standard variables:
 
 #### String Field References
 - **@lookup**: For entity relationships
-  - Single field: `@lookup:Actions.Name=Web Search`
-  - Multi-field: `@lookup:AI Prompt Categories.Name=Actions&Status=Active`
+  - Single field: `@lookup:MJ: Actions.Name=Web Search`
+  - Multi-field: `@lookup:MJ: AI Prompt Categories.Name=Actions&Status=Active`
   - With creation: `@lookup:Categories.Name=New Category?create&Description=Auto-created`
 - **@file**: For external file content (e.g., `@file:templates/agent-prompt.md`)
 - **@parent**: For parent entity fields in nested structures (e.g., `@parent:ID`)
@@ -101,11 +101,11 @@ For fields that store JSON (like `Configuration`, `Settings`, `Metadata`), use *
   "fields": {
     "Name": "Memory Manager Job",
     "Configuration": {
-      "AgentID": "@lookup:AI Agents.Name=Memory Manager",
+      "AgentID": "@lookup:MJ: AI Agents.Name=Memory Manager",
       "InitialMessage": "Analyze conversations",
       "Settings": {
         "MaxItems": 100,
-        "TargetAgent": "@lookup:AI Agents.Name=Sage"
+        "TargetAgent": "@lookup:MJ: AI Agents.Name=Sage"
       }
     }
   }
@@ -120,13 +120,13 @@ For fields that store JSON (like `Configuration`, `Settings`, `Metadata`), use *
 
 **Before this feature, you had to write:**
 ```json
-"Configuration": "{\"AgentID\":\"@lookup:AI Agents.Name=Memory Manager\"}"
+"Configuration": "{\"AgentID\":\"@lookup:MJ: AI Agents.Name=Memory Manager\"}"
 ```
 
 **Now you write:**
 ```json
 "Configuration": {
-  "AgentID": "@lookup:AI Agents.Name=Memory Manager"
+  "AgentID": "@lookup:MJ: AI Agents.Name=Memory Manager"
 }
 ```
 

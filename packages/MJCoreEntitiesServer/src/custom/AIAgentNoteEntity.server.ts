@@ -1,15 +1,15 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
-import { AIAgentNoteEntity } from "@memberjunction/core-entities";
+import { MJAIAgentNoteEntity } from "@memberjunction/core-entities";
 import { EmbedTextLocalHelper } from "./util";
 import { AIEngine } from "@memberjunction/aiengine";
 
 /**
- * Server-side extension of AIAgentNoteEntity that auto-generates embeddings
- * when the Note field changes, following the QueryEntity pattern.
+ * Server-side extension of MJAIAgentNoteEntity that auto-generates embeddings
+ * when the Note field changes, following the MJQueryEntity pattern.
  */
-@RegisterClass(BaseEntity, 'AI Agent Notes')
-export class AIAgentNoteEntityExtended extends AIAgentNoteEntity {
+@RegisterClass(BaseEntity, 'MJ: AI Agent Notes')
+export class AIAgentNoteEntityExtended extends MJAIAgentNoteEntity {
     /**
      * Override EmbedTextLocal to use helper
      */

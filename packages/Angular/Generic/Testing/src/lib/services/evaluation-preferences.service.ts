@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata } from '@memberjunction/core';
-import { UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import {
   EvaluationPreferences,
   DEFAULT_EVALUATION_PREFERENCES,
@@ -17,7 +17,7 @@ import {
 })
 export class EvaluationPreferencesService {
   private readonly _preferences$ = new BehaviorSubject<EvaluationPreferences>(DEFAULT_EVALUATION_PREFERENCES);
-  private _settingEntity: UserSettingEntity | null = null;
+  private _settingEntity: MJUserSettingEntity | null = null;
   private _loaded = false;
   private _saving = false;
 
@@ -155,7 +155,7 @@ export class EvaluationPreferencesService {
         if (existing) {
           this._settingEntity = existing;
         } else {
-          this._settingEntity = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+          this._settingEntity = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
           this._settingEntity.UserID = userId;
           this._settingEntity.Setting = EVALUATION_PREFS_SETTING_KEY;
         }

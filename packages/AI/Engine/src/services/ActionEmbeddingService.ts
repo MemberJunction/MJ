@@ -1,5 +1,5 @@
 import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
-import { ActionEntity } from '@memberjunction/core-entities';
+import { MJActionEntity } from '@memberjunction/core-entities';
 import { ActionMatchResult, ActionEmbeddingMetadata } from '../types/ActionMatchResult';
 import { EmbedTextResult } from '@memberjunction/ai';
 import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
@@ -40,7 +40,7 @@ export class ActionEmbeddingService {
      * @returns Vector entries ready for loading into vector service
      */
     public static async GenerateActionEmbeddings(
-        actions: ActionEntity[],
+        actions: MJActionEntity[],
         embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null>
     ): Promise<VectorEntry<ActionEmbeddingMetadata>[]> {
         const entries: VectorEntry<ActionEmbeddingMetadata>[] = [];
@@ -219,7 +219,7 @@ export class ActionEmbeddingService {
      * Combines name and description with proper weighting.
      * @private
      */
-    private static createEmbeddingText(action: ActionEntity): string {
+    private static createEmbeddingText(action: MJActionEntity): string {
         // Weight the action name more heavily by repeating it
         // This ensures that name matches have higher similarity
         const parts = [

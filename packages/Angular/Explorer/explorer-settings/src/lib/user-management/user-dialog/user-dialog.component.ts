@@ -2,17 +2,17 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, S
 
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
-import { UserEntity, RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, MJRoleEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 
 export interface UserDialogData {
-  user?: UserEntity;
+  user?: MJUserEntity;
   mode: 'create' | 'edit';
-  availableRoles: RoleEntity[];
+  availableRoles: MJRoleEntity[];
 }
 
 export interface UserDialogResult {
   action: 'save' | 'cancel';
-  user?: UserEntity;
+  user?: MJUserEntity;
 }
 
 @Component({
@@ -36,7 +36,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   public isLoading = false;
   public error: string | null = null;
   public selectedRoleIds = new Set<string>();
-  public existingUserRoles: UserRoleEntity[] = [];
+  public existingUserRoles: MJUserRoleEntity[] = [];
 
   constructor() {
     this.userForm = this.fb.group({
@@ -127,8 +127,8 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   private async loadExistingUserRoles(userId: string): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<UserRoleEntity>({
-        EntityName: 'User Roles',
+      const result = await rv.RunView<MJUserRoleEntity>({
+        EntityName: 'MJ: User Roles',
         ExtraFilter: `UserID='${userId}'`,
         ResultType: 'entity_object'
       });
@@ -173,14 +173,14 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.error = null;
 
     try {
-      let user: UserEntity;
+      let user: MJUserEntity;
 
       if (this.isEditMode && this.data?.user) {
         // Edit existing user
         user = this.data.user;
       } else {
         // Create new user
-        user = await this.metadata.GetEntityObject<UserEntity>('Users');
+        user = await this.metadata.GetEntityObject<MJUserEntity>('MJ: Users');
         user.NewRecord();
       }
 
@@ -240,7 +240,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
       // Add new selected roles
       for (const roleId of rolesToAdd) {
         try {
-          const userRole = await this.metadata.GetEntityObject<UserRoleEntity>('User Roles');
+          const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
           userRole.UserID = userId;
           userRole.RoleID = roleId;

@@ -14,12 +14,12 @@
 
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
-    FileStorageProviderEntity,
-    FileEntity,
-    AIAgentEntity,
-    AIModelEntity,
-    ConversationDetailAttachmentEntity,
-    AIModalityEntity
+    MJFileStorageProviderEntity,
+    MJFileEntity,
+    MJAIAgentEntity,
+    MJAIModelEntity,
+    MJConversationDetailAttachmentEntity,
+    MJAIModalityEntity
 } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { FileStorageBase } from '@memberjunction/storage';
@@ -58,7 +58,7 @@ export interface AddAttachmentResult {
     /** Whether the operation succeeded */
     success: boolean;
     /** The created attachment entity (if successful) */
-    attachment?: ConversationDetailAttachmentEntity;
+    attachment?: MJConversationDetailAttachmentEntity;
     /** Error message (if failed) */
     error?: string;
 }
@@ -67,7 +67,7 @@ export interface AddAttachmentResult {
  * Attachment data with content for AI consumption
  */
 export interface AttachmentWithData {
-    attachment: ConversationDetailAttachmentEntity;
+    attachment: MJConversationDetailAttachmentEntity;
     /** The full content as data URL or pre-auth download URL */
     contentUrl: string;
 }
@@ -76,7 +76,7 @@ export interface AttachmentWithData {
  * Cached modality lookup
  */
 interface ModalityCache {
-    byName: Map<string, AIModalityEntity>;
+    byName: Map<string, MJAIModalityEntity>;
     loaded: boolean;
 }
 
@@ -101,7 +101,7 @@ export class ConversationAttachmentService {
         }
 
         const rv = new RunView();
-        const result = await rv.RunView<AIModalityEntity>({
+        const result = await rv.RunView<MJAIModalityEntity>({
             EntityName: 'MJ: AI Modalities',
             ResultType: 'entity_object'
         }, contextUser);
@@ -117,7 +117,7 @@ export class ConversationAttachmentService {
     /**
      * Get modality by name (e.g., 'Image', 'Audio', 'Video', 'File')
      */
-    private async getModalityByName(name: string, contextUser: UserInfo): Promise<AIModalityEntity | null> {
+    private async getModalityByName(name: string, contextUser: UserInfo): Promise<MJAIModalityEntity | null> {
         await this.loadModalitiesIfNeeded(contextUser);
         return this.modalityCache.byName.get(name.toLowerCase()) || null;
     }
@@ -149,8 +149,8 @@ export class ConversationAttachmentService {
     async addAttachment(
         conversationDetailId: string,
         input: AddAttachmentInput,
-        agent: AIAgentEntity | null,
-        model: AIModelEntity | null,
+        agent: MJAIAgentEntity | null,
+        model: MJAIModelEntity | null,
         contextUser: UserInfo,
         existingCounts: { images: number; videos: number; audios: number; documents: number } = { images: 0, videos: 0, audios: 0, documents: 0 }
     ): Promise<AddAttachmentResult> {
@@ -270,7 +270,7 @@ export class ConversationAttachmentService {
      * @returns The attachment with content URL
      */
     async getAttachmentData(
-        attachment: ConversationDetailAttachmentEntity,
+        attachment: MJConversationDetailAttachmentEntity,
         contextUser: UserInfo
     ): Promise<AttachmentWithData | null> {
         let contentUrl: string;
@@ -304,13 +304,13 @@ export class ConversationAttachmentService {
      */
     async getDownloadUrl(fileId: string, contextUser: UserInfo): Promise<string | null> {
         // Load file entity
-        const file = await this.md.GetEntityObject<FileEntity>('Files', contextUser);
+        const file = await this.md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         if (!await file.Load(fileId)) {
             return null;
         }
 
         // Load provider
-        const provider = await this.md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', contextUser);
+        const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
         if (!await provider.Load(file.ProviderID)) {
             return null;
         }
@@ -335,9 +335,9 @@ export class ConversationAttachmentService {
     async getAttachments(
         conversationDetailId: string,
         contextUser: UserInfo
-    ): Promise<ConversationDetailAttachmentEntity[]> {
+    ): Promise<MJConversationDetailAttachmentEntity[]> {
         const rv = new RunView();
-        const result = await rv.RunView<ConversationDetailAttachmentEntity>({
+        const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID='${conversationDetailId}'`,
             OrderBy: 'DisplayOrder ASC',
@@ -361,7 +361,7 @@ export class ConversationAttachmentService {
     async getAttachmentsBatch(
         conversationDetailIds: string[],
         contextUser: UserInfo
-    ): Promise<Map<string, ConversationDetailAttachmentEntity[]>> {
+    ): Promise<Map<string, MJConversationDetailAttachmentEntity[]>> {
         if (conversationDetailIds.length === 0) {
             return new Map();
         }
@@ -369,14 +369,14 @@ export class ConversationAttachmentService {
         const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
         const rv = new RunView();
-        const result = await rv.RunView<ConversationDetailAttachmentEntity>({
+        const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID IN (${idList})`,
             OrderBy: 'DisplayOrder ASC',
             ResultType: 'entity_object'
         }, contextUser);
 
-        const map = new Map<string, ConversationDetailAttachmentEntity[]>();
+        const map = new Map<string, MJConversationDetailAttachmentEntity[]>();
 
         if (!result.Success || !result.Results) {
             return map;
@@ -401,7 +401,7 @@ export class ConversationAttachmentService {
      */
     async deleteAttachment(attachmentId: string, contextUser: UserInfo): Promise<boolean> {
         // Load attachment using strongly-typed entity
-        const attachment = await this.md.GetEntityObject<ConversationDetailAttachmentEntity>(
+        const attachment = await this.md.GetEntityObject<MJConversationDetailAttachmentEntity>(
             'MJ: Conversation Detail Attachments',
             contextUser
         );
@@ -426,7 +426,7 @@ export class ConversationAttachmentService {
      * @param attachment - The attachment entity
      * @returns The attachment content reference
      */
-    createAttachmentReference(attachment: ConversationDetailAttachmentEntity): AttachmentContent {
+    createAttachmentReference(attachment: MJConversationDetailAttachmentEntity): AttachmentContent {
         // Map from modality to AttachmentType
         const modalityName = attachment.Modality?.toLowerCase() || 'file';
         let type: AttachmentType = 'Document';
@@ -468,7 +468,7 @@ export class ConversationAttachmentService {
         base64Data: string,
         mimeType: string,
         fileName: string,
-        agent: AIAgentEntity | null,
+        agent: MJAIAgentEntity | null,
         contextUser: UserInfo
     ): Promise<{ success: boolean; fileId?: string; error?: string }> {
         // Get storage provider from agent config or use default
@@ -481,7 +481,7 @@ export class ConversationAttachmentService {
         }
 
         // Load provider
-        const provider = await this.md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', contextUser);
+        const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
         if (!await provider.Load(providerId)) {
             return {
                 success: false,
@@ -513,7 +513,7 @@ export class ConversationAttachmentService {
         }
 
         // Create File entity record
-        const file = await this.md.GetEntityObject<FileEntity>('Files', contextUser);
+        const file = await this.md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         file.Name = fileName;
         file.ProviderID = providerId;
         file.ContentType = mimeType;
@@ -540,13 +540,13 @@ export class ConversationAttachmentService {
      */
     private async deleteStorageFile(fileId: string, contextUser: UserInfo): Promise<boolean> {
         // Load file entity
-        const file = await this.md.GetEntityObject<FileEntity>('Files', contextUser);
+        const file = await this.md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         if (!await file.Load(fileId)) {
             return false;
         }
 
         // Load provider
-        const provider = await this.md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', contextUser);
+        const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
         if (!await provider.Load(file.ProviderID)) {
             return false;
         }
@@ -618,8 +618,8 @@ export class ConversationAttachmentService {
             displayOrder: number;
         },
         contextUser: UserInfo
-    ): Promise<ConversationDetailAttachmentEntity | null> {
-        const attachment = await this.md.GetEntityObject<ConversationDetailAttachmentEntity>(
+    ): Promise<MJConversationDetailAttachmentEntity | null> {
+        const attachment = await this.md.GetEntityObject<MJConversationDetailAttachmentEntity>(
             'MJ: Conversation Detail Attachments',
             contextUser
         );

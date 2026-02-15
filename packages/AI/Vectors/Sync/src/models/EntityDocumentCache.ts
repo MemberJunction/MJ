@@ -1,5 +1,5 @@
 import { UserInfo, RunView, LogStatus, RunViewResult } from "@memberjunction/core";
-import { EntityDocumentEntity, EntityDocumentTypeEntity } from "@memberjunction/core-entities";
+import { MJEntityDocumentEntity, MJEntityDocumentTypeEntity } from "@memberjunction/core-entities";
 
 /**
  * Simple caching class to load all Entity Documents and related data at once into memory
@@ -7,8 +7,8 @@ import { EntityDocumentEntity, EntityDocumentTypeEntity } from "@memberjunction/
 export class EntityDocumentCache {
     private static _instance: EntityDocumentCache;
     private _loaded: boolean = false;
-    private _cache: { [key: string]: EntityDocumentEntity } = {};
-    private _typeCache: { [key: string]: EntityDocumentTypeEntity } = {};
+    private _cache: { [key: string]: MJEntityDocumentEntity } = {};
+    private _typeCache: { [key: string]: MJEntityDocumentTypeEntity } = {};
     private _contextUser: UserInfo | null = null;
 
     private constructor() {
@@ -28,16 +28,16 @@ export class EntityDocumentCache {
         return this._loaded;
     }
 
-    protected Cache(): { [key: string]: EntityDocumentEntity } {
+    protected Cache(): { [key: string]: MJEntityDocumentEntity } {
         return this._cache;
     }
 
-    protected TypeCache(): { [key: string]: EntityDocumentTypeEntity } {
+    protected TypeCache(): { [key: string]: MJEntityDocumentTypeEntity } {
         return this._typeCache;
     }
 
-    public GetDocument(EntityDocumentID: string): EntityDocumentEntity | null {
-        let document: EntityDocumentEntity = this._cache[EntityDocumentID];
+    public GetDocument(EntityDocumentID: string): MJEntityDocumentEntity | null {
+        let document: MJEntityDocumentEntity = this._cache[EntityDocumentID];
         if (!document) {
             LogStatus(`EntityDocumentCache.GetDocument: Cache miss for EntityDocumentID: ${EntityDocumentID}`);
         }
@@ -45,33 +45,33 @@ export class EntityDocumentCache {
         return document || null;
     }
 
-    public GetFirstActiveDocumentForEntityByID(EntityID: string): EntityDocumentEntity | null {
-        let documentType: EntityDocumentTypeEntity | null = this.GetDocumentTypeByName('Record Duplicate');
+    public GetFirstActiveDocumentForEntityByID(EntityID: string): MJEntityDocumentEntity | null {
+        let documentType: MJEntityDocumentTypeEntity | null = this.GetDocumentTypeByName('Record Duplicate');
         if(!documentType){
             return null;
         }
 
-        return Object.values(this._cache).find((ed: EntityDocumentEntity) => {
+        return Object.values(this._cache).find((ed: MJEntityDocumentEntity) => {
             ed.EntityID === EntityID && ed.Status === 'Active' && ed.TypeID === documentType.ID;
         });
 
     }
 
-    public GetFirstActiveDocumentForEntityByName(EntityName: string): EntityDocumentEntity | null {
-        let documentType: EntityDocumentTypeEntity | null = this.GetDocumentTypeByName('Record Duplicate');
+    public GetFirstActiveDocumentForEntityByName(EntityName: string): MJEntityDocumentEntity | null {
+        let documentType: MJEntityDocumentTypeEntity | null = this.GetDocumentTypeByName('Record Duplicate');
         if(!documentType){
             return null;
         }
 
-        return Object.values(this._cache).find((ed: EntityDocumentEntity) => {
+        return Object.values(this._cache).find((ed: MJEntityDocumentEntity) => {
             ed.Entity === EntityName && ed.Status === 'Active' && ed.TypeID === documentType.ID;
         });
 
     }
 
-    public GetDocumentByName(EntityDocumentName: string): EntityDocumentEntity | null {
+    public GetDocumentByName(EntityDocumentName: string): MJEntityDocumentEntity | null {
         const toLower = EntityDocumentName.trim().toLowerCase();
-        let document: EntityDocumentEntity = Object.values(this._cache).find((ed: EntityDocumentEntity) => {
+        let document: MJEntityDocumentEntity = Object.values(this._cache).find((ed: MJEntityDocumentEntity) => {
             ed.Name.trim().toLowerCase() === toLower;
         });
 
@@ -82,8 +82,8 @@ export class EntityDocumentCache {
         return document || null;
     }
 
-    public GetDocumentType(EntityDocumentTypeID: string): EntityDocumentTypeEntity | null {
-        let documentType: EntityDocumentTypeEntity = this._typeCache[EntityDocumentTypeID];
+    public GetDocumentType(EntityDocumentTypeID: string): MJEntityDocumentTypeEntity | null {
+        let documentType: MJEntityDocumentTypeEntity = this._typeCache[EntityDocumentTypeID];
         if (!documentType) {
             LogStatus(`EntityDocumentCache.GetDocument: Cache miss for EntityDocumentID: ${EntityDocumentTypeID}`);
             return null;
@@ -92,9 +92,9 @@ export class EntityDocumentCache {
         return documentType;
     }
 
-    public GetDocumentTypeByName(EntityDocumentTypeName: string): EntityDocumentTypeEntity | null {
+    public GetDocumentTypeByName(EntityDocumentTypeName: string): MJEntityDocumentTypeEntity | null {
         const toLower = EntityDocumentTypeName.trim().toLowerCase();
-        let documentType: EntityDocumentTypeEntity = Object.values(this._typeCache).find((edt: EntityDocumentTypeEntity) => edt.Name.trim().toLowerCase() === toLower);
+        let documentType: MJEntityDocumentTypeEntity = Object.values(this._typeCache).find((edt: MJEntityDocumentTypeEntity) => edt.Name.trim().toLowerCase() === toLower);
 
         if (!documentType) {
             LogStatus(`EntityDocumentCache.GetDocumentByName: Cache miss for EntityDocumentName: ${EntityDocumentTypeName}`);
@@ -123,11 +123,11 @@ export class EntityDocumentCache {
 
         const results: RunViewResult[] = await rv.RunViews([
             {
-                EntityName: "Entity Documents",
+                EntityName: "MJ: Entity Documents",
                 ResultType: "entity_object"
             },
             {
-                EntityName: "Entity Document Types",
+                EntityName: "MJ: Entity Document Types",
                 ResultType: "entity_object"
             }
         ], ContextUser || this._contextUser);

@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
-import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionLibraryEntity } from '@memberjunction/core-entities';
 import { ActionEntityServerEntity } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
 import { mkdirSync } from 'fs';
@@ -99,7 +99,7 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
      * @param directory 
      * @returns 
      */
-    public async generateSingleAction(action: ActionEntity, directory: string): Promise<string> {
+    public async generateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
         if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved' || action.Type !== 'Generated') {
             // either the action is not active, not approved, or is NOT a Generated action, so skip it
             return "";

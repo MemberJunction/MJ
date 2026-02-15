@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { Metadata } from "@memberjunction/core";
-import { UserRoleEntity } from "@memberjunction/core-entities";
+import { MJUserRoleEntity } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
 /**
@@ -92,7 +92,7 @@ export class AssignUserRolesAction extends BaseAction {
 
                 try {
                     // Create UserRole entity
-                    const userRole = await md.GetEntityObject<UserRoleEntity>('User Roles', params.ContextUser);
+                    const userRole = await md.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', params.ContextUser);
                     userRole.UserID = userID;
                     userRole.RoleID = role.ID;
 

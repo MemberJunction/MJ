@@ -1274,6 +1274,7 @@ meeting.ParentEntityFieldNames; // Set<string> — cached for O(1) lookup
 const product = md.EntityByName('Products');
 product.IsParentType;       // true — has child entities
 product.ChildEntities;      // [MeetingsEntityInfo, PublicationsEntityInfo]
+product.AllowMultipleSubtypes; // false — disjoint (default)
 ```
 
 ### BaseEntity Set/Get Routing
@@ -1294,12 +1295,46 @@ meetingEntity.Get('Name'); // Returns from _parentEntity (authoritative)
 meetingEntity.Dirty; // true if ANY field in chain is modified
 ```
 
+### Disjoint vs Overlapping Subtypes
+
+IS-A relationships support two modes, controlled by the parent entity's `AllowMultipleSubtypes` flag:
+
+**Disjoint (default)** — A parent record can be at most ONE child type. The parent auto-chains to its single child via `ISAChild`, and save/delete delegates through the full chain.
+
+```typescript
+// Product -> Meeting -> Webinar (disjoint chain)
+const meeting = await md.GetEntityObject<MeetingEntity>('Meetings', key);
+meeting.ISAChild;    // WebinarEntity (single child, auto-chained)
+meeting.ISAChildren; // null (not overlapping)
+meeting.LeafEntity;  // WebinarEntity (traverses to deepest child)
+```
+
+**Overlapping** (`AllowMultipleSubtypes = true`) — A parent record can simultaneously exist as MULTIPLE child types. The parent does not auto-chain; instead, `ISAChildren` returns an informational list of which child entity types have records for this PK.
+
+```typescript
+// Person -> [Members, Speakers, GoldMembers] (overlapping)
+const person = await md.GetEntityObject<PersonEntity>('Persons', key);
+person.ISAChild;     // null (no single child to chain to)
+person.ISAChildren;  // [{entityName: 'Members'}, {entityName: 'Speakers'}, ...]
+person.LeafEntity;   // PersonEntity itself (overlapping parent is its own leaf)
+
+// Each child chains independently upward to Person
+const member = await md.GetEntityObject<MemberEntity>('Members', key);
+member.ISAParent;    // PersonEntity
+member.Save();       // Saves Person -> Member (normal IS-A chain)
+```
+
 ### Save & Delete Orchestration
 
 - **Save** — Parent entities are saved first (inner-to-outer), then the child. On server, a shared SQL transaction wraps the entire chain.
-- **Delete** — Child is deleted first, then parents (outer-to-inner). Disjoint subtype enforcement prevents a parent from being multiple child types simultaneously.
+- **Delete (disjoint)** — Child is deleted first, then parents. Disjoint subtype enforcement prevents a parent from being multiple child types simultaneously.
+- **Delete (overlapping)** — Child is deleted, then the parent is checked for remaining children. If other children still exist, the parent is preserved. If no children remain, the parent is also deleted.
 
-> **Full Guide**: See [IS-A Relationships Guide](./docs/isa-relationships.md) for the complete data model, runtime object model, save/delete orchestration sequences, provider implementations, CodeGen integration, and troubleshooting.
+### Record Change Propagation (Overlapping)
+
+When saving through one branch of an overlapping hierarchy, Record Change entries are automatically propagated to sibling branches that share the same ancestor. This ensures complete audit history across all child types. Propagation is handled at the provider level (`SQLServerDataProvider.PropagateRecordChangesToSiblings`) using a single SQL batch for efficiency.
+
+> **Full Guide**: See [IS-A Relationships Guide](./docs/isa-relationships.md) for the complete data model, runtime object model, save/delete orchestration sequences, overlapping subtypes, Record Change propagation, provider implementations, CodeGen integration, and troubleshooting.
 
 ## Documentation
 

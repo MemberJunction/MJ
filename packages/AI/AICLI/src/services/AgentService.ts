@@ -37,7 +37,7 @@ export class AgentService {
     try {
       const rv = new RunView();
       const result = await rv.RunView<AIAgentEntityExtended>({
-        EntityName: 'AI Agents',
+        EntityName: 'MJ: AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
         ResultType: 'entity_object'
@@ -78,7 +78,7 @@ For help with agent configuration, see the MJ documentation.`);
     try {
       const rv = new RunView();
       const result = await rv.RunView<AIAgentEntityExtended>({
-        EntityName: 'AI Agents',
+        EntityName: 'MJ: AI Agents',
         ExtraFilter: `Name = '${agentName.replace(/'/g, "''")}'`,
         ResultType: 'entity_object'
       }, this.contextUser);

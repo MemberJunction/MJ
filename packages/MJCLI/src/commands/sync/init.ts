@@ -56,7 +56,7 @@ export default class Init extends Command {
       
       if (setupEntity === 'other') {
         options.entityName = await input({
-          message: 'Enter the entity name (e.g., "Templates", "AI Models"):'
+          message: 'Enter the entity name (e.g., "Templates", "MJ: AI Models"):'
         });
         
         options.dirName = await input({

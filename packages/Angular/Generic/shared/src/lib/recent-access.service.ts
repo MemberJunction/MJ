@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, CompositeKey, LogError } from '@memberjunction/core';
-import { UserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 /**
@@ -91,8 +91,8 @@ export class RecentAccessService {
 
       // Check if we already have a log entry for this user/entity/record combination
       const rv = new RunView();
-      const existingResult = await rv.RunView<UserRecordLogEntity>({
-        EntityName: 'User Record Logs',
+      const existingResult = await rv.RunView<MJUserRecordLogEntity>({
+        EntityName: 'MJ: User Record Logs',
         ExtraFilter: `UserID='${md.CurrentUser.ID}' AND EntityID='${entityInfo.ID}' AND RecordID='${recordIdString}'`,
         ResultType: 'entity_object',
         MaxRows: 1
@@ -115,7 +115,7 @@ export class RecentAccessService {
         }
       } else {
         // Create new entry
-        const newLog = await md.GetEntityObject<UserRecordLogEntity>('User Record Logs');
+        const newLog = await md.GetEntityObject<MJUserRecordLogEntity>('MJ: User Record Logs');
         newLog.UserID = md.CurrentUser.ID;
         newLog.EntityID = entityInfo.ID;
         newLog.RecordID = recordIdString;
