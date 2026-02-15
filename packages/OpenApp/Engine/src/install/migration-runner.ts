@@ -106,7 +106,10 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
     let skyway: SkywayInstance | undefined;
 
     try {
-        const { Skyway } = await import('@skyway/core');
+        // Use a variable to prevent TypeScript from resolving the module at compile time.
+        // @skyway/core is not yet published to npm; it will be resolved at runtime once available.
+        const skywayModuleId = '@skyway/core';
+        const { Skyway } = await import(skywayModuleId);
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig);
 
         if (Verbose) {
