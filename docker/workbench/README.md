@@ -73,8 +73,15 @@ Open `.env` in a text editor and configure:
 | `TEST_AUTH0_CLIENT_SECRET` | Auth0 application secret. | _(empty)_ |
 | `TEST_UID` | Test user email for browser automation login. | _(empty)_ |
 | `TEST_PWD` | Test user password for browser automation login. | _(empty)_ |
+| `AI_VENDOR_API_KEY__OpenAILLM` | OpenAI API key — needed for Sage and other MJ AI agents. | _(empty)_ |
+| `AI_VENDOR_API_KEY__AnthropicLLM` | Anthropic API key for MJ AI agents. | _(empty)_ |
+| `AI_VENDOR_API_KEY__GroqLLM` | Groq API key for MJ AI agents. | _(empty)_ |
+| `AI_VENDOR_API_KEY__GeminiLLM` | Google Gemini API key for MJ AI agents. | _(empty)_ |
+| `AI_VENDOR_API_KEY__MistralLLM` | Mistral API key for MJ AI agents. | _(empty)_ |
 
 > **Tip**: If you pre-fill the `TEST_AUTH0_*` / `TEST_UID` / `TEST_PWD` variables, the container will auto-configure Auth0 on first boot without any interactive prompts.
+>
+> **AI Agents**: MJ uses the `AI_VENDOR_API_KEY__<DriverClass>` pattern for AI provider keys. You need at least one LLM key (e.g., OpenAI or Anthropic) for Sage and other AI agents to work. See `.env.example` for the full list of supported providers.
 
 ### Step 4: Start the Workbench
 

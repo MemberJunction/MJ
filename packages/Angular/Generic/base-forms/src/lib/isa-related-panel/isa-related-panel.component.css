@@ -1,0 +1,68 @@
+/* ============================================
+   ISA RELATED PANEL
+   Container for IS-A related entity cards
+   ============================================ */
+
+.mj-isa-panel {
+  width: 280px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+  align-self: flex-start;
+}
+
+/* Cards container — no gap between cards per design */
+.mj-isa-panel__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Override card border-radius to butt up against each other */
+.mj-isa-panel__cards mj-isa-related-card:not(:first-child) .mj-isa-card {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.mj-isa-panel__cards mj-isa-related-card:not(:last-child) .mj-isa-card {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 1px solid #f0f0f0;
+  box-shadow: none;
+}
+
+/* ---- Collapsed Strip ---- */
+.mj-isa-panel--collapsed {
+  width: 40px;
+}
+
+.mj-isa-panel__collapsed-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.mj-isa-panel__collapsed-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #f5f6fa;
+  color: #667eea;
+  font-size: 12px;
+  cursor: default;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1024px) {
+  .mj-isa-panel {
+    display: none;
+  }
+}

@@ -1,15 +1,17 @@
 # AdvancedEntities Demo
 
-A comprehensive demonstration of two key MemberJunction features: **IS-A Type Relationships** (Table-Per-Type inheritance) and **Virtual Entities** (read-only aggregation views).
+A comprehensive demonstration of three key MemberJunction features: **Disjoint IS-A Type Relationships**, **Overlapping IS-A Subtypes**, and **Virtual Entities** (read-only aggregation views).
 
 ## What This Demo Includes
 
 | Feature | Tables | Description |
 |---------|--------|-------------|
-| IS-A Type Relationships | Product, Meeting, Webinar, Publication | 3-level type hierarchy with shared primary keys |
-| Virtual Entity | Customer, Order, vwCustomerOrderSummary | Aggregation view backing a read-only entity |
+| IS-A (Disjoint) | Product, Meeting, Webinar, Publication | 3-level type hierarchy; a Product is one child type only |
+| IS-A (Overlapping) | Person, Member, GoldMember, Speaker | Overlapping subtypes; a Person can be Member AND Speaker |
+| IS-A (Overlapping) | Organization, Vendor | Extensible overlapping parent with one child type |
+| Virtual Entity | Customer, Order, 4 aggregation views | Read-only entities backed by SQL views |
 
-**Sample Data**: 20 products, 7 meetings, 4 webinars, 5 publications, 25 customers, 85 orders
+**Sample Data**: 20 products, 7 meetings, 4 webinars, 5 publications, 100 persons, 60 members, 20 gold members, 50 speakers, 50 organizations, 30 vendors, 25 customers, 85 orders
 
 ## IS-A Type Relationships
 
@@ -98,6 +100,137 @@ After registering these as MJ entities and setting `ParentID`:
 | **GraphQL Mutations** | `CreateMeeting` input includes all inherited Product fields |
 | **Field Metadata** | Inherited fields marked `IsVirtual=true` with source tracking |
 
+## Overlapping IS-A Subtypes
+
+### Concept
+
+While the Product hierarchy uses **disjoint** subtypes (a product is either a Meeting or a Publication, never both), real-world modeling often requires **overlapping** subtypes. A Person can simultaneously be a Member, a Speaker, or both.
+
+MemberJunction supports this via the `AllowMultipleSubtypes` flag on the parent entity. When enabled, the disjoint enforcement is skipped, and multiple child type records can coexist for the same parent PK.
+
+```mermaid
+erDiagram
+    Person ||--o{ Member : "Member IS-A Person (overlapping)"
+    Person ||--o{ Speaker : "Speaker IS-A Person (overlapping)"
+    Member ||--o| GoldMember : "GoldMember IS-A Member"
+    Organization ||--o{ Vendor : "Vendor IS-A Organization (overlapping)"
+
+    Person {
+        uniqueidentifier ID PK
+        nvarchar FirstName
+        nvarchar LastName
+        nvarchar Email
+        date DateOfBirth
+        nvarchar Phone
+    }
+
+    Member {
+        uniqueidentifier ID "PK + FK to Person.ID"
+        date MembershipDate
+        nvarchar MembershipLevel
+        decimal DuesAmount
+        bit IsActive
+    }
+
+    GoldMember {
+        uniqueidentifier ID "PK + FK to Member.ID"
+        date GoldSince
+        nvarchar PersonalAdvisor
+        decimal AnnualBenefitLimit
+        int PointsBalance
+    }
+
+    Speaker {
+        uniqueidentifier ID "PK + FK to Person.ID"
+        nvarchar Bio
+        nvarchar Expertise
+        decimal HourlyRate
+        bit AvailableForBooking
+    }
+```
+
+### Disjoint vs Overlapping — Side by Side
+
+| Aspect | Disjoint (Product) | Overlapping (Person) |
+|--------|-------------------|---------------------|
+| `AllowMultipleSubtypes` | `false` (default) | `true` |
+| Same PK in multiple children | Blocked at save time | Allowed |
+| `ISAChild` accessor | Returns the single child | Returns `null` (use `ISAChildren`) |
+| `LeafEntity` from parent | Walks to deepest child | Returns `this` (parent is its own leaf) |
+| Save from parent | Delegates to leaf | Saves parent only |
+| Delete child | Cascades delete to parent | Checks for remaining siblings first |
+| Record Changes | Standard chain | Propagated to sibling branches |
+
+### Sample Data Distribution
+
+The 100 Person records demonstrate all possible subtype combinations:
+
+| Category | Person IDs | Count | Description |
+|----------|------------|-------|-------------|
+| Member ONLY | PE001-PE030 | 30 | Members who are not speakers |
+| Both Member AND Speaker | PE031-PE060 | 30 | Overlapping! Same person in both tables |
+| Speaker ONLY | PE061-PE080 | 20 | Speakers who are not members |
+| Standalone Person | PE081-PE100 | 20 | No child type records |
+| GoldMember | PE001-PE020 | 20 | Subset of members with gold tier |
+
+### Overlapping Queries
+
+```sql
+-- Find all persons who are BOTH Member and Speaker
+SELECT p.FirstName, p.LastName, m.MembershipLevel, s.Expertise, s.HourlyRate
+FROM [AdvancedEntities].[Person] p
+JOIN [AdvancedEntities].[Member] m ON p.ID = m.ID
+JOIN [AdvancedEntities].[Speaker] s ON p.ID = s.ID
+ORDER BY p.LastName;
+
+-- Show the subtype distribution
+SELECT
+    CASE
+        WHEN m.ID IS NOT NULL AND s.ID IS NOT NULL THEN 'Both Member AND Speaker'
+        WHEN m.ID IS NOT NULL THEN 'Member ONLY'
+        WHEN s.ID IS NOT NULL THEN 'Speaker ONLY'
+        ELSE 'Standalone Person'
+    END AS SubtypeCategory,
+    COUNT(*) AS PersonCount
+FROM [AdvancedEntities].[Person] p
+LEFT JOIN [AdvancedEntities].[Member] m ON p.ID = m.ID
+LEFT JOIN [AdvancedEntities].[Speaker] s ON p.ID = s.ID
+GROUP BY
+    CASE
+        WHEN m.ID IS NOT NULL AND s.ID IS NOT NULL THEN 'Both Member AND Speaker'
+        WHEN m.ID IS NOT NULL THEN 'Member ONLY'
+        WHEN s.ID IS NOT NULL THEN 'Speaker ONLY'
+        ELSE 'Standalone Person'
+    END;
+
+-- 3-level chain: GoldMember with all inherited fields
+SELECT p.FirstName, p.LastName, p.Email,
+       m.MembershipLevel, m.DuesAmount,
+       g.GoldSince, g.PersonalAdvisor, g.PointsBalance
+FROM [AdvancedEntities].[GoldMember] g
+JOIN [AdvancedEntities].[Member] m ON g.ID = m.ID
+JOIN [AdvancedEntities].[Person] p ON m.ID = p.ID;
+```
+
+### CodeGen Configuration for Overlapping Subtypes
+
+The `database-metadata-config.json` uses two sections to configure overlapping subtypes. The `ISARelationships` section declares parent-child relationships (same as disjoint), and the `Entities` section sets `AllowMultipleSubtypes` on the parent entities:
+
+```json
+{
+  "ISARelationships": [
+    { "ChildEntity": "Member",     "ParentEntity": "Person", "SchemaName": "AdvancedEntities" },
+    { "ChildEntity": "GoldMember", "ParentEntity": "Member", "SchemaName": "AdvancedEntities" },
+    { "ChildEntity": "Speaker",    "ParentEntity": "Person", "SchemaName": "AdvancedEntities" }
+  ],
+  "Entities": [
+    { "BaseTable": "Person", "SchemaName": "AdvancedEntities", "AllowMultipleSubtypes": true }
+  ]
+}
+```
+
+The `Entities` section is a general-purpose mechanism for setting any Entity-table attribute by `BaseTable` + `SchemaName`. Here it sets `AllowMultipleSubtypes = 1` on the Person entity. The GoldMember → Member relationship uses standard disjoint IS-A behavior since Member is not listed in `Entities`.
+
 ## Virtual Entities
 
 ### Concept
@@ -177,9 +310,11 @@ The script is **idempotent** — it drops and recreates all objects if they alre
 ### Step 2: Verify
 
 The script includes verification queries at the end. Check:
-- Row counts: 20 products, 7 meetings, 4 webinars, 5 publications, 25 customers, 85 orders
-- IS-A PK sharing: every Meeting ID exists in Product
+- Row counts: 20 products, 7 meetings, 4 webinars, 5 publications, 25 customers, 85 orders, 100 persons, 60 members, 20 gold members, 50 speakers, 50 organizations, 30 vendors
+- IS-A PK sharing: every Meeting ID exists in Product; every Member/Speaker ID exists in Person
 - Disjoint subtypes: 0 violations (no ID in both Meeting and Publication)
+- Overlapping subtypes: 30 persons appear in BOTH Member and Speaker tables
+- Distribution breakdown: 30 member-only, 30 both, 20 speaker-only, 20 standalone
 - Virtual view: 25 rows, 2 with zero orders
 
 ### Step 3: Configure Metadata
@@ -206,13 +341,29 @@ The config file declares:
 }
 ```
 
-**IS-A Relationships** — CodeGen auto-sets `ParentID` on the child entities after they're discovered from the schema:
+**IS-A Relationships (Disjoint)** — CodeGen auto-sets `ParentID` on the child entities after they're discovered from the schema:
 ```json
 {
   "ISARelationships": [
     { "ChildEntity": "Meetings",      "ParentEntity": "Products",  "SchemaName": "AdvancedEntities" },
     { "ChildEntity": "Webinars",      "ParentEntity": "Meetings",  "SchemaName": "AdvancedEntities" },
     { "ChildEntity": "Publications",  "ParentEntity": "Products",  "SchemaName": "AdvancedEntities" }
+  ]
+}
+```
+
+**IS-A Relationships (Overlapping)** — Same `ISARelationships` format (no special flags), plus an `Entities` section to enable overlapping on the parent:
+```json
+{
+  "ISARelationships": [
+    { "ChildEntity": "Member",     "ParentEntity": "Person",       "SchemaName": "AdvancedEntities" },
+    { "ChildEntity": "GoldMember", "ParentEntity": "Member",       "SchemaName": "AdvancedEntities" },
+    { "ChildEntity": "Speaker",    "ParentEntity": "Person",       "SchemaName": "AdvancedEntities" },
+    { "ChildEntity": "Vendor",     "ParentEntity": "Organization", "SchemaName": "AdvancedEntities" }
+  ],
+  "Entities": [
+    { "BaseTable": "Person",       "SchemaName": "AdvancedEntities", "AllowMultipleSubtypes": true },
+    { "BaseTable": "Organization", "SchemaName": "AdvancedEntities", "AllowMultipleSubtypes": true }
   ]
 }
 ```
@@ -227,11 +378,12 @@ CodeGen will automatically:
 1. **Discover** the AdvancedEntities tables and create Entity metadata records
 2. **Create the virtual entity** from the `VirtualEntities` config (with soft PK/FK)
 3. **Set ParentID** on child entities from the `ISARelationships` config
-4. **Generate views** for IS-A entities (JOINing parent fields via shared PK)
-5. **Generate stored procedures** (single-table inserts for IS-A entities)
-6. **Sync entity field metadata** from `sys.columns`
-7. **Generate TypeScript classes** with inherited field accessors
-8. **Skip SP generation** for the virtual entity (read-only)
+4. **Apply Entity attributes** from the `Entities` config (e.g., AllowMultipleSubtypes on Person, Organization)
+5. **Generate views** for IS-A entities (JOINing parent fields via shared PK)
+6. **Generate stored procedures** (single-table inserts for IS-A entities)
+7. **Sync entity field metadata** from `sys.columns`
+8. **Generate TypeScript classes** with inherited field accessors
+9. **Skip SP generation** for the virtual entity (read-only)
 
 ### Step 5: Run RefreshMetadata
 
@@ -369,6 +521,69 @@ WHERE TotalOrders = 0;
 | ItemCount | INT | No | 1 | Number of items |
 | ShippingAddress | NVARCHAR(500) | Yes | | Delivery address |
 | Notes | NVARCHAR(MAX) | Yes | | Special instructions |
+
+### AdvancedEntities.Person
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| ID | UNIQUEIDENTIFIER | No | NEWSEQUENTIALID() | Root PK for overlapping IS-A chain |
+| FirstName | NVARCHAR(100) | No | | First name |
+| LastName | NVARCHAR(100) | No | | Last name |
+| Email | NVARCHAR(255) | No | | Unique email address |
+| DateOfBirth | DATE | Yes | | Date of birth |
+| Phone | NVARCHAR(50) | Yes | | Phone number |
+
+### AdvancedEntities.Member
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| ID | UNIQUEIDENTIFIER | No | *(shared PK)* | Same UUID as Person.ID |
+| MembershipDate | DATE | No | | Date membership started |
+| MembershipLevel | NVARCHAR(50) | No | | Basic, Standard, Premium, or Elite |
+| DuesAmount | DECIMAL(18,2) | No | | Annual dues in USD |
+| IsActive | BIT | No | 1 | Active/inactive flag |
+
+### AdvancedEntities.GoldMember
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| ID | UNIQUEIDENTIFIER | No | *(shared PK)* | Same UUID as Member.ID and Person.ID |
+| GoldSince | DATE | No | | Date gold status was granted |
+| PersonalAdvisor | NVARCHAR(200) | Yes | | Assigned advisor name |
+| AnnualBenefitLimit | DECIMAL(18,2) | No | 50000.00 | Maximum annual benefit amount |
+| PointsBalance | INT | No | 0 | Current rewards points balance |
+
+### AdvancedEntities.Speaker
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| ID | UNIQUEIDENTIFIER | No | *(shared PK)* | Same UUID as Person.ID |
+| Bio | NVARCHAR(MAX) | Yes | | Speaker biography |
+| Expertise | NVARCHAR(200) | No | | Area of expertise |
+| HourlyRate | DECIMAL(18,2) | No | | Speaking fee per hour |
+| AvailableForBooking | BIT | No | 1 | Available for new engagements |
+
+### AdvancedEntities.Organization
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| ID | UNIQUEIDENTIFIER | No | NEWSEQUENTIALID() | Root PK for organization IS-A chain |
+| Name | NVARCHAR(200) | No | | Organization name |
+| Website | NVARCHAR(500) | Yes | | Organization website URL |
+| Industry | NVARCHAR(100) | Yes | | Industry sector |
+| FoundedYear | INT | Yes | | Year the organization was founded |
+| EmployeeCount | INT | Yes | | Number of employees |
+
+### AdvancedEntities.Vendor
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| ID | UNIQUEIDENTIFIER | No | *(shared PK)* | Same UUID as Organization.ID |
+| VendorCode | NVARCHAR(20) | No | | Unique vendor code |
+| PaymentTerms | NVARCHAR(50) | No | | Net-15, Net-30, Net-45, Net-60, or Prepaid |
+| TaxID | NVARCHAR(50) | Yes | | Tax identification number |
+| PreferredCurrency | NVARCHAR(10) | No | USD | Payment currency |
+| Rating | DECIMAL(3,1) | Yes | | Vendor rating (0.0–5.0) |
 
 ## Related Documentation
 

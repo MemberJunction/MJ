@@ -1091,6 +1091,13 @@ export class EntityInfo extends BaseInfo {
      */
     TrackRecordChanges: boolean = null
     /**
+     * When false (default), child types are disjoint — a record can only be one child type at a time.
+     * When true, a record can simultaneously exist as multiple child types
+     * (e.g., a Person can be both a Member and a Volunteer).
+     * This flag is set on the **parent** entity and controls whether its children are exclusive.
+     */
+    AllowMultipleSubtypes: boolean = false
+    /**
      * Whether to audit when users access records from this entity
      */
     AuditRecordAccess: boolean = null
@@ -1518,9 +1525,22 @@ export class EntityInfo extends BaseInfo {
      * Returns all child entities that have their ParentID set to this entity's ID.
      * These represent IS-A type specializations of this entity.
      * Example: For "Products" entity, might return [Meetings, Publications].
+     *
+     * When `AllowMultipleSubtypes` is true on this entity, multiple children can
+     * coexist for the same parent record (overlapping subtypes). When false (default),
+     * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
         return Metadata.Provider?.Entities?.filter(e => e.ParentID === this.ID) ?? [];
+    }
+
+    /**
+     * Convenience alias: returns true when this entity is a parent type that allows
+     * overlapping (non-disjoint) subtypes. Equivalent to checking both
+     * `IsParentType` and `AllowMultipleSubtypes`.
+     */
+    get HasOverlappingSubtypes(): boolean {
+        return this.IsParentType && this.AllowMultipleSubtypes;
     }
 
     // Cache for ParentChain to avoid repeated walks

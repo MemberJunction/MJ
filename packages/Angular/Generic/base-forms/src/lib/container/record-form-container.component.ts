@@ -258,6 +258,30 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
     return this.Panels.filter(p => p.Expanded && p.IsVisible).length;
   }
 
+  // ---- IS-A Related Panel ----
+
+  /** Whether the current record has IS-A related items to display in the side panel */
+  get HasIsaRelatedItems(): boolean {
+    const record = this.EffectiveRecord;
+    if (!record?.EntityInfo) return false;
+
+    const entityInfo = record.EntityInfo;
+
+    // Child entity with overlapping parent — may have siblings
+    if (entityInfo.IsChildType && entityInfo.ParentEntityInfo?.AllowMultipleSubtypes) {
+      const parent = record.ISAParent;
+      if (parent?.ISAChildren && parent.ISAChildren.length > 1) return true;
+    }
+
+    // Parent entity with children
+    if (entityInfo.IsParentType) {
+      if (entityInfo.AllowMultipleSubtypes && record.ISAChildren && record.ISAChildren.length > 0) return true;
+      if (!entityInfo.AllowMultipleSubtypes && record.ISAChild) return true;
+    }
+
+    return false;
+  }
+
   // ---- Section Manager ----
 
   /** Builds section info array from projected panels for the section manager drawer */

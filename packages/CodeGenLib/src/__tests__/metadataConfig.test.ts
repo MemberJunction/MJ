@@ -1,10 +1,11 @@
 /**
  * Unit tests for database-metadata-config.json parsing logic.
  *
- * Tests the three extraction methods on ManageMetadataBase:
+ * Tests the four extraction methods on ManageMetadataBase:
  *   - extractTablesFromConfig (soft PK/FK for regular tables)
  *   - extractVirtualEntitiesFromConfig (virtual entity definitions)
  *   - extractISARelationshipsFromConfig (IS-A parent-child declarations)
+ *   - extractEntitiesFromConfig (Entity-table attribute overrides)
  *
  * Also tests deriveEntityNameFromView and the interaction between sections.
  */
@@ -66,6 +67,7 @@ import {
    SoftPKFKTableConfig,
    VirtualEntityConfig,
    ISARelationshipConfig,
+   EntityConfig,
 } from '../Database/manage-metadata';
 
 // ---------------------------------------------------------------------------
@@ -82,6 +84,10 @@ class TestableManageMetadata extends ManageMetadataBase {
 
    public testExtractISARelationships(config: Record<string, unknown>): ISARelationshipConfig[] {
       return this.extractISARelationshipsFromConfig(config);
+   }
+
+   public testExtractEntities(config: Record<string, unknown>): EntityConfig[] {
+      return this.extractEntitiesFromConfig(config);
    }
 
    public testDeriveEntityName(viewName: string): string {
@@ -152,6 +158,18 @@ const fullConfig: Record<string, unknown> = {
                Description: 'FK to Customers',
             },
          ],
+      },
+   ],
+   'Entities': [
+      {
+         BaseTable: 'Person',
+         SchemaName: 'AdvancedEntities',
+         AllowMultipleSubtypes: true,
+      },
+      {
+         BaseTable: 'Organization',
+         SchemaName: 'AdvancedEntities',
+         AllowMultipleSubtypes: true,
       },
    ],
    'AdvancedEntities': [
@@ -570,6 +588,84 @@ describe('extractISARelationshipsFromConfig', () => {
    });
 });
 
+// ===== extractEntitiesFromConfig =====
+
+describe('extractEntitiesFromConfig', () => {
+   test('extracts entities with attributes from full config', () => {
+      const entities = manager.testExtractEntities(fullConfig);
+      expect(entities).toHaveLength(2);
+
+      expect(entities[0].BaseTable).toBe('Person');
+      expect(entities[0].SchemaName).toBe('AdvancedEntities');
+      expect(entities[0].AllowMultipleSubtypes).toBe(true);
+
+      expect(entities[1].BaseTable).toBe('Organization');
+      expect(entities[1].SchemaName).toBe('AdvancedEntities');
+      expect(entities[1].AllowMultipleSubtypes).toBe(true);
+   });
+
+   test('returns empty array when Entities key is missing', () => {
+      expect(manager.testExtractEntities(tablesOnlyConfig)).toEqual([]);
+   });
+
+   test('returns empty array when Entities is not an array', () => {
+      const config: Record<string, unknown> = { Entities: 'not-an-array' };
+      expect(manager.testExtractEntities(config)).toEqual([]);
+   });
+
+   test('returns empty array for empty config', () => {
+      expect(manager.testExtractEntities(emptyConfig)).toEqual([]);
+   });
+
+   test('filters out entries missing BaseTable', () => {
+      const config: Record<string, unknown> = {
+         Entities: [
+            { SchemaName: 'dbo', AllowMultipleSubtypes: true },
+            { BaseTable: 'Valid', SchemaName: 'dbo', TrackRecordChanges: false },
+         ],
+      };
+      const entities = manager.testExtractEntities(config);
+      expect(entities).toHaveLength(1);
+      expect(entities[0].BaseTable).toBe('Valid');
+   });
+
+   test('filters out entries missing SchemaName', () => {
+      const config: Record<string, unknown> = {
+         Entities: [
+            { BaseTable: 'NoSchema', AllowMultipleSubtypes: true },
+            { BaseTable: 'HasSchema', SchemaName: 'dbo' },
+         ],
+      };
+      const entities = manager.testExtractEntities(config);
+      expect(entities).toHaveLength(1);
+      expect(entities[0].BaseTable).toBe('HasSchema');
+   });
+
+   test('preserves arbitrary attribute keys', () => {
+      const config: Record<string, unknown> = {
+         Entities: [
+            {
+               BaseTable: 'MyTable',
+               SchemaName: 'myschema',
+               AllowMultipleSubtypes: true,
+               TrackRecordChanges: false,
+               Description: 'Custom description',
+            },
+         ],
+      };
+      const entities = manager.testExtractEntities(config);
+      expect(entities).toHaveLength(1);
+      expect(entities[0].AllowMultipleSubtypes).toBe(true);
+      expect(entities[0].TrackRecordChanges).toBe(false);
+      expect(entities[0].Description).toBe('Custom description');
+   });
+
+   test('returns empty array when Entities array is empty', () => {
+      const config: Record<string, unknown> = { Entities: [] };
+      expect(manager.testExtractEntities(config)).toEqual([]);
+   });
+});
+
 // ===== deriveEntityNameFromView =====
 
 describe('deriveEntityNameFromView', () => {
@@ -601,16 +697,18 @@ describe('deriveEntityNameFromView', () => {
 // ===== Cross-section interaction tests =====
 
 describe('cross-section interactions', () => {
-   test('all three extractors work independently on full config', () => {
+   test('all four extractors work independently on full config', () => {
       const tables = manager.testExtractTables(fullConfig);
       const ves = manager.testExtractVirtualEntities(fullConfig);
       const isas = manager.testExtractISARelationships(fullConfig);
+      const entities = manager.testExtractEntities(fullConfig);
 
       expect(tables.length).toBeGreaterThan(0);
       expect(ves.length).toBeGreaterThan(0);
       expect(isas.length).toBeGreaterThan(0);
+      expect(entities.length).toBeGreaterThan(0);
 
-      // Tables should NOT contain items from VirtualEntities or ISA
+      // Tables should NOT contain items from VirtualEntities, ISA, or Entities
       const tableNames = tables.map(t => t.TableName);
       for (const ve of ves) {
          expect(tableNames).not.toContain(ve.ViewName);
@@ -619,18 +717,31 @@ describe('cross-section interactions', () => {
          expect(tableNames).not.toContain(isa.ChildEntity);
          expect(tableNames).not.toContain(isa.ParentEntity);
       }
+      for (const ec of entities) {
+         expect(tableNames).not.toContain(ec.BaseTable);
+      }
+   });
+
+   test('Entities key is not parsed as a schema-as-key table section', () => {
+      const tables = manager.testExtractTables(fullConfig);
+      const tableNames = tables.map(t => t.TableName);
+      // "Person" and "Organization" are in the Entities array, not table configs
+      expect(tableNames).not.toContain('Person');
+      expect(tableNames).not.toContain('Organization');
    });
 
    test('empty config returns empty from all extractors', () => {
       expect(manager.testExtractTables(emptyConfig)).toEqual([]);
       expect(manager.testExtractVirtualEntities(emptyConfig)).toEqual([]);
       expect(manager.testExtractISARelationships(emptyConfig)).toEqual([]);
+      expect(manager.testExtractEntities(emptyConfig)).toEqual([]);
    });
 
    test('malformed config returns empty from all extractors', () => {
       expect(manager.testExtractTables(malformedConfig)).toEqual([]);
       expect(manager.testExtractVirtualEntities(malformedConfig)).toEqual([]);
       expect(manager.testExtractISARelationships(malformedConfig)).toEqual([]);
+      expect(manager.testExtractEntities(malformedConfig)).toEqual([]);
    });
 
    test('mixed format (legacy Tables + VE + ISA) parses all sections', () => {
@@ -662,21 +773,24 @@ describe('cross-section interactions', () => {
       expect(isas).toHaveLength(2);
    });
 
-   test('virtual-only config has no tables and no ISA', () => {
+   test('virtual-only config has no tables, ISA, or entities', () => {
       expect(manager.testExtractTables(virtualOnlyConfig)).toEqual([]);
       expect(manager.testExtractVirtualEntities(virtualOnlyConfig)).toHaveLength(1);
       expect(manager.testExtractISARelationships(virtualOnlyConfig)).toEqual([]);
+      expect(manager.testExtractEntities(virtualOnlyConfig)).toEqual([]);
    });
 
-   test('ISA-only config has no tables and no virtual entities', () => {
+   test('ISA-only config has no tables, virtual entities, or entities', () => {
       expect(manager.testExtractTables(isaOnlyConfig)).toEqual([]);
       expect(manager.testExtractVirtualEntities(isaOnlyConfig)).toEqual([]);
       expect(manager.testExtractISARelationships(isaOnlyConfig)).toHaveLength(1);
+      expect(manager.testExtractEntities(isaOnlyConfig)).toEqual([]);
    });
 
-   test('tables-only config has no virtual entities and no ISA', () => {
+   test('tables-only config has no virtual entities, ISA, or entities', () => {
       expect(manager.testExtractTables(tablesOnlyConfig).length).toBeGreaterThan(0);
       expect(manager.testExtractVirtualEntities(tablesOnlyConfig)).toEqual([]);
       expect(manager.testExtractISARelationships(tablesOnlyConfig)).toEqual([]);
+      expect(manager.testExtractEntities(tablesOnlyConfig)).toEqual([]);
    });
 });
