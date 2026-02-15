@@ -66,3 +66,10 @@ export { SqlServerAdapter, type SqlConnectivityResult } from './adapters/SqlServ
 // Phases (exported for testing and direct use)
 export { PreflightPhase, type PreflightContext, type PreflightResult } from './phases/PreflightPhase.js';
 export { ScaffoldPhase, type ScaffoldContext, type ScaffoldResult } from './phases/ScaffoldPhase.js';
+export { ConfigurePhase, type ConfigureContext, type ConfigureResult } from './phases/ConfigurePhase.js';
+export { DatabaseProvisionPhase, type DatabaseProvisionContext, type DatabaseProvisionResult } from './phases/DatabaseProvisionPhase.js';
+export { MigratePhase, type MigrateContext, type MigrateResult } from './phases/MigratePhase.js';
+export { PlatformCompatPhase, type PlatformCompatContext, type PlatformCompatResult } from './phases/PlatformCompatPhase.js';
+export { DependencyPhase, type DependencyContext, type DependencyResult } from './phases/DependencyPhase.js';
+export { CodeGenPhase, type CodeGenContext, type CodeGenResult } from './phases/CodeGenPhase.js';
+export { SmokeTestPhase, type SmokeTestContext, type SmokeTestResult } from './phases/SmokeTestPhase.js';

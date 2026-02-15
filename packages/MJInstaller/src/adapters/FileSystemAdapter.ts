@@ -164,4 +164,71 @@ export class FileSystemAdapter {
     const json = JSON.stringify(data, null, 2);
     await fs.writeFile(filePath, json, 'utf-8');
   }
+
+  /**
+   * Write a text file (for .env, SQL scripts, etc.).
+   */
+  async WriteText(filePath: string, content: string): Promise<void> {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content, 'utf-8');
+  }
+
+  /**
+   * Read a text file and return its content.
+   */
+  async ReadText(filePath: string): Promise<string> {
+    return fs.readFile(filePath, 'utf-8');
+  }
+
+  /**
+   * List files in a directory, optionally filtered by a regex pattern.
+   */
+  async ListFiles(dirPath: string, pattern?: RegExp): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const files = entries
+        .filter((e) => e.isFile())
+        .map((e) => e.name);
+      if (pattern) {
+        return files.filter((f) => pattern.test(f));
+      }
+      return files;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Recursively find files matching a pattern under a directory.
+   * Returns absolute paths.
+   */
+  async FindFiles(dirPath: string, filename: string, maxDepth: number = 3): Promise<string[]> {
+    const results: string[] = [];
+    await this.findFilesRecursive(dirPath, filename, maxDepth, 0, results);
+    return results;
+  }
+
+  private async findFilesRecursive(
+    dirPath: string,
+    filename: string,
+    maxDepth: number,
+    currentDepth: number,
+    results: string[]
+  ): Promise<void> {
+    if (currentDepth > maxDepth) return;
+
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isFile() && entry.name === filename) {
+          results.push(fullPath);
+        } else if (entry.isDirectory() && entry.name !== 'node_modules' && entry.name !== '.git') {
+          await this.findFilesRecursive(fullPath, filename, maxDepth, currentDepth + 1, results);
+        }
+      }
+    } catch {
+      // skip directories we can't read
+    }
+  }
 }

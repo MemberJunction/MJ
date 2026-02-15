@@ -81,9 +81,9 @@ export class InstallPlan {
     const allPhases: PhaseId[] = [
       'preflight',
       'scaffold',
+      'configure',
       'database',
       'migrate',
-      'configure',
       'platform',
       'dependencies',
       'codegen',

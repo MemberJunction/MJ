@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/installer",
-  "version": "4.3.0",
+  "version": "4.4.0",
   "description": "Headless, event-driven installer engine for MemberJunction",
   "type": "module",
   "main": "dist/index.js",

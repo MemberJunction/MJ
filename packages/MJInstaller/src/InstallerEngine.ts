@@ -11,6 +11,13 @@ import { InstallerError, type PhaseId } from './errors/InstallerError.js';
 import { GitHubReleaseProvider } from './adapters/GitHubReleaseProvider.js';
 import { PreflightPhase } from './phases/PreflightPhase.js';
 import { ScaffoldPhase } from './phases/ScaffoldPhase.js';
+import { ConfigurePhase } from './phases/ConfigurePhase.js';
+import { DatabaseProvisionPhase } from './phases/DatabaseProvisionPhase.js';
+import { MigratePhase } from './phases/MigratePhase.js';
+import { PlatformCompatPhase } from './phases/PlatformCompatPhase.js';
+import { DependencyPhase } from './phases/DependencyPhase.js';
+import { CodeGenPhase } from './phases/CodeGenPhase.js';
+import { SmokeTestPhase } from './phases/SmokeTestPhase.js';
 import { InstallPlan, type CreatePlanInput, type RunOptions, type DoctorOptions, type InstallResult } from './models/InstallPlan.js';
 import { InstallState } from './models/InstallState.js';
 import { InstallConfigDefaults, type PartialInstallConfig } from './models/InstallConfig.js';
@@ -24,9 +31,9 @@ import type { Diagnostics } from './models/Diagnostics.js';
 const ALL_PHASES: PhaseId[] = [
   'preflight',
   'scaffold',
+  'configure',
   'database',
   'migrate',
-  'configure',
   'platform',
   'dependencies',
   'codegen',
@@ -38,6 +45,16 @@ export class InstallerEngine {
   private github = new GitHubReleaseProvider();
   private preflight = new PreflightPhase();
   private scaffold = new ScaffoldPhase();
+  private configure = new ConfigurePhase();
+  private databaseProvision = new DatabaseProvisionPhase();
+  private migrate = new MigratePhase();
+  private platformCompat = new PlatformCompatPhase();
+  private dependency = new DependencyPhase();
+  private codeGen = new CodeGenPhase();
+  private smokeTest = new SmokeTestPhase();
+
+  /** Resolved config — populated by the configure phase, used by subsequent phases */
+  private resolvedConfig: PartialInstallConfig = {};
 
   // -------------------------------------------------------------------------
   // Public API
@@ -90,9 +107,6 @@ export class InstallerEngine {
 
   /**
    * Execute an install plan, emitting events throughout.
-   *
-   * Currently implements Milestone 1 phases (preflight + scaffold).
-   * Later milestones will add remaining phases.
    */
   async Run(plan: InstallPlan, options?: RunOptions): Promise<InstallResult> {
     const startTime = Date.now();
@@ -105,6 +119,9 @@ export class InstallerEngine {
       ...plan.Config,
       ...options?.Config,
     };
+
+    // Reset resolved config — will be populated by the configure phase
+    this.resolvedConfig = { ...config };
 
     // Check for existing state file (resume)
     let state: InstallState | null = null;
@@ -279,24 +296,22 @@ export class InstallerEngine {
     switch (phaseId) {
       case 'preflight':
         return this.executePreflight(plan, config);
-
       case 'scaffold':
         return this.executeScaffold(plan, config, yes);
-
-      // Remaining phases will be implemented in Milestones 2 & 3
-      case 'database':
-      case 'migrate':
       case 'configure':
+        return this.executeConfigure(plan, config, yes);
+      case 'database':
+        return this.executeDatabase(plan, yes);
+      case 'migrate':
+        return this.executeMigrate(plan);
       case 'platform':
+        return this.executePlatform(plan);
       case 'dependencies':
+        return this.executeDependencies(plan);
       case 'codegen':
+        return this.executeCodeGen(plan);
       case 'smoke_test':
-        this.emitter.Emit('warn', {
-          Type: 'warn',
-          Phase: phaseId,
-          Message: `Phase "${phaseId}" is not yet implemented (coming in Milestone 2/3).`,
-        });
-        return { Warnings: [`Phase "${phaseId}" not yet implemented`] };
+        return this.executeSmokeTest(plan);
     }
   }
 
@@ -347,6 +362,122 @@ export class InstallerEngine {
     });
 
     return { Warnings: [] };
+  }
+
+  private async executeConfigure(
+    plan: InstallPlan,
+    config: PartialInstallConfig,
+    yes: boolean
+  ): Promise<PhaseExecutionResult> {
+    const result = await this.configure.Run({
+      Dir: plan.Dir,
+      Config: { ...this.resolvedConfig, ...config },
+      Yes: yes,
+      Emitter: this.emitter,
+    });
+
+    // Store resolved config for subsequent phases
+    this.resolvedConfig = { ...this.resolvedConfig, ...result.Config };
+
+    return { Warnings: [] };
+  }
+
+  private async executeDatabase(
+    plan: InstallPlan,
+    yes: boolean
+  ): Promise<PhaseExecutionResult> {
+    const result = await this.databaseProvision.Run({
+      Dir: plan.Dir,
+      Config: this.resolvedConfig,
+      Yes: yes,
+      Emitter: this.emitter,
+    });
+
+    const warnings: string[] = [];
+    if (!result.ValidationPassed) {
+      warnings.push('Database validation did not pass. You may need to run the setup script manually.');
+    }
+
+    return { Warnings: warnings };
+  }
+
+  private async executeMigrate(plan: InstallPlan): Promise<PhaseExecutionResult> {
+    await this.migrate.Run({
+      Dir: plan.Dir,
+      Config: this.resolvedConfig,
+      Emitter: this.emitter,
+    });
+
+    return { Warnings: [] };
+  }
+
+  private async executePlatform(plan: InstallPlan): Promise<PhaseExecutionResult> {
+    const result = await this.platformCompat.Run({
+      Dir: plan.Dir,
+      DetectedOS: this.detectOS(),
+      Emitter: this.emitter,
+    });
+
+    const warnings: string[] = [];
+    if (result.CrossEnvNeeded) {
+      warnings.push('cross-env was added as a dependency. It will be installed in the dependencies phase.');
+    }
+
+    return { Warnings: warnings };
+  }
+
+  private async executeDependencies(plan: InstallPlan): Promise<PhaseExecutionResult> {
+    const result = await this.dependency.Run({
+      Dir: plan.Dir,
+      Emitter: this.emitter,
+    });
+
+    return { Warnings: result.Warnings };
+  }
+
+  private async executeCodeGen(plan: InstallPlan): Promise<PhaseExecutionResult> {
+    const result = await this.codeGen.Run({
+      Dir: plan.Dir,
+      Emitter: this.emitter,
+    });
+
+    const warnings: string[] = [];
+    if (result.RetryUsed) {
+      warnings.push('Code generation required a retry to produce all artifacts.');
+    }
+
+    return { Warnings: warnings };
+  }
+
+  private async executeSmokeTest(plan: InstallPlan): Promise<PhaseExecutionResult> {
+    const result = await this.smokeTest.Run({
+      Dir: plan.Dir,
+      Config: this.resolvedConfig,
+      Emitter: this.emitter,
+    });
+
+    const warnings: string[] = [];
+    if (!result.ApiRunning) {
+      warnings.push('MJAPI did not respond to health checks. Check the API logs.');
+    }
+    if (!result.ExplorerRunning) {
+      warnings.push('Explorer did not respond to health checks. Check the Explorer logs.');
+    }
+
+    return { Warnings: warnings };
+  }
+
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
+
+  private detectOS(): 'windows' | 'macos' | 'linux' | 'other' {
+    switch (process.platform) {
+      case 'win32': return 'windows';
+      case 'darwin': return 'macos';
+      case 'linux': return 'linux';
+      default: return 'other';
+    }
   }
 }
 
