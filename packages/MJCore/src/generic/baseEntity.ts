@@ -625,22 +625,57 @@ export abstract class BaseEntity<T = unknown> {
      *
      * All data routing (Set/Get), dirty tracking, validation, and save/delete
      * orchestration flow through this composition chain.
+     *
+     * ## Disjoint vs Overlapping Subtypes
+     *
+     * Two modes of child relationship exist, controlled by the parent entity's
+     * `AllowMultipleSubtypes` flag:
+     *
+     * **Disjoint (AllowMultipleSubtypes = false, default):**
+     *   A parent record has at most ONE child type. _childEntity holds a live
+     *   BaseEntity reference for composition chaining — save/delete delegates
+     *   down to the leaf, and LeafEntity traverses through it.
+     *     Product → _childEntity = MeetingEntity → _childEntity = WebinarEntity
+     *
+     * **Overlapping (AllowMultipleSubtypes = true):**
+     *   A parent record can simultaneously exist as MULTIPLE child types.
+     *   _childEntity is NOT used (ISAChild returns null). Instead,
+     *   _childEntities stores an informational list of which child entity
+     *   types have records for this PK. The overlapping parent is the leaf
+     *   of its own chain — it does not delegate save/delete downward. Each
+     *   child entity independently chains upward to the parent via
+     *   _parentEntity, and save/delete flows upward through that chain.
+     *     Person → _childEntities = [{entityName:'Members'}, {entityName:'Speakers'}]
+     *     MemberEntity._parentEntity = PersonEntity  (independent chain)
+     *     SpeakerEntity._parentEntity = PersonEntity  (independent chain)
+     *
+     * Record Change propagation for overlapping subtypes is handled at the
+     * provider level (SQLServerDataProvider.PropagateRecordChangesToSiblings),
+     * not in BaseEntity.
      **************************************************************************/
 
     /**
      * Persistent reference to the parent entity in the IS-A chain.
      * For example, if MeetingEntity IS-A ProductEntity, the MeetingEntity instance
      * holds a reference to a ProductEntity instance here. This is null for entities
-     * that are not IS-A child types.
+     * that are not IS-A child types. Used identically for both disjoint and
+     * overlapping subtypes — child entities always chain upward to their parent.
      */
     private _parentEntity: BaseEntity | null = null;
 
     /**
-     * Persistent reference to the child entity in the IS-A chain.
+     * Persistent reference to the single child entity in a **disjoint** IS-A chain.
      * For example, if MeetingEntity has a Webinar child record with the same PK,
      * the MeetingEntity instance holds a reference to a WebinarEntity instance here.
      * Populated after Load/Hydrate when child discovery finds a matching record.
-     * Null when this entity has no child record, is a leaf, or hasn't been loaded yet.
+     *
+     * **Only used for disjoint subtypes** (AllowMultipleSubtypes = false).
+     * For overlapping parents, this field is not populated — use _childEntities
+     * instead, which stores the list of child entity type names. The ISAChild
+     * getter returns null for overlapping parents to enforce this distinction.
+     *
+     * Null when: no child record exists, entity is a leaf, entity hasn't been
+     * loaded yet, or entity is an overlapping parent.
      */
     private _childEntity: BaseEntity | null = null;
 
@@ -658,10 +693,20 @@ export abstract class BaseEntity<T = unknown> {
     private _childEntityDiscoveryDone: boolean = false;
 
     /**
-     * For overlapping subtype parents (AllowMultipleSubtypes = true), stores the
-     * list of child entity type names that have records for this PK. Populated
-     * during InitializeChildEntity() for overlapping parents. Null for disjoint
-     * parents or entities that haven't been loaded yet.
+     * For **overlapping** subtype parents (AllowMultipleSubtypes = true), stores
+     * the list of child entity type names that have records for this PK.
+     * Populated during InitializeChildEntity() via discoverOverlappingChildren().
+     *
+     * **Only used for overlapping subtypes.** For disjoint parents, this is null —
+     * use _childEntity instead, which holds a live BaseEntity reference for
+     * composition chaining. The ISAChildren getter exposes this publicly.
+     *
+     * This is an **informational list** (entity names only, no live object
+     * references) used for UI display (IS-A related panel, breadcrumb tree)
+     * and Record Change propagation. It does NOT participate in save/delete
+     * orchestration — each child entity chains independently via _parentEntity.
+     *
+     * Null for disjoint parents, non-parent entities, or entities not yet loaded.
      */
     private _childEntities: { entityName: string }[] | null = null;
 
