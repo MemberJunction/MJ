@@ -23,7 +23,7 @@ const DEFAULT_CLI_CONFIG = {
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   coreSchema: '__mj',
   cleanDisabled: true,
-  baselineVersion: '202602061600',
+  baselineVersion: '202602151200',
   baselineOnMigrate: true,
   mjRepoUrl: MJ_REPO_URL,
   migrationsLocation: 'filesystem:./migrations',
@@ -61,7 +61,7 @@ const mjConfigSchema = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202602061600'),
+  baselineVersion: z.string().optional().default('202602151200'),
   baselineOnMigrate: z.boolean().optional().default(true),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
@@ -80,7 +80,7 @@ const mjConfigSchemaOptional = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202602061600'),
+  baselineVersion: z.string().optional().default('202602151200'),
   baselineOnMigrate: z.boolean().optional().default(true),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),

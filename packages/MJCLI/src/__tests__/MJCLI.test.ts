@@ -21,7 +21,7 @@ vi.mock('cosmiconfig', () => ({
         cleanDisabled: true,
         mjRepoUrl: 'https://github.com/MemberJunction/MJ.git',
         migrationsLocation: 'filesystem:./migrations',
-        baselineVersion: '202602061600',
+        baselineVersion: '202602151200',
         baselineOnMigrate: true,
       },
       filepath: '/fake/mj.config.cjs',
@@ -74,7 +74,7 @@ const baseConfig: MJConfig = {
   coreSchema: '__mj',
   cleanDisabled: true,
   mjRepoUrl: 'https://github.com/MemberJunction/MJ.git',
-  baselineVersion: '202602061600',
+  baselineVersion: '202602151200',
   baselineOnMigrate: true,
 };
 
@@ -124,7 +124,7 @@ describe('getFlywayConfig', () => {
 
   it('should set baseline properties', async () => {
     const flyway = await getFlywayConfig(baseConfig);
-    expect(flyway.advanced!.baselineVersion).toBe('202602061600');
+    expect(flyway.advanced!.baselineVersion).toBe('202602151200');
     expect(flyway.advanced!.baselineOnMigrate).toBe(true);
   });
 
