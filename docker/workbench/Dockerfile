@@ -30,6 +30,14 @@ RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor
 # Add sqlcmd to PATH
 ENV PATH="$PATH:/opt/mssql-tools18/bin"
 
+# Install PostgreSQL client tools (psql, pg_dump, pg_restore)
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-16 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install Angular CLI and Turbo globally
 RUN npm install -g @angular/cli turbo
 
@@ -72,8 +80,9 @@ COPY claude-settings.json /root/.claude/settings.json
 # Copy scripts
 COPY entrypoint.sh /entrypoint.sh
 COPY db-bootstrap.sh /usr/local/bin/db-bootstrap
+COPY db-bootstrap-pg.sh /usr/local/bin/db-bootstrap-pg
 COPY auth-setup.sh /usr/local/bin/auth-setup
-RUN chmod +x /entrypoint.sh /usr/local/bin/db-bootstrap /usr/local/bin/auth-setup
+RUN chmod +x /entrypoint.sh /usr/local/bin/db-bootstrap /usr/local/bin/db-bootstrap-pg /usr/local/bin/auth-setup
 
 # Set zsh as default shell
 ENV SHELL=/bin/zsh

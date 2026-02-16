@@ -88,6 +88,16 @@ if [ -f "$MJ_DIR/.env" ] && [ ! -L "$MJAPI_ENV" ]; then
     echo "  Symlinked .env → packages/MJAPI/.env"
 fi
 
+# ─── Verify PostgreSQL connectivity ────────────────────────────────────────
+echo "Checking PostgreSQL connectivity..."
+if pg_isready -h "${PG_HOST:-postgres-claude}" -p "${PG_PORT:-5432}" -U "${PG_USER:-mj_admin}" -d "${PG_DATABASE:-MJ_Workbench_PG}" -q 2>/dev/null; then
+    PG_TABLE_COUNT=$(PGPASSWORD="${PG_PASSWORD:-Claude2Pg99}" psql -h "${PG_HOST:-postgres-claude}" -p "${PG_PORT:-5432}" -U "${PG_USER:-mj_admin}" -d "${PG_DATABASE:-MJ_Workbench_PG}" -t -A -c "SELECT COUNT(*) FROM pg_tables WHERE schemaname = '__mj'" 2>/dev/null || echo "0")
+    echo "  PostgreSQL: ready (${PG_TABLE_COUNT} tables in __mj schema)"
+else
+    echo "  PostgreSQL: not available (postgres-claude container may not be running)"
+fi
+echo ""
+
 # ─── Auth0 setup: auto-configure from env vars or prompt interactively ────────
 if [ -d "$MJ_DIR" ]; then
     if ! auth-setup --check 2>/dev/null; then
