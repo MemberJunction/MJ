@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View Creation Flow - MJ Prototype</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    :root {
+      --primary: #5c6bc0;
+      --primary-hover: #4a59b0;
+      --primary-light: #e8eaf6;
+      --success: #43a047;
+      --success-light: #e8f5e9;
+      --danger: #e53935;
+      --danger-light: #ffebee;
+      --warning: #f57c00;
+      --warning-light: #fff3e0;
+      --text: #333;
+      --text-secondary: #666;
+      --text-muted: #999;
+      --border: #e0e0e0;
+      --bg: #f5f5f5;
+      --bg-white: #fff;
+      --shadow: 0 4px 24px rgba(0,0,0,0.12);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+      --radius: 8px;
+      --radius-sm: 4px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* ===== PAGE LAYOUT ===== */
+    .page-header {
+      background: var(--primary);
+      color: white;
+      padding: 16px 32px;
+      font-size: 14px;
+    }
+    .page-header h1 { font-size: 18px; font-weight: 600; }
+    .page-header p { opacity: 0.8; font-size: 13px; margin-top: 4px; }
+
+    .scenarios {
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+      padding: 32px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .scenario {
+      background: var(--bg-white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .scenario-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .scenario-header .badge {
+      background: var(--primary);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .scenario-header .badge.current {
+      background: var(--danger);
+    }
+    .scenario-header h2 { font-size: 16px; font-weight: 600; }
+    .scenario-header p { font-size: 13px; color: var(--text-secondary); margin-left: auto; }
+
+    .scenario-body {
+      padding: 24px;
+    }
+
+    .flow-steps {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      overflow-x: auto;
+      padding: 8px 0;
+    }
+    .flow-step {
+      flex: 0 0 auto;
+      text-align: center;
+    }
+    .flow-step .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 8px;
+    }
+    .flow-step .step-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      max-width: 100px;
+    }
+    .flow-arrow {
+      flex: 0 0 auto;
+      color: var(--text-muted);
+      font-size: 16px;
+      padding-top: 4px;
+    }
+
+    /* ===== MOCK UI COMPONENTS ===== */
+
+    /* Data Explorer Header Bar */
+    .mock-header {
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .mock-header .entity-name {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text);
+    }
+    .mock-header .separator {
+      color: var(--border);
+    }
+    .mock-header .record-count {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    /* View Selector Area (Current) */
+    .view-selector-current {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .view-selector-current .view-dropdown {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-selector-current .view-dropdown:hover {
+      border-color: var(--primary);
+    }
+
+    /* Quick Save Dialog (NEW - Proposed) */
+    .overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .quick-save-dialog {
+      background: var(--bg-white);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      width: 480px;
+      max-width: 95vw;
+      overflow: hidden;
+      animation: dialogIn 0.2s ease-out;
+    }
+    @keyframes dialogIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .dialog-header {
+      padding: 20px 24px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .dialog-header .icon-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .dialog-header h3 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .dialog-header .close-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 18px;
+      padding: 4px;
+    }
+    .dialog-body {
+      padding: 20px 24px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.1);
+    }
+    .form-group textarea { resize: vertical; min-height: 60px; }
+    .form-group .hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+    .toggle-row .toggle-label {
+      font-size: 13px;
+      color: var(--text);
+    }
+    .toggle-row .toggle-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .toggle {
+      width: 40px;
+      height: 22px;
+      border-radius: 11px;
+      background: var(--border);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.on { background: var(--primary); }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .toggle.on::after { transform: translateX(18px); }
+
+    /* View Summary Preview */
+    .view-summary {
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+    .view-summary h4 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .summary-items {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .summary-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .summary-item i { color: var(--primary); font-size: 12px; }
+    .summary-item .count {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Advanced Options Toggle */
+    .advanced-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--primary);
+      cursor: pointer;
+      padding: 8px 0;
+      border: none;
+      background: none;
+      font-family: inherit;
+    }
+    .advanced-toggle:hover { color: var(--primary-hover); }
+
+    .dialog-footer {
+      padding: 16px 24px 20px;
+      display: flex;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .btn {
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+    }
+    .btn-ghost:hover { background: var(--bg); }
+    .ml-auto { margin-left: auto; }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--text);
+      color: white;
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      z-index: 2000;
+      animation: toastIn 0.3s ease-out;
+    }
+    .toast.success { background: var(--success); }
+    .toast.error { background: var(--danger); }
+    @keyframes toastIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Modified Badge */
+    .modified-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--warning);
+      background: var(--warning-light);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    /* Save Buttons in Header */
+    .save-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: var(--radius-sm);
+    }
+    .btn-icon {
+      padding: 6px 8px;
+      font-size: 13px;
+    }
+
+    /* Section Labels */
+    .section-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 24px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--primary-light);
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 16px;
+    }
+    .comparison-side {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .comparison-side.before { border-color: var(--danger); }
+    .comparison-side.after { border-color: var(--success); }
+    .comparison-label {
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .comparison-side.before .comparison-label {
+      background: var(--danger-light);
+      color: var(--danger);
+    }
+    .comparison-side.after .comparison-label {
+      background: var(--success-light);
+      color: var(--success);
+    }
+    .comparison-content {
+      padding: 16px;
+    }
+
+    .annotation {
+      background: #fffde7;
+      border-left: 3px solid var(--warning);
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+    .annotation strong { color: var(--warning); }
+
+    /* Inline Edit */
+    .inline-edit {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .inline-edit .view-name-display {
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+    }
+    .inline-edit .view-name-display:hover {
+      border-color: var(--border);
+      background: var(--bg);
+    }
+    .inline-edit .edit-icon {
+      font-size: 11px;
+      color: var(--text-muted);
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .inline-edit:hover .edit-icon { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>View Creation & Save Flow - UX Prototype</h1>
+  <p>Comparing current (problematic) flow with proposed (streamlined) flow</p>
+</div>
+
+<div class="scenarios">
+
+  <!-- ===== SCENARIO 1: CURRENT FLOW ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge current">Current</span>
+      <h2>Current "Create New View" Flow</h2>
+      <p>7+ clicks, scattered across multiple UI surfaces</p>
+    </div>
+    <div class="scenario-body">
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="step-num">1</div>
+          <div class="step-label">Click View Selector dropdown</div>
+        </div>
+        <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="flow-step">
+          <div class="step-num">2</div>
+          <div class="step-label">Click "Save As New" in dropdown</div>
+        </div>
+        <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="flow-step">
+          <div class="step-num">3</div>
+          <div class="step-label">Config panel slides open (intent lost)</div>
+        </div>
+        <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="flow-step">
+          <div class="step-num">4</div>
+          <div class="step-label">Navigate to Settings tab</div>
+        </div>
+        <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="flow-step">
+          <div class="step-num">5</div>
+          <div class="step-label">Enter view name & description</div>
+        </div>
+        <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="flow-step">
+          <div class="step-num">6</div>
+          <div class="step-label">Scroll to find "Save As New" button</div>
+        </div>
+        <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="flow-step">
+          <div class="step-num">7</div>
+          <div class="step-label">Click save (no feedback on result)</div>
+        </div>
+      </div>
+
+      <div class="annotation">
+        <strong>Problems:</strong> User intent ("save as new") is forgotten when config panel opens.
+        View name is buried in Settings tab. No validation. No success/error feedback.
+        Panel closes even on save failure, losing all configuration.
+      </div>
+
+      <!-- Current Header Mock -->
+      <div class="section-label">Current Header Bar</div>
+      <div class="mock-header">
+        <span class="entity-name">Contacts</span>
+        <span class="separator">|</span>
+        <span class="record-count">1,247 records</span>
+        <div class="view-selector-current">
+          <div class="view-dropdown">
+            <i class="fa-solid fa-table-list" style="color: var(--primary)"></i>
+            <span>(Default)</span>
+            <i class="fa-solid fa-chevron-down" style="font-size: 10px; color: var(--text-muted)"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 2: PROPOSED QUICK SAVE ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Quick Save Dialog</h2>
+      <p>2-3 clicks, focused modal, clear feedback</p>
+    </div>
+    <div class="scenario-body">
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="step-num">1</div>
+          <div class="step-label">Click "Save View" button or Ctrl+S</div>
+        </div>
+        <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="flow-step">
+          <div class="step-num">2</div>
+          <div class="step-label">Quick Save dialog opens with preview</div>
+        </div>
+        <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="flow-step">
+          <div class="step-num">3</div>
+          <div class="step-label">Enter name, click Create (toast confirms)</div>
+        </div>
+      </div>
+
+      <!-- Proposed Header Mock -->
+      <div class="section-label">Proposed Header Bar (with save actions)</div>
+      <div class="mock-header">
+        <span class="entity-name">Contacts</span>
+        <span class="separator">|</span>
+        <span class="record-count">1,247 records</span>
+
+        <div class="view-selector-current">
+          <div class="view-dropdown">
+            <i class="fa-solid fa-table-list" style="color: var(--primary)"></i>
+            <span>Active West Coast</span>
+            <i class="fa-solid fa-chevron-down" style="font-size: 10px; color: var(--text-muted)"></i>
+          </div>
+          <span class="modified-badge">
+            <i class="fa-solid fa-circle" style="font-size: 6px"></i>
+            Modified
+          </span>
+        </div>
+
+        <div class="save-actions">
+          <button class="btn btn-sm btn-primary" title="Save current view">
+            <i class="fa-solid fa-floppy-disk"></i> Save
+          </button>
+          <button class="btn btn-sm btn-secondary btn-icon" title="Save as new view">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+          <button class="btn btn-sm btn-ghost btn-icon" title="Revert changes">
+            <i class="fa-solid fa-rotate-left"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="annotation">
+        <strong>Key changes:</strong> Save/SaveAs/Revert buttons always visible in header when changes exist.
+        "Modified" badge tells user they have unsaved changes. Revert button lets them undo.
+      </div>
+
+      <!-- Quick Save Dialog Mock -->
+      <div class="section-label">Quick Save Dialog (appears on "+" or "Save As New")</div>
+      <div style="position: relative; height: 620px; background: rgba(0,0,0,0.05); border-radius: var(--radius); overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
+          <div class="quick-save-dialog" style="position: relative; animation: none;">
+            <div class="dialog-header">
+              <div class="icon-circle">
+                <i class="fa-solid fa-plus"></i>
+              </div>
+              <div>
+                <h3>Save as New View</h3>
+                <div style="font-size: 13px; color: var(--text-secondary);">Contacts</div>
+              </div>
+              <button class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="dialog-body">
+              <div class="form-group">
+                <label>View Name <span style="color: var(--danger)">*</span></label>
+                <input type="text" placeholder="e.g., Active West Coast Contacts" value="Active West Coast">
+              </div>
+
+              <div class="form-group">
+                <label>Description <span style="color: var(--text-muted); font-weight: 400">(optional)</span></label>
+                <textarea placeholder="What does this view show?">Active contacts in CA, OR, WA with recent activity</textarea>
+              </div>
+
+              <!-- View Summary -->
+              <div class="view-summary">
+                <h4>This view includes</h4>
+                <div class="summary-items">
+                  <div class="summary-item">
+                    <i class="fa-solid fa-table-columns"></i>
+                    <span class="count">8</span> columns visible
+                  </div>
+                  <div class="summary-item">
+                    <i class="fa-solid fa-filter"></i>
+                    <span class="count">3</span> filters active
+                  </div>
+                  <div class="summary-item">
+                    <i class="fa-solid fa-arrow-down-short-wide"></i>
+                    Sorted by <span class="count">Name ASC</span>
+                  </div>
+                  <div class="summary-item">
+                    <i class="fa-solid fa-calculator"></i>
+                    <span class="count">1</span> aggregate
+                  </div>
+                </div>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-label">Share with others</div>
+                  <div class="toggle-desc">Other users can see and use this view</div>
+                </div>
+                <div class="toggle"></div>
+              </div>
+
+              <button class="advanced-toggle">
+                <i class="fa-solid fa-sliders"></i>
+                Customize columns, filters & sorting before saving
+                <i class="fa-solid fa-chevron-right" style="font-size: 10px"></i>
+              </button>
+            </div>
+
+            <div class="dialog-footer">
+              <button class="btn btn-primary">
+                <i class="fa-solid fa-plus"></i> Create View
+              </button>
+              <button class="btn btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Success Toast -->
+      <div class="section-label">Success Feedback (toast notification)</div>
+      <div style="position: relative; height: 60px;">
+        <div class="toast success" style="position: relative; bottom: auto; right: auto; display: inline-flex;">
+          <i class="fa-solid fa-check-circle"></i>
+          View "Active West Coast" created successfully
+        </div>
+      </div>
+
+      <!-- Error Toast -->
+      <div style="margin-top: 8px;">
+        <div class="toast error" style="position: relative; bottom: auto; right: auto; display: inline-flex;">
+          <i class="fa-solid fa-exclamation-circle"></i>
+          Failed to save view. Please try again.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 3: SAVING EXISTING VIEW ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Saving Changes to Existing View</h2>
+      <p>Clear "modified" state with easy save/revert</p>
+    </div>
+    <div class="scenario-body">
+
+      <div class="comparison">
+        <div class="comparison-side before">
+          <div class="comparison-label">Before (Current)</div>
+          <div class="comparison-content">
+            <div class="mock-header" style="margin-top: 0">
+              <span class="entity-name">Contacts</span>
+              <div class="view-selector-current" style="margin-left: auto">
+                <div class="view-dropdown">
+                  <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--warning);"></span>
+                  <span>Active West Coast</span>
+                  <i class="fa-solid fa-chevron-down" style="font-size: 10px; color: var(--text-muted)"></i>
+                </div>
+              </div>
+            </div>
+            <div class="annotation" style="margin-bottom: 0">
+              Tiny orange dot is the only indicator. Must open config panel, navigate to footer, find "Save" button. No way to revert changes.
+            </div>
+          </div>
+        </div>
+        <div class="comparison-side after">
+          <div class="comparison-label">After (Proposed)</div>
+          <div class="comparison-content">
+            <div class="mock-header" style="margin-top: 0">
+              <span class="entity-name">Contacts</span>
+              <div class="view-selector-current" style="margin-left: auto">
+                <div class="view-dropdown">
+                  <span>Active West Coast</span>
+                  <i class="fa-solid fa-chevron-down" style="font-size: 10px; color: var(--text-muted)"></i>
+                </div>
+                <span class="modified-badge">
+                  <i class="fa-solid fa-circle" style="font-size: 6px"></i>
+                  Modified
+                </span>
+              </div>
+              <div class="save-actions">
+                <button class="btn btn-sm btn-primary">
+                  <i class="fa-solid fa-floppy-disk"></i> Save
+                </button>
+                <button class="btn btn-sm btn-secondary btn-icon" title="Save as new">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-ghost btn-icon" title="Revert">
+                  <i class="fa-solid fa-rotate-left"></i>
+                </button>
+              </div>
+            </div>
+            <div class="annotation" style="margin-bottom: 0">
+              Clear "Modified" badge. One-click Save. Plus button for Save As New. Revert button to undo changes. All visible without opening panels.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 4: INLINE VIEW RENAME ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Inline View Rename</h2>
+      <p>Double-click view name to edit directly - no config panel needed</p>
+    </div>
+    <div class="scenario-body">
+      <div class="section-label">Click view name to enter edit mode</div>
+      <div class="mock-header">
+        <span class="entity-name">Contacts</span>
+        <div class="view-selector-current" style="margin-left: auto">
+          <div class="inline-edit">
+            <span class="view-name-display" style="border-color: var(--primary); background: var(--primary-light);">
+              Active West Coast
+            </span>
+            <i class="fa-solid fa-pencil edit-icon" style="opacity: 1"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="annotation">
+        <strong>How it works:</strong> Click the view name to toggle into edit mode.
+        Press Enter or click away to save. Press Escape to cancel.
+        No need to open the config panel just to rename.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 5: CONFIRMATION FOR SHARED VIEWS ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Shared View Modification Warning</h2>
+      <p>Prevent accidental modification of views used by others</p>
+    </div>
+    <div class="scenario-body">
+      <div style="display: flex; justify-content: center; margin-top: 16px;">
+        <div class="quick-save-dialog" style="width: 440px; animation: none;">
+          <div class="dialog-header">
+            <div class="icon-circle" style="background: var(--warning-light); color: var(--warning);">
+              <i class="fa-solid fa-users"></i>
+            </div>
+            <h3>Shared View</h3>
+            <button class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="dialog-body">
+            <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">
+              <strong>"Active West Coast"</strong> is shared with other users. Changes you save will affect everyone who uses this view.
+            </p>
+            <div style="background: var(--warning-light); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: var(--warning); display: flex; gap: 8px; align-items: flex-start;">
+              <i class="fa-solid fa-triangle-exclamation" style="margin-top: 2px"></i>
+              <span>3 other users have used this view in the past week.</span>
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn btn-primary">
+              <i class="fa-solid fa-floppy-disk"></i> Update Shared View
+            </button>
+            <button class="btn btn-secondary">
+              <i class="fa-solid fa-plus"></i> Save As My Copy
+            </button>
+            <button class="btn btn-ghost ml-auto">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 6: SMART FILTER FEEDBACK ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Smart Filter with AI Explanation</h2>
+      <p>Show users what the AI actually generated</p>
+    </div>
+    <div class="scenario-body">
+      <div style="max-width: 500px;">
+        <div class="form-group">
+          <label><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--primary); margin-right: 4px;"></i> Smart Filter</label>
+          <textarea style="min-height: 44px;" placeholder="Describe what you want to see...">active customers in California with revenue over 1 million</textarea>
+        </div>
+
+        <!-- AI Explanation (currently hidden, proposing to show) -->
+        <div style="background: var(--primary-light); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+            <i class="fa-solid fa-robot" style="color: var(--primary); font-size: 12px;"></i>
+            <span style="font-size: 12px; font-weight: 600; color: var(--primary);">AI Interpretation</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">
+            Filtering for records where:
+          </p>
+          <ul style="font-size: 13px; color: var(--text); padding-left: 20px; margin: 0;">
+            <li>Status = 'Active'</li>
+            <li>State = 'CA' (California)</li>
+            <li>AnnualRevenue > 1,000,000</li>
+          </ul>
+          <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+            <span style="font-weight: 500;">Result:</span> 47 records match
+          </div>
+        </div>
+      </div>
+
+      <div class="annotation">
+        <strong>Currently:</strong> smartFilterExplanation is computed by the AI but never displayed to the user.
+        <br><strong>Proposed:</strong> Show the explanation inline so users can verify the AI understood their intent
+        and see the actual filter criteria being applied.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,125 @@
+.view-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.view-name-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* View Name */
+.view-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+
+.view-name.editable {
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.15s ease;
+}
+
+.view-name.editable:hover {
+  border-bottom-color: #3b82f6;
+  color: #2563eb;
+}
+
+/* Name Input (inline edit) */
+.name-input {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1f2937;
+  padding: 2px 8px;
+  border: 1px solid #3b82f6;
+  border-radius: 4px;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  max-width: 250px;
+}
+
+/* Shared Badge */
+.shared-badge {
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.shared-badge i {
+  font-size: 12px;
+}
+
+/* Modified Badge */
+.modified-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Action Buttons */
+.view-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  font-size: 12px;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn.save-btn {
+  background: #3b82f6;
+  color: white;
+}
+
+.action-btn.save-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.action-btn.save-as-btn {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.action-btn.save-as-btn:hover:not(:disabled) {
+  background: #d1d5db;
+}
+
+.action-btn.revert-btn {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.action-btn.revert-btn:hover:not(:disabled) {
+  background: #fecaca;
+  color: #dc2626;
+}
