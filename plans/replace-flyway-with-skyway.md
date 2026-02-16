@@ -2,9 +2,13 @@
 
 ## Summary
 
-Replace `node-flyway` (Java-dependent Flyway wrapper) with `@skyway/core` (TypeScript-native, Flyway-compatible migration engine) in the `mj migrate` and `mj clean` CLI commands. This eliminates the Java runtime dependency, removes ~210 lines of `spawnSync` diagnostic workaround code, and enables working placeholder support that was previously broken.
+Replace `node-flyway` (Java-dependent Flyway wrapper) with `@memberjunction/skyway-core` (TypeScript-native, Flyway-compatible migration engine) in the `mj migrate` and `mj clean` CLI commands. This eliminates the Java runtime dependency, removes ~210 lines of `spawnSync` diagnostic workaround code, and enables working placeholder support that was previously broken.
 
-**Prerequisite**: `@skyway/core` must be published to npm first.
+**Prerequisite**: `@memberjunction/skyway-core` must be published to npm first.
+
+**Skyway npm packages:**
+- `@memberjunction/skyway-core` — Core migration engine (programmatic API)
+- `@memberjunction/skyway-cli` — CLI interface (not used by MJCLI directly)
 
 ## Files to Modify (5 files)
 
@@ -21,7 +25,7 @@ Replace `node-flyway` (Java-dependent Flyway wrapper) with `@skyway/core` (TypeS
 
 ## Step 1: `packages/MJCLI/package.json`
 
-Remove `"node-flyway": "0.0.13"`, add `"@skyway/core": "^0.5.0"`.
+Remove `"node-flyway": "0.0.13"`, add `"@memberjunction/skyway-core": "^0.5.0"`.
 
 Then run `npm install` at repo root.
 
@@ -35,7 +39,7 @@ Then run `npm install` at repo root.
 // Remove
 import type { FlywayConfig } from 'node-flyway/dist/types/types';
 // Add
-import type { SkywayConfig } from '@skyway/core';
+import type { SkywayConfig } from '@memberjunction/skyway-core';
 ```
 
 ### 2b. Delete `createFlywayUrl()` (lines 134-138)
@@ -91,8 +95,8 @@ import os from 'os';
 import { getValidatedConfig, getFlywayConfig } from '../../config';
 
 // Add
-import { Skyway } from '@skyway/core';
-import type { MigrateResult } from '@skyway/core';
+import { Skyway } from '@memberjunction/skyway-core';
+import type { MigrateResult } from '@memberjunction/skyway-core';
 import { getValidatedConfig, getSkywayConfig } from '../../config';
 ```
 
@@ -144,8 +148,8 @@ import { Flyway } from 'node-flyway';
 import { getValidatedConfig, getFlywayConfig } from '../../config';
 
 // Add
-import { Skyway } from '@skyway/core';
-import type { CleanResult } from '@skyway/core';
+import { Skyway } from '@memberjunction/skyway-core';
+import type { CleanResult } from '@memberjunction/skyway-core';
 import { getValidatedConfig, getSkywayConfig } from '../../config';
 ```
 
@@ -188,8 +192,8 @@ Key assertion changes:
 ## Step 6: `packages/MJCLI/src/light-commands.ts`
 
 Update 2 comments:
-- Line 3: `node-flyway` → `@skyway/core`
-- Line 24: `node-flyway` → `@skyway/core`
+- Line 3: `node-flyway` → `@memberjunction/skyway-core`
+- Line 24: `node-flyway` → `@memberjunction/skyway-core`
 
 ---
 
