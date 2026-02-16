@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Bootstrap Module
+ * MemberJunction Bootstrap Module
  *
  * Provides the MJBootstrapComponent and all necessary services for MemberJunction Angular applications.
  * This module encapsulates all the authentication and initialization logic that was previously

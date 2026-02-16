@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Initialization Service
+ * MemberJunction Initialization Service
  *
  * Handles all core initialization tasks:
  * - Generated entities loading

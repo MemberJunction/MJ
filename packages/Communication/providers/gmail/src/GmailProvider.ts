@@ -47,7 +47,7 @@ import googleApis from 'googleapis';
  *
  * @remarks
  * **TEMPORARY INTERFACE**: This interface is part of the interim credential solution for 2.x patch release.
- * In MemberJunction 3.0, this will be integrated with the comprehensive credential management system.
+ * In a future release, this will be integrated with the comprehensive credential management system.
  */
 export interface GmailCredentials extends ProviderCredentialsBase {
   /** Google OAuth2 Client ID */
