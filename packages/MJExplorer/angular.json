@@ -32,11 +32,16 @@
           },
           "configurations": {
             "production": {
+              "optimization": {
+                "scripts": false,
+                "styles": true,
+                "fonts": true
+              },
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "15mb",
-                  "maximumError": "50mb"
+                  "maximumWarning": "60mb",
+                  "maximumError": "80mb"
                 },
                 {
                   "type": "anyComponentStyle",
@@ -46,6 +51,11 @@
               "outputHashing": "all"
             },
             "staging": {
+              "optimization": {
+                "scripts": false,
+                "styles": true,
+                "fonts": true
+              },
               "sourceMap": true,
               "fileReplacements": [
                 {
