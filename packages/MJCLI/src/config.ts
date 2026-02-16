@@ -1,5 +1,5 @@
 import { cosmiconfigSync } from 'cosmiconfig';
-import type { FlywayConfig } from 'node-flyway/dist/types/types';
+import type { SkywayConfig } from '@memberjunction/skyway-core';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
@@ -23,8 +23,8 @@ const DEFAULT_CLI_CONFIG = {
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   coreSchema: '__mj',
   cleanDisabled: true,
-  baselineVersion: '202602151200',
   baselineOnMigrate: true,
+  transactionMode: 'per-migration' as const,
   mjRepoUrl: MJ_REPO_URL,
   migrationsLocation: 'filesystem:./migrations',
 };
@@ -61,8 +61,9 @@ const mjConfigSchema = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202602151200'),
+  baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
+  transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
@@ -80,8 +81,9 @@ const mjConfigSchemaOptional = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202602151200'),
+  baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
+  transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
@@ -131,18 +133,21 @@ export const updatedConfig = (): MJConfig | undefined => {
   return maybeConfig.success ? maybeConfig.data : undefined;
 };
 
-export const createFlywayUrl = (mjConfig: MJConfig) => {
-  return `jdbc:sqlserver://${mjConfig.dbHost}:${mjConfig.dbPort}; databaseName=${mjConfig.dbDatabase}${
-    mjConfig.dbTrustServerCertificate ? '; trustServerCertificate=true' : ''
-  }`;
-};
-
-export const getFlywayConfig = async (
+/**
+ * Builds a SkywayConfig from the MJ CLI config and optional overrides.
+ *
+ * Handles:
+ * - Database connection mapping (MJConfig fields → Skyway DatabaseConfig)
+ * - Migration location resolution (local dir, remote git tag)
+ * - Placeholder mapping (schemaPlaceholders, legacy mjSchema, flyway:defaultSchema)
+ * - Baseline configuration
+ */
+export const getSkywayConfig = async (
   mjConfig: MJConfig,
   tag?: string,
   schema?: string,
   dir?: string
-): Promise<FlywayConfig> => {
+): Promise<SkywayConfig> => {
   const targetSchema = schema || mjConfig.coreSchema;
 
   let location = mjConfig.migrationsLocation;
@@ -167,57 +172,50 @@ export const getFlywayConfig = async (
     }
   }
 
-  // Build advanced config - only include properties with defined values
-  const advancedConfig: any = {
-    schemas: [targetSchema],
-    createSchemas: true, // Auto-create schema if it doesn't exist (needed for --schema flag)
-  };
+  // Strip filesystem: prefix — Skyway uses plain filesystem paths
+  const cleanLocation = location.replace(/^filesystem:/, '');
 
-  // Only add cleanDisabled if explicitly set to false
-  if (mjConfig.cleanDisabled === false) {
-    advancedConfig.cleanDisabled = false;
-  }
+  // Build placeholders
+  const placeholders: Record<string, string> = {};
 
-  // Enable custom placeholders for cross-schema references (e.g., BCSaaS → MJ)
-  // Uses schemaPlaceholders from mj.config.cjs SQLOutput configuration if available
-  // Falls back to legacy behavior (mjSchema placeholder) for backward compatibility
-  // NOTE: The Map entries are swapped (value, key) due to a bug in node-flyway's Map.forEach iteration
+  // Always provide the flyway:defaultSchema built-in so existing migration SQL works unchanged
+  placeholders['flyway:defaultSchema'] = targetSchema;
+
   const schemaPlaceholders = mjConfig.SQLOutput?.schemaPlaceholders;
 
   if (schemaPlaceholders && schemaPlaceholders.length > 0) {
-    // Use schemaPlaceholders from config (new behavior - supports BCSaaS and other extensions)
-    // NOTE: node-flyway seems to hang when placeHolders Map is provided
-    // Placeholders will be applied by the diagnostic Flyway CLI call instead
-    // advancedConfig.placeHolderReplacement = true;
-    // const placeholderMap = new Map();
-    //
-    // schemaPlaceholders.forEach(({ schema: schemaName, placeholder }) => {
-    //   const cleanPlaceholder = placeholder.replace(/^\$\{|\}$/g, '');
-    //   if (cleanPlaceholder.startsWith('flyway:')) return;
-    //   placeholderMap.set(cleanPlaceholder, schemaName);
-    // });
-    //
-    // if (placeholderMap.size > 0) {
-    //   advancedConfig.placeHolders = placeholderMap;
-    // }
+    // Use schemaPlaceholders from config (supports BCSaaS and other extensions)
+    for (const { schema: schemaName, placeholder } of schemaPlaceholders) {
+      const cleanPlaceholder = placeholder.replace(/^\$\{|\}$/g, '');
+      // Skip Flyway built-in placeholders (already handled above)
+      if (cleanPlaceholder.startsWith('flyway:')) continue;
+      placeholders[cleanPlaceholder] = schemaName;
+    }
   } else if (schema && schema !== mjConfig.coreSchema) {
     // Legacy behavior: Add mjSchema placeholder for non-core schemas
-    advancedConfig.placeHolderReplacement = true;
-    // Map('mjSchema' => '__mj') generates -placeholders.mjSchema=__mj
-    advancedConfig.placeHolders = new Map([['mjSchema', mjConfig.coreSchema]]);
+    placeholders['mjSchema'] = mjConfig.coreSchema;
   }
 
-  // Merge additional required properties into advancedConfig
-  advancedConfig.baselineVersion = mjConfig.baselineVersion;
-  advancedConfig.baselineOnMigrate = mjConfig.baselineOnMigrate;
-
   return {
-    url: createFlywayUrl(mjConfig),
-    user: mjConfig.codeGenLogin,
-    password: mjConfig.codeGenPassword,
-    // Note: Flyway uses the first schema in advanced.schemas as the default schema
-    // Setting both defaultSchema and schemas causes issues due to node-flyway's filtering logic
-    migrationLocations: [location],
-    advanced: advancedConfig,
+    Database: {
+      Server: mjConfig.dbHost,
+      Port: mjConfig.dbPort,
+      Database: mjConfig.dbDatabase,
+      User: mjConfig.codeGenLogin,
+      Password: mjConfig.codeGenPassword,
+      Options: {
+        TrustServerCertificate: mjConfig.dbTrustServerCertificate,
+      },
+    },
+    Migrations: {
+      Locations: [cleanLocation],
+      DefaultSchema: targetSchema,
+      // Only pass BaselineVersion if explicitly set in config;
+      // when omitted, Skyway auto-detects the latest B__baseline file.
+      ...(mjConfig.baselineVersion ? { BaselineVersion: mjConfig.baselineVersion } : {}),
+      BaselineOnMigrate: mjConfig.baselineOnMigrate,
+    },
+    TransactionMode: mjConfig.transactionMode,
+    Placeholders: Object.keys(placeholders).length > 0 ? placeholders : undefined,
   };
 };
