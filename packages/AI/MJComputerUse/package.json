@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/mj-computer-use",
   "type": "module",
-  "version": "4.2.0",
+  "version": "4.4.0",
   "description": "MemberJunction: MJ Computer Use - MJ-aware subclass of the Computer Use engine with AIPromptRunner, MJ Credentials, Actions-as-Tools, and entity persistence.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
