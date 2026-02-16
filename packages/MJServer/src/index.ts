@@ -31,9 +31,6 @@ import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
-// Load MJ Computer Use action
-import { LoadMJComputerUse } from '@memberjunction/mj-computer-use';
-LoadMJComputerUse();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
