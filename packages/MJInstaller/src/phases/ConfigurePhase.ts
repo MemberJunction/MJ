@@ -34,8 +34,9 @@ export class ConfigurePhase {
   async Run(context: ConfigureContext): Promise<ConfigureResult> {
     const { Emitter: emitter } = context;
     const filesWritten: string[] = [];
+    const filesPreserved: string[] = [];
 
-    // Step 1: Gather all config values
+    // Step 1: Gather config values (prompts or defaults)
     emitter.Emit('step:progress', {
       Type: 'step:progress',
       Phase: 'configure',
@@ -44,40 +45,79 @@ export class ConfigurePhase {
 
     const config = await this.resolveConfig(context.Config, context.Yes, emitter);
 
-    // Step 2: Write .env file
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'configure',
-      Message: 'Writing .env file...',
-    });
+    // Step 2: .env files — preserve existing, create if missing
     const envPath = path.join(context.Dir, '.env');
-    await this.writeEnvFile(envPath, config);
-    filesWritten.push(envPath);
+    const mjapiEnvPath = path.join(context.Dir, 'packages', 'MJAPI', '.env');
 
-    // Step 3: Write/update mj.config.cjs
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'configure',
-      Message: 'Writing mj.config.cjs...',
-    });
+    if (await this.fileSystem.FileExists(envPath)) {
+      filesPreserved.push(envPath);
+      // If MJAPI .env doesn't exist but root does, copy root → MJAPI
+      const mjapiDir = path.dirname(mjapiEnvPath);
+      if (await this.fileSystem.DirectoryExists(mjapiDir) && !(await this.fileSystem.FileExists(mjapiEnvPath))) {
+        const rootEnvContent = await this.fileSystem.ReadText(envPath);
+        await this.fileSystem.WriteText(mjapiEnvPath, rootEnvContent);
+        filesWritten.push(mjapiEnvPath);
+      } else if (await this.fileSystem.FileExists(mjapiEnvPath)) {
+        filesPreserved.push(mjapiEnvPath);
+      }
+    } else {
+      await this.writeEnvFile(envPath, config);
+      filesWritten.push(envPath);
+      const mjapiDir = path.dirname(mjapiEnvPath);
+      if (await this.fileSystem.DirectoryExists(mjapiDir)) {
+        await this.writeEnvFile(mjapiEnvPath, config);
+        filesWritten.push(mjapiEnvPath);
+      }
+    }
+
+    // Step 3: mj.config.cjs — preserve existing, create if missing
     const configCjsPath = path.join(context.Dir, 'mj.config.cjs');
-    await this.writeMjConfigCjs(configCjsPath, config);
-    filesWritten.push(configCjsPath);
+    if (await this.fileSystem.FileExists(configCjsPath)) {
+      filesPreserved.push(configCjsPath);
+      // If user is creating a new user, patch that section into the existing config
+      if (config.CreateNewUser) {
+        const existingContent = await this.fileSystem.ReadText(configCjsPath);
+        const updatedContent = this.patchNewUserSetup(existingContent, config.CreateNewUser);
+        await this.fileSystem.WriteText(configCjsPath, updatedContent);
+      }
+    } else {
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'configure',
+        Message: 'Writing mj.config.cjs...',
+      });
+      await this.writeMjConfigCjs(configCjsPath, config);
+      filesWritten.push(configCjsPath);
+    }
 
-    // Step 4: Update Explorer environment files
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'configure',
-      Message: 'Updating Explorer environment files...',
-    });
-    const envFilesWritten = await this.updateExplorerEnvironments(context.Dir, config, emitter);
-    filesWritten.push(...envFilesWritten);
+    // Step 4: Explorer environment files — preserve existing, create if missing
+    const envFilesResult = await this.updateExplorerEnvironments(context.Dir, config, emitter);
+    filesWritten.push(...envFilesResult.Written);
+    filesPreserved.push(...envFilesResult.Preserved);
 
+    // Summary
+    const parts: string[] = [];
+    if (filesWritten.length > 0) {
+      parts.push(`${filesWritten.length} file(s) created`);
+    }
+    if (filesPreserved.length > 0) {
+      parts.push(`${filesPreserved.length} existing file(s) preserved`);
+    }
     emitter.Emit('log', {
       Type: 'log',
       Level: 'info',
-      Message: `Configuration complete. ${filesWritten.length} file(s) written.`,
+      Message: `Configuration complete. ${parts.join(', ')}.`,
     });
+
+    if (filesWritten.length > 0 && context.Yes) {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'configure',
+        Message: 'Config files were created with default/empty values. '
+          + 'Edit .env and packages/MJExplorer/src/environments/ with your '
+          + 'database credentials and auth provider settings before starting services.',
+      });
+    }
 
     return { Config: config, FilesWritten: filesWritten };
   }
@@ -250,21 +290,6 @@ ASK_SKIP_ORGANIZATION_ID=1
   }
 
   private async writeMjConfigCjs(configPath: string, config: InstallConfig): Promise<void> {
-    // Check if mj.config.cjs already exists — if so, only update newUserSetup
-    const exists = await this.fileSystem.FileExists(configPath);
-
-    if (exists && config.CreateNewUser) {
-      const existingContent = await this.fileSystem.ReadText(configPath);
-      const updatedContent = this.patchNewUserSetup(existingContent, config.CreateNewUser);
-      await this.fileSystem.WriteText(configPath, updatedContent);
-      return;
-    }
-
-    if (exists) {
-      // Config exists, no new user — leave it alone
-      return;
-    }
-
     // Generate a minimal mj.config.cjs for fresh installs
     const newUserSection = config.CreateNewUser
       ? `  newUserSetup: {
@@ -321,53 +346,126 @@ ${newUserSection}
     dir: string,
     config: InstallConfig,
     emitter: InstallerEventEmitter
-  ): Promise<string[]> {
-    const envDirs = [
+  ): Promise<{ Written: string[]; Preserved: string[] }> {
+    const envDirCandidates = [
+      path.join(dir, 'packages', 'MJExplorer', 'src', 'environments'),
       path.join(dir, 'apps', 'MJExplorer', 'src', 'environments'),
       path.join(dir, 'MJExplorer', 'src', 'environments'),
     ];
 
-    const filesUpdated: string[] = [];
-
-    for (const envDir of envDirs) {
-      const dirExists = await this.fileSystem.DirectoryExists(envDir);
-      if (!dirExists) continue;
-
-      const envFiles = await this.fileSystem.ListFiles(envDir, /environment.*\.ts$/);
-
-      const replacements: Record<string, string> = {
-        CLIENT_ID: config.AuthProviderValues?.ClientID ?? '',
-        TENANT_ID: config.AuthProviderValues?.TenantID ?? '',
-        CLIENT_AUTHORITY: config.AuthProviderValues?.TenantID
-          ? `https://login.microsoftonline.com/${config.AuthProviderValues.TenantID}`
-          : '',
-        AUTH_TYPE: this.mapAuthType(config.AuthProvider),
-        AUTH0_DOMAIN: config.AuthProviderValues?.Domain ?? '',
-        AUTH0_CLIENTID: config.AuthProviderValues?.ClientID ?? '',
-      };
-
-      for (const file of envFiles) {
-        const filePath = path.join(envDir, file);
-        let content = await this.fileSystem.ReadText(filePath);
-
-        for (const [key, value] of Object.entries(replacements)) {
-          const regex = new RegExp(`(["']?${key}["']?:\\s*["'])([^"']*)(['"])`, 'g');
-          const escapedValue = value.replaceAll('$', '$$');
-          content = content.replace(regex, `$1${escapedValue}$3`);
-        }
-
-        await this.fileSystem.WriteText(filePath, content);
-        filesUpdated.push(filePath);
-
-        emitter.Emit('step:progress', {
-          Type: 'step:progress',
-          Phase: 'configure',
-          Message: `Updated ${file}`,
-        });
+    // Find the first existing parent (MJExplorer/src/) to determine
+    // the correct environments directory location.
+    let envDir: string | null = null;
+    for (const candidate of envDirCandidates) {
+      const parentDir = path.dirname(candidate);
+      if (await this.fileSystem.DirectoryExists(parentDir)) {
+        envDir = candidate;
+        break;
       }
     }
 
-    return filesUpdated;
+    if (!envDir) {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'configure',
+        Message: 'Could not locate MJExplorer/src/ directory. Skipping environment file generation.',
+      });
+      return { Written: [], Preserved: [] };
+    }
+
+    const filesWritten: string[] = [];
+    const filesPreserved: string[] = [];
+
+    // Create the environments directory if it doesn't exist
+    // (it's gitignored, so it won't be in release archives)
+    const dirExists = await this.fileSystem.DirectoryExists(envDir);
+    if (!dirExists) {
+      await this.fileSystem.CreateDirectory(envDir);
+    }
+
+    const envFiles = dirExists
+      ? await this.fileSystem.ListFiles(envDir, /environment.*\.ts$/)
+      : [];
+
+    if (envFiles.length > 0) {
+      // Existing environment files found — preserve them
+      for (const file of envFiles) {
+        filesPreserved.push(path.join(envDir, file));
+      }
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'configure',
+        Message: `Existing environment files found (${envFiles.join(', ')}), preserving.`,
+      });
+    } else {
+      // No environment files — create them from scratch
+      const envContent = this.generateEnvironmentFile(config, true);
+      const devContent = this.generateEnvironmentFile(config, false);
+
+      const envPath = path.join(envDir, 'environment.ts');
+      const devPath = path.join(envDir, 'environment.development.ts');
+
+      await this.fileSystem.WriteText(envPath, envContent);
+      await this.fileSystem.WriteText(devPath, devContent);
+      filesWritten.push(envPath, devPath);
+
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'configure',
+        Message: 'Created environment.ts and environment.development.ts',
+      });
+    }
+
+    return { Written: filesWritten, Preserved: filesPreserved };
+  }
+
+  private generateEnvironmentFile(config: InstallConfig, production: boolean): string {
+    const authType = this.mapAuthType(config.AuthProvider);
+    const clientId = config.AuthProviderValues?.ClientID ?? '';
+    const tenantId = config.AuthProviderValues?.TenantID ?? '';
+    const authority = tenantId
+      ? `https://login.microsoftonline.com/${tenantId}`
+      : '';
+    const auth0Domain = config.AuthProviderValues?.Domain ?? '';
+    const apiPort = config.APIPort ?? 4000;
+
+    const explorerPort = config.ExplorerPort ?? 4200;
+    const redirectUri = `http://localhost:${explorerPort}`;
+
+    return `export const environment = {
+  production: ${production},
+  GRAPHQL_URI: 'http://localhost:${apiPort}/',
+  GRAPHQL_WS_URI: 'ws://localhost:${apiPort}/',
+  REDIRECT_URI: '${redirectUri}',
+  AUTH_TYPE: '${authType}',
+  MJ_CORE_SCHEMA_NAME: '__mj',
+  CLIENT_ID: '${clientId}',
+  TENANT_ID: '${tenantId}',
+  CLIENT_AUTHORITY: '${authority}',
+  AUTH0_DOMAIN: '${auth0Domain}',
+  AUTH0_CLIENTID: '${clientId}',
+  NODE_ENV: '${production ? 'production' : 'development'}',
+  AUTOSAVE_DEBOUNCE_MS: 2000,
+};
+`;
+  }
+
+  private buildEnvironmentReplacements(config: InstallConfig): Record<string, string> {
+    const apiPort = config.APIPort ?? 4000;
+    const explorerPort = config.ExplorerPort ?? 4200;
+    return {
+      GRAPHQL_URI: `http://localhost:${apiPort}/`,
+      GRAPHQL_WS_URI: `ws://localhost:${apiPort}/`,
+      REDIRECT_URI: `http://localhost:${explorerPort}`,
+      CLIENT_ID: config.AuthProviderValues?.ClientID ?? '',
+      TENANT_ID: config.AuthProviderValues?.TenantID ?? '',
+      CLIENT_AUTHORITY: config.AuthProviderValues?.TenantID
+        ? `https://login.microsoftonline.com/${config.AuthProviderValues.TenantID}`
+        : '',
+      AUTH_TYPE: this.mapAuthType(config.AuthProvider),
+      AUTH0_DOMAIN: config.AuthProviderValues?.Domain ?? '',
+      AUTH0_CLIENTID: config.AuthProviderValues?.ClientID ?? '',
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -442,12 +540,15 @@ ${newUserSection}
   // Helpers
   // ---------------------------------------------------------------------------
 
-  private mapAuthType(provider: InstallConfig['AuthProvider']): string {
+  private mapAuthType(provider: InstallConfig['AuthProvider']): 'msal' | 'auth0' {
     switch (provider) {
       case 'entra': return 'msal';
       case 'auth0': return 'auth0';
-      case 'none': return '';
-      default: return '';
+      // 'none' defaults to 'msal' because the MJEnvironmentConfig type
+      // requires AUTH_TYPE to be 'msal' | 'auth0'. With an empty CLIENT_ID
+      // the MSAL provider will simply skip authentication.
+      case 'none': return 'msal';
+      default: return 'msal';
     }
   }
 }

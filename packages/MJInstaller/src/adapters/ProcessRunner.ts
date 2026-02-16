@@ -3,7 +3,7 @@
  * Used by phases that run external tools (npm, mj codegen, etc.)
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, execSync } from 'node:child_process';
 
 export interface ProcessResult {
   ExitCode: number;
@@ -50,9 +50,7 @@ export class ProcessRunner {
       if (options?.TimeoutMs) {
         timeoutHandle = setTimeout(() => {
           timedOut = true;
-          child.kill('SIGTERM');
-          // Force kill after 5s if SIGTERM didn't work
-          setTimeout(() => child.kill('SIGKILL'), 5000);
+          this.killTree(child.pid);
         }, options.TimeoutMs);
       }
 
@@ -126,6 +124,61 @@ export class ProcessRunner {
       return result.ExitCode === 0;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Kill a process and all its children.
+   * On Windows, `child.kill()` with `shell: true` only kills the cmd.exe shell,
+   * leaving turbo/node grandchild processes running as orphans.
+   * This uses `taskkill /T` (Windows) or process group kill (Unix) instead.
+   */
+  killTree(pid: number | undefined): void {
+    if (!pid) return;
+    try {
+      if (process.platform === 'win32') {
+        execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+      } else {
+        process.kill(-pid, 'SIGTERM');
+        setTimeout(() => {
+          try { process.kill(-pid, 'SIGKILL'); } catch { /* already dead */ }
+        }, 5000);
+      }
+    } catch {
+      // Process may have already exited
+    }
+  }
+
+  /**
+   * Kill all processes listening on a given TCP port.
+   * Used by SmokeTestPhase to clean up service processes after health checks.
+   */
+  killByPort(port: number): void {
+    try {
+      if (process.platform === 'win32') {
+        // Find PIDs listening on this port and kill their process trees
+        const output = execSync(
+          `netstat -ano | findstr ":${port}" | findstr "LISTENING"`,
+          { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }
+        );
+        const pids = new Set<string>();
+        for (const line of output.split('\n')) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parts[parts.length - 1];
+          if (pid && /^\d+$/.test(pid) && pid !== '0') {
+            pids.add(pid);
+          }
+        }
+        for (const pid of pids) {
+          try {
+            execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+          } catch { /* already dead */ }
+        }
+      } else {
+        execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore' });
+      }
+    } catch {
+      // No process on this port, or already killed
     }
   }
 }

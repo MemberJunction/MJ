@@ -33,9 +33,9 @@ const ALL_PHASES: PhaseId[] = [
   'scaffold',
   'configure',
   'database',
-  'migrate',
   'platform',
   'dependencies',
+  'migrate',
   'codegen',
   'smoke_test',
 ];

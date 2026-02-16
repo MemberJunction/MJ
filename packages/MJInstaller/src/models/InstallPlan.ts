@@ -83,9 +83,9 @@ export class InstallPlan {
       'scaffold',
       'configure',
       'database',
-      'migrate',
       'platform',
       'dependencies',
+      'migrate',
       'codegen',
       'smoke_test',
     ];

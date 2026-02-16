@@ -128,12 +128,12 @@ export class DependencyPhase {
     emitter.Emit('step:progress', {
       Type: 'step:progress',
       Phase: 'dependencies',
-      Message: 'Running npm run build (this may take several minutes)...',
+      Message: 'Running npm run build (first-time builds can take 15-20 minutes for 170 packages)...',
     });
 
     const result = await this.processRunner.Run('npm', ['run', 'build'], {
       Cwd: dir,
-      TimeoutMs: 600_000, // 10 minutes
+      TimeoutMs: 1_800_000, // 30 minutes — first-time full workspace build of 170 packages can take 17+ min
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
           Type: 'step:progress',
@@ -154,8 +154,8 @@ export class DependencyPhase {
       throw new InstallerError(
         'dependencies',
         'BUILD_TIMEOUT',
-        'npm run build timed out after 10 minutes.',
-        'Run "npm run build" manually at the repo root to see full output.'
+        'npm run build timed out after 30 minutes.',
+        'Run "npm run build" manually at the repo root to see full output. First-time builds of 170 packages can take 15-20 minutes.'
       );
     }
 

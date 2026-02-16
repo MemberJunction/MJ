@@ -58,6 +58,13 @@ export class FileSystemAdapter {
   }
 
   /**
+   * Create a directory (and any missing parents).
+   */
+  async CreateDirectory(dirPath: string): Promise<void> {
+    await fs.mkdir(dirPath, { recursive: true });
+  }
+
+  /**
    * Check if a directory exists.
    */
   async DirectoryExists(dirPath: string): Promise<boolean> {

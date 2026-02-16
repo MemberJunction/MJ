@@ -38,7 +38,8 @@ export class MigratePhase {
     });
 
     // Use npx mj migrate to run Flyway-based migrations
-    const result = await this.processRunner.Run('npx', ['mj', 'migrate'], {
+    // Always pass --verbose so we get detailed Flyway output for diagnostics
+    const result = await this.processRunner.Run('npx', ['mj', 'migrate', '--verbose'], {
       Cwd: context.Dir,
       TimeoutMs: 300_000, // 5 minutes
       OnStdout: (line: string) => {
@@ -67,7 +68,9 @@ export class MigratePhase {
     }
 
     if (result.ExitCode !== 0) {
-      const lastLines = this.lastNLines(result.Stderr || result.Stdout, 50);
+      // Combine stdout and stderr for full diagnostic output — Flyway errors go to stderr
+      const combined = [result.Stdout, result.Stderr].filter(Boolean).join('\n');
+      const lastLines = this.lastNLines(combined, 80);
       throw new InstallerError(
         'migrate',
         'MIGRATE_FAILED',

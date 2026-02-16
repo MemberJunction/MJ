@@ -78,6 +78,12 @@ export class SmokeTestPhase {
       emitter
     );
 
+    // Clean up: kill all processes we started so they don't remain as orphans.
+    // On Windows, shell-spawned processes (npm → turbo → node) aren't killed
+    // by child.kill() — only the top-level cmd.exe shell dies. Port-based
+    // cleanup ensures the actual service processes are terminated.
+    this.cleanupServices(apiPort, explorerPort, emitter);
+
     // Summary
     if (apiRunning && explorerRunning) {
       emitter.Emit('log', {
@@ -206,6 +212,10 @@ export class SmokeTestPhase {
   ): Promise<boolean> {
     const maxRetries = Math.min(MAX_HEALTH_RETRIES, Math.floor(timeoutMs / HEALTH_CHECK_INTERVAL));
 
+    // On Windows, "localhost" may resolve to ::1 (IPv6) while the server
+    // binds to 0.0.0.0 (IPv4 only). Use 127.0.0.1 for reliable connectivity.
+    const healthUrl = url.replace('localhost', '127.0.0.1');
+
     for (let i = 0; i < maxRetries; i++) {
       await this.sleep(HEALTH_CHECK_INTERVAL);
 
@@ -216,7 +226,7 @@ export class SmokeTestPhase {
       });
 
       try {
-        const response = await fetch(url, {
+        const response = await fetch(healthUrl, {
           signal: AbortSignal.timeout(5000),
         });
         if (response.ok || response.status < 500) {
@@ -232,5 +242,21 @@ export class SmokeTestPhase {
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Kill any processes still listening on the smoke test ports.
+   * Without this, turbo/node processes survive the parent shell being killed
+   * and block future starts with EADDRINUSE.
+   */
+  private cleanupServices(apiPort: number, explorerPort: number, emitter: InstallerEventEmitter): void {
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'smoke_test',
+      Message: 'Cleaning up smoke test processes...',
+    });
+
+    this.processRunner.killByPort(apiPort);
+    this.processRunner.killByPort(explorerPort);
   }
 }
