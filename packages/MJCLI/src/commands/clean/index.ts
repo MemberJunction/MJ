@@ -1,8 +1,7 @@
 import { Command, Flags } from '@oclif/core';
-import type { ParserOutput } from '@oclif/core/lib/interfaces/parser';
-import { Flyway } from 'node-flyway';
-import { getValidatedConfig, getFlywayConfig } from '../../config';
+import { Skyway } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
+import { getValidatedConfig, getSkywayConfig } from '../../config';
 
 export default class Clean extends Command {
   static description = 'Resets the MemberJunction database to a pre-installation state';
@@ -16,37 +15,45 @@ export default class Clean extends Command {
     verbose: Flags.boolean({ char: 'v', description: 'Enable additional logging' }),
   };
 
-  flags: ParserOutput<Clean>['flags'];
-
   async run(): Promise<void> {
-    const parsed = await this.parse(Clean);
-    this.flags = parsed.flags;
-
+    const { flags } = await this.parse(Clean);
     const config = getValidatedConfig();
 
-    const flywayConfig = await getFlywayConfig(config);
-    const flyway = new Flyway(flywayConfig);
+    if (config.cleanDisabled !== false) {
+      this.error('Clean is disabled. Set cleanDisabled: false in mj.config.cjs to enable.');
+    }
+
+    const skywayConfig = await getSkywayConfig(config);
+    const skyway = new Skyway(skywayConfig);
 
     this.log('Resetting MJ database to pre-installation state');
     this.log('Note that users and roles have not been dropped');
     const spinner = ora('Cleaning up...');
     spinner.start();
 
-    const result = await flyway.clean();
+    try {
+      const result = await skyway.Clean();
 
-    if (result.success) {
-      spinner.succeed();
-      this.log(`The database has been reset. Schemas dropped:\n\t- ${result.flywayResponse?.schemasDropped.join('\n\t- ')}`);
-    } else {
-      spinner.fail();
-      if (result.error) {
-        this.logToStderr(result.error.message);
-        if (this.flags.verbose) {
-          this.logToStderr(`ERROR CODE: ${result.error.errorCode}`);
-          this.logToStderr(result.error.stackTrace);
+      if (result.Success) {
+        spinner.succeed();
+        this.log(`The database has been reset. ${result.ObjectsDropped} objects dropped.`);
+        if (result.DroppedObjects.length > 0) {
+          this.log(`Objects dropped:\n\t- ${result.DroppedObjects.join('\n\t- ')}`);
         }
+      } else {
+        spinner.fail();
+        this.logToStderr(`\nClean failed: ${result.ErrorMessage ?? 'unknown error'}`);
+        if (flags.verbose && result.DroppedObjects.length > 0) {
+          this.logToStderr(`Partial cleanup:\n\t- ${result.DroppedObjects.join('\n\t- ')}`);
+        }
+        this.error('Command failed');
       }
-      this.error('Command failed');
+    } catch (err: unknown) {
+      spinner.fail();
+      const message = err instanceof Error ? err.message : String(err);
+      this.error(`Clean error: ${message}`);
+    } finally {
+      await skyway.Close();
     }
   }
 }
