@@ -22,12 +22,12 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    AIModelEntity: class AIModelEntity {
+    MJAIModelEntity: class MJAIModelEntity {
         Name: string = '';
         APIName: string = '';
     },
-    AIModelVendorEntity: class AIModelVendorEntity {},
-    AIPromptEntity: class AIPromptEntity {
+    MJAIModelVendorEntity: class MJAIModelVendorEntity {},
+    MJAIPromptEntity: class MJAIPromptEntity {
         TemplateID: string = '';
         ResultSelectorPromptID: string | null = null;
         ID: string | null = null;
@@ -35,7 +35,7 @@ vi.mock('@memberjunction/core-entities', () => ({
         Set(fieldName: string, value: unknown) {}
         get Dirty() { return false; }
     },
-    TemplateParamEntity: class TemplateParamEntity {
+    MJTemplateParamEntity: class MJTemplateParamEntity {
         TemplateID: string = '';
         Name: string = '';
     }

@@ -80,11 +80,11 @@ describe('Manifest Generator - TypeScript AST Parsing', () => {
         const source = `
             import { RegisterClass } from '@memberjunction/global';
             @RegisterClass(BaseEntity, 'Users')
-            export class UserEntity extends BaseEntity {}
+            export class MJUserEntity extends BaseEntity {}
         `;
         const results = parseSourceForRegisterClass(source);
         expect(results).toHaveLength(1);
-        expect(results[0].className).toBe('UserEntity');
+        expect(results[0].className).toBe('MJUserEntity');
         expect(results[0].baseClass).toBe('BaseEntity');
         expect(results[0].key).toBe('Users');
     });
@@ -92,15 +92,15 @@ describe('Manifest Generator - TypeScript AST Parsing', () => {
     it('should detect multiple @RegisterClass decorators in one file', () => {
         const source = `
             @RegisterClass(BaseEntity, 'Users')
-            export class UserEntity extends BaseEntity {}
+            export class MJUserEntity extends BaseEntity {}
 
             @RegisterClass(BaseEntity, 'Roles')
-            export class RoleEntity extends BaseEntity {}
+            export class MJRoleEntity extends BaseEntity {}
         `;
         const results = parseSourceForRegisterClass(source);
         expect(results).toHaveLength(2);
-        expect(results[0].className).toBe('UserEntity');
-        expect(results[1].className).toBe('RoleEntity');
+        expect(results[0].className).toBe('MJUserEntity');
+        expect(results[1].className).toBe('MJRoleEntity');
     });
 
     it('should return empty for files without @RegisterClass', () => {
@@ -146,11 +146,11 @@ describe('Manifest Generator - TypeScript AST Parsing', () => {
 
             @RegisterClass(BaseEntity, 'Test')
             @Injectable()
-            export class TestEntity extends BaseEntity {}
+            export class MJTestEntity extends BaseEntity {}
         `;
         const results = parseSourceForRegisterClass(source);
         expect(results).toHaveLength(1);
-        expect(results[0].className).toBe('TestEntity');
+        expect(results[0].className).toBe('MJTestEntity');
     });
 });
 

@@ -1,11 +1,11 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJTemplateEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 
 interface TemplateCardData {
-    Entity: TemplateEntity;
+    Entity: MJTemplateEntity;
     ContentTypes: string[];
     LastUpdated: Date | null;
     CategoryName: string;
@@ -334,13 +334,13 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
 
             const rv = new RunView();
             const [templatesResult, contentsResult] = await Promise.all([
-                rv.RunView<TemplateEntity>({
-                    EntityName: 'Templates',
+                rv.RunView<MJTemplateEntity>({
+                    EntityName: 'MJ: Templates',
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
                 }),
-                rv.RunView<TemplateContentEntity>({
-                    EntityName: 'Template Contents',
+                rv.RunView<MJTemplateContentEntity>({
+                    EntityName: 'MJ: Template Contents',
                     ResultType: 'entity_object'
                 })
             ]);
@@ -359,7 +359,7 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
         }
     }
 
-    private buildTemplateCard(template: TemplateEntity, allContents: TemplateContentEntity[]): TemplateCardData {
+    private buildTemplateCard(template: MJTemplateEntity, allContents: MJTemplateContentEntity[]): TemplateCardData {
         const templateContents = allContents.filter(c => c.TemplateID === template.ID);
         const contentTypes = [...new Set(templateContents.map(c => c.TypeID ? 'Content' : 'Text'))];
         const category = template.Category || 'Uncategorized';
@@ -411,14 +411,14 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
         this.cdr.detectChanges();
     }
 
-    public openTemplate(template: TemplateEntity): void {
+    public openTemplate(template: MJTemplateEntity): void {
         const pk = new CompositeKey();
-        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'Templates')!, template);
-        this.navService.OpenEntityRecord('Templates', pk);
+        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'MJ: Templates')!, template);
+        this.navService.OpenEntityRecord('MJ: Templates', pk);
     }
 
     public addNewTemplate(): void {
-        this.navService.OpenEntityRecord('Templates', new CompositeKey());
+        this.navService.OpenEntityRecord('MJ: Templates', new CompositeKey());
     }
 
     public getContentTypeIcon(type: string): string {

@@ -305,7 +305,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public onOpenQueryRecord(event: { queryId: string; queryName: string }): void {
         // Open the Query entity record using navigation service
         const compositeKey = CompositeKey.FromID(event.queryId);
-        this.navigationService.OpenEntityRecord('Queries', compositeKey);
+        this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
     }
 
     public openQueryDetails(query: QueryInfo, event: Event): void {
@@ -313,7 +313,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         event.stopPropagation();
         // Open the Query entity record
         const compositeKey = CompositeKey.FromID(query.ID);
-        this.navigationService.OpenEntityRecord('Queries', compositeKey);
+        this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
     }
 
     // ========================================

@@ -22,7 +22,7 @@ vi.mock('@memberjunction/core-entities', () => ({
         CronExpression: string = '';
         Params: unknown[] = [];
     },
-    ScheduledActionParamEntity: class ScheduledActionParamEntity {
+    MJScheduledActionParamEntity: class MJScheduledActionParamEntity {
         ScheduledActionID: string = '';
         ActionParamID: string = '';
         Value: string = '';

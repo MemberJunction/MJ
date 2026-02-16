@@ -1,0 +1,1362 @@
+[
+  {
+    "name": "Action Authorizations",
+    "className": "ActionAuthorization",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Action Categories",
+    "className": "ActionCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Action Context Types",
+    "className": "ActionContextType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Action Contexts",
+    "className": "ActionContext",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Action Execution Logs",
+    "className": "ActionExecutionLog",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Action Filters",
+    "className": "ActionFilter",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Action Libraries",
+    "className": "ActionLibrary",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Action Params",
+    "className": "ActionParam",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Action Result Codes",
+    "className": "ActionResultCode",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Actions",
+    "className": "Action",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Actions",
+    "className": "AIAction",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Agent Actions",
+    "className": "AIAgentAction",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Agent Learning Cycles",
+    "className": "AIAgentLearningCycle",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Agent Models",
+    "className": "AIAgentModel",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Agent Note Types",
+    "className": "AIAgentNoteType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Agent Notes",
+    "className": "AIAgentNote",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Agent Requests",
+    "className": "AIAgentRequest",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Agents",
+    "className": "AIAgent",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Model Actions",
+    "className": "AIModelAction",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Model Types",
+    "className": "AIModelType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Models",
+    "className": "AIModel",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Prompt Categories",
+    "className": "AIPromptCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Prompt Types",
+    "className": "AIPromptType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Prompts",
+    "className": "AIPrompt",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "AI Result Cache",
+    "className": "AIResultCache",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Application Entities",
+    "className": "ApplicationEntity",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Application Settings",
+    "className": "ApplicationSetting",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Applications",
+    "className": "Application",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Audit Log Types",
+    "className": "AuditLogType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Audit Logs",
+    "className": "AuditLog",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Authorization Roles",
+    "className": "AuthorizationRole",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Authorizations",
+    "className": "Authorization",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Communication Base Message Types",
+    "className": "CommunicationBaseMessageType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Communication Logs",
+    "className": "CommunicationLog",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Communication Provider Message Types",
+    "className": "CommunicationProviderMessageType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Communication Providers",
+    "className": "CommunicationProvider",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Communication Runs",
+    "className": "CommunicationRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Companies",
+    "className": "Company",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Company Integration Record Maps",
+    "className": "CompanyIntegrationRecordMap",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Company Integration Run API Logs",
+    "className": "CompanyIntegrationRunAPILog",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Company Integration Run Details",
+    "className": "CompanyIntegrationRunDetail",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Company Integration Runs",
+    "className": "CompanyIntegrationRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Company Integrations",
+    "className": "CompanyIntegration",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content File Types",
+    "className": "ContentFileType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Item Attributes",
+    "className": "ContentItemAttribute",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Item Tags",
+    "className": "ContentItemTag",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Items",
+    "className": "ContentItem",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Process Runs",
+    "className": "ContentProcessRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Source Params",
+    "className": "ContentSourceParam",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Source Type Params",
+    "className": "ContentSourceTypeParam",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Source Types",
+    "className": "ContentSourceType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Sources",
+    "className": "ContentSource",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Type Attributes",
+    "className": "ContentTypeAttribute",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Content Types",
+    "className": "ContentType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Conversation Details",
+    "className": "ConversationDetail",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Conversations",
+    "className": "Conversation",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Dashboard Categories",
+    "className": "DashboardCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Dashboards",
+    "className": "Dashboard",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Data Context Items",
+    "className": "DataContextItem",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Data Contexts",
+    "className": "DataContext",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Dataset Items",
+    "className": "DatasetItem",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Datasets",
+    "className": "Dataset",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Duplicate Run Detail Matches",
+    "className": "DuplicateRunDetailMatch",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Duplicate Run Details",
+    "className": "DuplicateRunDetail",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Duplicate Runs",
+    "className": "DuplicateRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Employee Company Integrations",
+    "className": "EmployeeCompanyIntegration",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Employee Roles",
+    "className": "EmployeeRole",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Employee Skills",
+    "className": "EmployeeSkill",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Employees",
+    "className": "Employee",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entities",
+    "className": "Entity",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Action Filters",
+    "className": "EntityActionFilter",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Action Invocation Types",
+    "className": "EntityActionInvocationType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Action Invocations",
+    "className": "EntityActionInvocation",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Action Params",
+    "className": "EntityActionParam",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Actions",
+    "className": "EntityAction",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity AI Actions",
+    "className": "EntityAIAction",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Communication Fields",
+    "className": "EntityCommunicationField",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Communication Message Types",
+    "className": "EntityCommunicationMessageType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Document Runs",
+    "className": "EntityDocumentRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Document Settings",
+    "className": "EntityDocumentSetting",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Document Types",
+    "className": "EntityDocumentType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Documents",
+    "className": "EntityDocument",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Field Values",
+    "className": "EntityFieldValue",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Fields",
+    "className": "EntityField",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Permissions",
+    "className": "EntityPermission",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Record Documents",
+    "className": "EntityRecordDocument",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Relationship Display Components",
+    "className": "EntityRelationshipDisplayComponent",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Relationships",
+    "className": "EntityRelationship",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Entity Settings",
+    "className": "EntitySetting",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Error Logs",
+    "className": "ErrorLog",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Explorer Navigation Items",
+    "className": "ExplorerNavigationItem",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "File Categories",
+    "className": "FileCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "File Entity Record Links",
+    "className": "FileEntityRecordLink",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "File Storage Providers",
+    "className": "FileStorageProvider",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Files",
+    "className": "File",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Generated Code Categories",
+    "className": "GeneratedCodeCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Generated Codes",
+    "className": "GeneratedCode",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Integration URL Formats",
+    "className": "IntegrationURLFormat",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Integrations",
+    "className": "Integration",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Libraries",
+    "className": "Library",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Library Items",
+    "className": "LibraryItem",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "List Categories",
+    "className": "ListCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "List Details",
+    "className": "ListDetail",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Lists",
+    "className": "List",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Output Delivery Types",
+    "className": "OutputDeliveryType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Output Format Types",
+    "className": "OutputFormatType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Output Trigger Types",
+    "className": "OutputTriggerType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Queries",
+    "className": "Query",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Query Categories",
+    "className": "QueryCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Query Entities",
+    "className": "QueryEntity",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Query Fields",
+    "className": "QueryField",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Query Permissions",
+    "className": "QueryPermission",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Queue Tasks",
+    "className": "QueueTask",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Queue Types",
+    "className": "QueueType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Queues",
+    "className": "Queue",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Recommendation Items",
+    "className": "RecommendationItem",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Recommendation Providers",
+    "className": "RecommendationProvider",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Recommendation Runs",
+    "className": "RecommendationRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Recommendations",
+    "className": "Recommendation",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Record Change Replay Runs",
+    "className": "RecordChangeReplayRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Record Changes",
+    "className": "RecordChange",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Record Merge Deletion Logs",
+    "className": "RecordMergeDeletionLog",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Record Merge Logs",
+    "className": "RecordMergeLog",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Report Categories",
+    "className": "ReportCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Report Snapshots",
+    "className": "ReportSnapshot",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Reports",
+    "className": "Report",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Resource Links",
+    "className": "ResourceLink",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Resource Permissions",
+    "className": "ResourcePermission",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Resource Types",
+    "className": "ResourceType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Roles",
+    "className": "Role",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Row Level Security Filters",
+    "className": "RowLevelSecurityFilter",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Scheduled Action Params",
+    "className": "ScheduledActionParam",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Scheduled Actions",
+    "className": "ScheduledAction",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Schema Info",
+    "className": "SchemaInfo",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Skills",
+    "className": "Skill",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Tagged Items",
+    "className": "TaggedItem",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Tags",
+    "className": "Tag",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Template Categories",
+    "className": "TemplateCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Template Content Types",
+    "className": "TemplateContentType",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Template Contents",
+    "className": "TemplateContent",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Template Params",
+    "className": "TemplateParam",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Templates",
+    "className": "Template",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User Application Entities",
+    "className": "UserApplicationEntity",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User Applications",
+    "className": "UserApplication",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User Favorites",
+    "className": "UserFavorite",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User Notifications",
+    "className": "UserNotification",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User Record Logs",
+    "className": "UserRecordLog",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User Roles",
+    "className": "UserRole",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User View Categories",
+    "className": "UserViewCategory",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User View Run Details",
+    "className": "UserViewRunDetail",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User View Runs",
+    "className": "UserViewRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "User Views",
+    "className": "UserView",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Users",
+    "className": "User",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Vector Databases",
+    "className": "VectorDatabase",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Vector Indexes",
+    "className": "VectorIndex",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Version Installations",
+    "className": "VersionInstallation",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Workflow Engines",
+    "className": "WorkflowEngine",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Workflow Runs",
+    "className": "WorkflowRun",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Workflows",
+    "className": "Workflow",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Workspace Items",
+    "className": "WorkspaceItem",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "Workspaces",
+    "className": "Workspace",
+    "hasMJPrefix": false
+  },
+  {
+    "name": "MJ: Access Control Rules",
+    "className": "AccessControlRule",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Artifact Types",
+    "className": "AIAgentArtifactType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Configurations",
+    "className": "AIAgentConfiguration",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Data Sources",
+    "className": "AIAgentDataSource",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Examples",
+    "className": "AIAgentExample",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Modalities",
+    "className": "AIAgentModality",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Permissions",
+    "className": "AIAgentPermission",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Prompts",
+    "className": "AIAgentPrompt",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Relationships",
+    "className": "AIAgentRelationship",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Run Medias",
+    "className": "AIAgentRunMedia",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Run Steps",
+    "className": "AIAgentRunStep",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Runs",
+    "className": "AIAgentRun",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Step Paths",
+    "className": "AIAgentStepPath",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Steps",
+    "className": "AIAgentStep",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Agent Types",
+    "className": "AIAgentType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Architectures",
+    "className": "AIArchitecture",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Configuration Params",
+    "className": "AIConfigurationParam",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Configurations",
+    "className": "AIConfiguration",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Credential Bindings",
+    "className": "AICredentialBinding",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Modalities",
+    "className": "AIModality",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Model Architectures",
+    "className": "AIModelArchitecture",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Model Costs",
+    "className": "AIModelCost",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Model Modalities",
+    "className": "AIModelModality",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Model Price Types",
+    "className": "AIModelPriceType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Model Price Unit Types",
+    "className": "AIModelPriceUnitType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Model Vendors",
+    "className": "AIModelVendor",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Prompt Models",
+    "className": "AIPromptModel",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Prompt Run Medias",
+    "className": "AIPromptRunMedia",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Prompt Runs",
+    "className": "AIPromptRun",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Vendor Type Definitions",
+    "className": "AIVendorTypeDefinition",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Vendor Types",
+    "className": "AIVendorType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: AI Vendors",
+    "className": "AIVendor",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: API Application Scopes",
+    "className": "APIApplicationScope",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: API Applications",
+    "className": "APIApplication",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: API Key Applications",
+    "className": "APIKeyApplication",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: API Key Scopes",
+    "className": "APIKeyScope",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: API Key Usage Logs",
+    "className": "APIKeyUsageLog",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: API Keys",
+    "className": "APIKey",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: API Scopes",
+    "className": "APIScope",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Artifact Permissions",
+    "className": "ArtifactPermission",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Artifact Types",
+    "className": "ArtifactType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Artifact Uses",
+    "className": "ArtifactUse",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Artifact Version Attributes",
+    "className": "ArtifactVersionAttribute",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Artifact Versions",
+    "className": "ArtifactVersion",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Artifacts",
+    "className": "Artifact",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Collection Artifacts",
+    "className": "CollectionArtifact",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Collection Permissions",
+    "className": "CollectionPermission",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Collections",
+    "className": "Collection",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Component Dependencies",
+    "className": "ComponentDependency",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Component Libraries",
+    "className": "ComponentLibrary",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Component Library Links",
+    "className": "ComponentLibraryLink",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Component Registries",
+    "className": "ComponentRegistry",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Components",
+    "className": "Component",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Conversation Artifact Permissions",
+    "className": "ConversationArtifactPermission",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Conversation Artifact Versions",
+    "className": "ConversationArtifactVersion",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Conversation Artifacts",
+    "className": "ConversationArtifact",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Conversation Detail Artifacts",
+    "className": "ConversationDetailArtifact",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Conversation Detail Attachments",
+    "className": "ConversationDetailAttachment",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Conversation Detail Ratings",
+    "className": "ConversationDetailRating",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Credential Categories",
+    "className": "CredentialCategory",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Credential Types",
+    "className": "CredentialType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Credentials",
+    "className": "Credential",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Dashboard Category Links",
+    "className": "DashboardCategoryLink",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Dashboard Category Permissions",
+    "className": "DashboardCategoryPermission",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Dashboard Part Types",
+    "className": "DashboardPartType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Dashboard Permissions",
+    "className": "DashboardPermission",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Dashboard User Preferences",
+    "className": "DashboardUserPreference",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Dashboard User States",
+    "className": "DashboardUserState",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Encryption Algorithms",
+    "className": "EncryptionAlgorithm",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Encryption Key Sources",
+    "className": "EncryptionKeySource",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Encryption Keys",
+    "className": "EncryptionKey",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Environments",
+    "className": "Environment",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: File Storage Accounts",
+    "className": "FileStorageAccount",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: List Invitations",
+    "className": "ListInvitation",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: List Shares",
+    "className": "ListShare",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: MCP Server Connection Permissions",
+    "className": "MCPServerConnectionPermission",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: MCP Server Connection Tools",
+    "className": "MCPServerConnectionTool",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: MCP Server Connections",
+    "className": "MCPServerConnection",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: MCP Server Tools",
+    "className": "MCPServerTool",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: MCP Servers",
+    "className": "MCPServer",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: MCP Tool Execution Logs",
+    "className": "MCPToolExecutionLog",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: O Auth Auth Server Metadata Caches",
+    "className": "OAuthAuthServerMetadataCache",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: O Auth Authorization States",
+    "className": "OAuthAuthorizationState",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: O Auth Client Registrations",
+    "className": "OAuthClientRegistration",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: O Auth Tokens",
+    "className": "OAuthToken",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Projects",
+    "className": "Project",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Public Links",
+    "className": "PublicLink",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Query Parameters",
+    "className": "QueryParameter",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Record Links",
+    "className": "RecordLink",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Report User States",
+    "className": "ReportUserState",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Report Versions",
+    "className": "ReportVersion",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Scheduled Job Runs",
+    "className": "ScheduledJobRun",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Scheduled Job Types",
+    "className": "ScheduledJobType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Scheduled Jobs",
+    "className": "ScheduledJob",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Task Dependencies",
+    "className": "TaskDependency",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Task Types",
+    "className": "TaskType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Tasks",
+    "className": "Task",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Test Rubrics",
+    "className": "TestRubric",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Test Run Feedbacks",
+    "className": "TestRunFeedback",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Test Runs",
+    "className": "TestRun",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Test Suite Runs",
+    "className": "TestSuiteRun",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Test Suite Tests",
+    "className": "TestSuiteTest",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Test Suites",
+    "className": "TestSuite",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Test Types",
+    "className": "TestType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Tests",
+    "className": "Test",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: User Notification Preferences",
+    "className": "UserNotificationPreference",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: User Notification Types",
+    "className": "UserNotificationType",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: User Settings",
+    "className": "UserSetting",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Version Label Items",
+    "className": "VersionLabelItem",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Version Label Restores",
+    "className": "VersionLabelRestore",
+    "hasMJPrefix": true
+  },
+  {
+    "name": "MJ: Version Labels",
+    "className": "VersionLabel",
+    "hasMJPrefix": true
+  }
+]

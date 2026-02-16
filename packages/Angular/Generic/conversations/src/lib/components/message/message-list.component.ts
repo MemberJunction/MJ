@@ -14,7 +14,7 @@ import {
   AfterViewInit,
   AfterViewChecked
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
@@ -34,8 +34,8 @@ import { AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
   styleUrls: ['./message-list.component.css']
 })
 export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit, AfterViewChecked {
-  @Input() public messages: ConversationDetailEntity[] = [];
-  @Input() public conversation!: ConversationEntity | null;
+  @Input() public messages: MJConversationDetailEntity[] = [];
+  @Input() public conversation!: MJConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
@@ -44,15 +44,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
 
-  @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
-  @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
-  @Output() public deleteMessage = new EventEmitter<ConversationDetailEntity>();
-  @Output() public retryMessage = new EventEmitter<ConversationDetailEntity>();
-  @Output() public testFeedbackMessage = new EventEmitter<ConversationDetailEntity>();
+  @Output() public pinMessage = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public editMessage = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public deleteMessage = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public retryMessage = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public testFeedbackMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
-  @Output() public replyInThread = new EventEmitter<ConversationDetailEntity>();
-  @Output() public viewThread = new EventEmitter<ConversationDetailEntity>();
-  @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
+  @Output() public replyInThread = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public viewThread = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public messageEdited = new EventEmitter<MJConversationDetailEntity>();
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
@@ -166,7 +166,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Efficiently updates the DOM without re-rendering everything
    */
   @Input()
-  set messagesUpdate(messages: ConversationDetailEntity[]) {
+  set messagesUpdate(messages: MJConversationDetailEntity[]) {
     if (messages && this.messageContainerRef) {
       this.updateMessages(messages);
     }
@@ -176,7 +176,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Updates the message list using dynamic component creation
    * Only adds/removes changed messages for optimal performance
    */
-  private updateMessages(messages: ConversationDetailEntity[]): void {
+  private updateMessages(messages: MJConversationDetailEntity[]): void {
     // Temporarily detach change detection for performance
     this.cdRef.detach();
 
@@ -295,13 +295,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.attachments = this.attachmentsMap.get(message.ID) || [];
 
           // Subscribe to outputs
-          instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));
-          instance.editClicked.subscribe((msg: ConversationDetailEntity) => this.editMessage.emit(msg));
-          instance.deleteClicked.subscribe((msg: ConversationDetailEntity) => this.deleteMessage.emit(msg));
-          instance.retryClicked.subscribe((msg: ConversationDetailEntity) => this.retryMessage.emit(msg));
-          instance.testFeedbackClicked.subscribe((msg: ConversationDetailEntity) => this.testFeedbackMessage.emit(msg));
+          instance.pinClicked.subscribe((msg: MJConversationDetailEntity) => this.pinMessage.emit(msg));
+          instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.editMessage.emit(msg));
+          instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.deleteMessage.emit(msg));
+          instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.retryMessage.emit(msg));
+          instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.testFeedbackMessage.emit(msg));
           instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
-          instance.messageEdited.subscribe((msg: ConversationDetailEntity) => this.messageEdited.emit(msg));
+          instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.messageEdited.emit(msg));
           instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
           instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
           instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
@@ -341,7 +341,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Generates a unique key for a message
    * Uses ID if available, otherwise uses a temporary key
    */
-  private getMessageKey(message: ConversationDetailEntity): string {
+  private getMessageKey(message: MJConversationDetailEntity): string {
     return message.ID && message.ID.length > 0
       ? message.ID
       : `temp_${message.__mj_CreatedAt?.getTime() || Date.now()}`;
@@ -391,7 +391,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Removes a message from the rendered list
    * Called externally when a message is deleted
    */
-  public removeMessage(message: ConversationDetailEntity): void {
+  public removeMessage(message: MJConversationDetailEntity): void {
     const key = this.getMessageKey(message);
     const componentRef = this._renderedMessages.get(key);
     if (componentRef) {

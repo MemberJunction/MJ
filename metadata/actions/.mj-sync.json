@@ -1,8 +1,8 @@
 {
-  "entity": "Actions",
+  "entity": "MJ: Actions",
   "filePattern": "**/.*.json",
   "defaults": {
-      "CategoryID": "@lookup:Action Categories.Name=System"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=System"
   },
   "ignoreDirectories": [
     "templates"
@@ -23,17 +23,17 @@
     "ignoreVirtualFields": true,
     "lookupFields": {
       "CategoryID": {
-        "entity": "Action Categories",
+        "entity": "MJ: Action Categories",
         "field": "Name"
       }
     },
     "relatedEntities": {
-      "Action Params": {
-        "entity": "Action Params",
+      "MJ: Action Params": {
+        "entity": "MJ: Action Params",
         "foreignKey": "ActionID"
       },
-      "Action Result Codes": {
-        "entity": "Action Result Codes",
+      "MJ: Action Result Codes": {
+        "entity": "MJ: Action Result Codes",
         "foreignKey": "ActionID"
       }
     }

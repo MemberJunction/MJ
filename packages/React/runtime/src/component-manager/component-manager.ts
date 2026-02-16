@@ -5,7 +5,7 @@
 
 import { ComponentSpec, ComponentLibraryDependency } from '@memberjunction/interactive-component-types';
 import { UserInfo, Metadata, LogError } from '@memberjunction/core';
-import { ComponentMetadataEngine, ComponentLibraryEntity, ComponentEntityExtended } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, MJComponentLibraryEntity, ComponentEntityExtended } from '@memberjunction/core-entities';
 
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';

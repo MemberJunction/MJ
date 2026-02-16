@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, AfterViewInit, ElementRef, ViewChild, OnDestroy, HostListener } from '@angular/core';
 
-import { TaskEntity, TaskDependencyEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
 import { gantt } from 'dhtmlx-gantt';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
@@ -118,15 +118,15 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
   `]
 })
 export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDestroy {
-  @Input() tasks: TaskEntity[] = [];
-  @Input() taskDependencies: TaskDependencyEntity[] = [];
+  @Input() tasks: MJTaskEntity[] = [];
+  @Input() taskDependencies: MJTaskDependencyEntity[] = [];
   @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
-  @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
 
-  public selectedTask: TaskEntity | null = null;
+  public selectedTask: MJTaskEntity | null = null;
   public detailPanelWidth: number = 400;
 
   private ganttInitialized = false;
@@ -280,7 +280,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     }
   }
 
-  private convertToGanttFormat(tasks: TaskEntity[]): { data: any[], links: any[] } {
+  private convertToGanttFormat(tasks: MJTaskEntity[]): { data: any[], links: any[] } {
     const data: any[] = [];
     const links: any[] = [];
 
@@ -288,7 +288,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     console.log('🔗 Task dependencies:', this.taskDependencies);
 
     // Build a map of task ID to task for quick lookup
-    const taskMap = new Map<string, TaskEntity>();
+    const taskMap = new Map<string, MJTaskEntity>();
     tasks.forEach(t => taskMap.set(t.ID, t));
 
     // Build dependency map: taskId -> array of tasks it depends on
@@ -422,7 +422,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       data.push(ganttTask);
     });
 
-    // Create links from TaskDependencyEntity records
+    // Create links from MJTaskDependencyEntity records
     this.taskDependencies.forEach((dep, index) => {
       links.push({
         id: dep.ID || `link_${index}`,
@@ -437,7 +437,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     return { data, links };
   }
 
-  private calculateDuration(task: TaskEntity): number {
+  private calculateDuration(task: MJTaskEntity): number {
     if (task.StartedAt && task.DueAt) {
       const startDate = new Date(task.StartedAt);
       const endDate = new Date(task.DueAt);
@@ -453,7 +453,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     return `${year}-${month}-${day} 00:00`;
   }
 
-  public getAgentRunId(task: TaskEntity): string | null {
+  public getAgentRunId(task: MJTaskEntity): string | null {
     return this.agentRunMap?.get(task.ID) || null;
   }
 

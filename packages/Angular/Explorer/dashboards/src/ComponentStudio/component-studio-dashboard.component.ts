@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 import {
   ComponentEntityExtended,
-  ArtifactVersionEntity,
+  MJArtifactVersionEntity,
   ResourceData,
   UserInfoEngine
 } from '@memberjunction/core-entities';
@@ -542,17 +542,17 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       if (!result?.action) return;
 
       const artifact = result.artifact;
-      let version: ArtifactVersionEntity;
+      let version: MJArtifactVersionEntity;
 
       if (result.action === 'update-version' && result.versionToUpdate) {
         version = result.versionToUpdate;
       } else {
-        version = await this.metadata.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions');
+        version = await this.metadata.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions');
         version.ArtifactID = artifact.ID;
         version.UserID = this.metadata.CurrentUser.ID;
 
         const rv = new RunView();
-        const versionsResult = await rv.RunView<ArtifactVersionEntity>({
+        const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ArtifactID = '${artifact.ID}'`,
           OrderBy: 'VersionNumber DESC',

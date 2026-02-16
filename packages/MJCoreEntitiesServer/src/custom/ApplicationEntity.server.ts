@@ -1,5 +1,5 @@
 import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, LogStatus, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
-import { ApplicationEntity, UserApplicationEntity } from "@memberjunction/core-entities";
+import { MJApplicationEntity, MJUserApplicationEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 
 /**
@@ -10,8 +10,8 @@ import { RegisterClass } from "@memberjunction/global";
  *    a. A new application is created with DefaultForNewUser = true
  *    b. An existing application's DefaultForNewUser is changed from false to true
  */
-@RegisterClass(BaseEntity, 'Applications')
-export class ApplicationEntityServerEntity extends ApplicationEntity {
+@RegisterClass(BaseEntity, 'MJ: Applications')
+export class ApplicationEntityServerEntity extends MJApplicationEntity {
     constructor(Entity: EntityInfo) {
         super(Entity);
 
@@ -131,8 +131,8 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
         const rv = this.RunViewProviderToUse;
 
         // Look for existing applications with this path or path-N pattern
-        const result = await rv.RunView<ApplicationEntity>({
-            EntityName: 'Applications',
+        const result = await rv.RunView<MJApplicationEntity>({
+            EntityName: 'MJ: Applications',
             ExtraFilter: `Path = '${baseSlug}' OR Path LIKE '${baseSlug}-%'`,
             ResultType: 'simple'
         }, this.ContextCurrentUser);
@@ -202,12 +202,12 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
             // Load all data in a single RunViews call
             const [usersResult, allUserAppsResult] = await rv.RunViews([
                 {
-                    EntityName: 'Users',
+                    EntityName: 'MJ: Users',
                     ExtraFilter: 'IsActive = 1',
                     ResultType: 'simple'
                 },
                 {
-                    EntityName: 'User Applications',
+                    EntityName: 'MJ: User Applications',
                     ExtraFilter: '', // Load all UserApplications
                     ResultType: 'simple'
                 }
@@ -244,7 +244,7 @@ export class ApplicationEntityServerEntity extends ApplicationEntity {
                 const sequence = this.calculateSequenceFromDefault(userApps);
 
                 // Create new UserApplication record
-                const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications', this.ContextCurrentUser);
+                const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', this.ContextCurrentUser);
                 userApp.NewRecord();
                 userApp.UserID = user.ID;
                 userApp.ApplicationID = this.ID;

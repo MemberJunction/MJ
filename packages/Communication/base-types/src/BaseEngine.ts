@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
-import { CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
+import { MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { CommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
  
 
@@ -16,11 +16,11 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    }
    
    private _Metadata: {
-      BaseMessageTypes: CommunicationBaseMessageTypeEntity[],
+      BaseMessageTypes: MJCommunicationBaseMessageTypeEntity[],
       Providers: CommunicationProviderEntityExtended[],
-      ProviderMessageTypes: CommunicationProviderMessageTypeEntity[],
-      EntityCommunicationMessageTypes: EntityCommunicationMessageTypeEntity[],
-      EntityCommunicationFields: EntityCommunicationFieldEntity[]
+      ProviderMessageTypes: MJCommunicationProviderMessageTypeEntity[],
+      EntityCommunicationMessageTypes: MJEntityCommunicationMessageTypeEntity[],
+      EntityCommunicationFields: MJEntityCommunicationFieldEntity[]
    } = {
       BaseMessageTypes: [],
       Providers: [],
@@ -55,13 +55,13 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
       });
    }
 
-   public get BaseMessageTypes(): CommunicationBaseMessageTypeEntity[] {
+   public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] {
       return this._Metadata.BaseMessageTypes;
    }
    public get Providers(): CommunicationProviderEntityExtended[] {
       return this._Metadata.Providers;
    }
-   public get ProviderMessageTypes(): CommunicationProviderMessageTypeEntity[] {
+   public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
       return this._Metadata.ProviderMessageTypes;
    }
 
@@ -73,9 +73,9 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    /**
    * Starts a communication run
    */
-   protected async StartRun(): Promise<CommunicationRunEntity> {
+   protected async StartRun(): Promise<MJCommunicationRunEntity> {
       const md = new Metadata();
-      const run = await md.GetEntityObject<CommunicationRunEntity>('Communication Runs', this.ContextUser);
+      const run = await md.GetEntityObject<MJCommunicationRunEntity>('MJ: Communication Runs', this.ContextUser);
       run.Status = 'Pending';
       run.Direction = 'Sending';
       run.StartedAt = new Date();
@@ -103,7 +103,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    * @param run 
    * @returns 
    */
-   protected async EndRun(run: CommunicationRunEntity): Promise<boolean> {
+   protected async EndRun(run: MJCommunicationRunEntity): Promise<boolean> {
       run.Status = 'Complete';
       run.EndedAt = new Date();
       return await run.Save();
@@ -114,9 +114,9 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    * @param processedMessage 
    * @param run 
    */
-   protected async StartLog(processedMessage: ProcessedMessage, run?: CommunicationRunEntity): Promise<CommunicationLogEntity> {
+   protected async StartLog(processedMessage: ProcessedMessage, run?: MJCommunicationRunEntity): Promise<MJCommunicationLogEntity> {
       const md = new Metadata();
-      const log = await md.GetEntityObject<CommunicationLogEntity>('Communication Logs', this.ContextUser);
+      const log = await md.GetEntityObject<MJCommunicationLogEntity>('MJ: Communication Logs', this.ContextUser);
       log.CommunicationRunID = run?.ID;
       log.Status = 'Pending';
       log.CommunicationProviderID = processedMessage.MessageType.CommunicationProviderID;

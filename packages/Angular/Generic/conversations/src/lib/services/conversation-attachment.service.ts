@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 import {
-  ConversationDetailAttachmentEntity,
-  AIModalityEntity
+  MJConversationDetailAttachmentEntity,
+  MJAIModalityEntity
 } from '@memberjunction/core-entities';
 import {
   ConversationUtility,
@@ -41,7 +41,7 @@ export class ConversationAttachmentService {
       const rv = new RunView();
       const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
-      const attachmentResult = await rv.RunView<ConversationDetailAttachmentEntity>({
+      const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
         EntityName: 'MJ: Conversation Detail Attachments',
         ExtraFilter: `ConversationDetailID IN (${idList})`,
         OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
@@ -90,15 +90,15 @@ export class ConversationAttachmentService {
     conversationDetailId: string,
     pendingAttachments: PendingAttachment[],
     contextUser?: UserInfo
-  ): Promise<ConversationDetailAttachmentEntity[]> {
-    const savedAttachments: ConversationDetailAttachmentEntity[] = [];
+  ): Promise<MJConversationDetailAttachmentEntity[]> {
+    const savedAttachments: MJConversationDetailAttachmentEntity[] = [];
     const md = new Metadata();
 
     for (let i = 0; i < pendingAttachments.length; i++) {
       const pending = pendingAttachments[i];
 
       try {
-        const attachment = await md.GetEntityObject<ConversationDetailAttachmentEntity>(
+        const attachment = await md.GetEntityObject<MJConversationDetailAttachmentEntity>(
           'MJ: Conversation Detail Attachments',
           contextUser
         );
@@ -141,7 +141,7 @@ export class ConversationAttachmentService {
    * Create attachment reference tokens for message text.
    * These tokens are stored in the Message field to reference attachments.
    */
-  createAttachmentReferences(attachments: ConversationDetailAttachmentEntity[]): string {
+  createAttachmentReferences(attachments: MJConversationDetailAttachmentEntity[]): string {
     return attachments
       .map(att => {
         const content: AttachmentContent = {
@@ -164,7 +164,7 @@ export class ConversationAttachmentService {
   /**
    * Convert a database entity to a MessageAttachment for display
    */
-  private convertToMessageAttachment(entity: ConversationDetailAttachmentEntity): MessageAttachment {
+  private convertToMessageAttachment(entity: MJConversationDetailAttachmentEntity): MessageAttachment {
     // Determine content URL
     let contentUrl: string | undefined;
     let thumbnailUrl: string | undefined;

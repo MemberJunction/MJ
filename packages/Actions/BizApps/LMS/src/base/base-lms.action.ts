@@ -2,7 +2,7 @@ import { ActionParam } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
-import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 
 /**
@@ -24,7 +24,7 @@ export abstract class BaseLMSAction extends BaseAction {
     /**
      * Cached company integration for the current execution
      */
-    private _companyIntegration: CompanyIntegrationEntity | null = null;
+    private _companyIntegration: MJCompanyIntegrationEntity | null = null;
 
     /**
      * Common LMS parameters that many actions will need
@@ -42,15 +42,15 @@ export abstract class BaseLMSAction extends BaseAction {
     /**
      * Gets the company integration record for the specified company and LMS
      */
-    protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<CompanyIntegrationEntity> {
+    protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
         // Check cache first
         if (this._companyIntegration && this._companyIntegration.CompanyID === companyId) {
             return this._companyIntegration;
         }
 
         const rv = new RunView();
-        const result = await rv.RunView<CompanyIntegrationEntity>({
-            EntityName: 'Company Integrations',
+        const result = await rv.RunView<MJCompanyIntegrationEntity>({
+            EntityName: 'MJ: Company Integrations',
             ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${this.integrationName}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -80,7 +80,7 @@ export abstract class BaseLMSAction extends BaseAction {
     /**
      * Gets API credentials - first tries environment variables, then falls back to database
      */
-    protected async getAPICredentials(integration: CompanyIntegrationEntity): Promise<{ apiKey?: string; apiSecret?: string; accessToken?: string }> {
+    protected async getAPICredentials(integration: MJCompanyIntegrationEntity): Promise<{ apiKey?: string; apiSecret?: string; accessToken?: string }> {
         const companyId = integration.CompanyID;
         
         // Try environment variables first
@@ -110,7 +110,7 @@ export abstract class BaseLMSAction extends BaseAction {
     /**
      * Gets the base URL for API calls
      */
-    protected async getAPIBaseURL(integration: CompanyIntegrationEntity): Promise<string> {
+    protected async getAPIBaseURL(integration: MJCompanyIntegrationEntity): Promise<string> {
         // Check if custom URL is stored in the integration
         if (integration.CustomAttribute1) {
             return integration.CustomAttribute1;

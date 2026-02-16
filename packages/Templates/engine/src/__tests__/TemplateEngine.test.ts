@@ -23,7 +23,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    TemplateContentEntity: class {
+    MJTemplateContentEntity: class {
         ID = '';
         TemplateID = '';
         TemplateText = '';
@@ -49,15 +49,15 @@ vi.mock('@memberjunction/core-entities', () => ({
             return this.Content.filter((c: Record<string, unknown>) => c.Type === type);
         }
     },
-    TemplateParamEntity: class {
+    MJTemplateParamEntity: class {
         ID = '';
         Name = '';
         Type = 'Scalar';
         DefaultValue: string | null = null;
         TemplateID = '';
     },
-    TemplateCategoryEntity: class {},
-    TemplateContentTypeEntity: class {},
+    MJTemplateCategoryEntity: class {},
+    MJTemplateContentTypeEntity: class {},
 }));
 
 const { mockGetAllRegistrations } = vi.hoisted(() => ({

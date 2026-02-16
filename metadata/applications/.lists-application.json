@@ -7,7 +7,7 @@
     "Color": "#009688",
     "DefaultSequence": 50,
     "Status": "Active",
-    "NavigationStyle": "Both",
+    "NavigationStyle": "App Switcher",
     "HideNavBarIconWhenActive": true,
     "TopNavLocation": "Left of User Menu",
     "DefaultNavItems": [
@@ -35,7 +35,7 @@
     ]
   },
   "relatedEntities": {
-    "Application Entities": []
+    "MJ: Application Entities": []
   },
   "primaryKey": {
     "ID": "140166B9-4064-4C3F-ACF1-3EB7DB2C9BD0"

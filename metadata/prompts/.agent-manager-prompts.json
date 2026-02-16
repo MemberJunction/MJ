@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Agent Manager - Main Prompt",
       "Description": "System prompt for the Agent Manager agent that orchestrates creation and management of other agents.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/agent-manager/agent-manager.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -19,14 +19,14 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management?create&Description=Prompts for Agent Management System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Agent Management?create&Description=Prompts for Agent Management System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 11
           },
@@ -34,14 +34,14 @@
             "ID": "7AB18736-0371-41F8-8408-46903C1B3ECC"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.167Z",
-            "checksum": "a4b5a24a49c7f8479a11f4aa0c99be7810ca774ba3abdd169aa54bde5ce0cfa3"
+            "lastModified": "2026-02-13T20:48:47.218Z",
+            "checksum": "c383e1e5d16a6fca8ae4f2d96d5f4b8626eff2c0a24a4f44e801accb9289560a"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 10
           },
@@ -49,8 +49,8 @@
             "ID": "3BF5F393-10C4-4470-8783-2131F18E4196"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.169Z",
-            "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
+            "lastModified": "2026-02-13T20:48:47.220Z",
+            "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
           }
         }
       ]
@@ -59,15 +59,15 @@
       "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
     },
     "sync": {
-      "lastModified": "2026-02-05T04:31:40.032Z",
-      "checksum": "9ac54a8f8d3308e5619ab6382646bb5f91f11111bed4aba7dea84a2ef6648ad7"
+      "lastModified": "2026-02-13T20:48:46.964Z",
+      "checksum": "738afab5c63e348c6ad38611adb7184a8222e663a29618442c9b27733b243ead"
     }
   },
   {
     "fields": {
       "Name": "Requirements Analyst Agent - Main Prompt",
       "Description": "System prompt for the Requirements Analyst sub-agent that gathers and clarifies agent requirements.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/agent-manager/requirements-analyst-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -83,14 +83,14 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Agent Management"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 11
           },
@@ -98,14 +98,14 @@
             "ID": "9BDC20EE-B8BC-44E6-99B8-2D3C60DBB16B"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.171Z",
-            "checksum": "a4b5a24a49c7f8479a11f4aa0c99be7810ca774ba3abdd169aa54bde5ce0cfa3"
+            "lastModified": "2026-02-13T20:48:47.221Z",
+            "checksum": "c383e1e5d16a6fca8ae4f2d96d5f4b8626eff2c0a24a4f44e801accb9289560a"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 10
           },
@@ -113,8 +113,8 @@
             "ID": "219CC484-E76A-4982-9DF7-82A543B560BB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.173Z",
-            "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
+            "lastModified": "2026-02-13T20:48:47.222Z",
+            "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
           }
         }
       ]
@@ -123,15 +123,15 @@
       "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:29.002Z",
-      "checksum": "d25dd0a33c580707d514e1948be03c5994b43c4c1368971babbbc8a9899401ea"
+      "lastModified": "2026-02-13T20:48:46.966Z",
+      "checksum": "d1a9e8979955e7601e33d434249de2e0b60c99599e22fe084627f250e930f6fd"
     }
   },
   {
     "fields": {
       "Name": "Planning Designer Agent - Main Prompt",
       "Description": "System prompt for the Planning Designer sub-agent that designs agent hierarchies and selects actions.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/agent-manager/planning-designer-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -147,14 +147,14 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Agent Management"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 10
           },
@@ -162,14 +162,14 @@
             "ID": "C62C4C5F-3A99-45ED-B4AF-CB2F160EF68E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.175Z",
-            "checksum": "0212780e9a18474565598346a0e0ea1ac3a9671a7ff709b3afa0d65ef3c93a0e"
+            "lastModified": "2026-02-13T20:48:47.223Z",
+            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 11
           },
@@ -177,8 +177,8 @@
             "ID": "831C9661-5268-4606-B9DF-3656EBA960CC"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.177Z",
-            "checksum": "ac942759c443151c80f295615c8e3587a4cd0b7533fc2c8b344f4221dce349ce"
+            "lastModified": "2026-02-13T20:48:47.224Z",
+            "checksum": "4819af745b22f03517dd842dd20c1ea6f311569e9134c84aff8ac376205c6588"
           }
         }
       ]
@@ -187,15 +187,15 @@
       "ID": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
     },
     "sync": {
-      "lastModified": "2026-02-05T04:31:40.217Z",
-      "checksum": "ad396ade94f2409c2e4bd07a921b7e205d4a063309b1065126dcbdc56a0d43b5"
+      "lastModified": "2026-02-13T20:48:46.968Z",
+      "checksum": "2d80a879aef0f879fc82e5f2aec583ce6dea186616c7e1f0d6995115176d2c7e"
     }
   },
   {
     "fields": {
       "Name": "Architect Agent - Main Prompt",
       "Description": "System prompt for the Architect Agent that transforms technical design into validated AgentSpec JSON",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/agent-manager/architect-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -211,14 +211,14 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Agent Management"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 10
           },
@@ -226,14 +226,14 @@
             "ID": "309F9BE7-E490-4B00-8C82-C4762D40DADE"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.179Z",
-            "checksum": "0212780e9a18474565598346a0e0ea1ac3a9671a7ff709b3afa0d65ef3c93a0e"
+            "lastModified": "2026-02-13T20:48:47.225Z",
+            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 11
           },
@@ -241,14 +241,14 @@
             "ID": "7CC49E6B-D4DC-4F1C-98C7-9FDEA000BC84"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.180Z",
-            "checksum": "ac942759c443151c80f295615c8e3587a4cd0b7533fc2c8b344f4221dce349ce"
+            "lastModified": "2026-02-13T20:48:47.227Z",
+            "checksum": "4819af745b22f03517dd842dd20c1ea6f311569e9134c84aff8ac376205c6588"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 5
           },
@@ -256,8 +256,8 @@
             "ID": "6B42CADC-172F-446C-A1A1-C6EBA91783EF"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.182Z",
-            "checksum": "953e0b81685fb06b23245c8ae92ab8b245c66ad1e63db24be04b37c9b2feeae3"
+            "lastModified": "2026-02-13T20:48:47.228Z",
+            "checksum": "396b6b95a45a5014cbc680ab3c5120a8f874c0e083fa3342f8c62b5ed973e09f"
           }
         }
       ]
@@ -266,8 +266,8 @@
       "ID": "FA0031BB-4838-4C16-A161-ED670E9A147B"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:29.005Z",
-      "checksum": "2baf0e1e79f1ede637af0a02dbda9e1ea78d29d662a337bc651907dde0918070"
+      "lastModified": "2026-02-13T20:48:46.970Z",
+      "checksum": "d5e66956bd5a412024eb7f5275bd49962e2b54f446cdb8f365e68342fa052ccd"
     }
   }
 ]

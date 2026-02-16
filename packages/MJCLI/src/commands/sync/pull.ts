@@ -9,12 +9,12 @@ export default class Pull extends Command {
   static description = 'Pull metadata from database to local files';
   
   static examples = [
-    `<%= config.bin %> <%= command.id %> --entity="AI Prompts"`,
-    `<%= config.bin %> <%= command.id %> --entity="AI Prompts" --filter="CategoryID='customer-service-id'"`,
-    `<%= config.bin %> <%= command.id %> --entity="AI Agents" --merge-strategy=overwrite`,
+    `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts"`,
+    `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts" --filter="CategoryID='customer-service-id'"`,
+    `<%= config.bin %> <%= command.id %> --entity="MJ: AI Agents" --merge-strategy=overwrite`,
     `<%= config.bin %> <%= command.id %> --entity="Actions" --target-dir=./custom-actions --no-validate`,
     `<%= config.bin %> <%= command.id %> --entity="Templates" --dry-run --verbose`,
-    `<%= config.bin %> <%= command.id %> --entity="AI Prompts" --exclude-fields=InternalNotes,DebugInfo`,
+    `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts" --exclude-fields=InternalNotes,DebugInfo`,
   ];
   
   static flags = {

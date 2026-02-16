@@ -340,7 +340,7 @@ export class RunView  {
             // we don't have a view entity loaded, so load it up now
             const rv = new RunView(<IRunViewProvider><any>p);
             const result = await rv.RunView({
-                EntityName: "User Views",
+                EntityName: "MJ: User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
                 ResultType: 'entity_object'
             });

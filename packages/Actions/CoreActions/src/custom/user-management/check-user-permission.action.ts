@@ -63,7 +63,7 @@ export class CheckUserPermissionAction extends BaseAction {
                     // Check authorization roles
                     const authRv = new RunView();
                     const authResult = await authRv.RunView({
-                        EntityName: 'Authorization Roles',
+                        EntityName: 'MJ: Authorization Roles',
                         ExtraFilter: `RoleID IN (SELECT RoleID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwUserRoles WHERE UserID='${userID}') AND AuthorizationID IN (SELECT ID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwAuthorizations WHERE Name='${permissionName}')`,
                         ResultType: 'simple'
                     }, currentUser);

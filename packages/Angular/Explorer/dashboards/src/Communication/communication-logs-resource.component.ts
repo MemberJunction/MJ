@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, CommunicationLogEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCommunicationLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
@@ -271,8 +271,8 @@ import { RunView } from '@memberjunction/core';
   `]
 })
 export class CommunicationLogsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    public logs: CommunicationLogEntity[] = [];
-    public filteredLogs: CommunicationLogEntity[] = [];
+    public logs: MJCommunicationLogEntity[] = [];
+    public filteredLogs: MJCommunicationLogEntity[] = [];
     public isLoading = false;
     public statusFilter = '';
     private searchTerm = '';
@@ -294,8 +294,8 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
             this.cdr.detectChanges();
 
             const rv = new RunView();
-            const result = await rv.RunView<CommunicationLogEntity>({
-                EntityName: 'Communication Logs',
+            const result = await rv.RunView<MJCommunicationLogEntity>({
+                EntityName: 'MJ: Communication Logs',
                 OrderBy: 'MessageDate DESC',
                 MaxRows: 200,
                 ResultType: 'entity_object'

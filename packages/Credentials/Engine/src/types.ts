@@ -1,5 +1,5 @@
 import { UserInfo } from "@memberjunction/core";
-import { CredentialEntity } from "@memberjunction/core-entities";
+import { MJCredentialEntity } from "@memberjunction/core-entities";
 
 /**
  * Options for resolving credentials.
@@ -47,7 +47,7 @@ export interface ResolvedCredential<T extends Record<string, string> = Record<st
      * The credential entity if loaded from database.
      * Will be null if directValues was provided.
      */
-    credential: CredentialEntity | null;
+    credential: MJCredentialEntity | null;
 
     /**
      * The decrypted credential values, typed according to the credential type's FieldSchema.

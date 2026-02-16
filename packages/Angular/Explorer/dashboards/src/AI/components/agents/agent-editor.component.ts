@@ -89,7 +89,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       // Load all agents to build hierarchy
       const rv = new RunView();
       const result = await rv.RunView({
-        EntityName: 'AI Agents',
+        EntityName: 'MJ: AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
         MaxRows: 1000
@@ -509,7 +509,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         await this.loadAgentData();
 
         // Navigate to the newly created agent record
-        this.navigationService.OpenEntityRecord('AI Agents', agent.PrimaryKey);
+        this.navigationService.OpenEntityRecord('MJ: AI Agents', agent.PrimaryKey);
       } else {
         const errorMessage = agent.LatestResult?.Message || 'Unknown error occurred while creating sub-agent';
         this.error = `Failed to create sub-agent: ${errorMessage}`;
@@ -538,7 +538,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public openCurrentAgentRecord(): void {
     if (this.currentAgent) {
-      this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: this.currentAgent.ID });
+      this.openEntityRecord.emit({ entityName: 'MJ: AI Agents', recordId: this.currentAgent.ID });
     }
   }
 }

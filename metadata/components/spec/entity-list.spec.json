@@ -8,7 +8,7 @@
     "mode": "views",
     "entities": [
       {
-        "name": "Entities",
+        "name": "MJ: Entities",
         "description": "Metadata about all entities in the system",
         "displayFields": [
           "ID",
@@ -108,7 +108,7 @@
         "usageContext": "Main entity list display and filtering"
       },
       {
-        "name": "Entity Fields",
+        "name": "MJ: Entity Fields",
         "description": "Fields belonging to each entity",
         "displayFields": [
           "Name",
@@ -215,7 +215,7 @@
         "usageContext": "Details panel to show entity fields"
       },
       {
-        "name": "Entity Relationships",
+        "name": "MJ: Entity Relationships",
         "description": "Relationships between entities",
         "displayFields": [
           "RelatedEntity",

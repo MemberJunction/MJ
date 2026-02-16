@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, UserInfo } from "@memberjunction/core";
-import { ScheduledActionEntityExtended, ScheduledActionParamEntity } from "@memberjunction/core-entities";
+import { ScheduledActionEntityExtended, MJScheduledActionParamEntity } from "@memberjunction/core-entities";
 import { ActionEntityExtended, ActionParam, ActionResult, RunActionParams } from "@memberjunction/actions-base";
 import cronParser from 'cron-parser';
 import { SafeJSONParse } from "@memberjunction/global";
@@ -13,12 +13,12 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
-                EntityName: 'Scheduled Actions',
+                EntityName: 'MJ: Scheduled Actions',
                 PropertyName: '_scheduledActions',
                 CacheLocal: true
             },
             {
-                EntityName: 'Scheduled Action Params',
+                EntityName: 'MJ: Scheduled Action Params',
                 PropertyName: '_scheduledActionParams',
                 CacheLocal: true
             },
@@ -40,8 +40,8 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
         return this._scheduledActions;
     }
 
-    private _scheduledActionParams: ScheduledActionParamEntity[] = [];
-    public get ScheduledActionParams(): ScheduledActionParamEntity[] {
+    private _scheduledActionParams: MJScheduledActionParamEntity[] = [];
+    public get ScheduledActionParams(): MJScheduledActionParamEntity[] {
         return this._scheduledActionParams;
     }
 

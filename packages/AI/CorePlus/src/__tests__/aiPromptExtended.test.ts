@@ -25,7 +25,7 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    AIPromptEntity: class AIPromptEntity {
+    MJAIPromptEntity: class MJAIPromptEntity {
         TemplateID: string = '';
         ResultSelectorPromptID: string | null = null;
         ID: string | null = null;
@@ -34,9 +34,13 @@ vi.mock('@memberjunction/core-entities', () => ({
         get Dirty() { return false; }
         async LoadFromData(data: unknown) { return true; }
         async InnerLoad(key: unknown) { return true; }
-        ValidateResultSelectorPromptIDNotEqualID(result: { Errors: unknown[] }) {}
+        ValidateResultSelectorPromptIDNotEqualID(result: { Errors: unknown[] }) {
+            if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
+                result.Errors.push({ FieldName: 'ResultSelectorPromptID', Message: 'Cannot equal ID', Value: this.ResultSelectorPromptID, Type: 'Failure' });
+            }
+        }
     },
-    TemplateParamEntity: class TemplateParamEntity {
+    MJTemplateParamEntity: class MJTemplateParamEntity {
         TemplateID: string = '';
         Name: string = '';
     }

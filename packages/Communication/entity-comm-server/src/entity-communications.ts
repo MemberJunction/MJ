@@ -1,7 +1,7 @@
 import { CommunicationEngine } from "@memberjunction/communication-engine";
 import { CommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
 import { EntityInfo, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
-import { ListDetailEntityType, ListEntityType, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
+import { MJListDetailEntityType, MJListEntityType, TemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import { EntityCommunicationMessageTypeExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 
  
@@ -152,7 +152,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         return recipients;
     }
 
-    protected async PopulateSingleRecipientContextData(record: any, relatedData: {paramName: string, data: any[]}[], pkey: any, params: TemplateParamEntity[]): Promise<{[key: string]: any}> {
+    protected async PopulateSingleRecipientContextData(record: any, relatedData: {paramName: string, data: any[]}[], pkey: any, params: MJTemplateParamEntity[]): Promise<{[key: string]: any}> {
         // now, go through each template, and populate the context data for that param, but only do if we've not already processed that parameter since templates across Body/BodyHTML/Subject can share parameters
         const contextData = {};
         for (const p of params) {
@@ -203,7 +203,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         if (message.SubjectTemplate) {
             templates.push(message.SubjectTemplate);
         }
-        const entityParams: TemplateParamEntity[] = [];
+        const entityParams: MJTemplateParamEntity[] = [];
         templates.forEach(t => {
             t.Params.forEach(p => {
                 if (p.Type === "Entity" && !entityParams.includes(p)) {

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angula
 
 import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
@@ -21,7 +21,7 @@ interface IconCategory {
   styleUrls: ['./user-profile-settings.component.css']
 })
 export class UserProfileSettingsComponent implements OnInit, OnDestroy {
-  currentUser!: UserEntity;
+  currentUser!: MJUserEntity;
   selectedTab: 'upload' | 'url' | 'icon' | 'provider' = 'url';
 
   // Form state
@@ -136,8 +136,8 @@ export class UserProfileSettingsComponent implements OnInit, OnDestroy {
     const md = new Metadata();
     const currentUserInfo = md.CurrentUser;
 
-    // Load the full UserEntity to access avatar fields
-    this.currentUser = await md.GetEntityObject<UserEntity>('Users');
+    // Load the full MJUserEntity to access avatar fields
+    this.currentUser = await md.GetEntityObject<MJUserEntity>('MJ: Users');
     await this.currentUser.Load(currentUserInfo.ID);
 
     // Initialize filtered icons

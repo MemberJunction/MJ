@@ -421,6 +421,186 @@ export const STANDALONE_ENTITY_DATA = {
     EntitySettings: [],
 };
 
+// ─── Overlapping Subtype Hierarchy ───────────────────────────────────────
+// Persons (root parent, AllowMultipleSubtypes = true)
+//   ├── Members (child of Persons)
+//   └── Volunteers (child of Persons)
+//
+// This hierarchy tests overlapping subtypes where a single Person record can
+// have BOTH a Member and a Volunteer child record simultaneously.
+
+export const PERSON_ENTITY_ID = 'entity-persons-001';
+export const PERSON_FIELDS = [
+    {
+        ID: 'f-person-id',
+        EntityID: PERSON_ENTITY_ID,
+        Name: 'ID',
+        Type: 'uniqueidentifier',
+        IsPrimaryKey: true,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: false,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: false,
+        ValueListType: 'None',
+        Sequence: 1,
+        Status: 'Active',
+        Entity: 'Persons',
+        EntityFieldValues: [],
+    },
+    {
+        ID: 'f-person-name',
+        EntityID: PERSON_ENTITY_ID,
+        Name: 'Name',
+        Type: 'nvarchar',
+        Length: 255,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: false,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: true,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 2,
+        Status: 'Active',
+        Entity: 'Persons',
+        EntityFieldValues: [],
+    },
+    {
+        ID: 'f-person-email',
+        EntityID: PERSON_ENTITY_ID,
+        Name: 'Email',
+        Type: 'nvarchar',
+        Length: 255,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 3,
+        Status: 'Active',
+        Entity: 'Persons',
+        EntityFieldValues: [],
+    },
+];
+
+export const PERSON_ENTITY_DATA = {
+    ID: PERSON_ENTITY_ID,
+    Name: 'Persons',
+    BaseTable: 'Person',
+    BaseView: 'vwPersons',
+    SchemaName: 'dbo',
+    VirtualEntity: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    IncludeInAPI: true,
+    ParentID: null,
+    AllowMultipleSubtypes: true,
+    TrackRecordChanges: true,
+    Status: 'Active',
+    EntityFields: PERSON_FIELDS,
+    EntityPermissions: [makePermission(PERSON_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
+// ─── Members (child of Persons) ──────────────────────────────────────────
+export const MEMBER_ENTITY_ID = 'entity-members-001';
+export const MEMBER_FIELDS = [
+    {
+        ID: 'f-member-level',
+        EntityID: MEMBER_ENTITY_ID,
+        Name: 'MembershipLevel',
+        Type: 'nvarchar',
+        Length: 50,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 2,
+        Status: 'Active',
+        Entity: 'Members',
+        EntityFieldValues: [],
+    },
+];
+
+export const MEMBER_ENTITY_DATA = {
+    ID: MEMBER_ENTITY_ID,
+    Name: 'Members',
+    BaseTable: 'Member',
+    BaseView: 'vwMembers',
+    SchemaName: 'dbo',
+    VirtualEntity: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    IncludeInAPI: true,
+    ParentID: PERSON_ENTITY_ID,
+    Status: 'Active',
+    EntityFields: MEMBER_FIELDS,
+    EntityPermissions: [makePermission(MEMBER_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
+// ─── Volunteers (child of Persons) ───────────────────────────────────────
+export const VOLUNTEER_ENTITY_ID = 'entity-volunteers-001';
+export const VOLUNTEER_FIELDS = [
+    {
+        ID: 'f-volunteer-area',
+        EntityID: VOLUNTEER_ENTITY_ID,
+        Name: 'VolunteerArea',
+        Type: 'nvarchar',
+        Length: 100,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: false,
+        IsNameField: false,
+        AllowUpdateAPI: true,
+        ValueListType: 'None',
+        Sequence: 2,
+        Status: 'Active',
+        Entity: 'Volunteers',
+        EntityFieldValues: [],
+    },
+];
+
+export const VOLUNTEER_ENTITY_DATA = {
+    ID: VOLUNTEER_ENTITY_ID,
+    Name: 'Volunteers',
+    BaseTable: 'Volunteer',
+    BaseView: 'vwVolunteers',
+    SchemaName: 'dbo',
+    VirtualEntity: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    IncludeInAPI: true,
+    ParentID: PERSON_ENTITY_ID,
+    Status: 'Active',
+    EntityFields: VOLUNTEER_FIELDS,
+    EntityPermissions: [makePermission(VOLUNTEER_ENTITY_ID)],
+    EntityRelationships: [],
+    EntitySettings: [],
+};
+
 /**
  * All entity data arrays — use this to set up a mock Metadata.Provider.Entities
  * that has the full hierarchy available for ParentEntityInfo / ChildEntities lookups.
@@ -432,4 +612,7 @@ export const ALL_ENTITY_DATA = [
     PUBLICATION_ENTITY_DATA,
     SALES_SUMMARY_ENTITY_DATA,
     STANDALONE_ENTITY_DATA,
+    PERSON_ENTITY_DATA,
+    MEMBER_ENTITY_DATA,
+    VOLUNTEER_ENTITY_DATA,
 ];

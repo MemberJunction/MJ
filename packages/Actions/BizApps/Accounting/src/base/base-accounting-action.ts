@@ -2,7 +2,7 @@ import { BaseAction } from '@memberjunction/actions';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
-import { CompanyIntegrationEntity, IntegrationEntity } from '@memberjunction/core-entities';
+import { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 
 /**
@@ -25,7 +25,7 @@ export abstract class BaseAccountingAction extends BaseAction {
     /**
      * Cached company integration for the current execution
      */
-    private _companyIntegration: CompanyIntegrationEntity | null = null;
+    private _companyIntegration: MJCompanyIntegrationEntity | null = null;
 
     /**
      * Override of the required abstract method from BaseAction
@@ -66,15 +66,15 @@ export abstract class BaseAccountingAction extends BaseAction {
     /**
      * Gets the company integration record for the specified company and accounting system
      */
-    protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<CompanyIntegrationEntity> {
+    protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
         // Check cache first
         if (this._companyIntegration && this._companyIntegration.CompanyID === companyId) {
             return this._companyIntegration;
         }
 
         const rv = new RunView();
-        const result = await rv.RunView<CompanyIntegrationEntity>({
-            EntityName: 'Company Integrations',
+        const result = await rv.RunView<MJCompanyIntegrationEntity>({
+            EntityName: 'MJ: Company Integrations',
             ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${this.integrationName}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -104,7 +104,7 @@ export abstract class BaseAccountingAction extends BaseAction {
     /**
      * Gets OAuth tokens - first tries environment variables, then falls back to database
      */
-    protected async getOAuthTokens(integration: CompanyIntegrationEntity): Promise<{ accessToken: string; refreshToken?: string }> {
+    protected async getOAuthTokens(integration: MJCompanyIntegrationEntity): Promise<{ accessToken: string; refreshToken?: string }> {
         const companyId = integration.CompanyID;
         
         // Try environment variables first
@@ -139,11 +139,11 @@ export abstract class BaseAccountingAction extends BaseAction {
      */
     protected async getAPIBaseURL(contextUser: UserInfo): Promise<string> {
         const md = new Metadata();
-        const integration = await md.GetEntityObject<IntegrationEntity>('Integrations', contextUser);
+        const integration = await md.GetEntityObject<MJIntegrationEntity>('MJ: Integrations', contextUser);
         
         const rv = new RunView();
-        const result = await rv.RunView<IntegrationEntity>({
-            EntityName: 'Integrations',
+        const result = await rv.RunView<MJIntegrationEntity>({
+            EntityName: 'MJ: Integrations',
             ExtraFilter: `Name = '${this.integrationName}'`,
             ResultType: 'entity_object'
         }, contextUser);

@@ -1,4 +1,4 @@
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { Metadata, UserInfo } from '@memberjunction/core';
 
 /**
@@ -27,16 +27,16 @@ export class LazyArtifactInfo {
   public readonly visibility: string;
 
   // Full entities (lazy-loaded on first access via getArtifact() or getVersion())
-  private _artifact: ArtifactEntity | null = null;
-  private _version: ArtifactVersionEntity | null = null;
+  private _artifact: MJArtifactEntity | null = null;
+  private _version: MJArtifactVersionEntity | null = null;
   private _isLoading = false;
   private _loadPromise: Promise<void> | null = null;
 
   constructor(
     queryResult: any,
     private currentUser: UserInfo,
-    preloadedArtifact?: ArtifactEntity,
-    preloadedVersion?: ArtifactVersionEntity
+    preloadedArtifact?: MJArtifactEntity,
+    preloadedVersion?: MJArtifactVersionEntity
   ) {
     // Populate display data from query result
     // These fields come from GetConversationComplete query
@@ -65,9 +65,9 @@ export class LazyArtifactInfo {
   /**
    * Gets the full Artifact entity, loading it if needed.
    * Multiple concurrent calls share the same loading promise for efficiency.
-   * @returns The full ArtifactEntity with all fields including relationships
+   * @returns The full MJArtifactEntity with all fields including relationships
    */
-  async getArtifact(): Promise<ArtifactEntity> {
+  async getArtifact(): Promise<MJArtifactEntity> {
     if (this._artifact) {
       return this._artifact;
     }
@@ -87,9 +87,9 @@ export class LazyArtifactInfo {
   /**
    * Gets the full ArtifactVersion entity, loading it if needed.
    * Multiple concurrent calls share the same loading promise for efficiency.
-   * @returns The full ArtifactVersionEntity including Content field
+   * @returns The full MJArtifactVersionEntity including Content field
    */
-  async getVersion(): Promise<ArtifactVersionEntity> {
+  async getVersion(): Promise<MJArtifactVersionEntity> {
     if (this._version) {
       return this._version;
     }
@@ -158,8 +158,8 @@ export class LazyArtifactInfo {
    * Loads a single Artifact entity by ID
    * @private
    */
-  private async loadArtifact(md: Metadata): Promise<ArtifactEntity> {
-    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+  private async loadArtifact(md: Metadata): Promise<MJArtifactEntity> {
+    const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
     await artifact.Load(this.artifactId);
     return artifact;
   }
@@ -168,8 +168,8 @@ export class LazyArtifactInfo {
    * Loads a single ArtifactVersion entity by ID
    * @private
    */
-  private async loadVersion(md: Metadata): Promise<ArtifactVersionEntity> {
-    const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
+  private async loadVersion(md: Metadata): Promise<MJArtifactVersionEntity> {
+    const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
     await version.Load(this.artifactVersionId);
     return version;
   }

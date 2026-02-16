@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, Metadata, RegisterForStartup, UserInfo } from "@memberjunction/core";
-import { ResourcePermissionEntity, ResourceTypeEntity } from "../../generated/entity_subclasses";
+import { MJResourcePermissionEntity, MJResourceTypeEntity } from "../../generated/entity_subclasses";
 
 /**
  * Resource Permission Engine is used for accessing metadata about permissions for resources and also determining if a user has access to a resource and at what level.
@@ -13,16 +13,16 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
        return super.getInstance<ResourcePermissionEngine>();
     }
 
-    private _Permissions: ResourcePermissionEntity[];
+    private _Permissions: MJResourcePermissionEntity[];
     private _ResourceTypes: {
-        ResourceTypes: ResourceTypeEntity[];
+        ResourceTypes: MJResourceTypeEntity[];
     };
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
-                EntityName: 'Resource Permissions',
+                EntityName: 'MJ: Resource Permissions',
                 PropertyName: "_Permissions",
                 CacheLocal: true
             },
@@ -36,11 +36,11 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         await super.Load(c, provider, forceRefresh, contextUser);
     }
   
-    public get ResourceTypes(): ResourceTypeEntity[] {
+    public get ResourceTypes(): MJResourceTypeEntity[] {
         return this._ResourceTypes.ResourceTypes;
     }
 
-    public get Permissions(): ResourcePermissionEntity[] {
+    public get Permissions(): MJResourcePermissionEntity[] {
         return this._Permissions;
     }
 
@@ -52,7 +52,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
      * @param ResourceRecordID 
      * @returns 
      */
-    public GetResourcePermissions(ResourceTypeID: string, ResourceRecordID: string): ResourcePermissionEntity[] {
+    public GetResourcePermissions(ResourceTypeID: string, ResourceRecordID: string): MJResourcePermissionEntity[] {
         return this.Permissions.filter((r) => r.ResourceTypeID === ResourceTypeID && r.ResourceRecordID === ResourceRecordID);
     }
 
@@ -60,7 +60,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
      * Determines the highest level of resource permission a user has for a specific resource.
      * This function checks both user-specific permissions and permissions assigned through roles
      * and returns the highest level of permission ('View', 'Edit', 'Owner', or `null` if no permission is found).
-     * Note: This only returns ResourcePermissionEntity objects that have Status === Approved.
+     * Note: This only returns MJResourcePermissionEntity objects that have Status === Approved.
      *
      * @param {string} ResourceTypeID - The ID of the resource type (e.g., document, project).
      * @param {string} ResourceRecordID - The ID of the specific resource record.
@@ -114,12 +114,12 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
 
     /**
      * Returns all the permissions a user has for a specific resource type based on both their user-specific permissions and permissions assigned through roles.
-     * This only returns ResourcePermissionEntity objects that have Status === Approved.
+     * This only returns MJResourcePermissionEntity objects that have Status === Approved.
      * @param user 
      * @param ResourceTypeID 
      * @returns 
      */
-    public GetUserAvailableResources(user: UserInfo, ResourceTypeID?: string): ResourcePermissionEntity[] {
+    public GetUserAvailableResources(user: UserInfo, ResourceTypeID?: string): MJResourcePermissionEntity[] {
         let rolePermissions = this.Permissions.filter((r) => r.Type === 'Role' && user.UserRoles.find(ur => ur.RoleID === r.RoleID) !== undefined);
         let permissions = this.Permissions.filter((r) => r.Type === 'User' && r.UserID === user.ID);
         if (ResourceTypeID) {
@@ -132,7 +132,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         permissions = permissions.filter((r) => r.Status === 'Approved');
 
         // now, we reduce the array so that we only have the highest permission level for each resourcetypeid/resourcerecordid combination
-        let reducedPermissions: ResourcePermissionEntity[] = [];
+        let reducedPermissions: MJResourcePermissionEntity[] = [];
         permissions.forEach((p) => {
             let existing = reducedPermissions.find((r) => r.ResourceTypeID === p.ResourceTypeID && r.ResourceRecordID === p.ResourceRecordID);
             if (!existing) {
@@ -171,9 +171,9 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         const entity = md.EntityByID(rt.EntityID);
         if (!entity)
             throw new Error(`Entity ${rt.EntityID} not found`); 
-        const usersEntity = md.EntityByName('Users');
+        const usersEntity = md.EntityByName('MJ: Users');
         if (!usersEntity)
-            throw new Error(`Entity Users not found`);
+            throw new Error(`Entity MJ: Users not found`);
 
         const ownerIDField = entity.Fields.find((f) => f.RelatedEntityID === usersEntity.ID);
         const nameField = entity.NameField;

@@ -10,7 +10,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { Metadata, EntityInfo, CompositeKey, BaseEntity, RunViewParams } from '@memberjunction/core';
-import { ListEntity } from '@memberjunction/core-entities';
+import { MJListEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import {
   AfterRowClickEventArgs,
@@ -65,7 +65,7 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
    * Optional: The List entity object if already loaded.
    * If provided, avoids an extra database call to load the list.
    */
-  @Input() listEntity: ListEntity | null = null;
+  @Input() listEntity: MJListEntity | null = null;
 
   /**
    * Whether to auto-navigate to the record when double-clicked.
@@ -218,11 +218,11 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
 
     try {
       const md = new Metadata();
-      let list: ListEntity | null = this.listEntity;
+      let list: MJListEntity | null = this.listEntity;
 
       // Load the list entity if not provided
       if (!list && this.listId) {
-        list = await md.GetEntityObject<ListEntity>('Lists');
+        list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
         await list.Load(this.listId);
       }
 
@@ -241,7 +241,7 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
       this.entityInfo = entityInfo;
 
       // Get the List Details entity info to get the correct schema name
-      const listDetailsEntityInfo = md.EntityByName('List Details');
+      const listDetailsEntityInfo = md.EntityByName('MJ: List Details');
       if (!listDetailsEntityInfo) {
         console.error('List Details entity not found in metadata');
         return;

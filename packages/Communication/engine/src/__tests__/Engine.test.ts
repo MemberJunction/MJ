@@ -57,8 +57,8 @@ vi.mock('@memberjunction/core', () => {
         Metadata: vi.fn().mockImplementation(() => ({
             GetEntityObject: vi.fn()
                 .mockImplementation((entityName: string) => {
-                    if (entityName === 'Communication Runs') return Promise.resolve(mockRunEntity);
-                    if (entityName === 'Communication Logs') return Promise.resolve(mockLogEntity);
+                    if (entityName === 'MJ: Communication Runs') return Promise.resolve(mockRunEntity);
+                    if (entityName === 'MJ: Communication Logs') return Promise.resolve(mockLogEntity);
                     return Promise.resolve({});
                 }),
         })),
@@ -81,17 +81,17 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-    CommunicationRunEntity: class {},
-    CommunicationLogEntity: class {},
-    CommunicationBaseMessageTypeEntity: class {},
-    CommunicationProviderMessageTypeEntity: class {
+    MJCommunicationRunEntity: class {},
+    MJCommunicationLogEntity: class {},
+    MJCommunicationBaseMessageTypeEntity: class {},
+    MJCommunicationProviderMessageTypeEntity: class {
         ID = 'pmt-1';
         Name = 'Email';
         CommunicationProviderID = 'provider-1';
     },
-    CommunicationProviderEntity: class { ID = ''; Name = ''; SupportsDrafts = false; },
-    EntityCommunicationFieldEntity: class {},
-    EntityCommunicationMessageTypeEntity: class {},
+    MJCommunicationProviderEntity: class { ID = ''; Name = ''; SupportsDrafts = false; },
+    MJEntityCommunicationFieldEntity: class {},
+    MJEntityCommunicationMessageTypeEntity: class {},
     TemplateEntityExtended: class {},
 }));
 

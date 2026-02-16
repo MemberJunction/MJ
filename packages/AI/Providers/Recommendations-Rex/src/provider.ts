@@ -1,6 +1,6 @@
 import { RecommendationProviderBase, RecommendationRequest, RecommendationResult } from "@memberjunction/ai-recommendations";
 import { EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
-import { EntityRecordDocumentEntityType, ListDetailEntity, ListEntity, RecommendationEntity, RecommendationItemEntity } from "@memberjunction/core-entities";
+import { MJEntityRecordDocumentEntityType, MJListDetailEntity, MJListEntity, MJRecommendationEntity, MJRecommendationItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, isAxiosError } from "axios";
 import { GetRecommendationParams, RasaResponse, RasaTokenResponse, RecommendationResponse, RecommendContextData } from "./generic/models";
@@ -51,15 +51,15 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             const batch = recommendationList.slice(i, i + Config.REX_BATCH_SIZE);
             LogStatus(`Processing batch ${batchCount + 1} of ${Math.ceil(recommendationList.length / Config.REX_BATCH_SIZE)}`);
 
-            const recordDocuments: EntityRecordDocumentEntityType[] | null = await this.GetEntityRecordDocuments(batch, entityDocumentID, request.CurrentUser);
+            const recordDocuments: MJEntityRecordDocumentEntityType[] | null = await this.GetEntityRecordDocuments(batch, entityDocumentID, request.CurrentUser);
             if(!recordDocuments){
                 LogError(`Error getting entity record documents for batch ${batchCount + 1}`);
                 result.AppendError(`Error getting entity record documents for batch ${batchCount + 1}`);
                 continue;
             }
 
-            await Promise.all(batch.map(async (recommendation: RecommendationEntity, index: number) => {
-                const recordDocument: EntityRecordDocumentEntityType | undefined = recordDocuments.find(rd => rd.RecordID == recommendation.SourceEntityRecordID);
+            await Promise.all(batch.map(async (recommendation: MJRecommendationEntity, index: number) => {
+                const recordDocument: MJEntityRecordDocumentEntityType | undefined = recordDocuments.find(rd => rd.RecordID == recommendation.SourceEntityRecordID);
                 if(!recordDocument){
                     LogError(`No record document found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
                     result.AppendWarning(`No record document found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
@@ -89,7 +89,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 }
     
                 LogStatus(`Creating ${recommendations.length} recommendation items for recommendation ${index + 1}/${batch.length} of batch ${batchCount + 1}`);
-                const recommendationItemEntities: RecommendationItemEntity[] = await this.ConvertRecommendationsToItemEntities(recommendation, recommendations, request.CurrentUser, typeMap);
+                const recommendationItemEntities: MJRecommendationItemEntity[] = await this.ConvertRecommendationsToItemEntities(recommendation, recommendations, request.CurrentUser, typeMap);
     
                 // Save the results
                 const saveResult = await this.SaveRecommendation(recommendation, request.RunID, recommendationItemEntities);
@@ -106,15 +106,15 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return result;
     }
 
-    private async GetEntityRecordDocuments(recommendations: RecommendationEntity[], entityDocumentID: string, currentUser?: UserInfo): Promise<EntityRecordDocumentEntityType[] | null> {
+    private async GetEntityRecordDocuments(recommendations: MJRecommendationEntity[], entityDocumentID: string, currentUser?: UserInfo): Promise<MJEntityRecordDocumentEntityType[] | null> {
         const rv: RunView = new RunView();
 
         //assuming all recommendations have the same source entity ID
         const entityID: string = recommendations[0].SourceEntityID;
         const recordIDs: string = recommendations.map(r => `'${r.SourceEntityRecordID}'`).join(",");
 
-        const rvVectorResult: RunViewResult<EntityRecordDocumentEntityType> = await rv.RunView<EntityRecordDocumentEntityType>({
-            EntityName: "Entity Record Documents",
+        const rvVectorResult: RunViewResult<MJEntityRecordDocumentEntityType> = await rv.RunView<MJEntityRecordDocumentEntityType>({
+            EntityName: "MJ: Entity Record Documents",
             ExtraFilter: `EntityDocumentID = '${entityDocumentID}'
                 AND EntityID = '${entityID}'
                 AND RecordID IN (${recordIDs})`,
@@ -211,11 +211,11 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         }
     }
 
-    protected async ConvertRecommendationsToItemEntities(recommendationEntity: RecommendationEntity, recommendations: RecommendationResponse[], currentUser: UserInfo, typeMap: Record<string, string>): Promise<RecommendationItemEntity[]> {
+    protected async ConvertRecommendationsToItemEntities(recommendationEntity: MJRecommendationEntity, recommendations: RecommendationResponse[], currentUser: UserInfo, typeMap: Record<string, string>): Promise<MJRecommendationItemEntity[]> {
         const md = new Metadata();        
 
-        const entities: RecommendationItemEntity[] =  await Promise.all(recommendations.map(async (recommendation: RecommendationResponse) => {
-            const entity: RecommendationItemEntity = await md.GetEntityObject<RecommendationItemEntity>("Recommendation Items", currentUser);
+        const entities: MJRecommendationItemEntity[] =  await Promise.all(recommendations.map(async (recommendation: RecommendationResponse) => {
+            const entity: MJRecommendationItemEntity = await md.GetEntityObject<MJRecommendationItemEntity>("MJ: Recommendation Items", currentUser);
             let data: Record<'entityID' | 'recordID', string> = this.GetEntityIDAndRecordID(recommendation, typeMap);
 
             entity.NewRecord();
@@ -303,7 +303,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
     private async AddRecordToErrorsList(listID: string, recordID: string, errorMessage: string, currentUser?: UserInfo): Promise<void> {
         const md: Metadata = new Metadata();
-        const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>("List Details", currentUser);
+        const listDetail: MJListDetailEntity = await md.GetEntityObject<MJListDetailEntity>("MJ: List Details", currentUser);
         
         listDetail.NewRecord();
         listDetail.ListID = listID;

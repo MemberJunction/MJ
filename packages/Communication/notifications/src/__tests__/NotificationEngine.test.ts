@@ -61,9 +61,9 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-  UserNotificationEntity: class {},
-  UserNotificationTypeEntity: class {},
-  UserNotificationPreferenceEntity: class {},
+  MJUserNotificationEntity: class {},
+  MJUserNotificationTypeEntity: class {},
+  MJUserNotificationPreferenceEntity: class {},
   UserInfoEngine: {
     Instance: mockUserInfoEngineInstance,
   },

@@ -8,7 +8,7 @@
  */
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { AuditLogEntity } from '@memberjunction/core-entities';
+import { MJAuditLogEntity } from '@memberjunction/core-entities';
 
 /**
  * Audit log type IDs for OAuth events.
@@ -286,7 +286,7 @@ export class OAuthAuditLogger {
 
             // Create the audit log record
             const md = new Metadata();
-            const auditLog = await md.GetEntityObject<AuditLogEntity>('Audit Logs', contextUser);
+            const auditLog = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', contextUser);
             auditLog.NewRecord();
 
             auditLog.UserID = contextUser.ID;
@@ -324,7 +324,7 @@ export class OAuthAuditLogger {
         try {
             const rv = new RunView();
             const result = await rv.RunView<{ ID: string }>({
-                EntityName: 'Audit Log Types',
+                EntityName: 'MJ: Audit Log Types',
                 ExtraFilter: `Name='${typeName.replace(/'/g, "''")}'`,
                 Fields: ['ID'],
                 ResultType: 'simple'
@@ -355,7 +355,7 @@ export class OAuthAuditLogger {
         try {
             const rv = new RunView();
             const result = await rv.RunView<{ ID: string }>({
-                EntityName: 'Entities',
+                EntityName: 'MJ: Entities',
                 ExtraFilter: `Name='MJ: MCP Server Connections'`,
                 Fields: ['ID'],
                 ResultType: 'simple'

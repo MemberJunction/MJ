@@ -1,10 +1,10 @@
 {
-  "entity": "Applications",
+  "entity": "MJ: Applications",
   "filePattern": "**/.*.json",
   "pull": {
     "relatedEntities": {
-      "Application Entities": {
-        "entity": "Application Entities",
+      "MJ: Application Entities": {
+        "entity": "MJ: Application Entities",
         "foreignKey": "ApplicationID"
       }
     }

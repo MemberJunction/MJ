@@ -9,10 +9,10 @@ import {
 } from "@memberjunction/core";
 
 import {
-    AuditLogEntity,
-    CredentialCategoryEntity,
-    CredentialEntity,
-    CredentialTypeEntity
+    MJAuditLogEntity,
+    MJCredentialCategoryEntity,
+    MJCredentialEntity,
+    MJCredentialTypeEntity
 } from "@memberjunction/core-entities";
 
 import Ajv, { ValidateFunction, ErrorObject } from 'ajv';
@@ -64,9 +64,9 @@ const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = '9375C9F9-1A58-44D6-9B09-8C6AF071438
  */
 export class CredentialEngine extends BaseEngine<CredentialEngine> {
     // Cached entity data
-    private _credentials: CredentialEntity[] = [];
-    private _credentialTypes: CredentialTypeEntity[] = [];
-    private _credentialCategories: CredentialCategoryEntity[] = [];
+    private _credentials: MJCredentialEntity[] = [];
+    private _credentialTypes: MJCredentialTypeEntity[] = [];
+    private _credentialCategories: MJCredentialCategoryEntity[] = [];
 
     // Cached entity ID for audit logging
     private _credentialsEntityId: string | null = null;
@@ -149,21 +149,21 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Returns all active credentials loaded from the database.
      */
-    public get Credentials(): CredentialEntity[] {
+    public get Credentials(): MJCredentialEntity[] {
         return this._credentials;
     }
 
     /**
      * Returns all credential types loaded from the database.
      */
-    public get CredentialTypes(): CredentialTypeEntity[] {
+    public get CredentialTypes(): MJCredentialTypeEntity[] {
         return this._credentialTypes;
     }
 
     /**
      * Returns all credential categories loaded from the database.
      */
-    public get CredentialCategories(): CredentialCategoryEntity[] {
+    public get CredentialCategories(): MJCredentialCategoryEntity[] {
         return this._credentialCategories;
     }
 
@@ -174,7 +174,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Gets a credential type by name.
      */
-    public getCredentialTypeByName(typeName: string): CredentialTypeEntity | undefined {
+    public getCredentialTypeByName(typeName: string): MJCredentialTypeEntity | undefined {
         return this._credentialTypes.find(t =>
             t.Name.trim().toLowerCase() === typeName.trim().toLowerCase()
         );
@@ -183,7 +183,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Gets the default credential for a given type.
      */
-    public getDefaultCredentialForType(credentialTypeName: string): CredentialEntity | undefined {
+    public getDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
         const credType = this.getCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
@@ -195,14 +195,14 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Gets a credential by ID.
      */
-    public getCredentialById(credentialId: string): CredentialEntity | undefined {
+    public getCredentialById(credentialId: string): MJCredentialEntity | undefined {
         return this._credentials.find(c => c.ID === credentialId);
     }
 
     /**
      * Gets a credential by type and name.
      */
-    public getCredentialByName(credentialTypeName: string, credentialName: string): CredentialEntity | undefined {
+    public getCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
         const credType = this.getCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
@@ -240,7 +240,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         options: CredentialResolutionOptions = {}
     ): Promise<ResolvedCredential<T>> {
         const startTime = Date.now();
-        let credential: CredentialEntity | null = null;
+        let credential: MJCredentialEntity | null = null;
         let values: T = {} as T;
         let source: 'database' | 'request' = 'database';
 
@@ -314,7 +314,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         values: Record<string, string>,
         options: StoreCredentialOptions,
         contextUser: UserInfo
-    ): Promise<CredentialEntity> {
+    ): Promise<MJCredentialEntity> {
         this.TryThrowIfNotLoaded();
 
         const credType = this.getCredentialTypeByName(credentialTypeName);
@@ -330,7 +330,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
 
         // Create credential entity via metadata
         const md = new Metadata();
-        const credEntity = await md.GetEntityObject<CredentialEntity>('MJ: Credentials', contextUser);
+        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         credEntity.NewRecord();
         credEntity.CredentialTypeID = credType.ID;
         credEntity.Name = name;
@@ -378,7 +378,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         this.TryThrowIfNotLoaded();
 
         const md = new Metadata();
-        const credEntity = await md.GetEntityObject<CredentialEntity>('MJ: Credentials', contextUser);
+        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credEntity.Load(credentialId);
         if (!loaded) {
             throw new Error(`Credential not found: ${credentialId}`);
@@ -483,7 +483,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private resolveCredential(
         credentialName: string,
         options: CredentialResolutionOptions
-    ): CredentialEntity | null {
+    ): MJCredentialEntity | null {
         // Try by ID first
         if (options.credentialId) {
             return this.getCredentialById(options.credentialId) || null;
@@ -649,7 +649,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private async updateLastUsedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
         try {
             const md = new Metadata();
-            const credEntity = await md.GetEntityObject<CredentialEntity>('MJ: Credentials', contextUser);
+            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             await credEntity.Load(credentialId);
             credEntity.LastUsedAt = new Date();
             await credEntity.Save();
@@ -665,7 +665,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private async updateLastValidatedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
         try {
             const md = new Metadata();
-            const credEntity = await md.GetEntityObject<CredentialEntity>('MJ: Credentials', contextUser);
+            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             await credEntity.Load(credentialId);
             credEntity.LastValidatedAt = new Date();
             await credEntity.Save();
@@ -698,7 +698,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * Logs credential access to the AuditLog entity.
      */
     private async logAccess(
-        credential: CredentialEntity | null,
+        credential: MJCredentialEntity | null,
         contextUser: UserInfo | undefined,
         details: CredentialAccessDetails
     ): Promise<void> {
@@ -709,7 +709,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             }
 
             const md = new Metadata();
-            const auditLog = await md.GetEntityObject<AuditLogEntity>('Audit Logs', contextUser);
+            const auditLog = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', contextUser);
             auditLog.NewRecord();
 
             auditLog.UserID = contextUser.ID;

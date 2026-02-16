@@ -42,7 +42,6 @@
     "@memberjunction/ng-base-application": "4.4.0",
     "@memberjunction/ng-base-forms": "4.4.0",
     "@memberjunction/ng-code-editor": "4.4.0",
-    "@memberjunction/ng-container-directives": "4.4.0",
     "@memberjunction/ng-deep-diff": "4.4.0",
     "@memberjunction/ng-entity-relationship-diagram": "4.4.0",
     "@memberjunction/ng-flow-editor": "4.4.0",

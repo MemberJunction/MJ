@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityField, EntityFieldTSType, EntityInfo, IMetadataProvider, KeyValuePair, LogError, LogStatus, Metadata, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
-import { RecordChangeEntity, RecordChangeReplayRunEntity } from "@memberjunction/core-entities";
+import { MJRecordChangeEntity, MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
 
@@ -51,7 +51,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
 
         const c: Array<Partial<BaseEnginePropertyConfig>> = [
             {
-                EntityName: "Entities",
+                EntityName: "MJ: Entities",
                 PropertyName: "_EligibleEntities",
                 Filter: `ID IN (SELECT ID FROM ${p.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)`, // limit to entities that are in this view. This view has the logic which basically is TrackRecordChanges=1 and also has an UpdatedAt field
                 CacheLocal: true
@@ -65,7 +65,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     }
 
 
-    private _IneligibleEntities: string[] = [];// ['Entities', 'Entity Fields', 'Entity Field Values', 'Entity Relationships', 'Record Changes']; // default ineligible entities --- turned off for now
+    private _IneligibleEntities: string[] = [];// ['Entities', 'MJ: Entity Fields', 'MJ: Entity Field Values', 'MJ: Entity Relationships', 'MJ: Record Changes']; // default ineligible entities --- turned off for now
     /**
      * A list of entities that will automatically be excluded from all calls to this class. This array is used as a "safety"
      * mechanism to prevent the system from trying to replay changes to these entities which wouldn't negatively affect system integrity
@@ -591,11 +591,11 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     /**
      * Method creates a new Record Change Replay Run and returns the object for the run
      */
-    protected async StartRun(): Promise<RecordChangeReplayRunEntity> {
+    protected async StartRun(): Promise<MJRecordChangeReplayRunEntity> {
         // first make sure an existing run isn't in progress
         const rv = new RunView();
         const existingRun = await rv.RunView({
-            EntityName: "Record Change Replay Runs",
+            EntityName: "MJ: Record Change Replay Runs",
             ExtraFilter: "Status NOT IN('Complete', 'Error')"
         }, this.ContextUser);
         if (existingRun && existingRun.Success) {
@@ -603,7 +603,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 throw new Error(`Existing Record Change Replay Run ${existingRun.Results[0].ID} is not complete or marked as error, cannot start a new run.`);
             else {
                 const md = new Metadata();
-                const run = await md.GetEntityObject<RecordChangeReplayRunEntity>("Record Change Replay Runs", this.ContextUser)
+                const run = await md.GetEntityObject<MJRecordChangeReplayRunEntity>("MJ: Record Change Replay Runs", this.ContextUser)
                 run.StartedAt = new Date();
                 run.UserID = this.ContextUser.ID;
                 run.Status = 'In Progress';
@@ -627,7 +627,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      *  3) Record the result in the Record Change record, updating status and if appropriate, the error message
      * @param change 
      */
-    protected async ReplaySingleChange(md: Metadata, run: RecordChangeReplayRunEntity, change: ChangeDetectionItem): Promise<boolean> {
+    protected async ReplaySingleChange(md: Metadata, run: MJRecordChangeReplayRunEntity, change: ChangeDetectionItem): Promise<boolean> {
         try {
             const rc = await this.CreateRecordChangeRecord(md, run, change);
             if (rc) {
@@ -675,7 +675,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     /**
      * This method will attempt to update the RecordChange record and return true if succesful, false otherwise.
      */
-    protected async FinishRecordChangeRecord(rc: RecordChangeEntity, code: 'error' | 'success', errorMessage: string): Promise<boolean> {
+    protected async FinishRecordChangeRecord(rc: MJRecordChangeEntity, code: 'error' | 'success', errorMessage: string): Promise<boolean> {
         try {
             rc.Status = code === 'error' ? 'Error' : 'Complete';
             rc.ErrorLog = errorMessage;
@@ -694,9 +694,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * Creates a new record change record for the start of the replay process.
      * @param change 
      */
-    protected async CreateRecordChangeRecord(md: Metadata, run: RecordChangeReplayRunEntity, change: ChangeDetectionItem): Promise<RecordChangeEntity> {
+    protected async CreateRecordChangeRecord(md: Metadata, run: MJRecordChangeReplayRunEntity, change: ChangeDetectionItem): Promise<MJRecordChangeEntity> {
         try {
-            const rc = await md.GetEntityObject<RecordChangeEntity>("Record Changes", this.ContextUser);    
+            const rc = await md.GetEntityObject<MJRecordChangeEntity>("MJ: Record Changes", this.ContextUser);
             rc.EntityID = change.Entity.ID;
 
             if (change.LegacyKey)

@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
-import { UserApplicationEntity } from '@memberjunction/core-entities';
+import { MJUserApplicationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
 
@@ -73,14 +73,14 @@ export class ApplicationSettingsComponent implements OnInit {
       const systemApps = this.appManager.GetAllSystemApps();
 
       // Load user's UserApplication records
-      const userAppsResult = await rv.RunView<UserApplicationEntity>({
-        EntityName: 'User Applications',
+      const userAppsResult = await rv.RunView<MJUserApplicationEntity>({
+        EntityName: 'MJ: User Applications',
         ExtraFilter: `UserID = '${md.CurrentUser.ID}'`,
         OrderBy: 'Sequence, Application',
         ResultType: 'entity_object'
       });
 
-      const userApps: UserApplicationEntity[] = userAppsResult.Success ? userAppsResult.Results : [];
+      const userApps: MJUserApplicationEntity[] = userAppsResult.Success ? userAppsResult.Results : [];
 
       // Build app config items
       this.AllApps = this.BuildAppConfigItems(systemApps, userApps);
@@ -102,7 +102,7 @@ export class ApplicationSettingsComponent implements OnInit {
   /**
    * Builds app config items by matching system apps with user's UserApplication records
    */
-  private BuildAppConfigItems(systemApps: BaseApplication[], userApps: UserApplicationEntity[]): AppConfigItem[] {
+  private BuildAppConfigItems(systemApps: BaseApplication[], userApps: MJUserApplicationEntity[]): AppConfigItem[] {
     const items: AppConfigItem[] = [];
 
     for (const app of systemApps) {
@@ -331,7 +331,7 @@ export class ApplicationSettingsComponent implements OnInit {
    * Updates an existing UserApplication record
    */
   private async UpdateUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
-    const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
+    const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     await userApp.Load(item.UserAppId!);
 
     userApp.Sequence = item.Sequence;
@@ -350,7 +350,7 @@ export class ApplicationSettingsComponent implements OnInit {
    * Creates a new UserApplication record
    */
   private async CreateUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
-    const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
+    const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     userApp.NewRecord();
 
     userApp.UserID = md.CurrentUser.ID;

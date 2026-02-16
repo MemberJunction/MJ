@@ -3,9 +3,9 @@ import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import {
-  EntityPermissionEntity,
-  EntityEntity,
-  RoleEntity,
+  MJEntityPermissionEntity,
+  MJEntityEntity,
+  MJRoleEntity,
   ResourceData
 } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
@@ -26,9 +26,9 @@ interface FilterOptions {
 }
 
 interface EntityAccess {
-  entity: EntityEntity;
+  entity: MJEntityEntity;
   isPublic: boolean;
-  permissions: EntityPermissionEntity[];
+  permissions: MJEntityPermissionEntity[];
   rolePermissions: Map<string, PermissionLevel>;
 }
 
@@ -50,7 +50,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   // State management
   public entityAccess: EntityAccess[] = [];
   public filteredEntityAccess: EntityAccess[] = [];
-  public roles: RoleEntity[] = [];
+  public roles: MJRoleEntity[] = [];
   public isLoading = false;
   public error: string | null = null;
   
@@ -132,10 +132,10 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     }
   }
 
-  private async loadEntities(): Promise<EntityEntity[]> {
+  private async loadEntities(): Promise<MJEntityEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<EntityEntity>({
-      EntityName: 'Entities',
+    const result = await rv.RunView<MJEntityEntity>({
+      EntityName: 'MJ: Entities',
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
@@ -143,10 +143,10 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     return result.Success ? result.Results : [];
   }
   
-  private async loadEntityPermissions(): Promise<EntityPermissionEntity[]> {
+  private async loadEntityPermissions(): Promise<MJEntityPermissionEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<EntityPermissionEntity>({
-      EntityName: 'Entity Permissions',
+    const result = await rv.RunView<MJEntityPermissionEntity>({
+      EntityName: 'MJ: Entity Permissions',
       ResultType: 'entity_object',
       OrderBy: 'EntityID, RoleID'
     });
@@ -154,10 +154,10 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     return result.Success ? result.Results : [];
   }
   
-  private async loadRoles(): Promise<RoleEntity[]> {
+  private async loadRoles(): Promise<MJRoleEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<RoleEntity>({
-      EntityName: 'Roles',
+    const result = await rv.RunView<MJRoleEntity>({
+      EntityName: 'MJ: Roles',
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
@@ -165,9 +165,9 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     return result.Success ? result.Results : [];
   }
   
-  private processEntityAccess(entities: EntityEntity[], permissions: EntityPermissionEntity[]): void {
+  private processEntityAccess(entities: MJEntityEntity[], permissions: MJEntityPermissionEntity[]): void {
     // Group permissions by entity
-    const permissionsByEntity = new Map<string, EntityPermissionEntity[]>();
+    const permissionsByEntity = new Map<string, MJEntityPermissionEntity[]>();
     
     for (const permission of permissions) {
       const entityId = permission.EntityID;

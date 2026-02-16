@@ -4,7 +4,7 @@ import {
     LogError,
     LogStatus,
 } from '@memberjunction/core';
-import { VersionLabelEntity } from '@memberjunction/core-entities';
+import { MJVersionLabelEntity } from '@memberjunction/core-entities';
 import {
     CaptureResult,
     CreateLabelParams,
@@ -48,7 +48,7 @@ import { RestoreEngine } from './RestoreEngine';
  * const label = await engine.CreateLabel({
  *   Name: 'Before Refactor',
  *   Scope: 'Record',
- *   EntityName: 'AI Prompts',
+ *   EntityName: 'MJ: AI Prompts',
  *   RecordKey: promptKey,
  *   IncludeDependencies: true,
  * }, contextUser);
@@ -82,7 +82,7 @@ export class VersionHistoryEngine {
     public async CreateLabel(
         params: CreateLabelParams,
         contextUser: UserInfo
-    ): Promise<{ Label: VersionLabelEntity; CaptureResult: CaptureResult }> {
+    ): Promise<{ Label: MJVersionLabelEntity; CaptureResult: CaptureResult }> {
         const onProgress = params.OnProgress;
 
         // Step: Initializing
@@ -191,14 +191,14 @@ export class VersionHistoryEngine {
     /**
      * Load a single version label by ID.
      */
-    public async GetLabel(labelId: string, contextUser: UserInfo): Promise<VersionLabelEntity> {
+    public async GetLabel(labelId: string, contextUser: UserInfo): Promise<MJVersionLabelEntity> {
         return this.LabelMgr.GetLabel(labelId, contextUser);
     }
 
     /**
      * Query version labels with optional filters.
      */
-    public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<VersionLabelEntity[]> {
+    public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<MJVersionLabelEntity[]> {
         return this.LabelMgr.GetLabels(filter, contextUser);
     }
 

@@ -1,6 +1,6 @@
 import { ActionEngineServer } from '@memberjunction/actions';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { initializeMJProvider } from '../lib/mj-provider';
 import { ActionInfo, ExecutionResult } from '../lib/output-formatter';
@@ -32,8 +32,8 @@ export class ActionService {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ActionEntity>({
-        EntityName: 'Actions',
+      const result = await rv.RunView<MJActionEntity>({
+        EntityName: 'MJ: Actions',
         ExtraFilter: '',
         OrderBy: 'Name',
         ResultType: 'entity_object'
@@ -76,13 +76,13 @@ For help with action configuration, see the MJ documentation.`);
     }
   }
 
-  async findAction(actionName: string): Promise<ActionEntity | null> {
+  async findAction(actionName: string): Promise<MJActionEntity | null> {
     await this.ensureInitialized();
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ActionEntity>({
-        EntityName: 'Actions',
+      const result = await rv.RunView<MJActionEntity>({
+        EntityName: 'MJ: Actions',
         ExtraFilter: `Name = '${actionName.replace(/'/g, "''")}'`,
         ResultType: 'entity_object'
       }, this.contextUser);
@@ -245,8 +245,8 @@ Log file: ${logger.getLogFilePath()}`);
   }>> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ActionParamEntity>({
-        EntityName: 'Action Params',
+      const result = await rv.RunView<MJActionParamEntity>({
+        EntityName: 'MJ: Action Params',
         ExtraFilter: `ActionID = '${actionId}'`,
         OrderBy: 'Name',
         ResultType: 'entity_object'

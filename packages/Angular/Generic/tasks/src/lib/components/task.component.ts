@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 
-import { TaskEntity, TaskDependencyEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
 import { TaskViewMode } from '../models/task-view.models';
 import { SimpleTaskViewerComponent } from './simple-task-viewer.component';
 import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
@@ -155,9 +155,9 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
   `]
 })
 export class TaskComponent {
-  @Input() tasks: TaskEntity[] = [];
-  @Input() ganttTasks?: TaskEntity[]; // Optional separate task list for Gantt (includes parent)
-  @Input() taskDependencies?: TaskDependencyEntity[]; // Task dependencies for Gantt links
+  @Input() tasks: MJTaskEntity[] = [];
+  @Input() ganttTasks?: MJTaskEntity[]; // Optional separate task list for Gantt (includes parent)
+  @Input() taskDependencies?: MJTaskDependencyEntity[]; // Task dependencies for Gantt links
   @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
   @Input() title?: string;
   @Input() description?: string;
@@ -166,7 +166,7 @@ export class TaskComponent {
   @Input() viewMode: TaskViewMode = 'simple';
 
   @Output() viewModeChanged = new EventEmitter<TaskViewMode>();
-  @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   public setViewMode(mode: TaskViewMode): void {
@@ -174,7 +174,7 @@ export class TaskComponent {
     this.viewModeChanged.emit(mode);
   }
 
-  public onTaskClicked(task: TaskEntity): void {
+  public onTaskClicked(task: MJTaskEntity): void {
     this.taskClicked.emit(task);
   }
 

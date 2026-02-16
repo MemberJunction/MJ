@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-tabstrip",
   "version": "4.4.0",
-  "description": "MemberJunction: Very simple tab strip component used in the MJ Explorer app and reusable anywhere else in an Angular project.",
+  "description": "DEPRECATED: Simple tab strip component. Use Kendo TabStrip or mj-collapsible-panel instead.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [

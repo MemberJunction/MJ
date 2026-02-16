@@ -71,13 +71,13 @@ export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
   @Query(() => [MJUserFavorite_])
   async UserFavoritesByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { providers, userPayload }: AppContext) {
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
-    return await this.findBy(provider, 'User Favorites', { UserID }, userPayload.userRecord);
+    return await this.findBy(provider, 'MJ: User Favorites', { UserID }, userPayload.userRecord);
   }
 
   @Query(() => [MJUserFavorite_])
   async UserFavoriteSearchByParams(@Arg('params', () => Int) params: UserFavoriteSearchParams, @Ctx() { providers, userPayload }: AppContext) {
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
-    return await this.findBy(provider, 'User Favorites', params, userPayload.userRecord);
+    return await this.findBy(provider, 'MJ: User Favorites', params, userPayload.userRecord);
   }
 
   @Query(() => UserFavoriteResult)
