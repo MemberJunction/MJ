@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
-import type { MigrateResult } from '@memberjunction/skyway-core';
+import type { MigrateResult, MigrationExecutionResult, ResolvedMigration } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
 import { getValidatedConfig, getSkywayConfig } from '../../config';
 
@@ -31,16 +31,30 @@ export default class Migrate extends Command {
     const skywayConfig = await getSkywayConfig(config, flags.tag, flags.schema, flags.dir);
     const skyway = new Skyway(skywayConfig);
 
+    // Always capture progress for error diagnostics; verbose mode prints it live
+    const errorLog: string[] = [];
+    const failedMigrations: MigrationExecutionResult[] = [];
+    let lastMigrationStarted: ResolvedMigration | undefined;
+
+    skyway.OnProgress({
+      OnLog: (msg) => {
+        errorLog.push(msg);
+        if (flags.verbose) this.log(`  ${msg}`);
+      },
+      OnMigrationStart: (m) => {
+        lastMigrationStarted = m;
+        if (flags.verbose) this.log(`  Applying: ${m.Version ?? '(repeatable)'} — ${m.Description}`);
+      },
+      OnMigrationEnd: (r) => {
+        if (!r.Success) failedMigrations.push(r);
+        if (flags.verbose) this.log(`  ${r.Success ? 'OK' : 'FAIL'}: ${r.Migration.Description} (${r.ExecutionTimeMS}ms)`);
+      },
+    });
+
     if (flags.verbose) {
       this.log(`Database Connection: ${config.dbHost}:${config.dbPort}, ${config.dbDatabase}, User: ${config.codeGenLogin}`);
       this.log(`Migrating ${targetSchema} schema using migrations from:\n\t- ${skywayConfig.Migrations.Locations.join('\n\t- ')}\n`);
       this.log(`Skyway config: baselineVersion: ${config.baselineVersion ?? '(auto-detect)'}, baselineOnMigrate: ${config.baselineOnMigrate}\n`);
-
-      skyway.OnProgress({
-        OnLog: (msg) => this.log(`  ${msg}`),
-        OnMigrationStart: (m) => this.log(`  Applying: ${m.Version ?? '(repeatable)'} — ${m.Description}`),
-        OnMigrationEnd: (r) => this.log(`  ${r.Success ? 'OK' : 'FAIL'}: ${r.Migration.Description} (${r.ExecutionTimeMS}ms)`),
-      });
     }
 
     if (flags.tag) {
@@ -56,7 +70,9 @@ export default class Migrate extends Command {
     } catch (err: unknown) {
       spinner.fail();
       const message = err instanceof Error ? err.message : String(err);
-      this.error(`Migration error: ${message}`);
+      this.logToStderr(`\nMigration error: ${message}\n`);
+      this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
+      this.error('Migrations failed');
     } finally {
       await skyway.Close();
     }
@@ -76,16 +92,74 @@ export default class Migrate extends Command {
       spinner.fail();
       this.logToStderr(`\nMigration failed: ${result.ErrorMessage ?? 'unknown error'}\n`);
 
-      // Show details for failed migrations
-      const failed = result.Details.filter(d => !d.Success);
-      for (const detail of failed) {
-        this.logToStderr(`  Failed: ${detail.Migration.Version ?? '(R)'} ${detail.Migration.Description}`);
-        if (detail.Error) {
-          this.logToStderr(`    ${detail.Error.message}`);
+      if (result.Details.length > 0) {
+        // We have per-migration details — show them
+        const succeeded = result.Details.filter(d => d.Success);
+        if (succeeded.length > 0) {
+          this.logToStderr(`  Applied ${succeeded.length} migration(s) before failure:`);
+          for (const detail of succeeded) {
+            this.logToStderr(`    OK: ${detail.Migration.Filename} (${detail.ExecutionTimeMS}ms)`);
+          }
+          this.logToStderr('');
         }
+
+        const failed = result.Details.filter(d => !d.Success);
+        for (const detail of failed) {
+          this.logToStderr(`  FAILED: ${detail.Migration.Filename}`);
+          this.logToStderr(`    Script: ${detail.Migration.FilePath}`);
+          this.logToStderr(`    Version: ${detail.Migration.Version ?? '(repeatable)'}`);
+          this.logToStderr(`    Description: ${detail.Migration.Description}`);
+          if (detail.Error) {
+            this.logToStderr(`    Error: ${detail.Error.message}`);
+          }
+        }
+      } else {
+        // Details is empty — error was caught at the transaction/connection level.
+        // Fall back to errors captured by OnProgress callbacks.
+        this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
       }
 
       this.error('Migrations failed');
+    }
+  }
+
+  /**
+   * Prints error details captured by OnProgress callbacks.
+   * Used when Skyway's result.Details is empty (transaction-level errors).
+   */
+  private printCallbackErrors(
+    failedMigrations: MigrationExecutionResult[],
+    lastMigrationStarted: ResolvedMigration | undefined,
+    errorLog: string[]
+  ): void {
+    // Show any migration failures captured by OnMigrationEnd
+    if (failedMigrations.length > 0) {
+      for (const detail of failedMigrations) {
+        this.logToStderr(`  FAILED: ${detail.Migration.Filename}`);
+        this.logToStderr(`    Script: ${detail.Migration.FilePath}`);
+        this.logToStderr(`    Version: ${detail.Migration.Version ?? '(repeatable)'}`);
+        this.logToStderr(`    Description: ${detail.Migration.Description}`);
+        if (detail.Error) {
+          this.logToStderr(`    Error: ${detail.Error.message}`);
+        }
+      }
+    } else if (lastMigrationStarted) {
+      // OnMigrationEnd never fired, but we know which migration was running
+      this.logToStderr(`  Failed while executing: ${lastMigrationStarted.Filename}`);
+      this.logToStderr(`    Script: ${lastMigrationStarted.FilePath}`);
+      this.logToStderr(`    Version: ${lastMigrationStarted.Version ?? '(repeatable)'}`);
+    }
+
+    // Show relevant log messages from Skyway (error/failure lines)
+    const relevantLogs = errorLog.filter(
+      msg => msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error') || msg.toLowerCase().includes('rolled back')
+    );
+    if (relevantLogs.length > 0) {
+      this.logToStderr('');
+      this.logToStderr('  Skyway log:');
+      for (const msg of relevantLogs) {
+        this.logToStderr(`    ${msg}`);
+      }
     }
   }
 }
