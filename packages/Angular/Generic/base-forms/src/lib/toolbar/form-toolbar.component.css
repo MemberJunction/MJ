@@ -283,6 +283,25 @@
   box-shadow: 0 2px 6px rgba(6, 182, 212, 0.15);
 }
 
+.mj-entity-badge--overlapping {
+  background: #fffbeb;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
+.mj-entity-badge--overlapping:hover {
+  background: #fef3c7;
+  border-color: #d97706;
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.15);
+}
+
+.mj-entity-badge-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
 .mj-child-count {
   background: var(--mj-isa-child);
   color: white;
@@ -303,6 +322,63 @@
 .mj-hierarchy-arrow {
   color: var(--mj-text-muted);
   font-size: 10px;
+}
+
+/* Descendant chain tree (connecting lines when multiple chains branch) */
+.mj-descendant-chains {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  padding-left: 20px;
+}
+
+/* Horizontal connector from parent entity badge to tree trunk */
+.mj-descendant-chains::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  width: 4px;
+  border-top: 1.5px solid var(--mj-text-muted);
+}
+
+.mj-descendant-chain {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  padding: 2px 0;
+}
+
+/* Horizontal branch line from trunk to chain content */
+.mj-descendant-chain::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 18px;
+  border-top: 1.5px solid var(--mj-text-muted);
+}
+
+/* Vertical trunk segment (each chain draws its portion) */
+.mj-descendant-chain::after {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px solid var(--mj-text-muted);
+}
+
+/* First chain: trunk starts from center */
+.mj-descendant-chain:first-child::after {
+  top: 50%;
+}
+
+/* Last chain: trunk ends at center */
+.mj-descendant-chain:last-child::after {
+  bottom: 50%;
 }
 
 /* (dirty summary removed — now inline in edit banner) */

@@ -88,27 +88,83 @@ if [ -f "$MJ_DIR/.env" ] && [ ! -L "$MJAPI_ENV" ]; then
     echo "  Symlinked .env → packages/MJAPI/.env"
 fi
 
-# ─── Auth0 setup: prompt on first run or when credentials are missing ────────
+# ─── Auth0 setup: auto-configure from env vars or prompt interactively ────────
 if [ -d "$MJ_DIR" ]; then
     if ! auth-setup --check 2>/dev/null; then
-        echo ""
-        echo "  Auth0 credentials not found in .env."
-        echo "  MJAPI and MJExplorer need Auth0 to authenticate users."
-        echo ""
-        # Check if we're in an interactive terminal
-        if [ -t 0 ]; then
-            read -rp "  Run Auth0 setup now? [Y/n] " SETUP_ANSWER
-            SETUP_ANSWER=${SETUP_ANSWER:-Y}
-            if [[ "$SETUP_ANSWER" =~ ^[Yy] ]]; then
-                auth-setup
+        # Check if Auth0 credentials were passed as environment variables
+        if [ -n "$TEST_AUTH0_DOMAIN" ] && [ -n "$TEST_AUTH0_CLIENT_ID" ] && [ -n "$TEST_AUTH0_CLIENT_SECRET" ]; then
+            echo "  Auth0 credentials found in environment variables — auto-configuring..."
+            # Write Auth0 vars to MJ .env (same format as auth-setup)
+            ENV_FILE="$MJ_DIR/.env"
+            cat >> "$ENV_FILE" << EOF
+
+# ─── Auth0 Configuration (auto-configured from environment) ──────────────────
+AUTH0_DOMAIN=${TEST_AUTH0_DOMAIN}
+AUTH0_CLIENT_ID=${TEST_AUTH0_CLIENT_ID}
+AUTH0_CLIENT_SECRET=${TEST_AUTH0_CLIENT_SECRET}
+
+# Test credentials for browser automation (used by Claude Code for headless login)
+TEST_AUTH0_DOMAIN=${TEST_AUTH0_DOMAIN}
+TEST_AUTH0_CLIENT_ID=${TEST_AUTH0_CLIENT_ID}
+TEST_AUTH0_CLIENT_SECRET=${TEST_AUTH0_CLIENT_SECRET}
+TEST_UID=${TEST_UID}
+TEST_PWD=${TEST_PWD}
+EOF
+            echo "  Auth0 domain:    ${TEST_AUTH0_DOMAIN}"
+            echo "  Client ID:       ${TEST_AUTH0_CLIENT_ID:0:8}..."
+            echo "  Test user:       ${TEST_UID}"
+
+            # Generate Angular environment files
+            ENVIRONMENTS_DIR="$MJ_DIR/packages/MJExplorer/src/environments"
+            mkdir -p "$ENVIRONMENTS_DIR"
+
+            for ENV_VARIANT in \
+                "environment.ts:production:true:DOCKER" \
+                "environment.development.ts:development:false:DEV" \
+                "environment.staging.ts:staging:false:STAGING"; do
+                IFS=':' read -r FNAME NODE_ENV PROD APP_INSTANCE <<< "$ENV_VARIANT"
+                cat > "$ENVIRONMENTS_DIR/$FNAME" << ENVTS
+export const environment = {
+  GRAPHQL_URI: 'http://localhost:4000/',
+  GRAPHQL_WS_URI: 'ws://localhost:4000/',
+  REDIRECT_URI: 'http://localhost:4200/',
+  AUTH_TYPE: 'auth0',
+  NODE_ENV: '${NODE_ENV}',
+  AUTOSAVE_DEBOUNCE_MS: 1200,
+  SEARCH_DEBOUNCE_MS: 800,
+  MIN_SEARCH_LENGTH: 3,
+  MJ_CORE_SCHEMA_NAME: '__mj',
+  production: ${PROD},
+  APPLICATION_NAME: 'MemberJunction Explorer',
+  APPLICATION_INSTANCE: '${APP_INSTANCE}',
+  AUTH0_DOMAIN: '${TEST_AUTH0_DOMAIN}',
+  AUTH0_CLIENTID: '${TEST_AUTH0_CLIENT_ID}',
+} as const;
+ENVTS
+            done
+            echo "  Angular environment files generated."
+        else
+            echo ""
+            echo "  Auth0 credentials not found in .env."
+            echo "  MJAPI and MJExplorer need Auth0 to authenticate users."
+            echo ""
+            # Check if we're in an interactive terminal
+            if [ -t 0 ]; then
+                read -rp "  Run Auth0 setup now? [Y/n] " SETUP_ANSWER
+                SETUP_ANSWER=${SETUP_ANSWER:-Y}
+                if [[ "$SETUP_ANSWER" =~ ^[Yy] ]]; then
+                    auth-setup
+                else
+                    echo ""
+                    echo "  Skipped. Run 'auth-setup' later to configure Auth0."
+                    echo ""
+                fi
             else
-                echo ""
-                echo "  Skipped. Run 'auth-setup' later to configure Auth0."
+                echo "  Non-interactive terminal detected. Run 'auth-setup' manually."
+                echo "  Or pass TEST_AUTH0_DOMAIN, TEST_AUTH0_CLIENT_ID, TEST_AUTH0_CLIENT_SECRET,"
+                echo "  TEST_UID, and TEST_PWD in your workbench .env file."
                 echo ""
             fi
-        else
-            echo "  Non-interactive terminal detected. Run 'auth-setup' manually."
-            echo ""
         fi
     fi
 fi

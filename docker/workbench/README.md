@@ -11,8 +11,8 @@ graph TB
     end
 
     HOST_SQL["Host :1444<br/>Azure Data Studio / DBeaver"] -.->|"port forward"| SQL
-    HOST_API["Host :4100<br/>API clients"] -.->|"port forward"| DEV
-    HOST_UI["Host :4300<br/>Browser"] -.->|"port forward"| DEV
+    HOST_API["Host :4000 (configurable)<br/>API clients"] -.->|"port forward"| DEV
+    HOST_UI["Host :4200 (configurable)<br/>Browser"] -.->|"port forward"| DEV
 
     style SQL fill:#1e3a5f,color:#fff
     style DEV fill:#4a9eff,color:#fff
@@ -60,12 +60,28 @@ cd docker/workbench
 cp .env.example .env
 ```
 
-Open `.env` in a text editor. The only setting you might want to change:
+Open `.env` in a text editor and configure:
 
 | Variable | What it does | Default |
 |----------|-------------|---------|
 | `ANTHROPIC_API_KEY` | Your Anthropic API key for Claude Code. **Leave blank** if you use Claude Max (OAuth login). | _(empty)_ |
 | `SA_PASSWORD` | SQL Server admin password. Fine to leave as-is for local dev. | `Claude2Sql99` |
+| `MJAPI_HOST_PORT` | Host port mapped to MJAPI (container :4000). Override if you already run a local MJAPI. | `4000` |
+| `EXPLORER_HOST_PORT` | Host port mapped to MJExplorer (container :4200). Override if you already run a local Explorer. | `4200` |
+| `TEST_AUTH0_DOMAIN` | Auth0 tenant domain. Pre-fill to skip interactive `auth-setup` on first boot. | _(empty)_ |
+| `TEST_AUTH0_CLIENT_ID` | Auth0 SPA application client ID. | _(empty)_ |
+| `TEST_AUTH0_CLIENT_SECRET` | Auth0 application secret. | _(empty)_ |
+| `TEST_UID` | Test user email for browser automation login. | _(empty)_ |
+| `TEST_PWD` | Test user password for browser automation login. | _(empty)_ |
+| `AI_VENDOR_API_KEY__OpenAILLM` | OpenAI API key — needed for Sage and other MJ AI agents. | _(empty)_ |
+| `AI_VENDOR_API_KEY__AnthropicLLM` | Anthropic API key for MJ AI agents. | _(empty)_ |
+| `AI_VENDOR_API_KEY__GroqLLM` | Groq API key for MJ AI agents. | _(empty)_ |
+| `AI_VENDOR_API_KEY__GeminiLLM` | Google Gemini API key for MJ AI agents. | _(empty)_ |
+| `AI_VENDOR_API_KEY__MistralLLM` | Mistral API key for MJ AI agents. | _(empty)_ |
+
+> **Tip**: If you pre-fill the `TEST_AUTH0_*` / `TEST_UID` / `TEST_PWD` variables, the container will auto-configure Auth0 on first boot without any interactive prompts.
+>
+> **AI Agents**: MJ uses the `AI_VENDOR_API_KEY__<DriverClass>` pattern for AI provider keys. You need at least one LLM key (e.g., OpenAI or Anthropic) for Sage and other AI agents to work. See `.env.example` for the full list of supported providers.
 
 ### Step 4: Start the Workbench
 
@@ -145,9 +161,11 @@ Your Auth0 tenant needs a **Single Page Application** (SPA) configured with:
 
 | Setting | Values |
 |---------|--------|
-| Allowed Callback URLs | `http://localhost:4200`, `http://localhost:4300` |
-| Allowed Logout URLs | `http://localhost:4200`, `http://localhost:4300` |
-| Allowed Web Origins | `http://localhost:4200`, `http://localhost:4300` |
+| Allowed Callback URLs | `http://localhost:4200` through `http://localhost:4205` |
+| Allowed Logout URLs | `http://localhost:4200` through `http://localhost:4205` |
+| Allowed Web Origins | `http://localhost:4200` through `http://localhost:4205` |
+
+The port range (4200–4205) supports running multiple workbench instances simultaneously by setting different `EXPLORER_HOST_PORT` values in each instance's `.env` file.
 
 And a **test user account** with email/password for browser automation.
 
@@ -174,11 +192,11 @@ db-bootstrap                # Creates MJ_Workbench + runs Flyway migrations
 Then start the MJ stack:
 
 ```bash
-mjapi                       # Start MJAPI (container :4000 → host :4100)
-mjui                        # Start Explorer (container :4200 → host :4300)
+mjapi                       # Start MJAPI (container :4000 → host :4000 by default)
+mjui                        # Start Explorer (container :4200 → host :4200 by default)
 ```
 
-Open `http://localhost:4300` in your browser to see MJ Explorer.
+Open `http://localhost:4200` in your browser to see MJ Explorer (or the port you set in `EXPLORER_HOST_PORT`).
 
 ---
 
@@ -293,7 +311,7 @@ playwright-cli click e7                     # Submit
 |--------|---------|-----------------|
 | Display mode | `--headed` (visible window) | Headless (no display) |
 | Interaction style | Visual + snapshot | Snapshot-driven |
-| Ports | MJAPI :4001, Explorer :4201 | MJAPI :4000, Explorer :4200 |
+| Ports | MJAPI :4001, Explorer :4201 | MJAPI :4000, Explorer :4200 (configurable) |
 | Auth caching | `.playwright-cli/profile` dir | Fresh per session (or use `--persistent`) |
 | Screenshots | Open in OS viewer | Read with `Read` tool or copy to host |
 
@@ -305,13 +323,15 @@ Chromium uses `/dev/shm` (shared memory) for inter-process communication. The Do
 
 ## Port Mapping
 
-All ports are offset from their defaults so they don't conflict with anything you're running locally.
+By default, host ports match container ports so Auth0 callbacks work without extra configuration. Override via `.env` if you have local services on those ports.
 
-| Service | Inside Container | Your Machine | What to use it for |
-|---------|-----------------|-------------|-------------------|
-| SQL Server | 1433 | **localhost:1444** | Azure Data Studio, DBeaver |
-| MJAPI | 4000 | **localhost:4100** | API testing, GraphQL Playground |
-| MJ Explorer | 4200 | **localhost:4300** | Browser UI |
+| Service | Inside Container | Your Machine (Default) | Env Var Override |
+|---------|-----------------|----------------------|-----------------|
+| SQL Server | 1433 | **localhost:1444** | _(hardcoded)_ |
+| MJAPI | 4000 | **localhost:4000** | `MJAPI_HOST_PORT` |
+| MJ Explorer | 4200 | **localhost:4200** | `EXPLORER_HOST_PORT` |
+
+Example: To avoid conflicts with a local MJAPI on port 4000, add `MJAPI_HOST_PORT=4100` to your `.env`.
 
 ---
 
@@ -343,8 +363,8 @@ When you enter the container (`docker exec -it claude-dev zsh`), these shortcuts
 | Type this | What it does |
 |-----------|-------------|
 | `mjcd` | `cd` to the MJ repo (`/workspace/MJ`) |
-| `mjapi` | Start MJAPI server (accessible at host :4100) |
-| `mjui` | Start MJ Explorer (accessible at host :4300) |
+| `mjapi` | Start MJAPI server (host port configurable via `MJAPI_HOST_PORT`, default :4000) |
+| `mjui` | Start MJ Explorer (host port configurable via `EXPLORER_HOST_PORT`, default :4200) |
 | `mjcg` | Run CodeGen (`mj codegen`) |
 | `mjmig` | Run database migrations (`mj migrate`) |
 | `mjb` | Build all packages (`npm run build`) |
@@ -388,9 +408,11 @@ When you enter the container (`docker exec -it claude-dev zsh`), these shortcuts
 
 A test Auth0 tenant with:
 1. A **Single Page Application** (SPA) configured with:
-   - **Allowed Callback URLs**: `http://localhost:4200`, `http://localhost:4300`
-   - **Allowed Logout URLs**: `http://localhost:4200`, `http://localhost:4300`
-   - **Allowed Web Origins**: `http://localhost:4200`, `http://localhost:4300`
+   - **Allowed Callback URLs**: `http://localhost:4200` through `http://localhost:4205`
+   - **Allowed Logout URLs**: `http://localhost:4200` through `http://localhost:4205`
+   - **Allowed Web Origins**: `http://localhost:4200` through `http://localhost:4205`
+
+   The port range supports multiple simultaneous workbench instances with different `EXPLORER_HOST_PORT` values.
 2. A **test user account** for browser automation
 
 ### How Setup Works
@@ -590,8 +612,9 @@ ports:
 ### Auth0 login fails
 
 1. Run `auth-setup` to verify your credentials
-2. Check that your Auth0 SPA application has `http://localhost:4200` in its Allowed Callback URLs
+2. Check that your Auth0 SPA application has `http://localhost:4200` through `http://localhost:4205` in its Allowed Callback URLs (the port must match your `EXPLORER_HOST_PORT` setting, default 4200)
 3. Verify the test user exists and has a password set in Auth0
+4. Make sure MJAPI is started with the proper start command (via `npm run start` or the `mjapi` alias) so that `-r dotenv/config` loads the Auth0 environment variables
 
 ### Angular environment files missing
 

@@ -45,9 +45,9 @@ if [ "$MIGRATE_ONLY" = false ]; then
     echo ""
 fi
 
-# ─── Run Flyway migrations via MJ CLI ────────────────────────────────────────
+# ─── Run Flyway migrations directly ──────────────────────────────────────────
 if [ -d "$MJ_DIR" ]; then
-    echo "Running MJ migrations..."
+    echo "Running Flyway migrations..."
     cd "$MJ_DIR"
 
     # Ensure the .env points to the right database
@@ -60,14 +60,23 @@ if [ -d "$MJ_DIR" ]; then
         fi
     fi
 
-    # Run migrations using MJ CLI
-    mj migrate 2>&1 || {
+    # Run migrations using standalone Flyway CLI (already installed in Docker image).
+    # Uses the same parameters as `mj migrate` but avoids the node-flyway download step.
+    flyway migrate \
+        -url="jdbc:sqlserver://$SQL_HOST:1433;databaseName=$DB_NAME;trustServerCertificate=true" \
+        -user="$SQL_USER" \
+        -password="$SQL_PASS" \
+        -schemas=__mj \
+        -createSchemas=true \
+        -baselineVersion=202602061600 \
+        -baselineOnMigrate=true \
+        -locations="filesystem:$MJ_DIR/migrations" \
+        2>&1 || {
         echo ""
-        echo "  Migration failed. You can also run Flyway directly:"
-        echo "    cd $MJ_DIR && flyway migrate \\"
-        echo "      -url=\"jdbc:sqlserver://$SQL_HOST:1433;databaseName=$DB_NAME;trustServerCertificate=true\" \\"
-        echo "      -user=$SQL_USER -password=$SQL_PASS \\"
-        echo "      -locations=filesystem:./migrations"
+        echo "  Migration failed. Check the Flyway output above for details."
+        echo "  Common issues:"
+        echo "    - SQL Server not ready: wait a few seconds and retry"
+        echo "    - Schema conflicts: check if __mj schema already has a different baseline"
         exit 1
     }
 
@@ -82,6 +91,6 @@ fi
 
 echo ""
 echo "  Next steps:"
-echo "    cd $MJ_DIR && npm run start:api     # Start MJAPI on port 4000 (host: 4100)"
-echo "    cd $MJ_DIR && npm run start:explorer # Start Explorer on port 4200 (host: 4300)"
+echo "    mjapi     # Start MJAPI (default host port :4000)"
+echo "    mjui      # Start MJ Explorer (default host port :4200)"
 echo ""

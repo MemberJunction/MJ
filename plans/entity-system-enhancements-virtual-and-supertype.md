@@ -1756,7 +1756,7 @@ No Create/Edit/Delete buttons. Read-only grid with "Virtual: Read-Only View" bad
 
 ## Future Work
 
-1. **Overlapping subtypes**: Allow parent record to be multiple child types. Requires removing disjoint enforcement. Configurable per parent entity.
+1. ~~**Overlapping subtypes**~~: **IMPLEMENTED** — see [IS-A Overlapping Subtypes Plan](./isa-overlapping-subtypes.md). Added `AllowMultipleSubtypes` column to Entity table, bypasses disjoint enforcement, discovers multiple children via `FindISAChildEntities`, preserves parent on delete when siblings exist, propagates Record Changes to sibling branches.
 2. **Polymorphic load / leaf resolution**: `GetEntityObject('Products', user, { resolveToLeaf: true })` — given a Product ID, detect actual leaf type and return appropriate entity. Requires querying child tables. Only deterministic with disjoint subtypes.
 3. **Database management agent**: Automate IS-A relationship creation, virtual entity setup, schema analysis, migration generation.
 4. **Multiple inheritance**: Would require junction table (`EntityParents`) instead of singular `ParentID`. Significantly more complex.

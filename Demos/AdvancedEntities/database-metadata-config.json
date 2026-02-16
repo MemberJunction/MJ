@@ -1,7 +1,7 @@
 {
   "$schema": "../../config/database-metadata-config.schema.json",
-  "description": "Database metadata configuration for the AdvancedEntities demo schema. Defines the virtual entity (vwCustomerOrderSummary) and IS-A type relationships (Product hierarchy). Copy/merge this into your main config/database-metadata-config.json before running CodeGen.",
-  "version": "1.1",
+  "description": "Database metadata configuration for the AdvancedEntities demo schema. Defines virtual entities, IS-A type relationships (Product hierarchy — disjoint), overlapping IS-A subtypes (Person and Organization hierarchies), and entity attribute overrides. Copy/merge this into your main config/database-metadata-config.json before running CodeGen.",
+  "version": "1.3",
   "VirtualEntities": [
     {
       "ViewName": "vwCustomerOrderSummary",
@@ -56,7 +56,38 @@
       "ChildEntity": "Publications",
       "ParentEntity": "Products",
       "SchemaName": "AdvancedEntities"
+    },
+    {
+      "ChildEntity": "Member",
+      "ParentEntity": "Person",
+      "SchemaName": "AdvancedEntities"
+    },
+    {
+      "ChildEntity": "GoldMember",
+      "ParentEntity": "Member",
+      "SchemaName": "AdvancedEntities"
+    },
+    {
+      "ChildEntity": "Speaker",
+      "ParentEntity": "Person",
+      "SchemaName": "AdvancedEntities"
+    },
+    {
+      "ChildEntity": "Vendor",
+      "ParentEntity": "Organization",
+      "SchemaName": "AdvancedEntities"
     }
   ],
-  "AdvancedEntities": []
+  "Entities": [
+    {
+      "BaseTable": "Person",
+      "SchemaName": "AdvancedEntities",
+      "AllowMultipleSubtypes": true
+    },
+    {
+      "BaseTable": "Organization",
+      "SchemaName": "AdvancedEntities",
+      "AllowMultipleSubtypes": true
+    }
+  ]
 }
