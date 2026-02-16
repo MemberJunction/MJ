@@ -5,6 +5,7 @@
 
 # Playwright CLI snapshots
 .playwright-cli/
+.playwright-mcp/
 
 # Turbo local cache
 .turbo/
