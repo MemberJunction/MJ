@@ -22,6 +22,10 @@ import {
   GridStateChangedEvent,
   ViewSaveEvent,
   ViewConfigPanelComponent,
+  ViewConfigSummary,
+  QuickSaveEvent,
+  DuplicateViewEvent,
+  SharedViewAction,
   buildCompositeKey,
   buildPkString
 } from '@memberjunction/ng-entity-viewer';
@@ -178,6 +182,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Selection tracking for grid - needed to enable Add to List button in header
   public selectedRecordIds: string[] = [];
   public selectedRecords: Record<string, unknown>[] = [];
+
+  // Quick Save Dialog state (F-001)
+  public showQuickSaveDialog: boolean = false;
+  public quickSaveSummary: ViewConfigSummary | null = null;
+
+  // Duplicate View Dialog state (F-005)
+  public showDuplicateDialog: boolean = false;
+  public duplicateSourceViewName: string = '';
+  public duplicateSummary: ViewConfigSummary | null = null;
+  private duplicateTargetViewId: string | null = null;
+
+  // Shared View Warning Dialog state (Scenario 5)
+  public showSharedViewWarning: boolean = false;
+  private pendingQuickSaveEvent: QuickSaveEvent | null = null;
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return "Data Explorer"
@@ -655,12 +673,56 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (event.key === '/') {
       event.preventDefault();
       this.focusFilterInput();
+      return;
     }
 
     // Cmd+K or Ctrl+K to focus filter
     if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
       event.preventDefault();
       this.focusFilterInput();
+      return;
+    }
+
+    // View management shortcuts (only when an entity is selected)
+    if (this.selectedEntity && (event.metaKey || event.ctrlKey)) {
+      // Ctrl+S / Cmd+S: Save current view
+      if (event.key === 's' && !event.shiftKey) {
+        event.preventDefault();
+        this.onQuickSaveRequested(false);
+        return;
+      }
+
+      // Ctrl+Shift+S / Cmd+Shift+S: Save as new view
+      if (event.key === 'S' || (event.key === 's' && event.shiftKey)) {
+        event.preventDefault();
+        this.onQuickSaveRequested(true);
+        return;
+      }
+
+      // Ctrl+Shift+V / Cmd+Shift+V: Open view selector
+      if ((event.key === 'V' || (event.key === 'v' && event.shiftKey))) {
+        event.preventDefault();
+        this.viewSelectorRef?.toggleDropdown();
+        return;
+      }
+
+      // Ctrl+, / Cmd+,: Toggle config panel
+      if (event.key === ',') {
+        event.preventDefault();
+        if (this.state.viewConfigPanelOpen) {
+          this.onCloseViewConfigPanel();
+        } else {
+          this.onConfigureViewRequested();
+        }
+        return;
+      }
+
+      // Ctrl+Z / Cmd+Z: Revert unsaved changes (only when modified)
+      if (event.key === 'z' && !event.shiftKey && this.state.viewModified) {
+        event.preventDefault();
+        this.onRevertView();
+        return;
+      }
     }
   }
 
@@ -935,7 +997,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       return null;
     } catch (error) {
+      // BUG-010: Warn user about parse failure instead of silently returning null
       console.warn('[DataExplorer] Failed to parse GridState:', error);
+      this.showNotification('Warning: Could not parse view grid configuration', 'info', 3000);
       return null;
     }
   }
@@ -954,11 +1018,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Handle save view request from view selector
+   * Whether the config panel should default to save-as-new mode (BUG-011)
+   */
+  public defaultSaveAsNew: boolean = false;
+
+  /**
+   * Handle save view request from view selector (BUG-011: forward saveAsNew intent)
    */
   public onSaveViewRequested(event: SaveViewRequestedEvent): void {
-    // TODO: Implement in Phase 4 - View CRUD Operations
-    // For now, just open the config panel where save functionality will be
+    this.defaultSaveAsNew = event.saveAsNew || false;
     this.stateService.openViewConfigPanel();
   }
 
@@ -1030,6 +1098,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /**
    * Handle save view from config panel
+   * BUG-001: Panel only closes on success (not on failure)
+   * BUG-002: Shows success/error notifications
+   * BUG-008: Consistent filter handling for both create and update paths
    */
   public async onSaveView(event: ViewSaveEvent): Promise<void> {
     if (!this.selectedEntity) return;
@@ -1045,6 +1116,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       // Build SortState in Kendo-compatible format
       const sortState = this.buildSortState(event);
+
+      // BUG-008: Consistent filter state for both paths
+      const filterStateJson = event.filterState
+        ? JSON.stringify(event.filterState)
+        : JSON.stringify({ logic: 'and', filters: [] });
 
       if (event.saveAsNew || !this.selectedViewEntity) {
         // Create new view
@@ -1068,25 +1144,27 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         newView.SmartFilterEnabled = event.smartFilterEnabled;
         newView.SmartFilterPrompt = event.smartFilterPrompt;
 
-        // Set traditional filter state (Kendo-compatible JSON format)
-        // The MJUserViewEntity.Save() will auto-generate WhereClause from FilterState
-        if (event.filterState) {
-          newView.FilterState = JSON.stringify(event.filterState);
-        }
+        // BUG-008: Always set FilterState consistently
+        newView.FilterState = filterStateJson;
 
         const saved = await newView.Save();
         if (saved) {
           this.selectedViewEntity = newView;
           this.stateService.selectView(newView.ID);
           this.stateService.setViewModified(false);
-          // Update currentGridState from the saved view to refresh the grid
           this.currentGridState = this.parseViewGridState(newView);
-          // Force change detection to ensure grid picks up the new gridState
           this.cdr.detectChanges();
-          // Refresh the view selector dropdown
           await this.viewSelectorRef?.loadViews();
-          // Refresh the entity viewer data to apply saved aggregates and fetch their values
-          this.entityViewerRef?.refresh();
+          // BUG-007: Await the refresh
+          await this.entityViewerRef?.loadData();
+          // BUG-001: Only close panel on success
+          this.stateService.closeViewConfigPanel();
+          // BUG-002: Show success notification
+          this.showNotification(`View "${newView.Name}" created successfully`, 'success', 2500);
+        } else {
+          // BUG-001: Panel stays open on failure
+          // BUG-002: Show error notification
+          this.showNotification('Failed to create view', 'error', 3500);
         }
       } else {
         // Update existing view
@@ -1106,35 +1184,34 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedViewEntity.SmartFilterEnabled = event.smartFilterEnabled;
         this.selectedViewEntity.SmartFilterPrompt = event.smartFilterPrompt;
 
-        // Update traditional filter state (Kendo-compatible JSON format)
-        // The MJUserViewEntity.Save() will auto-generate WhereClause from FilterState
-        if (event.filterState) {
-          this.selectedViewEntity.FilterState = JSON.stringify(event.filterState);
-        } else {
-          // Clear filter state if no filters
-          this.selectedViewEntity.FilterState = JSON.stringify({ logic: 'and', filters: [] });
-        }
+        // BUG-008: Always set FilterState consistently
+        this.selectedViewEntity.FilterState = filterStateJson;
 
         const saved = await this.selectedViewEntity.Save();
         if (saved) {
           this.stateService.setViewModified(false);
-          // Update currentGridState from the saved view to refresh the grid columns
           this.currentGridState = this.parseViewGridState(this.selectedViewEntity);
-          // Force change detection to ensure grid picks up the new gridState
           this.cdr.detectChanges();
-          // Refresh the view selector dropdown
           await this.viewSelectorRef?.loadViews();
-          // Refresh the entity viewer data to apply saved filters/sorts
-          // Note: viewEntity reference didn't change, so we need to manually trigger refresh
-          // Use refresh() instead of loadData() to reset pagination state and reload from page 1
-          this.entityViewerRef?.refresh();
+          // BUG-007: Await the refresh
+          await this.entityViewerRef?.loadData();
+          // BUG-001: Only close panel on success
+          this.stateService.closeViewConfigPanel();
+          // BUG-002: Show success notification
+          this.showNotification(`View "${event.name}" updated successfully`, 'success', 2500);
+        } else {
+          // BUG-001: Panel stays open on failure
+          // BUG-002: Show error notification
+          this.showNotification('Failed to update view', 'error', 3500);
         }
       }
 
-      this.stateService.closeViewConfigPanel();
       this.cdr.detectChanges();
     } catch (error) {
       console.error('[DataExplorer] Error saving view:', error);
+      // BUG-002: Show error notification with details
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      this.showNotification(`Failed to save view: ${errorMsg}`, 'error', 4000);
     } finally {
       this.ngZone.run(() => {
         this.isSavingView = false;
@@ -1236,6 +1313,22 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     else if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
       columnSettings = this.currentGridState.columnSettings;
     }
+    // BUG-005: Third fallback - use entity DefaultInView fields so we never return null
+    else if (this.selectedEntity) {
+      columnSettings = this.selectedEntity.Fields
+        .filter(f => f.DefaultInView)
+        .map((f, idx) => ({
+          ID: f.ID,
+          Name: f.Name,
+          DisplayName: f.DisplayNameOrName,
+          hidden: false,
+          width: f.DefaultColumnWidth || null,
+          orderIndex: idx
+        }));
+      if (columnSettings.length === 0) {
+        return null;
+      }
+    }
     // No columns to save
     else {
       return null;
@@ -1300,15 +1393,310 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public async onDeleteView(): Promise<void> {
     if (!this.selectedViewEntity) return;
 
+    const viewName = this.selectedViewEntity.Name;
     try {
       const deleted = await this.selectedViewEntity.Delete();
       if (deleted) {
         this.selectedViewEntity = null;
         this.stateService.selectView(null);
         this.stateService.closeViewConfigPanel();
+        await this.viewSelectorRef?.loadViews();
+        this.showNotification(`View "${viewName}" deleted`, 'success', 2500);
+      } else {
+        this.showNotification('Failed to delete view', 'error', 3500);
       }
     } catch (error) {
       console.error('[DataExplorer] Error deleting view:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      this.showNotification(`Failed to delete view: ${errorMsg}`, 'error', 4000);
+    }
+  }
+
+  // ========================================
+  // QUICK SAVE, DUPLICATE, REVERT (F-001, F-005, F-007)
+  // ========================================
+
+  /**
+   * Handle quick save request from view selector (F-001)
+   * Builds a summary from the current config panel state and opens the Quick Save dialog
+   * @param saveAsNew - true when user explicitly clicked "Save As New"
+   */
+  public onQuickSaveRequested(saveAsNew: boolean): void {
+    this.defaultSaveAsNew = saveAsNew;
+    // Build summary from config panel if available
+    this.quickSaveSummary = this.viewConfigPanelRef?.BuildSummary() ?? null;
+    this.showQuickSaveDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle quick save event from Quick Save dialog (F-001)
+   * If updating a shared view, intercepts to show the shared view warning first.
+   * Otherwise constructs a ViewSaveEvent and delegates to onSaveView.
+   */
+  public async onQuickSave(event: QuickSaveEvent): Promise<void> {
+    this.showQuickSaveDialog = false;
+
+    // If updating (not save-as-new) a shared view, show the warning dialog
+    if (!event.SaveAsNew && this.selectedViewEntity?.IsShared) {
+      this.pendingQuickSaveEvent = event;
+      this.showSharedViewWarning = true;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    await this.executeQuickSave(event);
+  }
+
+  /**
+   * Execute the actual quick save (called directly or after shared view warning confirmation)
+   */
+  private async executeQuickSave(event: QuickSaveEvent): Promise<void> {
+    const viewSaveEvent: ViewSaveEvent = {
+      name: event.Name,
+      description: event.Description,
+      isShared: event.IsShared,
+      saveAsNew: event.SaveAsNew,
+      columns: [],
+      sortField: null,
+      sortDirection: 'asc',
+      sortItems: [],
+      smartFilterEnabled: false,
+      smartFilterPrompt: '',
+      filterState: this.filterDialogState ?? null,
+      aggregatesConfig: null
+    };
+
+    await this.onSaveView(viewSaveEvent);
+  }
+
+  /**
+   * Handle shared view warning dialog action
+   */
+  public async onSharedViewAction(action: SharedViewAction): Promise<void> {
+    this.showSharedViewWarning = false;
+    const event = this.pendingQuickSaveEvent;
+    this.pendingQuickSaveEvent = null;
+
+    if (!event) return;
+
+    if (action === 'update-shared') {
+      // Proceed with the update
+      await this.executeQuickSave(event);
+    } else if (action === 'save-as-copy') {
+      // Save as a new personal copy instead
+      await this.executeQuickSave({
+        ...event,
+        SaveAsNew: true,
+        IsShared: false
+      });
+    }
+    // 'cancel' - do nothing
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle shared view warning cancel
+   */
+  public onSharedViewWarningCancel(): void {
+    this.showSharedViewWarning = false;
+    this.pendingQuickSaveEvent = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle quick save dialog close
+   */
+  public onQuickSaveClose(): void {
+    this.showQuickSaveDialog = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle quick save "Open Advanced" - close dialog and open full config panel
+   */
+  public onQuickSaveOpenAdvanced(): void {
+    this.showQuickSaveDialog = false;
+    this.stateService.openViewConfigPanel();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle duplicate view request (F-005)
+   * Opens the Duplicate View Dialog so user can choose a name for the copy
+   */
+  public async onDuplicateView(viewId?: string): Promise<void> {
+    const targetId = viewId || this.selectedViewEntity?.ID;
+    if (!targetId || !this.selectedEntity) return;
+
+    // Find the view to get its name for the dialog
+    const allViews = [...(this.viewSelectorRef?.myViews ?? []), ...(this.viewSelectorRef?.sharedViews ?? [])];
+    const viewItem = allViews.find(v => v.id === targetId);
+    this.duplicateTargetViewId = targetId;
+    this.duplicateSourceViewName = viewItem?.name || this.selectedViewEntity?.Name || 'View';
+    this.duplicateSummary = this.buildDuplicateSummary(viewItem?.entity ?? this.selectedViewEntity);
+    this.showDuplicateDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Build a ViewConfigSummary from a view entity for the duplicate dialog
+   */
+  private buildDuplicateSummary(view: UserViewEntityExtended | null): ViewConfigSummary | null {
+    if (!view) return null;
+    let columnCount = 0;
+    let filterCount = 0;
+    let sortCount = 0;
+    let aggregateCount = 0;
+
+    try {
+      const gridState = view.GridState ? JSON.parse(view.GridState) : null;
+      if (Array.isArray(gridState)) {
+        columnCount = gridState.filter((c: Record<string, unknown>) => !c['hidden']).length;
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const filterState = view.FilterState ? JSON.parse(view.FilterState) : null;
+      if (filterState?.filters?.length) filterCount = filterState.filters.length;
+    } catch { /* ignore */ }
+
+    try {
+      const sortState = view.SortState ? JSON.parse(view.SortState) : null;
+      if (Array.isArray(sortState)) sortCount = sortState.length;
+    } catch { /* ignore */ }
+
+    return {
+      ColumnCount: columnCount,
+      FilterCount: filterCount,
+      SortCount: sortCount,
+      SmartFilterActive: view.SmartFilterEnabled || false,
+      SmartFilterPrompt: view.SmartFilterPrompt || '',
+      AggregateCount: aggregateCount
+    };
+  }
+
+  /**
+   * Handle duplicate dialog confirmation - actually creates the copy
+   */
+  public async onDuplicateConfirmed(event: DuplicateViewEvent): Promise<void> {
+    this.showDuplicateDialog = false;
+    const targetId = this.duplicateTargetViewId;
+    this.duplicateTargetViewId = null;
+
+    if (!targetId || !this.selectedEntity) return;
+
+    const md = new Metadata();
+    const rv = new RunView();
+    try {
+      const result = await rv.RunView<UserViewEntityExtended>({
+        EntityName: 'MJ: User Views',
+        ExtraFilter: `ID = '${targetId}'`,
+        ResultType: 'entity_object'
+      });
+
+      if (!result.Success || !result.Results || result.Results.length === 0) {
+        this.showNotification('Could not find view to duplicate', 'error', 3500);
+        return;
+      }
+
+      const sourceView = result.Results[0];
+
+      const newView = await md.GetEntityObject<UserViewEntityExtended>('MJ: User Views');
+      newView.Name = event.Name;
+      newView.Description = sourceView.Description || '';
+      newView.EntityID = sourceView.EntityID;
+      newView.IsShared = false;
+      newView.IsDefault = false;
+      newView.GridState = sourceView.GridState;
+      newView.FilterState = sourceView.FilterState;
+      newView.SortState = sourceView.SortState;
+      newView.SmartFilterEnabled = sourceView.SmartFilterEnabled || false;
+      newView.SmartFilterPrompt = sourceView.SmartFilterPrompt || '';
+
+      const saved = await newView.Save();
+      if (saved) {
+        this.showNotification(`View duplicated as "${newView.Name}"`, 'success', 2500);
+        await this.viewSelectorRef?.loadViews();
+      } else {
+        this.showNotification('Failed to duplicate view', 'error', 3500);
+      }
+    } catch (error) {
+      console.error('[DataExplorer] Error duplicating view:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      this.showNotification(`Failed to duplicate view: ${errorMsg}`, 'error', 4000);
+    }
+  }
+
+  /**
+   * Handle duplicate dialog cancel
+   */
+  public onDuplicateCancel(): void {
+    this.showDuplicateDialog = false;
+    this.duplicateTargetViewId = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle duplicate from config panel (F-005)
+   * Duplicates the currently selected view
+   */
+  public onDuplicateFromPanel(): void {
+    if (this.selectedViewEntity?.ID) {
+      this.stateService.closeViewConfigPanel();
+      this.onDuplicateView(this.selectedViewEntity.ID);
+    }
+  }
+
+  /**
+   * Handle revert view request (F-007)
+   * Re-parses the saved view's GridState and resets modified flag
+   */
+  public async onRevertView(): Promise<void> {
+    if (!this.selectedViewEntity) return;
+
+    try {
+      // Re-parse the saved grid state from the view entity
+      const gridState = this.parseViewGridState(this.selectedViewEntity);
+      if (gridState) {
+        this.currentGridState = gridState;
+      }
+
+      // Reset modified flag
+      this.stateService.setViewModified(false);
+
+      // Refresh the viewer to apply the reverted state
+      await this.entityViewerRef?.loadData();
+
+      this.showNotification('View reverted to last saved state', 'info', 2500);
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('[DataExplorer] Error reverting view:', error);
+      this.showNotification('Failed to revert view', 'error', 3500);
+    }
+  }
+
+  /**
+   * Handle inline view name change from ViewHeader (F-002)
+   * Updates the view entity name and saves immediately
+   */
+  public async onViewNameChanged(newName: string): Promise<void> {
+    if (!this.selectedViewEntity || !newName.trim()) return;
+
+    try {
+      this.selectedViewEntity.Name = newName.trim();
+      const saved = await this.selectedViewEntity.Save();
+      if (saved) {
+        this.showNotification(`View renamed to "${newName.trim()}"`, 'success', 2500);
+        // Refresh the view selector to show the updated name
+        this.viewSelectorRef?.loadViews();
+      } else {
+        this.showNotification('Failed to rename view', 'error', 3500);
+      }
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('[DataExplorer] Error renaming view:', error);
+      this.showNotification('Failed to rename view', 'error', 3500);
     }
   }
 
