@@ -1,6 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Subject, Observable } from 'rxjs';
-import type { AudioWorkerResponse, AudioTurn } from './audio-messages';
+import type { AudioWorkerResponse, AudioTurn, AudioProcessRequest } from './audio-messages';
 import type { AudioModelConfig } from './audio-model-registry';
 
 @Injectable({ providedIn: 'root' })
@@ -68,7 +68,7 @@ export class AudioService implements OnDestroy {
     });
   }
 
-  ProcessAudio(audioBlob: Blob): void {
+  ProcessAudio(audioData: Float32Array): void {
     if (!this.worker || !this._IsReady.value) {
       console.error('Audio worker not ready');
       return;
@@ -79,8 +79,8 @@ export class AudioService implements OnDestroy {
 
     this.worker.postMessage({
       Type: 'audio:process',
-      AudioBlob: audioBlob,
-    });
+      AudioData: audioData,
+    } satisfies AudioProcessRequest);
   }
 
   Abort(): void {

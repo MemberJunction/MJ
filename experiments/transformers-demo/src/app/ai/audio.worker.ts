@@ -7,6 +7,7 @@ import {
   AutoModelForSpeechSeq2Seq,
   TextStreamer,
   InterruptableStoppingCriteria,
+  pipeline,
   env,
   type PreTrainedTokenizer,
   type PreTrainedModel,
@@ -21,9 +22,8 @@ let sttProcessor: any = null;
 let sttModel: any = null;
 let llmTokenizer: PreTrainedTokenizer | null = null;
 let llmModel: PreTrainedModel | null = null;
-let ttsProcessor: any = null;
-let ttsModel: any = null;
-let speakerEmbeddings: Float32Array | null = null;
+let ttsPipeline: any = null;
+let speakerEmbeddingsUrl: string | null = null;
 let stoppingCriteria: InterruptableStoppingCriteria | null = null;
 
 let currentConfig: AudioModelConfig | null = null;
@@ -81,21 +81,16 @@ async function loadModels(config: AudioModelConfig): Promise<void> {
     });
     stoppingCriteria = new InterruptableStoppingCriteria();
 
-    // Load TTS (SpeechT5) - using pipeline for simplicity
+    // Load TTS (SpeechT5) using pipeline API
+    // Force WASM for TTS - WebGPU has compatibility issues with SpeechT5
     post({ Type: 'progress', Stage: 'tts', Progress: 0 });
-
-    // For SpeechT5, we need processor and model
-    ttsProcessor = await AutoProcessor.from_pretrained(config.TTS.HuggingFaceId, {
+    ttsPipeline = await pipeline('text-to-speech', config.TTS.HuggingFaceId, {
+      dtype: 'fp32',
+      device: 'wasm',  // Use WASM (CPU) instead of WebGPU
       progress_callback: progressCallback('tts'),
     });
-
-    // Note: SpeechT5 uses AutoModelForTextToWaveform but we'll use a simpler approach
-    // Load speaker embeddings
-    if (config.TTS.SpeakerEmbeddingUrl) {
-      const response = await fetch(config.TTS.SpeakerEmbeddingUrl);
-      const buffer = await response.arrayBuffer();
-      speakerEmbeddings = new Float32Array(buffer);
-    }
+    // Store speaker embeddings URL for later use
+    speakerEmbeddingsUrl = config.TTS.SpeakerEmbeddingUrl ?? null;
 
     post({ Type: 'ready' });
   } catch (err: unknown) {
@@ -105,36 +100,14 @@ async function loadModels(config: AudioModelConfig): Promise<void> {
 }
 
 // ── STT Processing ─────────────────────────────────────
-async function transcribeAudio(audioBlob: Blob): Promise<string> {
+async function transcribeAudio(audioData: Float32Array): Promise<string> {
   if (!sttProcessor || !sttModel) {
     throw new Error('STT model not loaded');
   }
 
   try {
-    // Convert Blob to ArrayBuffer
-    const arrayBuffer = await audioBlob.arrayBuffer();
-
-    // Decode audio using Web Audio API (available in worker context with proper types)
-    // For workers, we need to use OfflineAudioContext
-    const audioContext = new OfflineAudioContext(1, 16000 * 30, 16000);
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-    // Extract mono channel as Float32Array
-    let audioData = audioBuffer.getChannelData(0);
-
-    // Whisper expects exactly 30 seconds of audio at 16kHz
-    const targetSamples = 16000 * 30; // 480,000 samples
-    const currentSamples = audioData.length;
-
-    if (currentSamples < targetSamples) {
-      // Pad with silence
-      const paddedData = new Float32Array(targetSamples);
-      paddedData.set(audioData);
-      audioData = paddedData;
-    } else if (currentSamples > targetSamples) {
-      // Truncate to 30 seconds
-      audioData = audioData.slice(0, targetSamples);
-    }
+    // Audio is already pre-processed in main thread
+    // (converted to 16kHz mono Float32Array, padded/truncated to 30s)
 
     // Process with Whisper
     const inputs = await sttProcessor(audioData);
@@ -208,8 +181,9 @@ async function generateLLMResponse(userMessage: string): Promise<string> {
 
 // ── TTS Synthesis ──────────────────────────────────────
 async function synthesizeSpeech(text: string): Promise<Blob> {
-  // For now, create a placeholder WAV with silence
-  // Full SpeechT5 integration would require more complex setup
+  if (!ttsPipeline) {
+    throw new Error('TTS pipeline not loaded');
+  }
 
   // Truncate text if too long (TTS works best with shorter text)
   const maxChars = 500;
@@ -220,19 +194,16 @@ async function synthesizeSpeech(text: string): Promise<Blob> {
   }
 
   try {
-    // Create a simple beep as placeholder
-    // In a full implementation, this would use SpeechT5 model
-    const sampleRate = 16000;
-    const duration = 1; // 1 second beep
-    const numSamples = sampleRate * duration;
-    const audioData = new Float32Array(numSamples);
+    // Generate speech using SpeechT5 pipeline
+    const result = await ttsPipeline(synthesisText, {
+      speaker_embeddings: speakerEmbeddingsUrl,
+    });
 
-    // Generate a 440Hz beep (placeholder for actual TTS)
-    const frequency = 440;
-    for (let i = 0; i < numSamples; i++) {
-      audioData[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate) * 0.3;
-    }
+    // result = { audio: Float32Array, sampling_rate: 16000 }
+    const audioData = result.audio;
+    const sampleRate = result.sampling_rate;
 
+    // Convert to WAV blob
     const wavBlob = createWavBlob(audioData, sampleRate);
     return wavBlob;
   } catch (err: unknown) {
@@ -284,12 +255,12 @@ function writeString(view: DataView, offset: number, string: string): void {
 }
 
 // ── Full Pipeline ──────────────────────────────────────
-async function processAudioTurn(audioBlob: Blob): Promise<void> {
+async function processAudioTurn(audioData: Float32Array): Promise<void> {
   try {
     currentTurn = { transcription: '', llmResponse: '', audioBlob: null };
 
     // Step 1: Transcribe
-    const transcription = await transcribeAudio(audioBlob);
+    const transcription = await transcribeAudio(audioData);
     currentTurn.transcription = transcription;
     post({ Type: 'transcription', Text: transcription });
 
@@ -327,7 +298,7 @@ self.onmessage = async (event: MessageEvent<AudioWorkerRequest>): Promise<void> 
       await loadModels(msg.Config);
       break;
     case 'audio:process':
-      await processAudioTurn(msg.AudioBlob);
+      await processAudioTurn(msg.AudioData);
       break;
     case 'audio:abort':
       stoppingCriteria?.interrupt();

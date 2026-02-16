@@ -104,6 +104,15 @@ import { BROWSER_CHAT_MODELS, type BrowserModelDefinition } from '../ai/model-re
           </select>
         </div>
 
+        <div class="device-selector">
+          <label for="device-select">Device:</label>
+          <select id="device-select" [(ngModel)]="SelectedDevice">
+            <option value="auto">Auto-detect</option>
+            <option value="webgpu">WebGPU (GPU - Fastest)</option>
+            <option value="wasm">WASM (CPU - Compatible)</option>
+          </select>
+        </div>
+
         <button (click)="LoadModel()" class="load-btn">Load Model</button>
         @if (ErrorMessage) {
           <p class="error">{{ ErrorMessage }}</p>
@@ -178,11 +187,11 @@ import { BROWSER_CHAT_MODELS, type BrowserModelDefinition } from '../ai/model-re
     .abort-btn { background: #ef4444; color: white; }
     .load-btn { background: #3b82f6; color: white; padding: 12px 32px; font-size: 16px; }
 
-    .model-selector {
+    .model-selector, .device-selector {
       display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
       justify-content: center;
     }
-    .model-selector select {
+    .model-selector select, .device-selector select {
       padding: 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
       font-size: 14px;
     }
@@ -212,6 +221,7 @@ export class ChatComponent implements OnInit {
   ActiveModelName = '';
   ActiveModelSizeMB = 0;
   SelectedModelId = BROWSER_CHAT_MODELS[0].Id;
+  SelectedDevice: 'auto' | 'webgpu' | 'wasm' = 'webgpu'; // Default to WebGPU for best performance
   AvailableModels = BROWSER_CHAT_MODELS;
 
   ngOnInit(): void {
@@ -274,7 +284,7 @@ export class ChatComponent implements OnInit {
 
   LoadModel(): void {
     const selected = BROWSER_CHAT_MODELS.find((m) => m.Id === this.SelectedModelId);
-    this.chatService.Initialize(selected);
+    this.chatService.Initialize(selected, this.SelectedDevice);
   }
 
   Send(): void {

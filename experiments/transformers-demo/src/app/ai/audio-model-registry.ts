@@ -24,7 +24,7 @@ export const AUDIO_MODEL_REGISTRY = {
     {
       Id: 'whisper-tiny',
       Name: 'Whisper Tiny',
-      HuggingFaceId: 'onnx-community/whisper-tiny',
+      HuggingFaceId: 'Xenova/whisper-tiny',
       RequiresWebGPU: false,
       ApproxSizeMB: 75,
       Category: 'stt' as const,
@@ -34,7 +34,7 @@ export const AUDIO_MODEL_REGISTRY = {
     {
       Id: 'whisper-base',
       Name: 'Whisper Base',
-      HuggingFaceId: 'onnx-community/whisper-base',
+      HuggingFaceId: 'Xenova/whisper-base',
       RequiresWebGPU: false,
       ApproxSizeMB: 140,
       Category: 'stt' as const,
@@ -44,7 +44,7 @@ export const AUDIO_MODEL_REGISTRY = {
     {
       Id: 'whisper-small',
       Name: 'Whisper Small',
-      HuggingFaceId: 'onnx-community/whisper-small',
+      HuggingFaceId: 'Xenova/whisper-small',
       RequiresWebGPU: true,
       ApproxSizeMB: 500,
       Category: 'stt' as const,
@@ -94,11 +94,11 @@ export const AUDIO_MODEL_REGISTRY = {
     {
       Id: 'speecht5',
       Name: 'SpeechT5',
-      HuggingFaceId: 'microsoft/speecht5_tts',
+      HuggingFaceId: 'Xenova/speecht5_tts',
       RequiresWebGPU: false,
       ApproxSizeMB: 120,
       Category: 'tts' as const,
-      SpeakerEmbeddingUrl: 'https://huggingface.co/datasets/Matthijs/cmu-arctic-xvectors/resolve/main/cmu_us_bdl_arctic-wav-arctic_a0009.bin',
+      SpeakerEmbeddingUrl: 'https://huggingface.co/datasets/Xenova/cmu-arctic-xvectors-extracted/resolve/main/cmu_us_bdl_arctic-wav-arctic_a0009.bin',
     },
   ],
 };

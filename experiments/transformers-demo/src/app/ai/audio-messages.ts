@@ -16,7 +16,7 @@ export interface AudioLoadRequest {
 
 export interface AudioProcessRequest {
   Type: 'audio:process';
-  AudioBlob: Blob;
+  AudioData: Float32Array;  // Pre-processed audio from main thread
 }
 
 export interface AudioAbortRequest {

@@ -546,9 +546,18 @@ export class AudioChatComponent implements OnInit {
         }
       };
 
-      this.mediaRecorder.onstop = () => {
+      this.mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-        this.audioService.ProcessAudio(audioBlob);
+
+        try {
+          // Process audio in main thread (Web Audio API available here)
+          const audioData = await this.processAudioBlob(audioBlob);
+          this.audioService.ProcessAudio(audioData);
+        } catch (err) {
+          console.error('Audio processing failed:', err);
+          this.ErrorMessage = 'Failed to process audio. Please try again.';
+        }
+
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -580,6 +589,57 @@ export class AudioChatComponent implements OnInit {
 
   DismissError(): void {
     this.ErrorMessage = '';
+  }
+
+  /**
+   * Process audio blob in main thread using Web Audio API
+   * Converts to Float32Array for Whisper model
+   */
+  private async processAudioBlob(audioBlob: Blob): Promise<Float32Array> {
+    // Convert Blob to ArrayBuffer
+    const arrayBuffer = await audioBlob.arrayBuffer();
+
+    // Decode audio using Web Audio API (only available in main thread)
+    const audioContext = new AudioContext();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    // Resample to 16kHz mono if needed
+    let audioData: Float32Array;
+
+    if (audioBuffer.sampleRate !== 16000 || audioBuffer.numberOfChannels !== 1) {
+      // Create offline context for resampling
+      const targetSampleRate = 16000;
+      const duration = audioBuffer.duration;
+      const targetLength = Math.ceil(duration * targetSampleRate);
+
+      const offlineContext = new OfflineAudioContext(1, targetLength, targetSampleRate);
+      const source = offlineContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(offlineContext.destination);
+      source.start();
+
+      const resampledBuffer = await offlineContext.startRendering();
+      audioData = resampledBuffer.getChannelData(0);
+    } else {
+      // Already correct format
+      audioData = audioBuffer.getChannelData(0);
+    }
+
+    // Whisper expects exactly 30 seconds of audio at 16kHz
+    const targetSamples = 16000 * 30; // 480,000 samples
+    const currentSamples = audioData.length;
+
+    if (currentSamples < targetSamples) {
+      // Pad with silence
+      const paddedData = new Float32Array(targetSamples);
+      paddedData.set(audioData);
+      return paddedData;
+    } else if (currentSamples > targetSamples) {
+      // Truncate to 30 seconds
+      return audioData.slice(0, targetSamples);
+    }
+
+    return audioData;
   }
 
   private subscribeToAudioService(): void {

@@ -64,7 +64,22 @@ async function loadModel(config: ModelConfig): Promise<void> {
 
     post({ Type: 'ready', ModelId: config.ModelId });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    // Handle both Error objects and numeric WebGPU error codes
+    let message: string;
+    if (err instanceof Error) {
+      message = err.message;
+    } else if (typeof err === 'number') {
+      // WebGPU error codes
+      message = `WebGPU error code ${err}. This may indicate:\n` +
+                `- Insufficient GPU memory for this model\n` +
+                `- WebGPU not properly initialized\n` +
+                `- Browser/driver limitations\n` +
+                `Try: (1) Refresh page, (2) Smaller model, or (3) Use WASM device`;
+    } else {
+      message = String(err);
+    }
+
+    console.error('Model loading failed:', err);
     post({ Type: 'error', Message: `Failed to load model: ${message}` });
   }
 }

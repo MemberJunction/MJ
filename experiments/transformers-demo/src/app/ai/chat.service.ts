@@ -45,7 +45,7 @@ export class ChatService implements OnDestroy {
     },
   ];
 
-  async Initialize(modelDef?: BrowserModelDefinition): Promise<void> {
+  async Initialize(modelDef?: BrowserModelDefinition, device: 'auto' | 'webgpu' | 'wasm' = 'auto'): Promise<void> {
     if (this.worker) return;
 
     const selectedModel = modelDef ?? (await SelectBestChatModel());
@@ -65,7 +65,7 @@ export class ChatService implements OnDestroy {
       Type: 'chat:load',
       Config: {
         ModelId: selectedModel.HuggingFaceId,
-        Device: 'auto',
+        Device: device,
         DType: selectedModel.DType,
         MaxNewTokens: selectedModel.MaxNewTokens,
       },
