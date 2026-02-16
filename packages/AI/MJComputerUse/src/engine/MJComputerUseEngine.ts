@@ -259,6 +259,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     /**
      * Resolve a PromptEntityRef to a full AIPromptEntityExtended.
      *
+     * Uses AIEngine's in-memory Prompts cache for fast lookup.
      * Looks up by PromptId first (if set), then by PromptName.
      * Returns undefined if the ref is not provided.
      * Throws if the ref is provided but the prompt is not found.
@@ -267,28 +268,19 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         ref: PromptEntityRef | undefined
     ): Promise<AIPromptEntityExtended | undefined> {
         if (!ref) return undefined;
+        if (!ref.PromptId && !ref.PromptName) return undefined;
 
-        const rv = new RunView();
+        // Ensure AIEngine metadata is loaded before accessing Prompts
+        await AIEngine.Instance.Config(false, this.contextUser);
 
-        let filter: string;
+        let prompt: AIPromptEntityExtended | undefined;
         if (ref.PromptId) {
-            filter = `ID='${ref.PromptId}'`;
+            prompt = AIEngine.Instance.Prompts.find(p => p.ID === ref.PromptId);
         } else if (ref.PromptName) {
-            filter = `Name='${ref.PromptName.replace(/'/g, "''")}'`;
-        } else {
-            return undefined;
+            prompt = AIEngine.Instance.Prompts.find(p => p.Name === ref.PromptName);
         }
 
-        const result = await rv.RunView<AIPromptEntityExtended>(
-            {
-                EntityName: 'AI Prompts',
-                ExtraFilter: filter,
-                ResultType: 'entity_object',
-            },
-            this.contextUser
-        );
-
-        if (!result.Success || !result.Results.length) {
+        if (!prompt) {
             const identifier = ref.PromptId ?? ref.PromptName;
             throw new Error(
                 `AI Prompt "${identifier}" not found. ` +
@@ -296,7 +288,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             );
         }
 
-        return result.Results[0];
+        return prompt;
     }
 
     /**
