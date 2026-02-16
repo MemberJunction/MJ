@@ -230,12 +230,12 @@ describe('Type interfaces shape validation', () => {
 
   it('should allow creating EntityDependency with Set', () => {
     const dep: EntityDependency = {
-      entityName: 'Users',
+      entityName: 'MJ: Users',
       dependsOn: new Set(['Roles', 'Departments']),
       file: '/path/to/users.json',
     };
 
-    expect(dep.entityName).toBe('Users');
+    expect(dep.entityName).toBe('MJ: Users');
     expect(dep.dependsOn.size).toBe(2);
     expect(dep.dependsOn.has('Roles')).toBe(true);
   });

@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { RunView } from '@memberjunction/core';
-import { ScheduledJobRunEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { BaseJobAction } from './BaseJobAction';
 
 /**
@@ -72,7 +72,7 @@ export class GetScheduledJobStatisticsAction extends BaseJobAction {
 
             // Load all job runs within the time period
             const rv = new RunView();
-            const result = await rv.RunView<ScheduledJobRunEntity>({
+            const result = await rv.RunView<MJScheduledJobRunEntity>({
                 EntityName: 'MJ: Scheduled Job Runs',
                 ExtraFilter: filterExpression,
                 OrderBy: 'StartedAt DESC',

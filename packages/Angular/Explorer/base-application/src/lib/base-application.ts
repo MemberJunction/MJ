@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
-import { DashboardEngine, DashboardUserPreferenceEntity } from '@memberjunction/core-entities';
+import { DashboardEngine, MJDashboardUserPreferenceEntity } from '@memberjunction/core-entities';
 import { NavItem } from './interfaces/nav-item.interface';
 import { TabRequest } from './interfaces/tab-request.interface';
 
@@ -212,9 +212,9 @@ export class BaseApplication {
    * 2. System defaults (UserID is null) if no user preferences exist
    */
   private findBestPreference(
-    preferences: Array<DashboardUserPreferenceEntity>,
+    preferences: Array<MJDashboardUserPreferenceEntity>,
     currentUserId: string
-  ): DashboardUserPreferenceEntity | null {
+  ): MJDashboardUserPreferenceEntity | null {
     // Sort by DisplayOrder
     const sorted = [...preferences].sort((a, b) => a.DisplayOrder - b.DisplayOrder);
 

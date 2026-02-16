@@ -26,6 +26,14 @@ module.exports = {
   // Default excludes __mj since end-users shouldn't modify core entities
   excludeSchemas: ['sys', 'staging'],
 
+  settings: [
+    { name: 'mj_core_schema', value: '__mj' },
+    { name: 'skip_database_generation', value: false },
+    { name: 'recompile_mj_views', value: true },
+    { name: 'auto_index_foreign_keys', value: true },
+  ],
+
+
   // Custom SQL scripts specific to this monorepo
   customSQLScripts: [
     {

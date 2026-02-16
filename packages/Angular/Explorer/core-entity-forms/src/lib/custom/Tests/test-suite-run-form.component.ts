@@ -2,12 +2,12 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, Vi
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { TestSuiteRunEntity, TestSuiteEntity, TestRunEntity, TestRunFeedbackEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJTestSuiteRunEntity, MJTestSuiteEntity, MJTestRunEntity, MJTestRunFeedbackEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
-import { TestSuiteRunFormComponent } from '../../generated/Entities/TestSuiteRun/testsuiterun.form.component';
+import { MJTestSuiteRunFormComponent } from '../../generated/Entities/MJTestSuiteRun/mjtestsuiterun.form.component';
 import {
   TestingDialogService,
   TagsHelper,
@@ -32,8 +32,8 @@ const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
   styleUrls: ['./test-suite-run-form.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent implements OnInit, OnDestroy {
-  public override record!: TestSuiteRunEntity;
+export class TestSuiteRunFormComponentExtended extends MJTestSuiteRunFormComponent implements OnInit, OnDestroy {
+  public override record!: MJTestSuiteRunEntity;
 
   private destroy$ = new Subject<void>();
 
@@ -49,9 +49,9 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
   autoRefreshEnabled = false;
 
   // Related entities
-  testSuite: TestSuiteEntity | null = null;
-  testRuns: TestRunEntity[] = [];
-  feedbacks: Map<string, TestRunFeedbackEntity> = new Map();
+  testSuite: MJTestSuiteEntity | null = null;
+  testRuns: MJTestRunEntity[] = [];
+  feedbacks: Map<string, MJTestRunFeedbackEntity> = new Map();
 
   // Tags
   tags: string[] = [];
@@ -73,7 +73,7 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
   // Keyboard shortcuts
   keyboardShortcutsEnabled = true;
   showShortcuts = false; // Hidden by default
-  private shortcutsSettingEntity: UserSettingEntity | null = null;
+  private shortcutsSettingEntity: MJUserSettingEntity | null = null;
   private metadata = new Metadata();
 
   // Evaluation system
@@ -185,7 +185,7 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
       // Load test suite
       if (this.record.SuiteID) {
         const md = new Metadata();
-        const suite = await md.GetEntityObject<TestSuiteEntity>('MJ: Test Suites');
+        const suite = await md.GetEntityObject<MJTestSuiteEntity>('MJ: Test Suites');
         if (suite && await suite.Load(this.record.SuiteID)) {
           this.testSuite = suite;
         }
@@ -214,7 +214,7 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TestRunEntity>({
+      const result = await rv.RunView<MJTestRunEntity>({
         EntityName: 'MJ: Test Runs',
         ExtraFilter: `TestSuiteRunID='${this.record.ID}'`,
         OrderBy: 'Sequence ASC, StartedAt ASC',
@@ -469,7 +469,7 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
     this.cdr.markForCheck();
   }
 
-  getFilteredTestRuns(): TestRunEntity[] {
+  getFilteredTestRuns(): MJTestRunEntity[] {
     if (!this.runStatusFilter) return this.testRuns;
     return this.testRuns.filter(run => run.Status === this.runStatusFilter);
   }
@@ -493,7 +493,7 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
       if (!testRunIds) return;
 
       const rv = new RunView();
-      const result = await rv.RunView<TestRunFeedbackEntity>({
+      const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `TestRunID IN (${testRunIds})`,
         ResultType: 'entity_object'
@@ -611,7 +611,7 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
       let feedback = this.feedbacks.get(this.expandedRunId);
 
       if (!feedback) {
-        feedback = await md.GetEntityObject<TestRunFeedbackEntity>('MJ: Test Run Feedbacks', currentUser);
+        feedback = await md.GetEntityObject<MJTestRunFeedbackEntity>('MJ: Test Run Feedbacks', currentUser);
         feedback.TestRunID = this.expandedRunId;
         feedback.ReviewerUserID = currentUser.ID;
       }
@@ -669,7 +669,7 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
   // Run Tags
   // ===========================
 
-  getRunTags(run: TestRunEntity): string[] {
+  getRunTags(run: MJTestRunEntity): string[] {
     return TagsHelper.parseTags(run.Tags);
   }
 
@@ -716,7 +716,7 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
         if (setting) {
           this.shortcutsSettingEntity = setting;
         } else {
-          this.shortcutsSettingEntity = await this.metadata.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+          this.shortcutsSettingEntity = await this.metadata.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
           this.shortcutsSettingEntity.UserID = userId;
           this.shortcutsSettingEntity.Setting = SHORTCUTS_SETTINGS_KEY;
         }

@@ -122,7 +122,7 @@ describe('EntitySubClassGeneratorBase', () => {
     describe('generateEntitySubClass', () => {
         it('should return empty string for entity with no primary keys', async () => {
             const entity = {
-                Name: 'TestEntity',
+                Name: 'MJTestEntity',
                 PrimaryKeys: [],
                 Fields: []
             };

@@ -1,7 +1,7 @@
 import { UserInfo } from '@memberjunction/core';
-import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
+import { MJContentSourceEntity, MJContentItemEntity } from '@memberjunction/core-entities';
 
 export abstract class AutotagBase {
-    public abstract SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]>;
+    public abstract SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]>;
     public abstract Autotag(contextUser: UserInfo): Promise<void>;
 }

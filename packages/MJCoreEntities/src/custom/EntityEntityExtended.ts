@@ -1,14 +1,14 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseEntity } from '@memberjunction/core';
-import { EntityEntity } from '../generated/entity_subclasses';
+import { MJEntityEntity } from '../generated/entity_subclasses';
 
 /**
- * Extended EntityEntity class that provides automatic handling of Description field updates.
+ * Extended MJEntityEntity class that provides automatic handling of Description field updates.
  * When a user manually updates the Description, it automatically sets AutoUpdateDescription to 1
  * to prevent CodeGen from overwriting the custom description.
  */
-@RegisterClass(BaseEntity, 'Entities')
-export class EntityEntityExtended extends EntityEntity {
+@RegisterClass(BaseEntity, 'MJ: Entities')
+export class EntityEntityExtended extends MJEntityEntity {
     /**
      * Override Set to handle Description field changes
      */

@@ -31,11 +31,11 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  LibraryEntity: class {
+  MJLibraryEntity: class {
     ID = '';
     Name = '';
   },
-  LibraryItemEntity: class {
+  MJLibraryItemEntity: class {
     ID = '';
     Name = '';
     Type = '';

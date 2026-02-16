@@ -6,7 +6,7 @@ import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 
 import { ERDCompositeComponent, ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
-import { ResourceData, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 
 /** Settings key for ERD state persistence */
 const ERD_SETTINGS_KEY = 'MJ.Admin.Entity.ERD';
@@ -35,7 +35,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   private userStateChangeSubject = new Subject<ERDCompositeState>();
   private hasLoadedUserState = false;
   private metadata = new Metadata();
-  private userSettingEntity: UserSettingEntity | null = null;
+  private userSettingEntity: MJUserSettingEntity | null = null;
 
   ngAfterViewInit(): void {
     // Setup debounced state persistence to MJ: User Settings
@@ -161,7 +161,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
         if (setting) {
           this.userSettingEntity = setting;
         } else {
-          this.userSettingEntity = await this.metadata.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+          this.userSettingEntity = await this.metadata.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
           this.userSettingEntity.UserID = userId;
           this.userSettingEntity.Setting = ERD_SETTINGS_KEY;
         }

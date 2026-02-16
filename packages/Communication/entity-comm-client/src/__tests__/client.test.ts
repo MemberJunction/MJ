@@ -25,13 +25,13 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-    CommunicationProviderMessageTypeEntity: class {},
-    EntityCommunicationFieldEntity: class {},
-    EntityCommunicationMessageTypeEntity: class {},
-    ListDetailEntityType: class {},
-    ListEntityType: class {},
+    MJCommunicationProviderMessageTypeEntity: class {},
+    MJEntityCommunicationFieldEntity: class {},
+    MJEntityCommunicationMessageTypeEntity: class {},
+    MJListDetailEntityType: class {},
+    MJListEntityType: class {},
     TemplateEntityExtended: class {},
-    TemplateParamEntity: class {},
+    MJTemplateParamEntity: class {},
 }));
 
 vi.mock('@memberjunction/global', () => ({

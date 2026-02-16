@@ -1,5 +1,5 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
-import { TemplateContentEntity, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
+import { MJTemplateContentEntity, TemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
@@ -145,7 +145,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * @param templateContent the template content item (within the template)  
      * @param data 
      */
-    public async RenderTemplate(templateEntity: TemplateEntityExtended, templateContent: TemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: TemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -300,7 +300,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
         const params = templateEntity.GetParametersForContent(contentId);
         
         // Group parameters by name to handle precedence
-        const paramsByName = new Map<string, TemplateParamEntity>();
+        const paramsByName = new Map<string, MJTemplateParamEntity>();
         
         // First add global parameters
         params.filter(p => !(p as any).TemplateContentID).forEach(p => {

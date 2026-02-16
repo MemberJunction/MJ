@@ -82,7 +82,7 @@ vi.mock('@memberjunction/core', () => {
     RunQueriesWithCacheCheckResponse: vi.fn(),
     RunQueryWithCacheCheckResult: vi.fn(),
     KeyValuePair: vi.fn(),
-    getGraphQLTypeNameBase: vi.fn().mockReturnValue('TestEntity'),
+    getGraphQLTypeNameBase: vi.fn().mockReturnValue('MJTestEntity'),
     AggregateExpression: vi.fn(),
     InMemoryLocalStorageProvider: vi.fn(),
     SetProvider: vi.fn(),

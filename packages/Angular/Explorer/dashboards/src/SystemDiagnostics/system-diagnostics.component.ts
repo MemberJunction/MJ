@@ -5,7 +5,7 @@ import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { CompositeKey, TelemetryManager, TelemetryEvent, TelemetryPattern, TelemetryInsight, TelemetryCategory, TelemetryParamsUnion, isSingleRunViewParams, isSingleRunQueryParams, isBatchRunViewParams } from '@memberjunction/core';
-import { ResourceData, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import * as d3 from 'd3';
@@ -4787,7 +4787,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
     // User settings persistence
     private metadata = new Metadata();
-    private userSettingEntity: UserSettingEntity | null = null;
+    private userSettingEntity: MJUserSettingEntity | null = null;
     private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
     private settingsLoaded = false;
 
@@ -7512,7 +7512,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 if (setting) {
                     this.userSettingEntity = setting;
                 } else {
-                    this.userSettingEntity = await this.metadata.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+                    this.userSettingEntity = await this.metadata.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
                     this.userSettingEntity.UserID = userId;
                     this.userSettingEntity.Setting = SYSTEM_DIAGNOSTICS_SETTINGS_KEY;
                 }

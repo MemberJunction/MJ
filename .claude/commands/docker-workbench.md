@@ -66,7 +66,10 @@ docker compose -f docker/workbench/docker-compose.yml logs --tail=50
 ## Important Notes
 
 - The `.env` file in `docker/workbench/` must exist before starting. If it doesn't, copy from `.env.example`.
+- Pre-fill `TEST_AUTH0_DOMAIN`, `TEST_AUTH0_CLIENT_ID`, `TEST_AUTH0_CLIENT_SECRET`, `TEST_UID`, `TEST_PWD` in `.env` for fully automated Auth0 setup (no interactive prompts).
+- Host ports default to 4000 (MJAPI) and 4200 (Explorer). Override with `MJAPI_HOST_PORT` and `EXPLORER_HOST_PORT` in `.env`.
 - SQL Server data persists in the `sql-claude-data` Docker volume across restarts.
 - Claude settings persist in the `claude-settings` Docker volume.
 - The workbench auto-updates Claude Code and MJ CLI on every container start.
 - SA password is `Claude2Sql99` (docker-internal only, disposable environment).
+- Inside the container: `db-bootstrap` to create DB + run migrations, `mjapi` / `mjui` to start the MJ stack, `pwopen` to launch headless browser.

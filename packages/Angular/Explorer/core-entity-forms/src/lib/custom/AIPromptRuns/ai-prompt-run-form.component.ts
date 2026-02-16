@@ -2,9 +2,9 @@ import { Component, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionS
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AIPromptRunEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import { AIModelEntity } from "@memberjunction/core-entities";
+import { MJAIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
-import { AIPromptRunFormComponent } from '../../generated/Entities/AIPromptRun/aipromptrun.form.component';
+import { MJAIPromptRunFormComponent } from '../../generated/Entities/MJAIPromptRun/mjaipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { TestHarnessWindowService } from '@memberjunction/ng-ai-test-harness';
@@ -18,12 +18,12 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
     styleUrls: ['./ai-prompt-run-form.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit, OnDestroy {
+export class AIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
     public record!: AIPromptRunEntityExtended;
     
     // Related entities
     public prompt: AIPromptEntityExtended | null = null;
-    public model: AIModelEntity | null = null;
+    public model: MJAIModelEntity | null = null;
     public parentRun: AIPromptRunEntityExtended | null = null;
     public childRuns: AIPromptRunEntityExtended[] = [];
     
@@ -152,7 +152,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             
             // Load prompt
             if (this.record.PromptID) {
-                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
+                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts');
                 if (this.prompt) {
                     await this.prompt.Load(this.record.PromptID);
                 }
@@ -160,7 +160,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             
             // Load model
             if (this.record.ModelID) {
-                this.model = await md.GetEntityObject<AIModelEntity>('AI Models');
+                this.model = await md.GetEntityObject<MJAIModelEntity>('MJ: AI Models');
                 if (this.model) {
                     await this.model.Load(this.record.ModelID);
                 }

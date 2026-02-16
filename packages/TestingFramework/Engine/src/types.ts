@@ -7,9 +7,9 @@
 
 import { UserInfo } from '@memberjunction/core';
 import {
-  TestEntity,
-  TestRunEntity,
-  AIAgentRunEntity
+  MJTestEntity,
+  MJTestRunEntity,
+  MJAIAgentRunEntity
 } from '@memberjunction/core-entities';
 import { IOracle } from './oracles/IOracle';
 
@@ -57,12 +57,12 @@ export interface DriverExecutionContext {
   /**
    * Test definition
    */
-  test: TestEntity;
+  test: MJTestEntity;
 
   /**
    * Test run entity (for bidirectional linking)
    */
-  testRun: TestRunEntity;
+  testRun: MJTestRunEntity;
 
   /**
    * User context for data access
@@ -99,7 +99,7 @@ export interface TurnResult {
   /**
    * Agent run for this turn
    */
-  agentRun: AIAgentRunEntity;
+  agentRun: MJAIAgentRunEntity;
 
   /**
    * Input payload for this turn
@@ -239,7 +239,7 @@ export interface OracleInput {
   /**
    * The test being evaluated
    */
-  test: TestEntity;
+  test: MJTestEntity;
 
   /**
    * Expected output from test definition

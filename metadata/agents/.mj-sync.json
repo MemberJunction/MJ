@@ -1,5 +1,5 @@
 {
-  "entity": "AI Agents",
+  "entity": "MJ: AI Agents",
   "filePattern": "**/.*.json",
   "defaults": {
     "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop"

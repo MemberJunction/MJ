@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit, ChangeDetectorRef } from '@angular/core';
-import { TemplateEntity, TemplateContentEntity, TemplateCategoryEntity } from '@memberjunction/core-entities';
+import { MJTemplateEntity, MJTemplateContentEntity, MJTemplateCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { TemplateFormComponent } from '../../generated/Entities/Template/template.form.component';
+import { MJTemplateFormComponent } from '../../generated/Entities/MJTemplate/mjtemplate.form.component';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
@@ -13,19 +13,19 @@ import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
 
-@RegisterClass(BaseFormComponent, 'Templates') 
+@RegisterClass(BaseFormComponent, 'MJ: Templates') 
 @Component({
   standalone: false,
     selector: 'mj-templates-form',
     templateUrl: './templates-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './templates-form.component.css']
 })
-export class TemplatesFormExtendedComponent extends TemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
-    public record!: TemplateEntity;
-    public templateContents: TemplateContentEntity[] = [];
+export class TemplatesFormExtendedComponent extends MJTemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
+    public record!: MJTemplateEntity;
+    public templateContents: MJTemplateContentEntity[] = [];
     public selectedContentIndex: number = 0;
     public isAddingNewContent: boolean = false;
-    public newTemplateContent: TemplateContentEntity | null = null;
+    public newTemplateContent: MJTemplateContentEntity | null = null;
     public hasUnsavedChanges: boolean = false;
     public templateInfoExpanded: boolean = true;
     public templateContentsExpanded: boolean = true;
@@ -78,8 +78,8 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         if (this.record && this.record.ID) {
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<TemplateContentEntity>({
-                    EntityName: 'Template Contents',
+                const results = await rv.RunView<MJTemplateContentEntity>({
+                    EntityName: 'MJ: Template Contents',
                     ExtraFilter: `TemplateID='${this.record.ID}'`,
                     OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
                     ResultType: 'entity_object'
@@ -109,7 +109,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
 
     async createDefaultTemplateContent() {
         const md = new Metadata();
-        const defaultContent = await md.GetEntityObject<TemplateContentEntity>('Template Contents');
+        const defaultContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
         defaultContent.TemplateID = this.record.ID;
         defaultContent.Priority = 1;
         defaultContent.IsActive = true;
@@ -149,7 +149,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         try {
             const rv = new RunView();
             const results = await rv.RunView({
-                EntityName: 'Template Categories' 
+                EntityName: 'MJ: Template Categories' 
             });
             
             this.categoryOptions = [
@@ -210,7 +210,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
             try {
                 // Create new category with trimmed name
                 const md = new Metadata();
-                const newCategory = await md.GetEntityObject<TemplateCategoryEntity>('Template Categories');
+                const newCategory = await md.GetEntityObject<MJTemplateCategoryEntity>('MJ: Template Categories');
                 newCategory.Name = value.trim();
                 newCategory.UserID = this.record.UserID || md.CurrentUser.ID;
                 const saved = await newCategory.Save();
@@ -244,7 +244,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
 
     async addNewTemplateContent() {
         const md = new Metadata();
-        this.newTemplateContent = await md.GetEntityObject<TemplateContentEntity>('Template Contents');
+        this.newTemplateContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
         this.newTemplateContent.TemplateID = this.record.ID;
         this.newTemplateContent.Priority = this.templateContents.length + 1;
         this.newTemplateContent.IsActive = true;
@@ -314,7 +314,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         }
     }
 
-    get currentTemplateContent(): TemplateContentEntity | null {
+    get currentTemplateContent(): MJTemplateContentEntity | null {
         if (this.isAddingNewContent) {
             return this.newTemplateContent;
         }
@@ -440,7 +440,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                 try {
                     // Create new category with trimmed name
                     const md = new Metadata();
-                    const newCategory = await md.GetEntityObject<TemplateCategoryEntity>('Template Categories');
+                    const newCategory = await md.GetEntityObject<MJTemplateCategoryEntity>('MJ: Template Categories');
                     newCategory.Name = this.record.CategoryID.trim(); // CategoryID contains the new category name, trim it
                     newCategory.UserID = this.record.UserID || md.CurrentUser.ID;  
                     const saved = await newCategory.Save();
@@ -575,7 +575,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     /**
      * Handles template content changes from the shared editor
      */
-    public onSharedTemplateContentChange(content: TemplateContentEntity[]) {
+    public onSharedTemplateContentChange(content: MJTemplateContentEntity[]) {
         this.templateContents = content;
         this.updateUnsavedChangesFlag();
     }
@@ -583,7 +583,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     /**
      * Handles template run requests from the shared editor
      */
-    public onSharedTemplateRun(template: TemplateEntity) {
+    public onSharedTemplateRun(template: MJTemplateEntity) {
         this.runTemplate();
     }
 

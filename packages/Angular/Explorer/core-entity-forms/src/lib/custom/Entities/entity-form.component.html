@@ -28,6 +28,11 @@
               <span class="status-badge isa-badge parent-type">
                 <i class="fa-solid fa-sitemap"></i> {{ ChildEntities.length }} child type{{ ChildEntities.length !== 1 ? 's' : '' }}
               </span>
+              @if (HasOverlappingSubtypes) {
+                <span class="status-badge isa-badge overlapping" title="Multiple child types can coexist for a single parent record">
+                  <i class="fa-solid fa-clone"></i> Overlapping Subtypes
+                </span>
+              }
             }
           </div>
           @if (IsChildType) {
@@ -265,7 +270,7 @@
                     <!-- Sibling Types -->
                     @if (SiblingEntities.length > 0) {
                       <div class="isa-siblings">
-                        <div class="isa-chain-label">Sibling Types (disjoint under {{ ParentChain[0]?.Name }})</div>
+                        <div class="isa-chain-label">Sibling Types ({{ ParentChain[0]?.AllowMultipleSubtypes ? 'overlapping' : 'disjoint' }} under {{ ParentChain[0]?.Name }})</div>
                         <div class="isa-child-list">
                           @for (sibling of SiblingEntities; track sibling.ID) {
                             <span class="isa-sibling-chip clickable" (click)="NavigateToEntity(sibling)" [title]="'Navigate to ' + sibling.Name">

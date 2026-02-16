@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock dependencies
 vi.mock('@memberjunction/core-entities', () => ({
-    ActionFilterEntity: class {},
+    MJActionFilterEntity: class {},
 }));
 vi.mock('@memberjunction/actions-base', () => ({
     RunActionParams: class {},

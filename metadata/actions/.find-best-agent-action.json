@@ -5,12 +5,12 @@
       "Description": "Finds the best-matching AI agents for a given task using embedding-based semantic search. Returns agents ranked by similarity score.",
       "DriverClass": "Find Candidate Agents",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "Status": "Active",
       "IconClass": "fa-solid fa-bullseye"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -160,7 +160,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -242,8 +242,8 @@
       "ID": "EF610103-E48D-4D9C-8DA2-1CF5B05F8AB6"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:18.012Z",
-      "checksum": "f52817c412bd46afa0c5bae8bf21099137e10ff6ae65abc90d1c2c4e524b28da"
+      "lastModified": "2026-02-13T21:09:05.039Z",
+      "checksum": "f6bd99394d6b01d9d5ff41e1a26f23c4068f7cbc07c5839830236ae52e20ec6b"
     }
   }
 ]

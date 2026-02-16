@@ -1,8 +1,8 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
-import { TestRubricEntity } from '@memberjunction/core-entities';
+import { MJTestRubricEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { TestRubricFormComponent } from '../../generated/Entities/TestRubric/testrubric.form.component';
+import { MJTestRubricFormComponent } from '../../generated/Entities/MJTestRubric/mjtestrubric.form.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Rubrics')
 @Component({
@@ -57,6 +57,6 @@ import { TestRubricFormComponent } from '../../generated/Entities/TestRubric/tes
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestRubricFormComponentExtended extends TestRubricFormComponent {
-  public override record!: TestRubricEntity;
+export class TestRubricFormComponentExtended extends MJTestRubricFormComponent {
+  public override record!: MJTestRubricEntity;
 }

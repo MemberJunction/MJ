@@ -48,6 +48,7 @@
       "Bash(pkill:*)",
       "Bash(lsof:*)",
       "Bash(rg:*)",
+      "Bash(playwright-cli:*)",
       "Bash(NODE_OPTIONS:*)",
       "Bash(DEBUG:*)"
     ],

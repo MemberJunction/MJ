@@ -87,14 +87,14 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  AIModelEntity: vi.fn(),
-  DuplicateRunDetailEntity: vi.fn(),
-  DuplicateRunDetailMatchEntity: vi.fn(),
-  DuplicateRunEntity: vi.fn(),
-  EntityDocumentEntity: vi.fn(),
-  ListDetailEntity: vi.fn(),
-  ListEntity: vi.fn(),
-  VectorDatabaseEntity: vi.fn(),
+  MJAIModelEntity: vi.fn(),
+  MJDuplicateRunDetailEntity: vi.fn(),
+  MJDuplicateRunDetailMatchEntity: vi.fn(),
+  MJDuplicateRunEntity: vi.fn(),
+  MJEntityDocumentEntity: vi.fn(),
+  MJListDetailEntity: vi.fn(),
+  MJListEntity: vi.fn(),
+  MJVectorDatabaseEntity: vi.fn(),
 }));
 
 vi.mock('@memberjunction/ai-vectors', () => {

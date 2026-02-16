@@ -3,7 +3,6 @@ import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, Application
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, Subscription } from 'rxjs';
-import { map } from 'rxjs/operators';
 
 /**
  * System application ID for non-app-specific resources (fallback only)
@@ -131,22 +130,15 @@ export class NavigationService implements OnDestroy {
    * Set up global keyboard event listeners to track shift key state
    */
   private setupGlobalShiftKeyDetection(): void {
-    // Track shift key down
-    const keyDown$ = fromEvent<KeyboardEvent>(document, 'keydown').pipe(
-      map(event => event.shiftKey)
-    );
-
-    // Track shift key up
-    const keyUp$ = fromEvent<KeyboardEvent>(document, 'keyup').pipe(
-      map(event => event.shiftKey)
-    );
-
+    // Track shift key via mousedown events (capture phase) instead of keydown/keyup.
+    // This is more reliable because:
+    // 1. MouseEvent.shiftKey always reflects the actual modifier state at click time
+    // 2. No risk of "stuck" state from missed keyup events (focus loss, tab switch, etc.)
+    // 3. Navigation is always triggered by a click, so the shift state is read
+    //    at exactly the right moment
     this.subscriptions.push(
-      keyDown$.subscribe(shiftKey => {
-        this.shiftKeyPressed = shiftKey;
-      }),
-      keyUp$.subscribe(shiftKey => {
-        this.shiftKeyPressed = shiftKey;
+      fromEvent<MouseEvent>(document, 'mousedown', { capture: true }).subscribe(event => {
+        this.shiftKeyPressed = event.shiftKey;
       })
     );
   }
@@ -331,7 +323,7 @@ export class NavigationService implements OnDestroy {
       ApplicationId: appId,
       Title: viewName,
       Configuration: {
-        resourceType: 'User Views',
+        resourceType: 'MJ: User Views',
         viewId,
         recordId: viewId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
@@ -474,7 +466,7 @@ export class NavigationService implements OnDestroy {
       ApplicationId: appId,
       Title: `${entityName}${filterSuffix}`,
       Configuration: {
-        resourceType: 'User Views',
+        resourceType: 'MJ: User Views',
         Entity: entityName,
         ExtraFilter: extraFilter,
         isDynamic: true,

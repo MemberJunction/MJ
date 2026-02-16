@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import {  
-    ArtifactTypeEntity
+import {
+    MJArtifactTypeEntity
 } from "../generated/entity_subclasses";
 
 /**
@@ -14,7 +14,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
        return super.getInstance<ArtifactMetadataEngine>();
     }
 
-    private _artifactTypes: ArtifactTypeEntity[];
+    private _artifactTypes: MJArtifactTypeEntity[];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
@@ -28,14 +28,14 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
         await this.Load(c, provider, forceRefresh, contextUser);
     }
 
-    public get ArtifactTypes(): ArtifactTypeEntity[] {
+    public get ArtifactTypes(): MJArtifactTypeEntity[] {
         return this._artifactTypes;
     }
 
     /**
      * Finds an artifact type on a case-insensitive match of name
      */
-    public FindArtifactType(name: string): ArtifactTypeEntity | undefined {
+    public FindArtifactType(name: string): MJArtifactTypeEntity | undefined {
         if (!this._artifactTypes || !name) {
             return undefined;
         }

@@ -8,6 +8,7 @@
     "DefaultSequence": 1,
     "Status": "Active",
     "NavigationStyle": "Both",
+    "HideNavBarIconWhenActive": true,
     "TopNavLocation": "Left of User Menu",
     "DefaultNavItems": [
       {
@@ -34,7 +35,7 @@
     ]
   },
   "relatedEntities": {
-    "Application Entities": []
+    "MJ: Application Entities": []
   },
   "primaryKey": {
     "ID": "7A873E1A-692E-43FA-97F8-57D8161A985C"

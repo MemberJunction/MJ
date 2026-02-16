@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, from, combineLatest } from 'rxjs';
 import { switchMap, shareReplay, tap } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { ScheduledJobEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 
 export interface SchedulingKPIs {
   totalActiveJobs: number;
@@ -197,9 +197,9 @@ export class SchedulingInstrumentationService {
       }
     ]);
 
-    const jobs = jobsResult.Results as ScheduledJobEntity[];
-    const runs24h = runsResult.Results as ScheduledJobRunEntity[];
-    const runs7d = runs7dResult.Results as ScheduledJobRunEntity[];
+    const jobs = jobsResult.Results as MJScheduledJobEntity[];
+    const runs24h = runsResult.Results as MJScheduledJobRunEntity[];
+    const runs7d = runs7dResult.Results as MJScheduledJobRunEntity[];
 
     const jobsDueInNextHour = jobs.filter(j => {
       if (!j.NextRunAt) return false;
@@ -230,7 +230,7 @@ export class SchedulingInstrumentationService {
     };
   }
 
-  private extractCostFromRun(run: ScheduledJobRunEntity): number {
+  private extractCostFromRun(run: MJScheduledJobRunEntity): number {
     if (!run.Details) return 0;
     try {
       const details = JSON.parse(run.Details);
@@ -246,7 +246,7 @@ export class SchedulingInstrumentationService {
     const recentTime = new Date(now.getTime() - 5 * 60 * 1000);
 
     const rv = new RunView();
-    const result = await rv.RunView<ScheduledJobRunEntity>({
+    const result = await rv.RunView<MJScheduledJobRunEntity>({
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${recentTime.toISOString()}'`,
       OrderBy: 'StartedAt DESC',
@@ -263,7 +263,7 @@ export class SchedulingInstrumentationService {
     const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     const rv = new RunView();
-    const result = await rv.RunView<ScheduledJobEntity>({
+    const result = await rv.RunView<MJScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
       ExtraFilter: `Status='Active' AND NextRunAt IS NOT NULL AND NextRunAt >= '${now.toISOString()}' AND NextRunAt <= '${next24Hours.toISOString()}'`,
       OrderBy: 'NextRunAt ASC',
@@ -287,7 +287,7 @@ export class SchedulingInstrumentationService {
     const { start, end } = this._dateRange$.value;
 
     const rv = new RunView();
-    const result = await rv.RunView<ScheduledJobRunEntity>({
+    const result = await rv.RunView<MJScheduledJobRunEntity>({
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
       OrderBy: 'StartedAt DESC',
@@ -304,7 +304,7 @@ export class SchedulingInstrumentationService {
     const buckets = this.createTimeBuckets(start, end);
 
     const rv = new RunView();
-    const result = await rv.RunView<ScheduledJobRunEntity>({
+    const result = await rv.RunView<MJScheduledJobRunEntity>({
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
       ResultType: 'entity_object'
@@ -333,7 +333,7 @@ export class SchedulingInstrumentationService {
   // ── Job Statistics ────────────────────────────────────────
   private async loadJobStatistics(): Promise<JobStatistics[]> {
     const rv = new RunView();
-    const result = await rv.RunView<ScheduledJobEntity>({
+    const result = await rv.RunView<MJScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
       OrderBy: 'Name ASC',
       ResultType: 'entity_object'
@@ -389,9 +389,9 @@ export class SchedulingInstrumentationService {
       }
     ]);
 
-    const types = typesResult.Results as ScheduledJobTypeEntity[];
-    const allJobs = jobsResult.Results as ScheduledJobEntity[];
-    const allRuns = runsResult.Results as ScheduledJobRunEntity[];
+    const types = typesResult.Results as MJScheduledJobTypeEntity[];
+    const allJobs = jobsResult.Results as MJScheduledJobEntity[];
+    const allRuns = runsResult.Results as MJScheduledJobRunEntity[];
 
     return types.map(type => {
       const jobsOfType = allJobs.filter(j => j.JobTypeID === type.ID);
@@ -414,7 +414,7 @@ export class SchedulingInstrumentationService {
   private async loadLockInfo(): Promise<LockInfo[]> {
     const now = new Date();
     const rv = new RunView();
-    const result = await rv.RunView<ScheduledJobEntity>({
+    const result = await rv.RunView<MJScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
       ExtraFilter: 'LockToken IS NOT NULL',
       ResultType: 'entity_object'
@@ -479,7 +479,7 @@ export class SchedulingInstrumentationService {
   }
 
   // ── Helpers ───────────────────────────────────────────────
-  private mapRunsToExecutions(runs: ScheduledJobRunEntity[], now?: Date): JobExecution[] {
+  private mapRunsToExecutions(runs: MJScheduledJobRunEntity[], now?: Date): JobExecution[] {
     const currentTime = now || new Date();
     return runs.map(run => {
       const duration = run.CompletedAt
@@ -537,7 +537,7 @@ export class SchedulingInstrumentationService {
   async updateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
     try {
       const md = new Metadata();
-      const job = await md.GetEntityObject<ScheduledJobEntity>('MJ: Scheduled Jobs');
+      const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       job.Status = status;
       const result = await job.Save();
@@ -565,7 +565,7 @@ export class SchedulingInstrumentationService {
   }>): Promise<boolean> {
     try {
       const md = new Metadata();
-      const job = await md.GetEntityObject<ScheduledJobEntity>('MJ: Scheduled Jobs');
+      const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
 
       if (jobId) {
         await job.Load(jobId);
@@ -598,7 +598,7 @@ export class SchedulingInstrumentationService {
   async deleteJob(jobId: string): Promise<boolean> {
     try {
       const md = new Metadata();
-      const job = await md.GetEntityObject<ScheduledJobEntity>('MJ: Scheduled Jobs');
+      const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       const result = await job.Delete();
       if (result) this.refresh();
@@ -612,7 +612,7 @@ export class SchedulingInstrumentationService {
   async releaseLock(jobId: string): Promise<boolean> {
     try {
       const md = new Metadata();
-      const job = await md.GetEntityObject<ScheduledJobEntity>('MJ: Scheduled Jobs');
+      const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       job.LockToken = null;
       job.LockedAt = null;
@@ -629,7 +629,7 @@ export class SchedulingInstrumentationService {
 
   async loadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
     const rv = new RunView();
-    const result = await rv.RunView<ScheduledJobTypeEntity>({
+    const result = await rv.RunView<MJScheduledJobTypeEntity>({
       EntityName: 'MJ: Scheduled Job Types',
       OrderBy: 'Name ASC',
       ResultType: 'entity_object',

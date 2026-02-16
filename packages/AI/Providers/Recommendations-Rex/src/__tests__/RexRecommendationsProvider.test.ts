@@ -88,11 +88,11 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  EntityRecordDocumentEntityType: class {},
-  ListDetailEntity: class {},
-  ListEntity: class {},
-  RecommendationEntity: class {},
-  RecommendationItemEntity: class {},
+  MJEntityRecordDocumentEntityType: class {},
+  MJListDetailEntity: class {},
+  MJListEntity: class {},
+  MJRecommendationEntity: class {},
+  MJRecommendationItemEntity: class {},
 }));
 
 import { RexRecommendationsProvider } from '../provider';

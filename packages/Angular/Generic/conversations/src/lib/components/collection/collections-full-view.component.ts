@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { CollectionEntity, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
@@ -182,7 +182,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
               <h3>No collections yet</h3>
               <p>Create your first collection to get started</p>
               @if (canEditCurrent()) {
-                <button class="btn-primary"
+                <button class="btn-primary empty-state-cta"
                   (click)="createCollection()"
                   >
                   <i class="fas fa-plus"></i>
@@ -732,6 +732,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     /* Content area */
     .collections-content {
+      display: flex;
+      flex-direction: column;
       flex: 1;
       overflow-y: auto;
       padding: 20px;
@@ -743,13 +745,14 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100%;
+      flex: 1;
+      min-height: 0;
       color: #9CA3AF;
       text-align: center;
-      padding: 48px 24px;
+      padding: 24px;
     }
 
-    .empty-state i {
+    .empty-state > i {
       font-size: 64px;
       margin-bottom: 24px;
       opacity: 0.3;
@@ -767,6 +770,12 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       margin: 0 0 24px 0;
       font-size: 14px;
       color: #6B7280;
+    }
+
+    .empty-state .empty-state-cta {
+      padding: 10px 20px;
+      font-size: 14px;
+      border-radius: 8px;
     }
 
     .empty-state-actions {
@@ -1128,22 +1137,22 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     versionId?: string | null;
   }>();
 
-  public collections: CollectionEntity[] = [];
-  public artifactVersions: Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }> = [];
-  public filteredCollections: CollectionEntity[] = [];
-  public filteredArtifactVersions: Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }> = [];
+  public collections: MJCollectionEntity[] = [];
+  public artifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
+  public filteredCollections: MJCollectionEntity[] = [];
+  public filteredArtifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
   public isLoading: boolean = false;
   public breadcrumbs: Array<{ id: string; name: string }> = [];
   public currentCollectionId: string | null = null;
-  public currentCollection: CollectionEntity | null = null;
+  public currentCollection: MJCollectionEntity | null = null;
 
   public isFormModalOpen: boolean = false;
-  public editingCollection?: CollectionEntity;
+  public editingCollection?: MJCollectionEntity;
   public isArtifactModalOpen: boolean = false;
 
   public userPermissions: Map<string, CollectionPermission> = new Map();
   public isShareModalOpen: boolean = false;
-  public sharingCollection: CollectionEntity | null = null;
+  public sharingCollection: MJCollectionEntity | null = null;
 
   // New UI state for Mac Finder-style view
   public viewMode: CollectionViewMode = 'grid';
@@ -1289,7 +1298,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       const filter = `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
 
-      const result = await rv.RunView<CollectionEntity>(
+      const result = await rv.RunView<MJCollectionEntity>(
         {
           EntityName: 'MJ: Collections',
           ExtraFilter: filter,
@@ -1360,7 +1369,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  async openCollection(collection: CollectionEntity): Promise<void> {
+  async openCollection(collection: MJCollectionEntity): Promise<void> {
     this.isNavigatingProgrammatically = true;
     try {
       this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
@@ -1392,7 +1401,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
         // Load the collection entity
         const md = new Metadata();
-        this.currentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        this.currentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await this.currentCollection.Load(crumb.id);
 
         await this.loadData();
@@ -1443,7 +1452,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       // Load the target collection
       const md = new Metadata();
-      const targetCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const targetCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await targetCollection.Load(collectionId);
 
       if (!targetCollection || !targetCollection.ID) {
@@ -1457,7 +1466,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       let currentId: string | null = targetCollection.ParentID;
 
       while (currentId) {
-        const parentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        const parentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await parentCollection.Load(currentId);
 
         if (parentCollection && parentCollection.ID) {
@@ -1520,7 +1529,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isFormModalOpen = true;
   }
 
-  async editCollection(collection: CollectionEntity): Promise<void> {
+  async editCollection(collection: MJCollectionEntity): Promise<void> {
     const canEdit = await this.validatePermission(collection, 'edit');
     if (!canEdit) return;
 
@@ -1528,7 +1537,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isFormModalOpen = true;
   }
 
-  async deleteCollection(collection: CollectionEntity): Promise<void> {
+  async deleteCollection(collection: MJCollectionEntity): Promise<void> {
     console.log('deleteCollection called for:', collection.Name, collection.ID);
 
     // Validate user has delete permission
@@ -1561,7 +1570,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     const rv = new RunView();
 
     // Step 1: Find and delete all child collections recursively
-    const childrenResult = await rv.RunView<CollectionEntity>(
+    const childrenResult = await rv.RunView<MJCollectionEntity>(
       {
         EntityName: 'MJ: Collections',
         ExtraFilter: `ParentID='${collectionId}'`,
@@ -1599,7 +1608,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     // Step 4: Delete the collection itself
     const md = new Metadata();
-    const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+    const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
     await collection.Load(collectionId);
     const deleted = await collection.Delete();
 
@@ -1608,7 +1617,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  async onCollectionSaved(collection: CollectionEntity): Promise<void> {
+  async onCollectionSaved(collection: MJCollectionEntity): Promise<void> {
     this.isFormModalOpen = false;
     this.editingCollection = undefined;
     await this.loadCollections();
@@ -1634,7 +1643,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isArtifactModalOpen = true;
   }
 
-  async onArtifactSaved(artifact: ArtifactEntity): Promise<void> {
+  async onArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
     this.isArtifactModalOpen = false;
     await this.loadArtifacts();
   }
@@ -1643,7 +1652,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isArtifactModalOpen = false;
   }
 
-  async removeArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): Promise<void> {
+  async removeArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
     if (!this.currentCollectionId) return;
 
     // Validate user has delete permission on current collection
@@ -1686,14 +1695,14 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  viewArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
+  viewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     this.activeArtifactId = item.artifact.ID;
     this.artifactState.openArtifact(item.artifact.ID, item.version.VersionNumber);
   }
 
   // Permission validation and checking methods
   private async validatePermission(
-    collection: CollectionEntity | null,
+    collection: MJCollectionEntity | null,
     requiredPermission: 'edit' | 'delete' | 'share'
   ): Promise<boolean> {
     // Owner has all permissions (including backwards compatibility for null OwnerID)
@@ -1727,7 +1736,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  canEdit(collection: CollectionEntity): boolean {
+  canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
     if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
 
@@ -1736,7 +1745,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return permission?.canEdit || false;
   }
 
-  canDelete(collection: CollectionEntity): boolean {
+  canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
     if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
 
@@ -1745,7 +1754,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return permission?.canDelete || false;
   }
 
-  canShare(collection: CollectionEntity): boolean {
+  canShare(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
     if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
 
@@ -1770,13 +1779,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return this.canDelete(this.currentCollection);
   }
 
-  isShared(collection: CollectionEntity): boolean {
+  isShared(collection: MJCollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
     return collection.OwnerID != null && collection.OwnerID !== this.currentUser.ID;
   }
 
   // Sharing methods
-  async shareCollection(collection: CollectionEntity): Promise<void> {
+  async shareCollection(collection: MJCollectionEntity): Promise<void> {
     // Validate user has share permission
     const canShare = await this.validatePermission(collection, 'share');
     if (!canShare) return;
@@ -1799,7 +1808,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
    * Get the icon for an artifact using the centralized icon service.
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
-  public getArtifactIcon(artifact: ArtifactEntity): string {
+  public getArtifactIcon(artifact: MJArtifactEntity): string {
     return this.artifactIconService.getArtifactIcon(artifact);
   }
 

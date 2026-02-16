@@ -4,7 +4,7 @@ const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs } = v
   const mockRunView = vi.fn();
   const mockRunViews = vi.fn();
   const mockEntities = [
-    { ID: 'entity-1', Name: 'TestEntity', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } },
+    { ID: 'entity-1', Name: 'MJTestEntity', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } },
   ];
   const mockModels = [
     { ID: 'model-1', AIModelType: 'Embeddings', DriverClass: 'TestDriver' },
@@ -52,7 +52,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  VectorDatabaseEntity: vi.fn(),
+  MJVectorDatabaseEntity: vi.fn(),
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
@@ -208,7 +208,7 @@ describe('VectorBase', () => {
       });
 
       const result = await (vectorBase as unknown as { RunViewForSingleValue: <T>(entityName: string, filter: string) => Promise<T | null> })
-        .RunViewForSingleValue('TestEntity', "ID = '1'");
+        .RunViewForSingleValue('MJTestEntity', "ID = '1'");
       expect(result).toBe(mockEntity);
     });
 
@@ -220,7 +220,7 @@ describe('VectorBase', () => {
       });
 
       const result = await (vectorBase as unknown as { RunViewForSingleValue: <T>(entityName: string, filter: string) => Promise<T | null> })
-        .RunViewForSingleValue('TestEntity', "ID = 'missing'");
+        .RunViewForSingleValue('MJTestEntity', "ID = 'missing'");
       expect(result).toBeNull();
     });
 
@@ -231,7 +231,7 @@ describe('VectorBase', () => {
       });
 
       const result = await (vectorBase as unknown as { RunViewForSingleValue: <T>(entityName: string, filter: string) => Promise<T | null> })
-        .RunViewForSingleValue('TestEntity', "ID = '1'");
+        .RunViewForSingleValue('MJTestEntity', "ID = '1'");
       expect(result).toBeNull();
     });
   });

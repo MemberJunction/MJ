@@ -59,7 +59,7 @@ export class ScheduledActionsComponent extends BaseResourceComponent implements 
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'Scheduled Actions';
+    return 'MJ: Scheduled Actions';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {

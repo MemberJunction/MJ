@@ -15,7 +15,7 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    AIModelCostEntity: class {
+    MJAIModelCostEntity: class {
         InputPricePerUnit = 0;
         OutputPricePerUnit = 0;
     }

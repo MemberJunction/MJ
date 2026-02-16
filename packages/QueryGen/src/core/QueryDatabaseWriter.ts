@@ -2,14 +2,14 @@
  * QueryDatabaseWriter - Write validated queries directly to the database
  *
  * Creates Query entities in the database. QueryFields and QueryParameters
- * are automatically extracted by QueryEntity.server.ts using AI analysis
+ * are automatically extracted by MJQueryEntity.server.ts using AI analysis
  * of the SQL template during the Save() operation.
  */
 
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
-  QueryEntity,
-  QueryCategoryEntity
+  MJQueryEntity,
+  MJQueryCategoryEntity
 } from '@memberjunction/core-entities';
 import { ValidatedQuery, WriteResult } from '../data/schema';
 import { extractErrorMessage } from '../utils/error-handlers';
@@ -28,7 +28,7 @@ export class QueryDatabaseWriter {
    * Write validated queries to the database
    *
    * Creates Query entities. QueryFields and QueryParameters are automatically
-   * extracted by QueryEntity.server.ts using AI analysis of the SQL template.
+   * extracted by MJQueryEntity.server.ts using AI analysis of the SQL template.
    * This happens asynchronously during the Save() operation.
    *
    * Errors for individual queries are logged but don't stop the batch process.
@@ -51,13 +51,13 @@ export class QueryDatabaseWriter {
         const categoryId = await this.getCategoryId(vq.category, contextUser);
 
         // Create Query entity ONLY (NO manual fields/params creation)
-        // QueryEntity.server.ts will automatically:
+        // MJQueryEntity.server.ts will automatically:
         // - Detect Nunjucks syntax
         // - Extract parameters using AI
         // - Create QueryParameter records
         // - Create QueryField records
         // - Set UsesTemplate flag
-        const query = await md.GetEntityObject<QueryEntity>('Queries', contextUser);
+        const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', contextUser);
         query.NewRecord();
         query.Name = vq.query.queryName;
         query.CategoryID = categoryId;
@@ -153,8 +153,8 @@ export class QueryDatabaseWriter {
       filter += ` AND ParentID IS NULL`;
     }
 
-    const result = await rv.RunView<QueryCategoryEntity>({
-      EntityName: 'Query Categories',
+    const result = await rv.RunView<MJQueryCategoryEntity>({
+      EntityName: 'MJ: Query Categories',
       ExtraFilter: filter,
       ResultType: 'entity_object'
     }, contextUser);
@@ -170,7 +170,7 @@ export class QueryDatabaseWriter {
 
     // Category doesn't exist, create it
     const md = new Metadata();
-    const category = await md.GetEntityObject<QueryCategoryEntity>('Query Categories', contextUser);
+    const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', contextUser);
     category.NewRecord();
     category.Name = categoryName;
     category.ParentID = parentCategoryId;

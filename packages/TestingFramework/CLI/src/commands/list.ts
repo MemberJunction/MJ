@@ -6,7 +6,7 @@
 import { TestEngine, VariableResolver } from '@memberjunction/testing-engine';
 import { TestVariableDefinition } from '@memberjunction/testing-engine-base';
 import { UserInfo } from '@memberjunction/core';
-import { TestEntity, TestSuiteEntity, TestTypeEntity } from '@memberjunction/core-entities';
+import { MJTestEntity, MJTestSuiteEntity, MJTestTypeEntity } from '@memberjunction/core-entities';
 import { ListFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
@@ -149,7 +149,7 @@ export class ListCommand {
         }
 
         // Group by type
-        const typeMap = new Map<string, TestEntity[]>();
+        const typeMap = new Map<string, MJTestEntity[]>();
         const types = engine.TestTypes;
 
         for (const test of tests) {
@@ -204,7 +204,7 @@ export class ListCommand {
     /**
      * Get test count for a suite
      */
-    private getTestCountForSuite(engine: TestEngine, suite: TestSuiteEntity): number {
+    private getTestCountForSuite(engine: TestEngine, suite: MJTestSuiteEntity): number {
         if (!suite.Configuration) return 0;
 
         try {

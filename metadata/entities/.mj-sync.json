@@ -1,5 +1,5 @@
 {
-  "entity": "Entities",
+  "entity": "MJ: Entities",
   "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
@@ -14,6 +14,6 @@
     "backupDirectory": ".backups",
     "filter": "",
     "externalizeFields": [],
-    "lookupFields": {} 
+    "lookupFields": {}
   }
 }

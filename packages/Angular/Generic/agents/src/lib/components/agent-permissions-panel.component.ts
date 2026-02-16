@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, Chan
 import { trigger, transition, style, animate } from '@angular/animations';
 import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RoleInfo } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 import { AgentPermissionsService, PermissionRow } from '../services/agent-permissions.service';
 
 /** Simple name/ID pair for the grantee search-select */
@@ -226,7 +226,7 @@ export class AgentPermissionsPanelComponent implements OnInit {
     private updateFilteredGrantees(): void {
         const query = this.SearchQuery.toLowerCase().trim();
         const source: GranteeOption[] = this.FormGrantType === 'user'
-            ? this.permsSvc.Users.map((u: UserEntity) => ({ ID: u.ID, Name: u.Name }))
+            ? this.permsSvc.Users.map((u: MJUserEntity) => ({ ID: u.ID, Name: u.Name }))
             : this.permsSvc.Roles.map((r: RoleInfo) => ({ ID: r.ID, Name: r.Name }));
 
         this.FilteredGrantees = query

@@ -3,7 +3,7 @@
 // import { DialogRef } from '@progress/kendo-angular-dialog';
 // import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 // import { RunView, Metadata } from '@memberjunction/core';
-// import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+// import { AIAgentEntityExtended, MJAIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 // import { MJNotificationService } from '@memberjunction/ng-notifications';
 // import { Router } from '@angular/router';
 // import { AIAgentManagementService } from './ai-agent-management.service';
@@ -57,7 +57,7 @@
 //   isSaving$ = new BehaviorSubject<boolean>(false);
   
 //   // Dropdown data
-//   agentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
+//   agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
   
 //   // Selected compression prompt
 //   selectedCompressionPrompt: AIPromptEntityExtended | null = null;
@@ -160,7 +160,7 @@
 //     try {
 //       const rv = new RunView();
       
-//       const agentTypesResult = await rv.RunView<AIAgentTypeEntity>({
+//       const agentTypesResult = await rv.RunView<MJAIAgentTypeEntity>({
 //         EntityName: 'MJ: AI Agent Types',
 //         ExtraFilter: 'IsActive = 1',
 //         OrderBy: 'Name',
@@ -189,7 +189,7 @@
 //       try {
 //         const rv = new RunView();
 //         const result = await rv.RunView<AIPromptEntityExtended>({
-//           EntityName: 'AI Prompts',
+//           EntityName: 'MJ: AI Prompts',
 //           ExtraFilter: `ID = '${this.agent.ContextCompressionPromptID}'`,
 //           ResultType: 'entity_object',
 //           MaxRows: 1
@@ -273,7 +273,7 @@
 //   viewContextCompressionPrompt() {
 //     if (this.selectedCompressionPrompt?.ID) {
 //       // Navigate to the AI Prompt form
-//       this.router.navigate(['/form', 'AI Prompts', this.selectedCompressionPrompt.ID]);
+//       this.router.navigate(['/form', 'MJ: AI Prompts', this.selectedCompressionPrompt.ID]);
 //     }
 //   }
 

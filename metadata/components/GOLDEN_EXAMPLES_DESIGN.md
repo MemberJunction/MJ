@@ -1374,7 +1374,7 @@ SELECT * FROM CRM.Account WHERE AccountType = '{{AccountType}}'
 {
   "fields": {
     "Name": "MonthlyInvoiceRevenue",
-    "CategoryID": "@lookup:Query Categories.Name=CRM Analytics",
+    "CategoryID": "@lookup:MJ: Query Categories.Name=CRM Analytics",
     "UserQuestion": "What is the monthly revenue from invoices?",
     "Description": "Aggregates invoice revenue by month",
     "SQL": "@file:SQL/monthly-invoice-revenue.sql",

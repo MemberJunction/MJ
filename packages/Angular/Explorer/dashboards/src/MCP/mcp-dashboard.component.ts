@@ -17,15 +17,15 @@ import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import {
     ResourceData,
-    MCPServerEntity,
-    MCPServerConnectionEntity,
-    MCPServerToolEntity,
-    MCPToolExecutionLogEntity,
+    MJMCPServerEntity,
+    MJMCPServerConnectionEntity,
+    MJMCPServerToolEntity,
+    MJMCPToolExecutionLogEntity,
     MCPEngine,
     UserInfoEngine,
-    OAuthAuthorizationStateEntity,
-    OAuthClientRegistrationEntity,
-    OAuthTokenEntity
+    MJOAuthAuthorizationStateEntity,
+    MJOAuthClientRegistrationEntity,
+    MJOAuthTokenEntity
 } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
@@ -568,7 +568,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             const rv = new RunView();
             const [, logsResult] = await Promise.all([
                 MCPEngine.Instance.Config(forceRefresh),
-                rv.RunView<MCPToolExecutionLogEntity>({
+                rv.RunView<MJMCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `StartedAt >= DATEADD(day, -7, GETUTCDATE())`,
                     OrderBy: 'StartedAt DESC',
@@ -694,7 +694,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Maps database log entity to UI interface format
      * Handles column name differences between DB schema and UI interface
      */
-    private mapLogFromDatabase(dbLog: MCPToolExecutionLogEntity): MCPExecutionLogData {
+    private mapLogFromDatabase(dbLog: MJMCPToolExecutionLogEntity): MCPExecutionLogData {
         // Determine status from Success boolean
         let status: string;
         if (dbLog.Success === true) {
@@ -974,7 +974,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerEntity>('MJ: MCP Servers');
+            const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
             const loaded = await entity.Load(server.ID);
             if (!loaded) {
                 this.ErrorMessage = `Server not found: ${server.Name}`;
@@ -1002,7 +1002,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      */
     private async deleteToolInternal(toolId: string): Promise<void> {
         const md = new Metadata();
-        const entity = await md.GetEntityObject<MCPServerToolEntity>('MJ: MCP Server Tools');
+        const entity = await md.GetEntityObject<MJMCPServerToolEntity>('MJ: MCP Server Tools');
         const loaded = await entity.Load(toolId);
         if (!loaded) {
             throw new Error(`Tool not found`);
@@ -1039,7 +1039,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             console.log(`[MCPDashboard] Found ${logsResult.Results.length} execution logs to delete`);
             for (const log of logsResult.Results) {
                 console.log(`[MCPDashboard] Loading execution log ${log.ID}...`);
-                const logEntity = await md.GetEntityObject<MCPToolExecutionLogEntity>('MJ: MCP Tool Execution Logs');
+                const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>('MJ: MCP Tool Execution Logs');
                 const loaded = await logEntity.Load(log.ID);
                 console.log(`[MCPDashboard] Load result for execution log ${log.ID}: ${loaded}`);
                 if (loaded) {
@@ -1067,7 +1067,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             console.log(`[MCPDashboard] Found ${authStatesResult.Results.length} OAuth Authorization States to delete`);
             for (const state of authStatesResult.Results) {
                 console.log(`[MCPDashboard] Loading OAuth Authorization State ${state.ID}...`);
-                const stateEntity = await md.GetEntityObject<OAuthAuthorizationStateEntity>('MJ: O Auth Authorization States');
+                const stateEntity = await md.GetEntityObject<MJOAuthAuthorizationStateEntity>('MJ: O Auth Authorization States');
                 const loaded = await stateEntity.Load(state.ID);
                 console.log(`[MCPDashboard] Load result for OAuth Authorization State ${state.ID}: ${loaded}`);
                 if (loaded) {
@@ -1095,7 +1095,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             console.log(`[MCPDashboard] Found ${clientRegsResult.Results.length} OAuth Client Registrations to delete`);
             for (const reg of clientRegsResult.Results) {
                 console.log(`[MCPDashboard] Loading OAuth Client Registration ${reg.ID}...`);
-                const regEntity = await md.GetEntityObject<OAuthClientRegistrationEntity>('MJ: O Auth Client Registrations');
+                const regEntity = await md.GetEntityObject<MJOAuthClientRegistrationEntity>('MJ: O Auth Client Registrations');
                 const loaded = await regEntity.Load(reg.ID);
                 console.log(`[MCPDashboard] Load result for OAuth Client Registration ${reg.ID}: ${loaded}`);
                 if (loaded) {
@@ -1123,7 +1123,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             console.log(`[MCPDashboard] Found ${tokensResult.Results.length} OAuth Tokens to delete`);
             for (const token of tokensResult.Results) {
                 console.log(`[MCPDashboard] Loading OAuth Token ${token.ID}...`);
-                const tokenEntity = await md.GetEntityObject<OAuthTokenEntity>('MJ: O Auth Tokens');
+                const tokenEntity = await md.GetEntityObject<MJOAuthTokenEntity>('MJ: O Auth Tokens');
                 const loaded = await tokenEntity.Load(token.ID);
                 console.log(`[MCPDashboard] Load result for OAuth Token ${token.ID}: ${loaded}`);
                 if (loaded) {
@@ -1141,7 +1141,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
         // Now delete the connection itself
         console.log('[MCPDashboard] All related records deleted. Now deleting the connection itself...');
-        const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
+        const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
         const loaded = await entity.Load(connectionId);
         if (!loaded) {
             throw new Error(`Connection not found`);
@@ -1751,7 +1751,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         if (!log.InputArgs && !log.Result) {
             try {
                 const rv = new RunView();
-                const result = await rv.RunView<MCPToolExecutionLogEntity>({
+                const result = await rv.RunView<MJMCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `ID='${log.ID}'`,
                     ResultType: 'simple'

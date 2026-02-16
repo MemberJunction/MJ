@@ -1,5 +1,5 @@
 import { Type } from '@angular/core';
-import { ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 
 /**
  * Interface for artifact viewer plugins.
@@ -26,7 +26,7 @@ export interface IArtifactViewerPlugin {
    * @param artifactVersion The artifact version to get metadata for
    * @returns Display metadata object
    */
-  getMetadata?(artifactVersion: ArtifactVersionEntity): ArtifactMetadata;
+  getMetadata?(artifactVersion: MJArtifactVersionEntity): ArtifactMetadata;
 }
 
 /**
@@ -44,5 +44,5 @@ export interface ArtifactMetadata {
  * The component receives the artifact version as an input.
  */
 export interface IArtifactViewerComponent {
-  artifactVersion: ArtifactVersionEntity;
+  artifactVersion: MJArtifactVersionEntity;
 }

@@ -1,5 +1,5 @@
 {
-  "entity": "Templates",
+  "entity": "MJ: Templates",
   "filePattern": "**/.*.json",
   "ignoreDirectories": [
     "templates"

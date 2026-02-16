@@ -2025,6 +2025,12 @@
     border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
+.isa-badge.overlapping {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
 /* Breadcrumb under title */
 .isa-breadcrumb {
     display: flex;

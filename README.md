@@ -233,6 +233,11 @@ docker-compose up -d
 
 ---
 
+## Upgrading
+
+- **[v5.0 Upgrade Guide](./UPGRADE-v5.0.md)** — Breaking changes, automated migration tools, and step-by-step instructions for upgrading from v4.x
+- **[General Upgrade Procedure](./UPDATES.md)** — Standard process for upgrading across environments (dev/stage/prod)
+
 ## Contributing
 
 We welcome contributions!

@@ -16,7 +16,7 @@ describe('ListManagementDialogConfig', () => {
     const config: ListManagementDialogConfig = {
       mode: 'add',
       entityId: 'entity-1',
-      entityName: 'Users',
+      entityName: 'MJ: Users',
       recordIds: ['rec-1', 'rec-2']
     };
     expect(config.mode).toBe('add');

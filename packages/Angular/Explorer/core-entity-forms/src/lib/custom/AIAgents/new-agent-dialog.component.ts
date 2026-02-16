@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { NotificationService } from '@progress/kendo-angular-notification';
 import { Metadata } from '@memberjunction/core';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIAgentEntityExtended, AIModelEntityExtended } from "@memberjunction/ai-core-plus";
 import { NavigationService } from '@memberjunction/ng-shared';
 import { BehaviorSubject } from 'rxjs';
@@ -29,7 +29,7 @@ export class NewAgentDialogComponent implements OnInit {
   form!: FormGroup;
   isLoading$ = new BehaviorSubject<boolean>(false);
   models$ = new BehaviorSubject<AIModelEntityExtended[]>([]);
-  agentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
+  agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
   isSubmitting = false;
   
   constructor(
@@ -76,7 +76,7 @@ export class NewAgentDialogComponent implements OnInit {
       }
       
       const agentTypes = engine.AgentTypes;
-      this.agentTypes$.next(agentTypes as AIAgentTypeEntity[] || []);
+      this.agentTypes$.next(agentTypes as MJAIAgentTypeEntity[] || []);
     } catch (error) {
       console.error('Error loading data:', error);
       this.showError('Failed to load required data');
@@ -94,7 +94,7 @@ export class NewAgentDialogComponent implements OnInit {
     
     try {
       const md = new Metadata();
-      const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+      const agent = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
       
       if (!agent) {
         throw new Error('Failed to create agent entity');
@@ -127,7 +127,7 @@ export class NewAgentDialogComponent implements OnInit {
         if (this.config.redirectToForm && !this.config.parentAgentId) {
           // Only redirect for top-level agents - use NavigationService to open the record
           setTimeout(() => {
-            this.navigationService.OpenEntityRecord('AI Agents', agent.PrimaryKey);
+            this.navigationService.OpenEntityRecord('MJ: AI Agents', agent.PrimaryKey);
           }, 100);
         }
       } else {

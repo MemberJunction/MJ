@@ -11,7 +11,7 @@
         "Label": "ERD",
         "Icon": "fa-solid fa-database",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=ERD?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=ERD?allowDefer",
         "isDefault": true
       },
       {
@@ -25,35 +25,35 @@
         "Label": "Permissions",
         "Icon": "fa-solid fa-lock",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=Entity Permissions?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=Entity Permissions?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Roles",
         "Icon": "fa-solid fa-shield-halved",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=Role Management?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=Role Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Users",
         "Icon": "fa-solid fa-users",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=User Management?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=User Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Apps",
         "Icon": "fa-solid fa-th-large",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=Application Management?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=Application Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "SQL Logging",
         "Icon": "fa-solid fa-file-code",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=SQL Logging?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=SQL Logging?allowDefer",
         "isDefault": true
       },
       {
@@ -66,13 +66,13 @@
     ]
   },
   "relatedEntities": {
-    "Application Entities": []
+    "MJ: Application Entities": []
   },
   "primaryKey": {
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2026-01-27T02:14:33.506Z",
-    "checksum": "d1da5bfc0051749d62a7d316b2a85026a0e0c2b167da888f7d5542f1ac68ee73"
+    "lastModified": "2026-02-13T21:09:36.691Z",
+    "checksum": "6a03ae98f0a6424606aef4acf7a79d4b6f5714ebeab59885e99a03d23d75f5ed"
   }
 }

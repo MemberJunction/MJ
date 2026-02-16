@@ -7,9 +7,9 @@
 
 import { UserInfo } from '@memberjunction/core';
 import {
-    APIApplicationScopeEntity,
-    APIKeyApplicationEntity,
-    APIKeyScopeEntity
+    MJAPIApplicationScopeEntity,
+    MJAPIKeyApplicationEntity,
+    MJAPIKeyScopeEntity
 } from '@memberjunction/core-entities';
 import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { PatternMatcher } from './PatternMatcher';
@@ -286,7 +286,7 @@ export class ScopeEvaluator {
     public async GetKeyApplications(
         apiKeyId: string,
         _contextUser: UserInfo
-    ): Promise<APIKeyApplicationEntity[]> {
+    ): Promise<MJAPIKeyApplicationEntity[]> {
         return this.Base.GetKeyApplicationsByKeyId(apiKeyId);
     }
 
@@ -329,10 +329,10 @@ export class ScopeEvaluator {
     }
 
     /**
-     * Convert APIApplicationScopeEntity to ScopeRule
+     * Convert MJAPIApplicationScopeEntity to ScopeRule
      */
     private toScopeRules(
-        entities: APIApplicationScopeEntity[],
+        entities: MJAPIApplicationScopeEntity[],
         fullPath?: string
     ): ScopeRule[] {
         return entities.map(e => ({
@@ -347,10 +347,10 @@ export class ScopeEvaluator {
     }
 
     /**
-     * Convert APIKeyScopeEntity to ScopeRule
+     * Convert MJAPIKeyScopeEntity to ScopeRule
      */
     private toScopeRulesFromKey(
-        entities: APIKeyScopeEntity[],
+        entities: MJAPIKeyScopeEntity[],
         fullPath?: string
     ): ScopeRule[] {
         return entities.map(e => ({

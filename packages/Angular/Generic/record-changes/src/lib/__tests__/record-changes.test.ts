@@ -36,7 +36,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-  RecordChangeEntity: class {},
+  MJRecordChangeEntity: class {},
 }));
 
 vi.mock('@memberjunction/ng-notifications', () => ({

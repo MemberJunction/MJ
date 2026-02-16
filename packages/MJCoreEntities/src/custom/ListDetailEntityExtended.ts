@@ -1,9 +1,9 @@
 import { BaseEntity, BaseEntityResult, CompositeKey, EntityInfo, Metadata } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { ListDetailEntity } from "../generated/entity_subclasses";
+import { MJListDetailEntity } from "../generated/entity_subclasses";
 
-@RegisterClass(BaseEntity, 'List Details')
-export class ListDetailEntityExtended extends ListDetailEntity  {
+@RegisterClass(BaseEntity, 'MJ: List Details')
+export class ListDetailEntityExtended extends MJListDetailEntity  {
     private _recordCompositeKey: CompositeKey | null = null;
     private _sourceEntityInfo: EntityInfo | null = null;
 
@@ -49,7 +49,7 @@ export class ListDetailEntityExtended extends ListDetailEntity  {
         if (!effectiveEntityInfo) {
             // Try to get entity info from the List's EntityID
             const md = new Metadata();
-            const list = md.Entities.find(e => e.Name === 'Lists');
+            const list = md.Entities.find(e => e.Name === 'MJ: Lists');
             if (!list) {
                 throw new Error('Cannot determine entity info. Provide entityInfo parameter or call SetRecordIDFromEntity first.');
             }
@@ -101,7 +101,7 @@ export class ListDetailEntityExtended extends ListDetailEntity  {
 
     /**
      * Static utility to build the appropriate RecordID value from a source record.
-     * Use this when you need to build a RecordID without creating a ListDetailEntity.
+     * Use this when you need to build a RecordID without creating a MJListDetailEntity.
      * @param entityInfo The EntityInfo for the source entity
      * @param record The source record
      * @returns The properly formatted RecordID string
@@ -157,7 +157,7 @@ export class ListDetailEntityExtended extends ListDetailEntity  {
             }
 
             const rvResult = await rv.RunView({
-                EntityName: 'List Details',
+                EntityName: 'MJ: List Details',
                 ExtraFilter: `ListID = '${this.ListID}' AND RecordID = '${this.RecordID}'`
             }, this.ContextCurrentUser);
 

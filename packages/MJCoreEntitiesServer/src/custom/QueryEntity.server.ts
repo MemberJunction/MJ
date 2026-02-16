@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult } from "@memberjunction/core";
-import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity } from "@memberjunction/core-entities";
+import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
@@ -37,8 +37,8 @@ interface ParameterExtractionResult {
     selectClause?: ExtractedField[];
 }
 
-@RegisterClass(BaseEntity, 'Queries')
-export class QueryEntityExtended extends QueryEntity {
+@RegisterClass(BaseEntity, 'MJ: Queries')
+export class QueryEntityExtended extends MJQueryEntity {
     private _queryEntities: QueryEntityInfo[] = [];
     private _queryFields: QueryFieldInfo[] = [];
     private _queryParameters: QueryParameterInfo[] = [];
@@ -363,9 +363,9 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             // Get existing query parameters
             const rv = this.RunViewProviderToUse
-            const existingParams: QueryParameterEntity[] = [];
+            const existingParams: MJQueryParameterEntity[] = [];
             if (this.IsSaved) {
-                const existingParamsResult = await rv.RunView<QueryParameterEntity>({
+                const existingParamsResult = await rv.RunView<MJQueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
@@ -399,7 +399,7 @@ export class QueryEntityExtended extends QueryEntity {
             
             // Add new parameters
             for (const param of paramsToAdd) {
-                const newParam = await md.GetEntityObject<QueryParameterEntity>('MJ: Query Parameters', this.ContextCurrentUser);
+                const newParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters', this.ContextCurrentUser);
                 newParam.QueryID = this.ID;
                 newParam.Name = param.name;
 
@@ -508,7 +508,7 @@ export class QueryEntityExtended extends QueryEntity {
             if (this.IsSaved) {
                 // Get all existing query parameters
                 const rv = this.RunViewProviderToUse
-                const existingParamsResult = await rv.RunView<QueryParameterEntity>({
+                const existingParamsResult = await rv.RunView<MJQueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
@@ -600,12 +600,12 @@ export class QueryEntityExtended extends QueryEntity {
         const fieldsToSync = this.expandWildcardFields(extractedFields, md);
 
         try {
-            const existingFields: QueryFieldEntity[] = [];
+            const existingFields: MJQueryFieldEntity[] = [];
             if (this.IsSaved) {
                 // Get existing query fields
                 const rv = this.RunViewProviderToUse
-                const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
-                    EntityName: 'Query Fields',
+                const existingFieldsResult = await rv.RunView<MJQueryFieldEntity>({
+                    EntityName: 'MJ: Query Fields',
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
                 }, this.ContextCurrentUser);
@@ -639,7 +639,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Add new fields
             for (let i = 0; i < fieldsToAdd.length; i++) {
                 const field = fieldsToAdd[i];
-                const newField = await md.GetEntityObject<QueryFieldEntity>('Query Fields', this.ContextCurrentUser);
+                const newField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields', this.ContextCurrentUser);
                 newField.QueryID = this.ID;
                 newField.Name = field.name;
                 newField.Description = field.description;
@@ -773,11 +773,11 @@ export class QueryEntityExtended extends QueryEntity {
 
         try {
             // Get existing query entities
-            const existingEntities: QueryEntityEntity[] = [];
+            const existingEntities: MJQueryEntityEntity[] = [];
             if (this.IsSaved) {
                 const rv = this.RunViewProviderToUse
-                const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
-                    EntityName: 'Query Entities',
+                const existingEntitiesResult = await rv.RunView<MJQueryEntityEntity>({
+                    EntityName: 'MJ: Query Entities',
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
                 }, this.ContextCurrentUser);
@@ -822,7 +822,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Add new query entity relationships
             for (const mapping of entitiesToAdd) {
                 if (mapping) {
-                    const newEntity = await md.GetEntityObject<QueryEntityEntity>('Query Entities', this.ContextCurrentUser);
+                    const newEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities', this.ContextCurrentUser);
                     newEntity.QueryID = this.ID;
                     newEntity.EntityID = mapping.entityID;
                     newEntity.DetectionMethod = 'AI'; // Using 'AI' as it's the closest match to automated detection
@@ -852,8 +852,8 @@ export class QueryEntityExtended extends QueryEntity {
             if (!this.IsSaved) return; // Nothing to remove if not saved
 
             const rv = this.RunViewProviderToUse
-            const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
-                EntityName: 'Query Fields',
+            const existingFieldsResult = await rv.RunView<MJQueryFieldEntity>({
+                EntityName: 'MJ: Query Fields',
                 ExtraFilter: `QueryID='${this.ID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -880,8 +880,8 @@ export class QueryEntityExtended extends QueryEntity {
             if (!this.IsSaved) return; // Nothing to remove if not saved
             
             const rv = this.RunViewProviderToUse
-            const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
-                EntityName: 'Query Entities',
+            const existingEntitiesResult = await rv.RunView<MJQueryEntityEntity>({
+                EntityName: 'MJ: Query Entities',
                 ExtraFilter: `QueryID='${this.ID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);

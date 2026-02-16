@@ -1,11 +1,11 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, CommunicationProviderEntity, CommunicationLogEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCommunicationProviderEntity, MJCommunicationLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 
 interface ProviderCardData {
-    Entity: CommunicationProviderEntity;
+    Entity: MJCommunicationProviderEntity;
     SentCount: number;
     SuccessRate: number;
     FailedCount: number;
@@ -299,13 +299,13 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
             const yesterdayIso = yesterday.toISOString();
 
             const [providersResult, logsResult] = await Promise.all([
-                rv.RunView<CommunicationProviderEntity>({
-                    EntityName: 'Communication Providers',
+                rv.RunView<MJCommunicationProviderEntity>({
+                    EntityName: 'MJ: Communication Providers',
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
                 }),
-                rv.RunView<CommunicationLogEntity>({
-                    EntityName: 'Communication Logs',
+                rv.RunView<MJCommunicationLogEntity>({
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
                     ResultType: 'entity_object'
                 })
@@ -323,7 +323,7 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
         }
     }
 
-    private buildProviderCard(provider: CommunicationProviderEntity, logs: CommunicationLogEntity[]): ProviderCardData {
+    private buildProviderCard(provider: MJCommunicationProviderEntity, logs: MJCommunicationLogEntity[]): ProviderCardData {
         const providerLogs = logs.filter(l => l.CommunicationProvider === provider.Name);
         const sent = providerLogs.length;
         const failed = providerLogs.filter(l => l.Status === 'Failed').length;
@@ -359,18 +359,18 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
         return '';
     }
 
-    public configureProvider(provider: CommunicationProviderEntity): void {
+    public configureProvider(provider: MJCommunicationProviderEntity): void {
         const pk = new CompositeKey();
-        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'Communication Providers')!, provider);
-        this.navService.OpenEntityRecord('Communication Providers', pk);
+        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'MJ: Communication Providers')!, provider);
+        this.navService.OpenEntityRecord('MJ: Communication Providers', pk);
     }
 
-    public viewProviderLogs(provider: CommunicationProviderEntity): void {
+    public viewProviderLogs(provider: MJCommunicationProviderEntity): void {
         console.log('View analytics for provider:', provider.Name);
     }
 
     public addNewProvider(): void {
-        this.navService.OpenEntityRecord('Communication Providers', new CompositeKey());
+        this.navService.OpenEntityRecord('MJ: Communication Providers', new CompositeKey());
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {

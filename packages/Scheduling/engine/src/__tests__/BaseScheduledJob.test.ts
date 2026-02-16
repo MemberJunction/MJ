@@ -22,9 +22,9 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    ScheduledJobEntity: class {},
-    ScheduledJobRunEntity: class {},
-    ScheduledJobTypeEntity: class {}
+    MJScheduledJobEntity: class {},
+    MJScheduledJobRunEntity: class {},
+    MJScheduledJobTypeEntity: class {}
 }));
 
 vi.mock('@memberjunction/scheduling-base-types', () => ({

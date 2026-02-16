@@ -1,5 +1,5 @@
 import { LogError, LogStatus, RunView, UserInfo } from "@memberjunction/core";
-import { AIAgentNoteEntity, AIAgentExampleEntity, AIAgentNoteTypeEntity } from "@memberjunction/core-entities";
+import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
@@ -87,7 +87,7 @@ export class AgentContextInjector {
      * Retrieve notes for a specific agent execution context.
      * Implements multi-dimensional scoping and injection strategy.
      */
-    async GetNotesForContext(params: GetNotesParams): Promise<AIAgentNoteEntity[]> {
+    async GetNotesForContext(params: GetNotesParams): Promise<MJAIAgentNoteEntity[]> {
         // Use semantic search if strategy is 'Relevant'
         if (params.strategy === 'Relevant' && params.currentInput) {
             return await this.getNotesViaSemanticSearch(params);
@@ -101,7 +101,7 @@ export class AgentContextInjector {
      * Retrieve examples for a specific agent execution context.
      * Implements multi-dimensional scoping and injection strategy.
      */
-    async GetExamplesForContext(params: GetExamplesParams): Promise<AIAgentExampleEntity[]> {
+    async GetExamplesForContext(params: GetExamplesParams): Promise<MJAIAgentExampleEntity[]> {
         // Use semantic search if strategy is 'Semantic'
         if (params.strategy === 'Semantic' && params.currentInput) {
             return await this.getExamplesViaSemanticSearch(params);
@@ -124,7 +124,7 @@ export class AgentContextInjector {
      * - If true: On reranking failure, gracefully falls back to vector search results
      * - If false: Propagates reranking errors to caller
      */
-    private async getNotesViaSemanticSearch(params: GetNotesParams): Promise<AIAgentNoteEntity[]> {
+    private async getNotesViaSemanticSearch(params: GetNotesParams): Promise<MJAIAgentNoteEntity[]> {
         const config = params.rerankerConfig;
 
         // Calculate candidates to fetch (more if reranking enabled)
@@ -195,7 +195,7 @@ export class AgentContextInjector {
     /**
      * Get examples using semantic search via AIEngine
      */
-    private async getExamplesViaSemanticSearch(params: GetExamplesParams): Promise<AIAgentExampleEntity[]> {
+    private async getExamplesViaSemanticSearch(params: GetExamplesParams): Promise<MJAIAgentExampleEntity[]> {
         // Build scope pre-filter so FindNearest only returns scope-valid candidates
         const scopePreFilter = this.buildScopePreFilter<ExampleEmbeddingMetadata>(params, m => m.exampleEntity);
 
@@ -233,13 +233,13 @@ export class AgentContextInjector {
      * Query notes using multi-dimensional scoping priority.
      * Implements 8-level scoping hierarchy from most specific to least specific.
      */
-    private async queryNotesWithScoping(params: GetNotesParams): Promise<AIAgentNoteEntity[]> {
+    private async queryNotesWithScoping(params: GetNotesParams): Promise<MJAIAgentNoteEntity[]> {
         const filter = this.buildNotesScopingFilter(params);
         const orderBy = '__mj_CreatedAt DESC';
 
         const rv = new RunView();
-        const result = await rv.RunView<AIAgentNoteEntity>({
-            EntityName: 'AI Agent Notes',
+        const result = await rv.RunView<MJAIAgentNoteEntity>({
+            EntityName: 'MJ: AI Agent Notes',
             ExtraFilter: filter,
             OrderBy: orderBy,
             IgnoreMaxRows: params.strategy !== 'Recent',
@@ -259,7 +259,7 @@ export class AgentContextInjector {
     /**
      * Query examples using multi-dimensional scoping priority
      */
-    private async queryExamplesWithScoping(params: GetExamplesParams): Promise<AIAgentExampleEntity[]> {
+    private async queryExamplesWithScoping(params: GetExamplesParams): Promise<MJAIAgentExampleEntity[]> {
         // Use cached data from AIEngine instead of database query
         const allExamples = AIEngine.Instance.AgentExamples;
 
@@ -455,7 +455,7 @@ export class AgentContextInjector {
      * Implements 4-level scoping hierarchy for examples (examples are always agent-specific).
      * Also handles multi-tenant secondary scoping when scope params are provided.
      */
-    private filterExamplesByScoping(examples: AIAgentExampleEntity[], params: GetExamplesParams): AIAgentExampleEntity[] {
+    private filterExamplesByScoping(examples: MJAIAgentExampleEntity[], params: GetExamplesParams): MJAIAgentExampleEntity[] {
         return examples.filter(example => {
             // Must be active
             if (example.Status !== 'Active') {
@@ -629,7 +629,7 @@ export class AgentContextInjector {
     /**
      * Sort examples based on the specified strategy
      */
-    private sortExamples(examples: AIAgentExampleEntity[], strategy: 'Semantic' | 'Recent' | 'Rated'): AIAgentExampleEntity[] {
+    private sortExamples(examples: MJAIAgentExampleEntity[], strategy: 'Semantic' | 'Recent' | 'Rated'): MJAIAgentExampleEntity[] {
         // Create a copy to avoid mutating the original array
         const sorted = [...examples];
 
@@ -665,10 +665,10 @@ export class AgentContextInjector {
      * For non-Recent strategies, uses AgentNoteType.Priority from cached note types.
      */
     private sortNotes(
-        notes: AIAgentNoteEntity[],
+        notes: MJAIAgentNoteEntity[],
         strategy: 'Relevant' | 'Recent' | 'All',
-        noteTypes: AIAgentNoteTypeEntity[]
-    ): AIAgentNoteEntity[] {
+        noteTypes: MJAIAgentNoteTypeEntity[]
+    ): MJAIAgentNoteEntity[] {
         const sorted = [...notes];
         const priorityByTypeId = new Map<string, number>();
 
@@ -676,7 +676,7 @@ export class AgentContextInjector {
             priorityByTypeId.set(noteType.ID, noteType.Priority);
         }
 
-        const getPriority = (note: AIAgentNoteEntity): number => {
+        const getPriority = (note: MJAIAgentNoteEntity): number => {
             const noteTypeId = note.AgentNoteTypeID;
             if (!noteTypeId) {
                 return Number.MAX_SAFE_INTEGER;
@@ -718,7 +718,7 @@ export class AgentContextInjector {
      * @param notes - Array of notes to format
      * @param includeMemoryPolicy - Whether to include the memory policy preamble (default: true)
      */
-    FormatNotesForInjection(notes: AIAgentNoteEntity[], includeMemoryPolicy: boolean = true): string {
+    FormatNotesForInjection(notes: MJAIAgentNoteEntity[], includeMemoryPolicy: boolean = true): string {
         if (notes.length === 0) return '';
 
         const lines: string[] = [];
@@ -764,7 +764,7 @@ export class AgentContextInjector {
     /**
      * Determine multi-tenant secondary scope description for a note
      */
-    private determineSecondaryScope(note: AIAgentNoteEntity): string | null {
+    private determineSecondaryScope(note: MJAIAgentNoteEntity): string | null {
         // Check for secondary scoping (takes precedence over MJ scoping)
         if (!note.PrimaryScopeRecordID) {
             return null; // No secondary scope, fall back to MJ scope
@@ -782,7 +782,7 @@ export class AgentContextInjector {
     /**
      * Format examples for injection into agent prompt
      */
-    FormatExamplesForInjection(examples: AIAgentExampleEntity[]): string {
+    FormatExamplesForInjection(examples: MJAIAgentExampleEntity[]): string {
         if (examples.length === 0) return '';
 
         const lines: string[] = [
@@ -810,7 +810,7 @@ export class AgentContextInjector {
     /**
      * Determine human-readable scope description for a note
      */
-    private determineNoteScope(note: AIAgentNoteEntity): string {
+    private determineNoteScope(note: MJAIAgentNoteEntity): string {
         if (note.AgentID && note.UserID && note.CompanyID) {
             return 'Agent + User + Company specific';
         }

@@ -652,7 +652,7 @@ export class RunViewResolver extends ResolverBase {
       if (rawData === null) 
         return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { Name: input.ViewName }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
@@ -683,7 +683,7 @@ export class RunViewResolver extends ResolverBase {
       if (rawData === null) 
         return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
@@ -837,7 +837,7 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {

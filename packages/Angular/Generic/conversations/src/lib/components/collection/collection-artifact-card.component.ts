@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
@@ -79,8 +79,8 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
   `]
 })
 export class CollectionArtifactCardComponent implements OnInit, OnChanges {
-  @Input() artifact!: ArtifactEntity;
-  @Input() version?: ArtifactVersionEntity; // Optional version info
+  @Input() artifact!: MJArtifactEntity;
+  @Input() version?: MJArtifactVersionEntity; // Optional version info
   @Input() currentUser!: UserInfo;
 
   @Output() selected = new EventEmitter<any>();

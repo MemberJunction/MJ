@@ -1,20 +1,20 @@
 import { Component, inject } from '@angular/core';
-import { EntityActionEntity } from '@memberjunction/core-entities';
+import { MJEntityActionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
-import { EntityActionFormComponent } from '../../generated/Entities/EntityAction/entityaction.form.component';
+import { MJEntityActionFormComponent } from '../../generated/Entities/MJEntityAction/mjentityaction.form.component';
 import { TabEvent } from '@memberjunction/ng-tabstrip';
 
-@RegisterClass(BaseFormComponent, 'Entity Actions')
+@RegisterClass(BaseFormComponent, 'MJ: Entity Actions')
 @Component({
   standalone: false,
     selector: 'mj-custom-entity-action-extended-form',
     templateUrl: './entityaction.form.component.html',
     styleUrls: ['../../../shared/form-styles.css']
 })
-export class EntityActionExtendedFormComponent extends EntityActionFormComponent {
-    public record!: EntityActionEntity;
+export class EntityActionExtendedFormComponent extends MJEntityActionFormComponent {
+    public record!: MJEntityActionEntity;
     private sharedService = inject(SharedService);
     private currentTab: string | null = null;
 

@@ -3,7 +3,7 @@ import { BehaviorSubject, Subject, Subscription, firstValueFrom } from 'rxjs';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { ActiveTasksService } from './active-tasks.service';
 import { DataCacheService } from './data-cache.service';
-import { ConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 
 /**

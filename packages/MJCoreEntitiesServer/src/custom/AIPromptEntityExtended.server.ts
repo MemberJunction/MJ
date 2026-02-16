@@ -1,7 +1,7 @@
 import { BaseEntity, BaseEntityResult, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogErrorEx, TransactionGroupBase } from "@memberjunction/core";
 import { RegisterClass, uuidv4 } from "@memberjunction/global";
 import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
-import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity } from "@memberjunction/core-entities";
+import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntity } from "@memberjunction/core-entities";
 
 /**
  * Server specific sub-class that handles the automatic creation and updating of
@@ -10,7 +10,7 @@ import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntit
  * also provides additional utility functionality that is used within Save() and can be overridden
  * by subclasses to provide custom logic for creating or updating the linked Template and Template Contents, etc.
  */
-@RegisterClass(BaseEntity, "AI Prompts")
+@RegisterClass(BaseEntity, "MJ: AI Prompts")
 export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
     private static _templateContentTypeID: string | null = null;
     /**
@@ -32,7 +32,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      * of the root category for each AI Prompt Category. Those sub-categories are below the 
      * root category. If RootTemplateCategoryID is null when the first such operation occurs upon
      * Save() of a given AIPrompt in a given process space, we will load a category with the name
-     * of "AI Prompts" and use that as the root category ID. If such a category does not exist, we will
+     * of "MJ: AI Prompts" and use that as the root category ID. If such a category does not exist, we will
      * create it automatically.
      * @returns {string | null} The root template category ID or null if not set.
      * @static
@@ -48,7 +48,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      * This internal method can be overriden by subclasses
      * to provide a custom way of getting or creating the root template category ID.
      * The default implementation checks if the RootTemplateCategoryID is set, and  
-     * if not, it attempts to find a category with the name "AI Prompts" (or you can override
+     * if not, it attempts to find a category with the name "MJ: AI Prompts" (or you can override
      * this with a Setting in the AI Prompts entity called "Root Template Category Name").
      * If such a category does not exist, it creates one and sets the RootTemplateCategoryID.
      * @returns {string} The root template category ID.
@@ -59,13 +59,13 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
             return AIPromptEntityExtendedServer.RootTemplateCategoryID;
         }
 
-        // look for an existing root level category with the name "AI Prompts"
+        // look for an existing root level category with the name "MJ: AI Prompts"
         const e = this.EntityInfo;
         const catName = e.Settings.find(s => s.Name.trim().toLowerCase() === 
-                                             "Root Template Category Name")?.Value || "AI Prompts";
+                                             "Root Template Category Name")?.Value || "MJ: AI Prompts";
         const rv = this.RunViewProviderToUse
-        const result = await rv.RunView<TemplateCategoryEntity>({
-            EntityName: "Template Categories",
+        const result = await rv.RunView<MJTemplateCategoryEntity>({
+            EntityName: "MJ: Template Categories",
             ExtraFilter: `Name='${catName}' AND ParentID IS NULL`,
             OrderBy: "__mj_CreatedAt ASC" // first one
         }, this.ContextCurrentUser);
@@ -89,7 +89,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      */
     protected async createRootTemplateCategory(name: string): Promise<string> {
         const md = this.ProviderToUse as any as IMetadataProvider;
-        const rootCategory = await md.GetEntityObject<TemplateCategoryEntity>("Template Categories", this.ContextCurrentUser);
+        const rootCategory = await md.GetEntityObject<MJTemplateCategoryEntity>("MJ: Template Categories", this.ContextCurrentUser);
         rootCategory.NewRecord();
         rootCategory.Name = name;
         rootCategory.Description = "Root category for AI Prompts (Auto-Created by AI Prompts Entity)";
@@ -174,20 +174,20 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
                 throw new Error("Cannot update linked Template Contents because TemplateID is null.");
             }
             const rv = this.RunViewProviderToUse
-            const result = await rv.RunView<TemplateContentEntity>({
-                EntityName: "Template Contents",
+            const result = await rv.RunView<MJTemplateContentEntity>({
+                EntityName: "MJ: Template Contents",
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,
                 OrderBy: "__mj_CreatedAt ASC", // first one
                 ResultType: 'entity_object',
                 MaxRows: 1 // should only be one row
             }, this.ContextCurrentUser);
-            let tc: TemplateContentEntity | undefined = undefined;
+            let tc: MJTemplateContentEntity | undefined = undefined;
             if (result && result.Success && result.Results.length > 0) {
                 // we found an existing Template Content, so update it
                 tc = result.Results[0];
             }
             else {
-                tc = await md.GetEntityObject<TemplateContentEntity>("Template Contents", this.ContextCurrentUser);
+                tc = await md.GetEntityObject<MJTemplateContentEntity>("MJ: Template Contents", this.ContextCurrentUser);
                 tc.NewRecord();
                 tc.TemplateID = this.TemplateID; // link to the existing Template
                 tc.TypeID = await this.getTemplateContentTypeID(); // use the Template Content Type ID for AI Prompts
@@ -223,12 +223,12 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      * This method is used to create a linked Template record and Template Contents record for this AI Prompt.
      * It is called automatically when the AI Prompt is saved and the TemplateID is null.
      * It can be overridden by subclasses to provide custom logic for creating the linked Template.
-     * @returns {Promise<TemplateEntity | null>} The created Template entity record or null if not created.
+     * @returns {Promise<MJTemplateEntity | null>} The created Template entity record or null if not created.
      */
-    protected async CreateLinkedTemplateAndTemplateContents(md: IMetadataProvider): Promise<TemplateEntity | null> {
+    protected async CreateLinkedTemplateAndTemplateContents(md: IMetadataProvider): Promise<MJTemplateEntity | null> {
         try {
             // we have no linked template, but we have template text, so create a new template and template contents
-            const t = await md.GetEntityObject<TemplateEntity>("Templates", this.ContextCurrentUser);
+            const t = await md.GetEntityObject<MJTemplateEntity>("MJ: Templates", this.ContextCurrentUser);
             t.NewRecord();
             t.ID = uuidv4(); // generate a new ID - we want to do this explicitly so that we can control the ID that goes into the SQL script so this can be part of a migration file
             t.Name = this.Name; // propagate the name
@@ -238,7 +238,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
             t.IsActive = true;
             if (await t.Save()) {
                 // now create the template contents
-                const tc = await md.GetEntityObject<TemplateContentEntity>("Template Contents", this.ContextCurrentUser);
+                const tc = await md.GetEntityObject<MJTemplateContentEntity>("MJ: Template Contents", this.ContextCurrentUser);
                 tc.NewRecord();
                 tc.ID = uuidv4(); // generate a new ID for the Template Content - do here as well for same reason as above with Template.ID
                 tc.TemplateID = t.ID;
@@ -276,10 +276,10 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         if (AIPromptEntityExtendedServer.TemplateContentTypeID) {
             return AIPromptEntityExtendedServer.TemplateContentTypeID;
         }
-        // we will use the TemplateEntityType for AI Prompts
+        // we will use the MJTemplateEntityType for AI Prompts
         const rv = this.ProviderToUse as any as IRunViewProvider;
-        const result = await rv.RunView<TemplateContentTypeEntity>({
-            EntityName: "Template Content Types",
+        const result = await rv.RunView<MJTemplateContentTypeEntity>({
+            EntityName: "MJ: Template Content Types",
             ExtraFilter: "Name='Text'",
             OrderBy: "__mj_CreatedAt ASC" // first one
         }, this.ContextCurrentUser);

@@ -10,7 +10,7 @@ import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
-import { EntityEntity } from '@memberjunction/core-entities';
+import { MJEntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
@@ -938,7 +938,7 @@ export class SQLCodeGenBase {
                 if (!u)
                     throw new Error('Could not find the first user in the cache, cant generate the full text search function without a user');
 
-                const e = <EntityEntity>await md.GetEntityObject('Entities', u);
+                const e = <MJEntityEntity>await md.GetEntityObject('MJ: Entities', u);
                 await e.Load(entity.ID);
                 e.FullTextSearchFunction = functionName;
                 if (!await e.Save())
@@ -1250,7 +1250,7 @@ GO
 
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
-        const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
+        const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
@@ -1301,7 +1301,7 @@ ${whereClause}GO${permissions}
 
     protected generateBaseViewJoins(entity: EntityInfo, entityFields: EntityFieldInfo[]): string {
         let sOutput: string = '';
-        const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
+        const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
         for (let i: number = 0; i < entityFields.length; i++) {
             const ef: EntityFieldInfo = entityFields[i];
             // Generate SQL JOIN for related entities that have configured join fields
@@ -1650,10 +1650,10 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR ${EntityInfo.UpdatedAtFieldName} field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.ClassName}]', 'TR') IS NOT NULL
-    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.ClassName}];
+IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.BaseTableCodeName}]', 'TR') IS NOT NULL
+    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.BaseTableCodeName}];
 GO
-CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
+CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.BaseTableCodeName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
 AFTER UPDATE
 AS
