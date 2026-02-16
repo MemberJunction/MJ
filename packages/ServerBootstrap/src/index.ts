@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Server Bootstrap
+ * MemberJunction Server Bootstrap
  *
  * Encapsulates all server initialization logic so MJAPI applications become minimal bootstrapping files.
  * This package provides a single `createMJServer` function that handles:
@@ -123,7 +123,7 @@ async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void
  * ```
  */
 export async function createMJServer(options: MJServerConfig = {}): Promise<void> {
-  console.log('🚀 MemberJunction 3.0 Server Bootstrap');
+  console.log('🚀 MemberJunction Server Bootstrap');
   console.log('=====================================\n');
 
   // Configuration has already been loaded and merged by MJServer's config.ts at module init time

@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Auth Shell Component
+ * MemberJunction Auth Shell Component
  *
  * Handles authentication flow and initialization for MJ applications.
  * This component encapsulates all the auth logic that was previously in app.component.ts
@@ -66,7 +66,7 @@ export class MJAuthShellComponent implements OnInit {
   ) {}
 
   async ngOnInit() {
-    console.log('🚀 MemberJunction 3.0 - Auth Shell Initializing');
+    console.log('🚀 MemberJunction - Auth Shell Initializing');
 
     SetProductionStatus(this.environment.production);
     this.initialPath = window.location.pathname + (window.location.search ? window.location.search : '');
