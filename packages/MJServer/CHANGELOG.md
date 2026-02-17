@@ -1,5 +1,70 @@
 # Change Log - @memberjunction/server
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- 737b56b: Add SimpleQueryFieldInfo for query field lineage tracking in InteractiveComponents, sync DeleteOptionsInput fields with server schema in GraphQLDataProvider, and flatten tsconfig files in distribution for cleaner package builds
+- Updated dependencies [786a390]
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/communication-types@5.0.0
+  - @memberjunction/graphql-dataprovider@5.0.0
+  - @memberjunction/interactive-component-types@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/sqlserver-dataprovider@5.0.0
+  - @memberjunction/ai-agent-manager-actions@5.0.0
+  - @memberjunction/ai-agent-manager@5.0.0
+  - @memberjunction/ai-agents@5.0.0
+  - @memberjunction/ai@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/aiengine@5.0.0
+  - @memberjunction/ai-mcp-client@5.0.0
+  - @memberjunction/ai-prompts@5.0.0
+  - @memberjunction/ai-provider-bundle@5.0.0
+  - @memberjunction/ai-vectors-pinecone@5.0.0
+  - @memberjunction/api-keys@5.0.0
+  - @memberjunction/actions-apollo@5.0.0
+  - @memberjunction/actions-base@5.0.0
+  - @memberjunction/actions-bizapps-accounting@5.0.0
+  - @memberjunction/actions-bizapps-crm@5.0.0
+  - @memberjunction/actions-bizapps-formbuilders@5.0.0
+  - @memberjunction/actions-bizapps-lms@5.0.0
+  - @memberjunction/actions-bizapps-social@5.0.0
+  - @memberjunction/core-actions@5.0.0
+  - @memberjunction/actions@5.0.0
+  - @memberjunction/entity-communications-base@5.0.0
+  - @memberjunction/entity-communications-server@5.0.0
+  - @memberjunction/notifications@5.0.0
+  - @memberjunction/communication-ms-graph@5.0.0
+  - @memberjunction/communication-sendgrid@5.0.0
+  - @memberjunction/component-registry-client-sdk@5.0.0
+  - @memberjunction/config@5.0.0
+  - @memberjunction/doc-utils@5.0.0
+  - @memberjunction/encryption@5.0.0
+  - @memberjunction/external-change-detection@5.0.0
+  - @memberjunction/core-entities-server@5.0.0
+  - @memberjunction/data-context@5.0.0
+  - @memberjunction/data-context-server@5.0.0
+  - @memberjunction/global@5.0.0
+  - @memberjunction/queue@5.0.0
+  - @memberjunction/storage@5.0.0
+  - @memberjunction/scheduling-actions@5.0.0
+  - @memberjunction/scheduling-engine-base@5.0.0
+  - @memberjunction/scheduling-base-types@5.0.0
+  - @memberjunction/scheduling-engine@5.0.0
+  - @memberjunction/skip-types@5.0.0
+  - @memberjunction/templates@5.0.0
+  - @memberjunction/testing-engine@5.0.0
+  - @memberjunction/testing-engine-base@5.0.0
+  - @memberjunction/version-history@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

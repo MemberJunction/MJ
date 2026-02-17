@@ -1,5 +1,43 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- 737b56b: Add SimpleQueryFieldInfo for query field lineage tracking in InteractiveComponents, sync DeleteOptionsInput fields with server schema in GraphQLDataProvider, and flatten tsconfig files in distribution for cleaner package builds
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ai-agent-manager@5.0.0
+  - @memberjunction/ai-agents@5.0.0
+  - @memberjunction/ai-engine-base@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/ai-provider-bundle@5.0.0
+  - @memberjunction/ai-reranker@5.0.0
+  - @memberjunction/actions-apollo@5.0.0
+  - @memberjunction/actions-base@5.0.0
+  - @memberjunction/actions-bizapps-accounting@5.0.0
+  - @memberjunction/actions-bizapps-crm@5.0.0
+  - @memberjunction/actions-bizapps-formbuilders@5.0.0
+  - @memberjunction/actions-bizapps-lms@5.0.0
+  - @memberjunction/actions-bizapps-social@5.0.0
+  - @memberjunction/core-actions@5.0.0
+  - @memberjunction/actions@5.0.0
+  - @memberjunction/doc-utils@5.0.0
+  - @memberjunction/encryption@5.0.0
+  - @memberjunction/core-entities-server@5.0.0
+  - @memberjunction/data-context-server@5.0.0
+  - @memberjunction/scheduling-actions@5.0.0
+  - @memberjunction/scheduling-engine-base@5.0.0
+  - @memberjunction/scheduling-engine@5.0.0
+  - @memberjunction/templates@5.0.0
+  - @memberjunction/testing-engine@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

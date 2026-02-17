@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/interactive-component-types@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/data-context@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

@@ -1,5 +1,22 @@
 # @memberjunction/ng-explorer-app
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [786a390]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/ng-bootstrap@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/ng-auth-services@5.0.0
+  - @memberjunction/ng-explorer-core@5.0.0
+  - @memberjunction/ng-workspace-initializer@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes
