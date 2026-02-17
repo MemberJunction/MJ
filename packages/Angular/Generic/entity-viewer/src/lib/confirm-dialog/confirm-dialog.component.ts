@@ -18,7 +18,7 @@ export type ConfirmButtonStyle = 'primary' | 'danger';
  *
  * @example
  * ```html
- * <mj-confirm-dialog
+ * <mj-ev-confirm-dialog
  *   [IsOpen]="showDeleteConfirm"
  *   Title="Delete View"
  *   Message="Are you sure you want to delete this view?"
@@ -28,12 +28,12 @@ export type ConfirmButtonStyle = 'primary' | 'danger';
  *   Icon="fa-solid fa-trash"
  *   (Confirmed)="onDeleteConfirmed()"
  *   (Cancelled)="showDeleteConfirm = false">
- * </mj-confirm-dialog>
+ * </mj-ev-confirm-dialog>
  * ```
  */
 @Component({
   standalone: false,
-  selector: 'mj-confirm-dialog',
+  selector: 'mj-ev-confirm-dialog',
   templateUrl: './confirm-dialog.component.html',
   styleUrls: ['./confirm-dialog.component.css']
 })

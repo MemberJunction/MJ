@@ -983,7 +983,7 @@
 </mj-aggregate-setup-dialog>
 
 <!-- Delete Confirmation Dialog -->
-<mj-confirm-dialog
+<mj-ev-confirm-dialog
   [IsOpen]="showDeleteConfirm"
   Title="Delete View"
   [Message]="'Are you sure you want to delete \'' + viewName + '\'?'"
@@ -993,10 +993,10 @@
   Icon="fa-solid fa-trash"
   (Confirmed)="OnDeleteConfirmed()"
   (Cancelled)="OnDeleteCancelled()">
-</mj-confirm-dialog>
+</mj-ev-confirm-dialog>
 
 <!-- Filter Mode Switch Confirmation Dialog (BUG-006) -->
-<mj-confirm-dialog
+<mj-ev-confirm-dialog
   [IsOpen]="showFilterModeSwitchConfirm"
   Title="Switch Filter Mode"
   [Message]="filterMode === 'smart' ? 'Switching to Traditional mode will clear your smart filter prompt.' : 'Switching to Smart mode will clear your traditional filter rules.'"
@@ -1006,4 +1006,4 @@
   Icon="fa-solid fa-exchange-alt"
   (Confirmed)="OnFilterModeSwitchConfirmed()"
   (Cancelled)="OnFilterModeSwitchCancelled()">
-</mj-confirm-dialog>
+</mj-ev-confirm-dialog>
