@@ -88,6 +88,53 @@ export class AngularFormSectionInfo {
  */
 export class AngularClientGeneratorBase {
     /**
+     * Removes orphaned Angular entity form directories that no longer correspond to existing entities.
+     * This handles cleanup when entities are renamed or deleted.
+     * @param entityPath The path to the Entities directory containing entity form subdirectories
+     * @param entities Array of current EntityInfo objects that should have form directories
+     */
+    protected cleanupOrphanedEntityDirectories(entityPath: string, entities: EntityInfo[]): void {
+        try {
+            if (!fs.existsSync(entityPath)) {
+                return; // Nothing to clean up if directory doesn't exist
+            }
+
+            // Get the set of valid entity ClassNames (these should have directories)
+            const validClassNames = new Set(
+                entities
+                    .filter(e => e.PrimaryKeys && e.PrimaryKeys.length > 0 && e.IncludeInAPI)
+                    .map(e => e.ClassName)
+            );
+
+            // Read all subdirectories in the Entities folder
+            const existingDirs = fs.readdirSync(entityPath, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+
+            // Delete directories that don't match any current entity ClassName
+            for (const dir of existingDirs) {
+                if (!validClassNames.has(dir)) {
+                    const dirPath = path.join(entityPath, dir);
+                    try {
+                        // Remove all files in the directory first
+                        const files = fs.readdirSync(dirPath);
+                        for (const file of files) {
+                            fs.unlinkSync(path.join(dirPath, file));
+                        }
+                        // Then remove the directory itself
+                        fs.rmdirSync(dirPath);
+                        logStatus(`   Removed orphaned entity form directory: ${dir}`);
+                    } catch (err) {
+                        logError(`   Failed to remove orphaned directory ${dir}: ${err}`);
+                    }
+                }
+            }
+        } catch (err) {
+            logError(`Error cleaning up orphaned entity directories: ${err}`);
+        }
+    }
+
+    /**
      * Main entry point for generating Angular code for a collection of entities
      * @param entities Array of EntityInfo objects to generate Angular code for
      * @param directory The output directory where generated files will be saved
@@ -98,6 +145,10 @@ export class AngularClientGeneratorBase {
     public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo): Promise<boolean> {
         try {
           const entityPath = path.join(directory, 'Entities');
+
+          // Clean up orphaned directories from renamed/deleted entities BEFORE generating new files
+          this.cleanupOrphanedEntityDirectories(entityPath, entities);
+
           //const classMapEntries: string[] = [];
           const componentImports: string[] = [];
           const relatedEntityModuleImports: {library: string, modules: string[]}[] = [];
