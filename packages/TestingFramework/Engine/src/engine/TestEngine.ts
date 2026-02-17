@@ -6,7 +6,6 @@
 import {
     UserInfo,
     Metadata,
-    RunView,
     LogError,
     LogStatusEx,
     IsVerboseLoggingEnabled
@@ -71,7 +70,6 @@ export class TestEngine extends TestEngineBase {
     private _driverCache = new Map<string, BaseTestDriver>();
     private _oracleRegistry = new Map<string, IOracle>();
     private _variableResolver = new VariableResolver();
-    private _outputTypeCache = new Map<string, string>(); // name → ID
 
     /**
      * Get singleton instance
@@ -627,33 +625,30 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async persistOutputs(
-        testRun: TestRunEntity,
+        testRun: MJTestRunEntity,
         outputs: TestRunOutputItem[],
         contextUser: UserInfo
     ): Promise<void> {
         try {
             this.log(`Persisting ${outputs.length} test run output(s) for TestRun ${testRun.ID}`);
 
-            // Lazy-load output type lookup
-            if (this._outputTypeCache.size === 0) {
-                await this.loadOutputTypeCache(contextUser);
-            }
-
-            if (this._outputTypeCache.size === 0) {
-                this.logError('Output type cache is empty after loading — no TestRunOutputType rows found. Cannot persist outputs.');
+            const outputTypes = this.TestOutputTypes;
+            if (outputTypes.length === 0) {
+                this.logError('TestOutputTypes cache is empty — no Test Run Output Type rows found. Cannot persist outputs.');
                 return;
             }
 
             const md = new Metadata();
             let persisted = 0;
             for (const output of outputs) {
-                const outputTypeId = this._outputTypeCache.get(output.outputTypeName);
-                if (!outputTypeId) {
-                    this.logError(`Unknown output type: "${output.outputTypeName}". Available types: ${[...this._outputTypeCache.keys()].join(', ')}. Skipping output.`);
+                const outputType = outputTypes.find(t => t.Get('Name') === output.outputTypeName);
+                if (!outputType) {
+                    const availableTypes = outputTypes.map(t => t.Get('Name') as string).join(', ');
+                    this.logError(`Unknown output type: "${output.outputTypeName}". Available types: ${availableTypes}. Skipping output.`);
                     continue;
                 }
 
-                await this.persistSingleOutput(md, testRun, output, outputTypeId, contextUser);
+                await this.persistSingleOutput(md, testRun, output, outputType.Get('ID') as string, contextUser);
                 persisted++;
             }
 
@@ -664,34 +659,12 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
-     * Load TestRunOutputType lookup into cache.
-     * @private
-     */
-    private async loadOutputTypeCache(contextUser: UserInfo): Promise<void> {
-        const rv = new RunView();
-        const result = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'MJ: Test Run Output Types',
-            Fields: ['ID', 'Name'],
-            ResultType: 'simple'
-        }, contextUser);
-
-        if (result.Success) {
-            for (const row of result.Results) {
-                this._outputTypeCache.set(row.Name, row.ID);
-            }
-            this.log(`Loaded ${this._outputTypeCache.size} output type(s): ${[...this._outputTypeCache.keys()].join(', ')}`);
-        } else {
-            this.logError(`Failed to load output types: ${result.ErrorMessage}`);
-        }
-    }
-
-    /**
      * Persist a single output record.
      * @private
      */
     private async persistSingleOutput(
         md: Metadata,
-        testRun: TestRunEntity,
+        testRun: MJTestRunEntity,
         output: TestRunOutputItem,
         outputTypeId: string,
         contextUser: UserInfo
