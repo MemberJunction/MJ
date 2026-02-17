@@ -1,6 +1,8 @@
 import { BaseInfo } from "./baseInfo";
 import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
+import { DatabasePlatform } from "./platformSQL";
+import { PlatformVariantsJSON, ParsePlatformVariants, ResolvePlatformVariant } from "./platformVariants";
 import { UserInfo } from "./securityInfo";
 import { QueryCacheConfig } from "./QueryCacheConfig";
 import {
@@ -107,6 +109,12 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * The AI Model ID used to generate the embedding vector for this query. Required for vector similarity comparisons.
      */
     EmbeddingModelID: string | null = null
+    /**
+     * JSON column containing platform-specific SQL variants for multi-database support.
+     * Stores alternative SQL for platforms other than the default (typically SQL Server).
+     * Parsed at runtime via GetPlatformSQL() and GetPlatformCacheValidationSQL().
+     */
+    PlatformVariants: string | null = null
 
     // virtual fields - returned by the database VIEW
     /**
@@ -326,6 +334,39 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
 
         // Then check status - only approved queries can be run
         return this.Status === 'Approved';
+    }
+
+    private _parsedVariants: PlatformVariantsJSON | null | undefined = undefined;
+    /**
+     * Lazily parses and caches the PlatformVariants JSON.
+     */
+    private get ParsedVariants(): PlatformVariantsJSON | null {
+        if (this._parsedVariants === undefined) {
+            this._parsedVariants = ParsePlatformVariants(this.PlatformVariants);
+        }
+        return this._parsedVariants;
+    }
+
+    /**
+     * Resolves the SQL for a given database platform.
+     * Checks PlatformVariants first; falls back to the base SQL property.
+     * @param platform - The target database platform
+     * @returns The appropriate SQL string for the platform
+     */
+    public GetPlatformSQL(platform: DatabasePlatform): string {
+        const variant = ResolvePlatformVariant(this.ParsedVariants, 'SQL', platform);
+        return variant ?? this.SQL;
+    }
+
+    /**
+     * Resolves CacheValidationSQL for a given database platform.
+     * Checks PlatformVariants first; falls back to the base CacheValidationSQL property.
+     * @param platform - The target database platform
+     * @returns The appropriate CacheValidationSQL string, or null if none configured
+     */
+    public GetPlatformCacheValidationSQL(platform: DatabasePlatform): string | null {
+        const variant = ResolvePlatformVariant(this.ParsedVariants, 'CacheValidationSQL', platform);
+        return variant ?? this.CacheValidationSQL;
     }
 }
 
