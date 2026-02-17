@@ -5334,12 +5334,14 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (!this.isRunViewsOperation(event) && event.params && isSingleRunViewParams(event.params)) {
             const extraFilter = event.params.ExtraFilter;
             if (extraFilter) {
-                pills.push({ label: 'Filter', value: this.truncateString(extraFilter, 25), type: 'filter' });
+                const filterStr = typeof extraFilter === 'string' ? extraFilter : extraFilter.default;
+                pills.push({ label: 'Filter', value: this.truncateString(filterStr, 25), type: 'filter' });
             }
 
             const orderBy = event.params.OrderBy;
             if (orderBy) {
-                pills.push({ label: 'Order', value: this.truncateString(orderBy, 20), type: 'order' });
+                const orderStr = typeof orderBy === 'string' ? orderBy : orderBy.default;
+                pills.push({ label: 'Order', value: this.truncateString(orderStr, 20), type: 'order' });
             }
 
             const resultType = event.params.ResultType;

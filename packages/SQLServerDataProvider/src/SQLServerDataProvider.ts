@@ -1437,7 +1437,8 @@ export class SQLServerDataProvider
         this.CheckUserReadPermissions(entityInfo.Name, user);
 
         // get other variaables from params
-        const extraFilter: string = params.ExtraFilter;
+        // ExtraFilter is guaranteed to be a resolved string by ProviderBase.PreRunView
+        const extraFilter: string = (params.ExtraFilter as string) || '';
         const userSearchString: string = params.UserSearchString;
         const excludeUserViewRunID: string = params.ExcludeUserViewRunID;
         const overrideExcludeFilter: string = params.OverrideExcludeFilter;
@@ -1553,7 +1554,8 @@ export class SQLServerDataProvider
         // first check params.OrderBy, that takes first priority
         // if that's not provided, then we check the view definition for its SortState
         // if that's not provided we do NOT sort
-        const orderBy: string = params.OrderBy ? params.OrderBy : viewEntity ? viewEntity.OrderByClause : '';
+        // OrderBy is guaranteed to be a resolved string by ProviderBase.PreRunView
+        const orderBy: string = params.OrderBy ? (params.OrderBy as string) : viewEntity ? viewEntity.OrderByClause : '';
 
         // if we're saving the view results, we need to wrap the entire SQL statement
         if (viewEntity?.ID && viewEntity?.ID.length > 0 && saveViewResults && user) {
@@ -1998,12 +2000,13 @@ export class SQLServerDataProvider
     let whereSQL = '';
     let bHasWhere = false;
 
-    // Extra filter
-    if (params.ExtraFilter && params.ExtraFilter.length > 0) {
-      if (!this.validateUserProvidedSQLClause(params.ExtraFilter)) {
-        throw new Error(`Invalid Extra Filter: ${params.ExtraFilter}`);
+    // Extra filter (resolved to string by ProviderBase.PreRunView)
+    const extraFilterStr = (params.ExtraFilter as string) || '';
+    if (extraFilterStr.length > 0) {
+      if (!this.validateUserProvidedSQLClause(extraFilterStr)) {
+        throw new Error(`Invalid Extra Filter: ${extraFilterStr}`);
       }
-      whereSQL = `(${params.ExtraFilter})`;
+      whereSQL = `(${extraFilterStr})`;
       bHasWhere = true;
     }
 
@@ -2178,12 +2181,13 @@ export class SQLServerDataProvider
       // Build the query
       let sql = `SELECT ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView} WHERE ${combinedWhere}`;
 
-      // Add ORDER BY if specified
-      if (params.OrderBy && params.OrderBy.length > 0) {
-        if (!this.validateUserProvidedSQLClause(params.OrderBy)) {
-          throw new Error(`Invalid OrderBy clause: ${params.OrderBy}`);
+      // Add ORDER BY if specified (resolved to string by ProviderBase.PreRunView)
+      const orderByStr = (params.OrderBy as string) || '';
+      if (orderByStr.length > 0) {
+        if (!this.validateUserProvidedSQLClause(orderByStr)) {
+          throw new Error(`Invalid OrderBy clause: ${orderByStr}`);
         }
-        sql += ` ORDER BY ${params.OrderBy}`;
+        sql += ` ORDER BY ${orderByStr}`;
       }
 
       const results = await this.ExecuteSQL(sql, undefined, undefined, contextUser);

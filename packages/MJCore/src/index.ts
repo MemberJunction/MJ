@@ -33,6 +33,7 @@ export * from "./generic/metadataUtil";
 export * from "./generic/authTypes";
 export * from "./generic/graphqlTypeNames";
 
+export * from "./generic/platformSQL";
 export * from "./generic/databaseProviderBase";
 export * from "./generic/baseEngineRegistry";
 export * from "./generic/localCacheManager";
