@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@memberjunction/codegen-lib": "5.0.0",
     "@memberjunction/core": "5.0.0",
     "@memberjunction/global": "5.0.0",
     "@memberjunction/sql-dialect": "5.0.0",
