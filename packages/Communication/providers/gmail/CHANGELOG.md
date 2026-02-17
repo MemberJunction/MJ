@@ -1,5 +1,21 @@
 # @memberjunction/communication-gmail
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- 786a390: Remove explicit 3.0 references in several areas
+- Updated dependencies [786a390]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/communication-types@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/global@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

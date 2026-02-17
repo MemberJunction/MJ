@@ -1,5 +1,38 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [4aa1b54]
+  - @memberjunction/ai-anthropic@5.0.0
+  - @memberjunction/ai-azure@5.0.0
+  - @memberjunction/ai-bedrock@5.0.0
+  - @memberjunction/ai-betty-bot@5.0.0
+  - @memberjunction/ai-blackforestlabs@5.0.0
+  - @memberjunction/ai-cerebras@5.0.0
+  - @memberjunction/ai-cohere@5.0.0
+  - @memberjunction/ai-elevenlabs@5.0.0
+  - @memberjunction/ai-fireworks@5.0.0
+  - @memberjunction/ai-gemini@5.0.0
+  - @memberjunction/ai-groq@5.0.0
+  - @memberjunction/ai-heygen@5.0.0
+  - @memberjunction/ai-lmstudio@5.0.0
+  - @memberjunction/ai-local-embeddings@5.0.0
+  - @memberjunction/ai-mistral@5.0.0
+  - @memberjunction/ai-ollama@5.0.0
+  - @memberjunction/ai-openai@5.0.0
+  - @memberjunction/ai-openrouter@5.0.0
+  - @memberjunction/ai-recommendations-rex@5.0.0
+  - @memberjunction/ai-vectors-pinecone@5.0.0
+  - @memberjunction/ai-vertex@5.0.0
+  - @memberjunction/ai-zhipu@5.0.0
+  - @memberjunction/ai-xai@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

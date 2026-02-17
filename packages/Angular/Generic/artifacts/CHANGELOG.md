@@ -1,5 +1,27 @@
 # @memberjunction/ng-artifacts
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/interactive-component-types@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ng-base-types@5.0.0
+  - @memberjunction/ng-code-editor@5.0.0
+  - @memberjunction/ng-markdown@5.0.0
+  - @memberjunction/ng-notifications@5.0.0
+  - @memberjunction/ng-react@5.0.0
+  - @memberjunction/ng-shared-generic@5.0.0
+  - @memberjunction/global@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

@@ -1,5 +1,32 @@
 # @memberjunction/ai-cli
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/sqlserver-dataprovider@5.0.0
+  - @memberjunction/ai-agents@5.0.0
+  - @memberjunction/ai@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/ai-prompts@5.0.0
+  - @memberjunction/ai-anthropic@5.0.0
+  - @memberjunction/ai-betty-bot@5.0.0
+  - @memberjunction/ai-cerebras@5.0.0
+  - @memberjunction/ai-groq@5.0.0
+  - @memberjunction/ai-mistral@5.0.0
+  - @memberjunction/ai-openai@5.0.0
+  - @memberjunction/core-actions@5.0.0
+  - @memberjunction/actions@5.0.0
+  - @memberjunction/core-entities-server@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes
