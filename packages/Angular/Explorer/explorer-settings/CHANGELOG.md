@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/graphql-dataprovider@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ng-base-application@5.0.0
+  - @memberjunction/ng-entity-form-dialog@5.0.0
+  - @memberjunction/ng-entity-permissions@5.0.0
+  - @memberjunction/ng-shared@5.0.0
+  - @memberjunction/ng-simple-record-list@5.0.0
+  - @memberjunction/ng-base-forms@5.0.0
+  - @memberjunction/ng-code-editor@5.0.0
+  - @memberjunction/ng-join-grid@5.0.0
+  - @memberjunction/ng-notifications@5.0.0
+  - @memberjunction/ng-shared-generic@5.0.0
+  - @memberjunction/ng-tabstrip@5.0.0
+  - @memberjunction/ng-user-avatar@5.0.0
+  - @memberjunction/global@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

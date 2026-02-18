@@ -1521,11 +1521,14 @@ export class ManageMetadataBase {
                if (relationships && relationships.length === 0) {
                   // no relationship exists, so create it
                   const e = md.Entities.find(e => e.ID === f.EntityID)!;
+                  const parentEntity = md.Entities.find(e => e.ID === f.RelatedEntityID);
+                  const parentEntityName = parentEntity ? parentEntity.Name : f.RelatedEntityID;
                   // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
                   const relCount = relationshipCountMap.get(f.EntityID) || 0;
                   const sequence = relCount + 1;
                   const newEntityRelationshipUUID = this.createNewUUID();
                   batchSQL += `
+/* Create Entity Relationship: ${parentEntityName} -> ${e.Name} (One To Many via ${f.Name}) */
    IF NOT EXISTS (
       SELECT 1
       FROM [${mj_core_schema()}].EntityRelationship
@@ -1542,7 +1545,7 @@ export class ManageMetadataBase {
             });
 
             if (batchSQL.length > 0){
-               await this.LogSQLAndExecute(pool, batchSQL, `SQL text to create Entitiy Relationships`);
+               await this.LogSQLAndExecute(pool, batchSQL);
             }
          };
 

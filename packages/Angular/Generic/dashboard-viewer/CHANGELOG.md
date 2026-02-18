@@ -1,5 +1,25 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [3cca644]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/ng-entity-viewer@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ng-artifacts@5.0.0
+  - @memberjunction/ng-query-viewer@5.0.0
+  - @memberjunction/ng-shared-generic@5.0.0
+  - @memberjunction/ng-trees@5.0.0
+  - @memberjunction/global@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

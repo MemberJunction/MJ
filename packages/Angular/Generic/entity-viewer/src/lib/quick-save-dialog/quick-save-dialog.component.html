@@ -1,0 +1,152 @@
+<!-- Dialog Backdrop -->
+@if (IsOpen) {
+  <div class="dialog-backdrop" (click)="OnClose()"></div>
+}
+
+<!-- Dialog Panel -->
+<div class="dialog-panel" [class.open]="IsOpen">
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="header-title">
+      <i class="fa-solid fa-bookmark"></i>
+      <span>Save View</span>
+    </div>
+    @if (EntityName) {
+      <span class="entity-badge">{{ EntityName }}</span>
+    }
+    <button class="close-btn" (click)="OnClose()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="dialog-content">
+    <!-- Name Field -->
+    <div class="form-group">
+      <label for="quickSaveName">View Name</label>
+      <input
+        id="quickSaveName"
+        type="text"
+        class="form-input"
+        [class.invalid]="NameTouched && !Name.trim()"
+        placeholder="e.g., Active West Coast Contacts"
+        [(ngModel)]="Name"
+        (blur)="NameTouched = true"
+        (keydown.enter)="OnSave(false)"
+      />
+      @if (NameTouched && !Name.trim()) {
+        <span class="validation-error">Name is required</span>
+      }
+    </div>
+
+    <!-- Description Field -->
+    <div class="form-group">
+      <label for="quickSaveDescription">Description <span class="optional">(optional)</span></label>
+      <textarea
+        id="quickSaveDescription"
+        class="form-input form-textarea"
+        placeholder="What does this view show?"
+        [(ngModel)]="Description"
+        rows="2"
+      ></textarea>
+    </div>
+
+    <!-- Share Toggle -->
+    <label class="checkbox-label">
+      <input type="checkbox" [(ngModel)]="IsShared" />
+      <span class="checkbox-text">
+        <strong>Share with others</strong>
+        <small>Allow other users to use this view</small>
+      </span>
+    </label>
+
+    <!-- View Summary Preview -->
+    @if (Summary) {
+      <div class="summary-section">
+        <div class="summary-header">
+          <i class="fa-solid fa-list-check"></i>
+          <span>View includes:</span>
+        </div>
+        <div class="summary-items">
+          <div class="summary-item">
+            <i class="fa-solid fa-columns"></i>
+            <span>{{ Summary.ColumnCount }} column{{ Summary.ColumnCount !== 1 ? 's' : '' }}</span>
+          </div>
+          @if (Summary.SortCount > 0) {
+            <div class="summary-item">
+              <i class="fa-solid fa-arrow-up-wide-short"></i>
+              <span>{{ Summary.SortCount }} sort level{{ Summary.SortCount !== 1 ? 's' : '' }}</span>
+            </div>
+          }
+          @if (Summary.SmartFilterActive) {
+            <div class="summary-item smart-filter">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Smart filter: "{{ Summary.SmartFilterPrompt }}"</span>
+            </div>
+          }
+          @if (Summary.FilterCount > 0) {
+            <div class="summary-item">
+              <i class="fa-solid fa-filter"></i>
+              <span>{{ Summary.FilterCount }} filter{{ Summary.FilterCount !== 1 ? 's' : '' }}</span>
+            </div>
+          }
+          @if (Summary.AggregateCount > 0) {
+            <div class="summary-item">
+              <i class="fa-solid fa-chart-simple"></i>
+              <span>{{ Summary.AggregateCount }} aggregate{{ Summary.AggregateCount !== 1 ? 's' : '' }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Advanced Link -->
+    <button class="advanced-link" (click)="OnOpenAdvanced()">
+      <i class="fa-solid fa-sliders"></i>
+      <span>Customize columns, filters & sorting...</span>
+    </button>
+  </div>
+
+  <!-- Footer -->
+  <div class="dialog-footer">
+    <div class="footer-actions">
+      @if (ViewEntity) {
+        <!-- Existing view: Update + Save As New -->
+        <button
+          class="btn btn-primary"
+          (click)="OnSave(false)"
+          [disabled]="!Name.trim() || IsSaving">
+          @if (IsSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-save"></i>
+          }
+          {{ IsSaving ? 'Saving...' : 'Update' }}
+        </button>
+        <button
+          class="btn btn-secondary"
+          (click)="OnSave(true)"
+          [disabled]="!Name.trim() || IsSaving">
+          <i class="fa-solid fa-plus"></i>
+          Save As New
+        </button>
+      } @else {
+        <!-- New view: Create -->
+        <button
+          class="btn btn-primary"
+          (click)="OnSave(true)"
+          [disabled]="!Name.trim() || IsSaving">
+          @if (IsSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-plus"></i>
+          }
+          {{ IsSaving ? 'Saving...' : 'Create View' }}
+        </button>
+      }
+    </div>
+    <button class="btn btn-cancel" (click)="OnClose()">
+      Cancel
+    </button>
+  </div>
+</div>
