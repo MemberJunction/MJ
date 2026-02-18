@@ -5,7 +5,8 @@ import {
     EventEmitter,
     OnInit,
     ChangeDetectorRef,
-    ChangeDetectionStrategy
+    ChangeDetectionStrategy,
+    NgZone
 } from '@angular/core';
 import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
 import {
@@ -14,10 +15,6 @@ import {
     CreateVersionLabelProgress
 } from '@memberjunction/graphql-dataprovider';
 
-export function LoadMjLabelCreateComponent() {
-    // Prevents tree-shaking
-}
-
 export interface RecordOption {
     ID: string;
     DisplayName: string;
@@ -25,6 +22,7 @@ export interface RecordOption {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-label-create',
     templateUrl: './label-create.component.html',
     styleUrls: ['./label-create.component.css'],
@@ -75,7 +73,7 @@ export class MjLabelCreateComponent implements OnInit {
 
     private metadata = new Metadata();
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
 
     ngOnInit(): void {
         this.resetCreateDialog();
@@ -100,10 +98,12 @@ export class MjLabelCreateComponent implements OnInit {
 
     private async skipToDetailsWithPreselection(): Promise<void> {
         await this.loadEntityRecords(this.SelectedEntity!);
-        this.preselectRecordsByIds(this.PreselectedRecordIds);
-        this.CreateStep = 'details';
-        this.LabelName = this.suggestLabelName();
-        this.cdr.markForCheck();
+        this.ngZone.run(() => {
+            this.preselectRecordsByIds(this.PreselectedRecordIds);
+            this.CreateStep = 'details';
+            this.LabelName = this.suggestLabelName();
+            this.cdr.markForCheck();
+        });
     }
 
     private preselectRecordsByIds(ids: string[]): void {
@@ -218,11 +218,15 @@ export class MjLabelCreateComponent implements OnInit {
 
             this.CreateStep = 'done';
         } catch (e: unknown) {
-            this.CreateError = e instanceof Error ? e.message : String(e);
-            this.CreateStep = 'done';
+            this.ngZone.run(() => {
+                this.CreateError = e instanceof Error ? e.message : String(e);
+                this.CreateStep = 'done';
+            });
         } finally {
-            this.IsCreatingLabel = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsCreatingLabel = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -251,8 +255,10 @@ export class MjLabelCreateComponent implements OnInit {
             RecordKeys: [{ Key: 'ID', Value: record.ID }],
             IncludeDependencies: true,
             OnProgress: (progress) => {
-                this.CreateProgress = progress;
-                this.cdr.markForCheck();
+                this.ngZone.run(() => {
+                    this.CreateProgress = progress;
+                    this.cdr.markForCheck();
+                });
             },
         });
 
@@ -260,8 +266,10 @@ export class MjLabelCreateComponent implements OnInit {
             throw new Error(result.Error ?? 'Failed to create version label');
         }
 
-        this.CreatedLabelCount = 1;
-        this.CreatedItemCount = result.ItemsCaptured ?? 0;
+        this.ngZone.run(() => {
+            this.CreatedLabelCount = 1;
+            this.CreatedItemCount = result.ItemsCaptured ?? 0;
+        });
     }
 
     private async createGroupedLabels(records: RecordOption[]): Promise<void> {
@@ -279,9 +287,11 @@ export class MjLabelCreateComponent implements OnInit {
             throw new Error(parentResult.Error ?? 'Failed to create parent version label');
         }
 
-        this.CreatedLabelCount = 1;
-        this.CreatedItemCount = parentResult.ItemsCaptured ?? 0;
-        this.cdr.markForCheck();
+        this.ngZone.run(() => {
+            this.CreatedLabelCount = 1;
+            this.CreatedItemCount = parentResult.ItemsCaptured ?? 0;
+            this.cdr.markForCheck();
+        });
 
         // Create child labels for each selected record
         for (const record of records) {
@@ -294,8 +304,10 @@ export class MjLabelCreateComponent implements OnInit {
                 ParentID: parentResult.LabelID,
                 IncludeDependencies: true,
                 OnProgress: (progress) => {
-                    this.CreateProgress = progress;
-                    this.cdr.markForCheck();
+                    this.ngZone.run(() => {
+                        this.CreateProgress = progress;
+                        this.cdr.markForCheck();
+                    });
                 },
             });
 
@@ -304,9 +316,11 @@ export class MjLabelCreateComponent implements OnInit {
                 continue;
             }
 
-            this.CreatedLabelCount++;
-            this.CreatedItemCount += childResult.ItemsCaptured ?? 0;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.CreatedLabelCount++;
+                this.CreatedItemCount += childResult.ItemsCaptured ?? 0;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -347,8 +361,10 @@ export class MjLabelCreateComponent implements OnInit {
         } catch (error) {
             console.error('Error loading entity records:', error);
         } finally {
-            this.IsLoadingRecords = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsLoadingRecords = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 

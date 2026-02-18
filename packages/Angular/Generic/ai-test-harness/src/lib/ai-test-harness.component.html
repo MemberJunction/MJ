@@ -1,955 +1,914 @@
-<div class="harness-container" *ngIf="isVisible" kendoWindowContainer>
-        <!-- Header -->
-        <div class="harness-header">
-            @if (entity) {
-                <div class="agent-info">
-                    <div class="agent-details">
-                        @if (hasEntityLogo()) {
-                            <img [src]="getEntityLogoURL()" [alt]="getEntityName() + ' logo'" class="entity-logo">
-                        } @else {
-                            <i [class]="getEntityIconClass()"></i>
-                        }
-                        <div>
-                            <h3>{{ getEntityName() }}</h3>
-                            @if (entity.Description) {
-                                <p>{{ entity.Description }}</p>
-                            }
-                        </div>
-                    </div>
-                    <div class="header-actions">
-                        <button 
-                            class="custom-button"
-                            (click)="clearConversation()"
-                            [disabled]="isExecuting || conversationMessages.length === 0"
-                            title="Clear conversation">
-                            <i class="fa-solid fa-broom"></i>
-                            Clear
-                        </button>
-                        <button 
-                            class="custom-button"
-                            (click)="saveConversation()"
-                            [disabled]="conversationMessages.length === 0"
-                            title="Save conversation">
-                            <i class="fa-solid fa-save"></i>
-                            Save
-                        </button>
-                        <button 
-                            class="custom-button"
-                            (click)="exportConversation()"
-                            [disabled]="conversationMessages.length === 0"
-                            title="Export conversation">
-                            <i class="fa-solid fa-download"></i>
-                            Export
-                        </button>
-                        <button 
-                            class="custom-button"
-                            (click)="importConversation()"
-                            title="Import conversation">
-                            <i class="fa-solid fa-upload"></i>
-                            Import
-                        </button>
-                        <input 
-                            #fileInput
-                            type="file"
-                            accept=".json"
-                            style="display: none"
-                            (change)="onFileSelected($event)">
-                        <button 
-                            class="custom-button icon-only"
-                            (click)="toggleSidebar()"
-                            title="Toggle sidebar">
-                            <i class="fa-solid" [class.fa-chevron-right]="!showSidebar" [class.fa-chevron-left]="showSidebar"></i>
-                        </button>
-                    </div>
-                </div>
-            }
-        </div>
-
-        <!-- Main Content Area with Splitter -->
-        <div class="harness-body">
-            @if (showSidebar) {
-                <kendo-splitter 
-                    orientation="horizontal"
-                    style="height: 100%; width: 100%;">
-                    
-                    <!-- Chat Area (Left Pane) -->
-                    <kendo-splitter-pane 
-                        [collapsible]="false"
-                        [resizable]="true"
-                        [min]="'400px'">
-                        <div class="chat-area">
-                            <!-- Messages Container -->
-                            <div class="messages-container" #messagesContainer>
-                    @if (conversationMessages.length === 0) {
-                        <div class="empty-state">
-                            <i class="fa-solid fa-comments"></i>
-                            <h4>Start a conversation</h4>
-                            <p>Send a message to begin testing the AI agent</p>
-                        </div>
-                    }
-
-                    @for (message of conversationMessages; track message.id) {
-                        <div [ngClass]="getMessageClass(message)">
-                            <div class="message-header">
-                                <span class="message-role">
-                                    @if (message.role === 'user') {
-                                        <i class="fa-solid fa-user"></i> You
-                                    } @else {
-                                        @if (hasEntityLogo()) {
-                                            <img [src]="getEntityLogoURL()" [alt]="getEntityName() + ' logo'" class="message-role-logo">
-                                        } @else {
-                                            <i [class]="getEntityIconClass()"></i>
-                                        }
-                                        {{ getEntityName() || 'Assistant' }}
-                                    }
-                                </span>
-                                <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
-                                @if (message.isStreaming && message.elapsedTime !== undefined) {
-                                    <span class="execution-time streaming">
-                                        <i class="fa-solid fa-spinner fa-spin"></i> {{ formatElapsedTime(message.elapsedTime) }}
-                                    </span>
-                                } @else if (message.executionTime) {
-                                    <span class="execution-time" [title]="getExecutionSummary(message)">{{ formatExecutionTime(message.executionTime) }}</span>
-                                }
-                                @if (showRawToggle(message)) {
-                                    <button class="raw-toggle" (click)="showRawJsonDialog(message)" title="View raw JSON response">
-                                        <i class="fa-solid fa-code"></i>
-                                    </button>
-                                }
-                            </div>
-                            <div class="message-content">
-                                <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
-                                    <i class="fa-solid fa-copy"></i>
-                                </button>
-                                @if (message.isStreaming) {
-                                    <div class="streaming-wrapper">
-                                        <span class="streaming-content" [innerHTML]="getFormattedStreamingContent(message)"></span>
-                                        <span class="cursor">|</span>
-                                    </div>
-                                } @else {
-                                    <div [innerHTML]="getFormattedContent(message)"></div>
-                                }
-                                @if (message.error) {
-                                    <div class="error-details">
-                                        <i class="fa-solid fa-exclamation-triangle"></i>
-                                        {{ message.error }}
-                                    </div>
-                                }
-                                @if (hasPayload(message.payload) && mode === 'agent' && message.role === 'assistant') {
-                                    <div class="payload-section" [class.collapsed]="message.payloadCollapsed">
-                                        <div class="payload-header" (click)="togglePayloadCollapse(message)">
-                                            <span class="payload-label">
-                                                <i class="fa-solid fa-code"></i> Payload
-                                            </span>
-                                            <button class="payload-toggle" type="button">
-                                                <i class="fa-solid" [class.fa-chevron-down]="!message.payloadCollapsed" [class.fa-chevron-right]="message.payloadCollapsed"></i>
-                                            </button>
-                                        </div>
-                                        @if (!message.payloadCollapsed) {
-                                            <div class="payload-content">
-                                                <mj-code-editor
-                                                    [ngModel]="formatJson(message.payload)"
-                                                    [language]="'json'"
-                                                    [readonly]="true"
-                                                    style="height: 300px; width: 100%;">
-                                                </mj-code-editor>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    }
-                </div>
-
-                <!-- Input Area -->
-                <div class="input-area">
-                    @if (originalPromptRunId && conversationMessages.length > 0) {
-                        <!-- Re-run mode - show loaded message -->
-                        <div class="rerun-mode-container">
-                            <div class="rerun-message">
-                                <i class="fa-solid fa-rotate-right"></i>
-                                <span>Messages from Prompt Run <strong>{{ originalPromptRunId.substring(0, 8) }}</strong> loaded above</span>
-                            </div>
-                            <div class="rerun-buttons">
-                                @if (!hasExecutedRerun) {
-                                    <!-- Show Re-Run button if we haven't executed yet -->
-                                    <button
-                                        class="send-button rerun-button"
-                                        (click)="executeRerun()"
-                                        [disabled]="isExecuting"
-                                        title="Re-run with loaded messages">
-                                        @if (isExecuting) {
-                                            <i class="fa-solid fa-spinner fa-spin"></i>
-                                            <span>Running...</span>
-                                        } @else {
-                                            <i class="fa-solid fa-play"></i>
-                                            <span>Re-Run</span>
-                                        }
-                                    </button>
-                                } @else {
-                                    <!-- Show only Reset button after execution -->
-                                    <button
-                                        class="send-button reset-button"
-                                        (click)="resetToOriginalMessages()"
-                                        [disabled]="isExecuting"
-                                        title="Reset conversation messages to the original state from the prompt run. Model settings and parameters will be preserved.">
-                                        <i class="fa-solid fa-rotate-left"></i>
-                                        <span>Reset Messages</span>
-                                    </button>
-                                }
-                            </div>
-                        </div>
-                    } @else {
-                        <!-- Normal mode - show text input -->
-                        <div class="input-container">
-                            <kendo-textarea
-                                #messageInput
-                                [(ngModel)]="currentUserMessage"
-                                [rows]="3"
-                                placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
-                                (keypress)="handleKeyPress($event)"
-                                [disabled]="isExecuting"
-                                class="message-input">
-                            </kendo-textarea>
-                            <button
-                                class="send-button"
-                                (click)="sendMessage()"
-                                [disabled]="isExecuting || !currentUserMessage.trim()"
-                                title="Send message">
-                                @if (isExecuting) {
-                                    <i class="fa-solid fa-spinner fa-spin"></i>
-                                } @else {
-                                    <i class="fa-solid fa-paper-plane"></i>
-                                }
-                            </button>
-                        </div>
-                    }
-                </div>
-                        </div>
-                    </kendo-splitter-pane>
-                    
-                    <!-- Sidebar (Right Pane) -->
-                    <kendo-splitter-pane 
-                        [collapsible]="false"
-                        [resizable]="true"
-                        [size]="'30%'"
-                        [min]="'300px'">
-                        <div class="sidebar">
-                    <!-- Tab Navigation -->
-                    <div class="sidebar-tabs">
-                        @if (mode === 'agent') {
-                            <button 
-                                class="tab-button"
-                                [class.active]="activeTab === 'agentVariables'"
-                                [disabled]="executionMonitorMode === 'live' && activeTab !== 'agentVariables'"
-                                (click)="selectTab('agentVariables')">
-                                <i class="fa-solid fa-code"></i>
-                                Agent Variables
-                            </button>
-                            <button 
-                                class="tab-button"
-                                [class.active]="activeTab === 'executionMonitor'"
-                                (click)="selectTab('executionMonitor')">
-                                <i class="fa-solid fa-diagram-project"></i>
-                                Execution Monitor
-                            </button>
-                            <button 
-                                class="tab-button"
-                                [class.active]="activeTab === 'agentSettings'"
-                                [disabled]="executionMonitorMode === 'live' && activeTab !== 'agentSettings'"
-                                (click)="selectTab('agentSettings')">
-                                <i class="fa-solid fa-sliders"></i>
-                                Settings
-                            </button>
-                        } @else {
-                            <button 
-                                class="tab-button"
-                                [class.active]="activeTab === 'templateVariables'"
-                                (click)="selectTab('templateVariables')">
-                                <i class="fa-solid fa-code"></i>
-                                Template Variables
-                            </button>
-                            <button 
-                                class="tab-button"
-                                [class.active]="activeTab === 'modelSettings'"
-                                (click)="selectTab('modelSettings')">
-                                <i class="fa-solid fa-sliders"></i>
-                                Model Settings
-                            </button>
-                        }
-                        <button 
-                            class="tab-button"
-                            [class.active]="activeTab === 'savedConversations'"
-                            [disabled]="executionMonitorMode === 'live' && activeTab !== 'savedConversations'"
-                            (click)="selectTab('savedConversations')">
-                            <i class="fa-solid fa-history"></i>
-                            Saved
-                            @if (savedConversations.length > 0) {
-                                <span class="badge">{{ savedConversations.length }}</span>
-                            }
-                        </button>
-                    </div>
-
-                    <!-- Tab Content -->
-                    <div class="sidebar-content">
-                        <!-- Agent Variables Tab (Unified) -->
-                        @if (activeTab === 'agentVariables') {
-                            <div class="tab-content">
-                                <div class="tab-header">
-                                    <h4>Agent Variables</h4>
-                                    <p>Variables available during agent execution and template rendering</p>
-                                </div>
-                                
-                                <div class="variables-list">
-                                    @if (agentVariables.length === 0) {
-                                        <div class="empty-variables">
-                                            <p>No variables defined. Click "Add Variable" to get started.</p>
-                                        </div>
-                                    }
-                                    
-                                    @for (variable of agentVariables; track $index) {
-                                        <div class="variable-item">
-                                            <kendo-textbox 
-                                                [(ngModel)]="variable.name" 
-                                                placeholder="Variable name"
-                                                [disabled]="isExecuting"
-                                                class="variable-name">
-                                            </kendo-textbox>
-                                            
-                                            <kendo-dropdownlist 
-                                                [(ngModel)]="variable.type"
-                                                [data]="[
-                                                    {text: 'String', value: 'string'}, 
-                                                    {text: 'Number', value: 'number'}, 
-                                                    {text: 'Boolean', value: 'boolean'}, 
-                                                    {text: 'Object', value: 'object'}
-                                                ]"
-                                                textField="text"
-                                                valueField="value"
-                                                [valuePrimitive]="true"
-                                                [disabled]="isExecuting"
-                                                class="variable-type">
-                                            </kendo-dropdownlist>
-                                            
-                                            <kendo-textbox 
-                                                [(ngModel)]="variable.value" 
-                                                [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
-                                                [disabled]="isExecuting"
-                                                class="variable-value">
-                                            </kendo-textbox>
-                                            
-                                            <button 
-                                                class="remove-button"
-                                                (click)="removeAgentVariable($index)"
-                                                [disabled]="isExecuting"
-                                                title="Remove variable">
-                                                <i class="fa-solid fa-times"></i>
-                                            </button>
-                                        </div>
-                                    }
-                                </div>
-                                
-                                <button 
-                                    class="add-button"
-                                    (click)="addAgentVariable()"
-                                    [disabled]="isExecuting">
-                                    <i class="fa-solid fa-plus"></i> Add Variable
-                                </button>
-                            </div>
-                        }
-
-                        <!-- Execution Monitor Tab -->
-                        @if (activeTab === 'executionMonitor') {
-                            <div class="tab-content" style="padding: 0; height: 100%;">
-                                <mj-agent-execution-monitor
-                                    [mode]="executionMonitorMode"
-                                    [agentRun]="currentAgentRun"
-                                    [liveSteps]="liveAgentSteps"
-                                    [autoExpand]="true"
-                                    (viewRunClick)="navigateToAgentRun($event)"
-                                    [runId]="getLastRunId()"
-                                    [runType]="mode">
-                                </mj-agent-execution-monitor>
-                            </div>
-                        }
-
-                        <!-- Agent Settings Tab -->
-                        @if (activeTab === 'agentSettings') {
-                            <div class="tab-content">
-                                <div class="tab-header">
-                                    <h4>Agent Settings</h4>
-                                    <p>Configure agent execution parameters</p>
-                                </div>
-                                
-                                <div class="model-settings">
-                                    <div class="setting-group">
-                                        <label>AI Configuration</label>
-                                        <kendo-dropdownlist 
-                                            [(ngModel)]="agentConfigurationId"
-                                            [data]="availableConfigurations"
-                                            textField="Name"
-                                            valueField="ID"
-                                            [valuePrimitive]="true"
-                                            placeholder="Select a configuration..."
-                                            class="configuration-selector">
-                                        </kendo-dropdownlist>
-                                        <div class="setting-help">
-                                            @if (agentConfigurationId) {
-                                                @for (config of availableConfigurations; track config.ID) {
-                                                    @if (config.ID === agentConfigurationId && config.Description) {
-                                                        {{ config.Description }}
-                                                    }
-                                                }
-                                            } @else {
-                                                Using default configuration
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-
-                        <!-- Template Variables Tab (Prompt Mode) -->
-                        @if (activeTab === 'templateVariables') {
-                            <div class="tab-content">
-                                <div class="tab-header">
-                                    <h4>Template Variables</h4>
-                                    <p>Variables for prompt template rendering</p>
-                                </div>
-                                
-                                <div class="variables-list">
-                                    @for (variable of templateVariables; track $index) {
-                                        <div class="variable-item">
-                                            <kendo-textbox 
-                                                [(ngModel)]="variable.name" 
-                                                placeholder="Variable name"
-                                                [disabled]="isExecuting"
-                                                class="variable-name">
-                                            </kendo-textbox>
-                                            
-                                            <kendo-dropdownlist 
-                                                [(ngModel)]="variable.type"
-                                                [data]="[
-                                                    {text: 'String', value: 'string'}, 
-                                                    {text: 'Number', value: 'number'}, 
-                                                    {text: 'Boolean', value: 'boolean'}, 
-                                                    {text: 'Object', value: 'object'}
-                                                ]"
-                                                textField="text"
-                                                valueField="value"
-                                                [valuePrimitive]="true"
-                                                [disabled]="isExecuting"
-                                                class="variable-type">
-                                            </kendo-dropdownlist>
-                                            
-                                            <kendo-textbox 
-                                                [(ngModel)]="variable.value" 
-                                                [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
-                                                [disabled]="isExecuting"
-                                                class="variable-value">
-                                            </kendo-textbox>
-                                            
-                                            <button 
-                                                class="remove-button"
-                                                (click)="removeTemplateVariable($index)"
-                                                title="Remove variable">
-                                                <i class="fa-solid fa-times"></i>
-                                            </button>
-                                        </div>
-                                    }
-                                </div>
-                                
-                                <button 
-                                    class="add-button"
-                                    (click)="addTemplateVariable()">
-                                    <i class="fa-solid fa-plus"></i>
-                                    Add Variable
-                                </button>
-                            </div>
-                        }
-
-                        <!-- Model Settings Tab (Prompt Mode) -->
-                        @if (activeTab === 'modelSettings') {
-                            <div class="tab-content" style="overflow-y: auto;">
-                                <div class="tab-header">
-                                    <h4>Model Settings</h4>
-                                    <p>Configure AI model parameters</p>
-                                    <button class="custom-button icon-only" (click)="resetToPromptDefaults()" title="Reset to Prompt Settings">
-                                        <i class="fa-solid fa-undo"></i>
-                                    </button>
-                                </div>
-                                
-                                <div class="model-settings">
-                                    <div class="setting-group">
-                                        <label>AI Model</label>
-                                        <kendo-dropdownlist 
-                                            [(ngModel)]="selectedModelId"
-                                            (ngModelChange)="onModelSelectionChange()"
-                                            [data]="availableModels"
-                                            textField="Name"
-                                            valueField="ID"
-                                            [valuePrimitive]="true"
-                                            placeholder="Select a model..."
-                                            class="model-selector">
-                                        </kendo-dropdownlist>
-                                    </div>
-                                    
-                                    <div class="setting-group">
-                                        <label>AI Vendor</label>
-                                        <kendo-dropdownlist 
-                                            [(ngModel)]="selectedVendorId"
-                                            [data]="availableVendors"
-                                            textField="Name"
-                                            valueField="ID"
-                                            [valuePrimitive]="true"
-                                            [disabled]="availableVendors.length <= 1 || !selectedModelId"
-                                            placeholder="Select a vendor..."
-                                            class="vendor-selector">
-                                        </kendo-dropdownlist>
-                                        <div class="setting-help">
-                                            @if (!selectedModelId) {
-                                                Using default vendor for the default model
-                                            } @else if (availableVendors.length <= 1) {
-                                                Only one vendor available for this model
-                                            } @else {
-                                                Select the inference provider for this model
-                                            }
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="setting-group">
-                                        <label>AI Configuration</label>
-                                        <kendo-dropdownlist 
-                                            [(ngModel)]="selectedConfigurationId"
-                                            [data]="availableConfigurations"
-                                            textField="Name"
-                                            valueField="ID"
-                                            [valuePrimitive]="true"
-                                            placeholder="Select a configuration..."
-                                            class="configuration-selector">
-                                        </kendo-dropdownlist>
-                                        <div class="setting-help">
-                                            @if (selectedConfigurationId) {
-                                                @for (config of availableConfigurations; track config.ID) {
-                                                    @if (config.ID === selectedConfigurationId && config.Description) {
-                                                        {{ config.Description }}
-                                                    }
-                                                }
-                                            } @else {
-                                                Using default configuration
-                                            }
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="setting-group">
-                                        <label>Response Format</label>
-                                        <kendo-dropdownlist 
-                                            [(ngModel)]="selectedResponseFormat"
-                                            [data]="responseFormatOptions"
-                                            textField="text"
-                                            valueField="value"
-                                            placeholder="Select format..."
-                                            class="format-selector">
-                                        </kendo-dropdownlist>
-                                        <div class="setting-help">
-                                            Expected format for AI response (defaults to prompt setting)
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="setting-group">
-                                        <label>Max Tokens</label>
-                                        <kendo-numerictextbox 
-                                            [(ngModel)]="maxTokens"
-                                            [min]="100"
-                                            [max]="8000"
-                                            [step]="100"
-                                            placeholder="Max tokens..."
-                                            class="max-tokens-input">
-                                        </kendo-numerictextbox>
-                                        <div class="setting-help">
-                                            Maximum length of generated response
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="setting-group">
-                                        <label class="checkbox-label">
-                                            <input type="checkbox" 
-                                                   [(ngModel)]="skipValidation"
-                                                   class="skip-validation-checkbox">
-                                            Skip Validation
-                                        </label>
-                                        <div class="setting-help">
-                                            Skip output validation during testing
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Advanced Parameters Expansion Panel -->
-                                    <kendo-expansionpanel 
-                                        [expanded]="advancedParamsExpanded"
-                                        (action)="toggleAdvancedParams()"
-                                        title="Advanced Parameters"
-                                        class="advanced-params-panel">
-                                        <div class="advanced-settings">
-                                            <div class="setting-group">
-                                                <label title="Controls randomness: 0 = more focused and deterministic, 2 = more random and creative">
-                                                    Temperature
-                                                </label>
-                                                <kendo-numerictextbox 
-                                                    [(ngModel)]="advancedParams.temperature"
-                                                    [min]="0"
-                                                    [max]="2"
-                                                    [step]="0.1"
-                                                    [format]="'n1'"
-                                                    placeholder="None"
-                                                    class="advanced-param-input">
-                                                </kendo-numerictextbox>
-                                            </div>
-                                            
-                                            <div class="setting-group">
-                                                <label title="Nucleus sampling: only consider tokens with cumulative probability up to this value. 1 = consider all tokens">
-                                                    Top P
-                                                </label>
-                                                <kendo-numerictextbox 
-                                                    [(ngModel)]="advancedParams.topP"
-                                                    [min]="0"
-                                                    [max]="1"
-                                                    [step]="0.01"
-                                                    [format]="'n2'"
-                                                    placeholder="None"
-                                                    class="advanced-param-input">
-                                                </kendo-numerictextbox>
-                                            </div>
-                                            
-                                            <div class="setting-group">
-                                                <label title="Only sample from the top K tokens. Lower values reduce randomness">
-                                                    Top K
-                                                </label>
-                                                <kendo-numerictextbox 
-                                                    [(ngModel)]="advancedParams.topK"
-                                                    [min]="1"
-                                                    [max]="100"
-                                                    [step]="1"
-                                                    [format]="'n0'"
-                                                    placeholder="None"
-                                                    class="advanced-param-input">
-                                                </kendo-numerictextbox>
-                                            </div>
-                                            
-                                            <div class="setting-group">
-                                                <label title="Minimum probability for token selection. Filters out low-probability tokens">
-                                                    Min P
-                                                </label>
-                                                <kendo-numerictextbox 
-                                                    [(ngModel)]="advancedParams.minP"
-                                                    [min]="0"
-                                                    [max]="1"
-                                                    [step]="0.01"
-                                                    [format]="'n2'"
-                                                    placeholder="None"
-                                                    class="advanced-param-input">
-                                                </kendo-numerictextbox>
-                                            </div>
-                                            
-                                            <div class="setting-group">
-                                                <label title="Penalizes tokens based on their frequency in the text. Positive values reduce repetition">
-                                                    Frequency Penalty
-                                                </label>
-                                                <kendo-numerictextbox 
-                                                    [(ngModel)]="advancedParams.frequencyPenalty"
-                                                    [min]="-2"
-                                                    [max]="2"
-                                                    [step]="0.1"
-                                                    [format]="'n1'"
-                                                    placeholder="None"
-                                                    class="advanced-param-input">
-                                                </kendo-numerictextbox>
-                                            </div>
-                                            
-                                            <div class="setting-group">
-                                                <label title="Penalizes tokens that have appeared in the text. Positive values increase topic diversity">
-                                                    Presence Penalty
-                                                </label>
-                                                <kendo-numerictextbox 
-                                                    [(ngModel)]="advancedParams.presencePenalty"
-                                                    [min]="-2"
-                                                    [max]="2"
-                                                    [step]="0.1"
-                                                    [format]="'n1'"
-                                                    placeholder="None"
-                                                    class="advanced-param-input">
-                                                </kendo-numerictextbox>
-                                            </div>
-                                            
-                                            <div class="setting-group">
-                                                <label title="Random seed for deterministic generation. Same seed produces same output">
-                                                    Seed
-                                                </label>
-                                                <kendo-numerictextbox 
-                                                    [(ngModel)]="advancedParams.seed"
-                                                    [format]="'n0'"
-                                                    placeholder="None"
-                                                    class="advanced-param-input">
-                                                </kendo-numerictextbox>
-                                            </div>
-                                            
-                                            <div class="setting-group">
-                                                <label title="Sequences that will stop generation when encountered. Enter comma-separated values">
-                                                    Stop Sequences
-                                                </label>
-                                                <kendo-textarea 
-                                                    [(ngModel)]="stopSequencesText"
-                                                    (ngModelChange)="updateStopSequences()"
-                                                    [rows]="2"
-                                                    placeholder="Enter comma-separated sequences"
-                                                    class="advanced-param-input">
-                                                </kendo-textarea>
-                                                <div class="setting-help">
-                                                    Separate multiple sequences with commas
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="setting-group">
-                                                <label title="Include log probabilities of the output tokens in the response">
-                                                    Include Log Probs
-                                                </label>
-                                                <kendo-switch 
-                                                    [(ngModel)]="advancedParams.includeLogProbs"
-                                                    class="advanced-param-switch">
-                                                </kendo-switch>
-                                            </div>
-                                            
-                                            @if (advancedParams.includeLogProbs) {
-                                                <div class="setting-group">
-                                                    <label title="Number of top log probabilities to include for each token">
-                                                        Top Log Probs
-                                                    </label>
-                                                    <kendo-numerictextbox 
-                                                        [(ngModel)]="advancedParams.topLogProbs"
-                                                        [min]="2"
-                                                        [max]="20"
-                                                        [step]="1"
-                                                        [format]="'n0'"
-                                                        placeholder="2"
-                                                        class="advanced-param-input">
-                                                    </kendo-numerictextbox>
-                                                </div>
-                                            }
-                                        </div>
-                                    </kendo-expansionpanel>
-                                </div>
-                            </div>
-                        }
-
-                        <!-- Saved Conversations Tab -->
-                        @if (activeTab === 'savedConversations') {
-                            <div class="tab-content">
-                                <div class="tab-header">
-                                    <h4>Saved Conversations</h4>
-                                    <p>Previously saved test sessions</p>
-                                    @if (currentConversationId) {
-                                        <button class="custom-button small primary" (click)="newConversation()" title="Start a new conversation">
-                                            <i class="fa-solid fa-plus"></i>
-                                            New
-                                        </button>
-                                    }
-                                </div>
-                                
-                                <div class="saved-list">
-                                    @if (savedConversations.length === 0) {
-                                        <div class="empty-saved">
-                                            <i class="fa-solid fa-folder-open"></i>
-                                            <p>No saved conversations</p>
-                                        </div>
-                                    }
-                                    
-                                    @for (conv of savedConversations; track conv.id) {
-                                        <div class="saved-item" 
-                                             [class.current]="conv.id === currentConversationId"
-                                             (click)="loadConversation(conv)">
-                                            <div class="saved-info">
-                                                <h5>{{ conv.name }}</h5>
-                                                <p>{{ conv.messages.length }} messages</p>
-                                                <span class="saved-date">{{ conv.updatedAt | date:'short' }}</span>
-                                            </div>
-                                            <button 
-                                                class="delete-button"
-                                                (click)="deleteConversation(conv, $event)"
-                                                title="Delete conversation">
-                                                <i class="fa-solid fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-                        </div>
-                    </kendo-splitter-pane>
-                </kendo-splitter>
+@if (isVisible) {
+  <div class="harness-container" kendoWindowContainer>
+    <!-- Header -->
+    <div class="harness-header">
+      @if (entity) {
+        <div class="agent-info">
+          <div class="agent-details">
+            @if (hasEntityLogo()) {
+              <img [src]="getEntityLogoURL()" [alt]="getEntityName() + ' logo'" class="entity-logo">
             } @else {
-                <!-- No sidebar - full width chat -->
-                <div class="chat-area">
-                    <!-- Messages Container -->
-                    <div class="messages-container" #messagesContainer>
-                        @if (conversationMessages.length === 0) {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-comments"></i>
-                                <h4>Start a conversation</h4>
-                                <p>Send a message to begin testing the AI agent</p>
-                            </div>
-                        }
-
-                        @for (message of conversationMessages; track message.id) {
-                            <div [ngClass]="getMessageClass(message)">
-                                <div class="message-header">
-                                    <span class="message-role">
-                                        @if (message.role === 'user') {
-                                            <i class="fa-solid fa-user"></i> You
-                                        } @else {
-                                            <i class="fa-solid fa-robot"></i> {{ getEntityName() || 'Assistant' }}
-                                        }
-                                    </span>
-                                    <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
-                                    @if (message.isStreaming && message.elapsedTime !== undefined) {
-                                        <span class="execution-time streaming">
-                                            <i class="fa-solid fa-spinner fa-spin"></i> {{ formatElapsedTime(message.elapsedTime) }}
-                                        </span>
-                                    } @else if (message.executionTime) {
-                                        <span class="execution-time" [title]="getExecutionSummary(message)">{{ formatExecutionTime(message.executionTime) }}</span>
-                                    }
-                                    @if (showRawToggle(message)) {
-                                        <button class="raw-toggle" (click)="showRawJsonDialog(message)" title="View raw JSON response">
-                                            <i class="fa-solid fa-code"></i>
-                                        </button>
-                                    }
-                                    @if (message.executionData && mode === 'agent' && message.role === 'assistant') {
-                                        <button class="execution-history-toggle" (click)="showMessageExecutionHistory(message)" title="View execution details">
-                                            <i class="fa-solid fa-diagram-project"></i>
-                                        </button>
-                                    }
-                                    @if (message.agentRunId && mode === 'agent' && message.role === 'assistant') {
-                                        <button class="execution-history-toggle" (click)="navigateToAgentRun({runId: message.agentRunId, runType: 'agent'})" title="View full run details">
-                                            <i class="fa-solid fa-external-link-alt"></i>
-                                        </button>
-                                    }
-                                </div>
-                                <div class="message-content">
-                                    <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
-                                        <i class="fa-solid fa-copy"></i>
-                                    </button>
-                                    @if (message.isStreaming) {
-                                        <div class="streaming-wrapper">
-                                            <span class="streaming-content">{{ message.streamingContent }}<span class="cursor">|</span></span>
-                                        </div>
-                                    } @else {
-                                        <div [innerHTML]="getFormattedContent(message)"></div>
-                                    }
-                                    @if (message.error) {
-                                        <div class="error-details">
-                                            <i class="fa-solid fa-exclamation-triangle"></i>
-                                            {{ message.error }}
-                                        </div>
-                                    }
-                                    @if (hasPayload(message.payload) && mode === 'agent' && message.role === 'assistant') {
-                                        <div class="payload-section" [class.collapsed]="message.payloadCollapsed">
-                                            <div class="payload-header" (click)="togglePayloadCollapse(message)">
-                                                <span class="payload-label">
-                                                    <i class="fa-solid fa-code"></i> Payload
-                                                </span>
-                                                <button class="payload-toggle" type="button">
-                                                    <i class="fa-solid" [class.fa-chevron-down]="!message.payloadCollapsed" [class.fa-chevron-right]="message.payloadCollapsed"></i>
-                                                </button>
-                                            </div>
-                                            @if (!message.payloadCollapsed) {
-                                                <div class="payload-content">
-                                                    <pre>{{ formatJson(message.payload) }}</pre>
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Input Area -->
-                    <div class="input-area">
-                        <div class="input-container">
-                            <kendo-textarea
-                                #messageInput
-                                [(ngModel)]="currentUserMessage"
-                                [rows]="3"
-                                placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
-                                (keypress)="handleKeyPress($event)"
-                                [disabled]="isExecuting"
-                                class="message-input">
-                            </kendo-textarea>
-                            <button
-                                class="send-button"
-                                (click)="sendMessage()"
-                                [disabled]="isExecuting || !currentUserMessage.trim()"
-                                title="Send message">
-                                @if (isExecuting) {
-                                    <i class="fa-solid fa-spinner fa-spin"></i>
-                                } @else {
-                                    <i class="fa-solid fa-paper-plane"></i>
-                                }
-                            </button>
-                        </div>
-                    </div>
-                </div>
+              <i [class]="getEntityIconClass()"></i>
             }
+            <div>
+              <h3>{{ getEntityName() }}</h3>
+              @if (entity.Description) {
+                <p>{{ entity.Description }}</p>
+              }
+            </div>
+          </div>
+          <div class="header-actions">
+            <button
+              class="custom-button"
+              (click)="clearConversation()"
+              [disabled]="isExecuting || conversationMessages.length === 0"
+              title="Clear conversation">
+              <i class="fa-solid fa-broom"></i>
+              Clear
+            </button>
+            <button
+              class="custom-button"
+              (click)="saveConversation()"
+              [disabled]="conversationMessages.length === 0"
+              title="Save conversation">
+              <i class="fa-solid fa-save"></i>
+              Save
+            </button>
+            <button
+              class="custom-button"
+              (click)="exportConversation()"
+              [disabled]="conversationMessages.length === 0"
+              title="Export conversation">
+              <i class="fa-solid fa-download"></i>
+              Export
+            </button>
+            <button
+              class="custom-button"
+              (click)="importConversation()"
+              title="Import conversation">
+              <i class="fa-solid fa-upload"></i>
+              Import
+            </button>
+            <input
+              #fileInput
+              type="file"
+              accept=".json"
+              style="display: none"
+              (change)="onFileSelected($event)">
+            <button
+              class="custom-button icon-only"
+              (click)="toggleSidebar()"
+              title="Toggle sidebar">
+              <i class="fa-solid" [class.fa-chevron-right]="!showSidebar" [class.fa-chevron-left]="showSidebar"></i>
+            </button>
+          </div>
         </div>
+      }
     </div>
+    <!-- Main Content Area with Splitter -->
+    <div class="harness-body">
+      @if (showSidebar) {
+        <kendo-splitter
+          orientation="horizontal"
+          style="height: 100%; width: 100%;">
+          <!-- Chat Area (Left Pane) -->
+          <kendo-splitter-pane
+            [collapsible]="false"
+            [resizable]="true"
+            [min]="'400px'">
+            <div class="chat-area">
+              <!-- Messages Container -->
+              <div class="messages-container" #messagesContainer>
+                @if (conversationMessages.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-comments"></i>
+                    <h4>Start a conversation</h4>
+                    <p>Send a message to begin testing the AI agent</p>
+                  </div>
+                }
+                @for (message of conversationMessages; track message.id) {
+                  <div [ngClass]="getMessageClass(message)">
+                    <div class="message-header">
+                      <span class="message-role">
+                        @if (message.role === 'user') {
+                          <i class="fa-solid fa-user"></i> You
+                        } @else {
+                          @if (hasEntityLogo()) {
+                            <img [src]="getEntityLogoURL()" [alt]="getEntityName() + ' logo'" class="message-role-logo">
+                          } @else {
+                            <i [class]="getEntityIconClass()"></i>
+                          }
+                          {{ getEntityName() || 'Assistant' }}
+                        }
+                      </span>
+                      <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
+                      @if (message.isStreaming && message.elapsedTime !== undefined) {
+                        <span class="execution-time streaming">
+                          <i class="fa-solid fa-spinner fa-spin"></i> {{ formatElapsedTime(message.elapsedTime) }}
+                        </span>
+                      } @else if (message.executionTime) {
+                        <span class="execution-time" [title]="getExecutionSummary(message)">{{ formatExecutionTime(message.executionTime) }}</span>
+                      }
+                      @if (showRawToggle(message)) {
+                        <button class="raw-toggle" (click)="showRawJsonDialog(message)" title="View raw JSON response">
+                          <i class="fa-solid fa-code"></i>
+                        </button>
+                      }
+                    </div>
+                    <div class="message-content">
+                      <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
+                        <i class="fa-solid fa-copy"></i>
+                      </button>
+                      @if (message.isStreaming) {
+                        <div class="streaming-wrapper">
+                          <span class="streaming-content" [innerHTML]="getFormattedStreamingContent(message)"></span>
+                          <span class="cursor">|</span>
+                        </div>
+                      } @else {
+                        <div [innerHTML]="getFormattedContent(message)"></div>
+                      }
+                      @if (message.error) {
+                        <div class="error-details">
+                          <i class="fa-solid fa-exclamation-triangle"></i>
+                          {{ message.error }}
+                        </div>
+                      }
+                      @if (hasPayload(message.payload) && mode === 'agent' && message.role === 'assistant') {
+                        <div class="payload-section" [class.collapsed]="message.payloadCollapsed">
+                          <div class="payload-header" (click)="togglePayloadCollapse(message)">
+                            <span class="payload-label">
+                              <i class="fa-solid fa-code"></i> Payload
+                            </span>
+                            <button class="payload-toggle" type="button">
+                              <i class="fa-solid" [class.fa-chevron-down]="!message.payloadCollapsed" [class.fa-chevron-right]="message.payloadCollapsed"></i>
+                            </button>
+                          </div>
+                          @if (!message.payloadCollapsed) {
+                            <div class="payload-content">
+                              <mj-code-editor
+                                [ngModel]="formatJson(message.payload)"
+                                [language]="'json'"
+                                [readonly]="true"
+                                style="height: 300px; width: 100%;">
+                              </mj-code-editor>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+              <!-- Input Area -->
+              <div class="input-area">
+                @if (originalPromptRunId && conversationMessages.length > 0) {
+                  <!-- Re-run mode - show loaded message -->
+                  <div class="rerun-mode-container">
+                    <div class="rerun-message">
+                      <i class="fa-solid fa-rotate-right"></i>
+                      <span>Messages from Prompt Run <strong>{{ originalPromptRunId.substring(0, 8) }}</strong> loaded above</span>
+                    </div>
+                    <div class="rerun-buttons">
+                      @if (!hasExecutedRerun) {
+                        <!-- Show Re-Run button if we haven't executed yet -->
+                        <button
+                          class="send-button rerun-button"
+                          (click)="executeRerun()"
+                          [disabled]="isExecuting"
+                          title="Re-run with loaded messages">
+                          @if (isExecuting) {
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                            <span>Running...</span>
+                          } @else {
+                            <i class="fa-solid fa-play"></i>
+                            <span>Re-Run</span>
+                          }
+                        </button>
+                      } @else {
+                        <!-- Show only Reset button after execution -->
+                        <button
+                          class="send-button reset-button"
+                          (click)="resetToOriginalMessages()"
+                          [disabled]="isExecuting"
+                          title="Reset conversation messages to the original state from the prompt run. Model settings and parameters will be preserved.">
+                          <i class="fa-solid fa-rotate-left"></i>
+                          <span>Reset Messages</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                } @else {
+                  <!-- Normal mode - show text input -->
+                  <div class="input-container">
+                    <kendo-textarea
+                      #messageInput
+                      [(ngModel)]="currentUserMessage"
+                      [rows]="3"
+                      placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+                      (keypress)="handleKeyPress($event)"
+                      [disabled]="isExecuting"
+                      class="message-input">
+                    </kendo-textarea>
+                    <button
+                      class="send-button"
+                      (click)="sendMessage()"
+                      [disabled]="isExecuting || !currentUserMessage.trim()"
+                      title="Send message">
+                      @if (isExecuting) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                      } @else {
+                        <i class="fa-solid fa-paper-plane"></i>
+                      }
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+          </kendo-splitter-pane>
+          <!-- Sidebar (Right Pane) -->
+          <kendo-splitter-pane
+            [collapsible]="false"
+            [resizable]="true"
+            [size]="'30%'"
+            [min]="'300px'">
+            <div class="sidebar">
+              <!-- Tab Navigation -->
+              <div class="sidebar-tabs">
+                @if (mode === 'agent') {
+                  <button
+                    class="tab-button"
+                    [class.active]="activeTab === 'agentVariables'"
+                    [disabled]="executionMonitorMode === 'live' && activeTab !== 'agentVariables'"
+                    (click)="selectTab('agentVariables')">
+                    <i class="fa-solid fa-code"></i>
+                    Agent Variables
+                  </button>
+                  <button
+                    class="tab-button"
+                    [class.active]="activeTab === 'executionMonitor'"
+                    (click)="selectTab('executionMonitor')">
+                    <i class="fa-solid fa-diagram-project"></i>
+                    Execution Monitor
+                  </button>
+                  <button
+                    class="tab-button"
+                    [class.active]="activeTab === 'agentSettings'"
+                    [disabled]="executionMonitorMode === 'live' && activeTab !== 'agentSettings'"
+                    (click)="selectTab('agentSettings')">
+                    <i class="fa-solid fa-sliders"></i>
+                    Settings
+                  </button>
+                } @else {
+                  <button
+                    class="tab-button"
+                    [class.active]="activeTab === 'templateVariables'"
+                    (click)="selectTab('templateVariables')">
+                    <i class="fa-solid fa-code"></i>
+                    Template Variables
+                  </button>
+                  <button
+                    class="tab-button"
+                    [class.active]="activeTab === 'modelSettings'"
+                    (click)="selectTab('modelSettings')">
+                    <i class="fa-solid fa-sliders"></i>
+                    Model Settings
+                  </button>
+                }
+                <button
+                  class="tab-button"
+                  [class.active]="activeTab === 'savedConversations'"
+                  [disabled]="executionMonitorMode === 'live' && activeTab !== 'savedConversations'"
+                  (click)="selectTab('savedConversations')">
+                  <i class="fa-solid fa-history"></i>
+                  Saved
+                  @if (savedConversations.length > 0) {
+                    <span class="badge">{{ savedConversations.length }}</span>
+                  }
+                </button>
+              </div>
+              <!-- Tab Content -->
+              <div class="sidebar-content">
+                <!-- Agent Variables Tab (Unified) -->
+                @if (activeTab === 'agentVariables') {
+                  <div class="tab-content">
+                    <div class="tab-header">
+                      <h4>Agent Variables</h4>
+                      <p>Variables available during agent execution and template rendering</p>
+                    </div>
+                    <div class="variables-list">
+                      @if (agentVariables.length === 0) {
+                        <div class="empty-variables">
+                          <p>No variables defined. Click "Add Variable" to get started.</p>
+                        </div>
+                      }
+                      @for (variable of agentVariables; track $index) {
+                        <div class="variable-item">
+                          <kendo-textbox
+                            [(ngModel)]="variable.name"
+                            placeholder="Variable name"
+                            [disabled]="isExecuting"
+                            class="variable-name">
+                          </kendo-textbox>
+                          <kendo-dropdownlist
+                            [(ngModel)]="variable.type"
+                                                [data]="[
+                                                    {text: 'String', value: 'string'}, 
+                                                    {text: 'Number', value: 'number'}, 
+                                                    {text: 'Boolean', value: 'boolean'}, 
+                                                    {text: 'Object', value: 'object'}
+                                                ]"
+                            textField="text"
+                            valueField="value"
+                            [valuePrimitive]="true"
+                            [disabled]="isExecuting"
+                            class="variable-type">
+                          </kendo-dropdownlist>
+                          <kendo-textbox
+                            [(ngModel)]="variable.value"
+                            [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
+                            [disabled]="isExecuting"
+                            class="variable-value">
+                          </kendo-textbox>
+                          <button
+                            class="remove-button"
+                            (click)="removeAgentVariable($index)"
+                            [disabled]="isExecuting"
+                            title="Remove variable">
+                            <i class="fa-solid fa-times"></i>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                    <button
+                      class="add-button"
+                      (click)="addAgentVariable()"
+                      [disabled]="isExecuting">
+                      <i class="fa-solid fa-plus"></i> Add Variable
+                    </button>
+                  </div>
+                }
+                <!-- Execution Monitor Tab -->
+                @if (activeTab === 'executionMonitor') {
+                  <div class="tab-content" style="padding: 0; height: 100%;">
+                    <mj-agent-execution-monitor
+                      [mode]="executionMonitorMode"
+                      [agentRun]="currentAgentRun"
+                      [liveSteps]="liveAgentSteps"
+                      [autoExpand]="true"
+                      (viewRunClick)="navigateToAgentRun($event)"
+                      [runId]="getLastRunId()"
+                      [runType]="mode">
+                    </mj-agent-execution-monitor>
+                  </div>
+                }
+                <!-- Agent Settings Tab -->
+                @if (activeTab === 'agentSettings') {
+                  <div class="tab-content">
+                    <div class="tab-header">
+                      <h4>Agent Settings</h4>
+                      <p>Configure agent execution parameters</p>
+                    </div>
+                    <div class="model-settings">
+                      <div class="setting-group">
+                        <label>AI Configuration</label>
+                        <kendo-dropdownlist
+                          [(ngModel)]="agentConfigurationId"
+                          [data]="availableConfigurations"
+                          textField="Name"
+                          valueField="ID"
+                          [valuePrimitive]="true"
+                          placeholder="Select a configuration..."
+                          class="configuration-selector">
+                        </kendo-dropdownlist>
+                        <div class="setting-help">
+                          @if (agentConfigurationId) {
+                            @for (config of availableConfigurations; track config.ID) {
+                              @if (config.ID === agentConfigurationId && config.Description) {
+                                {{ config.Description }}
+                              }
+                            }
+                          } @else {
+                            Using default configuration
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                }
+                <!-- Template Variables Tab (Prompt Mode) -->
+                @if (activeTab === 'templateVariables') {
+                  <div class="tab-content">
+                    <div class="tab-header">
+                      <h4>Template Variables</h4>
+                      <p>Variables for prompt template rendering</p>
+                    </div>
+                    <div class="variables-list">
+                      @for (variable of templateVariables; track $index) {
+                        <div class="variable-item">
+                          <kendo-textbox
+                            [(ngModel)]="variable.name"
+                            placeholder="Variable name"
+                            [disabled]="isExecuting"
+                            class="variable-name">
+                          </kendo-textbox>
+                          <kendo-dropdownlist
+                            [(ngModel)]="variable.type"
+                                                [data]="[
+                                                    {text: 'String', value: 'string'}, 
+                                                    {text: 'Number', value: 'number'}, 
+                                                    {text: 'Boolean', value: 'boolean'}, 
+                                                    {text: 'Object', value: 'object'}
+                                                ]"
+                            textField="text"
+                            valueField="value"
+                            [valuePrimitive]="true"
+                            [disabled]="isExecuting"
+                            class="variable-type">
+                          </kendo-dropdownlist>
+                          <kendo-textbox
+                            [(ngModel)]="variable.value"
+                            [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
+                            [disabled]="isExecuting"
+                            class="variable-value">
+                          </kendo-textbox>
+                          <button
+                            class="remove-button"
+                            (click)="removeTemplateVariable($index)"
+                            title="Remove variable">
+                            <i class="fa-solid fa-times"></i>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                    <button
+                      class="add-button"
+                      (click)="addTemplateVariable()">
+                      <i class="fa-solid fa-plus"></i>
+                      Add Variable
+                    </button>
+                  </div>
+                }
+                <!-- Model Settings Tab (Prompt Mode) -->
+                @if (activeTab === 'modelSettings') {
+                  <div class="tab-content" style="overflow-y: auto;">
+                    <div class="tab-header">
+                      <h4>Model Settings</h4>
+                      <p>Configure AI model parameters</p>
+                      <button class="custom-button icon-only" (click)="resetToPromptDefaults()" title="Reset to Prompt Settings">
+                        <i class="fa-solid fa-undo"></i>
+                      </button>
+                    </div>
+                    <div class="model-settings">
+                      <div class="setting-group">
+                        <label>AI Model</label>
+                        <kendo-dropdownlist
+                          [(ngModel)]="selectedModelId"
+                          (ngModelChange)="onModelSelectionChange()"
+                          [data]="availableModels"
+                          textField="Name"
+                          valueField="ID"
+                          [valuePrimitive]="true"
+                          placeholder="Select a model..."
+                          class="model-selector">
+                        </kendo-dropdownlist>
+                      </div>
+                      <div class="setting-group">
+                        <label>AI Vendor</label>
+                        <kendo-dropdownlist
+                          [(ngModel)]="selectedVendorId"
+                          [data]="availableVendors"
+                          textField="Name"
+                          valueField="ID"
+                          [valuePrimitive]="true"
+                          [disabled]="availableVendors.length <= 1 || !selectedModelId"
+                          placeholder="Select a vendor..."
+                          class="vendor-selector">
+                        </kendo-dropdownlist>
+                        <div class="setting-help">
+                          @if (!selectedModelId) {
+                            Using default vendor for the default model
+                          } @else if (availableVendors.length <= 1) {
+                            Only one vendor available for this model
+                          } @else {
+                            Select the inference provider for this model
+                          }
+                        </div>
+                      </div>
+                      <div class="setting-group">
+                        <label>AI Configuration</label>
+                        <kendo-dropdownlist
+                          [(ngModel)]="selectedConfigurationId"
+                          [data]="availableConfigurations"
+                          textField="Name"
+                          valueField="ID"
+                          [valuePrimitive]="true"
+                          placeholder="Select a configuration..."
+                          class="configuration-selector">
+                        </kendo-dropdownlist>
+                        <div class="setting-help">
+                          @if (selectedConfigurationId) {
+                            @for (config of availableConfigurations; track config.ID) {
+                              @if (config.ID === selectedConfigurationId && config.Description) {
+                                {{ config.Description }}
+                              }
+                            }
+                          } @else {
+                            Using default configuration
+                          }
+                        </div>
+                      </div>
+                      <div class="setting-group">
+                        <label>Response Format</label>
+                        <kendo-dropdownlist
+                          [(ngModel)]="selectedResponseFormat"
+                          [data]="responseFormatOptions"
+                          textField="text"
+                          valueField="value"
+                          placeholder="Select format..."
+                          class="format-selector">
+                        </kendo-dropdownlist>
+                        <div class="setting-help">
+                          Expected format for AI response (defaults to prompt setting)
+                        </div>
+                      </div>
+                      <div class="setting-group">
+                        <label>Max Tokens</label>
+                        <kendo-numerictextbox
+                          [(ngModel)]="maxTokens"
+                          [min]="100"
+                          [max]="8000"
+                          [step]="100"
+                          placeholder="Max tokens..."
+                          class="max-tokens-input">
+                        </kendo-numerictextbox>
+                        <div class="setting-help">
+                          Maximum length of generated response
+                        </div>
+                      </div>
+                      <div class="setting-group">
+                        <label class="checkbox-label">
+                          <input type="checkbox"
+                            [(ngModel)]="skipValidation"
+                            class="skip-validation-checkbox">
+                          Skip Validation
+                        </label>
+                        <div class="setting-help">
+                          Skip output validation during testing
+                        </div>
+                      </div>
+                      <!-- Advanced Parameters Expansion Panel -->
+                      <kendo-expansionpanel
+                        [expanded]="advancedParamsExpanded"
+                        (action)="toggleAdvancedParams()"
+                        title="Advanced Parameters"
+                        class="advanced-params-panel">
+                        <div class="advanced-settings">
+                          <div class="setting-group">
+                            <label title="Controls randomness: 0 = more focused and deterministic, 2 = more random and creative">
+                              Temperature
+                            </label>
+                            <kendo-numerictextbox
+                              [(ngModel)]="advancedParams.temperature"
+                              [min]="0"
+                              [max]="2"
+                              [step]="0.1"
+                              [format]="'n1'"
+                              placeholder="None"
+                              class="advanced-param-input">
+                            </kendo-numerictextbox>
+                          </div>
+                          <div class="setting-group">
+                            <label title="Nucleus sampling: only consider tokens with cumulative probability up to this value. 1 = consider all tokens">
+                              Top P
+                            </label>
+                            <kendo-numerictextbox
+                              [(ngModel)]="advancedParams.topP"
+                              [min]="0"
+                              [max]="1"
+                              [step]="0.01"
+                              [format]="'n2'"
+                              placeholder="None"
+                              class="advanced-param-input">
+                            </kendo-numerictextbox>
+                          </div>
+                          <div class="setting-group">
+                            <label title="Only sample from the top K tokens. Lower values reduce randomness">
+                              Top K
+                            </label>
+                            <kendo-numerictextbox
+                              [(ngModel)]="advancedParams.topK"
+                              [min]="1"
+                              [max]="100"
+                              [step]="1"
+                              [format]="'n0'"
+                              placeholder="None"
+                              class="advanced-param-input">
+                            </kendo-numerictextbox>
+                          </div>
+                          <div class="setting-group">
+                            <label title="Minimum probability for token selection. Filters out low-probability tokens">
+                              Min P
+                            </label>
+                            <kendo-numerictextbox
+                              [(ngModel)]="advancedParams.minP"
+                              [min]="0"
+                              [max]="1"
+                              [step]="0.01"
+                              [format]="'n2'"
+                              placeholder="None"
+                              class="advanced-param-input">
+                            </kendo-numerictextbox>
+                          </div>
+                          <div class="setting-group">
+                            <label title="Penalizes tokens based on their frequency in the text. Positive values reduce repetition">
+                              Frequency Penalty
+                            </label>
+                            <kendo-numerictextbox
+                              [(ngModel)]="advancedParams.frequencyPenalty"
+                              [min]="-2"
+                              [max]="2"
+                              [step]="0.1"
+                              [format]="'n1'"
+                              placeholder="None"
+                              class="advanced-param-input">
+                            </kendo-numerictextbox>
+                          </div>
+                          <div class="setting-group">
+                            <label title="Penalizes tokens that have appeared in the text. Positive values increase topic diversity">
+                              Presence Penalty
+                            </label>
+                            <kendo-numerictextbox
+                              [(ngModel)]="advancedParams.presencePenalty"
+                              [min]="-2"
+                              [max]="2"
+                              [step]="0.1"
+                              [format]="'n1'"
+                              placeholder="None"
+                              class="advanced-param-input">
+                            </kendo-numerictextbox>
+                          </div>
+                          <div class="setting-group">
+                            <label title="Random seed for deterministic generation. Same seed produces same output">
+                              Seed
+                            </label>
+                            <kendo-numerictextbox
+                              [(ngModel)]="advancedParams.seed"
+                              [format]="'n0'"
+                              placeholder="None"
+                              class="advanced-param-input">
+                            </kendo-numerictextbox>
+                          </div>
+                          <div class="setting-group">
+                            <label title="Sequences that will stop generation when encountered. Enter comma-separated values">
+                              Stop Sequences
+                            </label>
+                            <kendo-textarea
+                              [(ngModel)]="stopSequencesText"
+                              (ngModelChange)="updateStopSequences()"
+                              [rows]="2"
+                              placeholder="Enter comma-separated sequences"
+                              class="advanced-param-input">
+                            </kendo-textarea>
+                            <div class="setting-help">
+                              Separate multiple sequences with commas
+                            </div>
+                          </div>
+                          <div class="setting-group">
+                            <label title="Include log probabilities of the output tokens in the response">
+                              Include Log Probs
+                            </label>
+                            <kendo-switch
+                              [(ngModel)]="advancedParams.includeLogProbs"
+                              class="advanced-param-switch">
+                            </kendo-switch>
+                          </div>
+                          @if (advancedParams.includeLogProbs) {
+                            <div class="setting-group">
+                              <label title="Number of top log probabilities to include for each token">
+                                Top Log Probs
+                              </label>
+                              <kendo-numerictextbox
+                                [(ngModel)]="advancedParams.topLogProbs"
+                                [min]="2"
+                                [max]="20"
+                                [step]="1"
+                                [format]="'n0'"
+                                placeholder="2"
+                                class="advanced-param-input">
+                              </kendo-numerictextbox>
+                            </div>
+                          }
+                        </div>
+                      </kendo-expansionpanel>
+                    </div>
+                  </div>
+                }
+                <!-- Saved Conversations Tab -->
+                @if (activeTab === 'savedConversations') {
+                  <div class="tab-content">
+                    <div class="tab-header">
+                      <h4>Saved Conversations</h4>
+                      <p>Previously saved test sessions</p>
+                      @if (currentConversationId) {
+                        <button class="custom-button small primary" (click)="newConversation()" title="Start a new conversation">
+                          <i class="fa-solid fa-plus"></i>
+                          New
+                        </button>
+                      }
+                    </div>
+                    <div class="saved-list">
+                      @if (savedConversations.length === 0) {
+                        <div class="empty-saved">
+                          <i class="fa-solid fa-folder-open"></i>
+                          <p>No saved conversations</p>
+                        </div>
+                      }
+                      @for (conv of savedConversations; track conv.id) {
+                        <div class="saved-item"
+                          [class.current]="conv.id === currentConversationId"
+                          (click)="loadConversation(conv)">
+                          <div class="saved-info">
+                            <h5>{{ conv.name }}</h5>
+                            <p>{{ conv.messages.length }} messages</p>
+                            <span class="saved-date">{{ conv.updatedAt | date:'short' }}</span>
+                          </div>
+                          <button
+                            class="delete-button"
+                            (click)="deleteConversation(conv, $event)"
+                            title="Delete conversation">
+                            <i class="fa-solid fa-trash"></i>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          </kendo-splitter-pane>
+        </kendo-splitter>
+      } @else {
+        <!-- No sidebar - full width chat -->
+        <div class="chat-area">
+          <!-- Messages Container -->
+          <div class="messages-container" #messagesContainer>
+            @if (conversationMessages.length === 0) {
+              <div class="empty-state">
+                <i class="fa-solid fa-comments"></i>
+                <h4>Start a conversation</h4>
+                <p>Send a message to begin testing the AI agent</p>
+              </div>
+            }
+            @for (message of conversationMessages; track message.id) {
+              <div [ngClass]="getMessageClass(message)">
+                <div class="message-header">
+                  <span class="message-role">
+                    @if (message.role === 'user') {
+                      <i class="fa-solid fa-user"></i> You
+                    } @else {
+                      <i class="fa-solid fa-robot"></i> {{ getEntityName() || 'Assistant' }}
+                    }
+                  </span>
+                  <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
+                  @if (message.isStreaming && message.elapsedTime !== undefined) {
+                    <span class="execution-time streaming">
+                      <i class="fa-solid fa-spinner fa-spin"></i> {{ formatElapsedTime(message.elapsedTime) }}
+                    </span>
+                  } @else if (message.executionTime) {
+                    <span class="execution-time" [title]="getExecutionSummary(message)">{{ formatExecutionTime(message.executionTime) }}</span>
+                  }
+                  @if (showRawToggle(message)) {
+                    <button class="raw-toggle" (click)="showRawJsonDialog(message)" title="View raw JSON response">
+                      <i class="fa-solid fa-code"></i>
+                    </button>
+                  }
+                  @if (message.executionData && mode === 'agent' && message.role === 'assistant') {
+                    <button class="execution-history-toggle" (click)="showMessageExecutionHistory(message)" title="View execution details">
+                      <i class="fa-solid fa-diagram-project"></i>
+                    </button>
+                  }
+                  @if (message.agentRunId && mode === 'agent' && message.role === 'assistant') {
+                    <button class="execution-history-toggle" (click)="navigateToAgentRun({runId: message.agentRunId, runType: 'agent'})" title="View full run details">
+                      <i class="fa-solid fa-external-link-alt"></i>
+                    </button>
+                  }
+                </div>
+                <div class="message-content">
+                  <button class="copy-button-in-bubble" (click)="copyMessage(message)" title="Copy message">
+                    <i class="fa-solid fa-copy"></i>
+                  </button>
+                  @if (message.isStreaming) {
+                    <div class="streaming-wrapper">
+                      <span class="streaming-content">{{ message.streamingContent }}<span class="cursor">|</span></span>
+                    </div>
+                  } @else {
+                    <div [innerHTML]="getFormattedContent(message)"></div>
+                  }
+                  @if (message.error) {
+                    <div class="error-details">
+                      <i class="fa-solid fa-exclamation-triangle"></i>
+                      {{ message.error }}
+                    </div>
+                  }
+                  @if (hasPayload(message.payload) && mode === 'agent' && message.role === 'assistant') {
+                    <div class="payload-section" [class.collapsed]="message.payloadCollapsed">
+                      <div class="payload-header" (click)="togglePayloadCollapse(message)">
+                        <span class="payload-label">
+                          <i class="fa-solid fa-code"></i> Payload
+                        </span>
+                        <button class="payload-toggle" type="button">
+                          <i class="fa-solid" [class.fa-chevron-down]="!message.payloadCollapsed" [class.fa-chevron-right]="message.payloadCollapsed"></i>
+                        </button>
+                      </div>
+                      @if (!message.payloadCollapsed) {
+                        <div class="payload-content">
+                          <pre>{{ formatJson(message.payload) }}</pre>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+          <!-- Input Area -->
+          <div class="input-area">
+            <div class="input-container">
+              <kendo-textarea
+                #messageInput
+                [(ngModel)]="currentUserMessage"
+                [rows]="3"
+                placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+                (keypress)="handleKeyPress($event)"
+                [disabled]="isExecuting"
+                class="message-input">
+              </kendo-textarea>
+              <button
+                class="send-button"
+                (click)="sendMessage()"
+                [disabled]="isExecuting || !currentUserMessage.trim()"
+                title="Send message">
+                @if (isExecuting) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                } @else {
+                  <i class="fa-solid fa-paper-plane"></i>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+}
 
-    <!-- Save Conversation Dialog -->
-    @if (showSaveDialog) {
-        <kendo-dialog 
-            [title]="'Save Conversation'" 
-            [width]="400"
-            (close)="cancelSaveDialog()"
-            class="save-dialog">
-            <div class="dialog-content">
-                <p>Enter a name for this conversation:</p>
-                <input 
-                    #saveDialogInput
-                    type="text"
-                    (keyup)="updateTempConversation()"
-                    placeholder="Conversation name"
-                    class="k-textbox k-input k-input-md k-rounded-md k-input-solid full-width"  />
-            </div>
-            <kendo-dialog-actions>
-                <button kendoButton (click)="cancelSaveDialog()">Cancel</button>
-                <button kendoButton 
-                        [primary]="true" 
-                        (click)="confirmSaveConversation()"
-                        [disabled]="tempConversationName === ''">
-                    Save
-                </button>
-            </kendo-dialog-actions>
-        </kendo-dialog>
-    }
-    
-    <!-- Load Confirmation Dialog -->
-    @if (showLoadConfirmDialog) {
-        <kendo-dialog 
-            [title]="'Replace Current Conversation?'" 
-            [width]="400"
-            (close)="cancelLoadConversation()"
-            class="confirm-dialog">
-            <div class="dialog-content">
-                <p>Loading this conversation will replace the current one. Any unsaved changes will be lost.</p>
-                <p>Do you want to continue?</p>
-            </div>
-            <kendo-dialog-actions>
-                <button kendoButton (click)="cancelLoadConversation()">Cancel</button>
-                <button kendoButton 
-                        [primary]="true" 
-                        (click)="confirmLoadConversation()">
-                    Load Conversation
-                </button>
-            </kendo-dialog-actions>
-        </kendo-dialog>
-    }
+<!-- Save Conversation Dialog -->
+@if (showSaveDialog) {
+  <kendo-dialog
+    [title]="'Save Conversation'"
+    [width]="400"
+    (close)="cancelSaveDialog()"
+    class="save-dialog">
+    <div class="dialog-content">
+      <p>Enter a name for this conversation:</p>
+      <input
+        #saveDialogInput
+        type="text"
+        (keyup)="updateTempConversation()"
+        placeholder="Conversation name"
+        class="k-textbox k-input k-input-md k-rounded-md k-input-solid full-width"  />
+    </div>
+    <kendo-dialog-actions>
+      <button kendoButton (click)="cancelSaveDialog()">Cancel</button>
+      <button kendoButton
+        [primary]="true"
+        (click)="confirmSaveConversation()"
+        [disabled]="tempConversationName === ''">
+        Save
+      </button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+}
+
+<!-- Load Confirmation Dialog -->
+@if (showLoadConfirmDialog) {
+  <kendo-dialog
+    [title]="'Replace Current Conversation?'"
+    [width]="400"
+    (close)="cancelLoadConversation()"
+    class="confirm-dialog">
+    <div class="dialog-content">
+      <p>Loading this conversation will replace the current one. Any unsaved changes will be lost.</p>
+      <p>Do you want to continue?</p>
+    </div>
+    <kendo-dialog-actions>
+      <button kendoButton (click)="cancelLoadConversation()">Cancel</button>
+      <button kendoButton
+        [primary]="true"
+        (click)="confirmLoadConversation()">
+        Load Conversation
+      </button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+}
 

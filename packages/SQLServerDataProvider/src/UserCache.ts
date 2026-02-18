@@ -1,6 +1,6 @@
 import { LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import * as sql from 'mssql';
+import sql from 'mssql';
 
 const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
 

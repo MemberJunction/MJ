@@ -1,5 +1,5 @@
 import { QueryInfo, QueryParameterInfo, RunQuerySQLFilterManager } from '@memberjunction/core';
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 
 /**
  * Result of parameter validation

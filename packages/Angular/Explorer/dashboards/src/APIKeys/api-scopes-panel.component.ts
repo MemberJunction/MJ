@@ -1,15 +1,9 @@
 import { Component, OnInit, EventEmitter, Output, ChangeDetectorRef } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { APIScopeEntity } from '@memberjunction/core-entities';
-
-/** Tree shaking prevention function */
-export function LoadAPIScopesPanel(): void {
-    // This function prevents tree shaking
-}
-
+import { MJAPIScopeEntity } from '@memberjunction/core-entities';
 /** Scope tree node structure */
 interface ScopeTreeNode {
-    scope: APIScopeEntity;
+    scope: MJAPIScopeEntity;
     children: ScopeTreeNode[];
     expanded: boolean;
     level: number;
@@ -20,6 +14,7 @@ interface ScopeTreeNode {
  * Manages API Scopes in a hierarchical tree structure
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-scopes-panel',
     templateUrl: './api-scopes-panel.component.html',
     styleUrls: ['./api-scopes-panel.component.css']
@@ -36,10 +31,10 @@ export class APIScopesPanelComponent implements OnInit {
 
     // Data
     public ScopeTree: ScopeTreeNode[] = [];
-    public FlatScopes: APIScopeEntity[] = [];
+    public FlatScopes: MJAPIScopeEntity[] = [];
 
     // Edit state
-    public EditingScope: APIScopeEntity | null = null;
+    public EditingScope: MJAPIScopeEntity | null = null;
     public EditName = '';
     public EditDescription = '';
     public EditCategory = '';
@@ -50,7 +45,7 @@ export class APIScopesPanelComponent implements OnInit {
     // Dialog states
     public ShowCreateDialog = false;
     public ShowEditDialog = false;
-    public SelectedParentScope: APIScopeEntity | null = null;
+    public SelectedParentScope: MJAPIScopeEntity | null = null;
 
     // Messages
     public SuccessMessage = '';
@@ -87,7 +82,7 @@ export class APIScopesPanelComponent implements OnInit {
         this.IsLoading = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<APIScopeEntity>({
+            const result = await rv.RunView<MJAPIScopeEntity>({
                 EntityName: 'MJ: API Scopes',
                 OrderBy: 'FullPath',
                 ResultType: 'entity_object'
@@ -154,7 +149,7 @@ export class APIScopesPanelComponent implements OnInit {
     /**
      * Open create dialog for new scope
      */
-    public openCreateDialog(parentScope: APIScopeEntity | null = null): void {
+    public openCreateDialog(parentScope: MJAPIScopeEntity | null = null): void {
         this.EditName = '';
         this.EditDescription = '';
         this.EditCategory = parentScope?.Category || 'Entities';
@@ -169,7 +164,7 @@ export class APIScopesPanelComponent implements OnInit {
     /**
      * Open edit dialog for existing scope
      */
-    public openEditDialog(scope: APIScopeEntity): void {
+    public openEditDialog(scope: MJAPIScopeEntity): void {
         this.EditingScope = scope;
         this.EditName = scope.Name;
         this.EditDescription = scope.Description || '';
@@ -191,12 +186,12 @@ export class APIScopesPanelComponent implements OnInit {
         this.ErrorMessage = '';
 
         try {
-            let scope: APIScopeEntity;
+            let scope: MJAPIScopeEntity;
 
             if (this.EditingScope) {
                 scope = this.EditingScope;
             } else {
-                scope = await this.md.GetEntityObject<APIScopeEntity>('MJ: API Scopes');
+                scope = await this.md.GetEntityObject<MJAPIScopeEntity>('MJ: API Scopes');
                 scope.NewRecord();
             }
 
@@ -274,7 +269,7 @@ export class APIScopesPanelComponent implements OnInit {
     /**
      * Get parent scopes for dropdown (exclude self and descendants)
      */
-    public getParentOptions(): APIScopeEntity[] {
+    public getParentOptions(): MJAPIScopeEntity[] {
         if (!this.EditingScope) {
             return this.FlatScopes;
         }

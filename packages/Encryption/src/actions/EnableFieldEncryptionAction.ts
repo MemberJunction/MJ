@@ -157,7 +157,7 @@ export class EnableFieldEncryptionAction {
         try {
             // Step 1: Load the EntityField metadata
             const fieldResult = await rv.RunView({
-                EntityName: 'Entity Fields',
+                EntityName: 'MJ: Entity Fields',
                 ExtraFilter: `ID = '${entityFieldId}'`,
                 ResultType: 'simple'
             }, contextUser);

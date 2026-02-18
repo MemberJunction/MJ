@@ -4,7 +4,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
 import { AIAgentEntityExtended, AIPromptEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { TemplateParamEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { MJTemplateParamEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -141,13 +141,14 @@ export interface SavedConversation {
  * @example
  * ```typescript
  * // Using with agent entity
- * const agent = await metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+ * const agent = await metadata.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
  * await agent.Load('agent-id');
  * this.testHarness.aiAgent = agent;
  * this.testHarness.isVisible = true;
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-ai-test-harness',
     templateUrl: './ai-test-harness.component.html',
     styleUrls: ['./ai-test-harness.component.css']
@@ -272,7 +273,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public selectedConfigurationId: string = '';
     
     /** Available AI configurations */
-    public availableConfigurations: AIConfigurationEntity[] = [];
+    public availableConfigurations: MJAIConfigurationEntity[] = [];
     
     /** Default model for the prompt (cached for display) */
     private defaultModelName: string = '';
@@ -779,7 +780,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private async loadAvailableConfigurations() {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<AIConfigurationEntity>({
+            const result = await rv.RunView<MJAIConfigurationEntity>({
                 EntityName: 'MJ: AI Configurations',
                 ExtraFilter: `Status IN ('Active', 'Preview')`,
                 OrderBy: 'IsDefault DESC, Name',
@@ -910,8 +911,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             try {
                 const rv = new RunView();
-                const result = await rv.RunView<TemplateParamEntity>({
-                    EntityName: 'Template Params',
+                const result = await rv.RunView<MJTemplateParamEntity>({
+                    EntityName: 'MJ: Template Params',
                     ExtraFilter: `TemplateID='${prompt.TemplateID}'`,
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
@@ -3058,7 +3059,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private isAgentEntity(entity: any): entity is AIAgentEntityExtended {
         // Check using the EntityInfo property from BaseEntity
-        return entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Agents';
+        return entity && entity.EntityInfo && entity.EntityInfo.Name === 'MJ: AI Agents';
     }
     
     /**
@@ -3066,7 +3067,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private isPromptEntity(entity: any): entity is AIPromptEntityExtended {
         // Check using the EntityInfo property from BaseEntity
-        const result = entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Prompts';
+        const result = entity && entity.EntityInfo && entity.EntityInfo.Name === 'MJ: AI Prompts';
         
         return result;
     }

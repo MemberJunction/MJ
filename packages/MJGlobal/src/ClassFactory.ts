@@ -9,15 +9,23 @@
 import { GetRootClass, IsRootClass } from './ClassUtils';
 
 /**
- * Data structure to track the class registrations 
+ * Type for constructor functions that have a name property
+ */
+type NamedClass = { name: string };
+
+/**
+ * Data structure to track the class registrations
  */
 export class ClassRegistration {
-    BaseClass: any // The TYPE of the base class, NOT an instance of the base class
-    SubClass: any // The TYPE of the sub-class, NOT an instance of the sub-class
-    RootClass: any // The TYPE of the root class, NOT an instance of the root class. This is used to determine if the baseClass is a root class or not
-    Key: string // used to identify a special attribute that we use to determine if this is the right sub-class. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    BaseClass: any; // The TYPE of the base class, NOT an instance of the base class
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    SubClass: any; // The TYPE of the sub-class, NOT an instance of the sub-class
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    RootClass: any; // The TYPE of the root class, NOT an instance of the root class. This is used to determine if the baseClass is a root class or not
+    Key: string | null = null; // used to identify a special attribute that we use to determine if this is the right sub-class. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries
                 // in the registration list, so we'll use the key to identify which sub-class to use for a given entity
-    Priority: number // if there are multiple entries for a given combination of baseClass and subClass and key, we will use the priority to determine which one to use. The higher the number, the higher the priority
+    Priority: number = 0; // if there are multiple entries for a given combination of baseClass and subClass and key, we will use the priority to determine which one to use. The higher the number, the higher the priority
 }
  
 
@@ -35,23 +43,28 @@ export class ClassFactory {
      * @param key A key can be used to differentiate registrations for the same base class/sub-class combination. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries and we want to get the highest priority registered sub-class for a specific key. In that case, the key is the entity name, but the key can be any value you want to use to differentiate registrations.
      * @param priority Higher priority registrations will be used over lower priority registrations. If there are multiple registrations for a given base class/sub-class/key combination, the one with the highest priority will be used. If there are multiple registrations with the same priority, the last one registered will be used. Finally, if you do NOT provide this setting, the order of registrations will increment the priority automatically so dependency injection will typically care care of this. That is, in order for Class B, a subclass of Class A, to be registered properly, Class A code has to already have been loaded and therefore Class A's RegisterClass decorator was run. In that scenario, if neither Class A or B has a priority setting, Class A would be 1 and Class B would be 2 automatically. For this reason, you only need to explicitly set priority if you want to do something atypical as this mechanism normally will solve for setting the priority correctly based on the furthest descendant class that is registered.
      * @param skipNullKeyWarning If true, will not print a warning if the key is null or undefined. This is useful for cases where you know that the key is not needed and you don't want to see the warning in the console.
-     * @param autoRegisterWithRootClass If true (default), will automatically register the subclass with the root class of the baseClass hierarchy. This ensures proper priority ordering when multiple subclasses are registered in a hierarchy.
+     * @param autoRegisterWithRootClass If true, will automatically register the subclass with the root class of the baseClass hierarchy. This ensures proper priority ordering when multiple subclasses are registered in a hierarchy. Defaults to false to preserve the original registration contract where classes are stored under the baseClass you specify.
      */
-    public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = true): void {
+    public Register(baseClass: unknown, subClass: unknown, key: string | null = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = false): void {
         if (baseClass && subClass) {
+            const baseClassName = (baseClass as NamedClass).name;
+            const subClassName = (subClass as NamedClass).name;
+
             if (key === undefined || key === null && !skipNullKeyWarning) {
-                console.warn(`ClassFactory.GetAllRegistrations: Registration for base class ${baseClass.name} has no key set. This is not recommended and may lead to unintended behavior when trying to match registrations. Please set a key for this registration.`)
+                console.warn(`ClassFactory.GetAllRegistrations: Registration for base class ${baseClassName} has no key set. This is not recommended and may lead to unintended behavior when trying to match registrations. Please set a key for this registration.`)
             }
 
             // Get the root class for this registration
             const rootClass = GetRootClass(baseClass);
-            
+            const rootClassName = (rootClass as NamedClass).name;
+
             // Determine which class to actually register against
             const effectiveBaseClass = autoRegisterWithRootClass ? rootClass : baseClass;
-            
+            const effectiveBaseClassName = (effectiveBaseClass as NamedClass).name;
+
             // Log if we're auto-registering with root class
             if (autoRegisterWithRootClass && effectiveBaseClass !== baseClass) {
-                console.info(`ClassFactory.Register: Auto-registering ${subClass.name} with root class ${rootClass.name} instead of ${baseClass.name}`);
+                console.info(`ClassFactory.Register: Auto-registering ${subClassName} with root class ${rootClassName} instead of ${baseClassName}`);
             }
 
             // get all of the existing registrations for the effective base class and key
@@ -61,7 +74,7 @@ export class ClassFactory {
                 // validate to make sure that the combination of base class and key for the provided priority # is not already registered, if it is, then print a warning
                 const existing = registrations.filter(r => r.Priority === priority);
                 if (existing && existing.length > 0) {
-                    console.warn(`*** ClassFactory.Register: Registering class ${subClass.name} for base class ${effectiveBaseClass.name} and key/priority ${key}/${priority}. ${existing.length} registrations already exist for that combination. While this is allowed it is not desired and when matching class requests occur, we will simply use the LAST registration we happen to have which can lead to unintended behavior. ***`);
+                    console.warn(`*** ClassFactory.Register: Registering class ${subClassName} for base class ${effectiveBaseClassName} and key/priority ${key}/${priority}. ${existing.length} registrations already exist for that combination. While this is allowed it is not desired and when matching class requests occur, we will simply use the LAST registration we happen to have which can lead to unintended behavior. ***`);
                 }
             }
             else if (priority === 0 || priority === null || priority === undefined) {
@@ -92,21 +105,23 @@ export class ClassFactory {
      * Creates an instance of the class registered for the given base class and key. 
      * If no registration is found, will return an instance of the base class.
      */
-    public CreateInstance<T>(baseClass: any, key: string = null, ...params: any[]): T | null {
+    public CreateInstance<T>(baseClass: unknown, key: string | null = null, ...params: unknown[]): T | null {
         if (baseClass) {
             let reg = this.GetRegistration(baseClass, key);
             if (reg) {
+                const SubClassConstructor = reg.SubClass as new (...args: unknown[]) => T;
                 let instance: T | null = null;
                 if (params !== undefined)
-                    instance = new reg.SubClass(...params);
+                    instance = new SubClassConstructor(...params);
                 else
-                    instance = new reg.SubClass(); // dont pass in anything if we got undefined for that parameter into our function because it is different to call a function with no params than to pass in a single null/undefined param
+                    instance = new SubClassConstructor(); // dont pass in anything if we got undefined for that parameter into our function because it is different to call a function with no params than to pass in a single null/undefined param
 
                 return instance;
             }
             else {
                 // this is a normal condition to use the base class if we can't find a registration
-                return new baseClass(...params); // if we can't find a registration, just return a new instance of the base class
+                const BaseClassConstructor = baseClass as new (...args: unknown[]) => T;
+                return new BaseClassConstructor(...params); // if we can't find a registration, just return a new instance of the base class
             }
         }
 
@@ -119,21 +134,23 @@ export class ClassFactory {
      * @param key 
      * @returns 
      */
-    public GetAllRegistrations(baseClass: any, key: string = undefined): ClassRegistration[] {
+    public GetAllRegistrations(baseClass: unknown, key?: string | null): ClassRegistration[] {
         if (baseClass) {
             return this._registrations.filter(r => {
-                return  r.BaseClass.name === baseClass.name && // we use the name of the class instead of the class itself because JS is finicky about this since a given module can be loaded in various places (like from multiple other modules) and the class itself will be different in each case
+                const baseClassName = (baseClass as { name: string }).name;
+                const regBaseClassName = (r.BaseClass as { name: string }).name;
+                return  regBaseClassName === baseClassName && // we use the name of the class instead of the class itself because JS is finicky about this since a given module can be loaded in various places (like from multiple other modules) and the class itself will be different in each case
                         ( key === undefined || key === null ? true : r.Key?.trim().toLowerCase() === key.trim().toLowerCase())
             } );
         }
         else
-            return null;
+            return [];
     }
 
     /**
      * Returns the registration with the highest priority for a given base class and key. If key is not provided, will return the registration with the highest priority for the base class.
      */
-    public GetRegistration(baseClass: any, key: string = undefined): ClassRegistration {
+    public GetRegistration(baseClass: unknown, key?: string | null): ClassRegistration | null {
         let matches = this.GetAllRegistrations(baseClass, key)
         if (matches && matches.length > 0) {
             // figure out the highest priority for all the matching registrations
@@ -160,10 +177,12 @@ export class ClassFactory {
      * @param key Optional key to filter results
      * @returns Array of matching registrations
      */
-    public GetRegistrationsByRootClass(rootClass: any, key: string = undefined): ClassRegistration[] {
+    public GetRegistrationsByRootClass(rootClass: unknown, key?: string | null): ClassRegistration[] {
         if (rootClass) {
+            const rootClassName = (rootClass as { name: string }).name;
             return this._registrations.filter(r => {
-                return r.RootClass?.name === rootClass.name && 
+                const regRootClassName = (r.RootClass as { name?: string })?.name;
+                return regRootClassName === rootClassName &&
                        (key === undefined || key === null ? true : r.Key?.trim().toLowerCase() === key.trim().toLowerCase())
             });
         }

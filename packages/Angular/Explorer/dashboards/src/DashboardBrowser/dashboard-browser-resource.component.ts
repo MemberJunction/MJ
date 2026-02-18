@@ -5,7 +5,7 @@ import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, DashboardEntity, DashboardCategoryEntity, DashboardPartTypeEntity, DashboardEngine, DashboardUserPermissions, DashboardCategoryLinkEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJDashboardEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardEngine, DashboardUserPermissions, MJDashboardCategoryLinkEntity } from '@memberjunction/core-entities';
 import { ShareDialogResult } from './dashboard-share-dialog.component';
 import {
     DashboardViewerComponent,
@@ -28,11 +28,6 @@ import {
     DashboardBrowserViewMode,
     BreadcrumbNavigateEvent
 } from '@memberjunction/ng-dashboard-viewer';
-
-export function LoadDashboardBrowserResource() {
-    // Prevents tree-shaking
-}
-
 /**
  * Mode for the dashboard browser
  */
@@ -45,6 +40,7 @@ type BrowserMode = 'list' | 'view' | 'edit';
  */
 @RegisterClass(BaseResourceComponent, 'DashboardBrowserResource')
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-browser-resource',
     templateUrl: './dashboard-browser-resource.component.html',
     styleUrls: ['./dashboard-browser-resource.component.css'],
@@ -57,9 +53,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     public mode: BrowserMode = 'list';
     public isLoading = false;
-    public dashboards: DashboardEntity[] = [];
-    public categories: DashboardCategoryEntity[] = [];
-    public selectedDashboard: DashboardEntity | null = null;
+    public dashboards: MJDashboardEntity[] = [];
+    public categories: MJDashboardCategoryEntity[] = [];
+    public selectedDashboard: MJDashboardEntity | null = null;
     public selectedCategoryId: string | null = null;
     public viewMode: DashboardBrowserViewMode = 'cards';
     public showAddPanelDialog = false;
@@ -67,7 +63,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // Config dialog state
     public showConfigDialog = false;
     public configDialogPanel: DashboardPanel | null = null;
-    public configDialogPartType: DashboardPartTypeEntity | null = null;
+    public configDialogPartType: MJDashboardPartTypeEntity | null = null;
     public configDialogClass: string = '';
 
     // Confirm dialog state
@@ -281,7 +277,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             link => link.DashboardID === dashboardId && link.UserID === userId
         );
 
-        let link: DashboardCategoryLinkEntity;
+        let link: MJDashboardCategoryLinkEntity;
 
         if (existingLinks.length > 0) {
             // Update existing link
@@ -289,7 +285,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             link.DashboardCategoryID = categoryId;
         } else {
             // Create new link
-            link = await md.GetEntityObject<DashboardCategoryLinkEntity>('MJ: Dashboard Category Links');
+            link = await md.GetEntityObject<MJDashboardCategoryLinkEntity>('MJ: Dashboard Category Links');
             link.DashboardID = dashboardId;
             link.UserID = userId;
             link.DashboardCategoryID = categoryId;
@@ -345,7 +341,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 email: md.CurrentUser?.Email
             });
 
-            const category = await md.GetEntityObject<DashboardCategoryEntity>('Dashboard Categories');
+            const category = await md.GetEntityObject<MJDashboardCategoryEntity>('MJ: Dashboard Categories');
             console.log('[DashboardBrowserResource] Created category entity object');
 
             // Set required fields
@@ -464,7 +460,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Open a dashboard for viewing
      */
-    public openDashboard(dashboard: DashboardEntity): void {
+    public openDashboard(dashboard: MJDashboardEntity): void {
         this.selectedDashboard = dashboard;
         this.mode = 'view';
 
@@ -482,7 +478,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Open a dashboard for editing
      */
-    public editDashboard(dashboard: DashboardEntity): void {
+    public editDashboard(dashboard: MJDashboardEntity): void {
         // Check if user has edit permission
         const md = new Metadata();
         const permissions = DashboardEngine.Instance.GetDashboardPermissions(
@@ -588,7 +584,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.cdr.detectChanges();
 
             const md = new Metadata();
-            const dashboard = await md.GetEntityObject<DashboardEntity>('Dashboards');
+            const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards');
 
             dashboard.Name = 'New Dashboard';
             dashboard.Description = '';
@@ -1042,8 +1038,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Get all child categories of a parent category recursively
      */
-    private getChildCategoriesRecursive(parentId: string): DashboardCategoryEntity[] {
-        const children: DashboardCategoryEntity[] = [];
+    private getChildCategoriesRecursive(parentId: string): MJDashboardCategoryEntity[] {
+        const children: MJDashboardCategoryEntity[] = [];
         const directChildren = this.categories.filter(c => c.ParentID === parentId);
 
         for (const child of directChildren) {

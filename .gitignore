@@ -3,6 +3,10 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
+# Playwright CLI snapshots
+.playwright-cli/
+.playwright-mcp/
+
 # Turbo local cache
 .turbo/
 
@@ -75,8 +79,7 @@ packages/MJExplorer/src/environments/environment.development.ts
 packages/MJExplorer/src/environments/environment.staging.ts
 packages/MJExplorer/src/environments/environment.ts
 Schema Files/
-docs/
-!packages/DBAutoDoc/docs/
+/docs/
 SQL Scripts/generated/
 *.old
 SQL Scripts/internal_only/BC CDP - FULL TEXT Index Setup.sql
@@ -139,3 +142,10 @@ report.json
 report.html
 packages/MJAPI/src/generated/class-registrations-manifest.ts
 packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
+.needs-manifest-rebuild
+
+# Test coverage output
+coverage/
+docker/workbench/workspace/.env.database
+docker/workbench/workspace/screenshots/
+test-run-log.txt

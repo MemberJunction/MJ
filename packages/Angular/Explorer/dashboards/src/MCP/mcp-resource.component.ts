@@ -20,6 +20,7 @@ import { RegisterClass } from '@memberjunction/global';
  */
 @RegisterClass(BaseResourceComponent, 'MCPResource')
 @Component({
+  standalone: false,
     selector: 'mj-mcp-resource',
     template: `
         <mj-mcp-dashboard></mj-mcp-dashboard>
@@ -46,11 +47,4 @@ export class MCPResourceComponent extends BaseResourceComponent implements OnIni
     async GetResourceIconClass(data: ResourceData): Promise<string> {
         return 'fa-solid fa-plug-circle-bolt';
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPResource(): void {
-    // Ensures the component is not tree-shaken
 }

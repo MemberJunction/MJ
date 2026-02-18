@@ -1,50 +1,64 @@
 <div class="k-overlay"></div>
 <kendo-window class="modal-body-wrap" [width]="500" [minHeight]="300" [minWidth]="400" [resizable]="true" (close)="closeDialog()"
-    title="Add Item to Dashboard">
-    <div class="k-d-flex k-flex-col resource-wrap">
-        <kendo-label text="Resource Type">
+  title="Add Item to Dashboard">
+  <div class="k-d-flex k-flex-col resource-wrap">
+    <kendo-label text="Resource Type">
+      <br />
+      <kendo-dropdownlist [data]="ResourceTypes" [textField]="'DisplayName'" [valueField]="'ID'"
+        (valueChange)="onResourceTypeChange($event)" [(ngModel)]="resourceType">
+      </kendo-dropdownlist>
+    </kendo-label>
+    <div class="user-view-wrap">
+      @switch (resourceType.Entity ) {
+        @case ('MJ: User Views') {
+          <kendo-label text="Entity">
             <br />
-            <kendo-dropdownlist [data]="ResourceTypes" [textField]="'DisplayName'" [valueField]="'ID'"  [subtitle]="'sdfsdf'"
-                (valueChange)="onResourceTypeChange($event)" [(ngModel)]="resourceType">
+            <kendo-dropdownlist [data]="Entities" [textField]="'Name'" [valueField]="'ID'"
+              (valueChange)="onEntityChange($event)" [(ngModel)]="selectedEntity">
             </kendo-dropdownlist>
-        </kendo-label>
-        <div [ngSwitch]="resourceType.Entity " class="user-view-wrap">
-            <ng-container *ngSwitchCase="'User Views'">
-                <kendo-label text="Entity">
-                    <br />
-                    <kendo-dropdownlist [data]="Entities" [textField]="'Name'" [valueField]="'ID'"
-                        (valueChange)="onEntityChange($event)" [(ngModel)]="selectedEntity">
-                    </kendo-dropdownlist>
-                </kendo-label>
-                <kendo-label text="Views" *ngIf="selectedEntity && Views.length">
-                    <br />
-                    <kendo-dropdownlist [data]="Views" [textField]="'Name'" [valueField]="'ID'"
-                        (valueChange)="onViewChange($event)" [(ngModel)]="selectedView">
-                    </kendo-dropdownlist>
-                </kendo-label>
-                <mj-loading *ngIf="selectedEntity && !Views.length && showloader" [showText]="false" size="medium"></mj-loading>
-                <div *ngIf="selectedEntity && !Views.length && !showloader" class="no-views-message">
-                    No views available for this entity
-                </div>
-            </ng-container>
-            <ng-container *ngSwitchCase="'Reports'">
-                <kendo-label text="Reports" *ngIf="Reports.length">
-                    <br />
-                    <kendo-dropdownlist [data]="Reports" [textField]="'Name'" [valueField]="'ID'"
-                        (valueChange)="onViewChange($event)" [(ngModel)]="selectedReport">
-                    </kendo-dropdownlist>
-                </kendo-label>
-                <mj-loading *ngIf="!Reports.length && showloader" [showText]="false" size="medium"></mj-loading>
-                <div *ngIf="!Reports.length && !showloader" class="no-items-message">
-                    No reports available
-                </div>
-            </ng-container>
-        </div>
+          </kendo-label>
+          @if (selectedEntity && Views.length) {
+            <kendo-label text="Views">
+              <br />
+              <kendo-dropdownlist [data]="Views" [textField]="'Name'" [valueField]="'ID'"
+                (valueChange)="onViewChange($event)" [(ngModel)]="selectedView">
+              </kendo-dropdownlist>
+            </kendo-label>
+          }
+          @if (selectedEntity && !Views.length && showloader) {
+            <mj-loading [showText]="false" size="medium"></mj-loading>
+          }
+          @if (selectedEntity && !Views.length && !showloader) {
+            <div class="no-views-message">
+              No views available for this entity
+            </div>
+          }
+        }
+        @case ('Reports') {
+          @if (Reports.length) {
+            <kendo-label text="Reports">
+              <br />
+              <kendo-dropdownlist [data]="Reports" [textField]="'Name'" [valueField]="'ID'"
+                (valueChange)="onViewChange($event)" [(ngModel)]="selectedReport">
+              </kendo-dropdownlist>
+            </kendo-label>
+          }
+          @if (!Reports.length && showloader) {
+            <mj-loading [showText]="false" size="medium"></mj-loading>
+          }
+          @if (!Reports.length && !showloader) {
+            <div class="no-items-message">
+              No reports available
+            </div>
+          }
+        }
+      }
     </div>
-    <div class="k-actions k-actions-end popup-actions customBtn">
-        <button themeColor="info" kendoButton (click)="addItem()">
-            <span class="fa-solid fa-check"></span> Add
-        </button>
-        <button themeColor="info" kendoButton fillMode="outline" (click)="closeDialog()">Cancel</button>
-    </div>
+  </div>
+  <div class="k-actions k-actions-end popup-actions customBtn">
+    <button themeColor="info" kendoButton (click)="addItem()">
+      <span class="fa-solid fa-check"></span> Add
+    </button>
+    <button themeColor="info" kendoButton fillMode="outline" (click)="closeDialog()">Cancel</button>
+  </div>
 </kendo-window>

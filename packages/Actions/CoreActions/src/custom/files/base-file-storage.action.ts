@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView, UserInfo } from "@memberjunction/core";
-import { FileStorageAccountEntity, FileStorageProviderEntity } from "@memberjunction/core-entities";
+import { MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
 import { FileStorageBase, initializeDriverWithAccountCredentials } from "@memberjunction/storage";
 
 /**
@@ -18,11 +18,11 @@ export abstract class BaseFileStorageAction extends BaseAction {
      * Get storage account entity by name
      * @param accountName - Name of the storage account
      * @param contextUser - User context for the operation
-     * @returns FileStorageAccountEntity or null if not found
+     * @returns MJFileStorageAccountEntity or null if not found
      */
-    protected async getStorageAccount(accountName: string, contextUser: UserInfo): Promise<FileStorageAccountEntity | null> {
+    protected async getStorageAccount(accountName: string, contextUser: UserInfo): Promise<MJFileStorageAccountEntity | null> {
         const rv = new RunView();
-        const result = await rv.RunView<FileStorageAccountEntity>({
+        const result = await rv.RunView<MJFileStorageAccountEntity>({
             EntityName: 'MJ: File Storage Accounts',
             ExtraFilter: `Name='${accountName.replace(/'/g, "''")}'`,
             ResultType: 'entity_object'
@@ -39,12 +39,12 @@ export abstract class BaseFileStorageAction extends BaseAction {
      * Get storage provider entity by ID
      * @param providerId - ID of the storage provider
      * @param contextUser - User context for the operation
-     * @returns FileStorageProviderEntity or null if not found
+     * @returns MJFileStorageProviderEntity or null if not found
      */
-    protected async getStorageProviderById(providerId: string, contextUser: UserInfo): Promise<FileStorageProviderEntity | null> {
+    protected async getStorageProviderById(providerId: string, contextUser: UserInfo): Promise<MJFileStorageProviderEntity | null> {
         const rv = new RunView();
-        const result = await rv.RunView<FileStorageProviderEntity>({
-            EntityName: 'File Storage Providers',
+        const result = await rv.RunView<MJFileStorageProviderEntity>({
+            EntityName: 'MJ: File Storage Providers',
             ExtraFilter: `ID='${providerId}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -58,14 +58,14 @@ export abstract class BaseFileStorageAction extends BaseAction {
 
     /**
      * Initialize storage driver using the enterprise credential model
-     * @param accountEntity - FileStorageAccountEntity to initialize
-     * @param providerEntity - FileStorageProviderEntity for the account
+     * @param accountEntity - MJFileStorageAccountEntity to initialize
+     * @param providerEntity - MJFileStorageProviderEntity for the account
      * @param contextUser - User context for credential access
      * @returns Initialized FileStorageBase driver
      */
     protected async initializeDriver(
-        accountEntity: FileStorageAccountEntity,
-        providerEntity: FileStorageProviderEntity,
+        accountEntity: MJFileStorageAccountEntity,
+        providerEntity: MJFileStorageProviderEntity,
         contextUser: UserInfo
     ): Promise<FileStorageBase> {
         return initializeDriverWithAccountCredentials({

@@ -17,8 +17,6 @@ import { CommonModule } from '@angular/common';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
-import { LoadOAuthCallbackComponent } from './oauth-callback.component';
-
 /**
  * OAuth Module - provides dependencies for OAuth callback handling.
  * The OAuthCallbackComponent itself is declared in ExplorerCoreModule.
@@ -30,9 +28,4 @@ import { LoadOAuthCallbackComponent } from './oauth-callback.component';
         SharedGenericModule
     ]
 })
-export class OAuthModule {
-    constructor() {
-        // Prevent tree-shaking
-        LoadOAuthCallbackComponent();
-    }
-}
+export class OAuthModule { }

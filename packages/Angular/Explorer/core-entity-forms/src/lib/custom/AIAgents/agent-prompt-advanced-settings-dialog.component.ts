@@ -3,7 +3,7 @@ import { FormGroup, FormBuilder, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
-import { AIAgentPromptEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { MJAIAgentPromptEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface AgentPromptAdvancedSettingsFormData {
@@ -20,6 +20,7 @@ export interface AgentPromptAdvancedSettingsFormData {
  * Manages execution order, context behavior, and other advanced prompt configurations.
  */
 @Component({
+  standalone: false,
   selector: 'mj-agent-prompt-advanced-settings-dialog',
   templateUrl: './agent-prompt-advanced-settings-dialog.component.html',
   styleUrls: ['./agent-prompt-advanced-settings-dialog.component.css']
@@ -27,8 +28,8 @@ export interface AgentPromptAdvancedSettingsFormData {
 export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
-  agentPrompt!: AIAgentPromptEntity;
-  allAgentPrompts: AIAgentPromptEntity[] = []; // For execution order validation
+  agentPrompt!: MJAIAgentPromptEntity;
+  allAgentPrompts: MJAIAgentPromptEntity[] = []; // For execution order validation
   
   // Reactive state management
   private destroy$ = new Subject<void>();
@@ -40,7 +41,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
   isSaving$ = new BehaviorSubject<boolean>(false);
   
   // Dropdown data
-  configurations$ = new BehaviorSubject<AIConfigurationEntity[]>([]);
+  configurations$ = new BehaviorSubject<MJAIConfigurationEntity[]>([]);
   
   // Available options
   contextBehaviorOptions = [
@@ -147,7 +148,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
       const rv = new RunView();
       
       // Load AI Configurations
-      const configurationsResult = await rv.RunView<AIConfigurationEntity>({
+      const configurationsResult = await rv.RunView<MJAIConfigurationEntity>({
         EntityName: 'MJ: AI Configurations',
         ExtraFilter: "Status = 'Active'",
         OrderBy: 'Name',

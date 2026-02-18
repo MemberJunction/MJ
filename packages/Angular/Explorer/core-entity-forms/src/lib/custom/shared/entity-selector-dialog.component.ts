@@ -15,80 +15,83 @@ export interface EntitySelectorConfig {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-entity-selector-dialog',
     template: `
         <div class="dialog-wrapper">
-            <div class="dialog-header">
-                <h3><i *ngIf="config.icon" [class]="config.icon"></i> {{ config.title }}</h3>
+          <div class="dialog-header">
+            <h3>@if (config.icon) {
+              <i [class]="config.icon"></i>
+            } {{ config.title }}</h3>
+          </div>
+          <div class="dialog-content">
+            <!-- Search Bar -->
+            <div class="search-bar">
+              <kendo-textbox
+                [(ngModel)]="searchText"
+                placeholder="Search..."
+                (valueChange)="onSearchChange()"
+                class="search-input">
+                <ng-template kendoTextBoxPrefixTemplate>
+                  <i class="fa-solid fa-search"></i>
+                </ng-template>
+              </kendo-textbox>
             </div>
-            <div class="dialog-content">
-                <!-- Search Bar -->
-                <div class="search-bar">
-                    <kendo-textbox 
-                        [(ngModel)]="searchText"
-                        placeholder="Search..."
-                        (valueChange)="onSearchChange()"
-                        class="search-input">
-                        <ng-template kendoTextBoxPrefixTemplate>
-                            <i class="fa-solid fa-search"></i>
-                        </ng-template>
-                    </kendo-textbox>
-                </div>
-
-                <!-- Loading State -->
-                @if (isLoading) {
-                    <div class="loading-state">
-                        <i class="fa-solid fa-spinner fa-spin"></i>
-                        <p>Loading {{ config.entityName }}...</p>
-                    </div>
-                }
-
-                <!-- Entity List -->
-                @if (!isLoading) {
-                    <div class="entity-list-container">
-                        @if (filteredEntities.length === 0) {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-inbox"></i>
-                                <p>No {{ config.entityName }} found</p>
+        
+            <!-- Loading State -->
+            @if (isLoading) {
+              <div class="loading-state">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <p>Loading {{ config.entityName }}...</p>
+              </div>
+            }
+        
+            <!-- Entity List -->
+            @if (!isLoading) {
+              <div class="entity-list-container">
+                @if (filteredEntities.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-inbox"></i>
+                    <p>No {{ config.entityName }} found</p>
+                  </div>
+                } @else {
+                  <div class="entity-list">
+                    @for (entity of filteredEntities; track entity.ID) {
+                      <div class="entity-item"
+                        [class.selected]="selectedEntity?.ID === entity.ID"
+                        (click)="selectEntity(entity)">
+                        <div class="item-icon">
+                          <i [class]="config.icon || 'fa-solid fa-file'"></i>
+                        </div>
+                        <div class="item-content">
+                          <div class="item-title">{{ entity[config.displayField] || 'Untitled' }}</div>
+                          @if (config.descriptionField && entity[config.descriptionField]) {
+                            <div class="item-description">{{ entity[config.descriptionField] }}</div>
+                          }
+                          @if (config.statusField && entity[config.statusField]) {
+                            <div class="item-status">
+                              <span class="status-badge" [class.active]="entity[config.statusField] === 'Active'">
+                                {{ entity[config.statusField] }}
+                              </span>
                             </div>
-                        } @else {
-                            <div class="entity-list">
-                                @for (entity of filteredEntities; track entity.ID) {
-                                    <div class="entity-item" 
-                                         [class.selected]="selectedEntity?.ID === entity.ID"
-                                         (click)="selectEntity(entity)">
-                                        <div class="item-icon">
-                                            <i [class]="config.icon || 'fa-solid fa-file'"></i>
-                                        </div>
-                                        <div class="item-content">
-                                            <div class="item-title">{{ entity[config.displayField] || 'Untitled' }}</div>
-                                            @if (config.descriptionField && entity[config.descriptionField]) {
-                                                <div class="item-description">{{ entity[config.descriptionField] }}</div>
-                                            }
-                                            @if (config.statusField && entity[config.statusField]) {
-                                                <div class="item-status">
-                                                    <span class="status-badge" [class.active]="entity[config.statusField] === 'Active'">
-                                                        {{ entity[config.statusField] }}
-                                                    </span>
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
                 }
-            </div>
-            <div class="dialog-actions">
-                <button kendoButton themeColor="primary" (click)="createNew()">
-                    <i class="fa-solid fa-plus"></i> Create New
-                </button>
-                <button kendoButton (click)="onCancel()">Cancel</button>
-                <button kendoButton themeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
-            </div>
+              </div>
+            }
+          </div>
+          <div class="dialog-actions">
+            <button kendoButton themeColor="primary" (click)="createNew()">
+              <i class="fa-solid fa-plus"></i> Create New
+            </button>
+            <button kendoButton (click)="onCancel()">Cancel</button>
+            <button kendoButton themeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
+          </div>
         </div>
-    `,
+        `,
     styles: [`
         .dialog-wrapper {
             display: flex;

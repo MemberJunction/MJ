@@ -5,6 +5,8 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
+import { CreateAgentService, CreateAgentDialogResult, CreateAgentResult } from '@memberjunction/ng-agents';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -28,20 +30,13 @@ interface AgentConfigurationUserPreferences {
   sortDirection: 'asc' | 'desc';
   filters: AgentFilter;
 }
-
-/**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIAgentsResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * AI Agents Resource - displays AI agent configuration and management
  * Extends BaseResourceComponent to work with the resource type system
  */
 @RegisterClass(BaseResourceComponent, 'AIAgentsResource')
 @Component({
+  standalone: false,
   selector: 'app-agent-configuration',
   templateUrl: './agent-configuration.component.html',
   styleUrls: ['./agent-configuration.component.css']
@@ -87,22 +82,22 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   /** Check if user can create AI Agents */
   public get UserCanCreateAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Create');
+    return this.checkEntityPermission('MJ: AI Agents', 'Create');
   }
 
   /** Check if user can read AI Agents */
   public get UserCanReadAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Read');
+    return this.checkEntityPermission('MJ: AI Agents', 'Read');
   }
 
   /** Check if user can update AI Agents */
   public get UserCanUpdateAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Update');
+    return this.checkEntityPermission('MJ: AI Agents', 'Update');
   }
 
   /** Check if user can delete AI Agents */
   public get UserCanDeleteAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Delete');
+    return this.checkEntityPermission('MJ: AI Agents', 'Delete');
   }
 
   /**
@@ -163,6 +158,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   constructor(
     private testHarnessService: AITestHarnessDialogService,
+    private createAgentService: CreateAgentService,
     private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
@@ -520,13 +516,87 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   public openAgentRecord(agentId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agentId }]);
-    this.navigationService.OpenEntityRecord('AI Agents', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Agents', compositeKey);
   }
 
+  /**
+   * Opens the create agent slide-in panel. Upon successful creation,
+   * saves the agent and navigates to the new record.
+   */
   public createNewAgent(): void {
-    // Use the standard MemberJunction pattern to open a new AI Agent form
-    // Empty CompositeKey indicates a new record
-    this.navigationService.OpenEntityRecord('AI Agents', new CompositeKey([]));
+    this.createAgentService.OpenSlideIn({
+      Title: 'Create New Agent'
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: async (dialogResult: CreateAgentDialogResult) => {
+        if (!dialogResult.Cancelled && dialogResult.Result) {
+          await this.handleAgentCreated(dialogResult.Result);
+        }
+      },
+      error: (error) => {
+        console.error('Error in create agent slide-in:', error);
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'Error opening agent creation panel. Please try again.',
+          'error',
+          3000
+        );
+      }
+    });
+  }
+
+  /**
+   * Handles the result from the create agent slide-in.
+   * Saves the agent and navigates to the new record.
+   */
+  private async handleAgentCreated(result: CreateAgentResult): Promise<void> {
+    try {
+      const agent = result.Agent;
+
+      // Save the agent
+      const saveResult = await agent.Save();
+      if (!saveResult) {
+        throw new Error('Failed to save agent');
+      }
+
+      // Save linked prompts if any
+      if (result.AgentPrompts && result.AgentPrompts.length > 0) {
+        for (const agentPrompt of result.AgentPrompts) {
+          // Update the AgentID to the saved agent's ID
+          agentPrompt.AgentID = agent.ID;
+          await agentPrompt.Save();
+        }
+      }
+
+      // Save linked actions if any
+      if (result.AgentActions && result.AgentActions.length > 0) {
+        for (const agentAction of result.AgentActions) {
+          // Update the AgentID to the saved agent's ID
+          agentAction.AgentID = agent.ID;
+          await agentAction.Save();
+        }
+      }
+
+      // Refresh the agent list
+      await AIEngineBase.Instance.Config(true); // Force refresh
+      await this.loadAgents();
+      this.applyFilters();
+
+      // Navigate to the new agent record
+      const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agent.ID }]);
+      this.navigationService.OpenEntityRecord('MJ: AI Agents', compositeKey);
+
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Agent "${agent.Name}" created successfully`,
+        'success',
+        3000
+      );
+    } catch (error) {
+      console.error('Error saving created agent:', error);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error saving agent. Please try again.',
+        'error',
+        3000
+      );
+    }
   }
 
   public runAgent(agent: AIAgentEntityExtended): void {

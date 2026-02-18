@@ -13,20 +13,19 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 //***********************************************************
 import {
   MJExplorerModulesBundle,
-  LoadCoreGeneratedForms,
-  LoadCoreCustomForms,
-  LoadResourceWrappers,
   SharedService
 } from '@memberjunction/ng-explorer-modules';
 import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJExplorerAppModule } from '@memberjunction/ng-explorer-app';
 
-LoadCoreGeneratedForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
-LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
-LoadResourceWrappers(); // prevent tree shaking and component loss through this call
+// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
+import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap';
 
-// Import class registrations manifest to prevent tree-shaking of @RegisterClass decorated classes
-import './generated/class-registrations-manifest';
+// Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
+import {CLASS_REGISTRATIONS as LOCAL_CLASSES} from './generated/class-registrations-manifest';
+
+// static code path builder
+const combinedClasses = [...CLASS_REGISTRATIONS, ...LOCAL_CLASSES];
 
 //***********************************************************
 //MSAL
@@ -38,12 +37,8 @@ import { InteractionType } from '@azure/msal-browser';
 // Project stuff
 //***********************************************************
 import { AppComponent } from './app.component';
-import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-forms.module';
-import { environment } from 'src/environments/environment';
-import { NavigationItemDemoComponent } from './demo/navigation-item.component';
-import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
-
-LoadGeneratedForms(); // prevent tree shaking and component loss through this call
+import { GeneratedFormsModule } from './generated/generated-forms.module';
+import { environment } from '../environments/environment';
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -67,8 +62,6 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 @NgModule({
   declarations: [
     AppComponent, 
-    NavigationItemDemoComponent,
-    HelloDashboardComponent
   ],
   imports: [
     // Angular Core Modules

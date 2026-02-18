@@ -13,8 +13,8 @@ import {
   generateAccountSASQueryParameters,
 } from '@azure/storage-blob';
 import { RegisterClass } from '@memberjunction/global';
-import * as env from 'env-var';
-import * as mime from 'mime-types';
+import env from 'env-var';
+import mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,
@@ -671,7 +671,7 @@ export class AzureFileStorage extends FileStorageBase {
         }
       }
 
-      return Buffer.concat(chunks as Uint8Array[]);
+      return Buffer.concat(chunks as unknown as Uint8Array[]);
     } catch (error) {
       console.error('Error getting object from Azure Blob Storage', { objectName });
       console.error(error);

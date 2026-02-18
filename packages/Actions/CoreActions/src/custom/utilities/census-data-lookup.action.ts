@@ -386,10 +386,3 @@ export class CensusDataLookupAction extends BaseAction {
         return mockData;
     }
 }
-
-/**
- * Loader function to ensure the CensusDataLookupAction class is included in the bundle.
- */
-export function LoadCensusDataLookupAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

@@ -1,16 +1,17 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Subject, debounceTime } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { ListFormComponent } from '../../generated/Entities/List/list.form.component';
-import { ListEntity, ListDetailEntity, ListDetailEntityExtended, ListCategoryEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { SharedService } from '@memberjunction/ng-shared';
+import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
+import { MJListEntity, MJListDetailEntity, ListDetailEntityExtended, MJListCategoryEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import { ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
 
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
 
 export interface ListItemViewModel {
-    detail: ListDetailEntity;
+    detail: MJListDetailEntity;
     recordName: string;
     isLoading: boolean;
 }
@@ -43,15 +44,18 @@ export interface AddableRecord {
  * - Activity history
  * - Settings and configuration
  */
-@RegisterClass(BaseFormComponent, 'Lists')
+@RegisterClass(BaseFormComponent, 'MJ: Lists')
 @Component({
+  standalone: false,
     selector: 'mj-list-form-extended',
     templateUrl: './list-form.component.html',
     styleUrls: ['./list-form.component.css', '../../../shared/form-styles.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ListFormComponentExtended extends ListFormComponent implements OnInit, OnDestroy {
-    public override record!: ListEntity;
+export class ListFormComponentExtended extends MJListFormComponent implements OnInit, OnDestroy {
+    private sharedService = inject(SharedService);
+
+    public override record!: MJListEntity;
 
     // Navigation
     public activeSection: ListSection = 'overview';
@@ -65,7 +69,7 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
 
     // Data
     public listItems: ListItemViewModel[] = [];
-    public categories: ListCategoryEntity[] = [];
+    public categories: MJListCategoryEntity[] = [];
     public entityInfo: EntityInfo | null = null;
     public stats: ListStats = {
         itemCount: 0,
@@ -165,8 +169,8 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
 
     private async loadCategories(): Promise<void> {
         const rv = new RunView();
-        const result = await rv.RunView<ListCategoryEntity>({
-            EntityName: 'List Categories',
+        const result = await rv.RunView<MJListCategoryEntity>({
+            EntityName: 'MJ: List Categories',
             OrderBy: 'Name',
             ResultType: 'entity_object'
         });
@@ -183,8 +187,8 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
 
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ListDetailEntity>({
-                EntityName: 'List Details',
+            const result = await rv.RunView<MJListDetailEntity>({
+                EntityName: 'MJ: List Details',
                 ExtraFilter: `ListID = '${this.record.ID}'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 ResultType: 'entity_object'
@@ -248,7 +252,7 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
             const rv = new RunView();
             const [itemsResult, sharesResult, invitationsResult] = await rv.RunViews([
                 {
-                    EntityName: 'List Details',
+                    EntityName: 'MJ: List Details',
                     ExtraFilter: `ListID = '${this.record.ID}'`,
                     ResultType: 'count_only'
                 },
@@ -534,7 +538,7 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
 
         const rv = new RunView();
         const result = await rv.RunView<{ RecordID: string }>({
-            EntityName: 'List Details',
+            EntityName: 'MJ: List Details',
             ExtraFilter: `ListID = '${this.record.ID}'`,
             Fields: ['RecordID'],
             ResultType: 'simple'
@@ -634,7 +638,7 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
         const tg = await this.metadata.CreateTransactionGroup();
 
         for (const record of recordsToAdd) {
-            const listDetail = await this.metadata.GetEntityObject<ListDetailEntityExtended>('List Details');
+            const listDetail = await this.metadata.GetEntityObject<ListDetailEntityExtended>('MJ: List Details');
             listDetail.ListID = this.record.ID;
             listDetail.RecordID = record.ID;
             listDetail.TransactionGroup = tg;
@@ -691,7 +695,7 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
 
         const rv = new RunView();
         const runViewResult = await rv.RunView<UserViewEntityExtended>({
-            EntityName: 'User Views',
+            EntityName: 'MJ: User Views',
             ExtraFilter: `UserID = '${this.metadata.CurrentUser.ID}' AND EntityID = '${this.record.EntityID}'`,
             ResultType: 'entity_object'
         }, this.metadata.CurrentUser);
@@ -734,7 +738,7 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
 
         for (const userView of this.userViewsToAdd) {
             const runViewResult = await rv.RunView({
-                EntityName: 'User Views',
+                EntityName: 'MJ: User Views',
                 ViewEntity: userView,
                 Fields: ['ID']
             }, this.metadata.CurrentUser);
@@ -767,7 +771,7 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
         const tg = await this.metadata.CreateTransactionGroup();
 
         for (const recordID of recordsToAdd) {
-            const listDetail = await this.metadata.GetEntityObject<ListDetailEntityExtended>('List Details');
+            const listDetail = await this.metadata.GetEntityObject<ListDetailEntityExtended>('MJ: List Details');
             listDetail.ListID = this.record.ID;
             listDetail.RecordID = recordID;
             listDetail.TransactionGroup = tg;
@@ -829,8 +833,4 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
         this.shareDialogConfig = null;
         this.cdr.markForCheck();
     }
-}
-
-export function LoadListFormComponentExtended() {
-    // Prevents tree-shaking
 }

@@ -1,7 +1,7 @@
 import { Component, Output, EventEmitter, OnInit, Input, SimpleChanges, OnChanges } from '@angular/core';
 
 import { Metadata, RunView } from '@memberjunction/core';
-import { EntityPermissionEntity } from '@memberjunction/core-entities';
+import { MJEntityPermissionEntity } from '@memberjunction/core-entities';
 
 
 export type EntityPermissionChangedEvent = {
@@ -13,6 +13,7 @@ export type EntityPermissionChangedEvent = {
 }
  
 @Component({
+  standalone: false,
   selector: 'mj-entity-permissions-grid',
   templateUrl: './entity-permissions-grid.component.html',
   styleUrls: ['./entity-permissions-grid.component.css']
@@ -25,7 +26,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
 
   @Output() PermissionChanged = new EventEmitter<EntityPermissionChangedEvent>();
 
-  public permissions: EntityPermissionEntity[] = [];
+  public permissions: MJEntityPermissionEntity[] = [];
   public gridHeight: number = 750;
   public isLoading: boolean = false;
 
@@ -66,7 +67,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     const rv = new RunView();
     const filter: string = this.Mode === 'Entity' ? `EntityID='${entity!.ID}'` : `RoleName='${r?.Name}'`;
     const result = await rv.RunView({
-      EntityName: 'Entity Permissions',
+      EntityName: 'MJ: Entity Permissions',
       ExtraFilter: filter,
       OrderBy: 'RoleName ASC, Entity ASC',
       ResultType: 'entity_object'
@@ -76,13 +77,13 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       // the post-process we need to do now is to see if there are any roles that don't have any existing permissions and if so, we need to create 
       // new permission records for them. We won't actually consider those "Dirty" and save those unless the user actually selects one or more
       // to turn on, we are just doing this to make the grid easy to manage from the user perspective.
-      const existingPermissions = <EntityPermissionEntity[]>result.Results;
+      const existingPermissions = <MJEntityPermissionEntity[]>result.Results;
       const roles = md.Roles;
 
       if (this.Mode === 'Entity') {
         const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => p.RoleID === r.ID));
         for (const r of rolesWithNoPermissions) {
-          const p = await md.GetEntityObject<EntityPermissionEntity>('Entity Permissions')
+          const p = await md.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions')
            
           await p.LoadFromData({
             ID: null,
@@ -102,7 +103,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
         // for the mode of Role, that means we want to show all entities and their permissions for the given role
         const entitiesWithNoPermissions = md.Entities.filter(e => !existingPermissions.some(p => p.EntityID === e.ID));
         for (const e of entitiesWithNoPermissions) {
-          const p = await md.GetEntityObject<EntityPermissionEntity>('Entity Permissions')
+          const p = await md.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions')
           
           await p.LoadFromData({
             ID: null,
@@ -165,7 +166,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     return this.permissions.filter(p => this.IsPermissionReallyDirty(p)).length;
   }
 
-  protected IsPermissionReallyDirty(p: EntityPermissionEntity): boolean {
+  protected IsPermissionReallyDirty(p: MJEntityPermissionEntity): boolean {
     if (!p.Dirty)
       return false;
     else if (p.IsSaved)
@@ -226,14 +227,14 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     }
   }
 
-  public revertRow(event: MouseEvent, permission: EntityPermissionEntity) {
+  public revertRow(event: MouseEvent, permission: MJEntityPermissionEntity) {
     if (this.IsPermissionReallyDirty(permission)) {
       permission.Revert();
       event.stopPropagation(); // don't bubble up to the parent row because that will do something else...
     }
   }
 
-  public flipRow(permission: EntityPermissionEntity) {
+  public flipRow(permission: MJEntityPermissionEntity) {
     // if 2 or more are on, flip all to off, otherwise flip all to on
     const onCount = (permission.CanRead ? 1 : 0) + (permission.CanCreate ? 1 : 0) + (permission.CanUpdate ? 1 : 0) + (permission.CanDelete ? 1 : 0);
     const newValue = onCount < 2;
@@ -259,7 +260,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     }
   }
 
-  public flipPermission(event: MouseEvent | undefined, permission: EntityPermissionEntity, type: 'Read' | 'Create' | 'Update' | 'Delete', flipPermission: boolean) {
+  public flipPermission(event: MouseEvent | undefined, permission: MJEntityPermissionEntity, type: 'Read' | 'Create' | 'Update' | 'Delete', flipPermission: boolean) {
     if (flipPermission) {
       switch (type) {
         case 'Read':

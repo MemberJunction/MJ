@@ -4,13 +4,13 @@ import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
-import { EntityEntity } from '@memberjunction/core-entities';
+import { MJEntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
@@ -209,13 +209,19 @@ export class SQLCodeGenBase {
                 executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
             }
 
+            let overallSuccess = true;
             if (!executionSuccess) {
                 failSpinner('Failed to execute entity SQL files');
                 TempBatchFile.cleanup(); // Cleanup on error
-                return false;
+                overallSuccess = false;
+                // Continue to manage entity fields metadata even after SQL execution failure.
+                // This prevents virtual fields from being incorrectly dropped when sqlcmd fails
+                // (e.g., SSL certificate errors) but the mssql connection still works.
             }
-            const step2eEndTime: Date = new Date();
-            succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
+            else {
+                const step2eEndTime: Date = new Date();
+                succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
+            }
 
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
@@ -224,9 +230,11 @@ export class SQLCodeGenBase {
             startSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false)) {
                 failSpinner('Failed to manage entity fields');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner('Entity fields metadata updated');
+            else {
+                succeedSpinner('Entity fields metadata updated');
+            }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
             // STEP 4- Apply permissions, executing all .permissions files
@@ -234,26 +242,32 @@ export class SQLCodeGenBase {
             const step4StartTime: Date = new Date();
             if (! await this.applyPermissions(pool, directory, baselineEntities)) {
                 failSpinner('Failed to apply permissions');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
-            
+            else {
+                succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
+            }
+
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             startSpinner('Running post-generation SQL scripts...');
             const step5StartTime: Date = new Date();
             if (! await this.runCustomSQLScripts(pool, 'after-sql')) {
                 failSpinner('Failed to run post-generation SQL scripts');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
+            else {
+                succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
+            }
 
-            succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            if (overallSuccess) {
+                succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            }
 
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata();
             await md.Refresh();
 
-            return true;
+            return overallSuccess;
         }
         catch (err) {
             logError(err as string);
@@ -365,7 +379,7 @@ export class SQLCodeGenBase {
                 const promises = batch.map(async (e) => {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
-                        logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have a primary key field defined. A table must have a primary key defined to quality to be a MemberJunction entity`);
+                        logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
                         return {Success: false, Files: []};
                     }
                     return this.generateAndExecuteSingleEntitySQLToSeparateFiles({
@@ -554,8 +568,8 @@ export class SQLCodeGenBase {
 
             let sRet: string = ''
             let permissionsSQL: string = ''
-            // Indexes for Fkeys for the table
-            if (!options.onlyPermissions){
+            // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
+            if (!options.onlyPermissions && !options.entity.VirtualEntity){
                 const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
                 const indexSQL = shouldGenerateIndexes ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
                 const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
@@ -707,7 +721,7 @@ export class SQLCodeGenBase {
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
                         logStatus(`  Regenerating ${spName} due to cascade dependency changes`);
                     }
-                    const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPDelete(options.entity)
+                    const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + await this.generateSPDelete(options.entity, options.pool)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
 
@@ -848,7 +862,7 @@ export class SQLCodeGenBase {
         if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
             if (entity.spDeleteGenerated)
                 // generated SP, will include permissions
-                sOutput += this.generateSPDelete(entity) + '\n\n';
+                sOutput += await this.generateSPDelete(entity, pool) + '\n\n';
             else
                 // custom SP, still generate the permissions
                 sOutput += this.generateSPPermissions(entity, entity.spDelete, SPType.Delete) + '\n\n';
@@ -924,7 +938,7 @@ export class SQLCodeGenBase {
                 if (!u)
                     throw new Error('Could not find the first user in the cache, cant generate the full text search function without a user');
 
-                const e = <EntityEntity>await md.GetEntityObject('Entities', u);
+                const e = <MJEntityEntity>await md.GetEntityObject('MJ: Entities', u);
                 await e.Load(entity.ID);
                 e.FullTextSearchFunction = functionName;
                 if (!await e.Save())
@@ -1172,9 +1186,71 @@ GO
         return this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity);
     }
 
+    /**
+     * Generates SELECT field expressions for IS-A parent entity columns.
+     * Walks the ParentID chain upward, joining to each parent's base table, and includes
+     * non-PK, non-timestamp, non-virtual fields from each parent table.
+     * Returns a string starting with ',\n' if there are parent fields, or '' if none.
+     */
+    protected generateParentEntityFieldSelects(entity: EntityInfo): string {
+        if (!entity.IsChildType) return '';
+
+        const parentChain = entity.ParentChain;
+        if (parentChain.length === 0) return '';
+
+        const fieldExpressions: string[] = [];
+
+        for (let i = 0; i < parentChain.length; i++) {
+            const parent = parentChain[i];
+            const alias = `__mj_isa_p${i + 1}`;
+
+            for (const field of parent.Fields) {
+                // Skip PKs (shared with child), timestamps, and virtual fields (view-computed)
+                if (field.IsPrimaryKey || field.Name.startsWith('__mj_') || field.IsVirtual) continue;
+
+                fieldExpressions.push(`    ${alias}.[${field.Name}]`);
+            }
+        }
+
+        if (fieldExpressions.length === 0) return '';
+        return ',\n' + fieldExpressions.join(',\n');
+    }
+
+    /**
+     * Generates INNER JOIN clauses for IS-A parent entity base tables.
+     * Chains joins from child -> parent -> grandparent using PK-to-PK conditions.
+     * Each parent is joined via its base table (not view) to avoid view dependency ordering issues.
+     */
+    protected generateParentEntityJoins(entity: EntityInfo, classNameFirstChar: string): string {
+        if (!entity.IsChildType) return '';
+
+        const parentChain = entity.ParentChain;
+        if (parentChain.length === 0) return '';
+
+        const joins: string[] = [];
+
+        for (let i = 0; i < parentChain.length; i++) {
+            const parent = parentChain[i];
+            const parentAlias = `__mj_isa_p${i + 1}`;
+            // First parent joins to child table alias; deeper parents chain to previous parent alias
+            const sourceAlias = i === 0 ? classNameFirstChar : `__mj_isa_p${i}`;
+
+            // Build PK-to-PK join condition (supports composite keys)
+            const joinConditions = entity.PrimaryKeys.map(pk =>
+                `[${sourceAlias}].[${pk.Name}] = ${parentAlias}.[${pk.Name}]`
+            ).join(' AND ');
+
+            joins.push(
+                `INNER JOIN\n    [${parent.SchemaName}].[${parent.BaseTable}] AS ${parentAlias}\n  ON\n    ${joinConditions}`
+            );
+        }
+
+        return joins.join('\n');
+    }
+
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
-        const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
+        const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
@@ -1186,6 +1262,10 @@ GO
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
         const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
         const rootJoins = recursiveFKs.length > 0 ? this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity) : '';
+
+        // IS-A parent entity JOINs — walk ParentID chain, JOIN to each parent's base table
+        const parentFieldsString: string = this.generateParentEntityFieldSelects(entity);
+        const parentJoinsString: string = this.generateParentEntityJoins(entity, classNameFirstChar);
 
         return `
 ------------------------------------------------------------
@@ -1201,9 +1281,9 @@ GO
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
+    ${classNameFirstChar}.*${parentFieldsString}${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${parentJoinsString ? '\n' + parentJoinsString : ''}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
 ${whereClause}GO${permissions}
     `
     }
@@ -1221,7 +1301,7 @@ ${whereClause}GO${permissions}
 
     protected generateBaseViewJoins(entity: EntityInfo, entityFields: EntityFieldInfo[]): string {
         let sOutput: string = '';
-        const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
+        const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
         for (let i: number = 0; i < entityFields.length; i++) {
             const ef: EntityFieldInfo = entityFields[i];
             // Generate SQL JOIN for related entities that have configured join fields
@@ -1570,10 +1650,10 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR ${EntityInfo.UpdatedAtFieldName} field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.ClassName}]', 'TR') IS NOT NULL
-    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.ClassName}];
+IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.BaseTableCodeName}]', 'TR') IS NOT NULL
+    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.BaseTableCodeName}];
 GO
-CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
+CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.BaseTableCodeName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
 AFTER UPDATE
 AS
@@ -1809,9 +1889,9 @@ ${updatedAtTrigger}
     }
 
 
-    protected generateSPDelete(entity: EntityInfo): string {
+    protected async generateSPDelete(entity: EntityInfo, pool: sql.ConnectionPool): Promise<string> {
         const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.BaseTableCodeName}`;
-        const sCascadeDeletes: string = this.generateCascadeDeletes(entity);
+        const sCascadeDeletes: string = await this.generateCascadeDeletes(entity, pool);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Delete);
         let sVariables: string = '';
         let sSelect: string = '';
@@ -1877,7 +1957,7 @@ GO${permissions}
     `
     }
 
-    protected generateCascadeDeletes(entity: EntityInfo): string {
+    protected async generateCascadeDeletes(entity: EntityInfo, pool: sql.ConnectionPool): Promise<string> {
         let sOutput: string = '';
         if (entity.CascadeDeletes) {
             const md = new Metadata();
@@ -1886,12 +1966,12 @@ GO${permissions}
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
                     if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
-                        const sql = this.generateSingleCascadeOperation(entity, e, ef);
-                        
-                        if (sql !== '') {
+                        const cascadeSql = await this.generateSingleCascadeOperation(entity, e, ef, pool);
+
+                        if (cascadeSql !== '') {
                             if (sOutput !== '')
                                 sOutput += '\n    ';
-                            sOutput += sql;
+                            sOutput += cascadeSql;
                         }
                     }
                 }
@@ -1900,7 +1980,32 @@ GO${permissions}
         return sOutput === '' ? '' : `${sOutput}\n    `;
     }
 
-    protected generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
+    protected async generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo, pool: sql.ConnectionPool): Promise<string> {
+        // Check if nullable FK is part of composite unique constraint
+        // If so, we must DELETE instead of UPDATE to avoid unique constraint violations
+        if (fkField.AllowsNull) {
+            const isCompositeUnique = await this.isFieldInCompositeUniqueConstraint(
+                pool,
+                relatedEntity.SchemaName,
+                relatedEntity.BaseTable,
+                fkField.Name
+            );
+
+            if (isCompositeUnique) {
+                if (relatedEntity.AllowDeleteAPI) {
+                    // FK is part of composite unique - use DELETE instead of UPDATE
+                    logStatus(`    ${relatedEntity.Name}.${fkField.Name} is part of composite unique constraint - using DELETE cascade`);
+                    return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
+                } else {
+                    // Can't delete and can't safely update - warn
+                    const msg = `${relatedEntity.Name}.${fkField.Name} is part of composite unique constraint but entity doesn't allow delete API`;
+                    logWarning(`WARNING in spDelete${parentEntity.BaseTableCodeName}: ${msg}`);
+                    return `
+    -- WARNING: ${msg} - cascade operation may fail due to unique constraint violation`;
+                }
+            }
+        }
+
         if (fkField.AllowsNull === false && relatedEntity.AllowDeleteAPI) {
             // Non-nullable FK: generate cursor-based cascade delete
             return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
@@ -1927,7 +2032,7 @@ GO${permissions}
     -- ${sqlComment}
     -- This will cause a referential integrity violation`;
         }
-        
+
         return '';
     }
 
@@ -1935,48 +2040,53 @@ GO${permissions}
         // Build the WHERE clause for matching foreign key(s)
         // TODO: Future enhancement to support composite foreign keys
         const whereClause = `[${fkField.CodeName}] = @${parentEntity.FirstPrimaryKey.CodeName}`;
-        
-        // Generate unique cursor name using entity code names
-        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_cursor`;
-        
+
+        // Generate unique cursor name using entity code name AND FK field name
+        // This ensures uniqueness when an entity has multiple FKs pointing to the same parent
+        // (e.g., AIPromptRun.ParentID and AIPromptRun.RerunFromPromptRunID both reference AIPromptRun)
+        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_${fkField.CodeName}_cursor`;
+
+        // Use a combined prefix that includes both entity name and FK field name to ensure unique variable names
+        const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
+
         // Determine which SP to call
         const spType = operation === 'delete' ? SPType.Delete : SPType.Update;
         const spName = this.getSPName(relatedEntity, spType);
-        
+
         if (operation === 'update') {
             // For update, we need to include all updateable fields
-            // Use the related entity's code name as prefix to ensure uniqueness
-            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, relatedEntity.CodeName);
+            // Use the combined prefix to ensure uniqueness across multiple FKs to same entity
+            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, variablePrefix);
             const spCallParams = updateParams.allParams;
-            
+
             return `
     -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}
     ${updateParams.declarations}
-    DECLARE ${cursorName} CURSOR FOR 
+    DECLARE ${cursorName} CURSOR FOR
         SELECT ${updateParams.selectFields}
         FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
         WHERE ${whereClause}
-    
+
     OPEN ${cursorName}
     FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
-    
+
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Set the FK field to NULL
-        SET @${relatedEntity.CodeName}_${fkField.CodeName} = NULL
-        
+        SET @${variablePrefix}_${fkField.CodeName} = NULL
+
         -- Call the update SP for the related entity
         EXEC [${relatedEntity.SchemaName}].[${spName}] ${spCallParams}
-        
+
         FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
     END
-    
+
     CLOSE ${cursorName}
     DEALLOCATE ${cursorName}`;
         }
-        
+
         // For delete operation, use a simpler prefix for primary keys only
-        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, relatedEntity.CodeName);
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, variablePrefix);
         
         return `
     -- Cascade delete from ${relatedEntity.BaseTable} using cursor to call ${spName}
@@ -2084,6 +2194,56 @@ GO${permissions}
         }
         
         return { declarations, selectFields, fetchInto, allParams };
+    }
+
+    /**
+     * Checks if a field is part of a composite (multi-column) unique constraint.
+     * Returns true if the field participates in a unique index with 2+ columns.
+     * This is used to determine if a nullable FK should use DELETE instead of UPDATE
+     * during cascade operations, since setting to NULL could violate uniqueness.
+     */
+    protected async isFieldInCompositeUniqueConstraint(
+        pool: sql.ConnectionPool,
+        schemaName: string,
+        tableName: string,
+        columnName: string
+    ): Promise<boolean> {
+        const query = `
+            SELECT i.index_id
+            FROM sys.indexes i
+            INNER JOIN sys.tables t ON i.object_id = t.object_id
+            INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE i.is_unique = 1
+              AND i.is_primary_key = 0
+              AND s.name = @schemaName
+              AND t.name = @tableName
+              -- This index contains the specified column
+              AND EXISTS (
+                  SELECT 1
+                  FROM sys.index_columns ic
+                  INNER JOIN sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+                  WHERE ic.object_id = i.object_id
+                    AND ic.index_id = i.index_id
+                    AND c.name = @columnName
+              )
+              -- This index has more than one column (composite)
+              AND (SELECT COUNT(*)
+                   FROM sys.index_columns ic2
+                   WHERE ic2.object_id = i.object_id
+                     AND ic2.index_id = i.index_id) > 1
+        `;
+
+        try {
+            const result = await pool.request()
+                .input('schemaName', sql.NVarChar, schemaName)
+                .input('tableName', sql.NVarChar, tableName)
+                .input('columnName', sql.NVarChar, columnName)
+                .query(query);
+            return result.recordset.length > 0;
+        } catch (error) {
+            logWarning(`Failed to check composite unique constraint for ${schemaName}.${tableName}.${columnName}: ${error}`);
+            return false; // Fallback to existing UPDATE behavior
+        }
     }
 
     /**

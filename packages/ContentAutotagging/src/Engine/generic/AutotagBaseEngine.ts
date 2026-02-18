@@ -1,9 +1,9 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core'
 import { RegisterClass, MJGlobal } from '@memberjunction/global'
-import { ContentSourceEntity, ContentItemEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentSourceTypeEntity, ContentTypeAttributeEntity, ContentSourceParamEntity } from '@memberjunction/core-entities'
+import { MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity, MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity, MJContentTypeAttributeEntity, MJContentSourceParamEntity } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
-import * as officeparser from 'officeparser'
+import officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
 import { toZonedTime } from 'date-fns-tz'
@@ -12,7 +12,7 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { ContentItemAttributeEntity } from '@memberjunction/core-entities'
+import { MJContentItemAttributeEntity } from '@memberjunction/core-entities'
 
 @RegisterClass(AIEngine, 'AutotagBaseEngine')
 export class AutotagBaseEngine extends AIEngine {
@@ -30,7 +30,7 @@ export class AutotagBaseEngine extends AIEngine {
      * @param contentItems 
      * @returns 
      */
-    public async ExtractTextAndProcessWithLLM(contentItems: ContentItemEntity[], contextUser: UserInfo): Promise<void> {
+    public async ExtractTextAndProcessWithLLM(contentItems: MJContentItemEntity[], contextUser: UserInfo): Promise<void> {
         if (!contentItems || contentItems.length === 0) {
             console.log('No content items to process');
             return;
@@ -182,7 +182,7 @@ export class AutotagBaseEngine extends AIEngine {
 
     public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo) {
         const md = new Metadata()
-        const contentItem: ContentItemEntity = await md.GetEntityObject<any>('Content Items', contextUser)
+        const contentItem: MJContentItemEntity = await md.GetEntityObject<any>('MJ: Content Items', contextUser)
         await contentItem.Load(contentItemID)
         await contentItem.Delete()
     }
@@ -223,7 +223,7 @@ export class AutotagBaseEngine extends AIEngine {
         const md = new Metadata()
         for (const keyword of LLMResults.keywords) {
 
-            const contentItemTags = await md.GetEntityObject<any>('Content Item Tags', contextUser)
+            const contentItemTags = await md.GetEntityObject<any>('MJ: Content Item Tags', contextUser)
             contentItemTags.NewRecord()
             
             contentItemTags.ItemID = contentItemID
@@ -238,20 +238,20 @@ export class AutotagBaseEngine extends AIEngine {
             // Overwrite name of content item with title if it exists
             if (key === 'title') {
                 const ID = LLMResults.contentItemID
-                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+                const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
                 await contentItem.Load(ID)
                 contentItem.Name = LLMResults.title
                 await contentItem.Save()
             }
             if(key === 'description') {
                 const ID = LLMResults.contentItemID
-                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+                const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
                 await contentItem.Load(ID)
                 contentItem.Description = LLMResults.description
                 await contentItem.Save()
             }
             if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
-                const contentItemAttribute = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
+                const contentItemAttribute = await md.GetEntityObject<MJContentItemAttributeEntity>('MJ: Content Item Attributes', contextUser)
                 contentItemAttribute.NewRecord()
                 
                 //Value should be a string, if its a null or undefined value, set it to an empty string
@@ -270,17 +270,17 @@ export class AutotagBaseEngine extends AIEngine {
     * @param contextUser: The user context to retrieve the content source data
     * @returns A list of content sources
     */
-    public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<ContentSourceEntity[]> {
+    public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
         const rv = new RunView();
         
-        const contentSourceResult = await rv.RunView<ContentSourceEntity>({
-            EntityName: 'Content Sources',
+        const contentSourceResult = await rv.RunView<MJContentSourceEntity>({
+            EntityName: 'MJ: Content Sources',
             ResultType: 'entity_object', 
             ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}'`
         }, contextUser);
         try {
         if (contentSourceResult.Success && contentSourceResult.Results.length) {
-            const contentSources: ContentSourceEntity[] = contentSourceResult.Results
+            const contentSources: MJContentSourceEntity[] = contentSourceResult.Results
             return contentSources
         }
         else {
@@ -296,13 +296,13 @@ export class AutotagBaseEngine extends AIEngine {
 
     public async setSubclassContentSourceType(subclass: string, contextUser: UserInfo): Promise<string>{
         const rv = new RunView()
-        const results = await rv.RunView<ContentSourceTypeEntity>({
-            EntityName: 'Content Source Types',
+        const results = await rv.RunView<MJContentSourceTypeEntity>({
+            EntityName: 'MJ: Content Source Types',
             ExtraFilter: `Name='${subclass}'`,
             ResultType: 'entity_object'
         }, contextUser)
         if (results.Success && results.Results.length) {
-            const contentSourceType: ContentSourceTypeEntity = results.Results[0]
+            const contentSourceType: MJContentSourceTypeEntity = results.Results[0]
             return contentSourceType.ID
         }
         else {
@@ -310,18 +310,18 @@ export class AutotagBaseEngine extends AIEngine {
         }
     }
 
-    public async getContentSourceParams(contentSource: ContentSourceEntity, contextUser: UserInfo): Promise<any> {
+    public async getContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<any> {
         const contentSourceParams = new Map<string, any>()
 
         const rv = new RunView()
-        const results = await rv.RunView<ContentSourceParamEntity>({
-            EntityName: 'Content Source Params', 
+        const results = await rv.RunView<MJContentSourceParamEntity>({
+            EntityName: 'MJ: Content Source Params', 
             ExtraFilter: `ContentSourceID='${contentSource.ID}'`,
             ResultType: 'entity_object'
         }, contextUser)
 
         if (results.Success && results.Results.length) {
-            const contentSourceParamResults: ContentSourceParamEntity[] = results.Results
+            const contentSourceParamResults: MJContentSourceParamEntity[] = results.Results
             for (const contentSourceParam of contentSourceParamResults) {
                 const params: ContentSourceTypeParams = await this.getDefaultContentSourceTypeParams(contentSourceParam.ContentSourceTypeParamID, contextUser)
                 params.contentSourceID = contentSource.ID
@@ -341,8 +341,8 @@ export class AutotagBaseEngine extends AIEngine {
 
     public async getDefaultContentSourceTypeParams(contentSourceTypeParamID: string, contextUser: UserInfo): Promise<ContentSourceTypeParams> {
         const rv = new RunView()
-        const results = await rv.RunView<ContentSourceEntity>({
-            EntityName: 'Content Source Type Params', 
+        const results = await rv.RunView<MJContentSourceEntity>({
+            EntityName: 'MJ: Content Source Type Params', 
             ExtraFilter: `ID='${contentSourceTypeParamID}'`,
             ResultType: 'entity_object'
         }, contextUser)
@@ -403,8 +403,8 @@ export class AutotagBaseEngine extends AIEngine {
      */
     public async getContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
         const rv = new RunView()
-        const results = await rv.RunView<ContentProcessRunEntity>({
-            EntityName: 'Content Process Runs', 
+        const results = await rv.RunView<MJContentProcessRunEntity>({
+            EntityName: 'MJ: Content Process Runs', 
             ExtraFilter: `SourceID='${contentSourceID}'`,
             ResultType: 'entity_object', 
             OrderBy: 'EndTime DESC'
@@ -412,7 +412,7 @@ export class AutotagBaseEngine extends AIEngine {
         
         try{
             if (results.Success && results.Results.length) {
-            const contentProcessRun: ContentProcessRunEntity = results.Results[0]
+            const contentProcessRun: MJContentProcessRunEntity = results.Results[0]
             const lastRunDate = contentProcessRun.Get('__mj_CreatedAt')
             return this.convertLastRunDateToTimezone(lastRunDate)
             }
@@ -432,14 +432,14 @@ export class AutotagBaseEngine extends AIEngine {
 
     public async getContentItemParams(contentTypeID: string, contextUser: UserInfo): Promise<{ modelID: string; minTags: number; maxTags: number; }> {
         const rv = new RunView();
-        const results = await rv.RunView<ContentTypeEntity>({
-            EntityName: 'Content Types',
+        const results = await rv.RunView<MJContentTypeEntity>({
+            EntityName: 'MJ: Content Types',
             ExtraFilter: `ID='${contentTypeID}'`,
             ResultType: 'entity_object',
         }, contextUser); 
 
         if (results.Success && results.Results.length) {
-            const contentType: ContentTypeEntity = results.Results[0];
+            const contentType: MJContentTypeEntity = results.Results[0];
             return {
                 modelID: contentType.AIModelID,
                 minTags: contentType.MinTags,
@@ -460,14 +460,14 @@ export class AutotagBaseEngine extends AIEngine {
     public async getContentSourceTypeName(contentSourceTypeID: string, contextUser: UserInfo): Promise<string> {
         const rv = new RunView();
 
-        const contentFileTypeResult = await rv.RunView<ContentSourceTypeEntity>({
-            EntityName: 'Content Source Types',
+        const contentFileTypeResult = await rv.RunView<MJContentSourceTypeEntity>({
+            EntityName: 'MJ: Content Source Types',
             ResultType: 'entity_object',
             ExtraFilter: `ID='${contentSourceTypeID}'`
         }, contextUser);
         try {
             if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
-                const contentSourceType: ContentSourceTypeEntity = contentFileTypeResult.Results[0]
+                const contentSourceType: MJContentSourceTypeEntity = contentFileTypeResult.Results[0]
                 return contentSourceType.Name
             }
         } catch (e) {
@@ -487,14 +487,14 @@ export class AutotagBaseEngine extends AIEngine {
     public async getContentTypeName(contentTypeID: string, contextUser: UserInfo): Promise<string> {
         const rv = new RunView();
 
-        const contentFileTypeResult = await rv.RunView<ContentTypeEntity>({
-            EntityName: 'Content Types',
+        const contentFileTypeResult = await rv.RunView<MJContentTypeEntity>({
+            EntityName: 'MJ: Content Types',
             ResultType: 'entity_object',
             ExtraFilter: `ID='${contentTypeID}'`
         }, contextUser);
         try {
             if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
-                const contentFileType: ContentTypeEntity = contentFileTypeResult.Results[0]
+                const contentFileType: MJContentTypeEntity = contentFileTypeResult.Results[0]
                 return contentFileType.Name
             }
         } catch (e) {
@@ -514,14 +514,14 @@ export class AutotagBaseEngine extends AIEngine {
     public async getContentFileTypeName(contentFileTypeID: string, contextUser: UserInfo): Promise<string> {
         const rv = new RunView();
 
-        const contentFileTypeResult = await rv.RunView<ContentFileTypeEntity>({
-            EntityName: 'Content File Types',
+        const contentFileTypeResult = await rv.RunView<MJContentFileTypeEntity>({
+            EntityName: 'MJ: Content File Types',
             ResultType: 'entity_object',
             ExtraFilter: `ID='${contentFileTypeID}'`
         }, contextUser);
         try {
             if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
-                const contentFileType: ContentFileTypeEntity = contentFileTypeResult.Results[0]
+                const contentFileType: MJContentFileTypeEntity = contentFileTypeResult.Results[0]
                 return contentFileType.Name
             }
         } catch (e) {
@@ -535,8 +535,8 @@ export class AutotagBaseEngine extends AIEngine {
     public async getAdditionalContentTypePrompt(contentTypeID: string, contextUser: UserInfo): Promise<string> {
         try { 
             const rv = new RunView()
-            const results = await rv.RunView<ContentTypeAttributeEntity>({
-                EntityName: 'Content Type Attributes', 
+            const results = await rv.RunView<MJContentTypeAttributeEntity>({
+                EntityName: 'MJ: Content Type Attributes', 
                 ExtraFilter: `ContentTypeID='${contentTypeID}'`,
                 ResultType: 'entity_object'
             }, contextUser)
@@ -583,14 +583,14 @@ export class AutotagBaseEngine extends AIEngine {
         const url: string = contentSourceParams.URL
         const rv = new RunView()
         try{
-            const results = await rv.RunView<ContentItemEntity>({
-                EntityName: 'Content Items',
+            const results = await rv.RunView<MJContentItemEntity>({
+                EntityName: 'MJ: Content Items',
                 ExtraFilter: `URL='${url}' AND ContentSourceID='${contentSourceParams.contentSourceID}'`,
                 ResultType: 'entity_object'
             }, contextUser)
 
             if (results.Success && results.Results.length) {
-                const contentItem: ContentItemEntity = results.Results[0]
+                const contentItem: MJContentItemEntity = results.Results[0]
                 return contentItem.ID
             }
             else {
@@ -610,7 +610,7 @@ export class AutotagBaseEngine extends AIEngine {
      */
     public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo){
         const md = new Metadata()
-        const processRun = await md.GetEntityObject<any>('Content Process Runs', contextUser)
+        const processRun = await md.GetEntityObject<any>('MJ: Content Process Runs', contextUser)
         processRun.NewRecord()
         processRun.SourceID = processRunParams.sourceID
         processRun.StartTime = processRunParams.startTime

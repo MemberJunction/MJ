@@ -1,5 +1,5 @@
 import { Input, Output, EventEmitter, ChangeDetectorRef, Directive, OnInit, OnDestroy } from '@angular/core';
-import { DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import {
     PanelConfig,
     DashboardPanel,
@@ -18,7 +18,7 @@ export interface PartConfigureEvent {
     /** The panel requesting configuration */
     Panel: DashboardPanel;
     /** The part type */
-    PartType: DashboardPartTypeEntity;
+    PartType: MJDashboardPartTypeEntity;
 }
 
 /**
@@ -77,7 +77,7 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
     /**
      * The part type metadata
      */
-    @Input() PartType: DashboardPartTypeEntity | null = null;
+    @Input() PartType: MJDashboardPartTypeEntity | null = null;
 
     /**
      * Whether the dashboard is in edit mode

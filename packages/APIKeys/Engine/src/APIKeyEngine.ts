@@ -14,13 +14,13 @@
 import { createHash, randomBytes } from 'crypto';
 import { RunView, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
-    APIKeyEntity,
-    APIApplicationEntity,
-    APIKeyApplicationEntity,
-    APIScopeEntity,
-    UserEntity
+    MJAPIKeyEntity,
+    MJAPIApplicationEntity,
+    MJAPIKeyApplicationEntity,
+    MJAPIScopeEntity,
+    MJUserEntity
 } from '@memberjunction/core-entities';
-import { APIKeysEngineBase, LoadAPIKeysEngineBase } from '@memberjunction/api-keys-base';
+import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { ScopeEvaluator } from './ScopeEvaluator';
 import { UsageLogger } from './UsageLogger';
 import { PatternMatcher } from './PatternMatcher';
@@ -45,7 +45,7 @@ export interface KeyHashValidationResult {
     /** Whether the key is valid */
     Valid: boolean;
     /** The API key entity if valid */
-    APIKey?: APIKeyEntity;
+    APIKey?: MJAPIKeyEntity;
     /** The reason if invalid */
     Reason?: string;
 }
@@ -88,9 +88,6 @@ export class APIKeyEngine {
             defaultBehaviorNoScopes: config.defaultBehaviorNoScopes ?? 'deny',
             scopeCacheTTLMs: config.scopeCacheTTLMs ?? 60000
         };
-
-        // Ensure APIKeysEngineBase is loaded (tree-shaking prevention)
-        LoadAPIKeysEngineBase();
 
         this._scopeEvaluator = new ScopeEvaluator(this._config.defaultBehaviorNoScopes);
         this._usageLogger = new UsageLogger();
@@ -135,14 +132,14 @@ export class APIKeyEngine {
     /**
      * All cached API Scopes from the base engine.
      */
-    public get Scopes(): APIScopeEntity[] {
+    public get Scopes(): MJAPIScopeEntity[] {
         return this.Base.Scopes;
     }
 
     /**
      * All cached API Applications from the base engine.
      */
-    public get Applications(): APIApplicationEntity[] {
+    public get Applications(): MJAPIApplicationEntity[] {
         return this.Base.Applications;
     }
 
@@ -238,7 +235,7 @@ export class APIKeyEngine {
             const { Raw, Hash } = this.GenerateAPIKey();
 
             const md = new Metadata();
-            const apiKey = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', contextUser);
+            const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
             apiKey.Hash = Hash;
             apiKey.UserID = params.UserId;
@@ -347,7 +344,7 @@ export class APIKeyEngine {
 
             if (keyApps.length > 0) {
                 // Key has app restrictions - check if this app is allowed
-                const boundToThisApp = keyApps.some((ka: APIKeyApplicationEntity) => ka.ApplicationID === appId);
+                const boundToThisApp = keyApps.some((ka: MJAPIKeyApplicationEntity) => ka.ApplicationID === appId);
                 if (!boundToThisApp) {
                     return { IsValid: false, Error: 'API key not authorized for this application' };
                 }
@@ -357,8 +354,8 @@ export class APIKeyEngine {
 
         // 5. Get the user
         const rv = new RunView();
-        const userResult = await rv.RunView<UserEntity>({
-            EntityName: 'Users',
+        const userResult = await rv.RunView<MJUserEntity>({
+            EntityName: 'MJ: Users',
             ExtraFilter: `ID = '${apiKey.UserID}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -424,7 +421,7 @@ export class APIKeyEngine {
      */
     public async RevokeAPIKey(apiKeyId: string, contextUser: UserInfo): Promise<boolean> {
         const md = new Metadata();
-        const apiKey = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', contextUser);
+        const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
         const loaded = await apiKey.Load(apiKeyId);
         if (!loaded) {
@@ -610,7 +607,7 @@ export class APIKeyEngine {
         contextUser: UserInfo
     ): Promise<KeyHashValidationResult> {
         const rv = new RunView();
-        const result = await rv.RunView<APIKeyEntity>({
+        const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
             ExtraFilter: `Hash='${hash}'`,
             ResultType: 'entity_object'
@@ -651,7 +648,7 @@ export class APIKeyEngine {
     public async GetApplicationByName(
         name: string,
         _contextUser: UserInfo
-    ): Promise<APIApplicationEntity | null> {
+    ): Promise<MJAPIApplicationEntity | null> {
         // Use cached data from Base engine
         const app = this.Base.GetApplicationByName(name);
         return app || null;
@@ -666,7 +663,7 @@ export class APIKeyEngine {
     public async GetApplicationById(
         id: string,
         _contextUser: UserInfo
-    ): Promise<APIApplicationEntity | null> {
+    ): Promise<MJAPIApplicationEntity | null> {
         // Use cached data from Base engine
         const app = this.Base.GetApplicationById(id);
         return app || null;
@@ -681,7 +678,7 @@ export class APIKeyEngine {
     ): Promise<boolean> {
         try {
             const md = new Metadata();
-            const apiKey = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', contextUser);
+            const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
             if (await apiKey.Load(apiKeyId)) {
                 apiKey.LastUsedAt = new Date();

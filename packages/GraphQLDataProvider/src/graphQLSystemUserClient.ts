@@ -787,9 +787,16 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const variables: any = { ID: ID };
+            const variables: Record<string, unknown> = { ID: ID };
             if (options !== undefined) {
-                variables.options = options;
+                // Apply defaults for all required fields in DeleteOptionsInput
+                // The server requires all fields to be present
+                variables.options = {
+                    SkipEntityAIActions: options.SkipEntityAIActions ?? false,
+                    SkipEntityActions: options.SkipEntityActions ?? false,
+                    ReplayOnly: options.ReplayOnly ?? false,
+                    IsParentEntityDelete: options.IsParentEntityDelete ?? false
+                };
             }
 
             const result = await this.Client.request(query, variables) as { DeleteQuerySystemResolver: DeleteQueryResult };
@@ -803,11 +810,41 @@ export class GraphQLSystemUserClient {
                 };
             }
         }
-        catch (e) {
-            LogError(`GraphQLSystemUserClient::DeleteQuery - Error deleting query - ${e}`);
+        catch (e: unknown) {
+            // Extract detailed error information for debugging
+            let errorDetails = '';
+            if (e instanceof Error) {
+                errorDetails = e.message;
+                // Check for cause (common in fetch errors)
+                if ('cause' in e && e.cause) {
+                    const cause = e.cause as Error;
+                    errorDetails += ` | Cause: ${cause.message || cause}`;
+                    if ('code' in cause) {
+                        errorDetails += ` | Code: ${(cause as NodeJS.ErrnoException).code}`;
+                    }
+                }
+                // Check for response details (GraphQL client errors)
+                if ('response' in e) {
+                    const response = (e as { response?: { status?: number; errors?: unknown[] } }).response;
+                    if (response?.status) {
+                        errorDetails += ` | HTTP Status: ${response.status}`;
+                    }
+                    if (response?.errors) {
+                        errorDetails += ` | GraphQL Errors: ${JSON.stringify(response.errors)}`;
+                    }
+                }
+                // Include stack trace for debugging
+                if (e.stack) {
+                    console.error('DeleteQuery stack trace:', e.stack);
+                }
+            } else {
+                errorDetails = String(e);
+            }
+
+            LogError(`GraphQLSystemUserClient::DeleteQuery - Error deleting query - ${errorDetails}`);
             return {
                 Success: false,
-                ErrorMessage: e.toString()
+                ErrorMessage: errorDetails
             };
         }
     }
@@ -1924,7 +1961,7 @@ export interface QueryParameter {
 /**
  * Type for query entity information
  */
-export interface QueryEntity {
+export interface MJQueryEntity {
     ID: string;
     QueryID: string;
     EntityID: string;
@@ -2008,7 +2045,7 @@ export interface CreateQueryResult {
     /**
      * Array of entities referenced by the query (optional)
      */
-    Entities?: QueryEntity[];
+    Entities?: MJQueryEntity[];
     /**
      * Array of permissions created for the query (optional)
      */
@@ -2148,7 +2185,7 @@ export interface UpdateQueryResult {
     /**
      * Array of entities referenced by the query (optional)
      */
-    Entities?: QueryEntity[];
+    Entities?: MJQueryEntity[];
     /**
      * Array of permissions for the query (optional)
      */
@@ -2156,17 +2193,33 @@ export interface UpdateQueryResult {
 }
 
 /**
- * Delete options input type for controlling delete behavior
+ * Delete options input type for controlling delete behavior.
+ * All fields are optional - defaults will be applied if not provided.
  */
 export interface DeleteQueryOptionsInput {
     /**
-     * Whether to skip AI actions during deletion
+     * Whether to skip AI actions during deletion.
+     * @default false
      */
-    SkipEntityAIActions: boolean;
+    SkipEntityAIActions?: boolean;
     /**
-     * Whether to skip regular entity actions during deletion
+     * Whether to skip regular entity actions during deletion.
+     * @default false
      */
-    SkipEntityActions: boolean;
+    SkipEntityActions?: boolean;
+    /**
+     * When true, bypasses Validate() and actual database deletion but still
+     * invokes associated actions (AI Actions, Entity Actions, etc.).
+     * Used for replaying/simulating delete operations.
+     * @default false
+     */
+    ReplayOnly?: boolean;
+    /**
+     * When true, indicates this entity is being deleted as part of an IS-A parent chain
+     * initiated by a child entity.
+     * @default false
+     */
+    IsParentEntityDelete?: boolean;
 }
 
 /**

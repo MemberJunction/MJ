@@ -1,11 +1,12 @@
 {
   "name": "@memberjunction/actions-bizapps-formbuilders",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "5.1.0",
   "description": "Form builder and survey platform integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
     "test": "echo \"No tests yet\""
@@ -23,20 +24,20 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "3.4.0",
-    "@memberjunction/actions-base": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "axios": "^1.6.0",
+    "@memberjunction/actions": "5.1.0",
+    "@memberjunction/actions-base": "5.1.0",
+    "@memberjunction/core": "5.1.0",
+    "@memberjunction/core-entities": "5.1.0",
+    "@memberjunction/global": "5.1.0",
+    "axios": "^1.13.4",
     "exceljs": "^4.4.0",
-    "mammoth": "^1.8.0",
+    "mammoth": "^1.11.0",
     "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "20.8.7",
-    "rimraf": "^5.0.5",
-    "typescript": "~5.3.3"
+    "@types/node": "24.10.11",
+    "rimraf": "^6.1.2",
+    "typescript": "~5.9.3"
   },
   "engines": {
     "node": ">=16"

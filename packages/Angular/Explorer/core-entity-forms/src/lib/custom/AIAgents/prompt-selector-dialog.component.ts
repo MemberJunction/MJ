@@ -35,6 +35,7 @@ export interface PromptSelectorResult {
  * - Any other prompt selection scenario
  */
 @Component({
+  standalone: false,
   selector: 'mj-prompt-selector-dialog',
   templateUrl: './prompt-selector-dialog.component.html',
   styleUrls: ['./prompt-selector-dialog.component.css']
@@ -111,7 +112,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
       }
       
       const result = await rv.RunView<AIPromptEntityExtended>({
-        EntityName: 'AI Prompts',
+        EntityName: 'MJ: AI Prompts',
         ExtraFilter: filter,
         OrderBy: 'Name ASC',
         ResultType: 'entity_object',

@@ -511,9 +511,3 @@ export class LoopAgentType extends BaseAgentType {
 
 }
 
-/**
- * Export a load function to ensure the class is registered with the ClassFactory
- */
-export function LoadLoopAgentType() {
-    // This function ensures the class isn't tree-shaken
-}

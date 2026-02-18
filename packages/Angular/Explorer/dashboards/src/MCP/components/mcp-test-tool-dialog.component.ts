@@ -120,6 +120,7 @@ const ExecuteMCPToolMutation = gql`
 `;
 
 @Component({
+  standalone: false,
     selector: 'mj-mcp-test-tool-dialog',
     templateUrl: './mcp-test-tool-dialog.component.html',
     styleUrls: ['./mcp-test-tool-dialog.component.css'],
@@ -852,11 +853,4 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     get SelectedToolName(): string {
         return this.SelectedTool?.ToolTitle || this.SelectedTool?.ToolName || '';
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPTestToolDialog(): void {
-    // Ensures the component is not tree-shaken
 }

@@ -1,17 +1,12 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
-import { ResourceData, CredentialCategoryEntity, CredentialTypeEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCredentialCategoryEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialCategoryEditPanelComponent } from '@memberjunction/ng-credentials';
-
-export function LoadCredentialsCategoriesResource() {
-    // Prevents tree-shaking
-}
-
 interface CategoryNode {
-    category: CredentialCategoryEntity;
+    category: MJCredentialCategoryEntity;
     children: CategoryNode[];
     expanded: boolean;
     level: number;
@@ -20,6 +15,7 @@ interface CategoryNode {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsCategoriesResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-categories-resource',
     templateUrl: './credentials-categories-resource.component.html',
     styleUrls: ['./credentials-categories-resource.component.css'],
@@ -27,9 +23,9 @@ interface CategoryNode {
 })
 export class CredentialsCategoriesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = true;
-    public categories: CredentialCategoryEntity[] = [];
+    public categories: MJCredentialCategoryEntity[] = [];
     public categoryTree: CategoryNode[] = [];
-    public types: CredentialTypeEntity[] = [];
+    public types: MJCredentialTypeEntity[] = [];
     public selectedNode: CategoryNode | null = null;
     public searchText = '';
 
@@ -127,11 +123,11 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             ]);
 
             if (catResult.Success) {
-                this.categories = catResult.Results as CredentialCategoryEntity[];
+                this.categories = catResult.Results as MJCredentialCategoryEntity[];
             }
 
             if (typeResult.Success) {
-                this.types = typeResult.Results as CredentialTypeEntity[];
+                this.types = typeResult.Results as MJCredentialTypeEntity[];
             }
 
             this.buildTree();
@@ -268,7 +264,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
 
     // === Panel Event Handlers ===
 
-    public onCategorySaved(category: CredentialCategoryEntity): void {
+    public onCategorySaved(category: MJCredentialCategoryEntity): void {
         const existingIndex = this.categories.findIndex(c => c.ID === category.ID);
 
         if (existingIndex >= 0) {
@@ -377,7 +373,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         return this.types.length;
     }
 
-    public getTypesForCategory(categoryName: string): CredentialTypeEntity[] {
+    public getTypesForCategory(categoryName: string): MJCredentialTypeEntity[] {
         return this.types.filter(t => t.Category === categoryName);
     }
 

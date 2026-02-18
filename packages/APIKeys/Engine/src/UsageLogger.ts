@@ -5,7 +5,7 @@
  */
 
 import { Metadata, UserInfo } from '@memberjunction/core';
-import { APIKeyUsageLogEntity } from '@memberjunction/core-entities';
+import { MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
 import { UsageLogEntry, EvaluatedRule } from './interfaces';
 
 /**
@@ -21,7 +21,7 @@ export class UsageLogger {
     public async Log(entry: UsageLogEntry, contextUser: UserInfo): Promise<string | null> {
         try {
             const md = new Metadata();
-            const logEntity = await md.GetEntityObject<APIKeyUsageLogEntity>(
+            const logEntity = await md.GetEntityObject<MJAPIKeyUsageLogEntity>(
                 'MJ: API Key Usage Logs',
                 contextUser
             );

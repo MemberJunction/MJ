@@ -5,6 +5,7 @@ import { Component } from '@angular/core';
  * Wraps Profile Information and Account Info sections.
  */
 @Component({
+  standalone: false,
   selector: 'mj-general-settings',
   templateUrl: './general-settings.component.html',
   styleUrls: ['./general-settings.component.css']

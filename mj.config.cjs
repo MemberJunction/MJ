@@ -26,6 +26,14 @@ module.exports = {
   // Default excludes __mj since end-users shouldn't modify core entities
   excludeSchemas: ['sys', 'staging'],
 
+  settings: [
+    { name: 'mj_core_schema', value: '__mj' },
+    { name: 'skip_database_generation', value: false },
+    { name: 'recompile_mj_views', value: true },
+    { name: 'auto_index_foreign_keys', value: true },
+  ],
+
+
   // Custom SQL scripts specific to this monorepo
   customSQLScripts: [
     {
@@ -35,7 +43,8 @@ module.exports = {
   ],
 
   // Soft PK/FK configuration for tables without database constraints
-  //additionalSchemaInfo: './config/database-metadata-config.json',
+  // RELATIVE PATH TO YOUR ADDITIONAL SCHEMA INFO FILE - below is an example to a demo schema
+  // additionalSchemaInfo: './Demos/AdvancedEntities/database-metadata-config.json',
 
   // Output directories specific to monorepo structure
   output: [
@@ -158,7 +167,7 @@ module.exports = {
     ],
     entityTools: [
       {
-        schemaName: 'CRM',
+        schemaName: '*',
         entityName: '*',
         get: true,
         create: true,
@@ -187,7 +196,7 @@ module.exports = {
     enableA2AServer: true, // Override default (false)
     entityCapabilities: [
       {
-        schemaName: 'CRM',
+        schemaName: '*',
         entityName: '*',
         get: true,
         create: true,
@@ -205,7 +214,7 @@ module.exports = {
    */
 
   queryGen: {
-    includeEntities: ['Members'], // Override to specific entities
+    includeEntities: [], // Override to specific entities
   },
 
   /**

@@ -1,0 +1,57 @@
+<div class="mj-forms-panel"
+     [class.mj-forms-panel--related]="Variant === 'related-entity'"
+     [class.mj-forms-panel--inherited]="Variant === 'inherited'"
+     [attr.data-section-key]="SectionKey">
+
+  <!-- Panel Header -->
+  <div class="mj-forms-panel-header" role="button" tabindex="0" (click)="Toggle()">
+    <!-- Drag Handle (hidden when reorder disabled) -->
+    @if (ReorderAllowed) {
+      <div class="mj-forms-drag-handle"
+           title="Drag to reorder sections"
+           draggable="true"
+           (dragstart)="OnDragStart($event)"
+           (dragend)="OnDragEnd()"
+           (click)="$event.stopPropagation()">
+        <i class="fa-solid fa-grip-vertical"></i>
+      </div>
+    }
+
+    <!-- Icon + Title -->
+    <div class="mj-forms-panel-title-group">
+      <i [class]="Icon" class="mj-forms-panel-icon"></i>
+      <h3 class="mj-forms-panel-title">
+        <span [innerHTML]="DisplayName"></span>
+        <!-- Row count badge for related entities -->
+        @if (BadgeCount !== undefined) {
+          <span class="mj-forms-row-count-badge" [class.mj-forms-row-count-badge--zero]="BadgeCount === 0">
+            {{ BadgeCount }}
+          </span>
+        }
+      </h3>
+    </div>
+
+    <!-- Inherited From badge (IS-A) -->
+    @if (Variant === 'inherited' && InheritedFromEntity) {
+      <a class="mj-forms-inherited-badge" (click)="OnInheritedBadgeClick($event)"
+         [title]="'View parent record: ' + InheritedFromEntity">
+        <i class="fa-solid fa-arrow-up"></i>
+        Inherited from {{ InheritedFromEntity }}
+      </a>
+    }
+
+    <!-- Chevron -->
+    <div class="mj-forms-panel-chevron">
+      <i [class]="Expanded ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+    </div>
+  </div>
+
+  <!-- Panel Body -->
+  <div class="mj-forms-panel-body" [class.mj-forms-panel-body--collapsed]="!Expanded">
+    <div class="mj-forms-panel-content"
+         #panelContent
+         [style.height.px]="PanelContentHeight">
+      <ng-content></ng-content>
+    </div>
+  </div>
+</div>

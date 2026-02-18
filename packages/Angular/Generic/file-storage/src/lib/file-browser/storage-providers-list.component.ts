@@ -8,6 +8,7 @@ import { FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/c
  * their own OAuth connections - credentials are handled at the org level.
  */
 @Component({
+  standalone: false,
   selector: 'mj-storage-providers-list',
   templateUrl: './storage-providers-list.component.html',
   styleUrls: ['./storage-providers-list.component.css']

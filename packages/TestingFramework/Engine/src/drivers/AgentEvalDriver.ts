@@ -5,7 +5,7 @@
 
 import { UserInfo, Metadata, EntityInfo } from '@memberjunction/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import { AIAgentEntity, AIAgentRunEntity, TestEntity, TestRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentRunEntity, MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseTestDriver } from './BaseTestDriver';
@@ -393,7 +393,7 @@ export class AgentEvalDriver extends BaseTestDriver {
      * @param test - Test entity to validate
      * @returns Validation result
      */
-    public override async Validate(test: TestEntity): Promise<ValidationResult> {
+    public override async Validate(test: MJTestEntity): Promise<ValidationResult> {
         // Run base validation
         const baseResult = await super.Validate(test);
         if (!baseResult.valid) {
@@ -514,8 +514,8 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Load agent entity.
      * @private
      */
-    private async loadAgent(agentId: string, contextUser: UserInfo): Promise<AIAgentEntity> {
-        const agent = await this._metadata.GetEntityObject<AIAgentEntity>('AI Agents', contextUser);
+    private async loadAgent(agentId: string, contextUser: UserInfo): Promise<MJAIAgentEntity> {
+        const agent = await this._metadata.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
         await agent.Load(agentId);
         return agent;
     }
@@ -526,18 +526,18 @@ export class AgentEvalDriver extends BaseTestDriver {
      * @private
      */
     private async executeAgent(
-        agent: AIAgentEntity,
+        agent: MJAIAgentEntity,
         input: AgentEvalInput,
         contextUser: UserInfo,
-        test: TestEntity,
+        test: MJTestEntity,
         maxExecutionTime: number | undefined,
-        testRun: TestRunEntity,
+        testRun: MJTestRunEntity,
         context: DriverExecutionContext
-    ): Promise<{ agentRuns: AIAgentRunEntity[], turnResults: TurnResult[], timedOut: boolean, timeoutMessage?: string }> {
+    ): Promise<{ agentRuns: MJAIAgentRunEntity[], turnResults: TurnResult[], timedOut: boolean, timeoutMessage?: string }> {
         // Normalize to multi-turn format
         const turns = this.normalizeTurns(input);
 
-        const agentRuns: AIAgentRunEntity[] = [];
+        const agentRuns: MJAIAgentRunEntity[] = [];
         const turnResults: TurnResult[] = [];
 
         // Get effective timeout using priority: config JSON > entity field > default
@@ -604,7 +604,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                 this.logToTestRun(context, 'info', `Turn ${turnNumber} completed: ${turnResult.agentRun.Status}`);
 
                 // Update context for next turn
-                conversationId = turnResult.agentRun.ConversationID;
+                conversationId = turnResult.agentRun.ConversationID ?? undefined;
                 previousOutputPayload = this.extractOutputPayload(turnResult.agentRun);
             }
         } finally {
@@ -623,7 +623,7 @@ export class AgentEvalDriver extends BaseTestDriver {
      * @private
      */
     private async executeSingleTurn(params: {
-        agent: AIAgentEntity;
+        agent: MJAIAgentEntity;
         turn: AgentEvalTurn;
         turnNumber: number;
         totalTurns: number;
@@ -631,8 +631,8 @@ export class AgentEvalDriver extends BaseTestDriver {
         inputPayload?: Record<string, unknown>;
         priorMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;
         contextUser: UserInfo;
-        test: TestEntity;
-        testRun: TestRunEntity;
+        test: MJTestEntity;
+        testRun: MJTestRunEntity;
         cancellationToken?: AbortSignal;
         resolvedVariables?: { values: Record<string, unknown>; sources: Record<string, string> };
     }): Promise<TurnResult> {
@@ -677,7 +677,6 @@ export class AgentEvalDriver extends BaseTestDriver {
         // Build execution parameters with cancellation token and onAgentRunCreated callback
         const runParams = {
             agent: params.agent as any,
-            conversationId: params.conversationId,  // Continue same conversation for multi-turn
             conversationMessages,
             contextUser: params.contextUser,
             payload: params.inputPayload,  // Pass payload from previous turn
@@ -709,6 +708,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         // Execute agent - cancellation is handled via AbortSignal, not Promise.race
         // Note: BaseAgent already sets AgentRun.TestRunID from the testRunId param and invokes onAgentRunCreated callback
         const runResult = await runner.RunAgentInConversation(runParams, {
+            conversationId: params.conversationId,  // Continue same conversation for multi-turn
             userMessage: params.turn.userMessage,
             createArtifacts: true,
             conversationName: conversationName,
@@ -755,11 +755,11 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Parses the FinalPayload string property to get the agent's output for chaining to next turn.
      * @private
      */
-    private extractOutputPayload(agentRun: AIAgentRunEntity): Record<string, unknown> {
-        // Parse the FinalPayload string property (which exists on base AIAgentRunEntity)
+    private extractOutputPayload(agentRun: MJAIAgentRunEntity): Record<string, unknown> {
+        // Parse the FinalPayload string property (which exists on base MJAIAgentRunEntity)
         // SafeJSONParse returns the parsed object or an empty object if parsing fails
-        const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload);
-        return finalPayloadObject || {};
+        const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
+        return finalPayloadObject ?? {};
     }
 
 
@@ -767,7 +767,7 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Extract agent output from agent run.
      * @private
      */
-    private extractAgentOutput(agentRun: AIAgentRunEntity): Record<string, unknown> {
+    private extractAgentOutput(agentRun: MJAIAgentRunEntity): Record<string, unknown> {
         return {
             status: agentRun.Status,
             success: agentRun.Success,
@@ -1044,7 +1044,7 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Calculate total cost from agent run.
      * @private
      */
-    private calculateTotalCost(agentRun: AIAgentRunEntity): number {
+    private calculateTotalCost(agentRun: MJAIAgentRunEntity): number {
         return agentRun.TotalCost || 0;
     }
 
@@ -1052,7 +1052,7 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Calculate duration in milliseconds from agent run.
      * @private
      */
-    private calculateDurationMs(agentRun: AIAgentRunEntity): number {
+    private calculateDurationMs(agentRun: MJAIAgentRunEntity): number {
         if (!agentRun.StartedAt || !agentRun.CompletedAt) {
             return 0;
         }

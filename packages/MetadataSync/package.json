@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/metadata-sync",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "5.1.0",
   "description": "MemberJunction metadata synchronization CLI tool",
   "keywords": [
     "metadata",
@@ -23,33 +24,37 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/config": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/core-entities-server": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/graphql-dataprovider": "3.4.0",
-    "@memberjunction/sqlserver-dataprovider": "3.4.0",
-    "axios": "^1.6.8",
-    "chalk": "^4.1.2",
-    "chokidar": "^3.6.0",
+    "@memberjunction/server-bootstrap-lite": "5.1.0",
+    "@memberjunction/config": "5.1.0",
+    "@memberjunction/core": "5.1.0",
+    "@memberjunction/core-entities": "5.1.0",
+    "@memberjunction/core-entities-server": "5.1.0",
+    "@memberjunction/global": "5.1.0",
+    "@memberjunction/graphql-dataprovider": "5.1.0",
+    "@memberjunction/sqlserver-dataprovider": "5.1.0",
+    "axios": "^1.13.4",
+    "chalk": "^5.6.2",
+    "chokidar": "^5.0.0",
     "cosmiconfig": "9.0.0",
-    "dotenv": "16.4.5",
-    "fast-glob": "^3.3.2",
-    "fs-extra": "^11.2.0",
-    "minimatch": "^9.0.3",
-    "mssql": "^11.0.1",
-    "uuid": "^10.0.0",
-    "zod": "^3.23.4"
+    "dotenv": "17.2.4",
+    "fast-glob": "^3.3.3",
+    "fs-extra": "^11.3.3",
+    "minimatch": "^10.1.2",
+    "mssql": "^12.2.0",
+    "uuid": "^13.0.0",
+    "zod": "~3.24.4"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
-    "rimraf": "5.0.7",
+    "rimraf": "6.1.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.0.0"

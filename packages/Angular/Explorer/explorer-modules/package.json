@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-modules",
-  "version": "3.4.0",
+  "version": "5.1.0",
   "description": "MemberJunction: Consolidated Explorer Modules Bundle",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -8,7 +8,7 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"No tests configured yet\"",
     "build": "ngc"
   },
   "keywords": [
@@ -20,25 +20,25 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.2.14",
-    "@angular/compiler-cli": "18.2.14"
+    "@angular/compiler": "21.1.3",
+    "@angular/compiler-cli": "21.1.3"
   },
   "peerDependencies": {
-    "@angular/common": "^18.0.0",
-    "@angular/core": "^18.0.0",
-    "@angular/forms": "^18.0.0",
-    "@angular/router": "^18.0.0"
+    "@angular/common": "^21.0.0",
+    "@angular/core": "^21.0.0",
+    "@angular/forms": "^21.0.0",
+    "@angular/router": "^21.0.0"
   },
   "dependencies": {
-    "@memberjunction/ng-core-entity-forms": "3.4.0",
-    "@memberjunction/ng-container-directives": "3.4.0",
-    "@memberjunction/ng-explorer-core": "3.4.0",
-    "@memberjunction/ng-explorer-settings": "3.4.0",
-    "@memberjunction/ng-kendo-modules": "3.4.0",
-    "@memberjunction/ng-link-directives": "3.4.0",
-    "@memberjunction/ng-shared": "3.4.0",
-    "@memberjunction/ng-workspace-initializer": "3.4.0",
-    "tslib": "^2.3.0"
+    "@memberjunction/ng-core-entity-forms": "5.1.0",
+    "@memberjunction/ng-container-directives": "5.1.0",
+    "@memberjunction/ng-explorer-core": "5.1.0",
+    "@memberjunction/ng-explorer-settings": "5.1.0",
+    "@memberjunction/ng-kendo-modules": "5.1.0",
+    "@memberjunction/ng-link-directives": "5.1.0",
+    "@memberjunction/ng-shared": "5.1.0",
+    "@memberjunction/ng-workspace-initializer": "5.1.0",
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

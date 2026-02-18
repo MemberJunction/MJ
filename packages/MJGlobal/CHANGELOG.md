@@ -1,5 +1,40 @@
 # Change Log - @memberjunction/global
 
+## 5.1.0
+
+### Minor Changes
+
+- 61079e9: Add Open App system for installing, managing, and removing third-party apps via `mj app` CLI commands. Includes manifest validation, dependency resolution, schema isolation, migration execution, npm package management, and config-manager integration.
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+## 4.4.0
+
+## 4.3.1
+
+## 4.3.0
+
+## 4.2.0
+
+## 4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- 718b0ee: migration
+- e06f81c: changed SO much!
+
 ## 3.4.0
 
 ## 3.3.0

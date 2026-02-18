@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/communication-twilio",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "5.1.0",
   "description": "Twilio provider for MemberJunction Communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,20 +9,21 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc",
-    "clean": "rimraf dist"
+    "build": "tsc && tsc-alias -f",
+    "clean": "rimraf dist",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "dotenv": "^16.3.1",
+    "@memberjunction/communication-types": "5.1.0",
+    "@memberjunction/core": "5.1.0",
+    "@memberjunction/global": "5.1.0",
+    "dotenv": "^17.2.4",
     "env-var": "^7.4.1",
-    "twilio": "^4.23.0"
+    "twilio": "^5.12.1"
   },
   "devDependencies": {
-    "typescript": "^5.0.2",
-    "rimraf": "^5.0.5"
+    "typescript": "^5.9.3",
+    "rimraf": "^6.1.2"
   },
   "repository": {
     "type": "git",

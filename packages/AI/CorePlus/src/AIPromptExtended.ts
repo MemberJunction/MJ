@@ -1,10 +1,10 @@
-import { BaseEntity, CompositeKey, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
-import { AIPromptEntity, TemplateParamEntity } from "@memberjunction/core-entities";
+import { BaseEntity, CompositeKey } from "@memberjunction/core";
+import { MJAIPromptEntity, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import { compareStringsByLine, RegisterClass } from "@memberjunction/global";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 
-@RegisterClass(BaseEntity, "AI Prompts")
-export class AIPromptEntityExtended extends AIPromptEntity {
+@RegisterClass(BaseEntity, "MJ: AI Prompts")
+export class AIPromptEntityExtended extends MJAIPromptEntity {
     /**
      * private property to hold the template text.
      */
@@ -54,14 +54,14 @@ export class AIPromptEntityExtended extends AIPromptEntity {
     /**
      * private property to cache template parameters.
      */
-    private _templateParams: TemplateParamEntity[] | null = null;
+    private _templateParams: MJTemplateParamEntity[] | null = null;
 
     /**
      * Virtual property to get the template parameters for this AI Prompt.
      * Returns the cached parameters if available, or an empty array if not loaded yet.
      * Call LoadTemplateParams() to ensure params are loaded.
      */
-    public get TemplateParams(): TemplateParamEntity[] {
+    public get TemplateParams(): MJTemplateParamEntity[] {
         return this._templateParams || [];
     }
 
@@ -69,7 +69,7 @@ export class AIPromptEntityExtended extends AIPromptEntity {
      * Async getter for template parameters that ensures they are loaded.
      * Use this when you need to guarantee the parameters are loaded from the database.
      */
-    public async GetTemplateParams(): Promise<TemplateParamEntity[]> {
+    public async GetTemplateParams(): Promise<MJTemplateParamEntity[]> {
         if (this._templateParams === null) {
             await this.LoadTemplateParams();
         }
@@ -145,18 +145,4 @@ export class AIPromptEntityExtended extends AIPromptEntity {
         return result;
     }
 
-    /**
-     * Fix bug in generated code where new records have a null ID and that matches
-     * the ResultSelectorPromptID, which causes a validation error. When that code 
-     * gets regenerated we can remove this override.
-     * @param result 
-     */
-    override ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-        if (this.ResultSelectorPromptID === this.ID && this.ID /*make sure ID !== null*/) {
-            result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
-        }
-    }    
 }
-
-//tree shaking stub
-export function LoadAIPromptEntityExtended() {}

@@ -8,6 +8,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
  */
 @RegisterClass(BaseResourceComponent, 'TestingDashboardTabResource')
 @Component({
+  standalone: false,
   selector: 'mj-testing-dashboard-tab-resource',
   template: `
     <div class="resource-container">

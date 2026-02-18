@@ -1,12 +1,12 @@
 import { BaseEntity, EntitySaveOptions, Metadata, RunView, LogError, IMetadataProvider } from "@memberjunction/core";
-import { ArtifactVersionEntity, ArtifactEntity, ArtifactTypeEntity, ArtifactVersionAttributeEntity, ArtifactExtractor } from "@memberjunction/core-entities";
+import { MJArtifactVersionEntity, MJArtifactEntity, MJArtifactTypeEntity, MJArtifactVersionAttributeEntity, ArtifactExtractor } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { createHash } from 'crypto';
 
 @RegisterClass(BaseEntity, "MJ: Artifact Versions")
-export class ArtifactVersionExtended extends ArtifactVersionEntity {
+export class ArtifactVersionExtended extends MJArtifactVersionEntity {
     private _pendingAttributes: any[] | null = null;
-    private _loadedAttributes: ArtifactVersionAttributeEntity[] | null = null;
+    private _loadedAttributes: MJArtifactVersionAttributeEntity[] | null = null;
 
     /**
      * Gets the attributes for this artifact version
@@ -14,7 +14,7 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
      * Use InnerLoad() to automatically load attributes from database
      * After Save(), returns the newly created attributes from extraction
      */
-    public get Attributes(): ArtifactVersionAttributeEntity[] {
+    public get Attributes(): MJArtifactVersionAttributeEntity[] {
         return this._loadedAttributes || [];
     }
 
@@ -32,7 +32,7 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
         // Automatically load attributes for this version
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ArtifactVersionAttributeEntity>({
+            const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
                 EntityName: 'MJ: Artifact Version Attributes',
                 ExtraFilter: `ArtifactVersionID='${this.ID}'`,
                 ResultType: 'entity_object'
@@ -114,7 +114,7 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
         // Load the parent Artifact to get TypeID
         // Use the entity's provider instead of creating new Metadata instance
         const md = this.ProviderToUse as any as IMetadataProvider;
-        const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.ContextCurrentUser);
+        const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.ContextCurrentUser);
         const loadedArtifact = await artifact.Load(this.ArtifactID);
 
         if (!loadedArtifact) {
@@ -168,7 +168,7 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
      * @returns Array of saved attribute entities
      * @protected
      */
-    protected async SaveAttributeRecords(attributes: any[]): Promise<ArtifactVersionAttributeEntity[]> {
+    protected async SaveAttributeRecords(attributes: any[]): Promise<MJArtifactVersionAttributeEntity[]> {
         if (!this.ID) {
             throw new Error('Cannot save attributes: ArtifactVersion ID is not set');
         }
@@ -180,11 +180,11 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
         // Use the entity's provider instead of creating new Metadata instance
         const md = this.ProviderToUse as any as IMetadataProvider;
         const operations: Promise<boolean>[] = [];
-        const savedAttributes: ArtifactVersionAttributeEntity[] = [];
+        const savedAttributes: MJArtifactVersionAttributeEntity[] = [];
 
         // Load existing attributes for this version
         const rv = new RunView();
-        const existingAttrsResult = await rv.RunView<ArtifactVersionAttributeEntity>({
+        const existingAttrsResult = await rv.RunView<MJArtifactVersionAttributeEntity>({
             EntityName: 'MJ: Artifact Version Attributes',
             ExtraFilter: `ArtifactVersionID='${this.ID}'`,
             ResultType: 'entity_object'
@@ -221,7 +221,7 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
                 savedAttributes.push(existingAttr);
             } else {
                 // Create new attribute
-                const newAttr = await md.GetEntityObject<ArtifactVersionAttributeEntity>(
+                const newAttr = await md.GetEntityObject<MJArtifactVersionAttributeEntity>(
                     'MJ: Artifact Version Attributes',
                     this.ContextCurrentUser
                 );
@@ -255,8 +255,8 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
      * @returns Array of ArtifactType entities from child to parent
      * @protected
      */
-    protected async LoadArtifactTypeHierarchy(typeId: string): Promise<ArtifactTypeEntity[]> {
-        const hierarchy: ArtifactTypeEntity[] = [];
+    protected async LoadArtifactTypeHierarchy(typeId: string): Promise<MJArtifactTypeEntity[]> {
+        const hierarchy: MJArtifactTypeEntity[] = [];
         // Use the entity's provider instead of creating new Metadata instance
         const md = this.ProviderToUse as any as IMetadataProvider;
         let currentTypeId: string | null = typeId;
@@ -264,7 +264,7 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
         // Walk up the hierarchy (max 10 levels to prevent infinite loops)
         let maxDepth = 10;
         while (currentTypeId && maxDepth > 0) {
-            const artifactType = await md.GetEntityObject<ArtifactTypeEntity>(
+            const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>(
                 'MJ: Artifact Types',
                 this.ContextCurrentUser
             );
@@ -281,11 +281,4 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
 
         return hierarchy;
     }
-}
-
-/**
- * Stub function to ensure this class is not tree shaken out
- */
-export function LoadArtifactVersionExtendedServerSubClass() {
-    // This function is intentionally empty - it just needs to exist to prevent tree shaking
 }

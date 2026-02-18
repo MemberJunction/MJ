@@ -1,12 +1,9 @@
 #!/usr/bin/env node
-
-// Load environment variables from .env file in current working directory
-require('dotenv').config()
+import 'dotenv/config';
+import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
+import { execute } from '@oclif/core';
 
 // Load AI providers to prevent tree shaking
-const { LoadAIProviders } = require('@memberjunction/ai-provider-bundle');
 LoadAIProviders();
 
-const oclif = require('@oclif/core')
-
-oclif.run().then(oclif.flush).catch(oclif.Errors.handle)
+await execute({ dir: import.meta.url });

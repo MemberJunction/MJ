@@ -1,0 +1,18 @@
+# MemberJunction Explorer - Test Environment
+# This Dockerfile will be fleshed out when the full-stack test pipeline is implemented
+FROM node:24-slim
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY packages/MJExplorer/package.json ./packages/MJExplorer/
+
+RUN npm ci --workspace=packages/MJExplorer
+
+COPY . .
+
+RUN npm run build:explorer
+
+EXPOSE 4200
+
+CMD ["npm", "run", "start:explorer"]

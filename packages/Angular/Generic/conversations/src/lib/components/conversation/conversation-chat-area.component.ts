@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
-import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ConversationDataService } from '../../services/conversation-data.service';
@@ -23,6 +23,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-chat-area',
   templateUrl: `./conversation-chat-area.component.html`,
   styleUrls: ['./conversation-chat-area.component.css']
@@ -48,7 +49,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     return this._conversationId;
   }
 
-  @Input() conversation: ConversationEntity | null = null;
+  @Input() conversation: MJConversationEntity | null = null;
   @Input() threadId: string | null = null;
   @Input() isNewConversation: boolean = false;
 
@@ -85,14 +86,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
-  @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
   @Output() sidebarToggleClicked = new EventEmitter<void>();
 
   // STATE CHANGE OUTPUTS - notify parent of state changes
   // conversationCreated now includes pendingMessage and pendingAttachments to ensure atomic state update
   @Output() conversationCreated = new EventEmitter<{
-    conversation: ConversationEntity;
+    conversation: MJConversationEntity;
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
   }>();
@@ -107,13 +108,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
 
-  public messages: ConversationDetailEntity[] = [];
+  public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
   private scrollToBottom = false;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   public isProcessing: boolean = false;
-  private intentCheckMessage: ConversationDetailEntity | null = null; // Temporary message shown during intent checking
+  private intentCheckMessage: MJConversationDetailEntity | null = null; // Temporary message shown during intent checking
   public isLoadingConversation: boolean = true; // True while loading initial conversation messages
 
   // Store raw query results and derived data
@@ -145,7 +146,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   // Share modal state
   public isArtifactShareModalOpen: boolean = false;
-  public artifactToShare: ArtifactEntity | null = null;
+  public artifactToShare: MJArtifactEntity | null = null;
 
   // Conversation data cache: ConversationID -> Array of ConversationDetailComplete
   // Stores raw query results so we don't need to re-query when switching conversations
@@ -365,10 +366,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         // Check scroll state after scrolling to bottom
         this.checkScroll();
       }, 100);
-    } else {
-      // Always check scroll state to update button visibility
-      this.checkScroll();
     }
+    // Removed synchronous checkScroll() from else branch to prevent
+    // ExpressionChangedAfterItHasBeenCheckedError. Calling detectChanges()
+    // inside ngAfterViewChecked re-enters change detection and causes
+    // Angular's verification pass to see inconsistent state.
+    // Scroll icon visibility is still updated via:
+    // 1. (scroll)="checkScroll()" on the scroll container (user scroll events)
+    // 2. setTimeout callback above (after programmatic scroll-to-bottom)
   }
 
   ngOnDestroy() {
@@ -512,11 +517,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   /**
    * Build message entities from cached conversation data
-   * Creates ConversationDetailEntity objects from the raw query results
+   * Creates MJConversationDetailEntity objects from the raw query results
    */
   private async buildMessagesFromCache(conversationData: ConversationDetailComplete[]): Promise<void> {
     const md = new Metadata();
-    const messages: ConversationDetailEntity[] = [];
+    const messages: MJConversationDetailEntity[] = [];
 
     this.rawConversationData = conversationData;
     this.buildUserAvatarMap(conversationData);
@@ -524,7 +529,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     for (const row of conversationData) {
       if (!row.ID) continue;
 
-      const message = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+      const message = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
       message.LoadFromData(row);
       messages.push(message);
     }
@@ -742,7 +747,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Database tasks are loaded separately by TasksDropdownComponent
   }
 
-  async onMessageSent(message: ConversationDetailEntity): Promise<void> {
+  async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
     // Clear pending message if it was sent - notify parent via output
     if (this.pendingMessage) {
       this.pendingMessageConsumed.emit();
@@ -814,7 +819,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Load the current user's avatar data
     const md = new Metadata();
-    const userEntity = await md.GetEntityObject<any>('Users');
+    const userEntity = await md.GetEntityObject<any>('MJ: Users');
     await userEntity.Load(userId);
 
     this.userAvatarMap.set(userId, {
@@ -902,8 +907,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Track existing message IDs before reload to identify new messages
       const existingMessageIds = new Set(this.messages.map(m => m.ID));
 
-      const result = await rv.RunView<ConversationDetailEntity>({
-        EntityName: 'Conversation Details',
+      const result = await rv.RunView<MJConversationDetailEntity>({
+        EntityName: 'MJ: Conversation Details',
         ExtraFilter: `ConversationID='${conversationId}'`,
         OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'entity_object'
@@ -947,7 +952,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * @param message The message that completed
    * @param agentRunId The ID of the agent run that completed
    */
-  private async handleMessageCompletion(message: ConversationDetailEntity, _agentRunId: string): Promise<void> {
+  private async handleMessageCompletion(message: MJConversationDetailEntity, _agentRunId: string): Promise<void> {
     try {
       LogStatusEx({message: `🎉 Handling completion for message ${message.ID}`, verboseOnly: true});
 
@@ -1000,7 +1005,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
   }
 
-  async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
+  async onAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
 
@@ -1090,7 +1095,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       const md = new Metadata();
 
       // Get the ConversationID for this detail
-      const detail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+      const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
       if (!(await detail.Load(conversationDetailId))) {
         console.error('Failed to load conversation detail');
         return;
@@ -1339,6 +1344,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(artifactId);
+    this.cdr.detectChanges();
   }
 
   exportConversation(): void {
@@ -1387,12 +1393,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     LogStatusEx({message: 'Share conversation', verboseOnly: true});
   }
 
-  onReplyInThread(message: ConversationDetailEntity): void {
+  onReplyInThread(message: MJConversationDetailEntity): void {
     // Open thread panel for this message - emit to parent
     this.threadOpened.emit(message.ID);
   }
 
-  onViewThread(message: ConversationDetailEntity): void {
+  onViewThread(message: MJConversationDetailEntity): void {
     // Open thread panel for this message - emit to parent
     this.threadOpened.emit(message.ID);
   }
@@ -1402,7 +1408,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     this.threadClosed.emit();
   }
 
-  onThreadReplyAdded(reply: ConversationDetailEntity): void {
+  onThreadReplyAdded(reply: MJConversationDetailEntity): void {
     // Optionally refresh the message list to update thread counts
     // For now, we'll just log it
     LogStatusEx({message: 'Thread reply added', verboseOnly: true, additionalArgs: [reply]});
@@ -1419,13 +1425,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // This could be used to toggle a modal or different view
   }
 
-  onAgentSelected(agentRun: AIAgentRunEntity): void {
+  onAgentSelected(agentRun: MJAIAgentRunEntity): void {
     // When an agent is clicked in the indicator, could show details
     LogStatusEx({message: 'Agent selected', verboseOnly: true, additionalArgs: [agentRun.ID]});
     // Could open a modal or navigate to agent details
   }
 
-  onMessageEdited(message: ConversationDetailEntity): void {
+  onMessageEdited(message: MJConversationDetailEntity): void {
     // Message was edited and saved, trigger change detection
     LogStatusEx({message: 'Message edited', verboseOnly: true, additionalArgs: [message.ID]});
     // The message entity is already updated in place, so no need to reload
@@ -1455,7 +1461,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
   }
 
-  onRetryMessage(message: ConversationDetailEntity): void {
+  onRetryMessage(message: MJConversationDetailEntity): void {
     // TODO: Implement retry logic
     // This should find the parent user message and re-trigger the agent invocation
     LogStatusEx({message: 'Retry requested for message', verboseOnly: true, additionalArgs: [message.ID]});
@@ -1500,7 +1506,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // If versionId is provided, find the version number from display data (no lazy load needed)
     if (data.versionId) {
-      for (const [detailId, artifactList] of this.artifactsByDetailId.entries()) {
+      for (const artifactList of this.artifactsByDetailId.values()) {
         for (const artifactInfo of artifactList) {
           if (artifactInfo.artifactVersionId === data.versionId) {
             this.selectedVersionNumber = artifactInfo.versionNumber;
@@ -1518,6 +1524,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(data.artifactId);
+
+    // Trigger detectChanges after all state is settled (showArtifactPanel, permissions)
+    // to prevent ExpressionChangedAfterItHasBeenCheckedError from zone-triggered CD
+    // seeing partial state between the await boundaries
+    this.cdr.detectChanges();
   }
 
   async onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
@@ -1791,7 +1802,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     });
   }
 
-  onTestFeedbackMessage(message: ConversationDetailEntity): void {
+  onTestFeedbackMessage(message: MJConversationDetailEntity): void {
     if (!message.TestRunID) {
       console.error('Cannot provide test feedback: message has no TestRunID');
       return;
@@ -1823,7 +1834,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     });
   }
 
-  onTaskClicked(task: TaskEntity): void {
+  onTaskClicked(task: MJTaskEntity): void {
     // Pass task click up to workspace to navigate to Tasks tab
     this.taskClicked.emit(task);
   }
@@ -1872,7 +1883,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   async onArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
     const md = new Metadata();
-    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts');
+    const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 
     if (artifact) {
@@ -2032,6 +2043,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Load permissions for the artifact
     await this.loadArtifactPermissions(artifactIdToOpen);
+    this.cdr.detectChanges();
 
     // Scroll to the message
     this.scrollToMessage(messageIdWithArtifact);
@@ -2061,7 +2073,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   async onIntentCheckStarted(): Promise<void> {
     const md = new Metadata();
-    const tempMessage = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+    const tempMessage = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
 
     // Create a temporary message that looks like an AI response in-progress
     tempMessage.Message = '🔍 Analyzing your request to determine the best agent...';

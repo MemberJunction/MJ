@@ -1,0 +1,74 @@
+{
+  "name": "@memberjunction/server-bootstrap-lite",
+  "version": "5.1.0",
+  "description": "MemberJunction Server Bootstrap (Lite) - Class registrations manifest without ESM-incompatible dependencies (communication, storage)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mj-class-registrations": {
+      "types": "./dist/mj-class-registrations.d.ts",
+      "default": "./dist/mj-class-registrations.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "if [ -d dist ]; then mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'; else touch .needs-manifest-rebuild; fi",
+    "build": "tsc && tsc-alias -f",
+    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts && tsc && tsc-alias -f || echo 'Warning: mj codegen manifest not available, manifest will be generated on next build'); fi",
+    "watch": "tsc --watch",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "memberjunction",
+    "bootstrap",
+    "server",
+    "lite"
+  ],
+  "author": "MemberJunction",
+  "license": "MIT",
+  "dependencies": {
+    "@memberjunction/actions": "5.1.0",
+    "@memberjunction/actions-apollo": "5.1.0",
+    "@memberjunction/actions-base": "5.1.0",
+    "@memberjunction/actions-bizapps-accounting": "5.1.0",
+    "@memberjunction/actions-bizapps-crm": "5.1.0",
+    "@memberjunction/actions-bizapps-formbuilders": "5.1.0",
+    "@memberjunction/actions-bizapps-lms": "5.1.0",
+    "@memberjunction/actions-bizapps-social": "5.1.0",
+    "@memberjunction/ai-agent-manager": "5.1.0",
+    "@memberjunction/ai-agents": "5.1.0",
+    "@memberjunction/ai-core-plus": "5.1.0",
+    "@memberjunction/ai-engine-base": "5.1.0",
+    "@memberjunction/ai-provider-bundle": "5.1.0",
+    "@memberjunction/ai-reranker": "5.1.0",
+    "@memberjunction/core": "5.1.0",
+    "@memberjunction/core-actions": "5.1.0",
+    "@memberjunction/core-entities": "5.1.0",
+    "@memberjunction/core-entities-server": "5.1.0",
+    "@memberjunction/data-context-server": "5.1.0",
+    "@memberjunction/doc-utils": "5.1.0",
+    "@memberjunction/encryption": "5.1.0",
+    "@memberjunction/scheduling-actions": "5.1.0",
+    "@memberjunction/scheduling-engine": "5.1.0",
+    "@memberjunction/scheduling-engine-base": "5.1.0",
+    "@memberjunction/templates": "5.1.0",
+    "@memberjunction/testing-engine": "5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.11",
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

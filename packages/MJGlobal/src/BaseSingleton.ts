@@ -1,4 +1,4 @@
-import { GetGlobalObjectStore } from ".";
+import { GetGlobalObjectStore } from "./util";
 
 /**
  * Generic, abstract base class for any scenario where we want to use a Singleton pattern. This base class abstracts away the complexity of ensuring a truly global 
@@ -16,7 +16,7 @@ export abstract class BaseSingleton<T> {
         const g = GetGlobalObjectStore();
 
         if (g && g[this.GlobalKey]) {
-            return g[this.GlobalKey];
+            return g[this.GlobalKey] as this;
         }
 
         // If we get here, we are the first instance of this class
@@ -34,13 +34,13 @@ export abstract class BaseSingleton<T> {
      * @param className 
      * @returns 
      */
-    protected static getInstance<T extends BaseSingleton<any>>(this: new () => T, className?: string): T {
-        const key = BaseSingleton._globalKeyPrefix + (className || (this as Function).name); // use the class name as the key
+    protected static getInstance<T extends BaseSingleton<unknown>>(this: new () => T, className?: string): T {
+        const key = BaseSingleton._globalKeyPrefix + (className || (this as unknown as { name: string }).name);
         const g = GetGlobalObjectStore();
-        if (!g[key]) {
+        if (g && !g[key]) {
             g[key] = new this();
         }
-        return g[key];
+        return g ? g[key] as T : new this();
     }
  
     /**

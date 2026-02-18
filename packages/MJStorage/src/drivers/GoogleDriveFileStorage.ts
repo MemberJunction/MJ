@@ -1,7 +1,7 @@
 import { google, drive_v3 } from 'googleapis';
 import { RegisterClass } from '@memberjunction/global';
-import * as env from 'env-var';
-import * as mime from 'mime-types';
+import env from 'env-var';
+import mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
   FileStorageBase,
@@ -131,7 +131,11 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     } else if (credentials) {
       // Method 2: Using credentials directly (service account)
       const creds: ServiceAccountCredentials = typeof credentials === 'string' ? JSON.parse(credentials) : credentials;
-      const auth = new google.auth.JWT(creds.client_email, undefined, creds.private_key, ['https://www.googleapis.com/auth/drive']);
+      const auth = new google.auth.JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
       this._drive = google.drive({ version: 'v3', auth });
     } else if (this._clientID && this._clientSecret && this._refreshToken) {
       // Method 3: Using OAuth2 with refresh token

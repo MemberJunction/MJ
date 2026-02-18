@@ -11,332 +11,317 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
-import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
-import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
-
-// Kendo Imports
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
-import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
-import { ActionAuthorizationFormComponent, LoadActionAuthorizationFormComponent } from "./Entities/ActionAuthorization/actionauthorization.form.component";
-import { ActionCategoryFormComponent, LoadActionCategoryFormComponent } from "./Entities/ActionCategory/actioncategory.form.component";
-import { ActionContextTypeFormComponent, LoadActionContextTypeFormComponent } from "./Entities/ActionContextType/actioncontexttype.form.component";
-import { ActionContextFormComponent, LoadActionContextFormComponent } from "./Entities/ActionContext/actioncontext.form.component";
-import { ActionExecutionLogFormComponent, LoadActionExecutionLogFormComponent } from "./Entities/ActionExecutionLog/actionexecutionlog.form.component";
-import { ActionFilterFormComponent, LoadActionFilterFormComponent } from "./Entities/ActionFilter/actionfilter.form.component";
-import { ActionLibraryFormComponent, LoadActionLibraryFormComponent } from "./Entities/ActionLibrary/actionlibrary.form.component";
-import { ActionParamFormComponent, LoadActionParamFormComponent } from "./Entities/ActionParam/actionparam.form.component";
-import { ActionResultCodeFormComponent, LoadActionResultCodeFormComponent } from "./Entities/ActionResultCode/actionresultcode.form.component";
-import { ActionFormComponent, LoadActionFormComponent } from "./Entities/Action/action.form.component";
-import { AIActionFormComponent, LoadAIActionFormComponent } from "./Entities/AIAction/aiaction.form.component";
-import { AIAgentActionFormComponent, LoadAIAgentActionFormComponent } from "./Entities/AIAgentAction/aiagentaction.form.component";
-import { AIAgentLearningCycleFormComponent, LoadAIAgentLearningCycleFormComponent } from "./Entities/AIAgentLearningCycle/aiagentlearningcycle.form.component";
-import { AIAgentModelFormComponent, LoadAIAgentModelFormComponent } from "./Entities/AIAgentModel/aiagentmodel.form.component";
-import { AIAgentNoteTypeFormComponent, LoadAIAgentNoteTypeFormComponent } from "./Entities/AIAgentNoteType/aiagentnotetype.form.component";
-import { AIAgentNoteFormComponent, LoadAIAgentNoteFormComponent } from "./Entities/AIAgentNote/aiagentnote.form.component";
-import { AIAgentRequestFormComponent, LoadAIAgentRequestFormComponent } from "./Entities/AIAgentRequest/aiagentrequest.form.component";
-import { AIAgentFormComponent, LoadAIAgentFormComponent } from "./Entities/AIAgent/aiagent.form.component";
-import { AIModelActionFormComponent, LoadAIModelActionFormComponent } from "./Entities/AIModelAction/aimodelaction.form.component";
-import { AIModelTypeFormComponent, LoadAIModelTypeFormComponent } from "./Entities/AIModelType/aimodeltype.form.component";
-import { AIModelFormComponent, LoadAIModelFormComponent } from "./Entities/AIModel/aimodel.form.component";
-import { AIPromptCategoryFormComponent, LoadAIPromptCategoryFormComponent } from "./Entities/AIPromptCategory/aipromptcategory.form.component";
-import { AIPromptTypeFormComponent, LoadAIPromptTypeFormComponent } from "./Entities/AIPromptType/aiprompttype.form.component";
-import { AIPromptFormComponent, LoadAIPromptFormComponent } from "./Entities/AIPrompt/aiprompt.form.component";
-import { AIResultCacheFormComponent, LoadAIResultCacheFormComponent } from "./Entities/AIResultCache/airesultcache.form.component";
-import { ApplicationEntityFormComponent, LoadApplicationEntityFormComponent } from "./Entities/ApplicationEntity/applicationentity.form.component";
-import { ApplicationSettingFormComponent, LoadApplicationSettingFormComponent } from "./Entities/ApplicationSetting/applicationsetting.form.component";
-import { ApplicationFormComponent, LoadApplicationFormComponent } from "./Entities/Application/application.form.component";
-import { AuditLogTypeFormComponent, LoadAuditLogTypeFormComponent } from "./Entities/AuditLogType/auditlogtype.form.component";
-import { AuditLogFormComponent, LoadAuditLogFormComponent } from "./Entities/AuditLog/auditlog.form.component";
-import { AuthorizationRoleFormComponent, LoadAuthorizationRoleFormComponent } from "./Entities/AuthorizationRole/authorizationrole.form.component";
-import { AuthorizationFormComponent, LoadAuthorizationFormComponent } from "./Entities/Authorization/authorization.form.component";
-import { CommunicationBaseMessageTypeFormComponent, LoadCommunicationBaseMessageTypeFormComponent } from "./Entities/CommunicationBaseMessageType/communicationbasemessagetype.form.component";
-import { CommunicationLogFormComponent, LoadCommunicationLogFormComponent } from "./Entities/CommunicationLog/communicationlog.form.component";
-import { CommunicationProviderMessageTypeFormComponent, LoadCommunicationProviderMessageTypeFormComponent } from "./Entities/CommunicationProviderMessageType/communicationprovidermessagetype.form.component";
-import { CommunicationProviderFormComponent, LoadCommunicationProviderFormComponent } from "./Entities/CommunicationProvider/communicationprovider.form.component";
-import { CommunicationRunFormComponent, LoadCommunicationRunFormComponent } from "./Entities/CommunicationRun/communicationrun.form.component";
-import { CompanyFormComponent, LoadCompanyFormComponent } from "./Entities/Company/company.form.component";
-import { CompanyIntegrationRecordMapFormComponent, LoadCompanyIntegrationRecordMapFormComponent } from "./Entities/CompanyIntegrationRecordMap/companyintegrationrecordmap.form.component";
-import { CompanyIntegrationRunAPILogFormComponent, LoadCompanyIntegrationRunAPILogFormComponent } from "./Entities/CompanyIntegrationRunAPILog/companyintegrationrunapilog.form.component";
-import { CompanyIntegrationRunDetailFormComponent, LoadCompanyIntegrationRunDetailFormComponent } from "./Entities/CompanyIntegrationRunDetail/companyintegrationrundetail.form.component";
-import { CompanyIntegrationRunFormComponent, LoadCompanyIntegrationRunFormComponent } from "./Entities/CompanyIntegrationRun/companyintegrationrun.form.component";
-import { CompanyIntegrationFormComponent, LoadCompanyIntegrationFormComponent } from "./Entities/CompanyIntegration/companyintegration.form.component";
-import { ContentFileTypeFormComponent, LoadContentFileTypeFormComponent } from "./Entities/ContentFileType/contentfiletype.form.component";
-import { ContentItemAttributeFormComponent, LoadContentItemAttributeFormComponent } from "./Entities/ContentItemAttribute/contentitemattribute.form.component";
-import { ContentItemTagFormComponent, LoadContentItemTagFormComponent } from "./Entities/ContentItemTag/contentitemtag.form.component";
-import { ContentItemFormComponent, LoadContentItemFormComponent } from "./Entities/ContentItem/contentitem.form.component";
-import { ContentProcessRunFormComponent, LoadContentProcessRunFormComponent } from "./Entities/ContentProcessRun/contentprocessrun.form.component";
-import { ContentSourceParamFormComponent, LoadContentSourceParamFormComponent } from "./Entities/ContentSourceParam/contentsourceparam.form.component";
-import { ContentSourceTypeParamFormComponent, LoadContentSourceTypeParamFormComponent } from "./Entities/ContentSourceTypeParam/contentsourcetypeparam.form.component";
-import { ContentSourceTypeFormComponent, LoadContentSourceTypeFormComponent } from "./Entities/ContentSourceType/contentsourcetype.form.component";
-import { ContentSourceFormComponent, LoadContentSourceFormComponent } from "./Entities/ContentSource/contentsource.form.component";
-import { ContentTypeAttributeFormComponent, LoadContentTypeAttributeFormComponent } from "./Entities/ContentTypeAttribute/contenttypeattribute.form.component";
-import { ContentTypeFormComponent, LoadContentTypeFormComponent } from "./Entities/ContentType/contenttype.form.component";
-import { ConversationDetailFormComponent, LoadConversationDetailFormComponent } from "./Entities/ConversationDetail/conversationdetail.form.component";
-import { ConversationFormComponent, LoadConversationFormComponent } from "./Entities/Conversation/conversation.form.component";
-import { DashboardCategoryFormComponent, LoadDashboardCategoryFormComponent } from "./Entities/DashboardCategory/dashboardcategory.form.component";
-import { DashboardFormComponent, LoadDashboardFormComponent } from "./Entities/Dashboard/dashboard.form.component";
-import { DataContextItemFormComponent, LoadDataContextItemFormComponent } from "./Entities/DataContextItem/datacontextitem.form.component";
-import { DataContextFormComponent, LoadDataContextFormComponent } from "./Entities/DataContext/datacontext.form.component";
-import { DatasetItemFormComponent, LoadDatasetItemFormComponent } from "./Entities/DatasetItem/datasetitem.form.component";
-import { DatasetFormComponent, LoadDatasetFormComponent } from "./Entities/Dataset/dataset.form.component";
-import { DuplicateRunDetailMatchFormComponent, LoadDuplicateRunDetailMatchFormComponent } from "./Entities/DuplicateRunDetailMatch/duplicaterundetailmatch.form.component";
-import { DuplicateRunDetailFormComponent, LoadDuplicateRunDetailFormComponent } from "./Entities/DuplicateRunDetail/duplicaterundetail.form.component";
-import { DuplicateRunFormComponent, LoadDuplicateRunFormComponent } from "./Entities/DuplicateRun/duplicaterun.form.component";
-import { EmployeeCompanyIntegrationFormComponent, LoadEmployeeCompanyIntegrationFormComponent } from "./Entities/EmployeeCompanyIntegration/employeecompanyintegration.form.component";
-import { EmployeeRoleFormComponent, LoadEmployeeRoleFormComponent } from "./Entities/EmployeeRole/employeerole.form.component";
-import { EmployeeSkillFormComponent, LoadEmployeeSkillFormComponent } from "./Entities/EmployeeSkill/employeeskill.form.component";
-import { EmployeeFormComponent, LoadEmployeeFormComponent } from "./Entities/Employee/employee.form.component";
-import { EntityFormComponent, LoadEntityFormComponent } from "./Entities/Entity/entity.form.component";
-import { EntityActionFilterFormComponent, LoadEntityActionFilterFormComponent } from "./Entities/EntityActionFilter/entityactionfilter.form.component";
-import { EntityActionInvocationTypeFormComponent, LoadEntityActionInvocationTypeFormComponent } from "./Entities/EntityActionInvocationType/entityactioninvocationtype.form.component";
-import { EntityActionInvocationFormComponent, LoadEntityActionInvocationFormComponent } from "./Entities/EntityActionInvocation/entityactioninvocation.form.component";
-import { EntityActionParamFormComponent, LoadEntityActionParamFormComponent } from "./Entities/EntityActionParam/entityactionparam.form.component";
-import { EntityActionFormComponent, LoadEntityActionFormComponent } from "./Entities/EntityAction/entityaction.form.component";
-import { EntityAIActionFormComponent, LoadEntityAIActionFormComponent } from "./Entities/EntityAIAction/entityaiaction.form.component";
-import { EntityCommunicationFieldFormComponent, LoadEntityCommunicationFieldFormComponent } from "./Entities/EntityCommunicationField/entitycommunicationfield.form.component";
-import { EntityCommunicationMessageTypeFormComponent, LoadEntityCommunicationMessageTypeFormComponent } from "./Entities/EntityCommunicationMessageType/entitycommunicationmessagetype.form.component";
-import { EntityDocumentRunFormComponent, LoadEntityDocumentRunFormComponent } from "./Entities/EntityDocumentRun/entitydocumentrun.form.component";
-import { EntityDocumentSettingFormComponent, LoadEntityDocumentSettingFormComponent } from "./Entities/EntityDocumentSetting/entitydocumentsetting.form.component";
-import { EntityDocumentTypeFormComponent, LoadEntityDocumentTypeFormComponent } from "./Entities/EntityDocumentType/entitydocumenttype.form.component";
-import { EntityDocumentFormComponent, LoadEntityDocumentFormComponent } from "./Entities/EntityDocument/entitydocument.form.component";
-import { EntityFieldValueFormComponent, LoadEntityFieldValueFormComponent } from "./Entities/EntityFieldValue/entityfieldvalue.form.component";
-import { EntityFieldFormComponent, LoadEntityFieldFormComponent } from "./Entities/EntityField/entityfield.form.component";
-import { EntityPermissionFormComponent, LoadEntityPermissionFormComponent } from "./Entities/EntityPermission/entitypermission.form.component";
-import { EntityRecordDocumentFormComponent, LoadEntityRecordDocumentFormComponent } from "./Entities/EntityRecordDocument/entityrecorddocument.form.component";
-import { EntityRelationshipDisplayComponentFormComponent, LoadEntityRelationshipDisplayComponentFormComponent } from "./Entities/EntityRelationshipDisplayComponent/entityrelationshipdisplaycomponent.form.component";
-import { EntityRelationshipFormComponent, LoadEntityRelationshipFormComponent } from "./Entities/EntityRelationship/entityrelationship.form.component";
-import { EntitySettingFormComponent, LoadEntitySettingFormComponent } from "./Entities/EntitySetting/entitysetting.form.component";
-import { ErrorLogFormComponent, LoadErrorLogFormComponent } from "./Entities/ErrorLog/errorlog.form.component";
-import { ExplorerNavigationItemFormComponent, LoadExplorerNavigationItemFormComponent } from "./Entities/ExplorerNavigationItem/explorernavigationitem.form.component";
-import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Entities/FileCategory/filecategory.form.component";
-import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
-import { FileStorageProviderFormComponent, LoadFileStorageProviderFormComponent } from "./Entities/FileStorageProvider/filestorageprovider.form.component";
-import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.form.component";
-import { GeneratedCodeCategoryFormComponent, LoadGeneratedCodeCategoryFormComponent } from "./Entities/GeneratedCodeCategory/generatedcodecategory.form.component";
-import { GeneratedCodeFormComponent, LoadGeneratedCodeFormComponent } from "./Entities/GeneratedCode/generatedcode.form.component";
-import { IntegrationURLFormatFormComponent, LoadIntegrationURLFormatFormComponent } from "./Entities/IntegrationURLFormat/integrationurlformat.form.component";
-import { IntegrationFormComponent, LoadIntegrationFormComponent } from "./Entities/Integration/integration.form.component";
-import { LibraryFormComponent, LoadLibraryFormComponent } from "./Entities/Library/library.form.component";
-import { LibraryItemFormComponent, LoadLibraryItemFormComponent } from "./Entities/LibraryItem/libraryitem.form.component";
-import { ListCategoryFormComponent, LoadListCategoryFormComponent } from "./Entities/ListCategory/listcategory.form.component";
-import { ListDetailFormComponent, LoadListDetailFormComponent } from "./Entities/ListDetail/listdetail.form.component";
-import { ListFormComponent, LoadListFormComponent } from "./Entities/List/list.form.component";
-import { AccessControlRuleFormComponent, LoadAccessControlRuleFormComponent } from "./Entities/AccessControlRule/accesscontrolrule.form.component";
-import { AIAgentArtifactTypeFormComponent, LoadAIAgentArtifactTypeFormComponent } from "./Entities/AIAgentArtifactType/aiagentartifacttype.form.component";
-import { AIAgentConfigurationFormComponent, LoadAIAgentConfigurationFormComponent } from "./Entities/AIAgentConfiguration/aiagentconfiguration.form.component";
-import { AIAgentDataSourceFormComponent, LoadAIAgentDataSourceFormComponent } from "./Entities/AIAgentDataSource/aiagentdatasource.form.component";
-import { AIAgentExampleFormComponent, LoadAIAgentExampleFormComponent } from "./Entities/AIAgentExample/aiagentexample.form.component";
-import { AIAgentModalityFormComponent, LoadAIAgentModalityFormComponent } from "./Entities/AIAgentModality/aiagentmodality.form.component";
-import { AIAgentPermissionFormComponent, LoadAIAgentPermissionFormComponent } from "./Entities/AIAgentPermission/aiagentpermission.form.component";
-import { AIAgentPromptFormComponent, LoadAIAgentPromptFormComponent } from "./Entities/AIAgentPrompt/aiagentprompt.form.component";
-import { AIAgentRelationshipFormComponent, LoadAIAgentRelationshipFormComponent } from "./Entities/AIAgentRelationship/aiagentrelationship.form.component";
-import { AIAgentRunMediaFormComponent, LoadAIAgentRunMediaFormComponent } from "./Entities/AIAgentRunMedia/aiagentrunmedia.form.component";
-import { AIAgentRunStepFormComponent, LoadAIAgentRunStepFormComponent } from "./Entities/AIAgentRunStep/aiagentrunstep.form.component";
-import { AIAgentRunFormComponent, LoadAIAgentRunFormComponent } from "./Entities/AIAgentRun/aiagentrun.form.component";
-import { AIAgentStepPathFormComponent, LoadAIAgentStepPathFormComponent } from "./Entities/AIAgentStepPath/aiagentsteppath.form.component";
-import { AIAgentStepFormComponent, LoadAIAgentStepFormComponent } from "./Entities/AIAgentStep/aiagentstep.form.component";
-import { AIAgentTypeFormComponent, LoadAIAgentTypeFormComponent } from "./Entities/AIAgentType/aiagenttype.form.component";
-import { AIArchitectureFormComponent, LoadAIArchitectureFormComponent } from "./Entities/AIArchitecture/aiarchitecture.form.component";
-import { AIConfigurationParamFormComponent, LoadAIConfigurationParamFormComponent } from "./Entities/AIConfigurationParam/aiconfigurationparam.form.component";
-import { AIConfigurationFormComponent, LoadAIConfigurationFormComponent } from "./Entities/AIConfiguration/aiconfiguration.form.component";
-import { AICredentialBindingFormComponent, LoadAICredentialBindingFormComponent } from "./Entities/AICredentialBinding/aicredentialbinding.form.component";
-import { AIModalityFormComponent, LoadAIModalityFormComponent } from "./Entities/AIModality/aimodality.form.component";
-import { AIModelArchitectureFormComponent, LoadAIModelArchitectureFormComponent } from "./Entities/AIModelArchitecture/aimodelarchitecture.form.component";
-import { AIModelCostFormComponent, LoadAIModelCostFormComponent } from "./Entities/AIModelCost/aimodelcost.form.component";
-import { AIModelModalityFormComponent, LoadAIModelModalityFormComponent } from "./Entities/AIModelModality/aimodelmodality.form.component";
-import { AIModelPriceTypeFormComponent, LoadAIModelPriceTypeFormComponent } from "./Entities/AIModelPriceType/aimodelpricetype.form.component";
-import { AIModelPriceUnitTypeFormComponent, LoadAIModelPriceUnitTypeFormComponent } from "./Entities/AIModelPriceUnitType/aimodelpriceunittype.form.component";
-import { AIModelVendorFormComponent, LoadAIModelVendorFormComponent } from "./Entities/AIModelVendor/aimodelvendor.form.component";
-import { AIPromptModelFormComponent, LoadAIPromptModelFormComponent } from "./Entities/AIPromptModel/aipromptmodel.form.component";
-import { AIPromptRunMediaFormComponent, LoadAIPromptRunMediaFormComponent } from "./Entities/AIPromptRunMedia/aipromptrunmedia.form.component";
-import { AIPromptRunFormComponent, LoadAIPromptRunFormComponent } from "./Entities/AIPromptRun/aipromptrun.form.component";
-import { AIVendorTypeDefinitionFormComponent, LoadAIVendorTypeDefinitionFormComponent } from "./Entities/AIVendorTypeDefinition/aivendortypedefinition.form.component";
-import { AIVendorTypeFormComponent, LoadAIVendorTypeFormComponent } from "./Entities/AIVendorType/aivendortype.form.component";
-import { AIVendorFormComponent, LoadAIVendorFormComponent } from "./Entities/AIVendor/aivendor.form.component";
-import { APIApplicationScopeFormComponent, LoadAPIApplicationScopeFormComponent } from "./Entities/APIApplicationScope/apiapplicationscope.form.component";
-import { APIApplicationFormComponent, LoadAPIApplicationFormComponent } from "./Entities/APIApplication/apiapplication.form.component";
-import { APIKeyApplicationFormComponent, LoadAPIKeyApplicationFormComponent } from "./Entities/APIKeyApplication/apikeyapplication.form.component";
-import { APIKeyScopeFormComponent, LoadAPIKeyScopeFormComponent } from "./Entities/APIKeyScope/apikeyscope.form.component";
-import { APIKeyUsageLogFormComponent, LoadAPIKeyUsageLogFormComponent } from "./Entities/APIKeyUsageLog/apikeyusagelog.form.component";
-import { APIKeyFormComponent, LoadAPIKeyFormComponent } from "./Entities/APIKey/apikey.form.component";
-import { APIScopeFormComponent, LoadAPIScopeFormComponent } from "./Entities/APIScope/apiscope.form.component";
-import { ArtifactPermissionFormComponent, LoadArtifactPermissionFormComponent } from "./Entities/ArtifactPermission/artifactpermission.form.component";
-import { ArtifactTypeFormComponent, LoadArtifactTypeFormComponent } from "./Entities/ArtifactType/artifacttype.form.component";
-import { ArtifactUseFormComponent, LoadArtifactUseFormComponent } from "./Entities/ArtifactUse/artifactuse.form.component";
-import { ArtifactVersionAttributeFormComponent, LoadArtifactVersionAttributeFormComponent } from "./Entities/ArtifactVersionAttribute/artifactversionattribute.form.component";
-import { ArtifactVersionFormComponent, LoadArtifactVersionFormComponent } from "./Entities/ArtifactVersion/artifactversion.form.component";
-import { ArtifactFormComponent, LoadArtifactFormComponent } from "./Entities/Artifact/artifact.form.component";
-import { CollectionArtifactFormComponent, LoadCollectionArtifactFormComponent } from "./Entities/CollectionArtifact/collectionartifact.form.component";
-import { CollectionPermissionFormComponent, LoadCollectionPermissionFormComponent } from "./Entities/CollectionPermission/collectionpermission.form.component";
-import { CollectionFormComponent, LoadCollectionFormComponent } from "./Entities/Collection/collection.form.component";
-import { ComponentDependencyFormComponent, LoadComponentDependencyFormComponent } from "./Entities/ComponentDependency/componentdependency.form.component";
-import { ComponentLibraryFormComponent, LoadComponentLibraryFormComponent } from "./Entities/ComponentLibrary/componentlibrary.form.component";
-import { ComponentLibraryLinkFormComponent, LoadComponentLibraryLinkFormComponent } from "./Entities/ComponentLibraryLink/componentlibrarylink.form.component";
-import { ComponentRegistryFormComponent, LoadComponentRegistryFormComponent } from "./Entities/ComponentRegistry/componentregistry.form.component";
-import { ComponentFormComponent, LoadComponentFormComponent } from "./Entities/Component/component.form.component";
-import { ConversationArtifactPermissionFormComponent, LoadConversationArtifactPermissionFormComponent } from "./Entities/ConversationArtifactPermission/conversationartifactpermission.form.component";
-import { ConversationArtifactVersionFormComponent, LoadConversationArtifactVersionFormComponent } from "./Entities/ConversationArtifactVersion/conversationartifactversion.form.component";
-import { ConversationArtifactFormComponent, LoadConversationArtifactFormComponent } from "./Entities/ConversationArtifact/conversationartifact.form.component";
-import { ConversationDetailArtifactFormComponent, LoadConversationDetailArtifactFormComponent } from "./Entities/ConversationDetailArtifact/conversationdetailartifact.form.component";
-import { ConversationDetailAttachmentFormComponent, LoadConversationDetailAttachmentFormComponent } from "./Entities/ConversationDetailAttachment/conversationdetailattachment.form.component";
-import { ConversationDetailRatingFormComponent, LoadConversationDetailRatingFormComponent } from "./Entities/ConversationDetailRating/conversationdetailrating.form.component";
-import { CredentialCategoryFormComponent, LoadCredentialCategoryFormComponent } from "./Entities/CredentialCategory/credentialcategory.form.component";
-import { CredentialTypeFormComponent, LoadCredentialTypeFormComponent } from "./Entities/CredentialType/credentialtype.form.component";
-import { CredentialFormComponent, LoadCredentialFormComponent } from "./Entities/Credential/credential.form.component";
-import { DashboardCategoryLinkFormComponent, LoadDashboardCategoryLinkFormComponent } from "./Entities/DashboardCategoryLink/dashboardcategorylink.form.component";
-import { DashboardCategoryPermissionFormComponent, LoadDashboardCategoryPermissionFormComponent } from "./Entities/DashboardCategoryPermission/dashboardcategorypermission.form.component";
-import { DashboardPartTypeFormComponent, LoadDashboardPartTypeFormComponent } from "./Entities/DashboardPartType/dashboardparttype.form.component";
-import { DashboardPermissionFormComponent, LoadDashboardPermissionFormComponent } from "./Entities/DashboardPermission/dashboardpermission.form.component";
-import { DashboardUserPreferenceFormComponent, LoadDashboardUserPreferenceFormComponent } from "./Entities/DashboardUserPreference/dashboarduserpreference.form.component";
-import { DashboardUserStateFormComponent, LoadDashboardUserStateFormComponent } from "./Entities/DashboardUserState/dashboarduserstate.form.component";
-import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent } from "./Entities/EncryptionAlgorithm/encryptionalgorithm.form.component";
-import { EncryptionKeySourceFormComponent, LoadEncryptionKeySourceFormComponent } from "./Entities/EncryptionKeySource/encryptionkeysource.form.component";
-import { EncryptionKeyFormComponent, LoadEncryptionKeyFormComponent } from "./Entities/EncryptionKey/encryptionkey.form.component";
-import { EnvironmentFormComponent, LoadEnvironmentFormComponent } from "./Entities/Environment/environment.form.component";
-import { FileStorageAccountFormComponent, LoadFileStorageAccountFormComponent } from "./Entities/FileStorageAccount/filestorageaccount.form.component";
-import { ListInvitationFormComponent, LoadListInvitationFormComponent } from "./Entities/ListInvitation/listinvitation.form.component";
-import { ListShareFormComponent, LoadListShareFormComponent } from "./Entities/ListShare/listshare.form.component";
-import { MCPServerConnectionPermissionFormComponent, LoadMCPServerConnectionPermissionFormComponent } from "./Entities/MCPServerConnectionPermission/mcpserverconnectionpermission.form.component";
-import { MCPServerConnectionToolFormComponent, LoadMCPServerConnectionToolFormComponent } from "./Entities/MCPServerConnectionTool/mcpserverconnectiontool.form.component";
-import { MCPServerConnectionFormComponent, LoadMCPServerConnectionFormComponent } from "./Entities/MCPServerConnection/mcpserverconnection.form.component";
-import { MCPServerToolFormComponent, LoadMCPServerToolFormComponent } from "./Entities/MCPServerTool/mcpservertool.form.component";
-import { MCPServerFormComponent, LoadMCPServerFormComponent } from "./Entities/MCPServer/mcpserver.form.component";
-import { MCPToolExecutionLogFormComponent, LoadMCPToolExecutionLogFormComponent } from "./Entities/MCPToolExecutionLog/mcptoolexecutionlog.form.component";
-import { OAuthAuthServerMetadataCacheFormComponent, LoadOAuthAuthServerMetadataCacheFormComponent } from "./Entities/OAuthAuthServerMetadataCache/oauthauthservermetadatacache.form.component";
-import { OAuthAuthorizationStateFormComponent, LoadOAuthAuthorizationStateFormComponent } from "./Entities/OAuthAuthorizationState/oauthauthorizationstate.form.component";
-import { OAuthClientRegistrationFormComponent, LoadOAuthClientRegistrationFormComponent } from "./Entities/OAuthClientRegistration/oauthclientregistration.form.component";
-import { OAuthTokenFormComponent, LoadOAuthTokenFormComponent } from "./Entities/OAuthToken/oauthtoken.form.component";
-import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
-import { PublicLinkFormComponent, LoadPublicLinkFormComponent } from "./Entities/PublicLink/publiclink.form.component";
-import { QueryParameterFormComponent, LoadQueryParameterFormComponent } from "./Entities/QueryParameter/queryparameter.form.component";
-import { RecordLinkFormComponent, LoadRecordLinkFormComponent } from "./Entities/RecordLink/recordlink.form.component";
-import { ReportUserStateFormComponent, LoadReportUserStateFormComponent } from "./Entities/ReportUserState/reportuserstate.form.component";
-import { ReportVersionFormComponent, LoadReportVersionFormComponent } from "./Entities/ReportVersion/reportversion.form.component";
-import { ScheduledJobRunFormComponent, LoadScheduledJobRunFormComponent } from "./Entities/ScheduledJobRun/scheduledjobrun.form.component";
-import { ScheduledJobTypeFormComponent, LoadScheduledJobTypeFormComponent } from "./Entities/ScheduledJobType/scheduledjobtype.form.component";
-import { ScheduledJobFormComponent, LoadScheduledJobFormComponent } from "./Entities/ScheduledJob/scheduledjob.form.component";
-import { TaskDependencyFormComponent, LoadTaskDependencyFormComponent } from "./Entities/TaskDependency/taskdependency.form.component";
-import { TaskTypeFormComponent, LoadTaskTypeFormComponent } from "./Entities/TaskType/tasktype.form.component";
-import { TaskFormComponent, LoadTaskFormComponent } from "./Entities/Task/task.form.component";
-import { TestRubricFormComponent, LoadTestRubricFormComponent } from "./Entities/TestRubric/testrubric.form.component";
-import { TestRunFeedbackFormComponent, LoadTestRunFeedbackFormComponent } from "./Entities/TestRunFeedback/testrunfeedback.form.component";
-import { TestRunFormComponent, LoadTestRunFormComponent } from "./Entities/TestRun/testrun.form.component";
-import { TestSuiteRunFormComponent, LoadTestSuiteRunFormComponent } from "./Entities/TestSuiteRun/testsuiterun.form.component";
-import { TestSuiteTestFormComponent, LoadTestSuiteTestFormComponent } from "./Entities/TestSuiteTest/testsuitetest.form.component";
-import { TestSuiteFormComponent, LoadTestSuiteFormComponent } from "./Entities/TestSuite/testsuite.form.component";
-import { TestTypeFormComponent, LoadTestTypeFormComponent } from "./Entities/TestType/testtype.form.component";
-import { TestFormComponent, LoadTestFormComponent } from "./Entities/Test/test.form.component";
-import { UserNotificationPreferenceFormComponent, LoadUserNotificationPreferenceFormComponent } from "./Entities/UserNotificationPreference/usernotificationpreference.form.component";
-import { UserNotificationTypeFormComponent, LoadUserNotificationTypeFormComponent } from "./Entities/UserNotificationType/usernotificationtype.form.component";
-import { UserSettingFormComponent, LoadUserSettingFormComponent } from "./Entities/UserSetting/usersetting.form.component";
-import { VersionLabelItemFormComponent, LoadVersionLabelItemFormComponent } from "./Entities/VersionLabelItem/versionlabelitem.form.component";
-import { VersionLabelRestoreFormComponent, LoadVersionLabelRestoreFormComponent } from "./Entities/VersionLabelRestore/versionlabelrestore.form.component";
-import { VersionLabelFormComponent, LoadVersionLabelFormComponent } from "./Entities/VersionLabel/versionlabel.form.component";
-import { OutputDeliveryTypeFormComponent, LoadOutputDeliveryTypeFormComponent } from "./Entities/OutputDeliveryType/outputdeliverytype.form.component";
-import { OutputFormatTypeFormComponent, LoadOutputFormatTypeFormComponent } from "./Entities/OutputFormatType/outputformattype.form.component";
-import { OutputTriggerTypeFormComponent, LoadOutputTriggerTypeFormComponent } from "./Entities/OutputTriggerType/outputtriggertype.form.component";
-import { QueryFormComponent, LoadQueryFormComponent } from "./Entities/Query/query.form.component";
-import { QueryCategoryFormComponent, LoadQueryCategoryFormComponent } from "./Entities/QueryCategory/querycategory.form.component";
-import { QueryEntityFormComponent, LoadQueryEntityFormComponent } from "./Entities/QueryEntity/queryentity.form.component";
-import { QueryFieldFormComponent, LoadQueryFieldFormComponent } from "./Entities/QueryField/queryfield.form.component";
-import { QueryPermissionFormComponent, LoadQueryPermissionFormComponent } from "./Entities/QueryPermission/querypermission.form.component";
-import { QueueTaskFormComponent, LoadQueueTaskFormComponent } from "./Entities/QueueTask/queuetask.form.component";
-import { QueueTypeFormComponent, LoadQueueTypeFormComponent } from "./Entities/QueueType/queuetype.form.component";
-import { QueueFormComponent, LoadQueueFormComponent } from "./Entities/Queue/queue.form.component";
-import { RecommendationItemFormComponent, LoadRecommendationItemFormComponent } from "./Entities/RecommendationItem/recommendationitem.form.component";
-import { RecommendationProviderFormComponent, LoadRecommendationProviderFormComponent } from "./Entities/RecommendationProvider/recommendationprovider.form.component";
-import { RecommendationRunFormComponent, LoadRecommendationRunFormComponent } from "./Entities/RecommendationRun/recommendationrun.form.component";
-import { RecommendationFormComponent, LoadRecommendationFormComponent } from "./Entities/Recommendation/recommendation.form.component";
-import { RecordChangeReplayRunFormComponent, LoadRecordChangeReplayRunFormComponent } from "./Entities/RecordChangeReplayRun/recordchangereplayrun.form.component";
-import { RecordChangeFormComponent, LoadRecordChangeFormComponent } from "./Entities/RecordChange/recordchange.form.component";
-import { RecordMergeDeletionLogFormComponent, LoadRecordMergeDeletionLogFormComponent } from "./Entities/RecordMergeDeletionLog/recordmergedeletionlog.form.component";
-import { RecordMergeLogFormComponent, LoadRecordMergeLogFormComponent } from "./Entities/RecordMergeLog/recordmergelog.form.component";
-import { ReportCategoryFormComponent, LoadReportCategoryFormComponent } from "./Entities/ReportCategory/reportcategory.form.component";
-import { ReportSnapshotFormComponent, LoadReportSnapshotFormComponent } from "./Entities/ReportSnapshot/reportsnapshot.form.component";
-import { ReportFormComponent, LoadReportFormComponent } from "./Entities/Report/report.form.component";
-import { ResourceLinkFormComponent, LoadResourceLinkFormComponent } from "./Entities/ResourceLink/resourcelink.form.component";
-import { ResourcePermissionFormComponent, LoadResourcePermissionFormComponent } from "./Entities/ResourcePermission/resourcepermission.form.component";
-import { ResourceTypeFormComponent, LoadResourceTypeFormComponent } from "./Entities/ResourceType/resourcetype.form.component";
-import { RoleFormComponent, LoadRoleFormComponent } from "./Entities/Role/role.form.component";
-import { RowLevelSecurityFilterFormComponent, LoadRowLevelSecurityFilterFormComponent } from "./Entities/RowLevelSecurityFilter/rowlevelsecurityfilter.form.component";
-import { ScheduledActionParamFormComponent, LoadScheduledActionParamFormComponent } from "./Entities/ScheduledActionParam/scheduledactionparam.form.component";
-import { ScheduledActionFormComponent, LoadScheduledActionFormComponent } from "./Entities/ScheduledAction/scheduledaction.form.component";
-import { SchemaInfoFormComponent, LoadSchemaInfoFormComponent } from "./Entities/SchemaInfo/schemainfo.form.component";
-import { SkillFormComponent, LoadSkillFormComponent } from "./Entities/Skill/skill.form.component";
-import { TaggedItemFormComponent, LoadTaggedItemFormComponent } from "./Entities/TaggedItem/taggeditem.form.component";
-import { TagFormComponent, LoadTagFormComponent } from "./Entities/Tag/tag.form.component";
-import { TemplateCategoryFormComponent, LoadTemplateCategoryFormComponent } from "./Entities/TemplateCategory/templatecategory.form.component";
-import { TemplateContentTypeFormComponent, LoadTemplateContentTypeFormComponent } from "./Entities/TemplateContentType/templatecontenttype.form.component";
-import { TemplateContentFormComponent, LoadTemplateContentFormComponent } from "./Entities/TemplateContent/templatecontent.form.component";
-import { TemplateParamFormComponent, LoadTemplateParamFormComponent } from "./Entities/TemplateParam/templateparam.form.component";
-import { TemplateFormComponent, LoadTemplateFormComponent } from "./Entities/Template/template.form.component";
-import { UserApplicationEntityFormComponent, LoadUserApplicationEntityFormComponent } from "./Entities/UserApplicationEntity/userapplicationentity.form.component";
-import { UserApplicationFormComponent, LoadUserApplicationFormComponent } from "./Entities/UserApplication/userapplication.form.component";
-import { UserFavoriteFormComponent, LoadUserFavoriteFormComponent } from "./Entities/UserFavorite/userfavorite.form.component";
-import { UserNotificationFormComponent, LoadUserNotificationFormComponent } from "./Entities/UserNotification/usernotification.form.component";
-import { UserRecordLogFormComponent, LoadUserRecordLogFormComponent } from "./Entities/UserRecordLog/userrecordlog.form.component";
-import { UserRoleFormComponent, LoadUserRoleFormComponent } from "./Entities/UserRole/userrole.form.component";
-import { UserViewCategoryFormComponent, LoadUserViewCategoryFormComponent } from "./Entities/UserViewCategory/userviewcategory.form.component";
-import { UserViewRunDetailFormComponent, LoadUserViewRunDetailFormComponent } from "./Entities/UserViewRunDetail/userviewrundetail.form.component";
-import { UserViewRunFormComponent, LoadUserViewRunFormComponent } from "./Entities/UserViewRun/userviewrun.form.component";
-import { UserViewFormComponent, LoadUserViewFormComponent } from "./Entities/UserView/userview.form.component";
-import { UserFormComponent, LoadUserFormComponent } from "./Entities/User/user.form.component";
-import { VectorDatabaseFormComponent, LoadVectorDatabaseFormComponent } from "./Entities/VectorDatabase/vectordatabase.form.component";
-import { VectorIndexFormComponent, LoadVectorIndexFormComponent } from "./Entities/VectorIndex/vectorindex.form.component";
-import { VersionInstallationFormComponent, LoadVersionInstallationFormComponent } from "./Entities/VersionInstallation/versioninstallation.form.component";
-import { WorkflowEngineFormComponent, LoadWorkflowEngineFormComponent } from "./Entities/WorkflowEngine/workflowengine.form.component";
-import { WorkflowRunFormComponent, LoadWorkflowRunFormComponent } from "./Entities/WorkflowRun/workflowrun.form.component";
-import { WorkflowFormComponent, LoadWorkflowFormComponent } from "./Entities/Workflow/workflow.form.component";
-import { WorkspaceItemFormComponent, LoadWorkspaceItemFormComponent } from "./Entities/WorkspaceItem/workspaceitem.form.component";
-import { WorkspaceFormComponent, LoadWorkspaceFormComponent } from "./Entities/Workspace/workspace.form.component";
+import { MJAccessControlRuleFormComponent } from "./Entities/MJAccessControlRule/mjaccesscontrolrule.form.component";
+import { MJActionAuthorizationFormComponent } from "./Entities/MJActionAuthorization/mjactionauthorization.form.component";
+import { MJActionCategoryFormComponent } from "./Entities/MJActionCategory/mjactioncategory.form.component";
+import { MJActionContextTypeFormComponent } from "./Entities/MJActionContextType/mjactioncontexttype.form.component";
+import { MJActionContextFormComponent } from "./Entities/MJActionContext/mjactioncontext.form.component";
+import { MJActionExecutionLogFormComponent } from "./Entities/MJActionExecutionLog/mjactionexecutionlog.form.component";
+import { MJActionFilterFormComponent } from "./Entities/MJActionFilter/mjactionfilter.form.component";
+import { MJActionLibraryFormComponent } from "./Entities/MJActionLibrary/mjactionlibrary.form.component";
+import { MJActionParamFormComponent } from "./Entities/MJActionParam/mjactionparam.form.component";
+import { MJActionResultCodeFormComponent } from "./Entities/MJActionResultCode/mjactionresultcode.form.component";
+import { MJActionFormComponent } from "./Entities/MJAction/mjaction.form.component";
+import { MJAIActionFormComponent } from "./Entities/MJAIAction/mjaiaction.form.component";
+import { MJAIAgentActionFormComponent } from "./Entities/MJAIAgentAction/mjaiagentaction.form.component";
+import { MJAIAgentArtifactTypeFormComponent } from "./Entities/MJAIAgentArtifactType/mjaiagentartifacttype.form.component";
+import { MJAIAgentConfigurationFormComponent } from "./Entities/MJAIAgentConfiguration/mjaiagentconfiguration.form.component";
+import { MJAIAgentDataSourceFormComponent } from "./Entities/MJAIAgentDataSource/mjaiagentdatasource.form.component";
+import { MJAIAgentExampleFormComponent } from "./Entities/MJAIAgentExample/mjaiagentexample.form.component";
+import { MJAIAgentLearningCycleFormComponent } from "./Entities/MJAIAgentLearningCycle/mjaiagentlearningcycle.form.component";
+import { MJAIAgentModalityFormComponent } from "./Entities/MJAIAgentModality/mjaiagentmodality.form.component";
+import { MJAIAgentModelFormComponent } from "./Entities/MJAIAgentModel/mjaiagentmodel.form.component";
+import { MJAIAgentNoteTypeFormComponent } from "./Entities/MJAIAgentNoteType/mjaiagentnotetype.form.component";
+import { MJAIAgentNoteFormComponent } from "./Entities/MJAIAgentNote/mjaiagentnote.form.component";
+import { MJAIAgentPermissionFormComponent } from "./Entities/MJAIAgentPermission/mjaiagentpermission.form.component";
+import { MJAIAgentPromptFormComponent } from "./Entities/MJAIAgentPrompt/mjaiagentprompt.form.component";
+import { MJAIAgentRelationshipFormComponent } from "./Entities/MJAIAgentRelationship/mjaiagentrelationship.form.component";
+import { MJAIAgentRequestFormComponent } from "./Entities/MJAIAgentRequest/mjaiagentrequest.form.component";
+import { MJAIAgentRunMediaFormComponent } from "./Entities/MJAIAgentRunMedia/mjaiagentrunmedia.form.component";
+import { MJAIAgentRunStepFormComponent } from "./Entities/MJAIAgentRunStep/mjaiagentrunstep.form.component";
+import { MJAIAgentRunFormComponent } from "./Entities/MJAIAgentRun/mjaiagentrun.form.component";
+import { MJAIAgentStepPathFormComponent } from "./Entities/MJAIAgentStepPath/mjaiagentsteppath.form.component";
+import { MJAIAgentStepFormComponent } from "./Entities/MJAIAgentStep/mjaiagentstep.form.component";
+import { MJAIAgentTypeFormComponent } from "./Entities/MJAIAgentType/mjaiagenttype.form.component";
+import { MJAIAgentFormComponent } from "./Entities/MJAIAgent/mjaiagent.form.component";
+import { MJAIArchitectureFormComponent } from "./Entities/MJAIArchitecture/mjaiarchitecture.form.component";
+import { MJAIConfigurationParamFormComponent } from "./Entities/MJAIConfigurationParam/mjaiconfigurationparam.form.component";
+import { MJAIConfigurationFormComponent } from "./Entities/MJAIConfiguration/mjaiconfiguration.form.component";
+import { MJAICredentialBindingFormComponent } from "./Entities/MJAICredentialBinding/mjaicredentialbinding.form.component";
+import { MJAIModalityFormComponent } from "./Entities/MJAIModality/mjaimodality.form.component";
+import { MJAIModelActionFormComponent } from "./Entities/MJAIModelAction/mjaimodelaction.form.component";
+import { MJAIModelArchitectureFormComponent } from "./Entities/MJAIModelArchitecture/mjaimodelarchitecture.form.component";
+import { MJAIModelCostFormComponent } from "./Entities/MJAIModelCost/mjaimodelcost.form.component";
+import { MJAIModelModalityFormComponent } from "./Entities/MJAIModelModality/mjaimodelmodality.form.component";
+import { MJAIModelPriceTypeFormComponent } from "./Entities/MJAIModelPriceType/mjaimodelpricetype.form.component";
+import { MJAIModelPriceUnitTypeFormComponent } from "./Entities/MJAIModelPriceUnitType/mjaimodelpriceunittype.form.component";
+import { MJAIModelTypeFormComponent } from "./Entities/MJAIModelType/mjaimodeltype.form.component";
+import { MJAIModelVendorFormComponent } from "./Entities/MJAIModelVendor/mjaimodelvendor.form.component";
+import { MJAIModelFormComponent } from "./Entities/MJAIModel/mjaimodel.form.component";
+import { MJAIPromptCategoryFormComponent } from "./Entities/MJAIPromptCategory/mjaipromptcategory.form.component";
+import { MJAIPromptModelFormComponent } from "./Entities/MJAIPromptModel/mjaipromptmodel.form.component";
+import { MJAIPromptRunMediaFormComponent } from "./Entities/MJAIPromptRunMedia/mjaipromptrunmedia.form.component";
+import { MJAIPromptRunFormComponent } from "./Entities/MJAIPromptRun/mjaipromptrun.form.component";
+import { MJAIPromptTypeFormComponent } from "./Entities/MJAIPromptType/mjaiprompttype.form.component";
+import { MJAIPromptFormComponent } from "./Entities/MJAIPrompt/mjaiprompt.form.component";
+import { MJAIResultCacheFormComponent } from "./Entities/MJAIResultCache/mjairesultcache.form.component";
+import { MJAIVendorTypeDefinitionFormComponent } from "./Entities/MJAIVendorTypeDefinition/mjaivendortypedefinition.form.component";
+import { MJAIVendorTypeFormComponent } from "./Entities/MJAIVendorType/mjaivendortype.form.component";
+import { MJAIVendorFormComponent } from "./Entities/MJAIVendor/mjaivendor.form.component";
+import { MJAPIApplicationScopeFormComponent } from "./Entities/MJAPIApplicationScope/mjapiapplicationscope.form.component";
+import { MJAPIApplicationFormComponent } from "./Entities/MJAPIApplication/mjapiapplication.form.component";
+import { MJAPIKeyApplicationFormComponent } from "./Entities/MJAPIKeyApplication/mjapikeyapplication.form.component";
+import { MJAPIKeyScopeFormComponent } from "./Entities/MJAPIKeyScope/mjapikeyscope.form.component";
+import { MJAPIKeyUsageLogFormComponent } from "./Entities/MJAPIKeyUsageLog/mjapikeyusagelog.form.component";
+import { MJAPIKeyFormComponent } from "./Entities/MJAPIKey/mjapikey.form.component";
+import { MJAPIScopeFormComponent } from "./Entities/MJAPIScope/mjapiscope.form.component";
+import { MJApplicationEntityFormComponent } from "./Entities/MJApplicationEntity/mjapplicationentity.form.component";
+import { MJApplicationSettingFormComponent } from "./Entities/MJApplicationSetting/mjapplicationsetting.form.component";
+import { MJApplicationFormComponent } from "./Entities/MJApplication/mjapplication.form.component";
+import { MJArtifactPermissionFormComponent } from "./Entities/MJArtifactPermission/mjartifactpermission.form.component";
+import { MJArtifactTypeFormComponent } from "./Entities/MJArtifactType/mjartifacttype.form.component";
+import { MJArtifactUseFormComponent } from "./Entities/MJArtifactUse/mjartifactuse.form.component";
+import { MJArtifactVersionAttributeFormComponent } from "./Entities/MJArtifactVersionAttribute/mjartifactversionattribute.form.component";
+import { MJArtifactVersionFormComponent } from "./Entities/MJArtifactVersion/mjartifactversion.form.component";
+import { MJArtifactFormComponent } from "./Entities/MJArtifact/mjartifact.form.component";
+import { MJAuditLogTypeFormComponent } from "./Entities/MJAuditLogType/mjauditlogtype.form.component";
+import { MJAuditLogFormComponent } from "./Entities/MJAuditLog/mjauditlog.form.component";
+import { MJAuthorizationRoleFormComponent } from "./Entities/MJAuthorizationRole/mjauthorizationrole.form.component";
+import { MJAuthorizationFormComponent } from "./Entities/MJAuthorization/mjauthorization.form.component";
+import { MJCollectionArtifactFormComponent } from "./Entities/MJCollectionArtifact/mjcollectionartifact.form.component";
+import { MJCollectionPermissionFormComponent } from "./Entities/MJCollectionPermission/mjcollectionpermission.form.component";
+import { MJCollectionFormComponent } from "./Entities/MJCollection/mjcollection.form.component";
+import { MJCommunicationBaseMessageTypeFormComponent } from "./Entities/MJCommunicationBaseMessageType/mjcommunicationbasemessagetype.form.component";
+import { MJCommunicationLogFormComponent } from "./Entities/MJCommunicationLog/mjcommunicationlog.form.component";
+import { MJCommunicationProviderMessageTypeFormComponent } from "./Entities/MJCommunicationProviderMessageType/mjcommunicationprovidermessagetype.form.component";
+import { MJCommunicationProviderFormComponent } from "./Entities/MJCommunicationProvider/mjcommunicationprovider.form.component";
+import { MJCommunicationRunFormComponent } from "./Entities/MJCommunicationRun/mjcommunicationrun.form.component";
+import { MJCompanyFormComponent } from "./Entities/MJCompany/mjcompany.form.component";
+import { MJCompanyIntegrationRecordMapFormComponent } from "./Entities/MJCompanyIntegrationRecordMap/mjcompanyintegrationrecordmap.form.component";
+import { MJCompanyIntegrationRunAPILogFormComponent } from "./Entities/MJCompanyIntegrationRunAPILog/mjcompanyintegrationrunapilog.form.component";
+import { MJCompanyIntegrationRunDetailFormComponent } from "./Entities/MJCompanyIntegrationRunDetail/mjcompanyintegrationrundetail.form.component";
+import { MJCompanyIntegrationRunFormComponent } from "./Entities/MJCompanyIntegrationRun/mjcompanyintegrationrun.form.component";
+import { MJCompanyIntegrationFormComponent } from "./Entities/MJCompanyIntegration/mjcompanyintegration.form.component";
+import { MJComponentDependencyFormComponent } from "./Entities/MJComponentDependency/mjcomponentdependency.form.component";
+import { MJComponentLibraryFormComponent } from "./Entities/MJComponentLibrary/mjcomponentlibrary.form.component";
+import { MJComponentLibraryLinkFormComponent } from "./Entities/MJComponentLibraryLink/mjcomponentlibrarylink.form.component";
+import { MJComponentRegistryFormComponent } from "./Entities/MJComponentRegistry/mjcomponentregistry.form.component";
+import { MJComponentFormComponent } from "./Entities/MJComponent/mjcomponent.form.component";
+import { MJContentFileTypeFormComponent } from "./Entities/MJContentFileType/mjcontentfiletype.form.component";
+import { MJContentItemAttributeFormComponent } from "./Entities/MJContentItemAttribute/mjcontentitemattribute.form.component";
+import { MJContentItemTagFormComponent } from "./Entities/MJContentItemTag/mjcontentitemtag.form.component";
+import { MJContentItemFormComponent } from "./Entities/MJContentItem/mjcontentitem.form.component";
+import { MJContentProcessRunFormComponent } from "./Entities/MJContentProcessRun/mjcontentprocessrun.form.component";
+import { MJContentSourceParamFormComponent } from "./Entities/MJContentSourceParam/mjcontentsourceparam.form.component";
+import { MJContentSourceTypeParamFormComponent } from "./Entities/MJContentSourceTypeParam/mjcontentsourcetypeparam.form.component";
+import { MJContentSourceTypeFormComponent } from "./Entities/MJContentSourceType/mjcontentsourcetype.form.component";
+import { MJContentSourceFormComponent } from "./Entities/MJContentSource/mjcontentsource.form.component";
+import { MJContentTypeAttributeFormComponent } from "./Entities/MJContentTypeAttribute/mjcontenttypeattribute.form.component";
+import { MJContentTypeFormComponent } from "./Entities/MJContentType/mjcontenttype.form.component";
+import { MJConversationArtifactPermissionFormComponent } from "./Entities/MJConversationArtifactPermission/mjconversationartifactpermission.form.component";
+import { MJConversationArtifactVersionFormComponent } from "./Entities/MJConversationArtifactVersion/mjconversationartifactversion.form.component";
+import { MJConversationArtifactFormComponent } from "./Entities/MJConversationArtifact/mjconversationartifact.form.component";
+import { MJConversationDetailArtifactFormComponent } from "./Entities/MJConversationDetailArtifact/mjconversationdetailartifact.form.component";
+import { MJConversationDetailAttachmentFormComponent } from "./Entities/MJConversationDetailAttachment/mjconversationdetailattachment.form.component";
+import { MJConversationDetailRatingFormComponent } from "./Entities/MJConversationDetailRating/mjconversationdetailrating.form.component";
+import { MJConversationDetailFormComponent } from "./Entities/MJConversationDetail/mjconversationdetail.form.component";
+import { MJConversationFormComponent } from "./Entities/MJConversation/mjconversation.form.component";
+import { MJCredentialCategoryFormComponent } from "./Entities/MJCredentialCategory/mjcredentialcategory.form.component";
+import { MJCredentialTypeFormComponent } from "./Entities/MJCredentialType/mjcredentialtype.form.component";
+import { MJCredentialFormComponent } from "./Entities/MJCredential/mjcredential.form.component";
+import { MJDashboardCategoryFormComponent } from "./Entities/MJDashboardCategory/mjdashboardcategory.form.component";
+import { MJDashboardCategoryLinkFormComponent } from "./Entities/MJDashboardCategoryLink/mjdashboardcategorylink.form.component";
+import { MJDashboardCategoryPermissionFormComponent } from "./Entities/MJDashboardCategoryPermission/mjdashboardcategorypermission.form.component";
+import { MJDashboardPartTypeFormComponent } from "./Entities/MJDashboardPartType/mjdashboardparttype.form.component";
+import { MJDashboardPermissionFormComponent } from "./Entities/MJDashboardPermission/mjdashboardpermission.form.component";
+import { MJDashboardUserPreferenceFormComponent } from "./Entities/MJDashboardUserPreference/mjdashboarduserpreference.form.component";
+import { MJDashboardUserStateFormComponent } from "./Entities/MJDashboardUserState/mjdashboarduserstate.form.component";
+import { MJDashboardFormComponent } from "./Entities/MJDashboard/mjdashboard.form.component";
+import { MJDataContextItemFormComponent } from "./Entities/MJDataContextItem/mjdatacontextitem.form.component";
+import { MJDataContextFormComponent } from "./Entities/MJDataContext/mjdatacontext.form.component";
+import { MJDatasetItemFormComponent } from "./Entities/MJDatasetItem/mjdatasetitem.form.component";
+import { MJDatasetFormComponent } from "./Entities/MJDataset/mjdataset.form.component";
+import { MJDuplicateRunDetailMatchFormComponent } from "./Entities/MJDuplicateRunDetailMatch/mjduplicaterundetailmatch.form.component";
+import { MJDuplicateRunDetailFormComponent } from "./Entities/MJDuplicateRunDetail/mjduplicaterundetail.form.component";
+import { MJDuplicateRunFormComponent } from "./Entities/MJDuplicateRun/mjduplicaterun.form.component";
+import { MJEmployeeCompanyIntegrationFormComponent } from "./Entities/MJEmployeeCompanyIntegration/mjemployeecompanyintegration.form.component";
+import { MJEmployeeRoleFormComponent } from "./Entities/MJEmployeeRole/mjemployeerole.form.component";
+import { MJEmployeeSkillFormComponent } from "./Entities/MJEmployeeSkill/mjemployeeskill.form.component";
+import { MJEmployeeFormComponent } from "./Entities/MJEmployee/mjemployee.form.component";
+import { MJEncryptionAlgorithmFormComponent } from "./Entities/MJEncryptionAlgorithm/mjencryptionalgorithm.form.component";
+import { MJEncryptionKeySourceFormComponent } from "./Entities/MJEncryptionKeySource/mjencryptionkeysource.form.component";
+import { MJEncryptionKeyFormComponent } from "./Entities/MJEncryptionKey/mjencryptionkey.form.component";
+import { MJEntityFormComponent } from "./Entities/MJEntity/mjentity.form.component";
+import { MJEntityActionFilterFormComponent } from "./Entities/MJEntityActionFilter/mjentityactionfilter.form.component";
+import { MJEntityActionInvocationTypeFormComponent } from "./Entities/MJEntityActionInvocationType/mjentityactioninvocationtype.form.component";
+import { MJEntityActionInvocationFormComponent } from "./Entities/MJEntityActionInvocation/mjentityactioninvocation.form.component";
+import { MJEntityActionParamFormComponent } from "./Entities/MJEntityActionParam/mjentityactionparam.form.component";
+import { MJEntityActionFormComponent } from "./Entities/MJEntityAction/mjentityaction.form.component";
+import { MJEntityAIActionFormComponent } from "./Entities/MJEntityAIAction/mjentityaiaction.form.component";
+import { MJEntityCommunicationFieldFormComponent } from "./Entities/MJEntityCommunicationField/mjentitycommunicationfield.form.component";
+import { MJEntityCommunicationMessageTypeFormComponent } from "./Entities/MJEntityCommunicationMessageType/mjentitycommunicationmessagetype.form.component";
+import { MJEntityDocumentRunFormComponent } from "./Entities/MJEntityDocumentRun/mjentitydocumentrun.form.component";
+import { MJEntityDocumentSettingFormComponent } from "./Entities/MJEntityDocumentSetting/mjentitydocumentsetting.form.component";
+import { MJEntityDocumentTypeFormComponent } from "./Entities/MJEntityDocumentType/mjentitydocumenttype.form.component";
+import { MJEntityDocumentFormComponent } from "./Entities/MJEntityDocument/mjentitydocument.form.component";
+import { MJEntityFieldValueFormComponent } from "./Entities/MJEntityFieldValue/mjentityfieldvalue.form.component";
+import { MJEntityFieldFormComponent } from "./Entities/MJEntityField/mjentityfield.form.component";
+import { MJEntityPermissionFormComponent } from "./Entities/MJEntityPermission/mjentitypermission.form.component";
+import { MJEntityRecordDocumentFormComponent } from "./Entities/MJEntityRecordDocument/mjentityrecorddocument.form.component";
+import { MJEntityRelationshipDisplayComponentFormComponent } from "./Entities/MJEntityRelationshipDisplayComponent/mjentityrelationshipdisplaycomponent.form.component";
+import { MJEntityRelationshipFormComponent } from "./Entities/MJEntityRelationship/mjentityrelationship.form.component";
+import { MJEntitySettingFormComponent } from "./Entities/MJEntitySetting/mjentitysetting.form.component";
+import { MJEnvironmentFormComponent } from "./Entities/MJEnvironment/mjenvironment.form.component";
+import { MJErrorLogFormComponent } from "./Entities/MJErrorLog/mjerrorlog.form.component";
+import { MJExplorerNavigationItemFormComponent } from "./Entities/MJExplorerNavigationItem/mjexplorernavigationitem.form.component";
+import { MJFileCategoryFormComponent } from "./Entities/MJFileCategory/mjfilecategory.form.component";
+import { MJFileEntityRecordLinkFormComponent } from "./Entities/MJFileEntityRecordLink/mjfileentityrecordlink.form.component";
+import { MJFileStorageAccountFormComponent } from "./Entities/MJFileStorageAccount/mjfilestorageaccount.form.component";
+import { MJFileStorageProviderFormComponent } from "./Entities/MJFileStorageProvider/mjfilestorageprovider.form.component";
+import { MJFileFormComponent } from "./Entities/MJFile/mjfile.form.component";
+import { MJGeneratedCodeCategoryFormComponent } from "./Entities/MJGeneratedCodeCategory/mjgeneratedcodecategory.form.component";
+import { MJGeneratedCodeFormComponent } from "./Entities/MJGeneratedCode/mjgeneratedcode.form.component";
+import { MJIntegrationURLFormatFormComponent } from "./Entities/MJIntegrationURLFormat/mjintegrationurlformat.form.component";
+import { MJIntegrationFormComponent } from "./Entities/MJIntegration/mjintegration.form.component";
+import { MJLibraryFormComponent } from "./Entities/MJLibrary/mjlibrary.form.component";
+import { MJLibraryItemFormComponent } from "./Entities/MJLibraryItem/mjlibraryitem.form.component";
+import { MJListCategoryFormComponent } from "./Entities/MJListCategory/mjlistcategory.form.component";
+import { MJListDetailFormComponent } from "./Entities/MJListDetail/mjlistdetail.form.component";
+import { MJListInvitationFormComponent } from "./Entities/MJListInvitation/mjlistinvitation.form.component";
+import { MJListShareFormComponent } from "./Entities/MJListShare/mjlistshare.form.component";
+import { MJListFormComponent } from "./Entities/MJList/mjlist.form.component";
+import { MJMCPServerConnectionPermissionFormComponent } from "./Entities/MJMCPServerConnectionPermission/mjmcpserverconnectionpermission.form.component";
+import { MJMCPServerConnectionToolFormComponent } from "./Entities/MJMCPServerConnectionTool/mjmcpserverconnectiontool.form.component";
+import { MJMCPServerConnectionFormComponent } from "./Entities/MJMCPServerConnection/mjmcpserverconnection.form.component";
+import { MJMCPServerToolFormComponent } from "./Entities/MJMCPServerTool/mjmcpservertool.form.component";
+import { MJMCPServerFormComponent } from "./Entities/MJMCPServer/mjmcpserver.form.component";
+import { MJMCPToolExecutionLogFormComponent } from "./Entities/MJMCPToolExecutionLog/mjmcptoolexecutionlog.form.component";
+import { MJOAuthAuthServerMetadataCacheFormComponent } from "./Entities/MJOAuthAuthServerMetadataCache/mjoauthauthservermetadatacache.form.component";
+import { MJOAuthAuthorizationStateFormComponent } from "./Entities/MJOAuthAuthorizationState/mjoauthauthorizationstate.form.component";
+import { MJOAuthClientRegistrationFormComponent } from "./Entities/MJOAuthClientRegistration/mjoauthclientregistration.form.component";
+import { MJOAuthTokenFormComponent } from "./Entities/MJOAuthToken/mjoauthtoken.form.component";
+import { MJOpenAppDependencyFormComponent } from "./Entities/MJOpenAppDependency/mjopenappdependency.form.component";
+import { MJOpenAppInstallHistoryFormComponent } from "./Entities/MJOpenAppInstallHistory/mjopenappinstallhistory.form.component";
+import { MJOpenAppFormComponent } from "./Entities/MJOpenApp/mjopenapp.form.component";
+import { MJOutputDeliveryTypeFormComponent } from "./Entities/MJOutputDeliveryType/mjoutputdeliverytype.form.component";
+import { MJOutputFormatTypeFormComponent } from "./Entities/MJOutputFormatType/mjoutputformattype.form.component";
+import { MJOutputTriggerTypeFormComponent } from "./Entities/MJOutputTriggerType/mjoutputtriggertype.form.component";
+import { MJProjectFormComponent } from "./Entities/MJProject/mjproject.form.component";
+import { MJPublicLinkFormComponent } from "./Entities/MJPublicLink/mjpubliclink.form.component";
+import { MJQueryFormComponent } from "./Entities/MJQuery/mjquery.form.component";
+import { MJQueryCategoryFormComponent } from "./Entities/MJQueryCategory/mjquerycategory.form.component";
+import { MJQueryEntityFormComponent } from "./Entities/MJQueryEntity/mjqueryentity.form.component";
+import { MJQueryFieldFormComponent } from "./Entities/MJQueryField/mjqueryfield.form.component";
+import { MJQueryParameterFormComponent } from "./Entities/MJQueryParameter/mjqueryparameter.form.component";
+import { MJQueryPermissionFormComponent } from "./Entities/MJQueryPermission/mjquerypermission.form.component";
+import { MJQueueTaskFormComponent } from "./Entities/MJQueueTask/mjqueuetask.form.component";
+import { MJQueueTypeFormComponent } from "./Entities/MJQueueType/mjqueuetype.form.component";
+import { MJQueueFormComponent } from "./Entities/MJQueue/mjqueue.form.component";
+import { MJRecommendationItemFormComponent } from "./Entities/MJRecommendationItem/mjrecommendationitem.form.component";
+import { MJRecommendationProviderFormComponent } from "./Entities/MJRecommendationProvider/mjrecommendationprovider.form.component";
+import { MJRecommendationRunFormComponent } from "./Entities/MJRecommendationRun/mjrecommendationrun.form.component";
+import { MJRecommendationFormComponent } from "./Entities/MJRecommendation/mjrecommendation.form.component";
+import { MJRecordChangeReplayRunFormComponent } from "./Entities/MJRecordChangeReplayRun/mjrecordchangereplayrun.form.component";
+import { MJRecordChangeFormComponent } from "./Entities/MJRecordChange/mjrecordchange.form.component";
+import { MJRecordLinkFormComponent } from "./Entities/MJRecordLink/mjrecordlink.form.component";
+import { MJRecordMergeDeletionLogFormComponent } from "./Entities/MJRecordMergeDeletionLog/mjrecordmergedeletionlog.form.component";
+import { MJRecordMergeLogFormComponent } from "./Entities/MJRecordMergeLog/mjrecordmergelog.form.component";
+import { MJReportCategoryFormComponent } from "./Entities/MJReportCategory/mjreportcategory.form.component";
+import { MJReportSnapshotFormComponent } from "./Entities/MJReportSnapshot/mjreportsnapshot.form.component";
+import { MJReportUserStateFormComponent } from "./Entities/MJReportUserState/mjreportuserstate.form.component";
+import { MJReportVersionFormComponent } from "./Entities/MJReportVersion/mjreportversion.form.component";
+import { MJReportFormComponent } from "./Entities/MJReport/mjreport.form.component";
+import { MJResourceLinkFormComponent } from "./Entities/MJResourceLink/mjresourcelink.form.component";
+import { MJResourcePermissionFormComponent } from "./Entities/MJResourcePermission/mjresourcepermission.form.component";
+import { MJResourceTypeFormComponent } from "./Entities/MJResourceType/mjresourcetype.form.component";
+import { MJRoleFormComponent } from "./Entities/MJRole/mjrole.form.component";
+import { MJRowLevelSecurityFilterFormComponent } from "./Entities/MJRowLevelSecurityFilter/mjrowlevelsecurityfilter.form.component";
+import { MJScheduledActionParamFormComponent } from "./Entities/MJScheduledActionParam/mjscheduledactionparam.form.component";
+import { MJScheduledActionFormComponent } from "./Entities/MJScheduledAction/mjscheduledaction.form.component";
+import { MJScheduledJobRunFormComponent } from "./Entities/MJScheduledJobRun/mjscheduledjobrun.form.component";
+import { MJScheduledJobTypeFormComponent } from "./Entities/MJScheduledJobType/mjscheduledjobtype.form.component";
+import { MJScheduledJobFormComponent } from "./Entities/MJScheduledJob/mjscheduledjob.form.component";
+import { MJSchemaInfoFormComponent } from "./Entities/MJSchemaInfo/mjschemainfo.form.component";
+import { MJSkillFormComponent } from "./Entities/MJSkill/mjskill.form.component";
+import { MJTaggedItemFormComponent } from "./Entities/MJTaggedItem/mjtaggeditem.form.component";
+import { MJTagFormComponent } from "./Entities/MJTag/mjtag.form.component";
+import { MJTaskDependencyFormComponent } from "./Entities/MJTaskDependency/mjtaskdependency.form.component";
+import { MJTaskTypeFormComponent } from "./Entities/MJTaskType/mjtasktype.form.component";
+import { MJTaskFormComponent } from "./Entities/MJTask/mjtask.form.component";
+import { MJTemplateCategoryFormComponent } from "./Entities/MJTemplateCategory/mjtemplatecategory.form.component";
+import { MJTemplateContentTypeFormComponent } from "./Entities/MJTemplateContentType/mjtemplatecontenttype.form.component";
+import { MJTemplateContentFormComponent } from "./Entities/MJTemplateContent/mjtemplatecontent.form.component";
+import { MJTemplateParamFormComponent } from "./Entities/MJTemplateParam/mjtemplateparam.form.component";
+import { MJTemplateFormComponent } from "./Entities/MJTemplate/mjtemplate.form.component";
+import { MJTestRubricFormComponent } from "./Entities/MJTestRubric/mjtestrubric.form.component";
+import { MJTestRunFeedbackFormComponent } from "./Entities/MJTestRunFeedback/mjtestrunfeedback.form.component";
+import { MJTestRunFormComponent } from "./Entities/MJTestRun/mjtestrun.form.component";
+import { MJTestSuiteRunFormComponent } from "./Entities/MJTestSuiteRun/mjtestsuiterun.form.component";
+import { MJTestSuiteTestFormComponent } from "./Entities/MJTestSuiteTest/mjtestsuitetest.form.component";
+import { MJTestSuiteFormComponent } from "./Entities/MJTestSuite/mjtestsuite.form.component";
+import { MJTestTypeFormComponent } from "./Entities/MJTestType/mjtesttype.form.component";
+import { MJTestFormComponent } from "./Entities/MJTest/mjtest.form.component";
+import { MJUserApplicationEntityFormComponent } from "./Entities/MJUserApplicationEntity/mjuserapplicationentity.form.component";
+import { MJUserApplicationFormComponent } from "./Entities/MJUserApplication/mjuserapplication.form.component";
+import { MJUserFavoriteFormComponent } from "./Entities/MJUserFavorite/mjuserfavorite.form.component";
+import { MJUserNotificationPreferenceFormComponent } from "./Entities/MJUserNotificationPreference/mjusernotificationpreference.form.component";
+import { MJUserNotificationTypeFormComponent } from "./Entities/MJUserNotificationType/mjusernotificationtype.form.component";
+import { MJUserNotificationFormComponent } from "./Entities/MJUserNotification/mjusernotification.form.component";
+import { MJUserRecordLogFormComponent } from "./Entities/MJUserRecordLog/mjuserrecordlog.form.component";
+import { MJUserRoleFormComponent } from "./Entities/MJUserRole/mjuserrole.form.component";
+import { MJUserSettingFormComponent } from "./Entities/MJUserSetting/mjusersetting.form.component";
+import { MJUserViewCategoryFormComponent } from "./Entities/MJUserViewCategory/mjuserviewcategory.form.component";
+import { MJUserViewRunDetailFormComponent } from "./Entities/MJUserViewRunDetail/mjuserviewrundetail.form.component";
+import { MJUserViewRunFormComponent } from "./Entities/MJUserViewRun/mjuserviewrun.form.component";
+import { MJUserViewFormComponent } from "./Entities/MJUserView/mjuserview.form.component";
+import { MJUserFormComponent } from "./Entities/MJUser/mjuser.form.component";
+import { MJVectorDatabaseFormComponent } from "./Entities/MJVectorDatabase/mjvectordatabase.form.component";
+import { MJVectorIndexFormComponent } from "./Entities/MJVectorIndex/mjvectorindex.form.component";
+import { MJVersionInstallationFormComponent } from "./Entities/MJVersionInstallation/mjversioninstallation.form.component";
+import { MJVersionLabelItemFormComponent } from "./Entities/MJVersionLabelItem/mjversionlabelitem.form.component";
+import { MJVersionLabelRestoreFormComponent } from "./Entities/MJVersionLabelRestore/mjversionlabelrestore.form.component";
+import { MJVersionLabelFormComponent } from "./Entities/MJVersionLabel/mjversionlabel.form.component";
+import { MJWorkflowEngineFormComponent } from "./Entities/MJWorkflowEngine/mjworkflowengine.form.component";
+import { MJWorkflowRunFormComponent } from "./Entities/MJWorkflowRun/mjworkflowrun.form.component";
+import { MJWorkflowFormComponent } from "./Entities/MJWorkflow/mjworkflow.form.component";
+import { MJWorkspaceItemFormComponent } from "./Entities/MJWorkspaceItem/mjworkspaceitem.form.component";
+import { MJWorkspaceFormComponent } from "./Entities/MJWorkspace/mjworkspace.form.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid"   
 
 @NgModule({
 declarations: [
-    ActionAuthorizationFormComponent,
-    ActionCategoryFormComponent,
-    ActionContextTypeFormComponent,
-    ActionContextFormComponent,
-    ActionExecutionLogFormComponent,
-    ActionFilterFormComponent,
-    ActionLibraryFormComponent,
-    ActionParamFormComponent,
-    ActionResultCodeFormComponent,
-    ActionFormComponent,
-    AIActionFormComponent,
-    AIAgentActionFormComponent,
-    AIAgentLearningCycleFormComponent,
-    AIAgentModelFormComponent,
-    AIAgentNoteTypeFormComponent,
-    AIAgentNoteFormComponent,
-    AIAgentRequestFormComponent,
-    AIAgentFormComponent,
-    AIModelActionFormComponent,
-    AIModelTypeFormComponent],
+    MJAccessControlRuleFormComponent,
+    MJActionAuthorizationFormComponent,
+    MJActionCategoryFormComponent,
+    MJActionContextTypeFormComponent,
+    MJActionContextFormComponent,
+    MJActionExecutionLogFormComponent,
+    MJActionFilterFormComponent,
+    MJActionLibraryFormComponent,
+    MJActionParamFormComponent,
+    MJActionResultCodeFormComponent,
+    MJActionFormComponent,
+    MJAIActionFormComponent,
+    MJAIAgentActionFormComponent,
+    MJAIAgentArtifactTypeFormComponent,
+    MJAIAgentConfigurationFormComponent,
+    MJAIAgentDataSourceFormComponent,
+    MJAIAgentExampleFormComponent,
+    MJAIAgentLearningCycleFormComponent,
+    MJAIAgentModalityFormComponent,
+    MJAIAgentModelFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -347,42 +332,33 @@ export class GeneratedForms_SubModule_0 { }
 
 @NgModule({
 declarations: [
-    AIModelFormComponent,
-    AIPromptCategoryFormComponent,
-    AIPromptTypeFormComponent,
-    AIPromptFormComponent,
-    AIResultCacheFormComponent,
-    ApplicationEntityFormComponent,
-    ApplicationSettingFormComponent,
-    ApplicationFormComponent,
-    AuditLogTypeFormComponent,
-    AuditLogFormComponent,
-    AuthorizationRoleFormComponent,
-    AuthorizationFormComponent,
-    CommunicationBaseMessageTypeFormComponent,
-    CommunicationLogFormComponent,
-    CommunicationProviderMessageTypeFormComponent,
-    CommunicationProviderFormComponent,
-    CommunicationRunFormComponent,
-    CompanyFormComponent,
-    CompanyIntegrationRecordMapFormComponent,
-    CompanyIntegrationRunAPILogFormComponent],
+    MJAIAgentNoteTypeFormComponent,
+    MJAIAgentNoteFormComponent,
+    MJAIAgentPermissionFormComponent,
+    MJAIAgentPromptFormComponent,
+    MJAIAgentRelationshipFormComponent,
+    MJAIAgentRequestFormComponent,
+    MJAIAgentRunMediaFormComponent,
+    MJAIAgentRunStepFormComponent,
+    MJAIAgentRunFormComponent,
+    MJAIAgentStepPathFormComponent,
+    MJAIAgentStepFormComponent,
+    MJAIAgentTypeFormComponent,
+    MJAIAgentFormComponent,
+    MJAIArchitectureFormComponent,
+    MJAIConfigurationParamFormComponent,
+    MJAIConfigurationFormComponent,
+    MJAICredentialBindingFormComponent,
+    MJAIModalityFormComponent,
+    MJAIModelActionFormComponent,
+    MJAIModelArchitectureFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule,
-    JoinGridModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -393,41 +369,33 @@ export class GeneratedForms_SubModule_1 { }
 
 @NgModule({
 declarations: [
-    CompanyIntegrationRunDetailFormComponent,
-    CompanyIntegrationRunFormComponent,
-    CompanyIntegrationFormComponent,
-    ContentFileTypeFormComponent,
-    ContentItemAttributeFormComponent,
-    ContentItemTagFormComponent,
-    ContentItemFormComponent,
-    ContentProcessRunFormComponent,
-    ContentSourceParamFormComponent,
-    ContentSourceTypeParamFormComponent,
-    ContentSourceTypeFormComponent,
-    ContentSourceFormComponent,
-    ContentTypeAttributeFormComponent,
-    ContentTypeFormComponent,
-    ConversationDetailFormComponent,
-    ConversationFormComponent,
-    DashboardCategoryFormComponent,
-    DashboardFormComponent,
-    DataContextItemFormComponent,
-    DataContextFormComponent],
+    MJAIModelCostFormComponent,
+    MJAIModelModalityFormComponent,
+    MJAIModelPriceTypeFormComponent,
+    MJAIModelPriceUnitTypeFormComponent,
+    MJAIModelTypeFormComponent,
+    MJAIModelVendorFormComponent,
+    MJAIModelFormComponent,
+    MJAIPromptCategoryFormComponent,
+    MJAIPromptModelFormComponent,
+    MJAIPromptRunMediaFormComponent,
+    MJAIPromptRunFormComponent,
+    MJAIPromptTypeFormComponent,
+    MJAIPromptFormComponent,
+    MJAIResultCacheFormComponent,
+    MJAIVendorTypeDefinitionFormComponent,
+    MJAIVendorTypeFormComponent,
+    MJAIVendorFormComponent,
+    MJAPIApplicationScopeFormComponent,
+    MJAPIApplicationFormComponent,
+    MJAPIKeyApplicationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -438,41 +406,33 @@ export class GeneratedForms_SubModule_2 { }
 
 @NgModule({
 declarations: [
-    DatasetItemFormComponent,
-    DatasetFormComponent,
-    DuplicateRunDetailMatchFormComponent,
-    DuplicateRunDetailFormComponent,
-    DuplicateRunFormComponent,
-    EmployeeCompanyIntegrationFormComponent,
-    EmployeeRoleFormComponent,
-    EmployeeSkillFormComponent,
-    EmployeeFormComponent,
-    EntityFormComponent,
-    EntityActionFilterFormComponent,
-    EntityActionInvocationTypeFormComponent,
-    EntityActionInvocationFormComponent,
-    EntityActionParamFormComponent,
-    EntityActionFormComponent,
-    EntityAIActionFormComponent,
-    EntityCommunicationFieldFormComponent,
-    EntityCommunicationMessageTypeFormComponent,
-    EntityDocumentRunFormComponent,
-    EntityDocumentSettingFormComponent],
+    MJAPIKeyScopeFormComponent,
+    MJAPIKeyUsageLogFormComponent,
+    MJAPIKeyFormComponent,
+    MJAPIScopeFormComponent,
+    MJApplicationEntityFormComponent,
+    MJApplicationSettingFormComponent,
+    MJApplicationFormComponent,
+    MJArtifactPermissionFormComponent,
+    MJArtifactTypeFormComponent,
+    MJArtifactUseFormComponent,
+    MJArtifactVersionAttributeFormComponent,
+    MJArtifactVersionFormComponent,
+    MJArtifactFormComponent,
+    MJAuditLogTypeFormComponent,
+    MJAuditLogFormComponent,
+    MJAuthorizationRoleFormComponent,
+    MJAuthorizationFormComponent,
+    MJCollectionArtifactFormComponent,
+    MJCollectionPermissionFormComponent,
+    MJCollectionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -483,41 +443,34 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
-    EntityDocumentTypeFormComponent,
-    EntityDocumentFormComponent,
-    EntityFieldValueFormComponent,
-    EntityFieldFormComponent,
-    EntityPermissionFormComponent,
-    EntityRecordDocumentFormComponent,
-    EntityRelationshipDisplayComponentFormComponent,
-    EntityRelationshipFormComponent,
-    EntitySettingFormComponent,
-    ErrorLogFormComponent,
-    ExplorerNavigationItemFormComponent,
-    FileCategoryFormComponent,
-    FileEntityRecordLinkFormComponent,
-    FileStorageProviderFormComponent,
-    FileFormComponent,
-    GeneratedCodeCategoryFormComponent,
-    GeneratedCodeFormComponent,
-    IntegrationURLFormatFormComponent,
-    IntegrationFormComponent,
-    LibraryFormComponent],
+    MJCommunicationBaseMessageTypeFormComponent,
+    MJCommunicationLogFormComponent,
+    MJCommunicationProviderMessageTypeFormComponent,
+    MJCommunicationProviderFormComponent,
+    MJCommunicationRunFormComponent,
+    MJCompanyFormComponent,
+    MJCompanyIntegrationRecordMapFormComponent,
+    MJCompanyIntegrationRunAPILogFormComponent,
+    MJCompanyIntegrationRunDetailFormComponent,
+    MJCompanyIntegrationRunFormComponent,
+    MJCompanyIntegrationFormComponent,
+    MJComponentDependencyFormComponent,
+    MJComponentLibraryFormComponent,
+    MJComponentLibraryLinkFormComponent,
+    MJComponentRegistryFormComponent,
+    MJComponentFormComponent,
+    MJContentFileTypeFormComponent,
+    MJContentItemAttributeFormComponent,
+    MJContentItemTagFormComponent,
+    MJContentItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
+    BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
-    BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    JoinGridModule
 ],
 exports: [
 ]
@@ -528,41 +481,33 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
-    LibraryItemFormComponent,
-    ListCategoryFormComponent,
-    ListDetailFormComponent,
-    ListFormComponent,
-    AccessControlRuleFormComponent,
-    AIAgentArtifactTypeFormComponent,
-    AIAgentConfigurationFormComponent,
-    AIAgentDataSourceFormComponent,
-    AIAgentExampleFormComponent,
-    AIAgentModalityFormComponent,
-    AIAgentPermissionFormComponent,
-    AIAgentPromptFormComponent,
-    AIAgentRelationshipFormComponent,
-    AIAgentRunMediaFormComponent,
-    AIAgentRunStepFormComponent,
-    AIAgentRunFormComponent,
-    AIAgentStepPathFormComponent,
-    AIAgentStepFormComponent,
-    AIAgentTypeFormComponent,
-    AIArchitectureFormComponent],
+    MJContentProcessRunFormComponent,
+    MJContentSourceParamFormComponent,
+    MJContentSourceTypeParamFormComponent,
+    MJContentSourceTypeFormComponent,
+    MJContentSourceFormComponent,
+    MJContentTypeAttributeFormComponent,
+    MJContentTypeFormComponent,
+    MJConversationArtifactPermissionFormComponent,
+    MJConversationArtifactVersionFormComponent,
+    MJConversationArtifactFormComponent,
+    MJConversationDetailArtifactFormComponent,
+    MJConversationDetailAttachmentFormComponent,
+    MJConversationDetailRatingFormComponent,
+    MJConversationDetailFormComponent,
+    MJConversationFormComponent,
+    MJCredentialCategoryFormComponent,
+    MJCredentialTypeFormComponent,
+    MJCredentialFormComponent,
+    MJDashboardCategoryFormComponent,
+    MJDashboardCategoryLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -573,41 +518,33 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
-    AIConfigurationParamFormComponent,
-    AIConfigurationFormComponent,
-    AICredentialBindingFormComponent,
-    AIModalityFormComponent,
-    AIModelArchitectureFormComponent,
-    AIModelCostFormComponent,
-    AIModelModalityFormComponent,
-    AIModelPriceTypeFormComponent,
-    AIModelPriceUnitTypeFormComponent,
-    AIModelVendorFormComponent,
-    AIPromptModelFormComponent,
-    AIPromptRunMediaFormComponent,
-    AIPromptRunFormComponent,
-    AIVendorTypeDefinitionFormComponent,
-    AIVendorTypeFormComponent,
-    AIVendorFormComponent,
-    APIApplicationScopeFormComponent,
-    APIApplicationFormComponent,
-    APIKeyApplicationFormComponent,
-    APIKeyScopeFormComponent],
+    MJDashboardCategoryPermissionFormComponent,
+    MJDashboardPartTypeFormComponent,
+    MJDashboardPermissionFormComponent,
+    MJDashboardUserPreferenceFormComponent,
+    MJDashboardUserStateFormComponent,
+    MJDashboardFormComponent,
+    MJDataContextItemFormComponent,
+    MJDataContextFormComponent,
+    MJDatasetItemFormComponent,
+    MJDatasetFormComponent,
+    MJDuplicateRunDetailMatchFormComponent,
+    MJDuplicateRunDetailFormComponent,
+    MJDuplicateRunFormComponent,
+    MJEmployeeCompanyIntegrationFormComponent,
+    MJEmployeeRoleFormComponent,
+    MJEmployeeSkillFormComponent,
+    MJEmployeeFormComponent,
+    MJEncryptionAlgorithmFormComponent,
+    MJEncryptionKeySourceFormComponent,
+    MJEncryptionKeyFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -618,41 +555,33 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
-    APIKeyUsageLogFormComponent,
-    APIKeyFormComponent,
-    APIScopeFormComponent,
-    ArtifactPermissionFormComponent,
-    ArtifactTypeFormComponent,
-    ArtifactUseFormComponent,
-    ArtifactVersionAttributeFormComponent,
-    ArtifactVersionFormComponent,
-    ArtifactFormComponent,
-    CollectionArtifactFormComponent,
-    CollectionPermissionFormComponent,
-    CollectionFormComponent,
-    ComponentDependencyFormComponent,
-    ComponentLibraryFormComponent,
-    ComponentLibraryLinkFormComponent,
-    ComponentRegistryFormComponent,
-    ComponentFormComponent,
-    ConversationArtifactPermissionFormComponent,
-    ConversationArtifactVersionFormComponent,
-    ConversationArtifactFormComponent],
+    MJEntityFormComponent,
+    MJEntityActionFilterFormComponent,
+    MJEntityActionInvocationTypeFormComponent,
+    MJEntityActionInvocationFormComponent,
+    MJEntityActionParamFormComponent,
+    MJEntityActionFormComponent,
+    MJEntityAIActionFormComponent,
+    MJEntityCommunicationFieldFormComponent,
+    MJEntityCommunicationMessageTypeFormComponent,
+    MJEntityDocumentRunFormComponent,
+    MJEntityDocumentSettingFormComponent,
+    MJEntityDocumentTypeFormComponent,
+    MJEntityDocumentFormComponent,
+    MJEntityFieldValueFormComponent,
+    MJEntityFieldFormComponent,
+    MJEntityPermissionFormComponent,
+    MJEntityRecordDocumentFormComponent,
+    MJEntityRelationshipDisplayComponentFormComponent,
+    MJEntityRelationshipFormComponent,
+    MJEntitySettingFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -663,41 +592,33 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
-    ConversationDetailArtifactFormComponent,
-    ConversationDetailAttachmentFormComponent,
-    ConversationDetailRatingFormComponent,
-    CredentialCategoryFormComponent,
-    CredentialTypeFormComponent,
-    CredentialFormComponent,
-    DashboardCategoryLinkFormComponent,
-    DashboardCategoryPermissionFormComponent,
-    DashboardPartTypeFormComponent,
-    DashboardPermissionFormComponent,
-    DashboardUserPreferenceFormComponent,
-    DashboardUserStateFormComponent,
-    EncryptionAlgorithmFormComponent,
-    EncryptionKeySourceFormComponent,
-    EncryptionKeyFormComponent,
-    EnvironmentFormComponent,
-    FileStorageAccountFormComponent,
-    ListInvitationFormComponent,
-    ListShareFormComponent,
-    MCPServerConnectionPermissionFormComponent],
+    MJEnvironmentFormComponent,
+    MJErrorLogFormComponent,
+    MJExplorerNavigationItemFormComponent,
+    MJFileCategoryFormComponent,
+    MJFileEntityRecordLinkFormComponent,
+    MJFileStorageAccountFormComponent,
+    MJFileStorageProviderFormComponent,
+    MJFileFormComponent,
+    MJGeneratedCodeCategoryFormComponent,
+    MJGeneratedCodeFormComponent,
+    MJIntegrationURLFormatFormComponent,
+    MJIntegrationFormComponent,
+    MJLibraryFormComponent,
+    MJLibraryItemFormComponent,
+    MJListCategoryFormComponent,
+    MJListDetailFormComponent,
+    MJListInvitationFormComponent,
+    MJListShareFormComponent,
+    MJListFormComponent,
+    MJMCPServerConnectionPermissionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -708,41 +629,33 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
-    MCPServerConnectionToolFormComponent,
-    MCPServerConnectionFormComponent,
-    MCPServerToolFormComponent,
-    MCPServerFormComponent,
-    MCPToolExecutionLogFormComponent,
-    OAuthAuthServerMetadataCacheFormComponent,
-    OAuthAuthorizationStateFormComponent,
-    OAuthClientRegistrationFormComponent,
-    OAuthTokenFormComponent,
-    ProjectFormComponent,
-    PublicLinkFormComponent,
-    QueryParameterFormComponent,
-    RecordLinkFormComponent,
-    ReportUserStateFormComponent,
-    ReportVersionFormComponent,
-    ScheduledJobRunFormComponent,
-    ScheduledJobTypeFormComponent,
-    ScheduledJobFormComponent,
-    TaskDependencyFormComponent,
-    TaskTypeFormComponent],
+    MJMCPServerConnectionToolFormComponent,
+    MJMCPServerConnectionFormComponent,
+    MJMCPServerToolFormComponent,
+    MJMCPServerFormComponent,
+    MJMCPToolExecutionLogFormComponent,
+    MJOAuthAuthServerMetadataCacheFormComponent,
+    MJOAuthAuthorizationStateFormComponent,
+    MJOAuthClientRegistrationFormComponent,
+    MJOAuthTokenFormComponent,
+    MJOpenAppDependencyFormComponent,
+    MJOpenAppInstallHistoryFormComponent,
+    MJOpenAppFormComponent,
+    MJOutputDeliveryTypeFormComponent,
+    MJOutputFormatTypeFormComponent,
+    MJOutputTriggerTypeFormComponent,
+    MJProjectFormComponent,
+    MJPublicLinkFormComponent,
+    MJQueryFormComponent,
+    MJQueryCategoryFormComponent,
+    MJQueryEntityFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -753,41 +666,33 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
-    TaskFormComponent,
-    TestRubricFormComponent,
-    TestRunFeedbackFormComponent,
-    TestRunFormComponent,
-    TestSuiteRunFormComponent,
-    TestSuiteTestFormComponent,
-    TestSuiteFormComponent,
-    TestTypeFormComponent,
-    TestFormComponent,
-    UserNotificationPreferenceFormComponent,
-    UserNotificationTypeFormComponent,
-    UserSettingFormComponent,
-    VersionLabelItemFormComponent,
-    VersionLabelRestoreFormComponent,
-    VersionLabelFormComponent,
-    OutputDeliveryTypeFormComponent,
-    OutputFormatTypeFormComponent,
-    OutputTriggerTypeFormComponent,
-    QueryFormComponent,
-    QueryCategoryFormComponent],
+    MJQueryFieldFormComponent,
+    MJQueryParameterFormComponent,
+    MJQueryPermissionFormComponent,
+    MJQueueTaskFormComponent,
+    MJQueueTypeFormComponent,
+    MJQueueFormComponent,
+    MJRecommendationItemFormComponent,
+    MJRecommendationProviderFormComponent,
+    MJRecommendationRunFormComponent,
+    MJRecommendationFormComponent,
+    MJRecordChangeReplayRunFormComponent,
+    MJRecordChangeFormComponent,
+    MJRecordLinkFormComponent,
+    MJRecordMergeDeletionLogFormComponent,
+    MJRecordMergeLogFormComponent,
+    MJReportCategoryFormComponent,
+    MJReportSnapshotFormComponent,
+    MJReportUserStateFormComponent,
+    MJReportVersionFormComponent,
+    MJReportFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -798,41 +703,33 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
-    QueryEntityFormComponent,
-    QueryFieldFormComponent,
-    QueryPermissionFormComponent,
-    QueueTaskFormComponent,
-    QueueTypeFormComponent,
-    QueueFormComponent,
-    RecommendationItemFormComponent,
-    RecommendationProviderFormComponent,
-    RecommendationRunFormComponent,
-    RecommendationFormComponent,
-    RecordChangeReplayRunFormComponent,
-    RecordChangeFormComponent,
-    RecordMergeDeletionLogFormComponent,
-    RecordMergeLogFormComponent,
-    ReportCategoryFormComponent,
-    ReportSnapshotFormComponent,
-    ReportFormComponent,
-    ResourceLinkFormComponent,
-    ResourcePermissionFormComponent,
-    ResourceTypeFormComponent],
+    MJResourceLinkFormComponent,
+    MJResourcePermissionFormComponent,
+    MJResourceTypeFormComponent,
+    MJRoleFormComponent,
+    MJRowLevelSecurityFilterFormComponent,
+    MJScheduledActionParamFormComponent,
+    MJScheduledActionFormComponent,
+    MJScheduledJobRunFormComponent,
+    MJScheduledJobTypeFormComponent,
+    MJScheduledJobFormComponent,
+    MJSchemaInfoFormComponent,
+    MJSkillFormComponent,
+    MJTaggedItemFormComponent,
+    MJTagFormComponent,
+    MJTaskDependencyFormComponent,
+    MJTaskTypeFormComponent,
+    MJTaskFormComponent,
+    MJTemplateCategoryFormComponent,
+    MJTemplateContentTypeFormComponent,
+    MJTemplateContentFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -843,41 +740,33 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
-    RoleFormComponent,
-    RowLevelSecurityFilterFormComponent,
-    ScheduledActionParamFormComponent,
-    ScheduledActionFormComponent,
-    SchemaInfoFormComponent,
-    SkillFormComponent,
-    TaggedItemFormComponent,
-    TagFormComponent,
-    TemplateCategoryFormComponent,
-    TemplateContentTypeFormComponent,
-    TemplateContentFormComponent,
-    TemplateParamFormComponent,
-    TemplateFormComponent,
-    UserApplicationEntityFormComponent,
-    UserApplicationFormComponent,
-    UserFavoriteFormComponent,
-    UserNotificationFormComponent,
-    UserRecordLogFormComponent,
-    UserRoleFormComponent,
-    UserViewCategoryFormComponent],
+    MJTemplateParamFormComponent,
+    MJTemplateFormComponent,
+    MJTestRubricFormComponent,
+    MJTestRunFeedbackFormComponent,
+    MJTestRunFormComponent,
+    MJTestSuiteRunFormComponent,
+    MJTestSuiteTestFormComponent,
+    MJTestSuiteFormComponent,
+    MJTestTypeFormComponent,
+    MJTestFormComponent,
+    MJUserApplicationEntityFormComponent,
+    MJUserApplicationFormComponent,
+    MJUserFavoriteFormComponent,
+    MJUserNotificationPreferenceFormComponent,
+    MJUserNotificationTypeFormComponent,
+    MJUserNotificationFormComponent,
+    MJUserRecordLogFormComponent,
+    MJUserRoleFormComponent,
+    MJUserSettingFormComponent,
+    MJUserViewCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -888,33 +777,28 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
-    UserViewRunDetailFormComponent,
-    UserViewRunFormComponent,
-    UserViewFormComponent,
-    UserFormComponent,
-    VectorDatabaseFormComponent,
-    VectorIndexFormComponent,
-    VersionInstallationFormComponent,
-    WorkflowEngineFormComponent,
-    WorkflowRunFormComponent,
-    WorkflowFormComponent,
-    WorkspaceItemFormComponent,
-    WorkspaceFormComponent],
+    MJUserViewRunDetailFormComponent,
+    MJUserViewRunFormComponent,
+    MJUserViewFormComponent,
+    MJUserFormComponent,
+    MJVectorDatabaseFormComponent,
+    MJVectorIndexFormComponent,
+    MJVersionInstallationFormComponent,
+    MJVersionLabelItemFormComponent,
+    MJVersionLabelRestoreFormComponent,
+    MJVersionLabelFormComponent,
+    MJWorkflowEngineFormComponent,
+    MJWorkflowRunFormComponent,
+    MJWorkflowFormComponent,
+    MJWorkspaceItemFormComponent,
+    MJWorkspaceFormComponent],
 imports: [
     CommonModule,
     FormsModule,
     LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    EntityViewerModule,
-    LinkDirectivesModule,
     BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
+    EntityViewerModule,
+    LinkDirectivesModule
 ],
 exports: [
 ]
@@ -945,283 +829,7 @@ imports: [
 })
 export class CoreGeneratedFormsModule { }
     
-export function LoadCoreGeneratedForms() {
-    // This function doesn't do much, but it calls each generated form's loader function
-    // which in turn calls the sections for that generated form. Ultimately, those bits of
-    // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
-    // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
-    // in production builds tree shaking will eliminate the code unless we do this
-    LoadActionAuthorizationFormComponent();
-    LoadActionCategoryFormComponent();
-    LoadActionContextTypeFormComponent();
-    LoadActionContextFormComponent();
-    LoadActionExecutionLogFormComponent();
-    LoadActionFilterFormComponent();
-    LoadActionLibraryFormComponent();
-    LoadActionParamFormComponent();
-    LoadActionResultCodeFormComponent();
-    LoadActionFormComponent();
-    LoadAIActionFormComponent();
-    LoadAIAgentActionFormComponent();
-    LoadAIAgentLearningCycleFormComponent();
-    LoadAIAgentModelFormComponent();
-    LoadAIAgentNoteTypeFormComponent();
-    LoadAIAgentNoteFormComponent();
-    LoadAIAgentRequestFormComponent();
-    LoadAIAgentFormComponent();
-    LoadAIModelActionFormComponent();
-    LoadAIModelTypeFormComponent();
-    LoadAIModelFormComponent();
-    LoadAIPromptCategoryFormComponent();
-    LoadAIPromptTypeFormComponent();
-    LoadAIPromptFormComponent();
-    LoadAIResultCacheFormComponent();
-    LoadApplicationEntityFormComponent();
-    LoadApplicationSettingFormComponent();
-    LoadApplicationFormComponent();
-    LoadAuditLogTypeFormComponent();
-    LoadAuditLogFormComponent();
-    LoadAuthorizationRoleFormComponent();
-    LoadAuthorizationFormComponent();
-    LoadCommunicationBaseMessageTypeFormComponent();
-    LoadCommunicationLogFormComponent();
-    LoadCommunicationProviderMessageTypeFormComponent();
-    LoadCommunicationProviderFormComponent();
-    LoadCommunicationRunFormComponent();
-    LoadCompanyFormComponent();
-    LoadCompanyIntegrationRecordMapFormComponent();
-    LoadCompanyIntegrationRunAPILogFormComponent();
-    LoadCompanyIntegrationRunDetailFormComponent();
-    LoadCompanyIntegrationRunFormComponent();
-    LoadCompanyIntegrationFormComponent();
-    LoadContentFileTypeFormComponent();
-    LoadContentItemAttributeFormComponent();
-    LoadContentItemTagFormComponent();
-    LoadContentItemFormComponent();
-    LoadContentProcessRunFormComponent();
-    LoadContentSourceParamFormComponent();
-    LoadContentSourceTypeParamFormComponent();
-    LoadContentSourceTypeFormComponent();
-    LoadContentSourceFormComponent();
-    LoadContentTypeAttributeFormComponent();
-    LoadContentTypeFormComponent();
-    LoadConversationDetailFormComponent();
-    LoadConversationFormComponent();
-    LoadDashboardCategoryFormComponent();
-    LoadDashboardFormComponent();
-    LoadDataContextItemFormComponent();
-    LoadDataContextFormComponent();
-    LoadDatasetItemFormComponent();
-    LoadDatasetFormComponent();
-    LoadDuplicateRunDetailMatchFormComponent();
-    LoadDuplicateRunDetailFormComponent();
-    LoadDuplicateRunFormComponent();
-    LoadEmployeeCompanyIntegrationFormComponent();
-    LoadEmployeeRoleFormComponent();
-    LoadEmployeeSkillFormComponent();
-    LoadEmployeeFormComponent();
-    LoadEntityFormComponent();
-    LoadEntityActionFilterFormComponent();
-    LoadEntityActionInvocationTypeFormComponent();
-    LoadEntityActionInvocationFormComponent();
-    LoadEntityActionParamFormComponent();
-    LoadEntityActionFormComponent();
-    LoadEntityAIActionFormComponent();
-    LoadEntityCommunicationFieldFormComponent();
-    LoadEntityCommunicationMessageTypeFormComponent();
-    LoadEntityDocumentRunFormComponent();
-    LoadEntityDocumentSettingFormComponent();
-    LoadEntityDocumentTypeFormComponent();
-    LoadEntityDocumentFormComponent();
-    LoadEntityFieldValueFormComponent();
-    LoadEntityFieldFormComponent();
-    LoadEntityPermissionFormComponent();
-    LoadEntityRecordDocumentFormComponent();
-    LoadEntityRelationshipDisplayComponentFormComponent();
-    LoadEntityRelationshipFormComponent();
-    LoadEntitySettingFormComponent();
-    LoadErrorLogFormComponent();
-    LoadExplorerNavigationItemFormComponent();
-    LoadFileCategoryFormComponent();
-    LoadFileEntityRecordLinkFormComponent();
-    LoadFileStorageProviderFormComponent();
-    LoadFileFormComponent();
-    LoadGeneratedCodeCategoryFormComponent();
-    LoadGeneratedCodeFormComponent();
-    LoadIntegrationURLFormatFormComponent();
-    LoadIntegrationFormComponent();
-    LoadLibraryFormComponent();
-    LoadLibraryItemFormComponent();
-    LoadListCategoryFormComponent();
-    LoadListDetailFormComponent();
-    LoadListFormComponent();
-    LoadAccessControlRuleFormComponent();
-    LoadAIAgentArtifactTypeFormComponent();
-    LoadAIAgentConfigurationFormComponent();
-    LoadAIAgentDataSourceFormComponent();
-    LoadAIAgentExampleFormComponent();
-    LoadAIAgentModalityFormComponent();
-    LoadAIAgentPermissionFormComponent();
-    LoadAIAgentPromptFormComponent();
-    LoadAIAgentRelationshipFormComponent();
-    LoadAIAgentRunMediaFormComponent();
-    LoadAIAgentRunStepFormComponent();
-    LoadAIAgentRunFormComponent();
-    LoadAIAgentStepPathFormComponent();
-    LoadAIAgentStepFormComponent();
-    LoadAIAgentTypeFormComponent();
-    LoadAIArchitectureFormComponent();
-    LoadAIConfigurationParamFormComponent();
-    LoadAIConfigurationFormComponent();
-    LoadAICredentialBindingFormComponent();
-    LoadAIModalityFormComponent();
-    LoadAIModelArchitectureFormComponent();
-    LoadAIModelCostFormComponent();
-    LoadAIModelModalityFormComponent();
-    LoadAIModelPriceTypeFormComponent();
-    LoadAIModelPriceUnitTypeFormComponent();
-    LoadAIModelVendorFormComponent();
-    LoadAIPromptModelFormComponent();
-    LoadAIPromptRunMediaFormComponent();
-    LoadAIPromptRunFormComponent();
-    LoadAIVendorTypeDefinitionFormComponent();
-    LoadAIVendorTypeFormComponent();
-    LoadAIVendorFormComponent();
-    LoadAPIApplicationScopeFormComponent();
-    LoadAPIApplicationFormComponent();
-    LoadAPIKeyApplicationFormComponent();
-    LoadAPIKeyScopeFormComponent();
-    LoadAPIKeyUsageLogFormComponent();
-    LoadAPIKeyFormComponent();
-    LoadAPIScopeFormComponent();
-    LoadArtifactPermissionFormComponent();
-    LoadArtifactTypeFormComponent();
-    LoadArtifactUseFormComponent();
-    LoadArtifactVersionAttributeFormComponent();
-    LoadArtifactVersionFormComponent();
-    LoadArtifactFormComponent();
-    LoadCollectionArtifactFormComponent();
-    LoadCollectionPermissionFormComponent();
-    LoadCollectionFormComponent();
-    LoadComponentDependencyFormComponent();
-    LoadComponentLibraryFormComponent();
-    LoadComponentLibraryLinkFormComponent();
-    LoadComponentRegistryFormComponent();
-    LoadComponentFormComponent();
-    LoadConversationArtifactPermissionFormComponent();
-    LoadConversationArtifactVersionFormComponent();
-    LoadConversationArtifactFormComponent();
-    LoadConversationDetailArtifactFormComponent();
-    LoadConversationDetailAttachmentFormComponent();
-    LoadConversationDetailRatingFormComponent();
-    LoadCredentialCategoryFormComponent();
-    LoadCredentialTypeFormComponent();
-    LoadCredentialFormComponent();
-    LoadDashboardCategoryLinkFormComponent();
-    LoadDashboardCategoryPermissionFormComponent();
-    LoadDashboardPartTypeFormComponent();
-    LoadDashboardPermissionFormComponent();
-    LoadDashboardUserPreferenceFormComponent();
-    LoadDashboardUserStateFormComponent();
-    LoadEncryptionAlgorithmFormComponent();
-    LoadEncryptionKeySourceFormComponent();
-    LoadEncryptionKeyFormComponent();
-    LoadEnvironmentFormComponent();
-    LoadFileStorageAccountFormComponent();
-    LoadListInvitationFormComponent();
-    LoadListShareFormComponent();
-    LoadMCPServerConnectionPermissionFormComponent();
-    LoadMCPServerConnectionToolFormComponent();
-    LoadMCPServerConnectionFormComponent();
-    LoadMCPServerToolFormComponent();
-    LoadMCPServerFormComponent();
-    LoadMCPToolExecutionLogFormComponent();
-    LoadOAuthAuthServerMetadataCacheFormComponent();
-    LoadOAuthAuthorizationStateFormComponent();
-    LoadOAuthClientRegistrationFormComponent();
-    LoadOAuthTokenFormComponent();
-    LoadProjectFormComponent();
-    LoadPublicLinkFormComponent();
-    LoadQueryParameterFormComponent();
-    LoadRecordLinkFormComponent();
-    LoadReportUserStateFormComponent();
-    LoadReportVersionFormComponent();
-    LoadScheduledJobRunFormComponent();
-    LoadScheduledJobTypeFormComponent();
-    LoadScheduledJobFormComponent();
-    LoadTaskDependencyFormComponent();
-    LoadTaskTypeFormComponent();
-    LoadTaskFormComponent();
-    LoadTestRubricFormComponent();
-    LoadTestRunFeedbackFormComponent();
-    LoadTestRunFormComponent();
-    LoadTestSuiteRunFormComponent();
-    LoadTestSuiteTestFormComponent();
-    LoadTestSuiteFormComponent();
-    LoadTestTypeFormComponent();
-    LoadTestFormComponent();
-    LoadUserNotificationPreferenceFormComponent();
-    LoadUserNotificationTypeFormComponent();
-    LoadUserSettingFormComponent();
-    LoadVersionLabelItemFormComponent();
-    LoadVersionLabelRestoreFormComponent();
-    LoadVersionLabelFormComponent();
-    LoadOutputDeliveryTypeFormComponent();
-    LoadOutputFormatTypeFormComponent();
-    LoadOutputTriggerTypeFormComponent();
-    LoadQueryFormComponent();
-    LoadQueryCategoryFormComponent();
-    LoadQueryEntityFormComponent();
-    LoadQueryFieldFormComponent();
-    LoadQueryPermissionFormComponent();
-    LoadQueueTaskFormComponent();
-    LoadQueueTypeFormComponent();
-    LoadQueueFormComponent();
-    LoadRecommendationItemFormComponent();
-    LoadRecommendationProviderFormComponent();
-    LoadRecommendationRunFormComponent();
-    LoadRecommendationFormComponent();
-    LoadRecordChangeReplayRunFormComponent();
-    LoadRecordChangeFormComponent();
-    LoadRecordMergeDeletionLogFormComponent();
-    LoadRecordMergeLogFormComponent();
-    LoadReportCategoryFormComponent();
-    LoadReportSnapshotFormComponent();
-    LoadReportFormComponent();
-    LoadResourceLinkFormComponent();
-    LoadResourcePermissionFormComponent();
-    LoadResourceTypeFormComponent();
-    LoadRoleFormComponent();
-    LoadRowLevelSecurityFilterFormComponent();
-    LoadScheduledActionParamFormComponent();
-    LoadScheduledActionFormComponent();
-    LoadSchemaInfoFormComponent();
-    LoadSkillFormComponent();
-    LoadTaggedItemFormComponent();
-    LoadTagFormComponent();
-    LoadTemplateCategoryFormComponent();
-    LoadTemplateContentTypeFormComponent();
-    LoadTemplateContentFormComponent();
-    LoadTemplateParamFormComponent();
-    LoadTemplateFormComponent();
-    LoadUserApplicationEntityFormComponent();
-    LoadUserApplicationFormComponent();
-    LoadUserFavoriteFormComponent();
-    LoadUserNotificationFormComponent();
-    LoadUserRecordLogFormComponent();
-    LoadUserRoleFormComponent();
-    LoadUserViewCategoryFormComponent();
-    LoadUserViewRunDetailFormComponent();
-    LoadUserViewRunFormComponent();
-    LoadUserViewFormComponent();
-    LoadUserFormComponent();
-    LoadVectorDatabaseFormComponent();
-    LoadVectorIndexFormComponent();
-    LoadVersionInstallationFormComponent();
-    LoadWorkflowEngineFormComponent();
-    LoadWorkflowRunFormComponent();
-    LoadWorkflowFormComponent();
-    LoadWorkspaceItemFormComponent();
-    LoadWorkspaceFormComponent();
-}
+// Note: LoadXXXGeneratedForms() functions have been removed. Tree-shaking prevention
+// is now handled by the pre-built class registration manifest system.
+// See packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md for details.
     

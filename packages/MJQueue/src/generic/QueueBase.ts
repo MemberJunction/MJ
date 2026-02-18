@@ -1,6 +1,6 @@
 import { UserInfo, BaseEntity } from '@memberjunction/core';
-import { QueueEntity, QueueTaskEntity } from '@memberjunction/core-entities';
-//import { QueueTaskEntity, QueueEntity } from 'mj_generatedentities';
+import { MJQueueEntity, MJQueueTaskEntity } from '@memberjunction/core-entities';
+//import { MJQueueTaskEntity, MJQueueEntity } from 'mj_generatedentities';
 
 export class TaskResult {
   success: boolean
@@ -28,7 +28,7 @@ export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
 export class TaskBase {
   private _options: TaskOptions;
   private _data: any; 
-  private _taskRecord: QueueTaskEntity
+  private _taskRecord: MJQueueTaskEntity
   private _status: TaskStatus = TaskStatus.Pending;
 
   public get Options(): TaskOptions 
@@ -42,13 +42,13 @@ export class TaskBase {
   public get ID(): string {
     return this._taskRecord.ID;
   }
-  constructor (taskRecord: QueueTaskEntity, data: any, options: TaskOptions) {
+  constructor (taskRecord: MJQueueTaskEntity, data: any, options: TaskOptions) {
     this._taskRecord = taskRecord;
     this._options = options;
     this._data = data;
   }
 
-  public get TaskRecord(): QueueTaskEntity {
+  public get TaskRecord(): MJQueueTaskEntity {
     return this._taskRecord;
   }   
 
@@ -68,9 +68,9 @@ export abstract class QueueBase  {
   protected _contextUser: UserInfo
   private _maxTasks: number = 3; // move to metadata or config param
   private _checkInterval: number = 250; // move to metadata or config param
-  private _queueRecord: QueueEntity
+  private _queueRecord: MJQueueEntity
 
-  constructor(QueueRecord: QueueEntity, QueueTypeID: string, ContextUser: UserInfo) {
+  constructor(QueueRecord: MJQueueEntity, QueueTypeID: string, ContextUser: UserInfo) {
     this._queueRecord = QueueRecord;
     this._queueTypeId = QueueTypeID;
     this._contextUser = ContextUser;

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { TaskEntity } from '@memberjunction/core-entities';
+
+import { MJTaskEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
@@ -11,7 +11,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 @Component({
   selector: 'mj-task-detail-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <div class="task-detail-panel">
       <div class="detail-header">
@@ -20,69 +20,85 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
           <i class="fas fa-times"></i>
         </button>
       </div>
-
+    
       <div class="detail-content">
-        <div class="detail-field" *ngIf="task.Description">
-          <label>Description</label>
-          <p>{{ task.Description }}</p>
-        </div>
-
+        @if (task.Description) {
+          <div class="detail-field">
+            <label>Description</label>
+            <p>{{ task.Description }}</p>
+          </div>
+        }
+    
         <div class="detail-field">
           <label>Status</label>
           <p>{{ task.Status }}</p>
         </div>
-
-        <div class="detail-field" *ngIf="task.PercentComplete != null">
-          <label>Progress</label>
-          <div class="detail-progress">
-            <div class="progress-bar-detail">
-              <div class="progress-fill-detail" [style.width.%]="task.PercentComplete"></div>
+    
+        @if (task.PercentComplete != null) {
+          <div class="detail-field">
+            <label>Progress</label>
+            <div class="detail-progress">
+              <div class="progress-bar-detail">
+                <div class="progress-fill-detail" [style.width.%]="task.PercentComplete"></div>
+              </div>
+              <span>{{ task.PercentComplete }}%</span>
             </div>
-            <span>{{ task.PercentComplete }}%</span>
           </div>
-        </div>
-
-        <div class="detail-field" *ngIf="task.StartedAt">
-          <label>Started</label>
-          <p>{{ formatDateTime(task.StartedAt) }}</p>
-        </div>
-
-        <div class="detail-field" *ngIf="task.DueAt">
-          <label>Due</label>
-          <p>{{ formatDateTime(task.DueAt) }}</p>
-        </div>
-
-        <div class="detail-field" *ngIf="task.CompletedAt">
-          <label>Completed</label>
-          <p>{{ formatDateTime(task.CompletedAt) }}</p>
-        </div>
-
-        <div class="detail-field" *ngIf="task.User">
-          <label>Assigned User</label>
-          <p>{{ task.User }}</p>
-        </div>
-
+        }
+    
+        @if (task.StartedAt) {
+          <div class="detail-field">
+            <label>Started</label>
+            <p>{{ formatDateTime(task.StartedAt) }}</p>
+          </div>
+        }
+    
+        @if (task.DueAt) {
+          <div class="detail-field">
+            <label>Due</label>
+            <p>{{ formatDateTime(task.DueAt) }}</p>
+          </div>
+        }
+    
+        @if (task.CompletedAt) {
+          <div class="detail-field">
+            <label>Completed</label>
+            <p>{{ formatDateTime(task.CompletedAt) }}</p>
+          </div>
+        }
+    
+        @if (task.User) {
+          <div class="detail-field">
+            <label>Assigned User</label>
+            <p>{{ task.User }}</p>
+          </div>
+        }
+    
         <!-- Agent Information -->
-        <div class="detail-field" *ngIf="agent">
-          <label>Agent</label>
-          <div class="agent-info" (click)="openAgent()">
-            <i [class]="'fas fa-' + ('robot')" class="agent-icon"></i>
-            <span class="agent-name">{{ agent.Name }}</span>
-            <i class="fas fa-external-link-alt link-icon"></i>
+        @if (agent) {
+          <div class="detail-field">
+            <label>Agent</label>
+            <div class="agent-info" (click)="openAgent()">
+              <i [class]="'fas fa-' + ('robot')" class="agent-icon"></i>
+              <span class="agent-name">{{ agent.Name }}</span>
+              <i class="fas fa-external-link-alt link-icon"></i>
+            </div>
           </div>
-        </div>
-
+        }
+    
         <!-- Agent Run Information -->
-        <div class="detail-field" *ngIf="agentRunId">
-          <label>Agent Run</label>
-          <div class="agent-run-link" (click)="openAgentRun()">
-            <span>View Run Details</span>
-            <i class="fas fa-external-link-alt link-icon"></i>
+        @if (agentRunId) {
+          <div class="detail-field">
+            <label>Agent Run</label>
+            <div class="agent-run-link" (click)="openAgentRun()">
+              <span>View Run Details</span>
+              <i class="fas fa-external-link-alt link-icon"></i>
+            </div>
           </div>
-        </div>
+        }
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .task-detail-panel {
       width: 100%;
@@ -247,7 +263,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
   `]
 })
 export class TaskDetailPanelComponent implements OnInit, OnChanges {
-  @Input() task!: TaskEntity;
+  @Input() task!: MJTaskEntity;
   @Input() agentRunId: string | null = null;
   @Output() closePanel = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
@@ -288,7 +304,7 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
   public openAgent(): void {
     if (this.task.AgentID) {
       this.openEntityRecord.emit({
-        entityName: 'AI Agents',
+        entityName: 'MJ: AI Agents',
         recordId: this.task.AgentID
       });
     }

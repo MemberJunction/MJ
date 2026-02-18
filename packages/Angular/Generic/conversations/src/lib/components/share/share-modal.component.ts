@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ConversationEntity, ResourcePermissionEntity, UserEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -13,96 +13,95 @@ interface SharePermission {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-share-modal',
   template: `
-    <kendo-dialog
-      [title]="'Share: ' + (conversation.Name || '')"
-      [width]="500"
-      [height]="600"
-      *ngIf="isOpen"
-      (close)="onClose()">
-
-      <div class="share-content">
-        <div class="add-user-section">
-          <h4>Add People</h4>
-          <div class="add-user-form">
-            <kendo-textbox
-              [(value)]="newUserEmail"
-              placeholder="Enter email address"
-              [style.flex]="1">
-            </kendo-textbox>
-            <button kendoButton [primary]="true" (click)="onAddUser()">
-              Add
-            </button>
-          </div>
-        </div>
-
-        <div class="permissions-section">
-          <h4>People with Access</h4>
-
-          <div class="permission-list">
-            <div *ngIf="permissions.length === 0" class="empty-state">
-              <p>No one has been given access yet</p>
+    @if (isOpen) {
+      <kendo-dialog
+        [title]="'Share: ' + (conversation.Name || '')"
+        [width]="500"
+        [height]="600"
+        (close)="onClose()">
+        <div class="share-content">
+          <div class="add-user-section">
+            <h4>Add People</h4>
+            <div class="add-user-form">
+              <kendo-textbox
+                [(value)]="newUserEmail"
+                placeholder="Enter email address"
+                [style.flex]="1">
+              </kendo-textbox>
+              <button kendoButton [primary]="true" (click)="onAddUser()">
+                Add
+              </button>
             </div>
-
-            <div *ngFor="let permission of permissions" class="permission-item">
-              <div class="user-info">
-                <i class="fas fa-user-circle"></i>
-                <div class="user-details">
-                  <div class="user-name">{{ permission.userName }}</div>
-                  <div class="user-email">{{ permission.userEmail }}</div>
+          </div>
+          <div class="permissions-section">
+            <h4>People with Access</h4>
+            <div class="permission-list">
+              @if (permissions.length === 0) {
+                <div class="empty-state">
+                  <p>No one has been given access yet</p>
                 </div>
-              </div>
-
-              <div class="permission-controls">
-                <kendo-dropdownlist
-                  [data]="accessLevels"
-                  [textField]="'label'"
-                  [valueField]="'value'"
-                  [value]="getAccessLevel(permission)"
-                  (valueChange)="onAccessLevelChange(permission, $event)"
-                  [style.width.px]="120">
-                </kendo-dropdownlist>
-
-                <button
-                  class="btn-remove"
-                  (click)="onRemoveUser(permission)"
-                  title="Remove access">
-                  <i class="fas fa-times"></i>
+              }
+              @for (permission of permissions; track permission) {
+                <div class="permission-item">
+                  <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <div class="user-details">
+                      <div class="user-name">{{ permission.userName }}</div>
+                      <div class="user-email">{{ permission.userEmail }}</div>
+                    </div>
+                  </div>
+                  <div class="permission-controls">
+                    <kendo-dropdownlist
+                      [data]="accessLevels"
+                      [textField]="'label'"
+                      [valueField]="'value'"
+                      [value]="getAccessLevel(permission)"
+                      (valueChange)="onAccessLevelChange(permission, $event)"
+                      [style.width.px]="120">
+                    </kendo-dropdownlist>
+                    <button
+                      class="btn-remove"
+                      (click)="onRemoveUser(permission)"
+                      title="Remove access">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+          <div class="link-section">
+            <h4>Share Link</h4>
+            <div class="link-controls">
+              <kendo-switch
+                [(ngModel)]="isPublicLink"
+                (valueChange)="onTogglePublicLink()">
+              </kendo-switch>
+              <label>Anyone with the link can view</label>
+            </div>
+            @if (isPublicLink) {
+              <div class="link-display">
+                <kendo-textbox
+                  [value]="shareLink"
+                  [readonly]="true"
+                  [style.flex]="1">
+                </kendo-textbox>
+                <button kendoButton (click)="onCopyLink()">
+                  <i class="fas fa-copy"></i> Copy
                 </button>
               </div>
-            </div>
+            }
           </div>
         </div>
-
-        <div class="link-section">
-          <h4>Share Link</h4>
-          <div class="link-controls">
-            <kendo-switch
-              [(ngModel)]="isPublicLink"
-              (valueChange)="onTogglePublicLink()">
-            </kendo-switch>
-            <label>Anyone with the link can view</label>
-          </div>
-
-          <div *ngIf="isPublicLink" class="link-display">
-            <kendo-textbox
-              [value]="shareLink"
-              [readonly]="true"
-              [style.flex]="1">
-            </kendo-textbox>
-            <button kendoButton (click)="onCopyLink()">
-              <i class="fas fa-copy"></i> Copy
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onClose()">Close</button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        <kendo-dialog-actions>
+          <button kendoButton (click)="onClose()">Close</button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .share-content { display: flex; flex-direction: column; gap: 24px; }
 
@@ -136,7 +135,7 @@ interface SharePermission {
   `]
 })
 export class ShareModalComponent implements OnInit {
-  @Input() conversation!: ConversationEntity;
+  @Input() conversation!: MJConversationEntity;
   @Input() currentUser!: UserInfo;
   @Input() isOpen: boolean = false;
 
@@ -170,8 +169,8 @@ export class ShareModalComponent implements OnInit {
   private async loadPermissions(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ResourcePermissionEntity>({
-        EntityName: 'Resource Permissions',
+      const result = await rv.RunView<MJResourcePermissionEntity>({
+        EntityName: 'MJ: Resource Permissions',
         ExtraFilter: `ResourceTypeID='${this.CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.conversation.ID}' AND Status='Approved'`,
         ResultType: 'entity_object'
       });
@@ -180,8 +179,8 @@ export class ShareModalComponent implements OnInit {
         const permissionPromises = result.Results.map(async (perm) => {
           if (perm.UserID) {
             const userRv = new RunView();
-            const userResult = await userRv.RunView<UserEntity>({
-              EntityName: 'Users',
+            const userResult = await userRv.RunView<MJUserEntity>({
+              EntityName: 'MJ: Users',
               ExtraFilter: `ID='${perm.UserID}'`,
               ResultType: 'entity_object'
             });
@@ -236,8 +235,8 @@ export class ShareModalComponent implements OnInit {
     try {
       // Look up user by email
       const rv = new RunView();
-      const userResult = await rv.RunView<UserEntity>({
-        EntityName: 'Users',
+      const userResult = await rv.RunView<MJUserEntity>({
+        EntityName: 'MJ: Users',
         ExtraFilter: `Email='${email}'`,
         ResultType: 'entity_object'
       });
@@ -279,7 +278,7 @@ export class ShareModalComponent implements OnInit {
     try {
       if (permission.permissionId) {
         const md = new Metadata();
-        const permEntity = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+        const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
         await permEntity.Load(permission.permissionId);
 
         const deleteResult = await permEntity.Delete();
@@ -299,7 +298,7 @@ export class ShareModalComponent implements OnInit {
   private async savePermission(permission: SharePermission): Promise<void> {
     try {
       const md = new Metadata();
-      const permEntity = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+      const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
 
       if (permission.permissionId) {
         // Update existing permission

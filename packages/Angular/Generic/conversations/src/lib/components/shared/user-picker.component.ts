@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 
 export interface UserSearchResult {
     id: string;
@@ -15,7 +15,7 @@ export interface UserSearchResult {
 @Component({
     selector: 'mj-user-picker',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [FormsModule],
     template: `
         <div class="user-picker">
             <div class="search-input-wrapper">
@@ -275,8 +275,8 @@ export class UserPickerComponent implements OnInit, OnDestroy {
                 LastName LIKE '%${escapedQuery}%'
             )${excludeFilter}`;
 
-            const result = await rv.RunView<UserEntity>({
-                EntityName: 'Users',
+            const result = await rv.RunView<MJUserEntity>({
+                EntityName: 'MJ: Users',
                 ExtraFilter: searchFilter,
                 OrderBy: 'Name ASC',
                 MaxRows: 20,

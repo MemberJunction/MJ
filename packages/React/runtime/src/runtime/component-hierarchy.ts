@@ -15,7 +15,7 @@ import { ComponentRegistry } from '../registry';
 
 import { ComponentSpec, ComponentStyles } from '@memberjunction/interactive-component-types';
 import { UserInfo, Metadata, LogStatus, GetProductionStatus } from '@memberjunction/core';
-import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
  * Result of a hierarchy registration operation
@@ -55,7 +55,7 @@ export interface HierarchyRegistrationOptions {
   /**
    * Required, metadata for all possible libraries allowed by the system
    */
-  allLibraries: ComponentLibraryEntity[];
+  allLibraries: MJComponentLibraryEntity[];
   debug?: boolean;
   /** Optional user context for fetching from external registries */
   contextUser?: UserInfo;
@@ -310,7 +310,7 @@ export class ComponentHierarchyRegistrar {
       namespace?: string;
       version?: string;
       allowOverride?: boolean;
-      allLibraries: ComponentLibraryEntity[];
+      allLibraries: MJComponentLibraryEntity[];
     }
   ): Promise<{ success: boolean; error?: ComponentRegistrationError }> {
     const { styles, namespace = 'Global', version = 'v1', allowOverride = true } = options;

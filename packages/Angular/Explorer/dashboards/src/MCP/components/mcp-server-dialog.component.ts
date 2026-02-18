@@ -7,7 +7,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { MCPServerEntity } from '@memberjunction/core-entities';
+import { MJMCPServerEntity } from '@memberjunction/core-entities';
 import { MCPServerData } from '../mcp-dashboard.component';
 
 /**
@@ -44,6 +44,7 @@ export interface ServerDialogResult {
  * MCP Server Dialog Component
  */
 @Component({
+  standalone: false,
     selector: 'mj-mcp-server-dialog',
     templateUrl: './mcp-server-dialog.component.html',
     styleUrls: ['./mcp-server-dialog.component.css']
@@ -225,7 +226,7 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
 
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerEntity>('MJ: MCP Servers');
+            const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
 
             if (this.IsEditMode && this.server) {
                 await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.server.ID }]));
@@ -287,11 +288,4 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
         const control = this.serverForm.get(controlName);
         return control?.hasError(errorType) && control?.touched || false;
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPServerDialog(): void {
-    // Ensures the component is not tree-shaken
 }

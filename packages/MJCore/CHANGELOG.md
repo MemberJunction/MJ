@@ -1,5 +1,94 @@
 # Change Log - @memberjunction/core
 
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+  - @memberjunction/global@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Minor Changes
+
+- a3e7cb6: migration
+
+### Patch Changes
+
+- Updated dependencies [4aa1b54]
+  - @memberjunction/global@5.0.0
+
+## 4.4.0
+
+### Minor Changes
+
+- bef7f69: Migration for metadata sync
+
+### Patch Changes
+
+- 61079e9: just a plan
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Minor Changes
+
+- 564e1af: migration
+
+### Patch Changes
+
+- @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/global@4.2.0
+
+## 4.1.0
+
+### Minor Changes
+
+- 77839a9: Enable cascade deletes for AI Agent and Prompt entities, add cross-file dependency detection and --delete-db-only flag to MetadataSync for proper deletion ordering, fix CodeGen duplicate variable names for self-referential FKs, add requireConnectivity config to QueryGen, and add Gemini JSON parser support to DBAutoDoc.
+- 5af036f: Migration for metadata
+
+### Patch Changes
+
+- @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- 718b0ee: migration
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- 5c7f6ab: EntityByName
+- Updated dependencies [8366d44]
+- Updated dependencies [718b0ee]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/global@4.0.0
+
 ## 3.4.0
 
 ### Minor Changes

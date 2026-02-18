@@ -14,8 +14,8 @@
 import { AIEngine } from '@memberjunction/aiengine';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
 import { RunViewParams, RunQueryParams } from '@memberjunction/core';
-import { AIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
-import * as _ from 'lodash';
+import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
+import _ from 'lodash';
 
 /**
  * Result structure for preloaded data organized by destination
@@ -220,7 +220,7 @@ export class AgentDataPreloader {
     private async loadDataSourcesForAgent(
         agentId: string,
         contextUser: UserInfo
-    ): Promise<AIAgentDataSourceEntity[]> {
+    ): Promise<MJAIAgentDataSourceEntity[]> {
         // Ensure AIEngine is configured
         await AIEngine.Instance.Config(false, contextUser);
         const data = AIEngine.Instance.AgentDataSources.filter(ads => ads.AgentID === agentId);
@@ -241,7 +241,7 @@ export class AgentDataPreloader {
      * @private
      */
     private async executeDataSource(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         contextUser: UserInfo,
         runId?: string
     ): Promise<unknown> {
@@ -279,7 +279,7 @@ export class AgentDataPreloader {
      * @private
      */
     private async executeRunView(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         contextUser: UserInfo
     ): Promise<unknown> {
         if (!source.EntityName) {
@@ -319,7 +319,7 @@ export class AgentDataPreloader {
      * @private
      */
     private async executeRunQuery(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         contextUser: UserInfo
     ): Promise<unknown> {
         if (!source.QueryName) {
@@ -358,7 +358,7 @@ export class AgentDataPreloader {
      * @returns Cached data or null if not cached/expired
      */
     private getCachedData(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         runId?: string
     ): unknown | null {
         if (source.CachePolicy === 'None') {
@@ -401,7 +401,7 @@ export class AgentDataPreloader {
      * @private
      */
     private cacheData(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         data: unknown,
         runId?: string
     ): void {
@@ -440,15 +440,8 @@ export class AgentDataPreloader {
      *
      * @private
      */
-    private getPerAgentCacheKey(source: AIAgentDataSourceEntity): string {
+    private getPerAgentCacheKey(source: MJAIAgentDataSourceEntity): string {
         return `${source.AgentID}:${source.Name}`;
     }
 }
 
-/**
- * Export a load function to ensure the class isn't tree-shaken
- */
-export function LoadAgentDataPreloader() {
-    // This function ensures the class isn't tree-shaken
-    return AgentDataPreloader.Instance;
-}

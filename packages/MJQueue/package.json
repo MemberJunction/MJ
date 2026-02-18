@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/queue",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "5.1.0",
   "description": "MemberJunction: Queue Library for managing server side queues",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,24 +10,24 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "3.4.0",
-    "@memberjunction/ai-provider-bundle": "3.4.0",
-    "@memberjunction/aiengine": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@types/uuid": "^9.0.1",
-    "uuid": "^9.0.0"
+    "@memberjunction/ai": "5.1.0",
+    "@memberjunction/ai-provider-bundle": "5.1.0",
+    "@memberjunction/aiengine": "5.1.0",
+    "@memberjunction/core": "5.1.0",
+    "@memberjunction/global": "5.1.0",
+    "@memberjunction/core-entities": "5.1.0",
+    "@types/uuid": "^11.0.0",
+    "uuid": "^13.0.0"
   },
   "repository": {
     "type": "git",

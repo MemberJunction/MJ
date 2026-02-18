@@ -1,0 +1,98 @@
+# @memberjunction/ng-record-changes
+
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+  - @memberjunction/global@5.1.0
+  - @memberjunction/ng-notifications@5.1.0
+  - @memberjunction/ng-versions@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+  - @memberjunction/ng-shared-generic@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ng-notifications@5.0.0
+  - @memberjunction/ng-shared-generic@5.0.0
+  - @memberjunction/ng-versions@5.0.0
+  - @memberjunction/global@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ng-container-directives@4.4.0
+  - @memberjunction/ng-notifications@4.4.0
+  - @memberjunction/ng-shared-generic@4.4.0
+  - @memberjunction/ng-versions@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- 318c578: no migration
+  - @memberjunction/ng-container-directives@4.3.1
+  - @memberjunction/ng-notifications@4.3.1
+  - @memberjunction/ng-shared-generic@4.3.1
+  - @memberjunction/ng-versions@4.3.1
+  - @memberjunction/core@4.3.1
+  - @memberjunction/core-entities@4.3.1
+  - @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ng-notifications@4.3.0
+  - @memberjunction/ng-versions@4.3.0
+  - @memberjunction/ng-container-directives@4.3.0
+  - @memberjunction/ng-shared-generic@4.3.0
+  - @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@4.2.0
+- @memberjunction/ng-notifications@4.2.0
+- @memberjunction/ng-shared-generic@4.2.0
+- @memberjunction/ng-versions@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+
+## 4.1.0
+
+### Patch Changes
+
+- f54a9e4: no migration
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ng-container-directives@4.1.0
+  - @memberjunction/ng-notifications@4.1.0
+  - @memberjunction/ng-shared-generic@4.1.0
+  - @memberjunction/ng-versions@4.1.0
+  - @memberjunction/global@4.1.0

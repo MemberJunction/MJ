@@ -97,11 +97,3 @@ export {
     OAuthReauthorizationRequiredError
 } from './types.js';
 
-/**
- * Tree-shaking prevention function.
- * Call this from application initialization to ensure the OAuth module is loaded.
- */
-export function LoadOAuthModule(): void {
-    // This function exists to prevent tree-shaking
-    // and ensure the OAuth classes are available
-}

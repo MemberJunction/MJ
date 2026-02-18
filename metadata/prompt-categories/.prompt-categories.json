@@ -15,29 +15,29 @@
   {
     "fields": {
       "Name": "Actions",
-      "ParentID": "@lookup:AI Prompt Categories.Name=MJ: System",
+      "ParentID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
       "Description": "Prompts for generating and managing MemberJunction Actions"
     },
     "primaryKey": {
       "ID": "9A66484D-1B88-43D9-A166-692ABF7BFE64"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:28.918Z",
-      "checksum": "08d9ac935b92b03102df20c406d427554c6cfcffa20c8a30c6c7fa20d7fa48ce"
+      "lastModified": "2026-02-13T21:09:14.618Z",
+      "checksum": "0a5e331c7279f7b7c3d77cd026608803f00fcb9c30ae8c585c13cade0a766512"
     }
   },
   {
     "fields": {
       "Name": "Query Generation",
-      "ParentID": "@lookup:AI Prompt Categories.Name=MJ: System",
+      "ParentID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
       "Description": "Prompts for QueryGen system - AI-powered generation of domain-specific SQL query templates"
     },
     "primaryKey": {
       "ID": "FE112721-A511-4DC3-A75A-50E5E931E940"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:28.920Z",
-      "checksum": "4b4e8ac84ceeeedae9b8e4d3355cc98a6a84849825db697d7c3998a707f457c6"
+      "lastModified": "2026-02-13T21:09:14.622Z",
+      "checksum": "7ade514101c9d231e843b8fd8a28bb1af78b7e401c3c5195039e5124969c140b"
     }
   }
 ]

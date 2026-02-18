@@ -1,14 +1,10 @@
 import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
-import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity, DashboardCategoryEntity, DashboardPartTypeEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
+import { ResourceData, MJDashboardEntity, DashboardEngine, MJDashboardUserStateEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { DataExplorerDashboardComponent, DataExplorerFilter, ShareDialogResult } from '@memberjunction/ng-dashboards';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
-
-export function LoadDashboardResource() {
-}
-
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
  * Extends BaseResourceComponent to work with the resource type system
@@ -16,6 +12,7 @@ export function LoadDashboardResource() {
  */
 @RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-resource',
     template: `
         <div class="dashboard-resource-wrapper">
@@ -421,13 +418,13 @@ export class DashboardResource extends BaseResourceComponent {
     public errorDetails: string | null = null;
 
     /** Cached dashboard categories for breadcrumb navigation */
-    private categories: DashboardCategoryEntity[] = [];
+    private categories: MJDashboardCategoryEntity[] = [];
 
     /** Reference to the dashboard viewer component (for config-based dashboards) */
     private viewerInstance: DashboardViewerComponent | null = null;
 
     /** The config-based dashboard entity (null for code-based dashboards) */
-    public configDashboard: DashboardEntity | null = null;
+    public configDashboard: MJDashboardEntity | null = null;
 
     /** Whether we're in edit mode */
     public isEditMode = false;
@@ -717,10 +714,9 @@ export class DashboardResource extends BaseResourceComponent {
                 this.NotifyLoadComplete();
             };
 
-
             // Initialize dashboard (no database config needed for DataExplorer)
             const config: DashboardConfig = {
-                dashboard: null as unknown as DashboardEntity, // No database record
+                dashboard: null as unknown as MJDashboardEntity, // No database record
                 userState: {}
             };
             instance.Config = config;
@@ -738,7 +734,7 @@ export class DashboardResource extends BaseResourceComponent {
     /**
      * Load a code-based dashboard by looking up the registered class
      */
-    private async loadCodeBasedDashboard(dashboard: DashboardEntity): Promise<void> {
+    private async loadCodeBasedDashboard(dashboard: MJDashboardEntity): Promise<void> {
         try {
             if (!dashboard.DriverClass) {
                 throw new Error(`Dashboard '${dashboard.Name}' is marked as Code type but has no DriverClass specified`);
@@ -758,7 +754,6 @@ export class DashboardResource extends BaseResourceComponent {
             this.containerElement.nativeElement.innerHTML = '';
             this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
             const instance = this.componentRef.instance as BaseDashboard;
-
 
             // Setup LoadCompleteEvent() to know when the dashboard is ready
             instance.LoadCompleteEvent = () => {
@@ -811,18 +806,16 @@ export class DashboardResource extends BaseResourceComponent {
         }
     }
 
-
-
-    protected async loadDashboardUserState(dashboardId: string): Promise<DashboardUserStateEntity> {
+    protected async loadDashboardUserState(dashboardId: string): Promise<MJDashboardUserStateEntity> {
         // handle user state changes for the dashboard
         const md = new Metadata();
         const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => dus.DashboardID === dashboardId && dus.UserID === md.CurrentUser.ID)
-        let stateObject: DashboardUserStateEntity;
+        let stateObject: MJDashboardUserStateEntity;
         if (stateResult && stateResult.length > 0) {
             stateObject = stateResult[0];
         }
         else {
-            stateObject = await md.GetEntityObject<DashboardUserStateEntity>('MJ: Dashboard User States');
+            stateObject = await md.GetEntityObject<MJDashboardUserStateEntity>('MJ: Dashboard User States');
             stateObject.DashboardID = dashboardId;
             stateObject.UserID = md.CurrentUser.ID;
             // don't save becuase we don't care about the state until something changes
@@ -833,7 +826,7 @@ export class DashboardResource extends BaseResourceComponent {
     /**
      * Load a config-based dashboard using the new DashboardViewerComponent (Golden Layout)
      */
-    private async loadConfigBasedDashboard(dashboard: DashboardEntity): Promise<void> {
+    private async loadConfigBasedDashboard(dashboard: MJDashboardEntity): Promise<void> {
         try {
             this.containerElement.nativeElement.innerHTML = '';
             const componentRef = this.viewContainer.createComponent(DashboardViewerComponent);
@@ -882,7 +875,7 @@ export class DashboardResource extends BaseResourceComponent {
             });
 
             // Wire up dashboard saved event
-            instance.dashboardSaved.subscribe((savedDashboard: DashboardEntity) => {
+            instance.dashboardSaved.subscribe((savedDashboard: MJDashboardEntity) => {
                 this.ResourceRecordSaved(savedDashboard);
             });
 

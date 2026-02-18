@@ -1,17 +1,12 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { ResourceData, AuditLogEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJAuditLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-
-export function LoadCredentialsAuditResource() {
-    // Prevents tree-shaking
-}
-
 // The Credential Access AuditLogType ID from metadata
 const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = 'E8D4D100-E785-42D3-997F-ECFF3B0BCFC0';
 
-interface AuditLogWithDetails extends AuditLogEntity {
+interface AuditLogWithDetails extends MJAuditLogEntity {
     parsedDetails?: ParsedDetails;
 }
 
@@ -34,6 +29,7 @@ interface TimelineGroup {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsAuditResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-audit-resource',
     templateUrl: './credentials-audit-resource.component.html',
     styleUrls: ['./credentials-audit-resource.component.css'],
@@ -89,7 +85,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             const dateFilter = `AuditLogTypeID = '${CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID}' AND __mj_CreatedAt >= '${startDate.toISOString()}'`;
 
             const result = await rv.RunView<AuditLogWithDetails>({
-                EntityName: 'Audit Logs',
+                EntityName: 'MJ: Audit Logs',
                 ExtraFilter: dateFilter,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 500,
@@ -118,7 +114,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    private parseDetails(log: AuditLogEntity): ParsedDetails {
+    private parseDetails(log: MJAuditLogEntity): ParsedDetails {
         try {
             if (log.Details) {
                 return JSON.parse(log.Details);

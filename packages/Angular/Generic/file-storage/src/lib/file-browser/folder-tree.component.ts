@@ -24,6 +24,7 @@ export interface FolderItem {
  * Loads actual folder structure from storage accounts via GraphQL.
  */
 @Component({
+  standalone: false,
   selector: 'mj-folder-tree',
   templateUrl: './folder-tree.component.html',
   styleUrls: ['./folder-tree.component.css']

@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import * as zxcvbn from "zxcvbn";
+import zxcvbn from "zxcvbn";
 import * as crypto from "crypto";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
@@ -471,11 +471,4 @@ export class PasswordStrengthAction extends BaseAction {
         const param = params.Params.find(p => p.Name.toLowerCase() === name.toLowerCase());
         return param?.Value;
     }
-}
-
-/**
- * Loader function to ensure the PasswordStrengthAction class is included in the bundle
- */
-export function LoadPasswordStrengthAction() {
-    // Stub function to prevent tree shaking
 }

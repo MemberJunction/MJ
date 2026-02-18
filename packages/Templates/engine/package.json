@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/templates",
-  "version": "3.4.0",
+  "type": "module",
+  "version": "5.1.0",
   "description": "MemberJunction Templating Engine and Utilities - Used for any application that requires templating utility functionality. NOTE: this package does use Angular Universal for compilation but is not marked with the usual ng prefix because it is a server-side library and not used within Angular apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,23 +10,23 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc && tsc-alias -f",
+    "test": "echo \"No tests configured yet\""
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/templates-base-types": "3.4.0",
-    "@memberjunction/ai": "3.4.0",
-    "@memberjunction/ai-core-plus": "3.4.0",
-    "@memberjunction/aiengine": "3.4.0",
-    "@memberjunction/ai-provider-bundle": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/global": "3.4.0",
+    "@memberjunction/core": "5.1.0",
+    "@memberjunction/templates-base-types": "5.1.0",
+    "@memberjunction/ai": "5.1.0",
+    "@memberjunction/ai-core-plus": "5.1.0",
+    "@memberjunction/aiengine": "5.1.0",
+    "@memberjunction/ai-provider-bundle": "5.1.0",
+    "@memberjunction/core-entities": "5.1.0",
+    "@memberjunction/global": "5.1.0",
     "nunjucks": "3.2.4"
   },
   "repository": {

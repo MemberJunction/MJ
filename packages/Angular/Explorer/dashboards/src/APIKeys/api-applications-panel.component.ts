@@ -1,29 +1,23 @@
 import { Component, OnInit, OnDestroy, EventEmitter, Output, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
-import { APIApplicationEntity, APIApplicationScopeEntity, APIScopeEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJAPIApplicationEntity, MJAPIApplicationScopeEntity, MJAPIScopeEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 const PANEL_WIDTH_SETTING_KEY = 'APIKeys.ApplicationsPanelWidth';
 const DEFAULT_PANEL_WIDTH = 570;
 const MIN_PANEL_WIDTH = 400;
 const MAX_PANEL_WIDTH = 800;
-
-/** Tree shaking prevention function */
-export function LoadAPIApplicationsPanel(): void {
-    // This function prevents tree shaking
-}
-
 /** Application with scope count */
 interface ApplicationWithScopes {
-    application: APIApplicationEntity;
+    application: MJAPIApplicationEntity;
     scopeCount: number;
     expanded: boolean;
-    scopes: APIApplicationScopeEntity[];
+    scopes: MJAPIApplicationScopeEntity[];
 }
 
 /** Scope with selection state for application assignment */
 interface ScopeSelection {
-    scope: APIScopeEntity;
+    scope: MJAPIScopeEntity;
     selected: boolean;
     pattern: string;
     patternType: 'Include' | 'Exclude';
@@ -47,6 +41,7 @@ interface ScopeCategory {
  * Manages API Applications and their scope assignments
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-applications-panel',
     templateUrl: './api-applications-panel.component.html',
     styleUrls: ['./api-applications-panel.component.css']
@@ -63,10 +58,10 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
 
     // Data
     public Applications: ApplicationWithScopes[] = [];
-    public AllScopes: APIScopeEntity[] = [];
+    public AllScopes: MJAPIScopeEntity[] = [];
 
     // Edit state
-    public EditingApplication: APIApplicationEntity | null = null;
+    public EditingApplication: MJAPIApplicationEntity | null = null;
     public EditName = '';
     public EditDescription = '';
     public EditIsActive = true;
@@ -195,7 +190,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
             let setting = engine.UserSettings.find(s => s.Setting === PANEL_WIDTH_SETTING_KEY);
 
             if (!setting) {
-                setting = await this.md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+                setting = await this.md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
                 setting.UserID = userId;
                 setting.Setting = PANEL_WIDTH_SETTING_KEY;
             }
@@ -262,7 +257,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
         this.ErrorMessage = '';
 
         try {
-            const app = await this.md.GetEntityObject<APIApplicationEntity>('MJ: API Applications');
+            const app = await this.md.GetEntityObject<MJAPIApplicationEntity>('MJ: API Applications');
             app.NewRecord();
 
             app.Name = this.EditName.trim();
@@ -315,7 +310,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
         );
 
         // Build a map for computing full paths
-        const scopeMap = new Map<string, APIScopeEntity>();
+        const scopeMap = new Map<string, MJAPIScopeEntity>();
         for (const scope of this.AllScopes) {
             scopeMap.set(scope.ID, scope);
         }
@@ -334,7 +329,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
         }
 
         // Compute display name for each scope
-        const computeDisplayName = (scope: APIScopeEntity): string => {
+        const computeDisplayName = (scope: MJAPIScopeEntity): string => {
             // If FullPath is set and not empty, use it
             if (scope.FullPath && scope.FullPath.trim()) {
                 return scope.FullPath;
@@ -548,7 +543,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
 
             if (selection.selected && !existing) {
                 // Create new assignment
-                const appScope = await this.md.GetEntityObject<APIApplicationScopeEntity>('MJ: API Application Scopes');
+                const appScope = await this.md.GetEntityObject<MJAPIApplicationScopeEntity>('MJ: API Application Scopes');
                 appScope.NewRecord();
                 appScope.ApplicationID = appId;
                 appScope.ScopeID = selection.scope.ID;

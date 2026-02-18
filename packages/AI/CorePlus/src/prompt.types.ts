@@ -9,7 +9,7 @@
  * @since 2.50.0
  */
 
-import { AIPromptRunEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
+import { MJAIPromptRunEntity, MJAIConfigurationEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
 import { AIPromptEntityExtended } from './AIPromptExtended';
@@ -156,7 +156,7 @@ export interface AIPromptRunResult<T = unknown> {
   /**
    * The AIPromptRun entity that was created for tracking
    */
-  promptRun?: AIPromptRunEntity;
+  promptRun?: MJAIPromptRunEntity;
 
   /**
    * Total execution time in milliseconds
@@ -290,13 +290,13 @@ export interface AIPromptRunResult<T = unknown> {
  */
 export class AIModelSelectionInfo {
   /** The configuration entity that was used, if any */
-  aiConfiguration?: AIConfigurationEntity;
+  aiConfiguration?: MJAIConfigurationEntity;
   /** All models that were considered for selection */
   modelsConsidered: Array<{
     /** The model entity */
     model: AIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
-    vendor?: AIVendorEntity;
+    vendor?: MJAIVendorEntity;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -307,7 +307,7 @@ export class AIModelSelectionInfo {
   /** The model entity that was selected */
   modelSelected: AIModelEntityExtended;
   /** The vendor entity that was selected, if applicable */
-  vendorSelected?: AIVendorEntity;
+  vendorSelected?: MJAIVendorEntity;
   /** Reason for the selection */
   selectionReason: string;
   /** Whether a fallback model was used */

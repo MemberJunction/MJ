@@ -12,13 +12,14 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, LogError, CompositeKey } from '@memberjunction/core';
-import { ActionCategoryEntity, ActionEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { ActionExplorerStateService } from '../../services/action-explorer-state.service';
 
 type ActionType = 'Custom' | 'Generated';
 
 @Component({
+  standalone: false,
   selector: 'mj-new-action-panel',
   templateUrl: './new-action-panel.component.html',
   styleUrls: ['./new-action-panel.component.css'],
@@ -36,9 +37,9 @@ type ActionType = 'Custom' | 'Generated';
   ]
 })
 export class NewActionPanelComponent implements OnInit, OnDestroy {
-  @Input() Categories: ActionCategoryEntity[] = [];
+  @Input() Categories: MJActionCategoryEntity[] = [];
   @Input() PreselectedCategoryId: string | null = null;
-  @Output() ActionCreated = new EventEmitter<ActionEntity>();
+  @Output() ActionCreated = new EventEmitter<MJActionEntity>();
   @Output() Close = new EventEmitter<void>();
 
   public IsOpen = false;
@@ -144,7 +145,7 @@ export class NewActionPanelComponent implements OnInit, OnDestroy {
 
     try {
       const md = new Metadata();
-      const action = await md.GetEntityObject<ActionEntity>('Actions');
+      const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions');
 
       action.Name = this.Name.trim();
       action.Description = this.Description.trim() || null;
@@ -160,7 +161,7 @@ export class NewActionPanelComponent implements OnInit, OnDestroy {
 
         // Open the full action record for editing
         const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
-        this.navigationService.OpenEntityRecord('Actions', key);
+        this.navigationService.OpenEntityRecord('MJ: Actions', key);
       } else {
         this.Errors['general'] = 'Failed to save action. Please try again.';
       }
@@ -195,7 +196,7 @@ export class NewActionPanelComponent implements OnInit, OnDestroy {
     return options;
   }
 
-  private getCategoryPath(category: ActionCategoryEntity): string {
+  private getCategoryPath(category: MJActionCategoryEntity): string {
     const path: string[] = [category.Name];
     let currentParentId = category.ParentID;
 

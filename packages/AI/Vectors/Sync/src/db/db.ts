@@ -1,4 +1,4 @@
-import * as mssql from 'mssql';
+import mssql from 'mssql';
 import { dbDatabase, dbHost, dbPassword, dbPort, dbUsername } from '../config';
 
 const config = {

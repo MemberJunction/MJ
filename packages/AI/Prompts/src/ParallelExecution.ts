@@ -1,4 +1,4 @@
-import { AIPromptModelEntity } from "@memberjunction/core-entities";
+import { MJAIPromptModelEntity } from "@memberjunction/core-entities";
 import { AIPromptEntityExtended, AIModelEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo } from '@memberjunction/core';
 import { ValidationResult } from '@memberjunction/global';
@@ -19,7 +19,7 @@ export interface ExecutionTask {
   model: AIModelEntityExtended;
 
   /** Optional prompt-model configuration with execution parameters */
-  promptModel?: AIPromptModelEntity;
+  promptModel?: MJAIPromptModelEntity;
 
   /** Execution group number for coordinated parallel processing */
   executionGroup: number;

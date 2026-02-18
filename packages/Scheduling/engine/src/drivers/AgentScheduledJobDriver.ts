@@ -160,7 +160,7 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
 
     private async loadAgent(agentId: string, contextUser: UserInfo): Promise<AIAgentEntityExtended> {
         const md = new Metadata();
-        const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', contextUser);
+        const agent = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents', contextUser);
         const loaded = await agent.Load(agentId);
 
         if (!loaded) {
@@ -169,12 +169,4 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
 
         return agent;
     }
-}
-
-/**
- * Loader function to ensure this driver is registered
- * Prevents tree-shaking from removing the class
- */
-export function LoadAgentScheduledJobDriver(): void {
-    // No-op function, just ensures class is loaded
 }

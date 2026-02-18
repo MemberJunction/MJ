@@ -1,14 +1,15 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { LogError, Metadata, RunView } from '@memberjunction/core';
-import { DashboardEntityExtended, DashboardUserPreferenceEntity, ApplicationEntity } from '@memberjunction/core-entities';
+import { DashboardEntityExtended, MJDashboardUserPreferenceEntity, MJApplicationEntity } from '@memberjunction/core-entities';
 
 export interface DashboardPreferencesResult {
   saved: boolean;
-  preferences?: DashboardUserPreferenceEntity[];
+  preferences?: MJDashboardUserPreferenceEntity[];
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-dashboard-preferences-dialog',
   templateUrl: './dashboard-preferences-dialog.component.html',
   styleUrls: ['./dashboard-preferences-dialog.component.css']
@@ -29,7 +30,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
   public preferenceMode: 'personal' | 'system' = 'personal';
 
   private originalConfiguredIds: string[] = [];
-  private currentUserPreferences: DashboardUserPreferenceEntity[] = [];
+  private currentUserPreferences: MJDashboardUserPreferenceEntity[] = [];
   private allAvailableDashboards: DashboardEntityExtended[] = [];
 
   async ngOnInit(): Promise<void> {
@@ -97,7 +98,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       const ds = await md.GetAndCacheDatasetByName("MJ_Metadata");
       const appList = ds.Results.find(r => r.Code === 'Applications');
       if (appList) {
-        const app = appList.Results.find((a: ApplicationEntity) => a.ID === this.applicationId);
+        const app = appList.Results.find((a: MJApplicationEntity) => a.ID === this.applicationId);
         this.applicationName = app?.Name || 'Unknown Application';
       }
     } catch (error) {
@@ -127,7 +128,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
     console.log('Loading preferences with filter:', filter);
 
-    const prefsResult = await rv.RunView<DashboardUserPreferenceEntity>({
+    const prefsResult = await rv.RunView<MJDashboardUserPreferenceEntity>({
       EntityName: 'MJ: Dashboard User Preferences',
       ExtraFilter: filter,
       ResultType: 'entity_object',
@@ -292,7 +293,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       
       console.log('Loading existing preferences with filter:', userFilter);
       
-      const existingPrefs = await rv.RunView<DashboardUserPreferenceEntity>({
+      const existingPrefs = await rv.RunView<MJDashboardUserPreferenceEntity>({
         EntityName: 'MJ: Dashboard User Preferences',
         ExtraFilter: userFilter,
         ResultType: 'entity_object',
@@ -302,7 +303,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       console.log('Found existing preferences:', existingPreferences.length);
 
       // Create maps for efficient lookups
-      const existingByDashboardId = new Map<string, DashboardUserPreferenceEntity>();
+      const existingByDashboardId = new Map<string, MJDashboardUserPreferenceEntity>();
       existingPreferences.forEach(pref => {
         existingByDashboardId.set(pref.DashboardID, pref);
       });
@@ -322,7 +323,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       }
 
       // Step 2: Update existing preferences or create new ones
-      const newPreferences: DashboardUserPreferenceEntity[] = [];
+      const newPreferences: MJDashboardUserPreferenceEntity[] = [];
       
       for (let i = 0; i < this.configuredDashboards.length; i++) {
         const dashboard = this.configuredDashboards[i];
@@ -342,7 +343,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
         } else {
           // Create new preference
           console.log(`Creating new preference for dashboard ${dashboard.Name}, order: ${newDisplayOrder}`);
-          prefEntity = await md.GetEntityObject<DashboardUserPreferenceEntity>('MJ: Dashboard User Preferences');
+          prefEntity = await md.GetEntityObject<MJDashboardUserPreferenceEntity>('MJ: Dashboard User Preferences');
           
           // Set UserID based on preference mode
           if (this.isSysAdmin && this.scope === 'Global' && this.preferenceMode === 'system') {

@@ -1,11 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit, OnDestroy, HostListener } from '@angular/core';
-import { CredentialEntity, CredentialTypeEntity, CredentialCategoryEntity } from '@memberjunction/core-entities';
+import { MJCredentialEntity, MJCredentialTypeEntity, MJCredentialCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-
-export function LoadCredentialEditPanel() {
-    // Prevents tree-shaking
-}
 
 interface FieldSchemaProperty {
     name: string;
@@ -32,24 +28,25 @@ interface CredentialValues {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-edit-panel',
     templateUrl: './credential-edit-panel.component.html',
     styleUrls: ['./credential-edit-panel.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CredentialEditPanelComponent implements OnInit, OnDestroy {
-    @Input() credential: CredentialEntity | null = null;
-    @Input() credentialTypes: CredentialTypeEntity[] = [];
+    @Input() credential: MJCredentialEntity | null = null;
+    @Input() credentialTypes: MJCredentialTypeEntity[] = [];
     @Input() isOpen = false;
 
     @Output() close = new EventEmitter<void>();
-    @Output() saved = new EventEmitter<CredentialEntity>();
+    @Output() saved = new EventEmitter<MJCredentialEntity>();
     @Output() deleted = new EventEmitter<string>();
 
     public isLoading = false;
     public isSaving = false;
     public isNew = false;
-    public categories: CredentialCategoryEntity[] = [];
+    public categories: MJCredentialCategoryEntity[] = [];
 
     // Form fields
     public name = '';
@@ -77,7 +74,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         // Cleanup
     }
 
-    public get selectedType(): CredentialTypeEntity | null {
+    public get selectedType(): MJCredentialTypeEntity | null {
         return this.credentialTypes.find(t => t.ID === this.selectedTypeId) || null;
     }
 
@@ -98,7 +95,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         return true;
     }
 
-    public async open(credential: CredentialEntity | null, preselectedTypeId?: string, preselectedCategoryId?: string): Promise<void> {
+    public async open(credential: MJCredentialEntity | null, preselectedTypeId?: string, preselectedCategoryId?: string): Promise<void> {
         this.isLoading = true;
         this.isOpen = true;
         this.credential = credential;
@@ -139,7 +136,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         this.showSecretFields.clear();
     }
 
-    private populateFromCredential(credential: CredentialEntity): void {
+    private populateFromCredential(credential: MJCredentialEntity): void {
         this.name = credential.Name || '';
         this.description = credential.Description || '';
         this.selectedTypeId = credential.CredentialTypeID || '';
@@ -173,7 +170,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
     private async loadCategories(): Promise<void> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<CredentialCategoryEntity>({
+            const result = await rv.RunView<MJCredentialCategoryEntity>({
                 EntityName: 'MJ: Credential Categories',
                 OrderBy: 'Name',
                 ResultType: 'entity_object'
@@ -302,11 +299,11 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
 
         try {
-            let entity: CredentialEntity;
+            let entity: MJCredentialEntity;
 
             if (this.isNew) {
                 // Create new credential
-                entity = await this._metadata.GetEntityObject<CredentialEntity>('MJ: Credentials');
+                entity = await this._metadata.GetEntityObject<MJCredentialEntity>('MJ: Credentials');
             } else {
                 entity = this.credential!;
             }
@@ -421,8 +418,8 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         }
     }
 
-    public get groupedCredentialTypes(): Array<{ category: string; types: CredentialTypeEntity[] }> {
-        const grouped = new Map<string, CredentialTypeEntity[]>();
+    public get groupedCredentialTypes(): Array<{ category: string; types: MJCredentialTypeEntity[] }> {
+        const grouped = new Map<string, MJCredentialTypeEntity[]>();
         for (const type of this.credentialTypes) {
             const category = type.Category || 'Other';
             if (!grouped.has(category)) {
@@ -433,7 +430,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         return Array.from(grouped.entries()).map(([category, types]) => ({ category, types }));
     }
 
-    public getTypeIcon(type: CredentialTypeEntity): string {
+    public getTypeIcon(type: MJCredentialTypeEntity): string {
         const iconMap: Record<string, string> = {
             'AI': 'fa-solid fa-brain',
             'Communication': 'fa-solid fa-envelope',
@@ -445,7 +442,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         return type.IconClass || iconMap[type.Category] || 'fa-solid fa-key';
     }
 
-    public getTypeColor(type: CredentialTypeEntity): string {
+    public getTypeColor(type: MJCredentialTypeEntity): string {
         const colorMap: Record<string, string> = {
             'AI': '#8b5cf6',
             'Communication': '#3b82f6',

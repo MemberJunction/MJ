@@ -7,12 +7,14 @@ import {
   OnDestroy,
   ChangeDetectorRef,
   ElementRef,
-  ViewChild
+  ViewChild,
+  NgZone
 } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { BaseEntity, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { buildPkString, computeFieldsList } from '../utils/record.util';
 import { UserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
 import {
   ColDef,
@@ -133,6 +135,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-data-grid',
   templateUrl: './entity-data-grid.component.html',
   styleUrls: ['./entity-data-grid.component.css'],
@@ -267,14 +270,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   // External Data Input
   // ========================================
 
-  private _data: BaseEntity[] = [];
+  private _data: Record<string, unknown>[] = [];
   /**
    * Pre-loaded data (bypass RunView, use provided data).
    * When provided, the grid displays this data instead of loading via RunView.
    * Parent component is responsible for data loading and passing results here.
    */
   @Input()
-  set Data(value: BaseEntity[]) {
+  set Data(value: Record<string, unknown>[]) {
     const hadData = this._data.length > 0;
     this._data = value || [];
     this._useExternalData = this._data.length > 0;
@@ -301,7 +304,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
     }
   }
-  get Data(): BaseEntity[] {
+  get Data(): Record<string, unknown>[] {
     return this._data;
   }
 
@@ -1077,19 +1080,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   // Toolbar Actions (legacy names)
   @Output() AddRequested = new EventEmitter<void>();
-  @Output() DeleteRequested = new EventEmitter<BaseEntity[]>();
+  @Output() DeleteRequested = new EventEmitter<Record<string, unknown>[]>();
   @Output() ExportRequested = new EventEmitter<void>();
 
   // Predefined Toolbar Button Events
   @Output() NewButtonClick = new EventEmitter<void>();
   @Output() RefreshButtonClick = new EventEmitter<void>();
   @Output() ExportButtonClick = new EventEmitter<void>();
-  @Output() DeleteButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() CompareButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() MergeButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() AddToListButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() DuplicateSearchButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() CommunicationButtonClick = new EventEmitter<BaseEntity[]>();
+  @Output() DeleteButtonClick = new EventEmitter<Record<string, unknown>[]>();
+  @Output() CompareButtonClick = new EventEmitter<Record<string, unknown>[]>();
+  @Output() MergeButtonClick = new EventEmitter<Record<string, unknown>[]>();
+  @Output() AddToListButtonClick = new EventEmitter<Record<string, unknown>[]>();
+  @Output() DuplicateSearchButtonClick = new EventEmitter<Record<string, unknown>[]>();
+  @Output() CommunicationButtonClick = new EventEmitter<Record<string, unknown>[]>();
 
   // Navigation Events
   /**
@@ -1098,7 +1101,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Output() NavigationRequested = new EventEmitter<{
     entityInfo: EntityInfo;
-    record: BaseEntity;
+    record: Record<string, unknown>;
     compositeKey: string;
   }>();
 
@@ -1127,7 +1130,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Output() CompareRecordsRequested = new EventEmitter<{
     entityInfo: EntityInfo;
-    records: BaseEntity[];
+    records: Record<string, unknown>[];
   }>();
 
   /**
@@ -1136,7 +1139,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Output() MergeRecordsRequested = new EventEmitter<{
     entityInfo: EntityInfo;
-    records: BaseEntity[];
+    records: Record<string, unknown>[];
   }>();
 
   /**
@@ -1145,7 +1148,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Output() CommunicationRequested = new EventEmitter<{
     entityInfo: EntityInfo;
-    records: BaseEntity[];
+    records: Record<string, unknown>[];
     viewParams: RunViewParams | null;
   }>();
 
@@ -1155,7 +1158,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Output() DuplicateSearchRequested = new EventEmitter<{
     entityInfo: EntityInfo;
-    records: BaseEntity[];
+    records: Record<string, unknown>[];
   }>();
 
   /**
@@ -1164,7 +1167,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Output() AddToListRequested = new EventEmitter<{
     entityInfo: EntityInfo;
-    records: BaseEntity[];
+    records: Record<string, unknown>[];
     recordIds: string[];
   }>();
 
@@ -1184,7 +1187,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   @Output() EntityActionRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     action: EntityActionConfig;
-    selectedRecords: BaseEntity[];
+    selectedRecords: Record<string, unknown>[];
   }>();
 
   // ========================================
@@ -1266,7 +1269,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   // ========================================
 
   private _useExternalData: boolean = false;
-  private _allData: BaseEntity[] = [];
+  private _allData: Record<string, unknown>[] = [];
   private _rowDataMap = new Map<string, GridRowData>();
   private _entityInfo: EntityInfo | null = null;
   private _viewEntity: UserViewEntityExtended | null = null;
@@ -1381,7 +1384,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   constructor(
     private cdr: ChangeDetectorRef,
     private elementRef: ElementRef,
-    private exportService: ExportService
+    private exportService: ExportService,
+    private ngZone: NgZone
   ) {}
 
   // ========================================
@@ -1820,15 +1824,21 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       });
 
       if (result.Success) {
-        this.processAggregateResults(result.AggregateResults, result.AggregateExecutionTime);
+        this.ngZone.run(() => {
+          this.processAggregateResults(result.AggregateResults, result.AggregateExecutionTime);
+        });
       } else {
-        this._aggregatesLoading = false;
-        this.cdr.detectChanges();
+        this.ngZone.run(() => {
+          this._aggregatesLoading = false;
+          this.cdr.detectChanges();
+        });
       }
     } catch (error) {
       console.error('[EntityDataGrid] Error fetching aggregates:', error);
-      this._aggregatesLoading = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this._aggregatesLoading = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
@@ -1866,7 +1876,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   /**
    * Determines if a field should be shown by default when no saved view exists.
-   * This logic is aligned with UserViewEntity.SetDefaultsFromEntity() to ensure
+   * This logic is aligned with MJUserViewEntity.SetDefaultsFromEntity() to ensure
    * consistent column visibility between initial load and saved views.
    */
   private shouldShowField(field: EntityFieldInfo): boolean {
@@ -1879,7 +1889,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
 
     // Only show fields explicitly marked as DefaultInView
-    // This aligns with UserViewEntity.SetDefaultsFromEntity() behavior
+    // This aligns with MJUserViewEntity.SetDefaultsFromEntity() behavior
     // ensuring users see the same columns before and after saving a view
     return field.DefaultInView === true;
   }
@@ -2774,9 +2784,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
 
       const rv = new RunView();
-      const result = await rv.RunView<BaseEntity>({
+      const result = await rv.RunView<Record<string, unknown>>({
         ...runViewParams,
-        ResultType: 'entity_object',
+        ResultType: 'simple',
+        Fields: this._entityInfo ? computeFieldsList(this._entityInfo, this._gridState) : undefined,
         Aggregates: aggregateExpressions
       });
 
@@ -2845,8 +2856,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       );
       this.AfterDataLoad.emit(afterLoadEvent);
     } finally {
-      this.loading = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.loading = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
@@ -2903,9 +2916,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           runViewParams.MaxRows = blockSize;
 
           const rv = new RunView();
-          const result = await rv.RunView<BaseEntity>({
+          const result = await rv.RunView<Record<string, unknown>>({
             ...runViewParams,
-            ResultType: 'entity_object'
+            ResultType: 'simple',
+            Fields: this._entityInfo ? computeFieldsList(this._entityInfo, this._gridState) : undefined
           });
 
           if (result.Success) {
@@ -2941,10 +2955,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Converts a BaseEntity to AG Grid row data format.
+   * Converts a Record<string, unknown> to AG Grid row data format.
    * This is used by both client and infinite scroll modes for consistent data formatting.
    */
-  private entityToRowData(entity: BaseEntity, index: number): Record<string, unknown> {
+  private entityToRowData(entity: Record<string, unknown>, index: number): Record<string, unknown> {
     const key = this.getRowKey(entity);
 
     // Store in row data map for later retrieval
@@ -2966,7 +2980,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
     if (this._entityInfo) {
       for (const field of this._entityInfo.Fields) {
-        row[field.Name] = entity.Get(field.Name);
+        row[field.Name] = entity[field.Name];
       }
     }
 
@@ -3035,7 +3049,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
       if (this._entityInfo) {
         for (const field of this._entityInfo.Fields) {
-          row[field.Name] = entity.Get(field.Name);
+          row[field.Name] = entity[field.Name];
         }
       }
 
@@ -3085,16 +3099,17 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  private getRowKey(entity: BaseEntity): string {
-    // Use composite key if available
-    if (entity.PrimaryKey) {
-      return entity.PrimaryKey.ToConcatenatedString();
+  private getRowKey(entity: Record<string, unknown>): string {
+    // Build key from EntityInfo PK fields when available
+    if (this._entityInfo) {
+      return buildPkString(entity, this._entityInfo);
     }
-    const keyValue = entity.Get(this._keyField);
+    // Fallback to configured key field via direct property access
+    const keyValue = entity[this._keyField];
     return keyValue != null ? String(keyValue) : '';
   }
 
-  private computeRowClasses(index: number, _entity: BaseEntity): string[] {
+  private computeRowClasses(index: number, _entity: Record<string, unknown>): string[] {
     const classes: string[] = [];
     if (this._striped && index % 2 === 1) {
       classes.push('grid-row-alt');
@@ -3274,7 +3289,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   /**
    * Emits a navigation request for the given entity record.
    */
-  private emitNavigationRequest(entity: BaseEntity, compositeKey: string): void {
+  private emitNavigationRequest(entity: Record<string, unknown>, compositeKey: string): void {
     if (!this._entityInfo) return;
 
     this.NavigationRequested.emit({
@@ -3712,10 +3727,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this.gridApi?.deselectAll();
   }
 
-  GetSelectedRows(): BaseEntity[] {
+  GetSelectedRows(): Record<string, unknown>[] {
     return this._selectedKeys
       .map(key => this._rowDataMap.get(key)?.entity)
-      .filter((e): e is BaseEntity => e !== undefined);
+      .filter((e): e is Record<string, unknown> => e !== undefined);
   }
 
   IsRowSelected(key: string): boolean {
@@ -3754,15 +3769,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  GetData(): BaseEntity[] {
+  GetData(): Record<string, unknown>[] {
     return this._useExternalData ? [...this._data] : [...this._allData];
   }
 
-  GetRowByKey(key: string): BaseEntity | undefined {
+  GetRowByKey(key: string): Record<string, unknown> | undefined {
     return this._rowDataMap.get(key)?.entity;
   }
 
-  GetRowByIndex(index: number): BaseEntity | undefined {
+  GetRowByIndex(index: number): Record<string, unknown> | undefined {
     const dataSource = this._useExternalData ? this._data : this._allData;
     return dataSource[index];
   }
@@ -3958,13 +3973,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Get the current grid data formatted for export
    */
   private getExportData(): ExportData {
-    // Convert BaseEntity[] to plain objects for export
-    return this.rowData.map(row => {
-      if (row instanceof BaseEntity) {
-        return row.GetAll();
-      }
-      return row as Record<string, unknown>;
-    });
+    // rowData is already plain Record<string, unknown>[] objects - return directly
+    return this.rowData.map(row => row as Record<string, unknown>);
   }
 
   /**
@@ -4072,7 +4082,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Emit new structured event with record IDs for list management
       if (this._entityInfo) {
         const recordIds = selectedRows.map(r => {
-          return r.PrimaryKey?.ToConcatenatedString() || String(r.Get(this._keyField));
+          return buildPkString(r, this._entityInfo!);
         });
         this.AddToListRequested.emit({
           entityInfo: this._entityInfo,

@@ -1,5 +1,10 @@
+import { createRequire } from 'module';
 import { BrowserManager } from './browser-context';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
+
+// ESM compatibility: require is not available in ESM, use createRequire
+// See: https://nodejs.org/api/module.html#modulecreaterequirefilename
+const _require = createRequire(import.meta.url);
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
 import { ComponentLinter, Violation } from './component-linter';
 import {
@@ -13,7 +18,7 @@ import {
   ComponentObject,
   SimpleEntityInfo
 } from '@memberjunction/interactive-component-types';
-import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
@@ -237,7 +242,7 @@ export class ComponentRunner {
 
     // Load component metadata and libraries first (needed for library loading)
     await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
-    const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as ComponentLibraryEntity[];
+    const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as MJComponentLibraryEntity[];
 
     try {
       
@@ -424,7 +429,7 @@ export class ComponentRunner {
             }
             
             // Configure the registry with the component libraries
-            // Note: LibraryRegistry.Config expects ComponentLibraryEntity[]
+            // Note: LibraryRegistry.Config expects MJComponentLibraryEntity[]
             await LibraryRegistry.Config(false, componentLibraries || []);
             if (debug) {
               console.log('⚙️ Configured LibraryRegistry with', componentLibraries?.length || 0, 'libraries');
@@ -1337,7 +1342,7 @@ export class ComponentRunner {
     const fs = await import('fs');
     
     // Resolve the path to the UMD bundle
-    const runtimePath = require.resolve('@memberjunction/react-runtime/dist/runtime.umd.js');
+    const runtimePath = _require.resolve('@memberjunction/react-runtime/dist/runtime.umd.js');
     const runtimeBundle = fs.readFileSync(runtimePath, 'utf-8');
     
     // Inject the UMD bundle into the page
@@ -1382,7 +1387,7 @@ export class ComponentRunner {
   private async loadComponentLibraries(
     page: any, 
     specLibraries: any[], 
-    allLibraries: ComponentLibraryEntity[],
+    allLibraries: MJComponentLibraryEntity[],
     debug: boolean = false
   ): Promise<void> {
     
@@ -1397,7 +1402,7 @@ export class ComponentRunner {
     }
 
     // Create a map of library definitions from allLibraries
-    const libraryMap = new Map<string, ComponentLibraryEntity>();
+    const libraryMap = new Map<string, MJComponentLibraryEntity>();
     for (const lib of allLibraries) {
       libraryMap.set(lib.Name.toLowerCase(), lib);
     }
@@ -1500,7 +1505,7 @@ export class ComponentRunner {
    * Set up error tracking in the page
    * @deprecated Moved inline to page.evaluate after library loading to avoid false positives
    */
-  private async setupErrorTracking_DEPRECATED(page: any, componentSpec: ComponentSpec, allLibraries?: ComponentLibraryEntity[]) {
+  private async setupErrorTracking_DEPRECATED(page: any, componentSpec: ComponentSpec, allLibraries?: MJComponentLibraryEntity[]) {
     await page.evaluate(({ spec, availableLibraries }: { spec: any; availableLibraries: any[] }) => {
       // Initialize error tracking
       (window as any).__testHarnessRuntimeErrors = [];

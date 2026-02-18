@@ -1,9 +1,10 @@
 import { Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { LogError, Metadata, RunQuery } from '@memberjunction/core';
-import { QueryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity } from '@memberjunction/core-entities';
 import { QueryGridComponent } from '@memberjunction/ng-query-grid';
 
 @Component({
+  standalone: false,
   selector: 'mj-single-query',
   templateUrl: './single-query.component.html',
   styleUrls: ['./single-query.component.css']
@@ -15,7 +16,7 @@ export class SingleQueryComponent implements OnInit {
 
   @ViewChild('theQuery', { static: true }) theQuery!: QueryGridComponent;
 
-  public queryEntity!: QueryEntity;
+  public queryEntity!: MJQueryEntity;
 
   public queryData!: any[];
  
@@ -37,7 +38,7 @@ export class SingleQueryComponent implements OnInit {
       // get info on the report we are loading
       this.loadStarted.emit();
       const md = new Metadata();
-      this.queryEntity = await md.GetEntityObject<QueryEntity>('Queries', md.CurrentUser);
+      this.queryEntity = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', md.CurrentUser);
       
       // Use the clean ID without quotes for GraphQL/entity loading
       const loadResult = await this.queryEntity.Load(this.queryId);

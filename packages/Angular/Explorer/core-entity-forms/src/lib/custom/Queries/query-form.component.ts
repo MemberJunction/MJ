@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
-import { QueryEntity, QueryParameterEntity, QueryCategoryEntity, QueryFieldEntity, QueryEntityEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { QueryFormComponent } from '../../generated/Entities/Query/query.form.component';
+import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
 import { Metadata, RunView, RUN_QUERY_SQL_FILTERS } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
@@ -14,19 +14,19 @@ interface CategoryTreeNode {
     items?: CategoryTreeNode[];
 }
 
-@RegisterClass(BaseFormComponent, 'Queries') 
+@RegisterClass(BaseFormComponent, 'MJ: Queries')
 @Component({
+  standalone: false,
     selector: 'mj-query-form',
     templateUrl: './query-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
 })
-export class QueryFormExtendedComponent extends QueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
-    public override cdr!: ChangeDetectorRef;
-    public record!: QueryEntity;
-    public queryParameters: QueryParameterEntity[] = [];
-    public queryFields: QueryFieldEntity[] = [];
-    public queryEntities: QueryEntityEntity[] = [];
-    public queryPermissions: QueryPermissionEntity[] = [];
+export class QueryFormExtendedComponent extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
+    public record!: MJQueryEntity;
+    public queryParameters: MJQueryParameterEntity[] = [];
+    public queryFields: MJQueryFieldEntity[] = [];
+    public queryEntities: MJQueryEntityEntity[] = [];
+    public queryPermissions: MJQueryPermissionEntity[] = [];
     public isLoadingParameters = false;
     public isLoadingFields = false;
     public isLoadingEntities = false;
@@ -48,7 +48,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     public categoryOptions: Array<{text: string, value: string}> = [
         { text: 'Select Category...', value: '' }
     ];
-    public categories: QueryCategoryEntity[] = [];
+    public categories: MJQueryCategoryEntity[] = [];
     public categoryTreeData: CategoryTreeNode[] = [];
     
     // Status options
@@ -84,7 +84,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         // Ensure form is properly initialized after all data is loaded
         this.cdr.detectChanges();
     }
-
 
     ngOnDestroy() {
         this.destroy$.next();
@@ -164,7 +163,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.isLoadingParameters = true;
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<QueryParameterEntity>({
+                const results = await rv.RunView<MJQueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Name ASC',
@@ -187,8 +186,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.isLoadingFields = true;
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<QueryFieldEntity>({
-                    EntityName: 'Query Fields',
+                const results = await rv.RunView<MJQueryFieldEntity>({
+                    EntityName: 'MJ: Query Fields',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Sequence ASC, Name ASC',
                     ResultType: 'entity_object'
@@ -210,8 +209,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.isLoadingEntities = true;
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<QueryEntityEntity>({
-                    EntityName: 'Query Entities',
+                const results = await rv.RunView<MJQueryEntityEntity>({
+                    EntityName: 'MJ: Query Entities',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Entity ASC',
                     ResultType: 'entity_object'
@@ -234,8 +233,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.isLoadingPermissions = true;
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<QueryPermissionEntity>({
-                    EntityName: 'Query Permissions',
+                const results = await rv.RunView<MJQueryPermissionEntity>({
+                    EntityName: 'MJ: Query Permissions',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Role ASC',
                     ResultType: 'entity_object'
@@ -255,8 +254,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     async loadCategories() {
         try {
             const rv = new RunView();
-            const results = await rv.RunView<QueryCategoryEntity>({
-                EntityName: 'Query Categories',
+            const results = await rv.RunView<MJQueryCategoryEntity>({
+                EntityName: 'MJ: Query Categories',
                 OrderBy: 'Name',
                 ResultType: 'entity_object'
             });
@@ -286,7 +285,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         }
     }
     
-    private buildCategoryTree(categories: QueryCategoryEntity[]): CategoryTreeNode[] {
+    private buildCategoryTree(categories: MJQueryCategoryEntity[]): CategoryTreeNode[] {
         const categoryMap = new Map<string, CategoryTreeNode>();
         const rootCategories: CategoryTreeNode[] = [];
         
@@ -364,7 +363,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             try {
                 // Create new category with trimmed name
                 const md = new Metadata();
-                const newCategory = await md.GetEntityObject<QueryCategoryEntity>('Query Categories');
+                const newCategory = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
                 newCategory.Name = value.trim();
                 const saved = await newCategory.Save();
                 
@@ -404,7 +403,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             option.text && option.text.trim().toLowerCase() === normalizedName
         );
     }
-
 
     /**
      * Updates the hasUnsavedChanges flag based on entity dirty states
@@ -464,7 +462,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     async addParameter() {
         try {
             const md = new Metadata();
-            const newParam = await md.GetEntityObject<QueryParameterEntity>('MJ: Query Parameters');
+            const newParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
             newParam.QueryID = this.record.ID;
             newParam.Name = `param${this.queryParameters.length + 1}`;
             newParam.Type = 'string';
@@ -499,7 +497,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Edit a parameter
      */
-    async editParameter(param: QueryParameterEntity) {
+    async editParameter(param: MJQueryParameterEntity) {
         // TODO: Show parameter edit dialog
         console.log('Edit parameter:', param);
     }
@@ -507,7 +505,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Delete a parameter
      */
-    async deleteParameter(param: QueryParameterEntity) {
+    async deleteParameter(param: MJQueryParameterEntity) {
         if (!confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
             return;
         }
@@ -544,7 +542,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Handle category creation from dialog
      */
-    async onCategoryCreated(newCategory: QueryCategoryEntity) {
+    async onCategoryCreated(newCategory: MJQueryCategoryEntity) {
         // Reload categories to include the new one
         await this.loadCategories();
         
@@ -582,7 +580,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             } else {
                 try {
                     const md = new Metadata();
-                    const newCategory = await md.GetEntityObject<QueryCategoryEntity>('Query Categories');
+                    const newCategory = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
                     newCategory.Name = this.record.CategoryID.trim();
                     const saved = await newCategory.Save();
                     
@@ -675,7 +673,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     async addField() {
         try {
             const md = new Metadata();
-            const newField = await md.GetEntityObject<QueryFieldEntity>('Query Fields');
+            const newField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
             newField.QueryID = this.record.ID;
             newField.Name = `field${this.queryFields.length + 1}`;
             newField.Description = '';
@@ -707,7 +705,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Delete a field
      */
-    async deleteField(field: QueryFieldEntity) {
+    async deleteField(field: MJQueryFieldEntity) {
         if (!confirm(`Are you sure you want to delete field "${field.Name}"?`)) {
             return;
         }
@@ -739,7 +737,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     async addEntity() {
         try {
             const md = new Metadata();
-            const newEntity = await md.GetEntityObject<QueryEntityEntity>('Query Entities');
+            const newEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
             newEntity.QueryID = this.record.ID;
             
             // Add to the list immediately for UI responsiveness
@@ -758,7 +756,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Delete an entity
      */
-    async deleteEntity(entity: QueryEntityEntity) {
+    async deleteEntity(entity: MJQueryEntityEntity) {
         if (!confirm(`Are you sure you want to delete entity "${entity.Entity}"?`)) {
             return;
         }
@@ -801,8 +799,4 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         return this.EditMode ? "Queue" : "None";
     }
 
-}
-
-export function LoadQueryFormExtendedComponent() {
-    // prevents tree shaking
 }

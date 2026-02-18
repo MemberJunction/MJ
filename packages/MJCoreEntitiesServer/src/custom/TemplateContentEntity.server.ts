@@ -1,5 +1,5 @@
 import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
-import { TemplateContentEntity, TemplateParamEntity, TemplateEntity } from "@memberjunction/core-entities";
+import { MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
@@ -19,8 +19,8 @@ interface ParameterExtractionResult {
     parameters: ExtractedParameter[];
 }
 
-@RegisterClass(BaseEntity, 'Template Contents')
-export class TemplateContentEntityExtended extends TemplateContentEntity {
+@RegisterClass(BaseEntity, 'MJ: Template Contents')
+export class TemplateContentEntityExtended extends MJTemplateContentEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const provider = Metadata.Provider as SQLServerDataProvider;
         
@@ -139,8 +139,8 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
         try {
             // Get existing template parameters
             const rv = this.RunViewProviderToUse;
-            const existingParamsResult = await rv.RunView<TemplateParamEntity>({
-                EntityName: 'Template Params',
+            const existingParamsResult = await rv.RunView<MJTemplateParamEntity>({
+                EntityName: 'MJ: Template Params',
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -153,7 +153,7 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
             
             // Determine if we're in single or multiple template content scenario
             const templateContentsResult = await rv.RunView({
-                EntityName: 'Template Contents',
+                EntityName: 'MJ: Template Contents',
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,
                 ResultType: 'simple'
             }, this.ContextCurrentUser);
@@ -192,7 +192,7 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
             
             // Add new parameters
             for (const param of paramsToAdd) {
-                const newParam = await md.GetEntityObject<TemplateParamEntity>('Template Params', this.ContextCurrentUser);
+                const newParam = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params', this.ContextCurrentUser);
                 newParam.TemplateID = this.TemplateID;
                 newParam.TemplateContentID = templateContentID;
                 newParam.Name = param.name;
@@ -254,5 +254,3 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
         }
     }
 }
-
-export function LoadTemplateContentEntityServerSubClass() {}

@@ -1,0 +1,261 @@
+<!-- ============================================
+     EDIT MODE BANNER (shows above toolbar when editing)
+     ============================================ -->
+@if (EditMode && Config.ShowEditBanner) {
+  <div class="mj-forms-edit-banner">
+    @if (DirtyFieldDisplayNames.length > 0) {
+      <i class="fa-solid fa-circle-exclamation mj-forms-edit-banner-icon--dirty"></i>
+      <span class="mj-forms-edit-banner-dirty">
+        <strong>{{ DirtyFieldDisplayNames.length }}</strong>
+        field{{ DirtyFieldDisplayNames.length === 1 ? '' : 's' }} modified
+        &mdash; {{ DirtyFieldDisplayNames.join(', ') }}
+      </span>
+    } @else {
+      <i class="fa-solid fa-pen-to-square"></i>
+      <span class="mj-forms-edit-banner-text">Editing: {{ RecordDisplayName }}</span>
+    }
+    <div class="mj-forms-toolbar-spacer"></div>
+    <div class="mj-forms-edit-banner-actions">
+      <button class="mj-forms-btn mj-forms-btn--primary" (click)="OnSave()" [disabled]="IsSaving" title="Save Changes">
+        <i class="fa-solid fa-floppy-disk"></i>
+        <span class="mj-forms-btn-text">Save Changes</span>
+      </button>
+      <button class="mj-forms-btn" (click)="OnCancel()" [disabled]="IsSaving" title="Discard Changes">
+        <i class="fa-solid fa-rotate-left"></i>
+        <span class="mj-forms-btn-text">Discard</span>
+      </button>
+    </div>
+  </div>
+}
+
+<!-- ============================================
+     MAIN TOOLBAR (read mode only — hidden in edit mode)
+     ============================================ -->
+@if (!EditMode) {
+  <div class="mj-forms-toolbar" [class.mj-forms-toolbar--sticky]="Config.StickyToolbar">
+
+    <!-- Action buttons -->
+    <div class="mj-forms-toolbar-group">
+      @if (Config.ShowEditButton && UserCanEdit) {
+        <button class="mj-forms-btn" (click)="OnEdit()" title="Edit this Record">
+          <i class="fa-solid fa-pen-to-square"></i>
+        </button>
+      }
+      @if (Config.ShowDeleteButton && UserCanDelete) {
+        <button class="mj-forms-btn" (click)="OnDeleteClick()" title="Delete this Record">
+          <i class="fa-regular fa-trash-can"></i>
+        </button>
+      }
+      @if (Config.ShowFavoriteButton && FavoriteInitDone) {
+        <button class="mj-forms-btn" (click)="OnFavoriteToggle()" [title]="IsFavorite ? 'Remove Favorite' : 'Make Favorite'">
+          <i [class]="IsFavorite ? 'fa-solid fa-star mj-icon--favorite' : 'fa-regular fa-star'"></i>
+        </button>
+      }
+      @if (Config.ShowHistoryButton && TracksChanges) {
+        <button class="mj-forms-btn" (click)="OnHistory()" title="MJ: Record Changes">
+          <i class="fa-regular fa-clock"></i>
+        </button>
+      }
+      @if (Config.ShowListButton) {
+        <button class="mj-forms-btn mj-forms-btn--list" (click)="OnListManagement()"
+          [title]="ListCount > 0 ? 'Member of ' + ListCount + ' list(s)' : 'Add to a list'">
+          <i class="fa-regular fa-bookmark"></i>
+          @if (ListCount > 0) {
+            <span class="mj-list-count-badge">{{ ListCount }}</span>
+          }
+        </button>
+      }
+
+      <!-- Custom toolbar buttons -->
+      @for (button of Config.CustomButtons; track button.Key) {
+        @if (button.Visible !== false) {
+          <button class="mj-forms-btn"
+            [class]="button.CssClass || ''"
+            [disabled]="button.Disabled || false"
+            [title]="button.Description"
+            (click)="OnCustomButtonClick(button)">
+            <i [class]="button.Icon"></i>
+          </button>
+        }
+      }
+    </div>
+
+    <!-- Separator before hierarchy -->
+    @if (Config.ShowEntityHierarchy && IsInHierarchy) {
+      <div class="mj-forms-toolbar-separator"></div>
+    }
+
+    <!-- IS-A Entity Hierarchy Breadcrumb (bidirectional: Root → ... → Current → ... → Leaf) -->
+    @if (Config.ShowEntityHierarchy && IsInHierarchy) {
+      <div class="mj-entity-hierarchy">
+        <!-- Parent chain (root → ... → immediate parent) -->
+        @for (parent of ParentChain; track parent.ID) {
+          <a class="mj-entity-badge mj-entity-badge--parent"
+             [title]="'Navigate to parent: ' + parent.Name"
+             (click)="OnParentBadgeClick(parent, $event)">
+            <i class="fa-solid fa-arrow-up"></i>
+            {{ parent.Name }}
+          </a>
+          <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+        }
+
+        <!-- Current entity (always shown) -->
+        <span class="mj-entity-badge mj-entity-badge--current">{{ EntityInfo?.Name }}</span>
+
+        <!-- Descendant tree (recursive: inline for single paths, branching for multiple) -->
+        @if (DescendantTree.length > 0) {
+          <ng-container [ngTemplateOutlet]="descendantTreeTpl"
+            [ngTemplateOutletContext]="{ items: DescendantTree }"></ng-container>
+        }
+      </div>
+    }
+
+    <!-- Spacer pushes section controls to the right -->
+    <div class="mj-forms-toolbar-spacer"></div>
+
+    <!-- Section Controls -->
+    @if (Config.ShowSectionControls) {
+      <div class="mj-forms-toolbar-group mj-section-controls">
+        @if (Config.ShowSectionFilter) {
+          <div class="mj-forms-search-wrapper">
+            <input type="text"
+              class="mj-section-search"
+              [class.mj-section-search--active]="SearchFilter"
+              [value]="SearchFilter"
+              (input)="OnFilterInput($event)"
+              placeholder="Search sections...">
+            @if (SearchFilter) {
+              <button class="mj-clear-search" (click)="OnClearFilter()" title="Clear search">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            }
+          </div>
+        }
+        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+          [disabled]="ExpandedSectionCount >= VisibleSectionCount"
+          (click)="OnExpandAll()" title="Expand all sections">
+          <i class="fa-solid fa-angles-down"></i>
+        </button>
+        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+          [disabled]="ExpandedSectionCount === 0"
+          (click)="OnCollapseAll()" title="Collapse all sections">
+          <i class="fa-solid fa-angles-up"></i>
+        </button>
+        @if (HasCustomSectionOrder) {
+          <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only" (click)="OnResetSectionOrder()" title="Reset section order">
+            <i class="fa-solid fa-arrow-rotate-left"></i>
+          </button>
+        }
+        @if (Config.ShowSectionManager) {
+          <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+            (click)="OnManageSections()" title="Manage section order">
+            <i class="fa-solid fa-bars-staggered"></i>
+          </button>
+        }
+        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+          (click)="OnToggleWidthMode()"
+          [title]="WidthMode === 'centered' ? 'Expand to full width' : 'Center content'">
+          <i [class]="WidthMode === 'centered' ? 'fa-solid fa-arrows-left-right-to-line' : 'fa-solid fa-compress'"></i>
+        </button>
+      </div>
+    }
+
+    <!-- Additional actions slot -->
+    @if (AdditionalActionsTemplate) {
+      <ng-container [ngTemplateOutlet]="AdditionalActionsTemplate"></ng-container>
+    }
+    <ng-content select="[toolbar-additional-controls]"></ng-content>
+  </div>
+}
+
+<!-- ============================================
+     DISCARD CHANGES CONFIRMATION DIALOG
+     ============================================ -->
+@if (ShowDiscardDialog) {
+  <div class="mj-dialog-overlay" (click)="OnDiscardCancel()">
+    <div class="mj-dialog" (click)="$event.stopPropagation()">
+      <div class="mj-dialog-header">
+        <h3>Discard Changes?</h3>
+        <button class="mj-dialog-close" (click)="OnDiscardCancel()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-dialog-body">
+        <p>You have <strong>{{ DirtyFieldDisplayNames.length }}</strong> unsaved change{{ DirtyFieldDisplayNames.length === 1 ? '' : 's' }}. Are you sure you want to discard {{ DirtyFieldDisplayNames.length === 1 ? 'it' : 'them' }}?</p>
+      </div>
+      <div class="mj-dialog-footer">
+        <button class="mj-forms-btn mj-forms-btn--danger" (click)="OnDiscardConfirm()">
+          <i class="fa-solid fa-rotate-left"></i>
+          Discard Changes
+        </button>
+        <button class="mj-forms-btn" (click)="OnDiscardCancel()">
+          Keep Editing
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ============================================
+     DELETE CONFIRMATION DIALOG
+     ============================================ -->
+@if (ShowDeleteDialog) {
+  <div class="mj-dialog-overlay" (click)="OnDeleteCancel()">
+    <div class="mj-dialog" (click)="$event.stopPropagation()">
+      <div class="mj-dialog-header">
+        <h3>Confirm Deletion</h3>
+        <button class="mj-dialog-close" (click)="OnDeleteCancel()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-dialog-body">
+        <p>Are you sure you want to delete this record? This action cannot be undone.</p>
+      </div>
+      <div class="mj-dialog-footer">
+        <button class="mj-forms-btn mj-forms-btn--danger" (click)="OnDeleteConfirm()">
+          <i class="fa-solid fa-trash-can"></i>
+          Delete
+        </button>
+        <button class="mj-forms-btn" (click)="OnDeleteCancel()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Recursive template for IS-A descendant tree rendering.
+     Single child at a level → inline with chevron.
+     Multiple children at a level → tree branch with CSS connector lines. -->
+<ng-template #descendantTreeTpl let-items="items">
+  @if (items.length === 1) {
+    <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+    <a class="mj-entity-badge mj-entity-badge--child"
+       [title]="'Navigate to: ' + items[0].EntityName"
+       (click)="OnDescendantBadgeClick(items[0].EntityName, $event)">
+      <i class="fa-solid fa-arrow-down"></i>
+      {{ items[0].EntityName }}
+    </a>
+    @if (items[0].Children.length > 0) {
+      <ng-container [ngTemplateOutlet]="descendantTreeTpl"
+        [ngTemplateOutletContext]="{ items: items[0].Children }"></ng-container>
+    }
+  } @else if (items.length > 1) {
+    <div class="mj-descendant-chains">
+      @for (item of items; track item.EntityName) {
+        <div class="mj-descendant-chain">
+          <a class="mj-entity-badge mj-entity-badge--child"
+             [title]="'Navigate to: ' + item.EntityName"
+             (click)="OnDescendantBadgeClick(item.EntityName, $event)">
+            <i class="fa-solid fa-arrow-down"></i>
+            {{ item.EntityName }}
+          </a>
+          @if (item.Children.length > 0) {
+            <ng-container [ngTemplateOutlet]="descendantTreeTpl"
+              [ngTemplateOutletContext]="{ items: item.Children }"></ng-container>
+          }
+        </div>
+      }
+    </div>
+  }
+</ng-template>

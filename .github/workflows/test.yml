@@ -1,0 +1,72 @@
+name: Unit Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [next]
+    paths:
+      - 'package-lock.json'
+      - 'packages/**'
+      - 'vitest.*'
+
+jobs:
+  test:
+    name: Run unit tests
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create MJExplorer environment file
+        run: |
+          mkdir -p packages/MJExplorer/src/environments
+          cat > packages/MJExplorer/src/environments/environment.ts << 'ENVEOF'
+          export const environment = {
+            GRAPHQL_URI: "http://localhost:4000",
+            GRAPHQL_WS_URI: "ws://localhost:4000",
+            REDIRECT_URI: "http://localhost:4200",
+            CLIENT_ID: "00000000-0000-0000-0000-000000000000",
+            TENANT_ID: "00000000-0000-0000-0000-000000000000",
+            CLIENT_AUTHORITY: "https://login.microsoftonline.com/common",
+            AUTH_TYPE: "msal" as const,
+            NODE_ENV: "test",
+            AUTOSAVE_DEBOUNCE_MS: 1200,
+            SEARCH_DEBOUNCE_MS: 800,
+            MIN_SEARCH_LENGTH: 3,
+            MJ_CORE_SCHEMA_NAME: "__mj",
+            production: false,
+            APPLICATION_NAME: "MJ Explorer CI",
+            APPLICATION_INSTANCE: "CI",
+            AUTH0_DOMAIN: "",
+            AUTH0_CLIENTID: ""
+          };
+          ENVEOF
+          sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30

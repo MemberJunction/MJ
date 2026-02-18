@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 import {
   ComponentEntityExtended,
-  ArtifactVersionEntity,
+  MJArtifactVersionEntity,
   ResourceData,
   UserInfoEngine
 } from '@memberjunction/core-entities';
@@ -44,6 +44,7 @@ export interface NewComponentResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-component-studio-dashboard',
   templateUrl: './component-studio-dashboard.component.html',
   styleUrls: ['./component-studio-dashboard.component.css'],
@@ -541,17 +542,17 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       if (!result?.action) return;
 
       const artifact = result.artifact;
-      let version: ArtifactVersionEntity;
+      let version: MJArtifactVersionEntity;
 
       if (result.action === 'update-version' && result.versionToUpdate) {
         version = result.versionToUpdate;
       } else {
-        version = await this.metadata.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions');
+        version = await this.metadata.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions');
         version.ArtifactID = artifact.ID;
         version.UserID = this.metadata.CurrentUser.ID;
 
         const rv = new RunView();
-        const versionsResult = await rv.RunView<ArtifactVersionEntity>({
+        const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ArtifactID = '${artifact.ID}'`,
           OrderBy: 'VersionNumber DESC',
@@ -710,11 +711,4 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
-}
-
-/**
- * Function to prevent tree shaking of the ComponentStudioDashboardComponent.
- */
-export function LoadComponentStudioDashboard() {
-  // This function doesn't need to do anything
 }

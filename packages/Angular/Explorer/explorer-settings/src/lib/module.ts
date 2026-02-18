@@ -5,11 +5,9 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { WindowModule } from '@progress/kendo-angular-dialog';
 
-import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { SimpleRecordListModule } from '@memberjunction/ng-simple-record-list';
-import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { JoinGridModule } from '@memberjunction/ng-join-grid';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -74,9 +72,7 @@ import { ApplicationDialogComponent } from './application-management/application
     FormsModule,
     ReactiveFormsModule,
     DragDropModule,
-    ContainerDirectivesModule,
     EntityPermissionsModule,
-    MJTabStripModule,
     EntityFormDialogModule,
     SimpleRecordListModule,
     JoinGridModule,

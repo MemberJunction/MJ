@@ -3,14 +3,14 @@
     "fields": {
       "Name": "HubSpot - Create Contact",
       "Description": "Creates a new contact in HubSpot CRM with email, personal details, and optional company association",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "CreateContactAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user-plus"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -209,7 +209,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -276,22 +276,22 @@
       "ID": "6CC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.189Z",
-      "checksum": "0f5f885e2f2e8b0d2a1d858a794abd6f816db1b50800ef7a6dcab726c5cfde15"
+      "lastModified": "2026-02-13T21:08:55.005Z",
+      "checksum": "cc15a71b1eb5d5f5c5cfaab159df6648ddd98263ef3aa928ce82ac19e69cc2b6"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Update Contact",
       "Description": "Updates an existing contact in HubSpot CRM by email or ID",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "UpdateContactAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user-pen"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -471,7 +471,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -538,22 +538,22 @@
       "ID": "76C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.190Z",
-      "checksum": "d0df58b7c1d993018214b607d755780c865308179585dfbe0488d0b25808b1fd"
+      "lastModified": "2026-02-13T21:08:55.006Z",
+      "checksum": "3ebd2ae874eade9ff3378a192e7a6daddb3d8d5041604cbbe3ab2f1b837dcfdd"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Delete Contact",
       "Description": "Deletes a contact from HubSpot CRM by email or ID",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "DeleteContactAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user-minus"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -643,7 +643,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -710,22 +710,22 @@
       "ID": "80C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.192Z",
-      "checksum": "128e5dfc8e0beaae6022aaca8f9ea0cdd7ab29119556d9dd497b7f2ea95f0f06"
+      "lastModified": "2026-02-13T21:08:55.007Z",
+      "checksum": "dd1186a5a9ab570fbb10a4071daf4c369d72f3002fa72524b24c02b3615140ff"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Search Contacts",
       "Description": "Searches for contacts in HubSpot using various filters like email, name, company, or custom properties",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "SearchContactsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-magnifying-glass"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -923,7 +923,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -975,22 +975,22 @@
       "ID": "8AC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.193Z",
-      "checksum": "5424413c632d96e61d0816ce275383ada90d3d139bbb7fed91fe1b6e2992e7da"
+      "lastModified": "2026-02-13T21:08:55.008Z",
+      "checksum": "fd06b8bf5038b478dd133a64197340988b697a15ffeb8b7c0347f9a9986c7147"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Create User",
       "Description": "Creates a new user in LearnWorlds LMS with optional course enrollments",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "CreateUserAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user-graduate"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1207,7 +1207,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1274,22 +1274,22 @@
       "ID": "94C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.194Z",
-      "checksum": "a9ca30db80308c0b4ca3151f4423e5eb3cab93486ec7ef0473e5868888b64da1"
+      "lastModified": "2026-02-13T21:08:55.008Z",
+      "checksum": "a09c483102281e963e5abebdafa37c1d1d621eb20ab0c0f4d22caa8e352ba302"
     }
   },
   {
     "fields": {
       "Name": "QuickBooks - Create Journal Entry",
       "Description": "Creates a journal entry in QuickBooks with multiple debit and credit lines",
-      "CategoryID": "@lookup:Action Categories.Name=QuickBooks&Parent=Accounting",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=QuickBooks&Parent=Accounting",
       "DriverClass": "CreateJournalEntryAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-invoice"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1451,7 +1451,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1518,22 +1518,22 @@
       "ID": "9DC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.195Z",
-      "checksum": "af1d4c1456bb9d0868fa2fe809f6ffe2245e5f1be8fa50e8097971efb6eb9e42"
+      "lastModified": "2026-02-13T21:08:55.009Z",
+      "checksum": "fb722efee25ac27a17d6f3533299199ab5d16a900b8b8c3e1a15f338de754f43"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Get Contact",
       "Description": "Retrieves a contact from HubSpot by ID or email",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "GetContactAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1659,7 +1659,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1726,22 +1726,22 @@
       "ID": "A5C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.196Z",
-      "checksum": "50954fc7c412e3b0b1af8c1f8bbc6fcc435d5a7dc86d7a5277ad56388ff59b42"
+      "lastModified": "2026-02-13T21:08:55.010Z",
+      "checksum": "ed5456a66596b8d8f39dc465f3f3250c00e540024172a2cf71656cbe3f9cbc8b"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Create Company",
       "Description": "Creates a new company in HubSpot CRM",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "CreateCompanyAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-building"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1903,7 +1903,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1970,22 +1970,22 @@
       "ID": "ADC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.197Z",
-      "checksum": "c443d0e0f8bb211daa088b7f9c7d0931b26e3b2406937327cd3f159df5fbbe8a"
+      "lastModified": "2026-02-13T21:08:55.011Z",
+      "checksum": "06e0cfc059f52bce5f2035bf584485fc01ec0569bb2a30c33cad7d852d8c596b"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Update Company",
       "Description": "Updates an existing company in HubSpot CRM",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "UpdateCompanyAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-building-circle-check"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2111,7 +2111,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2163,22 +2163,22 @@
       "ID": "B5C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.199Z",
-      "checksum": "ca5a413b8d3719a6def5bbb28bd1cbb1cb99177ccd92270c38e6d2ce66f0afaf"
+      "lastModified": "2026-02-13T21:08:55.012Z",
+      "checksum": "b2089a8f2d39c5abaede2048233578e3fefd9f34113ca12de1a70d8479f6f562"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Create Deal",
       "Description": "Creates a new deal in HubSpot CRM with associated contacts and companies",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "CreateDealAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-handshake"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2340,7 +2340,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2392,22 +2392,22 @@
       "ID": "BDC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.200Z",
-      "checksum": "fe75325faaa4938d1da70dc0d319d99f409162f7b3dada719d685e0ce7194576"
+      "lastModified": "2026-02-13T21:08:55.012Z",
+      "checksum": "b4b2b1ecf9a639f942e952cefffc8251e3e55ce97ae908e193ac12e18f404e39"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Create Task",
       "Description": "Creates a task in HubSpot associated with contacts, companies, or deals",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "CreateTaskAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-list-check"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2552,7 +2552,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2604,22 +2604,22 @@
       "ID": "C5C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.375Z",
-      "checksum": "054c133e607c4e1ae9ca6021bce666eaf11f826bd9cd649f058062680b1b53aa"
+      "lastModified": "2026-02-13T21:08:55.192Z",
+      "checksum": "54e04cb0af32d59101058da0820a96076aa590d87caa41321675b52da4c82389"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Associate Contact to Company",
       "Description": "Associates a contact with a company in HubSpot CRM",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "AssociateContactToCompanyAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-link"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2710,7 +2710,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2792,22 +2792,22 @@
       "ID": "CDC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.376Z",
-      "checksum": "0e663d8dc0de06ab28f7258219fb5a653bcb13f30f9179651d5ab6efd273b498"
+      "lastModified": "2026-02-13T21:08:55.193Z",
+      "checksum": "b8d86769c826084e4d9735e0e40c3f427bc1b9bf6318684cac49b733f41dfe3f"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Get Company",
       "Description": "Retrieves company details from HubSpot by ID",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "GetCompanyAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-building"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2897,7 +2897,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2949,22 +2949,22 @@
       "ID": "D5C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.378Z",
-      "checksum": "0f6a9ca53c7592980def68ff204a28f7efbd4cc7d9f7bc42144f90de4b68559f"
+      "lastModified": "2026-02-13T21:08:55.194Z",
+      "checksum": "81f7e08c9c76a1f81a19880bdc3919197c6def97b45ad3a936d39e5360c8afed"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Merge Contacts",
       "Description": "Merges two contacts in HubSpot, combining their data and associations",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "MergeContactsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-code-merge"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3071,7 +3071,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3138,22 +3138,22 @@
       "ID": "DDC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.379Z",
-      "checksum": "e00330266692626a822020981f9b32bea00c384760faf359d91647c7a991443c"
+      "lastModified": "2026-02-13T21:08:55.195Z",
+      "checksum": "36fbb448bab087cd2c9d00ede7b0ce20faf495e121f0a4e86f93c50e7acbea2f"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Search Companies",
       "Description": "Searches for companies in HubSpot using various filters",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "SearchCompaniesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-building-magnifying-glass"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3298,7 +3298,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3350,22 +3350,22 @@
       "ID": "E8C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.380Z",
-      "checksum": "e2740415e52ab2cf20af56832477de9b69babd9c27338d319c8955495183bac7"
+      "lastModified": "2026-02-13T21:08:55.196Z",
+      "checksum": "76c8f2e4742d6b9d46ac8609e47a3db4b1910eb117a41b17077b2e5e951cf2fe"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Get Deal",
       "Description": "Retrieves a specific deal from HubSpot by ID",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "GetDealAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-handshake"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3473,7 +3473,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3525,22 +3525,22 @@
       "ID": "F6C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.382Z",
-      "checksum": "5e0a4b087d7f35f19870c59f91d6e06c62e43428ca166f083dc6ad8dd272e86c"
+      "lastModified": "2026-02-13T21:08:55.197Z",
+      "checksum": "19ec141ed5eafbc964a17c46c6231022b16ea5ddad995a23c6e0c2245944b048"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Update Deal",
       "Description": "Updates an existing deal in HubSpot",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "UpdateDealAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-handshake-angle"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3702,7 +3702,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3754,22 +3754,22 @@
       "ID": "04C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.384Z",
-      "checksum": "a74fa59844f6a982f60e97c2f0d56ce190c7085a4759cc7313d660d113b3f1fe"
+      "lastModified": "2026-02-13T21:08:55.198Z",
+      "checksum": "f74369356ce54f96a17b352d01f41e75ad9f9346b786c9457ae5b988f5d1aebe"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Log Activity",
       "Description": "Logs an activity (call, email, meeting, note) in HubSpot",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "LogActivityAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-clipboard-list"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3931,7 +3931,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -3983,22 +3983,22 @@
       "ID": "12C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.385Z",
-      "checksum": "d060287dc73b59ee39d8dfe6caaeffa8039f577282907776728f8a2a3332ac09"
+      "lastModified": "2026-02-13T21:08:55.199Z",
+      "checksum": "fe5a274fad22b14c2578767e43c526538e63778bae9ed307294cb8a844f2cda2"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Search Deals",
       "Description": "Searches for deals in HubSpot with various filters",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "SearchDealsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-magnifying-glass-dollar"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4143,7 +4143,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4195,22 +4195,22 @@
       "ID": "20C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.387Z",
-      "checksum": "34b298335003c05e5c2f94db73a450faa34ea4d7f4bbe048e887f68eb7cb406b"
+      "lastModified": "2026-02-13T21:08:55.200Z",
+      "checksum": "cd8a6738ba51f8d854d8f0634ec7f7b4c1c0854614607d8028cce348cb421477"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Get Deals by Company",
       "Description": "Retrieves all deals associated with a specific company",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "GetDealsByCompanyAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-building-circle-arrow-right"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4318,7 +4318,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4370,22 +4370,22 @@
       "ID": "2EC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.389Z",
-      "checksum": "e2033bd622cf520834d228470102cc54a90d4962b1642b1ee058685bd03c75d0"
+      "lastModified": "2026-02-13T21:08:55.200Z",
+      "checksum": "1d4b9b0ce3a90cd09ec63155b4c13571825d53466e87d955fcbba8d3bcb534a4"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Get Deals by Contact",
       "Description": "Retrieves all deals associated with a specific contact",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "GetDealsByContactAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user-tie"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4493,7 +4493,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4545,22 +4545,22 @@
       "ID": "3CC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.592Z",
-      "checksum": "f121f7343d31944e3963127549a0ad3de50c8bf2d9eb80f71b6df0d68018ab32"
+      "lastModified": "2026-02-13T21:08:55.362Z",
+      "checksum": "4caccfc03d3f684accf1bd203a91b8060f9681666212b17abdd81b0120d99b7e"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Get Activities by Contact",
       "Description": "Retrieves all activities (calls, emails, meetings, notes) for a contact",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "GetActivitiesByContactAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-clock-rotate-left"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4686,7 +4686,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4738,22 +4738,22 @@
       "ID": "4AC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.594Z",
-      "checksum": "fcf438789a1d13ead4422ff3e9822f1fd3b2ba487b61c8deae6edcdb8d711a55"
+      "lastModified": "2026-02-13T21:08:55.363Z",
+      "checksum": "adbb0aaa80de2b7bbe88c39685e99bf9a5ed521e0451a1378cc48d93116f7173"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Update Task",
       "Description": "Updates an existing task in HubSpot",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "UpdateTaskAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-square-check"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4897,7 +4897,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -4949,22 +4949,22 @@
       "ID": "58C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.595Z",
-      "checksum": "49fdb18a9f7445d4962985a3843ac38daa90d0e20e3df682d3d576096891fbbf"
+      "lastModified": "2026-02-13T21:08:55.364Z",
+      "checksum": "ef3105f03f0f6be71e5c40b9b123a456f20ad61b425abb326a2f387a4333b37f"
     }
   },
   {
     "fields": {
       "Name": "HubSpot - Get Upcoming Tasks",
       "Description": "Retrieves upcoming and overdue tasks from HubSpot",
-      "CategoryID": "@lookup:Action Categories.Name=HubSpot&Parent=CRM",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=HubSpot&Parent=CRM",
       "DriverClass": "GetUpcomingTasksAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-calendar-check"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5110,7 +5110,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5162,22 +5162,22 @@
       "ID": "60C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.597Z",
-      "checksum": "07d37bf6a3bb51f807c897fd172c2465407346f2b55391f1f31b68d23ac65d39"
+      "lastModified": "2026-02-13T21:08:55.365Z",
+      "checksum": "98842e15b85569ac2c1f9e06b3ba02a3a6fce2b25f3bf58adf0bd830d6ef275a"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Enroll User",
       "Description": "Enrolls a user in a LearnWorlds course",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "EnrollUserAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user-plus"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5304,7 +5304,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5386,22 +5386,22 @@
       "ID": "62C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.599Z",
-      "checksum": "824013d8c82fa21593f0bfd326e667ffb9254bea9a1653bbe0b7c7858cac5032"
+      "lastModified": "2026-02-13T21:08:55.366Z",
+      "checksum": "f8c7a0cec4a3075883d87e102a7f7e61cb742049aa096d0cae57d69c54b2d2b3"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get User Details",
       "Description": "Retrieves detailed information about a LearnWorlds user",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetUserDetailsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5490,7 +5490,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5542,22 +5542,22 @@
       "ID": "64C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.600Z",
-      "checksum": "0b78d88f6aea86a10a33fad766f1b7e4c0d0e26d2b4ffeb306deafc887978d31"
+      "lastModified": "2026-02-13T21:08:55.367Z",
+      "checksum": "dbbfd6320d8b5188e0e7815512f749aaf2e8b866c526ccd2ea0e7138d2428df0"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get User Enrollments",
       "Description": "Retrieves all course enrollments for a specific user",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetUserEnrollmentsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-graduation-cap"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5665,7 +5665,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5717,22 +5717,22 @@
       "ID": "66C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.602Z",
-      "checksum": "2ac73a9d64ee4e5210cc3f1be74b66570c0226f4c5678c4c0a957c4a27cdfaa3"
+      "lastModified": "2026-02-13T21:08:55.368Z",
+      "checksum": "4fa7253b85fdff1032d050f4b9551befd19c626f1609348c2d1e455cb2b82339"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get Courses",
       "Description": "Retrieves available courses from LearnWorlds",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetCoursesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-book"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5842,7 +5842,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5894,22 +5894,22 @@
       "ID": "68C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.604Z",
-      "checksum": "b754c1b1420d63c81c417d1647929ea0f0d621e6ff0891a8a5a7730cb2883b58"
+      "lastModified": "2026-02-13T21:08:55.369Z",
+      "checksum": "f484852f27b6c51abb6b539d0e21ba8a5bb301fdb77b339aba95e89177e9e66d"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get Course Details",
       "Description": "Retrieves detailed information about a specific course",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetCourseDetailsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-book-open"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -5998,7 +5998,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6050,22 +6050,22 @@
       "ID": "6AC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.606Z",
-      "checksum": "50d752876c6ec92d6ebfc3135f31dcc2e64d948d84027fa14aa5a51bd494a5fe"
+      "lastModified": "2026-02-13T21:08:55.369Z",
+      "checksum": "5a25a496fadd2cb6a44106250a203617781a7e93fb56e9c275edf1e4575e4511"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get User Progress",
       "Description": "Gets a user's progress in a specific course",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetUserProgressAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-chart-line"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6172,7 +6172,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6224,22 +6224,22 @@
       "ID": "6CC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.608Z",
-      "checksum": "786c79a46ff576a1555a60912348521ac65572be378db3754a762ac6cbf62b89"
+      "lastModified": "2026-02-13T21:08:55.370Z",
+      "checksum": "29dc269887421e5a8c053f8de9a70bf93feebdfeef07d224107baed2621d124d"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Update User Progress",
       "Description": "Updates a user's progress in a course",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "UpdateUserProgressAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-circle-check"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6366,7 +6366,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6433,22 +6433,22 @@
       "ID": "6EC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.801Z",
-      "checksum": "65b688f59579fd405a1220ce4b8e0d7ab74f2e10a3fe28022af230272bb00f48"
+      "lastModified": "2026-02-13T21:08:55.554Z",
+      "checksum": "5c870f80557da055fdbc1258f9b8f6cb345f328d123676b4e5425c5f59ad3889"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get Certificates",
       "Description": "Retrieves certificates earned by a user",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetCertificatesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-certificate"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6538,7 +6538,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6590,22 +6590,22 @@
       "ID": "70C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.803Z",
-      "checksum": "3288f35d38d28e3427174579141e208c75666d96d5b01f5c0e7607c289d58006"
+      "lastModified": "2026-02-13T21:08:55.555Z",
+      "checksum": "9bd21dd6ee53c6c8b5a2e7ee54eeb45df1969ea1593cb1f5fa8e7e936709eeb0"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get Course Analytics",
       "Description": "Retrieves analytics data for a course including enrollments and completion rates",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetCourseAnalyticsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-chart-bar"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6730,7 +6730,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6782,22 +6782,22 @@
       "ID": "72C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.805Z",
-      "checksum": "b7e663232adf493b45bcb27959506b691ff42e7f583229955db4f72e9d289d3a"
+      "lastModified": "2026-02-13T21:08:55.556Z",
+      "checksum": "8dd7742610aca44940c96a52e23175a4655564e8e362568dc0dd64436e911fc8"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get Users",
       "Description": "Retrieves a list of users from LearnWorlds with filtering options",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetUsersAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-users"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6924,7 +6924,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -6976,22 +6976,22 @@
       "ID": "75C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.806Z",
-      "checksum": "7ea1126ddad031e0ced4149c9d8b55d256a3f01bdd9f56937db66ec22a5656e0"
+      "lastModified": "2026-02-13T21:08:55.557Z",
+      "checksum": "046f55e057eff366ecc65e5e3f03ae71dda8e8f03eac3719a46433001cdd5690"
     }
   },
   {
     "fields": {
       "Name": "LearnWorlds - Get Quiz Results",
       "Description": "Retrieves quiz results for a user across courses",
-      "CategoryID": "@lookup:Action Categories.Name=LearnWorlds&Parent=LMS",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
       "DriverClass": "GetQuizResultsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-clipboard-check"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7116,7 +7116,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7168,22 +7168,22 @@
       "ID": "79C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.807Z",
-      "checksum": "e8add63a1babf899f0c04dd784dc0530178b73138f3923ef75ff3a9abfb6ed3d"
+      "lastModified": "2026-02-13T21:08:55.558Z",
+      "checksum": "53c0c1f02fc521cc41063ebc082005e05e0e04b93ff7a4e294f7fefd50835245"
     }
   },
   {
     "fields": {
       "Name": "QuickBooks - Get GL Codes",
       "Description": "Retrieves general ledger codes/chart of accounts from QuickBooks",
-      "CategoryID": "@lookup:Action Categories.Name=QuickBooks&Parent=Accounting",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=QuickBooks&Parent=Accounting",
       "DriverClass": "GetGLCodesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-list-ol"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7292,7 +7292,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7344,22 +7344,22 @@
       "ID": "7DC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.809Z",
-      "checksum": "9fa76d82f0f25b01f022348f5780135eb261ed1e99d439bc38f6567d19db1acf"
+      "lastModified": "2026-02-13T21:08:55.560Z",
+      "checksum": "f9be67efedcb1c538ffd18e0bbe595f25c3f4510e51f7eef430c07690da2b38f"
     }
   },
   {
     "fields": {
       "Name": "QuickBooks - Get Account Balances",
       "Description": "Retrieves account balances from QuickBooks as of a specific date",
-      "CategoryID": "@lookup:Action Categories.Name=QuickBooks&Parent=Accounting",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=QuickBooks&Parent=Accounting",
       "DriverClass": "GetAccountBalancesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-balance-scale"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7502,7 +7502,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7539,22 +7539,22 @@
       "ID": "81C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.810Z",
-      "checksum": "d89843bd9e21d70e4caa78383a0a305442daba9600170e356777652eb8524967"
+      "lastModified": "2026-02-13T21:08:55.562Z",
+      "checksum": "7320bfbc43dd8c4081d0a718ca8dbb1229ad1f521599fa5489bad40b71557abd"
     }
   },
   {
     "fields": {
       "Name": "QuickBooks - Get Transactions",
       "Description": "Retrieves transactions from QuickBooks for a date range",
-      "CategoryID": "@lookup:Action Categories.Name=QuickBooks&Parent=Accounting",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=QuickBooks&Parent=Accounting",
       "DriverClass": "GetTransactionsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-exchange-alt"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7733,7 +7733,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7785,22 +7785,22 @@
       "ID": "85C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.812Z",
-      "checksum": "9a5d73c9e88fdea7a3830b23ed442ccd9036f99f7e565c2cff38baa7aaba1780"
+      "lastModified": "2026-02-13T21:08:55.563Z",
+      "checksum": "7137f93ed62106de90f2a9d52e4b522e6102f67430ac9d2dc476c3167160e82f"
     }
   },
   {
     "fields": {
       "Name": "Business Central - Get Customers",
       "Description": "Retrieves customers from Microsoft Dynamics 365 Business Central",
-      "CategoryID": "@lookup:Action Categories.Name=Business Central&Parent=Accounting",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Business Central&Parent=Accounting",
       "DriverClass": "GetCustomersAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-users"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7945,7 +7945,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -7997,22 +7997,22 @@
       "ID": "89C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.813Z",
-      "checksum": "fc7f304161a6f56f95c1cc17641eacd3d9d9dd687e8f93c2ebd3df75e18976e0"
+      "lastModified": "2026-02-13T21:08:55.564Z",
+      "checksum": "cf52dfdb78e469a6c8f6f835b74c07f1b7360c71aaf7869959826bbc0f1f4451"
     }
   },
   {
     "fields": {
       "Name": "Business Central - Get General Ledger Entries",
       "Description": "Retrieves general ledger entries from Business Central",
-      "CategoryID": "@lookup:Action Categories.Name=Business Central&Parent=Accounting",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Business Central&Parent=Accounting",
       "DriverClass": "GetGeneralLedgerEntriesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-book"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -8191,7 +8191,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -8243,22 +8243,22 @@
       "ID": "8DC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.814Z",
-      "checksum": "ca2461a3a7c8fb5366844eadeccca86943d62b2ccffa20e805feefcf5a4584b1"
+      "lastModified": "2026-02-13T21:08:55.566Z",
+      "checksum": "c5911f4469a50a6e07b681ed87956c063182d332948661b6ab2f6cdbc802229d"
     }
   },
   {
     "fields": {
       "Name": "Business Central - Get GL Accounts",
       "Description": "Retrieves chart of GL accounts from Business Central",
-      "CategoryID": "@lookup:Action Categories.Name=Business Central&Parent=Accounting",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Business Central&Parent=Accounting",
       "DriverClass": "GetGLAccountsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-list"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -8420,7 +8420,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -8472,22 +8472,22 @@
       "ID": "91C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.863Z",
-      "checksum": "66cf7d5959907f4ba326be4f1435650f365780cf5c15e7fc980092d6553f673d"
+      "lastModified": "2026-02-13T21:08:55.601Z",
+      "checksum": "96f87b8f4ac473cf440aa49578d61d7991b78a66906422848d1b8d82470db7ee"
     }
   },
   {
     "fields": {
       "Name": "Business Central - Get Sales Invoices",
       "Description": "Retrieves sales invoices from Business Central with filtering options",
-      "CategoryID": "@lookup:Action Categories.Name=Business Central&Parent=Accounting",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Business Central&Parent=Accounting",
       "DriverClass": "GetSalesInvoicesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-invoice"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -8704,7 +8704,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -8756,8 +8756,8 @@
       "ID": "95C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:08.865Z",
-      "checksum": "0be48ea39aba52192e29a1c298a2ac3b47686c2c8681c6de70869c2f44709d97"
+      "lastModified": "2026-02-13T21:08:55.602Z",
+      "checksum": "b5b228587075bea3370d89e94d85502daf43a6f71c90b5047758bfb97ed3ef41"
     }
   }
 ]

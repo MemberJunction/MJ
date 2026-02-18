@@ -57,7 +57,7 @@
       <div class="header-left">
         @if (selectedEntity) {
           <i [class]="getEntityIcon(selectedEntity)" class="entity-icon"></i>
-          <h2 class="entity-title">{{ selectedEntity.Name }}</h2>
+          <h2 class="entity-title">{{ selectedEntity.DisplayNameOrName }}</h2>
           @if (debouncedFilterText && filteredRecordCount !== totalRecordCount) {
             <span class="record-count">{{ filteredRecordCount | number }} of {{ totalRecordCount | number }} records</span>
           } @else {
@@ -75,7 +75,10 @@
             (openInTabRequested)="onOpenInTabRequested($event)"
             (configureViewRequested)="onConfigureViewRequested()"
             (createNewRecordRequested)="onCreateNewRecord()"
-            (exportRequested)="onExport()">
+            (exportRequested)="onExport()"
+            (duplicateViewRequested)="onDuplicateView($event)"
+            (quickSaveRequested)="onQuickSaveRequested($event)"
+            (revertRequested)="onRevertView()">
           </mj-view-selector>
 
           <!-- Add to List Button -->
@@ -339,12 +342,12 @@
                           <div
                             class="entity-list-item"
                             (click)="onEntitySelected(entity)"
-                            [title]="entity.Description || entity.Name">
+                            [title]="entity.Description || entity.DisplayNameOrName">
                             <div class="entity-list-icon">
                               <i [class]="getEntityIcon(entity)"></i>
                             </div>
                             <div class="entity-list-content">
-                              <span class="entity-list-name">{{ entity.Name }}</span>
+                              <span class="entity-list-name">{{ entity.DisplayNameOrName }}</span>
                             </div>
                             <button
                               class="favorite-btn"
@@ -371,12 +374,12 @@
                           <div
                             class="entity-list-item"
                             (click)="onEntitySelected(entity)"
-                            [title]="entity.Description || entity.Name">
+                            [title]="entity.Description || entity.DisplayNameOrName">
                             <div class="entity-list-icon">
                               <i [class]="getEntityIcon(entity)"></i>
                             </div>
                             <div class="entity-list-content">
-                              <span class="entity-list-name">{{ entity.Name }}</span>
+                              <span class="entity-list-name">{{ entity.DisplayNameOrName }}</span>
                             </div>
                             <button
                               class="favorite-btn favorited"
@@ -434,12 +437,12 @@
                   <div
                     class="entity-card"
                     (click)="onEntitySelected(entity)"
-                    [title]="entity.Description || entity.Name">
+                    [title]="entity.Description || entity.DisplayNameOrName">
                     <div class="entity-card-icon">
                       <i [class]="getEntityIcon(entity)"></i>
                     </div>
                     <div class="entity-card-content">
-                      <h4 class="entity-card-title">{{ entity.Name }}</h4>
+                      <h4 class="entity-card-title">{{ entity.DisplayNameOrName }}</h4>
                       @if (entity.Description) {
                         <p class="entity-card-description">{{ entity.Description }}</p>
                       }
@@ -532,10 +535,12 @@
     [currentGridState]="currentGridState"
     [externalFilterState]="filterDialogState"
     [isSaving]="isSavingView"
+    [DefaultSaveAsNew]="defaultSaveAsNew"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
     (saveDefaults)="onSaveDefaultViewSettings($event)"
     (delete)="onDeleteView()"
+    (duplicate)="onDuplicateFromPanel()"
     (openFilterDialogRequest)="onOpenFilterDialogRequest($event)">
   </mj-view-config-panel>
 
@@ -565,4 +570,34 @@
       (cancel)="onListManagementCancel()">
     </mj-list-management-dialog>
   }
+
+  <!-- Quick Save Dialog (F-001) -->
+  <mj-quick-save-dialog
+    [IsOpen]="showQuickSaveDialog"
+    [ViewEntity]="selectedViewEntity"
+    [EntityName]="selectedEntity?.DisplayNameOrName ?? ''"
+    [Summary]="quickSaveSummary"
+    [IsSaving]="isSavingView"
+    [DefaultSaveAsNew]="defaultSaveAsNew"
+    (Save)="onQuickSave($event)"
+    (Close)="onQuickSaveClose()"
+    (OpenAdvanced)="onQuickSaveOpenAdvanced()">
+  </mj-quick-save-dialog>
+
+  <!-- Duplicate View Dialog (F-005) -->
+  <mj-duplicate-view-dialog
+    [IsOpen]="showDuplicateDialog"
+    [SourceViewName]="duplicateSourceViewName"
+    [Summary]="duplicateSummary"
+    (Duplicate)="onDuplicateConfirmed($event)"
+    (Cancel)="onDuplicateCancel()">
+  </mj-duplicate-view-dialog>
+
+  <!-- Shared View Warning Dialog (view-creation-flow Scenario 5) -->
+  <mj-shared-view-warning-dialog
+    [IsOpen]="showSharedViewWarning"
+    [ViewName]="selectedViewEntity?.Name ?? ''"
+    (Action)="onSharedViewAction($event)"
+    (Cancel)="onSharedViewWarningCancel()">
+  </mj-shared-view-warning-dialog>
 </div>

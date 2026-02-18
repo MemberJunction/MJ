@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, EventEmitter, Output } from '@angular/core';
+import { Component, OnInit, OnDestroy, EventEmitter, Output, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Location } from '@angular/common';
 import { RegisterClass } from '@memberjunction/global';
 import { Subject, BehaviorSubject } from 'rxjs';
@@ -32,6 +32,7 @@ export interface SearchableItem {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-settings',
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.css']
@@ -114,7 +115,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       id: 'applications',
       tabId: 'applications',
       sectionId: 'applications',
-      label: 'Application Settings',
+      label: 'MJ: Application Settings',
       keywords: ['applications', 'apps', 'switcher', 'order', 'visibility', 'menu'],
       description: 'Choose which applications appear in your app switcher'
     },
@@ -138,7 +139,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
 
   private destroy$ = new Subject<void>();
 
-  constructor(private location: Location) {
+  constructor(private location: Location, private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
     window.addEventListener('resize', this.handleResize.bind(this));
   }
@@ -172,10 +173,16 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     try {
       this.isLoading = true;
       await this.simulateDataLoad();
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     } catch (error) {
-      this.error = 'Failed to load settings data';
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.error = 'Failed to load settings data';
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

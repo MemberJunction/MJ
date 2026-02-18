@@ -39,6 +39,7 @@ interface FilteredStats {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-testing-runs',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

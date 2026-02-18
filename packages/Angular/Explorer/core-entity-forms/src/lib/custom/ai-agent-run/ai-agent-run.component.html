@@ -5,29 +5,41 @@
       <div class="header-content">
         <div class="header-left">
           <div class="icon-wrapper">
-            <img *ngIf="agent && agent.LogoURL" [src]="agent.LogoURL" [alt]="agent.Name || 'Agent'" class="agent-logo" />
-            <i *ngIf="agent && !agent.LogoURL && agent.IconClass" class="fas" [ngClass]="agent.IconClass"></i>
-            <i *ngIf="!agent || (!agent.LogoURL && !agent.IconClass)" class="fas fa-robot"></i>
+            @if (agent && agent.LogoURL) {
+              <img [src]="agent.LogoURL" [alt]="agent.Name || 'Agent'" class="agent-logo" />
+            }
+            @if (agent && !agent.LogoURL && agent.IconClass) {
+              <i class="fas" [ngClass]="agent.IconClass"></i>
+            }
+            @if (!agent || (!agent.LogoURL && !agent.IconClass)) {
+              <i class="fas fa-robot"></i>
+            }
           </div>
           <div class="header-info">
             <h2>AI Agent Run</h2>
             <div class="meta-info">
-              <span class="agent-name" *ngIf="agent">
-                <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Agents', record.AgentID)">
-                  {{ agent.Name }}
-                </a>
-              </span>
+              @if (agent) {
+                <span class="agent-name">
+                  <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agents', record.AgentID)">
+                    {{ agent.Name }}
+                  </a>
+                </span>
+              }
               <span class="run-id">{{ record.ID }}</span>
-              <span class="parent-run" *ngIf="record.ParentRunID">
-                <i class="fas fa-level-up-alt"></i>
-                <a (click)="navigateToParentRun()" class="parent-link">Parent Run</a>
-              </span>
+              @if (record.ParentRunID) {
+                <span class="parent-run">
+                  <i class="fas fa-level-up-alt"></i>
+                  <a (click)="navigateToParentRun()" class="parent-link">Parent Run</a>
+                </span>
+              }
               <!-- Conversation Link Pill -->
-              <span class="conversation-pill" *ngIf="record.ConversationID" (click)="navigateToConversation()" title="Open conversation in Chat app">
-                <i class="fas fa-comments"></i>
-                <span>Conversation</span>
-                <i class="fas fa-external-link-alt pill-action"></i>
-              </span>
+              @if (record.ConversationID) {
+                <span class="conversation-pill" (click)="navigateToConversation()" title="Open conversation in Chat app">
+                  <i class="fas fa-comments"></i>
+                  <span>Conversation</span>
+                  <i class="fas fa-external-link-alt pill-action"></i>
+                </span>
+              }
             </div>
           </div>
         </div>
@@ -48,50 +60,72 @@
           <span class="label">Started</span>
           <span class="value">{{ record.StartedAt | date:'medium' }}</span>
         </div>
-        <div class="stat" *ngIf="record.CompletedAt">
-          <span class="label">Completed</span>
-          <span class="value">{{ record.CompletedAt | date:'medium' }}</span>
-        </div>
-        <div class="stat" *ngIf="record.CompletedAt">
-          <span class="label">Duration</span>
-          <span class="value">{{ calculateDuration(record.StartedAt, record.CompletedAt) }}</span>
-        </div>
-        <div class="stat" *ngIf="record.Success !== null && record.CompletedAt !== null">
-          <span class="label">Result</span>
-          <span class="value" [class.success]="record.Success" [class.error]="!record.Success">
-            {{ record.Success ? 'Success' : 'Failed' }}
-          </span>
-        </div>
-        <div class="stat" *ngIf="costMetrics && (costMetrics.totalTokensInput + costMetrics.totalTokensOutput) > 0">
-          <span class="label">Tokens</span>
-          <span class="value" *ngIf="!costMetrics.isLoading">{{ (costMetrics.totalTokensInput + costMetrics.totalTokensOutput) | number:'1.0-0' }}</span>
-          <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
-        </div>
-        <div class="stat" *ngIf="costMetrics && costMetrics.totalCost > 0">
-          <span class="label">Cost</span>
-          <span class="value" *ngIf="!costMetrics.isLoading">${{ costMetrics.totalCost | number:'1.2-4' }}</span>
-          <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
-        </div>
-        <div class="stat" *ngIf="record.EffortLevel">
-          <span class="label">Effort Level</span>
-          <span class="value">{{ record.EffortLevel }}</span>
-        </div>
+        @if (record.CompletedAt) {
+          <div class="stat">
+            <span class="label">Completed</span>
+            <span class="value">{{ record.CompletedAt | date:'medium' }}</span>
+          </div>
+        }
+        @if (record.CompletedAt) {
+          <div class="stat">
+            <span class="label">Duration</span>
+            <span class="value">{{ calculateDuration(record.StartedAt, record.CompletedAt) }}</span>
+          </div>
+        }
+        @if (record.Success !== null && record.CompletedAt !== null) {
+          <div class="stat">
+            <span class="label">Result</span>
+            <span class="value" [class.success]="record.Success" [class.error]="!record.Success">
+              {{ record.Success ? 'Success' : 'Failed' }}
+            </span>
+          </div>
+        }
+        @if (costMetrics && (costMetrics.totalTokensInput + costMetrics.totalTokensOutput) > 0) {
+          <div class="stat">
+            <span class="label">Tokens</span>
+            @if (!costMetrics.isLoading) {
+              <span class="value">{{ (costMetrics.totalTokensInput + costMetrics.totalTokensOutput) | number:'1.0-0' }}</span>
+            }
+            @if (costMetrics.isLoading) {
+              <span class="value loading"><i class="fas fa-spinner fa-spin"></i></span>
+            }
+          </div>
+        }
+        @if (costMetrics && costMetrics.totalCost > 0) {
+          <div class="stat">
+            <span class="label">Cost</span>
+            @if (!costMetrics.isLoading) {
+              <span class="value">${{ costMetrics.totalCost | number:'1.2-4' }}</span>
+            }
+            @if (costMetrics.isLoading) {
+              <span class="value loading"><i class="fas fa-spinner fa-spin"></i></span>
+            }
+          </div>
+        }
+        @if (record.EffortLevel) {
+          <div class="stat">
+            <span class="label">Effort Level</span>
+            <span class="value">{{ record.EffortLevel }}</span>
+          </div>
+        }
       </div>
-      
+
       <!-- Configuration Bar (shown below header stats when ConfigurationID exists) -->
-      <div class="configuration-bar" *ngIf="record.ConfigurationID">
-        <div class="config-item">
-          <i class="fas fa-cog"></i>
-          <div class="config-content">
-            <div class="config-label">Configuration</div>
-            <div class="config-value">
-              <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Configurations', record.ConfigurationID)">
-                {{ record.Configuration || 'Unknown' }}
-              </a>
+      @if (record.ConfigurationID) {
+        <div class="configuration-bar">
+          <div class="config-item">
+            <i class="fas fa-cog"></i>
+            <div class="config-content">
+              <div class="config-label">Configuration</div>
+              <div class="config-value">
+                <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Configurations', record.ConfigurationID)">
+                  {{ record.Configuration || 'Unknown' }}
+                </a>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      }
     </div>
 
     <!-- Tabs -->
@@ -113,196 +147,231 @@
     <!-- Content -->
     <div class="content-area">
       <!-- Timeline Tab -->
-      <div class="tab-content" *ngIf="activeTab === 'timeline'" style="height: 100%;">
-        <kendo-splitter style="height: 100%;" orientation="horizontal">
-          <!-- Timeline Pane -->
-          <kendo-splitter-pane [min]="'400px'">
-            <mj-ai-agent-run-timeline
-              [aiAgentRunId]="record.ID"
-              [dataHelper]="dataHelper"
-              [autoRefresh]="record.Status === 'Running'"
-              [refreshInterval]="30000"
-              (itemSelected)="selectTimelineItem($event)"
-              (navigateToEntity)="navigateToEntityRecord($event)"
-              (agentRunCompleted)="onAgentRunCompleted($event)">
-            </mj-ai-agent-run-timeline>
-          </kendo-splitter-pane>
-          
-          <!-- JSON Detail Pane -->
-          <kendo-splitter-pane [size]="'45%'" [min]="'300px'" [collapsed]="!selectedTimelineItem">
-            <mj-ai-agent-run-step-detail
-              [selectedTimelineItem]="selectedTimelineItem"
-              (closePanel)="closeJsonPanel()"
-              (navigateToActionLog)="navigateToActionLog($event)"
-              (copyToClipboard)="copyToClipboard($event)">
-            </mj-ai-agent-run-step-detail>
-          </kendo-splitter-pane>
-        </kendo-splitter>
-      </div>
+      @if (activeTab === 'timeline') {
+        <div class="tab-content" style="height: 100%;">
+          <kendo-splitter style="height: 100%;" orientation="horizontal">
+            <!-- Timeline Pane -->
+            <kendo-splitter-pane [min]="'400px'">
+              <mj-ai-agent-run-timeline
+                [aiAgentRunId]="record.ID"
+                [dataHelper]="dataHelper"
+                [autoRefresh]="record.Status === 'Running'"
+                [refreshInterval]="30000"
+                (itemSelected)="selectTimelineItem($event)"
+                (navigateToEntity)="navigateToEntityRecord($event)"
+                (agentRunCompleted)="onAgentRunCompleted($event)">
+              </mj-ai-agent-run-timeline>
+            </kendo-splitter-pane>
+            <!-- JSON Detail Pane -->
+            <kendo-splitter-pane [size]="'45%'" [min]="'300px'" [collapsed]="!selectedTimelineItem">
+              <mj-ai-agent-run-step-detail
+                [selectedTimelineItem]="selectedTimelineItem"
+                (closePanel)="closeJsonPanel()"
+                (navigateToActionLog)="navigateToActionLog($event)"
+                (copyToClipboard)="copyToClipboard($event)">
+              </mj-ai-agent-run-step-detail>
+            </kendo-splitter-pane>
+          </kendo-splitter>
+        </div>
+      }
 
       <!-- Visualization Tab -->
-      <div class="tab-content" *ngIf="activeTab === 'visualization'" style="height: 100%;">
-        <mj-ai-agent-run-visualization
-          #visualizationComponent
-          [aiAgentRunId]="record.ID"
-          [dataHelper]="dataHelper"
-          *ngIf="visualizationLoaded">
-        </mj-ai-agent-run-visualization>
-      </div>
+      @if (activeTab === 'visualization') {
+        <div class="tab-content" style="height: 100%;">
+          @if (visualizationLoaded) {
+            <mj-ai-agent-run-visualization
+              #visualizationComponent
+              [aiAgentRunId]="record.ID"
+              [dataHelper]="dataHelper"
+              >
+            </mj-ai-agent-run-visualization>
+          }
+        </div>
+      }
 
       <!-- Analytics Tab -->
-      <div class="tab-content" *ngIf="activeTab === 'analytics'" style="height: 100%;">
-        <mj-ai-agent-run-analytics 
-          #analyticsComponent
-          [agentRunId]="record.ID"
-          *ngIf="analyticsLoaded">
-        </mj-ai-agent-run-analytics>
-      </div>
+      @if (activeTab === 'analytics') {
+        <div class="tab-content" style="height: 100%;">
+          @if (analyticsLoaded) {
+            <mj-ai-agent-run-analytics
+              #analyticsComponent
+              [agentRunId]="record.ID"
+              >
+            </mj-ai-agent-run-analytics>
+          }
+        </div>
+      }
 
       <!-- Details Tab -->
-      <div class="tab-content" *ngIf="activeTab === 'details'">
-        <kendo-panelbar [keepItemContent]="true">
-          <kendo-panelbar-item title="General Information" [expanded]="true">
-            <ng-template kendoPanelBarContent>
-              <div class="details-grid">
-                <div class="detail-item">
-                  <label>Agent</label>
-                  <span>
-                    <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Agents', record.AgentID)">
-                      {{ agent?.Name || 'N/A' }}
-                    </a>
-                  </span>
+      @if (activeTab === 'details') {
+        <div class="tab-content">
+          <kendo-panelbar [keepItemContent]="true">
+            <kendo-panelbar-item title="General Information" [expanded]="true">
+              <ng-template kendoPanelBarContent>
+                <div class="details-grid">
+                  <div class="detail-item">
+                    <label>Agent</label>
+                    <span>
+                      <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agents', record.AgentID)">
+                        {{ agent?.Name || 'N/A' }}
+                      </a>
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Parent Run ID</label>
+                    <span>
+                      @if (record.ParentRunID) {
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agent Runs', record.ParentRunID)">
+                          {{ record.ParentRunID }}
+                        </a>
+                      }
+                      @if (!record.ParentRunID) {
+                        <span>None (Root)</span>
+                      }
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Last Run ID</label>
+                    <span>
+                      @if (record.LastRunID) {
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agent Runs', record.LastRunID)">
+                          {{ record.LastRunID }}
+                        </a>
+                      }
+                      @if (!record.LastRunID) {
+                        <span>None</span>
+                      }
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Conversation ID</label>
+                    <span>
+                      @if (record.ConversationID) {
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: Conversations', record.ConversationID)">
+                          {{ record.ConversationID }}
+                        </a>
+                      }
+                      @if (!record.ConversationID) {
+                        <span>N/A</span>
+                      }
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <label>User</label>
+                    <span>
+                      @if (record.UserID) {
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: Users', record.UserID)">
+                          {{ record.User || 'N/A' }}
+                        </a>
+                      }
+                      @if (!record.UserID) {
+                        <span>N/A</span>
+                      }
+                    </span>
+                  </div>
                 </div>
-                <div class="detail-item">
-                  <label>Parent Run ID</label>
-                  <span>
-                    <a *ngIf="record.ParentRunID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agent Runs', record.ParentRunID)">
-                      {{ record.ParentRunID }}
-                    </a>
-                    <span *ngIf="!record.ParentRunID">None (Root)</span>
-                  </span>
+              </ng-template>
+            </kendo-panelbar-item>
+            <kendo-panelbar-item title="Execution Settings">
+              <ng-template kendoPanelBarContent>
+                <div class="details-grid">
+                  <div class="detail-item">
+                    <label>Override Model</label>
+                    <span>
+                      @if (record.OverrideModelID) {
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Models', record.OverrideModelID)">
+                          {{ record.OverrideModel || 'N/A' }}
+                        </a>
+                      }
+                      @if (!record.OverrideModelID) {
+                        <span>N/A</span>
+                      }
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Override Vendor</label>
+                    <span>
+                      @if (record.OverrideVendorID) {
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Vendors', record.OverrideVendorID)">
+                          {{ record.OverrideVendor || 'N/A' }}
+                        </a>
+                      }
+                      @if (!record.OverrideVendorID) {
+                        <span>N/A</span>
+                      }
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Verbose Logging</label>
+                    <span>{{ record.Verbose ? 'Yes' : 'No' }}</span>
+                  </div>
                 </div>
-                <div class="detail-item">
-                  <label>Last Run ID</label>
-                  <span>
-                    <a *ngIf="record.LastRunID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agent Runs', record.LastRunID)">
-                      {{ record.LastRunID }}
-                    </a>
-                    <span *ngIf="!record.LastRunID">None</span>
-                  </span>
-                </div>
-                <div class="detail-item">
-                  <label>Conversation ID</label>
-                  <span>
-                    <a *ngIf="record.ConversationID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Conversations', record.ConversationID)">
-                      {{ record.ConversationID }}
-                    </a>
-                    <span *ngIf="!record.ConversationID">N/A</span>
-                  </span>
-                </div>
-                <div class="detail-item">
-                  <label>User</label>
-                  <span>
-                    <a *ngIf="record.UserID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Users', record.UserID)">
-                      {{ record.User || 'N/A' }}
-                    </a>
-                    <span *ngIf="!record.UserID">N/A</span>
-                  </span>
-                </div>
-              </div>
-            </ng-template>
-          </kendo-panelbar-item>
-          
-          <kendo-panelbar-item title="Execution Settings">
-            <ng-template kendoPanelBarContent>
-              <div class="details-grid">
-                <div class="detail-item">
-                  <label>Override Model</label>
-                  <span>
-                    <a *ngIf="record.OverrideModelID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Models', record.OverrideModelID)">
-                      {{ record.OverrideModel || 'N/A' }}
-                    </a>
-                    <span *ngIf="!record.OverrideModelID">N/A</span>
-                  </span>
-                </div>
-                <div class="detail-item">
-                  <label>Override Vendor</label>
-                  <span>
-                    <a *ngIf="record.OverrideVendorID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Vendors', record.OverrideVendorID)">
-                      {{ record.OverrideVendor || 'N/A' }}
-                    </a>
-                    <span *ngIf="!record.OverrideVendorID">N/A</span>
-                  </span>
-                </div>
-                <div class="detail-item">
-                  <label>Verbose Logging</label>
-                  <span>{{ record.Verbose ? 'Yes' : 'No' }}</span>
-                </div>
-              </div>
-            </ng-template>
-          </kendo-panelbar-item>
-          
-          <kendo-panelbar-item title="Execution Status">
-            <ng-template kendoPanelBarContent>
-              <div class="details-grid">
-                <div class="detail-item">
-                  <label>Status</label>
-                  <span class="status-badge" [attr.data-status]="record.Status">
-                    {{ record.Status }}
-                  </span>
-                </div>
-                <div class="detail-item">
-                  <label>Success</label>
-                  @if (record.Success === null) {
-                    <span>In Progress</span>
-                  }
-                  @else if (record.Success) {
+              </ng-template>
+            </kendo-panelbar-item>
+            <kendo-panelbar-item title="Execution Status">
+              <ng-template kendoPanelBarContent>
+                <div class="details-grid">
+                  <div class="detail-item">
+                    <label>Status</label>
+                    <span class="status-badge" [attr.data-status]="record.Status">
+                      {{ record.Status }}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Success</label>
+                    @if (record.Success === null) {
+                      <span>In Progress</span>
+                    }
+                    @else if (record.Success) {
                     <span class="success">Yes</span>
                   }
                   @else {
-                    <span class="error-message">No</span>
-                  }
-                </div>
-                <div class="detail-item full-width" *ngIf="record.Message">
+                  <span class="error-message">No</span>
+                }
+              </div>
+              @if (record.Message) {
+                <div class="detail-item full-width">
                   <label>Message</label>
                   <div class="message">{{ record.Message }}</div>
                 </div>
-                <div class="detail-item full-width" *ngIf="record.ErrorMessage">
+              }
+              @if (record.ErrorMessage) {
+                <div class="detail-item full-width">
                   <label>Error Message</label>
                   <div class="error-message">{{ record.ErrorMessage }}</div>
                 </div>
+              }
+            </div>
+          </ng-template>
+        </kendo-panelbar-item>
+        <kendo-panelbar-item title="Usage & Cost">
+          <ng-template kendoPanelBarContent>
+            <div class="details-grid">
+              <div class="detail-item">
+                <label>Total Tokens Used</label>
+                <span>{{ record.TotalTokensUsed ? (record.TotalTokensUsed | number:'1.0-0') : 'N/A' }}</span>
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
-          
-          <kendo-panelbar-item title="Usage & Cost">
-            <ng-template kendoPanelBarContent>
-              <div class="details-grid">
-                <div class="detail-item">
-                  <label>Total Tokens Used</label>
-                  <span>{{ record.TotalTokensUsed ? (record.TotalTokensUsed | number:'1.0-0') : 'N/A' }}</span>
-                </div>
-                <div class="detail-item">
-                  <label>Prompt Tokens</label>
-                  <span>{{ record.TotalPromptTokensUsed ? (record.TotalPromptTokensUsed | number:'1.0-0') : 'N/A' }}</span>
-                </div>
-                <div class="detail-item">
-                  <label>Completion Tokens</label>
-                  <span>{{ record.TotalCompletionTokensUsed ? (record.TotalCompletionTokensUsed | number:'1.0-0') : 'N/A' }}</span>
-                </div>
-                <div class="detail-item">
-                  <label>Total Cost</label>
-                  <span>{{ record.TotalCost != null ? ('$' + (record.TotalCost | number:'1.2-4')) : 'N/A' }}</span>
-                </div>
-                <div class="detail-item">
-                  <label>Total Prompt Iterations</label>
-                  <span>{{ record.TotalPromptIterations != null ? (record.TotalPromptIterations | number:'1.0-0') : 'N/A' }}</span>
-                </div>
+              <div class="detail-item">
+                <label>Prompt Tokens</label>
+                <span>{{ record.TotalPromptTokensUsed ? (record.TotalPromptTokensUsed | number:'1.0-0') : 'N/A' }}</span>
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
-          
-          <kendo-panelbar-item title="Result" *ngIf="record.Result">
+              <div class="detail-item">
+                <label>Completion Tokens</label>
+                <span>{{ record.TotalCompletionTokensUsed ? (record.TotalCompletionTokensUsed | number:'1.0-0') : 'N/A' }}</span>
+              </div>
+              <div class="detail-item">
+                <label>Total Cost</label>
+                <span>{{ record.TotalCost != null ? ('$' + (record.TotalCost | number:'1.2-4')) : 'N/A' }}</span>
+              </div>
+              <div class="detail-item">
+                <label>Total Prompt Iterations</label>
+                <span>{{ record.TotalPromptIterations != null ? (record.TotalPromptIterations | number:'1.0-0') : 'N/A' }}</span>
+              </div>
+            </div>
+          </ng-template>
+        </kendo-panelbar-item>
+        @if (record.Result) {
+          <kendo-panelbar-item title="Result">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
                 @if (isParsingComplete) {
@@ -320,8 +389,9 @@
               </div>
             </ng-template>
           </kendo-panelbar-item>
-          
-          <kendo-panelbar-item title="Starting Payload" *ngIf="record.StartingPayload">
+        }
+        @if (record.StartingPayload) {
+          <kendo-panelbar-item title="Starting Payload">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
                 @if (isParsingComplete) {
@@ -339,8 +409,9 @@
               </div>
             </ng-template>
           </kendo-panelbar-item>
-          
-          <kendo-panelbar-item title="Execution Data" *ngIf="record.Data">
+        }
+        @if (record.Data) {
+          <kendo-panelbar-item title="Execution Data">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
                 @if (isParsingComplete) {
@@ -358,8 +429,9 @@
               </div>
             </ng-template>
           </kendo-panelbar-item>
-          
-          <kendo-panelbar-item title="Final Payload" *ngIf="record.FinalPayload">
+        }
+        @if (record.FinalPayload) {
+          <kendo-panelbar-item title="Final Payload">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
                 @if (isParsingComplete) {
@@ -377,8 +449,9 @@
               </div>
             </ng-template>
           </kendo-panelbar-item>
-          
-          <kendo-panelbar-item title="Payload Diff" *ngIf="showPayloadDiff">
+        }
+        @if (showPayloadDiff) {
+          <kendo-panelbar-item title="Payload Diff">
             <ng-template kendoPanelBarContent>
               <div style="padding: 20px; background: #f8f9fa;">
                 @if (isParsingComplete) {
@@ -401,8 +474,10 @@
               </div>
             </ng-template>
           </kendo-panelbar-item>
-        </kendo-panelbar>
-      </div>
+        }
+      </kendo-panelbar>
     </div>
-  </div>
+  }
+</div>
+</div>
 </div>

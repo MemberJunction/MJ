@@ -1,17 +1,8 @@
 {
+  "extends": "../../../tsconfig.server.json",
   "compilerOptions": {
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "target": "es2022",
-    "lib": ["es2022"],
-    "declaration": true,
-    "declarationMap": true,
-    "moduleResolution": "node",
-    "sourceMap": true,
     "outDir": "dist",
-    "skipLibCheck": true,
+    "rootDir": "src",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -21,5 +12,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts", "src/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts", "vitest.config.ts"]
 }

@@ -68,6 +68,3 @@ export class CreateDirectoryAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadCreateDirectoryAction() {
-    // Stub function to prevent tree shaking
-}

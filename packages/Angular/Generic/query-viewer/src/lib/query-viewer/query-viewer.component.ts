@@ -48,6 +48,7 @@ import {
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-query-viewer',
     templateUrl: './query-viewer.component.html',
     styleUrls: ['./query-viewer.component.css'],

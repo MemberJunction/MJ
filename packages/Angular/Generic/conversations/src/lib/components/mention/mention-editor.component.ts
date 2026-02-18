@@ -15,7 +15,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIAgentConfigurationEntity } from '@memberjunction/core-entities';
+import { MJAIAgentConfigurationEntity } from '@memberjunction/core-entities';
 import { ChatMessageContentBlock } from '@memberjunction/ai';
 
 /**
@@ -47,6 +47,7 @@ export interface PendingAttachment {
  * Provides Slack/Teams-style mention UX with immutable mention tokens
  */
 @Component({
+  standalone: false,
   selector: 'mj-mention-editor',
   templateUrl: './mention-editor.component.html',
   styleUrls: ['./mention-editor.component.css'],
@@ -400,7 +401,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     chip.setAttribute('data-mention-name', suggestion.name);
 
     // For agents, get configuration presets (AIEngine.Config() already called during app init)
-    let presets: AIAgentConfigurationEntity[] = [];
+    let presets: MJAIAgentConfigurationEntity[] = [];
     if (suggestion.type === 'agent') {
       presets = AIEngineBase.Instance.GetAgentConfigurationPresets(suggestion.id, true);
 
@@ -484,7 +485,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   /**
    * Add configuration preset dropdown to agent chip
    */
-  private addConfigurationDropdown(chip: HTMLSpanElement, presets: AIAgentConfigurationEntity[]): void {
+  private addConfigurationDropdown(chip: HTMLSpanElement, presets: MJAIAgentConfigurationEntity[]): void {
     // Store default preset for comparison
     const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
 

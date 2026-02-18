@@ -18,7 +18,7 @@
       "ExampleInjectionStrategy": "Semantic",
       "RerankerConfiguration": {
         "enabled": true,
-        "rerankerModelId": "@lookup:AI Models.Name=rerank-v3.5",
+        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v3.5",
         "retrievalMultiplier": 3,
         "minRelevanceThreshold": 0.5,
         "fallbackOnError": true
@@ -91,7 +91,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Sage - System Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Sage - System Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -99,276 +99,276 @@
             "ID": "17E3764B-6B6C-479D-A995-7FFA4ABE39AB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.586Z",
-            "checksum": "b738a8d81a003072d6c01938f95d4fb5ee019f9899434f8531755d302b9c6748"
+            "lastModified": "2026-02-13T21:09:24.556Z",
+            "checksum": "c9fe338f7a9f7633fa278624b3d9eb4e554bb7605e4511cb7acf6818ceb0be2f"
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Record",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Record",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "70D4B719-94EA-45A7-99EB-0A543BFA3CE6"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.587Z",
-            "checksum": "02e9b7fe46928fb1421173494701c0ee08cd34b8135994dca7baaf1d04e57932"
+            "lastModified": "2026-02-13T21:09:24.558Z",
+            "checksum": "d621ad2bc5b1f007109b35d60afe54d21b4f3cfedf42b242ca44d15785e6e6a5"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create Record",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Record",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "855CD725-8CAB-4307-B5C7-62184C9C2CA9"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.589Z",
-            "checksum": "8d1ab0fabb431d87a42c43039fd6d3587701eab5d977cadf83be7f1f12240156"
+            "lastModified": "2026-02-13T21:09:24.560Z",
+            "checksum": "f677b284d019d5cf93ba0125433e3f29cb520831c238683cf1303d6ca4ae1cf4"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Update Record",
+            "ActionID": "@lookup:MJ: Actions.Name=Update Record",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "161E3EF2-F5F6-4ABD-9CCE-033F512032F7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.590Z",
-            "checksum": "d5e981044345bde24a346866c57455854e9a10076781f23432adab6b09aba70e"
+            "lastModified": "2026-02-13T21:09:24.562Z",
+            "checksum": "ba214e4880b2c5272046116869798e9c65b9d2e3c16d9576af8d264ebfe09095"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Delete Record",
+            "ActionID": "@lookup:MJ: Actions.Name=Delete Record",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "89444FC1-B71A-4243-9529-56501E0941E5"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.591Z",
-            "checksum": "69584d770df0719ed3c3e3a08a0618b16305e00200c5c92f65806a93ce9f89f8"
+            "lastModified": "2026-02-13T21:09:24.564Z",
+            "checksum": "fc423499e947b2a6cdb335f873d0c898506bee7a78682128e76398ff9cc6e622"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "02862A6E-5AAB-4DE2-B16D-8553145F668C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.592Z",
-            "checksum": "0403f4da572b53521f8f8b0dd07677b94e0e79a0069456e704a51bde27bd6c5e"
+            "lastModified": "2026-02-13T21:09:24.566Z",
+            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Calculate Expression",
+            "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "E37EC417-5CC0-4911-9F2C-390E63340421"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.593Z",
-            "checksum": "68fdaff4b0c12b351551d108fe2800db349497489901afa0fe59e13e0c5c78b2"
+            "lastModified": "2026-02-13T21:09:24.707Z",
+            "checksum": "287e7118d0b949eb25c66afd1abdb58887a12ccc56d2bd01a09915269bc70629"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Text Analyzer",
+            "ActionID": "@lookup:MJ: Actions.Name=Text Analyzer",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "CC75EA61-9C03-402C-AF10-D56CBC9621C1"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.594Z",
-            "checksum": "51542b7d52a7062fadfe0ded3c63dca886443ec50d72ad155230e7fe7be203ef"
+            "lastModified": "2026-02-13T21:09:24.709Z",
+            "checksum": "9ee685e96fa742d4f3ab1531f7c623b43253bdbe3531f5c99526c233eb58e37f"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Page Content",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Page Content",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "24F29104-E203-45DA-AC4C-344E337621CE"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.595Z",
-            "checksum": "30f48cfb26d2fb19c34d0a41517878505125f9b353be953ed0e2a1c53d5a497b"
+            "lastModified": "2026-02-13T21:09:24.710Z",
+            "checksum": "eb374413b832106653fce686b208ca75da6d73946138457ddfe5dc2b1c255959"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=URL Metadata Extractor",
+            "ActionID": "@lookup:MJ: Actions.Name=URL Metadata Extractor",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "E763AC7F-DBF8-42FE-9D3D-C3644E2C393D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.596Z",
-            "checksum": "7c6d799707b13fc15b9d75e2fcef802111da0d47dd2fc87e7b0b90ce6ff444be"
+            "lastModified": "2026-02-13T21:09:24.712Z",
+            "checksum": "5b96798e63e77127a22f66ece440a79615f077bb88aab125cf01fc8d154f0c3c"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Weather",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Weather",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "27882351-BDC8-414E-B2B5-D74E5F5C8D46"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.686Z",
-            "checksum": "17d7614228d7e2f5ce80810575133660c35db80dcb32b3f537f68b96a059460b"
+            "lastModified": "2026-02-13T21:09:24.713Z",
+            "checksum": "275b81b63c537d4ae06c3e43670f5bd906a65f52c490cc99008c6bd8b3d9f4bf"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Query Scheduled Jobs",
+            "ActionID": "@lookup:MJ: Actions.Name=Query Scheduled Jobs",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "3C2F32A9-25D6-4843-83D2-AEC46D76264A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.688Z",
-            "checksum": "7287a42f623ac127f3e431a89f46b8a67edb1a8e77fee959c643706a705fcfd7"
+            "lastModified": "2026-02-13T21:09:24.715Z",
+            "checksum": "eac8b80273fd91f53f54acbd79ff0bf873b32a7900944070e776e7e016f6ecf4"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create Scheduled Job",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Scheduled Job",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "F5DF50BB-D2DA-4AA7-A9A9-521F00438B9A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.689Z",
-            "checksum": "f96b2c9a53f5953c91e2afc6b7d965a04e0e84abfdcffcb58d31483ab48db4c6"
+            "lastModified": "2026-02-13T21:09:24.716Z",
+            "checksum": "591de2408581ee9758ed7717202fcf2f25067abd4604a0022b7c0a70d8487d5a"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Update Scheduled Job",
+            "ActionID": "@lookup:MJ: Actions.Name=Update Scheduled Job",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "C8E72882-9BFE-4297-B831-7BA38C76D17A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.690Z",
-            "checksum": "b6b2c540fe46a80851b7f90c8ae0b0e067607d8899869233cc47fcd37d3ac6eb"
+            "lastModified": "2026-02-13T21:09:24.719Z",
+            "checksum": "e30ea49196f32aa437383b67b7fa85b1654ea2c8bb194a2f8ca27757b3392a21"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Delete Scheduled Job",
+            "ActionID": "@lookup:MJ: Actions.Name=Delete Scheduled Job",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "0EFBDB64-2CD1-4969-9241-194BA2D797C3"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.691Z",
-            "checksum": "f558f759c163cfe9cbf7717b91288bc43765dcc6c0d9e21c849887459f786aa1"
+            "lastModified": "2026-02-13T21:09:24.721Z",
+            "checksum": "8b9894c4353799a436d799a950106eb12a7f7c6825b404d172709e059d3ee8ad"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Execute Scheduled Job Now",
+            "ActionID": "@lookup:MJ: Actions.Name=Execute Scheduled Job Now",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "4F9A2326-D0A3-45B9-9C06-BC40E95DC64E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.693Z",
-            "checksum": "03251d32cffef5abc8b769bb2a8b719fb4e3b76139919a4d7dc563f685b6c056"
+            "lastModified": "2026-02-13T21:09:24.723Z",
+            "checksum": "767841a80ca26a5975a0ad009cd722a1fc0ab0cadc2ba75c3ed767ccdebecf55"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Scheduled Job Statistics",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Scheduled Job Statistics",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "C8865ECB-A130-4015-A372-D6AF3F0DEFDC"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.694Z",
-            "checksum": "d95d7e087eb4241f1062675ad9dba5bb2b96f12241b43147677e91afc9c0bd78"
+            "lastModified": "2026-02-13T21:09:24.827Z",
+            "checksum": "dd4571bccba22ec5eef357f61b01ac36b5df3842fbad36578510776d748e73dc"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Find Candidate Agents",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Agents",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "A71AFFCE-52DB-4A17-B6EF-93D63A696A22"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.695Z",
-            "checksum": "cb44e0f8291b1fee974713b29a82f84de3df3c3db7a6641ac31c26d6687ae079"
+            "lastModified": "2026-02-13T21:09:24.828Z",
+            "checksum": "8594e4c41f8dafa6b3254ca8ede1a7094801a11ada29a9aa2a8738be0c309067"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Typeform Responses",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Typeform Responses",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "B455ECE7-DD6D-4BF1-A1E5-A0E284718290"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.696Z",
-            "checksum": "71ee48e090db98dc431ce2ada37253d00e848c7ec151950e0332db999945857f"
+            "lastModified": "2026-02-13T21:09:24.830Z",
+            "checksum": "54f47272907d4b481d494d064fba5e4255c5cb743d167e7262e5089a0231e63c"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Generate Image",
+            "ActionID": "@lookup:MJ: Actions.Name=Generate Image",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "D1885727-0754-40B7-8578-73F8197DEA51"
           },
           "sync": {
-            "lastModified": "2026-01-15T21:03:56.364Z",
-            "checksum": "79e6bc17002f1592f4f4b2e362be1f2e982048b8904ff97e9b663424c51fda38"
+            "lastModified": "2026-02-13T21:09:24.831Z",
+            "checksum": "4a9447b3f1107b741f1dd561bb10bf06fdccd154626325f10a5dc0f340a43b78"
           }
         }
       ],
@@ -417,8 +417,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-01-27T02:14:25.133Z",
-      "checksum": "bccc9eb84698093c701e2ecd2587dee8dce949743bffaaa77789dfd9c0e73283"
+      "lastModified": "2026-02-13T21:09:24.381Z",
+      "checksum": "1e01cfdaaaa07b9114ffcf01e2e8a7a2e866f9b556004348cf5f746138690e29"
     }
   }
 ]

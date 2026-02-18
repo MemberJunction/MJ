@@ -398,10 +398,3 @@ export class RetryAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the RetryAction class is included in the bundle
- */
-export function LoadRetryAction() {
-    // Stub function to prevent tree shaking
-}

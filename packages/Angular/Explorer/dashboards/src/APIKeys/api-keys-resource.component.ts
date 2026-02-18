@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@ang
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIScopeEntity, APIKeyUsageLogEntity, APIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJAPIKeyEntity, MJAPIScopeEntity, MJAPIKeyUsageLogEntity, MJAPIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
@@ -34,12 +34,6 @@ type ViewType = 'overview' | 'list';
 
 /** Main tab type */
 type MainTab = 'keys' | 'applications' | 'scopes' | 'usage';
-
-/** Tree shaking prevention function */
-export function LoadAPIKeysResource(): void {
-    // This function prevents tree shaking
-}
-
 /**
  * API Keys Resource Component
  * Provides management interface for MJ API Keys including:
@@ -50,6 +44,7 @@ export function LoadAPIKeysResource(): void {
  */
 @RegisterClass(BaseResourceComponent, 'APIKeysResource')
 @Component({
+  standalone: false,
     selector: 'mj-api-keys-resource',
     templateUrl: './api-keys-resource.component.html',
     styleUrls: ['./api-keys-resource.component.css']
@@ -83,10 +78,10 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public NeverUsedKeys = 0;
 
     // Data collections
-    public APIKeys: APIKeyEntity[] = [];
+    public APIKeys: MJAPIKeyEntity[] = [];
     public RecentActivity: ActivityItem[] = [];
     public ScopeStats: ScopeStat[] = [];
-    public TopUsedKeys: APIKeyEntity[] = [];
+    public TopUsedKeys: MJAPIKeyEntity[] = [];
 
     // Dialog states
     public ShowCreateDialog = false;
@@ -167,7 +162,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      */
     private async loadAPIKeys(): Promise<void> {
         const rv = new RunView();
-        const result = await rv.RunView<APIKeyEntity>({
+        const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
             OrderBy: '__mj_CreatedAt DESC',
             ResultType: 'entity_object'
@@ -223,7 +218,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         const rv = new RunView();
 
         // Load usage logs
-        const usageResult = await rv.RunView<APIKeyUsageLogEntity>({
+        const usageResult = await rv.RunView<MJAPIKeyUsageLogEntity>({
             EntityName: 'MJ: API Key Usage Logs',
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 20,
@@ -372,7 +367,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Open edit panel for a key
      */
-    public openEditPanel(key: APIKeyEntity): void {
+    public openEditPanel(key: MJAPIKeyEntity): void {
         this.SelectedKeyId = key.ID;
         this.ShowEditPanel = true;
     }
@@ -380,7 +375,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Handle key from list selected
      */
-    public onKeySelected(key: APIKeyEntity): void {
+    public onKeySelected(key: MJAPIKeyEntity): void {
         this.openEditPanel(key);
     }
 
@@ -534,7 +529,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Get expiration status class
      */
-    public getExpirationClass(key: APIKeyEntity): string {
+    public getExpirationClass(key: MJAPIKeyEntity): string {
         if (!key.ExpiresAt) return '';
 
         const now = new Date();

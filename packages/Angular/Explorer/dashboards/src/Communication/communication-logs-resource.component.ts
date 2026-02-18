@@ -1,103 +1,104 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, CommunicationLogEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCommunicationLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadCommunicationLogsResource() {
-    // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'CommunicationLogsResource')
 @Component({
+  standalone: false,
     selector: 'mj-communication-logs-resource',
     template: `
     <div class="logs-wrapper">
-        <div class="card">
-            <div class="logs-toolbar">
-                <div class="search-input-wrapper">
-                    <i class="fa-solid fa-search"></i>
-                    <input type="text" placeholder="Search messages, providers, recipients..." (input)="onSearch($event)">
-                </div>
-                <div class="filter-chip" [class.active]="statusFilter === ''"
-                    (click)="onStatusFilter('')">
-                    <i class="fa-solid fa-filter"></i> All
-                </div>
-                <div class="filter-chip" [class.active]="statusFilter === 'Complete'"
-                    (click)="onStatusFilter('Complete')">
-                    <i class="fa-solid fa-check-circle"></i> Sent
-                </div>
-                <div class="filter-chip" [class.active]="statusFilter === 'Failed'"
-                    (click)="onStatusFilter('Failed')">
-                    <i class="fa-solid fa-times-circle"></i> Failed
-                </div>
-                <div class="filter-chip" [class.active]="statusFilter === 'Pending'"
-                    (click)="onStatusFilter('Pending')">
-                    <i class="fa-solid fa-clock"></i> Pending
-                </div>
-                <div class="toolbar-spacer"></div>
-                <button class="tb-btn" (click)="loadData()">
-                    <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
-                </button>
-            </div>
-            <div class="table-wrapper">
-                <table class="log-table">
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th>Direction</th>
-                            <th>Provider</th>
-                            <th>Type</th>
-                            <th>Date</th>
-                            <th>Error</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr *ngFor="let log of filteredLogs">
-                            <td>
-                                <span class="log-status-badge" [ngClass]="getStatusClass(log.Status)">
-                                    <i [class]="getStatusIcon(log.Status)"></i>
-                                    {{log.Status}}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="log-direction" [ngClass]="log.Direction.toLowerCase()">
-                                    <i [class]="log.Direction === 'Sending' ? 'fa-solid fa-arrow-up-right' : 'fa-solid fa-arrow-down-left'"></i>
-                                    {{log.Direction}}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="log-provider-badge">
-                                    <i [class]="getProviderIcon(log.CommunicationProvider)" [style.color]="getProviderColor(log.CommunicationProvider)"></i>
-                                    {{log.CommunicationProvider}}
-                                </span>
-                            </td>
-                            <td>{{log.CommunicationProviderMessageType}}</td>
-                            <td>{{log.MessageDate | date:'medium'}}</td>
-                            <td>
-                                <span *ngIf="log.ErrorMessage" class="log-error-text" [title]="log.ErrorMessage">
-                                    {{log.ErrorMessage}}
-                                </span>
-                                <span *ngIf="!log.ErrorMessage" class="no-error">&mdash;</span>
-                            </td>
-                        </tr>
-                        <tr *ngIf="filteredLogs.length === 0 && !isLoading">
-                            <td colspan="6" class="no-data">
-                                <div class="empty-state">
-                                    <i class="fa-solid fa-inbox"></i>
-                                    <p>No logs found matching your criteria</p>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+      <div class="card">
+        <div class="logs-toolbar">
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-search"></i>
+            <input type="text" placeholder="Search messages, providers, recipients..." (input)="onSearch($event)">
+          </div>
+          <div class="filter-chip" [class.active]="statusFilter === ''"
+            (click)="onStatusFilter('')">
+            <i class="fa-solid fa-filter"></i> All
+          </div>
+          <div class="filter-chip" [class.active]="statusFilter === 'Complete'"
+            (click)="onStatusFilter('Complete')">
+            <i class="fa-solid fa-check-circle"></i> Sent
+          </div>
+          <div class="filter-chip" [class.active]="statusFilter === 'Failed'"
+            (click)="onStatusFilter('Failed')">
+            <i class="fa-solid fa-times-circle"></i> Failed
+          </div>
+          <div class="filter-chip" [class.active]="statusFilter === 'Pending'"
+            (click)="onStatusFilter('Pending')">
+            <i class="fa-solid fa-clock"></i> Pending
+          </div>
+          <div class="toolbar-spacer"></div>
+          <button class="tb-btn" (click)="loadData()">
+            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
+          </button>
         </div>
+        <div class="table-wrapper">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Direction</th>
+                <th>Provider</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (log of filteredLogs; track log) {
+                <tr>
+                  <td>
+                    <span class="log-status-badge" [ngClass]="getStatusClass(log.Status)">
+                      <i [class]="getStatusIcon(log.Status)"></i>
+                      {{log.Status}}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="log-direction" [ngClass]="log.Direction.toLowerCase()">
+                      <i [class]="log.Direction === 'Sending' ? 'fa-solid fa-arrow-up-right' : 'fa-solid fa-arrow-down-left'"></i>
+                      {{log.Direction}}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="log-provider-badge">
+                      <i [class]="getProviderIcon(log.CommunicationProvider)" [style.color]="getProviderColor(log.CommunicationProvider)"></i>
+                      {{log.CommunicationProvider}}
+                    </span>
+                  </td>
+                  <td>{{log.CommunicationProviderMessageType}}</td>
+                  <td>{{log.MessageDate | date:'medium'}}</td>
+                  <td>
+                    @if (log.ErrorMessage) {
+                      <span class="log-error-text" [title]="log.ErrorMessage">
+                        {{log.ErrorMessage}}
+                      </span>
+                    }
+                    @if (!log.ErrorMessage) {
+                      <span class="no-error">&mdash;</span>
+                    }
+                  </td>
+                </tr>
+              }
+              @if (filteredLogs.length === 0 && !isLoading) {
+                <tr>
+                  <td colspan="6" class="no-data">
+                    <div class="empty-state">
+                      <i class="fa-solid fa-inbox"></i>
+                      <p>No logs found matching your criteria</p>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  `,
+    `,
     styles: [`
     .logs-wrapper {
         height: 100%;
@@ -270,8 +271,8 @@ export function LoadCommunicationLogsResource() {
   `]
 })
 export class CommunicationLogsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    public logs: CommunicationLogEntity[] = [];
-    public filteredLogs: CommunicationLogEntity[] = [];
+    public logs: MJCommunicationLogEntity[] = [];
+    public filteredLogs: MJCommunicationLogEntity[] = [];
     public isLoading = false;
     public statusFilter = '';
     private searchTerm = '';
@@ -293,8 +294,8 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
             this.cdr.detectChanges();
 
             const rv = new RunView();
-            const result = await rv.RunView<CommunicationLogEntity>({
-                EntityName: 'Communication Logs',
+            const result = await rv.RunView<MJCommunicationLogEntity>({
+                EntityName: 'MJ: Communication Logs',
                 OrderBy: 'MessageDate DESC',
                 MaxRows: 200,
                 ResultType: 'entity_object'

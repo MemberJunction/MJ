@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ActionParamEntity } from '@memberjunction/core-entities';
+import { MJActionParamEntity } from '@memberjunction/core-entities';
 
 export interface ActionParamDialogResult {
-    Param: ActionParamEntity;
+    Param: MJActionParamEntity;
     Save: boolean;
 }
 
@@ -20,25 +20,26 @@ export interface ActionParamDialogResult {
  * </mj-action-param-dialog>
  */
 @Component({
+  standalone: false,
     selector: 'mj-action-param-dialog',
     templateUrl: './action-param-dialog.component.html',
     styleUrls: ['./action-param-dialog.component.css']
 })
 export class ActionParamDialogComponent implements OnInit {
     // Private backing fields
-    private _param!: ActionParamEntity;
+    private _param!: MJActionParamEntity;
     private _isNew = false;
     private _editMode = false;
     private _isOpen = false;
 
     @Input()
-    set Param(value: ActionParamEntity) {
+    set Param(value: MJActionParamEntity) {
         this._param = value;
         if (value) {
             this.loadParamValues();
         }
     }
-    get Param(): ActionParamEntity {
+    get Param(): MJActionParamEntity {
         return this._param;
     }
 
@@ -143,9 +144,4 @@ export class ActionParamDialogComponent implements OnInit {
     public GetTypeClass(type: string): string {
         return 'type-' + type.toLowerCase();
     }
-}
-
-// Tree-shaking prevention function
-export function LoadActionParamDialogComponent(): void {
-    // This function ensures the component is included in the bundle
 }

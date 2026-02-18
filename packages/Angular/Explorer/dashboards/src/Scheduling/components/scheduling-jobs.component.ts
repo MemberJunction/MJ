@@ -11,6 +11,7 @@ import {
 } from '../services/scheduling-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-scheduling-jobs',
   templateUrl: './scheduling-jobs.component.html',
   styleUrls: ['./scheduling-jobs.component.css'],
@@ -248,7 +249,7 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
   public OpenEntityRecord(job: JobStatistics): void {
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromSingleKeyValuePair('ID', job.jobId);
-    SharedService.Instance.OpenEntityRecord('Scheduled Jobs', compositeKey);
+    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Jobs', compositeKey);
   }
 
   public GetStatusClass(status: string): string {

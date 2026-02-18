@@ -1,10 +1,8 @@
 import { logError } from "./status_logging";
-import { unlinkSync } from "fs-extra";
-
-const fs = require('fs');
-const fse = require('fs-extra');
-const glob = require('glob');
-const path = require('path');
+import fs, { unlinkSync } from "fs";
+import fsExtra from 'fs-extra';
+import { globSync } from 'glob';
+import path from 'path';
 
 export function makeDirs(dirPaths: string[]) {
     for (let i = 0; i < dirPaths.length; i++) {
@@ -21,7 +19,7 @@ export function makeDir(dirPath: string): void {
 export function copyDir(sourceDir: string, destDir: string) {
     // To copy a folder or file, select overwrite accordingly
     try {
-      fse.copySync(sourceDir, destDir, { overwrite: true })
+      fsExtra.copySync(sourceDir, destDir, { overwrite: true })
     } catch (err) {
       logError(err as string)
     }
@@ -59,8 +57,8 @@ export function combineFiles(directory: string, combinedFileName: string, patter
         return;
     }
 
-    // Use glob.sync to find files that match the pattern synchronously, excluding the combinedFileName
-    const files = glob.sync(pattern, { cwd: directory }).filter((file: string) => file !== combinedFileName);
+    // Use globSync to find files that match the pattern synchronously, excluding the combinedFileName
+    const files = globSync(pattern, { cwd: directory }).filter((file: string) => file !== combinedFileName);
 
     // Sort the files so that files ending with '.generated.sql' come before '.permissions.generated.sql'
     files.sort((a: string, b: string) => {

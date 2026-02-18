@@ -9,9 +9,9 @@
 
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import {
-    MCPServerEntity,
-    MCPServerConnectionEntity,
-    MCPServerToolEntity
+    MJMCPServerEntity,
+    MJMCPServerConnectionEntity,
+    MJMCPServerToolEntity
 } from "../generated/entity_subclasses";
 
 /**
@@ -86,9 +86,9 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
     // Private Storage
     // ========================================
 
-    private _Servers: MCPServerEntity[] = [];
-    private _Connections: MCPServerConnectionEntity[] = [];
-    private _Tools: MCPServerToolEntity[] = [];
+    private _Servers: MJMCPServerEntity[] = [];
+    private _Connections: MJMCPServerConnectionEntity[] = [];
+    private _Tools: MJMCPServerToolEntity[] = [];
 
     // ========================================
     // Public Getters
@@ -97,21 +97,21 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
     /**
      * Gets all cached MCP servers
      */
-    public get Servers(): MCPServerEntity[] {
+    public get Servers(): MJMCPServerEntity[] {
         return this._Servers;
     }
 
     /**
      * Gets all cached MCP server connections
      */
-    public get Connections(): MCPServerConnectionEntity[] {
+    public get Connections(): MJMCPServerConnectionEntity[] {
         return this._Connections;
     }
 
     /**
      * Gets all cached MCP server tools
      */
-    public get Tools(): MCPServerToolEntity[] {
+    public get Tools(): MJMCPServerToolEntity[] {
         return this._Tools;
     }
 
@@ -125,7 +125,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param serverId - The server ID
      * @returns The server entity or undefined if not found
      */
-    public GetServerById(serverId: string): MCPServerEntity | undefined {
+    public GetServerById(serverId: string): MJMCPServerEntity | undefined {
         return this._Servers.find(s => s.ID === serverId);
     }
 
@@ -135,7 +135,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param connectionId - The connection ID
      * @returns The connection entity or undefined if not found
      */
-    public GetConnectionById(connectionId: string): MCPServerConnectionEntity | undefined {
+    public GetConnectionById(connectionId: string): MJMCPServerConnectionEntity | undefined {
         return this._Connections.find(c => c.ID === connectionId);
     }
 
@@ -145,7 +145,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param toolId - The tool ID
      * @returns The tool entity or undefined if not found
      */
-    public GetToolById(toolId: string): MCPServerToolEntity | undefined {
+    public GetToolById(toolId: string): MJMCPServerToolEntity | undefined {
         return this._Tools.find(t => t.ID === toolId);
     }
 
@@ -155,7 +155,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param serverId - The server ID
      * @returns Array of connections for the server
      */
-    public GetConnectionsByServer(serverId: string): MCPServerConnectionEntity[] {
+    public GetConnectionsByServer(serverId: string): MJMCPServerConnectionEntity[] {
         return this._Connections.filter(c => c.MCPServerID === serverId);
     }
 
@@ -165,7 +165,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param serverId - The server ID
      * @returns Array of tools for the server
      */
-    public GetToolsByServer(serverId: string): MCPServerToolEntity[] {
+    public GetToolsByServer(serverId: string): MJMCPServerToolEntity[] {
         return this._Tools.filter(t => t.MCPServerID === serverId);
     }
 
@@ -174,7 +174,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      *
      * @returns Array of servers with Status = 'Active'
      */
-    public get ActiveServers(): MCPServerEntity[] {
+    public get ActiveServers(): MJMCPServerEntity[] {
         return this._Servers.filter(s => s.Status === 'Active');
     }
 
@@ -183,7 +183,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      *
      * @returns Array of connections with Status = 'Active'
      */
-    public get ActiveConnections(): MCPServerConnectionEntity[] {
+    public get ActiveConnections(): MJMCPServerConnectionEntity[] {
         return this._Connections.filter(c => c.Status === 'Active');
     }
 
@@ -192,7 +192,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      *
      * @returns Array of tools with Status = 'Active'
      */
-    public get ActiveTools(): MCPServerToolEntity[] {
+    public get ActiveTools(): MJMCPServerToolEntity[] {
         return this._Tools.filter(t => t.Status === 'Active');
     }
 
@@ -202,7 +202,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param serverId - The server ID
      * @returns Array of active connections for the server
      */
-    public GetActiveConnectionsByServer(serverId: string): MCPServerConnectionEntity[] {
+    public GetActiveConnectionsByServer(serverId: string): MJMCPServerConnectionEntity[] {
         return this._Connections.filter(c => c.MCPServerID === serverId && c.Status === 'Active');
     }
 
@@ -212,7 +212,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param serverId - The server ID
      * @returns Array of active tools for the server
      */
-    public GetActiveToolsByServer(serverId: string): MCPServerToolEntity[] {
+    public GetActiveToolsByServer(serverId: string): MJMCPServerToolEntity[] {
         return this._Tools.filter(t => t.MCPServerID === serverId && t.Status === 'Active');
     }
 

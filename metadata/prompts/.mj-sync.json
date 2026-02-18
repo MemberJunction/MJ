@@ -1,9 +1,9 @@
 {
-  "entity": "AI Prompts",
+  "entity": "MJ: AI Prompts",
   "filePattern": "**/.*.json",
   "defaults": {
-    "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types",
-    "TypeID": "@lookup:AI Prompt Types.Name=Chat"
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat"
   },
   "ignoreDirectories": [
     "output",
@@ -39,11 +39,11 @@
     ],
     "lookupFields": {
       "CategoryID": {
-        "entity": "AI Prompt Categories",
+        "entity": "MJ: AI Prompt Categories",
         "field": "Name"
       },
       "TypeID": {
-        "entity": "AI Prompt Types",
+        "entity": "MJ: AI Prompt Types",
         "field": "Name"
       }
     },
@@ -54,7 +54,7 @@
         "filter": "Status = 'Active'",
         "lookupFields": {
           "ModelID": {
-            "entity": "AI Models",
+            "entity": "MJ: AI Models",
             "field": "Name"
           },
           "VendorID": {

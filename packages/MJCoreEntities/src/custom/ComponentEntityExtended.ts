@@ -1,10 +1,10 @@
 import { BaseEntity, CompositeKey, EntitySaveOptions, FieldValueCollection } from "@memberjunction/core";
-import { ComponentEntity } from "../generated/entity_subclasses";
+import { MJComponentEntity } from "../generated/entity_subclasses";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { ComponentSpec } from "@memberjunction/interactive-component-types";
 
 @RegisterClass(BaseEntity, 'MJ: Components')
-export class ComponentEntityExtended extends ComponentEntity {
+export class ComponentEntityExtended extends MJComponentEntity {
     /**
      * Whenever a Component record is saved, if it is a new record or if the Specification field
      * has changed, we will recalculate the values of the hasCustomProps, hasCustomEvents, RequiresData, DependencyCount fields,

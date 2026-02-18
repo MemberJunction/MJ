@@ -1,154 +1,160 @@
 <!-- Query Config Panel - Compact layout with tree dropdown and collapsible sections -->
 <div class="config-panel config-panel--compact">
-    <!-- Query Selection (Primary) -->
-    <div class="form-group">
-        <label>
-            <i class="fa-solid fa-flask"></i>
-            Select Query
-            <span class="required">*</span>
-        </label>
-        <mj-tree-dropdown
-            #queryDropdown
-            [BranchConfig]="QueryCategoryConfig"
-            [LeafConfig]="QueryLeafConfig"
-            [Value]="QueryIdAsKey"
-            [SelectableTypes]="'leaf'"
-            [SelectionMode]="'single'"
-            [Placeholder]="'Search or browse queries...'"
-            [EnableSearch]="true"
-            (SelectionChange)="onQuerySelection($event)"
-            [class.error]="queryError">
-        </mj-tree-dropdown>
-        <span class="form-error" *ngIf="queryError">{{ queryError }}</span>
-        <span class="form-hint" *ngIf="!queryError && !queryId">
-            Browse categories or search to find a query
-        </span>
-        <span class="form-hint form-hint--selected" *ngIf="!queryError && queryId">
-            <i class="fa-solid fa-check"></i>
-            Selected: {{ queryName }}
-        </span>
-    </div>
+  <!-- Query Selection (Primary) -->
+  <div class="form-group">
+    <label>
+      <i class="fa-solid fa-flask"></i>
+      Select Query
+      <span class="required">*</span>
+    </label>
+    <mj-tree-dropdown
+      #queryDropdown
+      [BranchConfig]="QueryCategoryConfig"
+      [LeafConfig]="QueryLeafConfig"
+      [Value]="QueryIdAsKey"
+      [SelectableTypes]="'leaf'"
+      [SelectionMode]="'single'"
+      [Placeholder]="'Search or browse queries...'"
+      [EnableSearch]="true"
+      (SelectionChange)="onQuerySelection($event)"
+      [class.error]="queryError">
+    </mj-tree-dropdown>
+    @if (queryError) {
+      <span class="form-error">{{ queryError }}</span>
+    }
+    @if (!queryError && !queryId) {
+      <span class="form-hint">
+        Browse categories or search to find a query
+      </span>
+    }
+    @if (!queryError && queryId) {
+      <span class="form-hint form-hint--selected">
+        <i class="fa-solid fa-check"></i>
+        Selected: {{ queryName }}
+      </span>
+    }
+  </div>
 
-    <!-- Title (Optional) -->
-    <div class="form-group">
-        <label for="partTitle">
-            <i class="fa-solid fa-heading"></i>
-            Part Title
-            <span class="optional-tag">(optional)</span>
-        </label>
-        <input
-            type="text"
-            id="partTitle"
-            [(ngModel)]="title"
-            (input)="onTitleChange()"
-            [placeholder]="queryName ? 'Default: ' + queryName : 'Enter a custom title'"
-            class="form-input">
-        <span class="form-hint">Leave empty to use query name as title</span>
-    </div>
+  <!-- Title (Optional) -->
+  <div class="form-group">
+    <label for="partTitle">
+      <i class="fa-solid fa-heading"></i>
+      Part Title
+      <span class="optional-tag">(optional)</span>
+    </label>
+    <input
+      type="text"
+      id="partTitle"
+      [(ngModel)]="title"
+      (input)="onTitleChange()"
+      [placeholder]="queryName ? 'Default: ' + queryName : 'Enter a custom title'"
+      class="form-input">
+    <span class="form-hint">Leave empty to use query name as title</span>
+  </div>
 
-    <!-- Advanced Options (Collapsible) -->
-    <div class="collapsible-section">
-        <button
-            type="button"
-            class="collapsible-header"
-            (click)="toggleAdvancedOptions()"
-            [attr.aria-expanded]="showAdvancedOptions">
-            <span class="collapsible-title">
-                <i class="fa-solid fa-sliders"></i>
-                Display Options
-            </span>
-            <i class="collapsible-chevron fa-solid"
-               [class.fa-chevron-down]="!showAdvancedOptions"
-               [class.fa-chevron-up]="showAdvancedOptions"></i>
-        </button>
+  <!-- Advanced Options (Collapsible) -->
+  <div class="collapsible-section">
+    <button
+      type="button"
+      class="collapsible-header"
+      (click)="toggleAdvancedOptions()"
+      [attr.aria-expanded]="showAdvancedOptions">
+      <span class="collapsible-title">
+        <i class="fa-solid fa-sliders"></i>
+        Display Options
+      </span>
+      <i class="collapsible-chevron fa-solid"
+        [class.fa-chevron-down]="!showAdvancedOptions"
+      [class.fa-chevron-up]="showAdvancedOptions"></i>
+    </button>
 
-        <div class="collapsible-content" *ngIf="showAdvancedOptions">
-            <!-- Parameter Layout -->
-            <div class="form-group">
-                <label>Parameter Layout</label>
-                <div class="radio-group radio-group--horizontal">
-                    <label class="radio-option radio-option--compact" [class.selected]="parameterLayout === 'header'">
-                        <input
-                            type="radio"
-                            name="parameterLayout"
-                            value="header"
-                            [(ngModel)]="parameterLayout"
-                            (change)="onParameterLayoutChange()">
-                        <span class="radio-mark"></span>
-                        <span class="radio-label">
-                            <i class="fa-solid fa-arrow-up-from-bracket"></i>
-                            Header
-                        </span>
-                    </label>
-                    <label class="radio-option radio-option--compact" [class.selected]="parameterLayout === 'sidebar'">
-                        <input
-                            type="radio"
-                            name="parameterLayout"
-                            value="sidebar"
-                            [(ngModel)]="parameterLayout"
-                            (change)="onParameterLayoutChange()">
-                        <span class="radio-mark"></span>
-                        <span class="radio-label">
-                            <i class="fa-solid fa-table-columns"></i>
-                            Sidebar
-                        </span>
-                    </label>
-                    <label class="radio-option radio-option--compact" [class.selected]="parameterLayout === 'dialog'">
-                        <input
-                            type="radio"
-                            name="parameterLayout"
-                            value="dialog"
-                            [(ngModel)]="parameterLayout"
-                            (change)="onParameterLayoutChange()">
-                        <span class="radio-mark"></span>
-                        <span class="radio-label">
-                            <i class="fa-solid fa-window-restore"></i>
-                            Dialog
-                        </span>
-                    </label>
-                </div>
-                <span class="form-hint">{{ getParameterLayoutDescription() }}</span>
-            </div>
-
-            <!-- Auto Refresh -->
-            <div class="form-group">
-                <label for="autoRefresh">
-                    <i class="fa-solid fa-rotate"></i>
-                    Auto Refresh
-                </label>
-                <select
-                    class="form-select"
-                    [(ngModel)]="autoRefreshSeconds"
-                    (change)="onAutoRefreshChange()">
-                    <option [ngValue]="0">Disabled</option>
-                    <option [ngValue]="30">Every 30 seconds</option>
-                    <option [ngValue]="60">Every minute</option>
-                    <option [ngValue]="300">Every 5 minutes</option>
-                    <option [ngValue]="600">Every 10 minutes</option>
-                </select>
-            </div>
-
-            <!-- Options -->
-            <div class="form-group">
-                <div class="checkbox-group checkbox-group--compact">
-                    <label class="checkbox-option checkbox-option--compact">
-                        <input
-                            type="checkbox"
-                            [(ngModel)]="showParameterControls"
-                            (change)="onOptionChange()">
-                        <span class="checkbox-mark"></span>
-                        <span class="checkbox-label">Show Parameter Controls</span>
-                    </label>
-                    <label class="checkbox-option checkbox-option--compact">
-                        <input
-                            type="checkbox"
-                            [(ngModel)]="showExecutionMetadata"
-                            (change)="onOptionChange()">
-                        <span class="checkbox-mark"></span>
-                        <span class="checkbox-label">Show Execution Metadata</span>
-                    </label>
-                </div>
-            </div>
+    @if (showAdvancedOptions) {
+      <div class="collapsible-content">
+        <!-- Parameter Layout -->
+        <div class="form-group">
+          <label>Parameter Layout</label>
+          <div class="radio-group radio-group--horizontal">
+            <label class="radio-option radio-option--compact" [class.selected]="parameterLayout === 'header'">
+              <input
+                type="radio"
+                name="parameterLayout"
+                value="header"
+                [(ngModel)]="parameterLayout"
+                (change)="onParameterLayoutChange()">
+              <span class="radio-mark"></span>
+              <span class="radio-label">
+                <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                Header
+              </span>
+            </label>
+            <label class="radio-option radio-option--compact" [class.selected]="parameterLayout === 'sidebar'">
+              <input
+                type="radio"
+                name="parameterLayout"
+                value="sidebar"
+                [(ngModel)]="parameterLayout"
+                (change)="onParameterLayoutChange()">
+              <span class="radio-mark"></span>
+              <span class="radio-label">
+                <i class="fa-solid fa-table-columns"></i>
+                Sidebar
+              </span>
+            </label>
+            <label class="radio-option radio-option--compact" [class.selected]="parameterLayout === 'dialog'">
+              <input
+                type="radio"
+                name="parameterLayout"
+                value="dialog"
+                [(ngModel)]="parameterLayout"
+                (change)="onParameterLayoutChange()">
+              <span class="radio-mark"></span>
+              <span class="radio-label">
+                <i class="fa-solid fa-window-restore"></i>
+                Dialog
+              </span>
+            </label>
+          </div>
+          <span class="form-hint">{{ getParameterLayoutDescription() }}</span>
         </div>
-    </div>
+        <!-- Auto Refresh -->
+        <div class="form-group">
+          <label for="autoRefresh">
+            <i class="fa-solid fa-rotate"></i>
+            Auto Refresh
+          </label>
+          <select
+            class="form-select"
+            [(ngModel)]="autoRefreshSeconds"
+            (change)="onAutoRefreshChange()">
+            <option [ngValue]="0">Disabled</option>
+            <option [ngValue]="30">Every 30 seconds</option>
+            <option [ngValue]="60">Every minute</option>
+            <option [ngValue]="300">Every 5 minutes</option>
+            <option [ngValue]="600">Every 10 minutes</option>
+          </select>
+        </div>
+        <!-- Options -->
+        <div class="form-group">
+          <div class="checkbox-group checkbox-group--compact">
+            <label class="checkbox-option checkbox-option--compact">
+              <input
+                type="checkbox"
+                [(ngModel)]="showParameterControls"
+                (change)="onOptionChange()">
+              <span class="checkbox-mark"></span>
+              <span class="checkbox-label">Show Parameter Controls</span>
+            </label>
+            <label class="checkbox-option checkbox-option--compact">
+              <input
+                type="checkbox"
+                [(ngModel)]="showExecutionMetadata"
+                (change)="onOptionChange()">
+              <span class="checkbox-mark"></span>
+              <span class="checkbox-label">Show Execution Metadata</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
 </div>

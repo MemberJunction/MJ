@@ -64,6 +64,7 @@ export interface AITestHarnessDialogData {
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-ai-test-harness-dialog',
     template: `
         <div class="test-harness-dialog">
@@ -179,7 +180,7 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
         if (this.mode === 'agent' || (!this.data.promptId && !this.data.prompt)) {
             // Agent mode
             if (this.data.agentId && !this.data.agent) {
-                this.agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+                this.agent = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
                 await this.agent.Load(this.data.agentId);
                 
                 if (this.agent) {
@@ -193,7 +194,7 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
             // Prompt mode
             this.mode = 'prompt';
             if (this.data.promptId && !this.data.prompt) {
-                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
+                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts');
                 await this.prompt.Load(this.data.promptId);
                 
                 if (this.prompt) {
@@ -306,7 +307,7 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
             console.log('✅ Prompt run loaded successfully');
             // Load the prompt if not already loaded
             if (!this.prompt && promptRun.PromptID) {
-                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
+                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts');
                 await this.prompt.Load(promptRun.PromptID);
                 this.testHarness.entity = this.prompt;
                 

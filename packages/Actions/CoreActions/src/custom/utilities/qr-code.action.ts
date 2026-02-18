@@ -308,10 +308,3 @@ export class QRCodeAction extends BaseAction {
         return base64SVG; // Return base64 SVG as placeholder for PNG
     }
 }
-
-/**
- * Loader function to ensure the QRCodeAction class is included in the bundle.
- */
-export function LoadQRCodeAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

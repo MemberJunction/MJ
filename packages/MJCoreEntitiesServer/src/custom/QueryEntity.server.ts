@@ -1,13 +1,12 @@
 import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult } from "@memberjunction/core";
-import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity } from "@memberjunction/core-entities";
+import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { BaseEmbeddings, EmbedTextParams, GetAIAPIKey } from "@memberjunction/ai";
 import { EmbedTextLocalHelper } from "./util";
-import { Parser } from 'node-sql-parser';
-import * as nunjucks from 'nunjucks';
+import { SQLParser } from "./sql-parser";
 
 interface ExtractedParameter {
     name: string;
@@ -38,8 +37,8 @@ interface ParameterExtractionResult {
     selectClause?: ExtractedField[];
 }
 
-@RegisterClass(BaseEntity, 'Queries')
-export class QueryEntityExtended extends QueryEntity {
+@RegisterClass(BaseEntity, 'MJ: Queries')
+export class QueryEntityExtended extends MJQueryEntity {
     private _queryEntities: QueryEntityInfo[] = [];
     private _queryFields: QueryFieldInfo[] = [];
     private _queryParameters: QueryParameterInfo[] = [];
@@ -288,7 +287,7 @@ export class QueryEntityExtended extends QueryEntity {
         baseView: string;
         fields: Array<{ name: string; type: string; isPrimaryKey: boolean }>;
     }>> {
-        const md = this.ProviderToUse as any as IMetadataProvider;
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
         const results: Array<{
             name: string;
             schemaName: string;
@@ -299,79 +298,45 @@ export class QueryEntityExtended extends QueryEntity {
         if (!this.SQL) return results;
 
         try {
-            // Pre-process Nunjucks templates to get valid SQL for parsing
-            const processedSQL = this.preProcessNunjucksForParsing(this.SQL);
+            // Use the shared SQLParser with Nunjucks preprocessing
+            const parseResult = SQLParser.ParseWithTemplatePreprocessing(this.SQL);
 
-            // Parse the SQL using node-sql-parser
-            const parser = new Parser();
-            let ast: any;
-            try {
-                ast = parser.astify(processedSQL, { database: 'TransactSQL' });
-            } catch (parseError) {
-                // If parsing fails, fall back to regex-based extraction
-                console.warn(`SQL parsing failed, falling back to regex: ${parseError.message}`);
-                return this.extractEntityMetadataFromSQLRegex();
-            }
-
-            // Extract table references and column references from AST
-            const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
-            const referencedColumns = new Set<string>();
-
-            // Process AST (handle both single statement and array of statements)
-            const statements = Array.isArray(ast) ? ast : [ast];
-            for (const statement of statements) {
-                this.extractFromAST(statement, tableAliasMap, referencedColumns);
-            }
-
-            // Build entity metadata with only referenced fields
-            const processedEntities = new Set<string>();
-
-            for (const [alias, tableInfo] of tableAliasMap) {
-                const schemaName = tableInfo.schemaName || 'dbo';
-                const tableName = tableInfo.tableName;
-                const key = `${schemaName.toLowerCase()}.${tableName.toLowerCase()}`;
-
-                if (processedEntities.has(key)) continue;
-                processedEntities.add(key);
-
-                // Find matching entity in metadata
+            // Cross-reference parsed tables against entity metadata
+            for (const tableRef of parseResult.Tables) {
                 const matchingEntity = md.Entities.find(e =>
-                    (e.BaseView.toLowerCase() === tableName.toLowerCase() ||
-                     e.BaseTable.toLowerCase() === tableName.toLowerCase()) &&
-                    e.SchemaName.toLowerCase() === schemaName.toLowerCase()
+                    (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
+                     e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
+                    e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
                 );
 
                 if (matchingEntity) {
-                    // Get fields from the entity's Fields property
-                    const entityFields = matchingEntity.Fields;
-
                     // Filter to fields that are actually referenced in the SQL
-                    // Check both the field name directly and with table alias prefix
-                    const relevantFields = entityFields
+                    const relevantFields = matchingEntity.Fields
                         .filter(f => {
                             const fieldLower = f.Name.toLowerCase();
-                            // Check if this field is referenced directly or with any alias
-                            for (const colRef of referencedColumns) {
-                                const colLower = colRef.toLowerCase();
-                                // Match: fieldName, alias.fieldName, tableName.fieldName
-                                if (colLower === fieldLower ||
-                                    colLower === `${alias.toLowerCase()}.${fieldLower}` ||
-                                    colLower === `${tableName.toLowerCase()}.${fieldLower}` ||
-                                    colLower.endsWith(`.${fieldLower}`)) {
-                                    return true;
+                            for (const colRef of parseResult.Columns) {
+                                const colLower = colRef.ColumnName.toLowerCase();
+                                if (colLower === fieldLower) return true;
+                                // Check if column qualifier matches table alias or name
+                                if (colRef.TableQualifier) {
+                                    const qualLower = colRef.TableQualifier.toLowerCase();
+                                    if ((qualLower === tableRef.Alias.toLowerCase() ||
+                                         qualLower === tableRef.TableName.toLowerCase()) &&
+                                        colLower === fieldLower) {
+                                        return true;
+                                    }
                                 }
                             }
                             // Also include primary keys as they're always useful context
                             return f.IsPrimaryKey;
                         })
-                        .slice(0, 20) // Limit to 20 most relevant fields per entity
+                        .slice(0, 20)
                         .map(f => ({
                             name: f.Name,
                             type: f.Type,
                             isPrimaryKey: f.IsPrimaryKey
                         }));
 
-                    // Only include entity if we found relevant fields
                     if (relevantFields.length > 0) {
                         results.push({
                             name: matchingEntity.Name,
@@ -385,273 +350,9 @@ export class QueryEntityExtended extends QueryEntity {
 
             return results;
         } catch (error) {
-            console.warn(`Error in extractEntityMetadataFromSQL: ${error.message}`);
-            return this.extractEntityMetadataFromSQLRegex();
+            console.warn(`Error in extractEntityMetadataFromSQL: ${error}`);
+            return results;
         }
-    }
-
-    /**
-     * Pre-processes Nunjucks templates in SQL to create valid SQL for parsing.
-     * Replaces Nunjucks syntax with placeholder values.
-     */
-    private preProcessNunjucksForParsing(sql: string): string {
-        // Create a Nunjucks environment that won't throw on undefined
-        const env = new nunjucks.Environment(null, {
-            autoescape: false,
-            throwOnUndefined: false
-        });
-
-        // Add placeholder filters that return safe SQL values
-        env.addFilter('sqlString', () => "'placeholder'");
-        env.addFilter('sqlNumber', () => '0');
-        env.addFilter('sqlDate', () => "'2000-01-01'");
-        env.addFilter('sqlIn', () => "('placeholder')");
-        env.addFilter('sqlIdentifier', (val) => val || 'placeholder');
-        env.addFilter('sqlNoKeywordsExpression', (val) => val || 'placeholder');
-        env.addFilter('default', (val, defaultVal) => val || defaultVal || 'placeholder');
-        env.addFilter('safe', (val) => val || 'placeholder');
-        env.addFilter('dump', (val) => JSON.stringify(val || {}));
-
-        try {
-            // Try to render the template with placeholder data
-            // This handles most Nunjucks constructs
-            const rendered = env.renderString(sql, {});
-            return rendered;
-        } catch (e) {
-            // If rendering fails, do manual regex replacement
-            let processed = sql;
-
-            // Replace {{ variable | filter }} patterns
-            processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlString\s*\}\}/g, "'placeholder'");
-            processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlNumber\s*\}\}/g, '0');
-            processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlDate\s*\}\}/g, "'2000-01-01'");
-            processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlIn\s*\}\}/g, "('placeholder')");
-            processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlIdentifier\s*\}\}/g, 'placeholder');
-            processed = processed.replace(/\{\{\s*[\w.]+\s*[^}]*\}\}/g, "'placeholder'");
-
-            // Remove {% if %}, {% endif %}, {% for %}, {% endfor %} blocks
-            // Keep the content between them
-            processed = processed.replace(/\{%\s*if\s+[^%]+%\}/g, '');
-            processed = processed.replace(/\{%\s*endif\s*%\}/g, '');
-            processed = processed.replace(/\{%\s*else\s*%\}/g, '');
-            processed = processed.replace(/\{%\s*elif\s+[^%]+%\}/g, '');
-            processed = processed.replace(/\{%\s*for\s+[^%]+%\}/g, '');
-            processed = processed.replace(/\{%\s*endfor\s*%\}/g, '');
-            processed = processed.replace(/\{%\s*set\s+[^%]+%\}/g, '');
-            processed = processed.replace(/\{#[^#]*#\}/g, ''); // Comments
-
-            return processed;
-        }
-    }
-
-    /**
-     * Recursively extracts table references and column references from SQL AST.
-     */
-    private extractFromAST(
-        node: any,
-        tableAliasMap: Map<string, { schemaName: string; tableName: string }>,
-        referencedColumns: Set<string>
-    ): void {
-        if (!node || typeof node !== 'object') return;
-
-        // Handle CTEs (WITH clause) - process these first as they define tables used later
-        if (node.with) {
-            for (const cte of Array.isArray(node.with) ? node.with : [node.with]) {
-                // CTE structure can vary - check multiple possible locations
-                if (cte.stmt) {
-                    // stmt might be the AST directly or contain ast property
-                    const cteAst = cte.stmt.ast || cte.stmt;
-                    this.extractFromAST(cteAst, tableAliasMap, referencedColumns);
-                }
-            }
-        }
-
-        // Extract FROM clause tables (including JOINs)
-        if (node.from) {
-            for (const fromItem of Array.isArray(node.from) ? node.from : [node.from]) {
-                this.extractTableFromItem(fromItem, tableAliasMap, referencedColumns);
-            }
-        }
-
-        // Extract column references from SELECT
-        if (node.columns) {
-            for (const col of Array.isArray(node.columns) ? node.columns : [node.columns]) {
-                if (col === '*') continue;
-                if (col.expr) {
-                    this.extractColumnReferences(col.expr, referencedColumns, tableAliasMap);
-                }
-            }
-        }
-
-        // Extract column references from WHERE (and tables from subqueries like EXISTS, IN)
-        if (node.where) {
-            this.extractColumnReferences(node.where, referencedColumns, tableAliasMap);
-        }
-
-        // Extract column references from GROUP BY
-        if (node.groupby) {
-            const groupItems = node.groupby.columns || node.groupby;
-            for (const group of Array.isArray(groupItems) ? groupItems : [groupItems]) {
-                this.extractColumnReferences(group, referencedColumns, tableAliasMap);
-            }
-        }
-
-        // Extract column references from ORDER BY
-        if (node.orderby) {
-            for (const order of Array.isArray(node.orderby) ? node.orderby : [node.orderby]) {
-                this.extractColumnReferences(order.expr || order, referencedColumns, tableAliasMap);
-            }
-        }
-
-        // Handle UNION/INTERSECT/EXCEPT - the next query is in _next
-        if (node._next) {
-            this.extractFromAST(node._next, tableAliasMap, referencedColumns);
-        }
-    }
-
-    /**
-     * Extracts table information from a FROM clause item, handling tables and JOINs.
-     */
-    private extractTableFromItem(
-        fromItem: any,
-        tableAliasMap: Map<string, { schemaName: string; tableName: string }>,
-        referencedColumns: Set<string>
-    ): void {
-        if (!fromItem) return;
-
-        // Direct table reference
-        if (fromItem.table) {
-            const alias = fromItem.as || fromItem.table;
-            tableAliasMap.set(alias, {
-                schemaName: fromItem.db || 'dbo',
-                tableName: fromItem.table
-            });
-        }
-
-        // Handle subqueries in FROM (derived tables)
-        if (fromItem.expr) {
-            // The subquery AST is inside expr.ast
-            const subqueryAst = fromItem.expr.ast || fromItem.expr;
-            this.extractFromAST(subqueryAst, tableAliasMap, referencedColumns);
-        }
-
-        // Note: In node-sql-parser, JOINs are represented as separate items in the from array
-        // with a 'join' property that's a string (e.g., "INNER JOIN", "LEFT JOIN")
-        // So no need to recurse into join - each table is already in the from array
-
-        // Extract column references from ON conditions
-        if (fromItem.on) {
-            this.extractColumnReferences(fromItem.on, referencedColumns, tableAliasMap);
-        }
-
-        // Some parsers use 'using' for join conditions
-        if (fromItem.using) {
-            for (const col of Array.isArray(fromItem.using) ? fromItem.using : [fromItem.using]) {
-                if (typeof col === 'string') {
-                    referencedColumns.add(col);
-                } else if (col.column) {
-                    referencedColumns.add(col.column);
-                }
-            }
-        }
-    }
-
-    /**
-     * Extracts column references from an expression node.
-     * Also extracts tables from subqueries found in expressions (e.g., EXISTS, IN subqueries).
-     */
-    private extractColumnReferences(
-        expr: any,
-        referencedColumns: Set<string>,
-        tableAliasMap?: Map<string, { schemaName: string; tableName: string }>
-    ): void {
-        if (!expr || typeof expr !== 'object') return;
-
-        if (expr.type === 'column_ref') {
-            const colName = expr.table ? `${expr.table}.${expr.column}` : expr.column;
-            referencedColumns.add(colName);
-        }
-
-        // Handle subqueries in expressions (EXISTS, IN, scalar subqueries)
-        if (expr.ast && tableAliasMap) {
-            this.extractFromAST(expr.ast, tableAliasMap, referencedColumns);
-        }
-
-        // Recursively process nested expressions
-        if (expr.left) this.extractColumnReferences(expr.left, referencedColumns, tableAliasMap);
-        if (expr.right) this.extractColumnReferences(expr.right, referencedColumns, tableAliasMap);
-        if (expr.args) {
-            const args = expr.args.value || expr.args;
-            for (const arg of Array.isArray(args) ? args : [args]) {
-                this.extractColumnReferences(arg, referencedColumns, tableAliasMap);
-            }
-        }
-        if (expr.expr) this.extractColumnReferences(expr.expr, referencedColumns, tableAliasMap);
-    }
-
-    /**
-     * Fallback regex-based extraction for when SQL parsing fails.
-     */
-    private extractEntityMetadataFromSQLRegex(): Array<{
-        name: string;
-        schemaName: string;
-        baseView: string;
-        fields: Array<{ name: string; type: string; isPrimaryKey: boolean }>;
-    }> {
-        const md = this.ProviderToUse as any as IMetadataProvider;
-        const results: Array<{
-            name: string;
-            schemaName: string;
-            baseView: string;
-            fields: Array<{ name: string; type: string; isPrimaryKey: boolean }>;
-        }> = [];
-
-        if (!this.SQL) return results;
-
-        // Simple regex to find schema.table or schema.view references in SQL
-        const tablePattern = /(?:FROM|JOIN|INTO)\s+(?:\[?(\w+)\]?\.)?\[?(\w+)\]?(?:\s+(?:AS\s+)?(\w+))?/gi;
-        const matches = [...this.SQL.matchAll(tablePattern)];
-
-        const processedViews = new Set<string>();
-
-        for (const match of matches) {
-            const schemaName = match[1] || 'dbo';
-            const viewOrTable = match[2];
-            const key = `${schemaName.toLowerCase()}.${viewOrTable.toLowerCase()}`;
-
-            if (processedViews.has(key)) continue;
-            processedViews.add(key);
-
-            const matchingEntity = md.Entities.find(e =>
-                (e.BaseView.toLowerCase() === viewOrTable.toLowerCase() ||
-                 e.BaseTable.toLowerCase() === viewOrTable.toLowerCase()) &&
-                e.SchemaName.toLowerCase() === schemaName.toLowerCase()
-            );
-
-            if (matchingEntity) {
-                // Get fields from the entity's Fields property
-                const entityFields = matchingEntity.Fields;
-
-                // Include primary keys and fields ending in ID for fallback
-                const relevantFields = entityFields
-                    .filter(f => f.IsPrimaryKey || f.Name.endsWith('ID'))
-                    .slice(0, 15)
-                    .map(f => ({
-                        name: f.Name,
-                        type: f.Type,
-                        isPrimaryKey: f.IsPrimaryKey
-                    }));
-
-                results.push({
-                    name: matchingEntity.Name,
-                    schemaName: matchingEntity.SchemaName,
-                    baseView: matchingEntity.BaseView,
-                    fields: relevantFields
-                });
-            }
-        }
-
-        return results;
     }
 
     private async syncQueryParameters(extractedParams: ExtractedParameter[]): Promise<void> {
@@ -662,9 +363,9 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             // Get existing query parameters
             const rv = this.RunViewProviderToUse
-            const existingParams: QueryParameterEntity[] = [];
+            const existingParams: MJQueryParameterEntity[] = [];
             if (this.IsSaved) {
-                const existingParamsResult = await rv.RunView<QueryParameterEntity>({
+                const existingParamsResult = await rv.RunView<MJQueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
@@ -698,7 +399,7 @@ export class QueryEntityExtended extends QueryEntity {
             
             // Add new parameters
             for (const param of paramsToAdd) {
-                const newParam = await md.GetEntityObject<QueryParameterEntity>('MJ: Query Parameters', this.ContextCurrentUser);
+                const newParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters', this.ContextCurrentUser);
                 newParam.QueryID = this.ID;
                 newParam.Name = param.name;
 
@@ -807,7 +508,7 @@ export class QueryEntityExtended extends QueryEntity {
             if (this.IsSaved) {
                 // Get all existing query parameters
                 const rv = this.RunViewProviderToUse
-                const existingParamsResult = await rv.RunView<QueryParameterEntity>({
+                const existingParamsResult = await rv.RunView<MJQueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
@@ -899,12 +600,12 @@ export class QueryEntityExtended extends QueryEntity {
         const fieldsToSync = this.expandWildcardFields(extractedFields, md);
 
         try {
-            const existingFields: QueryFieldEntity[] = [];
+            const existingFields: MJQueryFieldEntity[] = [];
             if (this.IsSaved) {
                 // Get existing query fields
                 const rv = this.RunViewProviderToUse
-                const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
-                    EntityName: 'Query Fields',
+                const existingFieldsResult = await rv.RunView<MJQueryFieldEntity>({
+                    EntityName: 'MJ: Query Fields',
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
                 }, this.ContextCurrentUser);
@@ -938,7 +639,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Add new fields
             for (let i = 0; i < fieldsToAdd.length; i++) {
                 const field = fieldsToAdd[i];
-                const newField = await md.GetEntityObject<QueryFieldEntity>('Query Fields', this.ContextCurrentUser);
+                const newField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields', this.ContextCurrentUser);
                 newField.QueryID = this.ID;
                 newField.Name = field.name;
                 newField.Description = field.description;
@@ -1072,11 +773,11 @@ export class QueryEntityExtended extends QueryEntity {
 
         try {
             // Get existing query entities
-            const existingEntities: QueryEntityEntity[] = [];
+            const existingEntities: MJQueryEntityEntity[] = [];
             if (this.IsSaved) {
                 const rv = this.RunViewProviderToUse
-                const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
-                    EntityName: 'Query Entities',
+                const existingEntitiesResult = await rv.RunView<MJQueryEntityEntity>({
+                    EntityName: 'MJ: Query Entities',
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
                 }, this.ContextCurrentUser);
@@ -1121,7 +822,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Add new query entity relationships
             for (const mapping of entitiesToAdd) {
                 if (mapping) {
-                    const newEntity = await md.GetEntityObject<QueryEntityEntity>('Query Entities', this.ContextCurrentUser);
+                    const newEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities', this.ContextCurrentUser);
                     newEntity.QueryID = this.ID;
                     newEntity.EntityID = mapping.entityID;
                     newEntity.DetectionMethod = 'AI'; // Using 'AI' as it's the closest match to automated detection
@@ -1151,8 +852,8 @@ export class QueryEntityExtended extends QueryEntity {
             if (!this.IsSaved) return; // Nothing to remove if not saved
 
             const rv = this.RunViewProviderToUse
-            const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
-                EntityName: 'Query Fields',
+            const existingFieldsResult = await rv.RunView<MJQueryFieldEntity>({
+                EntityName: 'MJ: Query Fields',
                 ExtraFilter: `QueryID='${this.ID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -1179,8 +880,8 @@ export class QueryEntityExtended extends QueryEntity {
             if (!this.IsSaved) return; // Nothing to remove if not saved
             
             const rv = this.RunViewProviderToUse
-            const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
-                EntityName: 'Query Entities',
+            const existingEntitiesResult = await rv.RunView<MJQueryEntityEntity>({
+                EntityName: 'MJ: Query Entities',
                 ExtraFilter: `QueryID='${this.ID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -1243,5 +944,3 @@ export class QueryEntityExtended extends QueryEntity {
     }
 
 }
-
-export function LoadQueryEntityServerSubClass() {}

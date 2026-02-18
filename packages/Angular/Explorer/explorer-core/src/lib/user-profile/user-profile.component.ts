@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { AuthService } from '@auth0/auth0-angular';
 import { MJAuthBase, StandardUserInfo } from '@memberjunction/ng-auth-services';
-import { UserInfoEngine, UserNotificationPreferenceEntity } from '@memberjunction/core-entities';
+import { UserInfoEngine, MJUserNotificationPreferenceEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Observable, Subject } from 'rxjs';
@@ -14,6 +14,7 @@ interface NotificationSummary {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-user-profile',
   templateUrl: './user-profile.component.html',
   styleUrls: ['./user-profile.component.css']
@@ -134,7 +135,7 @@ export class UserProfileComponent implements OnInit, OnDestroy {
 
         if (!pref) {
           // Create new preference record
-          pref = await md.GetEntityObject<UserNotificationPreferenceEntity>('MJ: User Notification Preferences');
+          pref = await md.GetEntityObject<MJUserNotificationPreferenceEntity>('MJ: User Notification Preferences');
           pref.UserID = currentUser.ID;
           pref.NotificationTypeID = type.ID;
 

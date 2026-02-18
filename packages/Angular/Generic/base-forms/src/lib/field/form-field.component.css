@@ -1,0 +1,561 @@
+/* ============================================
+   FORM FIELD - Shared styles for read and edit
+   ============================================ */
+:host {
+  --mj-accent: #667eea;
+  --mj-accent-light: rgba(102, 126, 234, 0.08);
+  --mj-text-primary: #1f2937;
+  --mj-text-secondary: #4b5563;
+  --mj-text-muted: #9ca3af;
+  --mj-border: #e5e7eb;
+  --mj-error: #ef4444;
+  --mj-warning: #f59e0b;
+  --mj-card-bg: #ffffff;
+  --mj-forms-field-label-width: 200px;
+  --mj-forms-field-gap: 12px;
+  --mj-transition: 200ms;
+
+  display: contents;
+}
+
+.mj-forms-field {
+  display: grid;
+  grid-template-columns: var(--mj-forms-field-label-width) 1fr;
+  gap: var(--mj-forms-field-gap);
+  align-items: baseline;
+  padding: 8px 0;
+  transition: all var(--mj-transition) ease;
+}
+
+/* Subtle row hover in edit mode */
+.mj-forms-field--editing:hover {
+  background: var(--mj-accent-light);
+  border-radius: 6px;
+  margin: 0 -8px;
+  padding: 8px 8px;
+}
+
+/* ============================================
+   LABEL
+   ============================================ */
+.mj-forms-field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  padding-top: 2px;
+  word-break: break-word;
+}
+
+/* ============================================
+   FIELD CONTROL WRAPPER (value + dirty dot)
+   ============================================ */
+.mj-forms-field-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mj-forms-field-control > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ============================================
+   DIRTY INDICATOR (solid amber dot after label)
+   ============================================ */
+.mj-forms-field--dirty .mj-forms-field-label::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mj-warning);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ============================================
+   REQUIRED FIELD - red underline when empty
+   ============================================ */
+.mj-forms-field--required-empty .mj-forms-field-input {
+  border-bottom-color: var(--mj-error);
+}
+
+.mj-forms-field--required-empty .mj-forms-field-input:focus {
+  background: #fef2f2;
+  border-bottom-color: var(--mj-error);
+}
+
+.mj-forms-field--required-empty .mj-custom-select-trigger {
+  border-bottom-color: var(--mj-error);
+}
+
+.mj-forms-field--required-empty .mj-fk-search .mj-forms-field-input {
+  border-bottom-color: var(--mj-error);
+}
+
+/* ============================================
+   READ-ONLY VALUE
+   ============================================ */
+.mj-forms-field-value {
+  font-size: 14px;
+  color: var(--mj-text-primary);
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.mj-forms-field-value--long {
+  white-space: pre-line;
+  max-height: 300px;
+  overflow: auto;
+}
+
+/* Read-only fields in edit mode */
+.mj-forms-field--readonly {
+  opacity: 0.7;
+}
+
+.mj-forms-field--readonly .mj-forms-field-value {
+  color: var(--mj-text-secondary);
+}
+
+/* ============================================
+   LINKS (FK, email, URL)
+   ============================================ */
+.mj-forms-field-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mj-accent);
+  cursor: pointer;
+  font-weight: 500;
+  transition: color var(--mj-transition);
+  text-decoration: none;
+}
+
+.mj-forms-field-link:hover {
+  color: #5a6fd6;
+}
+
+.mj-forms-field-link-icon {
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity var(--mj-transition);
+}
+
+.mj-forms-field-link:hover .mj-forms-field-link-icon {
+  opacity: 1;
+}
+
+/* FK fields showing entity name instead of raw ID */
+.mj-forms-field-link--fk {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+/* ============================================
+   EDIT MODE INPUTS - Clean underline style
+   ============================================ */
+.mj-forms-field-input {
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--mj-text-primary);
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--mj-border);
+  padding: 4px 0;
+  width: 100%;
+  outline: none;
+  transition: border-color var(--mj-transition) ease,
+              background var(--mj-transition) ease;
+}
+
+.mj-forms-field-input:focus {
+  border-bottom-color: var(--mj-accent);
+  background: var(--mj-accent-light);
+  border-radius: 4px 4px 0 0;
+  padding: 4px 6px;
+}
+
+.mj-forms-field-input::placeholder {
+  color: var(--mj-text-muted);
+  font-style: italic;
+}
+
+/* Textarea variant */
+.mj-forms-field-input--textarea {
+  resize: vertical;
+  min-height: 60px;
+  border: 1.5px solid var(--mj-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: white;
+  font-family: inherit;
+}
+
+.mj-forms-field-input--textarea:focus {
+  border-color: var(--mj-accent);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  background: white;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+/* Number input - narrower */
+.mj-forms-field-input--number {
+  max-width: 200px;
+}
+
+/* Date input - narrower */
+.mj-forms-field-input--date {
+  max-width: 220px;
+}
+
+/* ============================================
+   CHECKBOX (custom styled)
+   ============================================ */
+.mj-forms-field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mj-forms-field-checkbox input[type="checkbox"] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--mj-border);
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all var(--mj-transition) ease;
+  flex-shrink: 0;
+}
+
+.mj-forms-field-checkbox input[type="checkbox"]:checked {
+  background: var(--mj-accent);
+  border-color: var(--mj-accent);
+}
+
+.mj-forms-field-checkbox input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.mj-forms-field-checkbox input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ============================================
+   CUSTOM SELECT DROPDOWN (replaces native <select>)
+   ============================================ */
+.mj-custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--mj-text-primary);
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--mj-border);
+  padding: 4px 0;
+  width: 100%;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--mj-transition) ease,
+              background var(--mj-transition) ease;
+}
+
+.mj-custom-select-trigger:focus {
+  border-bottom-color: var(--mj-accent);
+  background: var(--mj-accent-light);
+  border-radius: 4px 4px 0 0;
+  padding: 4px 6px;
+}
+
+.mj-custom-select-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-custom-select-value--placeholder {
+  color: var(--mj-text-muted);
+  font-style: italic;
+}
+
+.mj-custom-select-chevron {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  transition: transform var(--mj-transition) ease;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.mj-custom-select-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ============================================
+   FK SEARCH (custom autocomplete)
+   ============================================ */
+.mj-fk-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.mj-fk-search .mj-forms-field-input {
+  padding-right: 28px;
+}
+
+.mj-fk-search-icon {
+  position: absolute;
+  right: 4px;
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.mj-fk-clear {
+  position: absolute;
+  right: 2px;
+  background: none;
+  border: none;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 6px;
+  line-height: 1;
+  border-radius: 3px;
+  transition: all var(--mj-transition);
+}
+
+.mj-fk-clear:hover {
+  color: var(--mj-error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* Matched state: solid accent underline */
+.mj-fk-search--matched .mj-forms-field-input {
+  border-bottom: 2px solid var(--mj-accent);
+}
+
+/* ============================================
+   FLOATING DROPDOWN PANEL (position: fixed via ngStyle)
+   ============================================ */
+.mj-fk-dropdown {
+  background: var(--mj-card-bg);
+  border: 1px solid var(--mj-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  animation: mj-dropdown-in 150ms ease;
+}
+
+.mj-fk-dropdown--above {
+  animation: mj-dropdown-in-above 150ms ease;
+}
+
+.mj-fk-option {
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--mj-text-primary);
+  cursor: pointer;
+  transition: background var(--mj-transition);
+  border-radius: 6px;
+}
+
+.mj-fk-option:hover {
+  background: var(--mj-accent-light);
+}
+
+.mj-fk-option--selected {
+  background: var(--mj-accent-light);
+  font-weight: 600;
+  color: var(--mj-accent);
+}
+
+.mj-fk-option--selected:hover {
+  background: rgba(102, 126, 234, 0.15);
+}
+
+@keyframes mj-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes mj-dropdown-in-above {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   SEARCH HIGHLIGHTING
+   ============================================ */
+.mj-forms-field-label :global(.mj-forms-search-highlight) {
+  background-color: #fef08a;
+  color: #854d0e;
+  padding: 0;
+  border-radius: 2px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px #fef08a;
+}
+
+/* ============================================
+   VALIDATION ERROR STATE
+   ============================================ */
+.mj-forms-field--has-error .mj-forms-field-input {
+  border-bottom-color: var(--mj-error);
+  border-bottom-width: 2px;
+}
+
+.mj-forms-field--has-error .mj-forms-field-input:focus {
+  background: #fef2f2;
+  border-bottom-color: var(--mj-error);
+}
+
+.mj-forms-field--has-error .mj-forms-field-input--textarea {
+  border-color: var(--mj-error);
+}
+
+.mj-forms-field--has-error .mj-forms-field-input--textarea:focus {
+  border-color: var(--mj-error);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+}
+
+.mj-forms-field--has-error .mj-custom-select-trigger {
+  border-bottom-color: var(--mj-error);
+  border-bottom-width: 2px;
+}
+
+.mj-forms-field--has-error .mj-fk-search .mj-forms-field-input {
+  border-bottom-color: var(--mj-error);
+  border-bottom-width: 2px;
+}
+
+/* ============================================
+   VALIDATION WARNING STATE
+   ============================================ */
+.mj-forms-field--has-warning .mj-forms-field-input {
+  border-bottom-color: var(--mj-warning);
+  border-bottom-width: 2px;
+}
+
+.mj-forms-field--has-warning .mj-forms-field-input:focus {
+  background: #fffbeb;
+  border-bottom-color: var(--mj-warning);
+}
+
+.mj-forms-field--has-warning .mj-forms-field-input--textarea {
+  border-color: var(--mj-warning);
+}
+
+.mj-forms-field--has-warning .mj-forms-field-input--textarea:focus {
+  border-color: var(--mj-warning);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.08);
+}
+
+.mj-forms-field--has-warning .mj-custom-select-trigger {
+  border-bottom-color: var(--mj-warning);
+  border-bottom-width: 2px;
+}
+
+.mj-forms-field--has-warning .mj-fk-search .mj-forms-field-input {
+  border-bottom-color: var(--mj-warning);
+  border-bottom-width: 2px;
+}
+
+/* ============================================
+   VALIDATION MESSAGE AREA
+   ============================================ */
+.mj-forms-field-validation {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: -2px;
+  overflow: hidden;
+  animation: mj-validation-slide-in 200ms ease-out;
+}
+
+.mj-forms-field-validation-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 3px 0 1px;
+}
+
+.mj-forms-field-validation-item i {
+  font-size: 11px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* Error message colors */
+.mj-forms-field-validation--error .mj-forms-field-validation-item {
+  color: var(--mj-error);
+}
+
+.mj-forms-field-validation--error .mj-forms-field-validation-item i {
+  color: var(--mj-error);
+}
+
+/* Warning message colors */
+.mj-forms-field-validation--warning .mj-forms-field-validation-item {
+  color: #b45309;
+}
+
+.mj-forms-field-validation--warning .mj-forms-field-validation-item i {
+  color: var(--mj-warning);
+}
+
+@keyframes mj-validation-slide-in {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    max-height: 100px;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 640px) {
+  .mj-forms-field {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .mj-forms-field-label {
+    font-size: 12px;
+  }
+
+  .mj-forms-field-validation {
+    grid-column: 1;
+  }
+}

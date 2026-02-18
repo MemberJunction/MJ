@@ -91,7 +91,3 @@ export class ValidateEmailUniqueAction extends BaseAction {
         }
     }
 }
-
-export function LoadValidateEmailUniqueAction() {
-    // Prevent tree shaking
-}

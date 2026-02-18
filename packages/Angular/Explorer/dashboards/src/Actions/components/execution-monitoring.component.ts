@@ -1,18 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { ActionExecutionLogEntity, ActionEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJActionExecutionLogEntity, MJActionEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsMonitorResource() {
-  // Force inclusion in production builds
-}
-
 interface ExecutionMetrics {
   totalExecutions: number;
   successfulExecutions: number;
@@ -35,15 +27,16 @@ interface ExecutionTrend {
  */
 @RegisterClass(BaseResourceComponent, 'ActionsMonitorResource')
 @Component({
+  standalone: false,
   selector: 'mj-execution-monitoring',
   templateUrl: './execution-monitoring.component.html',
   styleUrls: ['./execution-monitoring.component.css']
 })
 export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading = true;
-  public executions: ActionExecutionLogEntity[] = [];
-  public filteredExecutions: ActionExecutionLogEntity[] = [];
-  public actions: Map<string, ActionEntity> = new Map();
+  public executions: MJActionExecutionLogEntity[] = [];
+  public filteredExecutions: MJActionExecutionLogEntity[] = [];
+  public actions: Map<string, MJActionEntity> = new Map();
   
   public metrics: ExecutionMetrics = {
     totalExecutions: 0,
@@ -83,7 +76,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   private destroy$ = new Subject<void>();
 
-  constructor(private navigationService: NavigationService) {
+  constructor(private navigationService: NavigationService, private cdr: ChangeDetectorRef) {
     super();
   }
 
@@ -117,11 +110,11 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       const rv = new RunView();
       const [executionsResult, actionsResult] = await rv.RunViews([
         {
-          EntityName: 'Action Execution Logs', 
+          EntityName: 'MJ: Action Execution Logs', 
           OrderBy: 'StartedAt DESC' 
         },
         {
-          EntityName: 'Actions', 
+          EntityName: 'MJ: Actions', 
           OrderBy: 'Name' 
         }
       ]);
@@ -130,8 +123,8 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         throw new Error('Failed to load data');
       }
       
-      const executions = executionsResult.Results as ActionExecutionLogEntity[];
-      const actions = actionsResult.Results as ActionEntity[];
+      const executions = executionsResult.Results as MJActionExecutionLogEntity[];
+      const actions = actionsResult.Results as MJActionEntity[];
 
       this.executions = executions;
       this.populateActionsMap(actions);
@@ -145,18 +138,18 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     } finally {
       this.isLoading = false;
       this.NotifyLoadComplete();
+      this.cdr.detectChanges();
     }
   }
 
-
-  private populateActionsMap(actions: ActionEntity[]): void {
+  private populateActionsMap(actions: MJActionEntity[]): void {
     this.actions.clear();
     actions.forEach(action => {
       this.actions.set(action.ID, action);
     });
   }
 
-  private buildActionOptions(actions: ActionEntity[]): void {
+  private buildActionOptions(actions: MJActionEntity[]): void {
     this.actionOptions = [
       { text: 'All Actions', value: 'all' },
       ...actions.map(action => ({
@@ -320,14 +313,14 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     this.selectedAction$.next(actionId);
   }
 
-  public openExecution(execution: ActionExecutionLogEntity): void {
+  public openExecution(execution: MJActionExecutionLogEntity): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: execution.ID }]);
-    this.navigationService.OpenEntityRecord('Action Execution Logs', key);
+    this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', key);
   }
 
   public openAction(actionId: string): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: actionId }]);
-    this.navigationService.OpenEntityRecord('Actions', key);
+    this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 
   public getActionName(actionId: string): string {
@@ -356,7 +349,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     }
   }
 
-  public getDuration(execution: ActionExecutionLogEntity): string {
+  public getDuration(execution: MJActionExecutionLogEntity): string {
     if (!execution.StartedAt || !execution.EndedAt) {
       return execution.EndedAt ? 'Unknown' : 'Running';
     }

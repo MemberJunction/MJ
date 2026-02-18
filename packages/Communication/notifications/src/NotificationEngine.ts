@@ -1,5 +1,5 @@
 import { BaseEngine, IMetadataProvider, Metadata, UserInfo, LogError, LogStatus, RegisterForStartup } from '@memberjunction/core';
-import { UserNotificationEntity, UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
@@ -51,7 +51,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    * @param nameOrId - The notification type name or UUID
    * @returns The notification type entity or null if not found
    */
-  private getNotificationType(nameOrId: string): UserNotificationTypeEntity | null {
+  private getNotificationType(nameOrId: string): MJUserNotificationTypeEntity | null {
     const types = UserInfoEngine.Instance.NotificationTypes;
 
     // Try by ID first
@@ -144,8 +144,8 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private resolveDeliveryChannels(
     params: SendNotificationParams,
-    prefs: UserNotificationPreferenceEntity | null,
-    type: UserNotificationTypeEntity,
+    prefs: MJUserNotificationPreferenceEntity | null,
+    type: MJUserNotificationTypeEntity,
   ): DeliveryChannels {
     // If forceDeliveryChannels is specified, use it directly
     if (params.forceDeliveryChannels) {
@@ -185,7 +185,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
   private getUserPreferences(
     userId: string,
     typeId: string
-  ): UserNotificationPreferenceEntity | null {
+  ): MJUserNotificationPreferenceEntity | null {
     // Use cached preferences from UserInfoEngine (user-specific)
     const pref = UserInfoEngine.Instance.GetUserPreferenceForType(userId, typeId);
 
@@ -210,11 +210,11 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private async createInAppNotification(
     params: SendNotificationParams,
-    type: UserNotificationTypeEntity,
+    type: MJUserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<string> {
     const md = new Metadata();
-    const notification = await md.GetEntityObject<UserNotificationEntity>('User Notifications', contextUser);
+    const notification = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications', contextUser);
 
     notification.UserID = params.userId;
     notification.NotificationTypeID = type.ID;
@@ -245,7 +245,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private async sendEmail(
     params: SendNotificationParams,
-    type: UserNotificationTypeEntity,
+    type: MJUserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<boolean> {
     // Access EmailTemplateID
@@ -302,7 +302,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private async sendSMS(
     params: SendNotificationParams,
-    type: UserNotificationTypeEntity,
+    type: MJUserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<boolean> {
     // Access SMSTemplateID

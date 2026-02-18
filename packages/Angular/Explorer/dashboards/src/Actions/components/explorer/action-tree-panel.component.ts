@@ -11,12 +11,12 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { ActionCategoryEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { ActionExplorerStateService } from '../../services/action-explorer-state.service';
 import { ActionEntityExtended } from '@memberjunction/actions-base';
 
 export interface CategoryTreeNode {
-  category: ActionCategoryEntity;
+  category: MJActionCategoryEntity;
   children: CategoryTreeNode[];
   level: number;
   actionCount: number;
@@ -24,17 +24,18 @@ export interface CategoryTreeNode {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-action-tree-panel',
   templateUrl: './action-tree-panel.component.html',
   styleUrls: ['./action-tree-panel.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ActionTreePanelComponent implements OnInit, OnDestroy {
-  @Input() Categories: ActionCategoryEntity[] = [];
+  @Input() Categories: MJActionCategoryEntity[] = [];
   @Input() Actions: ActionEntityExtended[] = [];
   @Output() CategorySelected = new EventEmitter<string>();
   @Output() NewCategoryClick = new EventEmitter<string | null>(); // parent ID or null for root
-  @Output() EditCategoryClick = new EventEmitter<ActionCategoryEntity>();
+  @Output() EditCategoryClick = new EventEmitter<MJActionCategoryEntity>();
 
   public CategoryTree: CategoryTreeNode[] = [];
   public SelectedCategoryId = 'all';
@@ -226,7 +227,7 @@ export class ActionTreePanelComponent implements OnInit, OnDestroy {
     this.NewCategoryClick.emit(parentId);
   }
 
-  public onEditCategory(category: ActionCategoryEntity, event: MouseEvent): void {
+  public onEditCategory(category: MJActionCategoryEntity, event: MouseEvent): void {
     event.stopPropagation();
     this.EditCategoryClick.emit(category);
   }

@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
 import { UserInfo, Metadata, LogError, LogStatus } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { ComponentEntity, ComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { MJComponentEntity, MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
     ComponentRegistryClient,
@@ -393,7 +393,7 @@ export class ComponentRegistryExtendedResolver {
     /**
      * Get registry entity from database by ID
      */
-    private async getRegistry(registryId: string, userInfo: UserInfo): Promise<ComponentRegistryEntity | null> {
+    private async getRegistry(registryId: string, userInfo: UserInfo): Promise<MJComponentRegistryEntity | null> {
         try {
             await this.componentEngine.Config(false, userInfo);
             
@@ -411,7 +411,7 @@ export class ComponentRegistryExtendedResolver {
     /**
      * Get registry entity from database by Name
      */
-    private async getRegistryByName(registryName: string, userInfo: UserInfo): Promise<ComponentRegistryEntity | null> {
+    private async getRegistryByName(registryName: string, userInfo: UserInfo): Promise<MJComponentRegistryEntity | null> {
         try {
             await this.componentEngine.Config(false, userInfo);
             
@@ -431,7 +431,7 @@ export class ComponentRegistryExtendedResolver {
      * Environment variable format: REGISTRY_URI_OVERRIDE_<REGISTRY_NAME>
      * Example: REGISTRY_URI_OVERRIDE_MJ_CENTRAL=http://localhost:8080
      */
-    private getRegistryUri(registry: ComponentRegistryEntity): string {
+    private getRegistryUri(registry: MJComponentRegistryEntity): string {
         if (!registry.Name) {
             return registry.URI || '';
         }
@@ -455,7 +455,7 @@ export class ComponentRegistryExtendedResolver {
      * Create a client for a registry on-demand
      * Checks configuration first, then falls back to default settings
      */
-    private createClientForRegistry(registry: ComponentRegistryEntity): ComponentRegistryClient {
+    private createClientForRegistry(registry: MJComponentRegistryEntity): ComponentRegistryClient {
         // Check if there's a configuration for this registry
         const config = configInfo.componentRegistries?.find(r => 
             r.id === registry.ID || r.name === registry.Name
@@ -490,7 +490,7 @@ export class ComponentRegistryExtendedResolver {
     /**
      * Check if component should be cached
      */
-    private shouldCache(registry: ComponentRegistryEntity): boolean {
+    private shouldCache(registry: MJComponentRegistryEntity): boolean {
         // Check config for caching settings
         const config = configInfo.componentRegistries?.find(r => 
             r.id === registry.ID || r.name === registry.Name
@@ -509,7 +509,7 @@ export class ComponentRegistryExtendedResolver {
         try {
             // Find or create component entity
             const md = new Metadata();
-            const componentEntity = await md.GetEntityObject<ComponentEntity>('MJ: Components', userInfo);
+            const componentEntity = await md.GetEntityObject<MJComponentEntity>('MJ: Components', userInfo);
             
             // Check if component already exists
             const existingComponent = this.componentEngine.Components?.find(
@@ -562,8 +562,8 @@ export class ComponentRegistryExtendedResolver {
     /**
      * Map component type string to entity enum
      */
-    private mapComponentType(type: string): ComponentEntity['Type'] {
-        const typeMap: Record<string, ComponentEntity['Type']> = {
+    private mapComponentType(type: string): MJComponentEntity['Type'] {
+        const typeMap: Record<string, MJComponentEntity['Type']> = {
             'report': 'Report',
             'dashboard': 'Dashboard',
             'form': 'Form',

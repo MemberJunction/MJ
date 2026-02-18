@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, RunView } from "@memberjunction/core";
-import { ListEntity, ListDetailEntity } from "@memberjunction/core-entities";
+import { MJListEntity, MJListDetailEntity } from "@memberjunction/core-entities";
 
 /**
  * Action to add one or more records to a list.
@@ -53,8 +53,8 @@ export class AddRecordsToListAction extends BaseAction {
       const md = new Metadata();
       const rv = new RunView();
 
-      const listResult = await rv.RunView<ListEntity>({
-        EntityName: 'Lists',
+      const listResult = await rv.RunView<MJListEntity>({
+        EntityName: 'MJ: Lists',
         ExtraFilter: `ID = '${listId}'`,
         ResultType: 'entity_object'
       }, params.ContextUser);
@@ -71,8 +71,8 @@ export class AddRecordsToListAction extends BaseAction {
       let existingRecordIds = new Set<string>();
       if (skipDuplicates) {
         const recordIdFilter = recordIds.map((id: string) => `'${id}'`).join(',');
-        const existingResult = await rv.RunView<ListDetailEntity>({
-          EntityName: 'List Details',
+        const existingResult = await rv.RunView<MJListDetailEntity>({
+          EntityName: 'MJ: List Details',
           ExtraFilter: `ListID = '${listId}' AND RecordID IN (${recordIdFilter})`,
           ResultType: 'entity_object'
         }, params.ContextUser);
@@ -98,7 +98,7 @@ export class AddRecordsToListAction extends BaseAction {
         }
 
         try {
-          const listDetail = await md.GetEntityObject<ListDetailEntity>('List Details', params.ContextUser);
+          const listDetail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', params.ContextUser);
           listDetail.NewRecord();
           listDetail.ListID = listId;
           listDetail.RecordID = recordId;
@@ -204,8 +204,4 @@ export class AddRecordsToListAction extends BaseAction {
       Value: value
     });
   }
-}
-
-export function LoadAddRecordsToListAction(): void {
-  // Prevents tree-shaking
 }

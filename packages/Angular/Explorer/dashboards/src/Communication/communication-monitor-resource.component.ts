@@ -1,9 +1,8 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, CommunicationLogEntity, CommunicationProviderEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCommunicationLogEntity, MJCommunicationProviderEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-
 
 interface ProviderHealth {
     Name: string;
@@ -31,169 +30,174 @@ interface HourlyBucket {
     tokens: number;
     avgTime: number;
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadCommunicationMonitorResource() {
-    // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'CommunicationMonitorResource')
 @Component({
+  standalone: false,
     selector: 'mj-communication-monitor-resource',
     template: `
     <div class="monitor-wrapper">
-        <div class="monitor-container">
-            <!-- KPI STRIP -->
-            <div class="kpi-strip">
-                <div class="kpi-card sent">
-                    <div class="kpi-icon"><i class="fa-solid fa-paper-plane"></i></div>
-                    <div class="kpi-body">
-                        <span class="kpi-label">Total Sent</span>
-                        <span class="kpi-value">{{stats.totalSent | number}}</span>
-                        <span class="kpi-delta" [class]="stats.totalSent > 0 ? 'up' : 'neutral'">
-                            <i class="fa-solid" [class.fa-arrow-up]="stats.totalSent > 0" [class.fa-minus]="stats.totalSent === 0"></i>
-                            Last 24 hours
-                        </span>
-                    </div>
-                </div>
-                <div class="kpi-card delivered">
-                    <div class="kpi-icon"><i class="fa-solid fa-check-double"></i></div>
-                    <div class="kpi-body">
-                        <span class="kpi-label">Delivery Rate</span>
-                        <span class="kpi-value">{{stats.deliveryRate}}%</span>
-                        <div class="delivery-bar">
-                            <div class="delivery-fill" [style.width.%]="stats.deliveryRate"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="kpi-card pending">
-                    <div class="kpi-icon"><i class="fa-solid fa-clock"></i></div>
-                    <div class="kpi-body">
-                        <span class="kpi-label">Pending</span>
-                        <span class="kpi-value">{{stats.pending | number}}</span>
-                        <span class="kpi-delta neutral">
-                            <i class="fa-solid fa-minus"></i> Awaiting provider
-                        </span>
-                    </div>
-                </div>
-                <div class="kpi-card failed">
-                    <div class="kpi-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
-                    <div class="kpi-body">
-                        <span class="kpi-label">Failed</span>
-                        <span class="kpi-value">{{stats.failed | number}}</span>
-                        <span class="kpi-delta" [class]="stats.failed > 0 ? 'down' : 'neutral'">
-                            <i class="fa-solid" [class.fa-arrow-up]="stats.failed > 0" [class.fa-minus]="stats.failed === 0"></i>
-                            {{stats.failed > 0 ? 'Requires attention' : 'No failures'}}
-                        </span>
-                    </div>
-                </div>
+      <div class="monitor-container">
+        <!-- KPI STRIP -->
+        <div class="kpi-strip">
+          <div class="kpi-card sent">
+            <div class="kpi-icon"><i class="fa-solid fa-paper-plane"></i></div>
+            <div class="kpi-body">
+              <span class="kpi-label">Total Sent</span>
+              <span class="kpi-value">{{stats.totalSent | number}}</span>
+              <span class="kpi-delta" [class]="stats.totalSent > 0 ? 'up' : 'neutral'">
+                <i class="fa-solid" [class.fa-arrow-up]="stats.totalSent > 0" [class.fa-minus]="stats.totalSent === 0"></i>
+                Last 24 hours
+              </span>
             </div>
-
-            <!-- CHARTS + ACTIVITY ROW -->
-            <div class="content-grid">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fa-solid fa-chart-bar"></i> Delivery Volume</h3>
-                    </div>
-                    <div class="chart-container-inner">
-                        <app-time-series-chart
-                            [data]="chartData"
-                            [showLegend]="true"
-                            [showControls]="false"
-                            [config]="chartConfig">
-                        </app-time-series-chart>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fa-solid fa-bolt"></i> Recent Activity</h3>
-                    </div>
-                    <div class="card-body no-padding">
-                        <div class="activity-feed">
-                            <div *ngFor="let log of recentLogs" class="activity-item">
-                                <div class="activity-icon" [ngClass]="getActivityIconClass(log)">
-                                    <i [class]="getActivityIcon(log)"></i>
-                                </div>
-                                <div class="activity-body">
-                                    <span class="activity-title">{{log.CommunicationProviderMessageType || 'Message'}}</span>
-                                    <span class="activity-meta">{{log.CommunicationProvider}} &bull; {{log.MessageDate | date:'shortTime'}}</span>
-                                </div>
-                                <span class="activity-status" [ngClass]="log.Status.toLowerCase()">
-                                    {{log.Status}}
-                                </span>
-                            </div>
-                            <div *ngIf="recentLogs.length === 0" class="empty-state">
-                                <i class="fa-solid fa-inbox"></i>
-                                <p>No recent activity</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+          </div>
+          <div class="kpi-card delivered">
+            <div class="kpi-icon"><i class="fa-solid fa-check-double"></i></div>
+            <div class="kpi-body">
+              <span class="kpi-label">Delivery Rate</span>
+              <span class="kpi-value">{{stats.deliveryRate}}%</span>
+              <div class="delivery-bar">
+                <div class="delivery-fill" [style.width.%]="stats.deliveryRate"></div>
+              </div>
             </div>
-
-            <!-- PROVIDER HEALTH + CHANNEL BREAKDOWN -->
-            <div class="content-grid">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fa-solid fa-heart-pulse"></i> Provider Health</h3>
-                    </div>
-                    <div class="card-body no-padding">
-                        <div class="provider-health-list">
-                            <div *ngFor="let provider of providerHealth" class="provider-row">
-                                <div class="provider-status-dot" [class.active]="provider.IsActive"></div>
-                                <div class="provider-logo" [ngClass]="provider.ColorClass">
-                                    <i [class]="provider.IconClass"></i>
-                                </div>
-                                <div class="provider-info">
-                                    <div class="provider-name">{{provider.Name}}</div>
-                                    <div class="provider-type">{{provider.Type}} &bull; {{provider.SentCount}} sent today</div>
-                                </div>
-                                <div class="provider-health-bar">
-                                    <div class="provider-health-fill" [ngClass]="getHealthClass(provider.SuccessRate)" [style.width.%]="provider.SuccessRate"></div>
-                                </div>
-                                <span class="provider-rate" [ngClass]="getHealthClass(provider.SuccessRate)">{{provider.SuccessRate}}%</span>
-                            </div>
-                            <div *ngIf="providerHealth.length === 0" class="empty-state">
-                                <i class="fa-solid fa-server"></i>
-                                <p>No providers configured</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fa-solid fa-layer-group"></i> Channel Breakdown</h3>
-                    </div>
-                    <div class="card-body no-padding">
-                        <div class="channel-breakdown">
-                            <div *ngFor="let channel of channelBreakdown" class="channel-row">
-                                <div class="channel-icon" [ngClass]="channel.ColorClass">
-                                    <i [class]="channel.IconClass"></i>
-                                </div>
-                                <div class="channel-info">
-                                    <div class="channel-name">{{channel.Name}}</div>
-                                    <div class="channel-count">{{channel.Count | number}} messages</div>
-                                </div>
-                                <div class="channel-bar-wrapper">
-                                    <div class="channel-bar-fill" [style.width.%]="channel.Percentage" [style.background]="channel.ColorClass === 'email' ? 'var(--mat-sys-primary)' : '#2e7d32'"></div>
-                                </div>
-                                <span class="channel-pct">{{channel.Percentage}}%</span>
-                            </div>
-                            <div *ngIf="channelBreakdown.length === 0" class="empty-state">
-                                <i class="fa-solid fa-layer-group"></i>
-                                <p>No channel data available</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+          </div>
+          <div class="kpi-card pending">
+            <div class="kpi-icon"><i class="fa-solid fa-clock"></i></div>
+            <div class="kpi-body">
+              <span class="kpi-label">Pending</span>
+              <span class="kpi-value">{{stats.pending | number}}</span>
+              <span class="kpi-delta neutral">
+                <i class="fa-solid fa-minus"></i> Awaiting provider
+              </span>
             </div>
+          </div>
+          <div class="kpi-card failed">
+            <div class="kpi-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+            <div class="kpi-body">
+              <span class="kpi-label">Failed</span>
+              <span class="kpi-value">{{stats.failed | number}}</span>
+              <span class="kpi-delta" [class]="stats.failed > 0 ? 'down' : 'neutral'">
+                <i class="fa-solid" [class.fa-arrow-up]="stats.failed > 0" [class.fa-minus]="stats.failed === 0"></i>
+                {{stats.failed > 0 ? 'Requires attention' : 'No failures'}}
+              </span>
+            </div>
+          </div>
         </div>
+    
+        <!-- CHARTS + ACTIVITY ROW -->
+        <div class="content-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-chart-bar"></i> Delivery Volume</h3>
+            </div>
+            <div class="chart-container-inner">
+              <app-time-series-chart
+                [data]="chartData"
+                [showLegend]="true"
+                [showControls]="false"
+                [config]="chartConfig">
+              </app-time-series-chart>
+            </div>
+          </div>
+    
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-bolt"></i> Recent Activity</h3>
+            </div>
+            <div class="card-body no-padding">
+              <div class="activity-feed">
+                @for (log of recentLogs; track log) {
+                  <div class="activity-item">
+                    <div class="activity-icon" [ngClass]="getActivityIconClass(log)">
+                      <i [class]="getActivityIcon(log)"></i>
+                    </div>
+                    <div class="activity-body">
+                      <span class="activity-title">{{log.CommunicationProviderMessageType || 'Message'}}</span>
+                      <span class="activity-meta">{{log.CommunicationProvider}} &bull; {{log.MessageDate | date:'shortTime'}}</span>
+                    </div>
+                    <span class="activity-status" [ngClass]="log.Status.toLowerCase()">
+                      {{log.Status}}
+                    </span>
+                  </div>
+                }
+                @if (recentLogs.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-inbox"></i>
+                    <p>No recent activity</p>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+    
+        <!-- PROVIDER HEALTH + CHANNEL BREAKDOWN -->
+        <div class="content-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-heart-pulse"></i> Provider Health</h3>
+            </div>
+            <div class="card-body no-padding">
+              <div class="provider-health-list">
+                @for (provider of providerHealth; track provider) {
+                  <div class="provider-row">
+                    <div class="provider-status-dot" [class.active]="provider.IsActive"></div>
+                    <div class="provider-logo" [ngClass]="provider.ColorClass">
+                      <i [class]="provider.IconClass"></i>
+                    </div>
+                    <div class="provider-info">
+                      <div class="provider-name">{{provider.Name}}</div>
+                      <div class="provider-type">{{provider.Type}} &bull; {{provider.SentCount}} sent today</div>
+                    </div>
+                    <div class="provider-health-bar">
+                      <div class="provider-health-fill" [ngClass]="getHealthClass(provider.SuccessRate)" [style.width.%]="provider.SuccessRate"></div>
+                    </div>
+                    <span class="provider-rate" [ngClass]="getHealthClass(provider.SuccessRate)">{{provider.SuccessRate}}%</span>
+                  </div>
+                }
+                @if (providerHealth.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-server"></i>
+                    <p>No providers configured</p>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+    
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-layer-group"></i> Channel Breakdown</h3>
+            </div>
+            <div class="card-body no-padding">
+              <div class="channel-breakdown">
+                @for (channel of channelBreakdown; track channel) {
+                  <div class="channel-row">
+                    <div class="channel-icon" [ngClass]="channel.ColorClass">
+                      <i [class]="channel.IconClass"></i>
+                    </div>
+                    <div class="channel-info">
+                      <div class="channel-name">{{channel.Name}}</div>
+                      <div class="channel-count">{{channel.Count | number}} messages</div>
+                    </div>
+                    <div class="channel-bar-wrapper">
+                      <div class="channel-bar-fill" [style.width.%]="channel.Percentage" [style.background]="channel.ColorClass === 'email' ? 'var(--mat-sys-primary)' : '#2e7d32'"></div>
+                    </div>
+                    <span class="channel-pct">{{channel.Percentage}}%</span>
+                  </div>
+                }
+                @if (channelBreakdown.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <p>No channel data available</p>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  `,
+    `,
     styles: [`
     /* ============================================================ */
     /* MD3 MONITOR RESOURCE                                        */
@@ -480,7 +484,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         pending: 0,
         failed: 0
     };
-    public recentLogs: CommunicationLogEntity[] = [];
+    public recentLogs: MJCommunicationLogEntity[] = [];
     public chartData: HourlyBucket[] = [];
     public chartConfig = {
         useDualAxis: false,
@@ -514,34 +518,34 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
 
             const [totalResult, failedResult, pendingResult, recentResult, allLogsResult, providersResult] = await Promise.all([
                 rv.RunView({
-                    EntityName: 'Communication Logs',
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
                     ResultType: 'count_only'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Logs',
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}' AND Status = 'Failed'`,
                     ResultType: 'count_only'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Logs',
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `Status = 'Pending'`,
                     ResultType: 'count_only'
                 }),
-                rv.RunView<CommunicationLogEntity>({
-                    EntityName: 'Communication Logs',
+                rv.RunView<MJCommunicationLogEntity>({
+                    EntityName: 'MJ: Communication Logs',
                     OrderBy: 'MessageDate DESC',
                     MaxRows: 8,
                     ResultType: 'entity_object'
                 }),
-                rv.RunView<CommunicationLogEntity>({
-                    EntityName: 'Communication Logs',
+                rv.RunView<MJCommunicationLogEntity>({
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
                     OrderBy: 'MessageDate ASC',
                     ResultType: 'entity_object'
                 }),
-                rv.RunView<CommunicationProviderEntity>({
-                    EntityName: 'Communication Providers',
+                rv.RunView<MJCommunicationProviderEntity>({
+                    EntityName: 'MJ: Communication Providers',
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
                 })
@@ -576,14 +580,14 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         }
     }
 
-    public getActivityIconClass(log: CommunicationLogEntity): string {
+    public getActivityIconClass(log: MJCommunicationLogEntity): string {
         if (log.Status === 'Failed') return 'error';
         const type = (log.CommunicationProviderMessageType || '').toLowerCase();
         if (type.includes('sms')) return 'sms';
         return 'email';
     }
 
-    public getActivityIcon(log: CommunicationLogEntity): string {
+    public getActivityIcon(log: MJCommunicationLogEntity): string {
         if (log.Direction === 'Receiving') return 'fa-solid fa-arrow-down';
         const type = (log.CommunicationProviderMessageType || '').toLowerCase();
         if (type.includes('sms')) return 'fa-solid fa-comment-sms';
@@ -597,7 +601,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         return 'critical';
     }
 
-    private processTrendData(logs: CommunicationLogEntity[], startTime: Date): HourlyBucket[] {
+    private processTrendData(logs: MJCommunicationLogEntity[], startTime: Date): HourlyBucket[] {
         const buckets: HourlyBucket[] = [];
         const now = new Date();
         const current = new Date(startTime);
@@ -624,7 +628,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         return buckets;
     }
 
-    private buildProviderHealth(providers: CommunicationProviderEntity[], logs: CommunicationLogEntity[]): ProviderHealth[] {
+    private buildProviderHealth(providers: MJCommunicationProviderEntity[], logs: MJCommunicationLogEntity[]): ProviderHealth[] {
         return providers.map(p => {
             const providerLogs = logs.filter(l => l.CommunicationProvider === p.Name);
             const sent = providerLogs.length;
@@ -643,7 +647,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         });
     }
 
-    private buildChannelBreakdown(logs: CommunicationLogEntity[]): ChannelBreakdown[] {
+    private buildChannelBreakdown(logs: MJCommunicationLogEntity[]): ChannelBreakdown[] {
         const total = logs.length;
         if (total === 0) return [];
 

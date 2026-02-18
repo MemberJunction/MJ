@@ -1,6 +1,6 @@
 import {
-  ArtifactEntity,
-  ArtifactVersionEntity
+  MJArtifactEntity,
+  MJArtifactVersionEntity
 } from '@memberjunction/core-entities';
 
 import {
@@ -17,9 +17,9 @@ export interface ConversationDetailPeripheralData {
   /** Artifact information if this message has an output artifact */
   artifact?: {
     /** The artifact entity */
-    artifact: ArtifactEntity;
+    artifact: MJArtifactEntity;
     /** The specific version of the artifact */
-    version: ArtifactVersionEntity;
+    version: MJArtifactVersionEntity;
   };
 }
 
@@ -31,8 +31,8 @@ export interface PeripheralDataMaps {
   agentRunsByDetailId: Map<string, AIAgentRunEntityExtended>;
   /** Map of ConversationDetailID -> {artifact, version} */
   artifactsByDetailId: Map<string, {
-    artifact: ArtifactEntity;
-    version: ArtifactVersionEntity;
+    artifact: MJArtifactEntity;
+    version: MJArtifactVersionEntity;
   }>;
 }
 

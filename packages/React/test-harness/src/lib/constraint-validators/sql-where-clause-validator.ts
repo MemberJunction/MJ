@@ -44,7 +44,8 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseConstraintValidator } from './base-constraint-validator';
 import { ValidationContext } from './validation-context';
 import { PropValueExtractor } from '../prop-value-extractor';
-import { Parser } from 'node-sql-parser';
+import NodeSqlParser from 'node-sql-parser';
+const { Parser } = NodeSqlParser;
 
 /**
  * Validates SQL WHERE clauses for syntax and field references
@@ -56,7 +57,7 @@ import { Parser } from 'node-sql-parser';
  * - RunView ExtraFilter parameter
  * - Custom components with SQL filtering
  *
- * **Implementation**: Uses node-sql-parser (same as QueryEntity.server.ts)
+ * **Implementation**: Uses node-sql-parser (same as MJQueryEntity.server.ts)
  * for accurate AST-based validation with regex fallback for edge cases.
  */
 @RegisterClass(BaseConstraintValidator, 'sql-where-clause')
@@ -168,7 +169,7 @@ export class SqlWhereClauseValidator extends BaseConstraintValidator {
    * Validate WHERE clause using AST parsing (Level 1: Field existence)
    *
    * Uses node-sql-parser to accurately extract column references.
-   * Pattern based on QueryEntity.server.ts (lines 305-324, 560-590)
+   * Pattern based on MJQueryEntity.server.ts (lines 305-324, 560-590)
    *
    * @param whereClause - SQL WHERE clause
    * @param entityName - Entity name for context
@@ -191,7 +192,7 @@ export class SqlWhereClauseValidator extends BaseConstraintValidator {
     const violations: ConstraintViolation[] = [];
 
     // Parse WHERE clause using node-sql-parser
-    // Same pattern as QueryEntity.server.ts line 309
+    // Same pattern as MJQueryEntity.server.ts line 309
     const parser = new Parser();
     const ast = parser.astify(`SELECT * FROM t WHERE ${whereClause}`, {
       database: 'TransactSQL',
@@ -295,7 +296,7 @@ export class SqlWhereClauseValidator extends BaseConstraintValidator {
   /**
    * Extract column references from SQL AST
    *
-   * Pattern based on QueryEntity.extractColumnReferences (lines 563-590)
+   * Pattern based on MJQueryEntity.extractColumnReferences (lines 563-590)
    * Recursively traverses the AST to find all column_ref nodes.
    *
    * @param expr - Expression node from AST

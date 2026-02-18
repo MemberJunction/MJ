@@ -1,49 +1,53 @@
-import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
-import { TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIVendorEntity, AIModelVendorEntity, AIPromptTypeEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { Component, OnInit, ViewChild, ChangeDetectorRef, ViewContainerRef, inject } from '@angular/core';
+import { MJTemplateEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJAIPromptModelEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIPromptTypeEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/components/template-editor.component';
-import { AIPromptFormComponent } from '../../generated/Entities/AIPrompt/aiprompt.form.component';
+import { MJAIPromptFormComponent } from '../../generated/Entities/MJAIPrompt/mjaiprompt.form.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { AIPromptManagementService } from './ai-prompt-management.service';
 import { AIModelEntityExtended, AIPromptCategoryEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 
-@RegisterClass(BaseFormComponent, 'AI Prompts')
+@RegisterClass(BaseFormComponent, 'MJ: AI Prompts')
 @Component({
+  standalone: false,
     selector: 'mj-ai-prompt-form',
     templateUrl: './ai-prompt-form.component.html',
     styleUrls: ['./ai-prompt-form.component.css']
 })
-export class AIPromptFormComponentExtended extends AIPromptFormComponent implements OnInit {
+export class AIPromptFormComponentExtended extends MJAIPromptFormComponent implements OnInit {
+    private testHarnessService = inject(AITestHarnessDialogService);
+    private viewContainerRef = inject(ViewContainerRef);
+    private promptManagementService = inject(AIPromptManagementService);
+
     public record!: AIPromptEntityExtended;
-    public template: TemplateEntity | null = null;
-    public templateContent: TemplateContentEntity | null = null;
-    public templateParams: TemplateParamEntity[] = [];
+    public template: MJTemplateEntity | null = null;
+    public templateContent: MJTemplateContentEntity | null = null;
+    public templateParams: MJTemplateParamEntity[] = [];
     public isLoadingTemplate = true; // Default to loading state
     public isLoadingTemplateParams = false;
     public templateNotFoundInDatabase = false;
     public showTestHarness = false;
     
     // Model management
-    public promptModels: AIPromptModelEntity[] = [];
+    public promptModels: MJAIPromptModelEntity[] = [];
     public availableModels: AIModelEntityExtended[] = [];
-    public availableVendors: AIVendorEntity[] = [];
+    public availableVendors: MJAIVendorEntity[] = [];
     public isLoadingModels = false;
     
     // Vendor management per model
-    public modelVendorsMap = new Map<string, { vendors: AIVendorEntity[], modelVendors: AIModelVendorEntity[] }>();
+    public modelVendorsMap = new Map<string, { vendors: MJAIVendorEntity[], modelVendors: MJAIModelVendorEntity[] }>();
     
     // AI Prompt Types
-    public availablePromptTypes: AIPromptTypeEntity[] = [];
+    public availablePromptTypes: MJAIPromptTypeEntity[] = [];
     public isLoadingPromptTypes = false;
     
     // AI Configurations
-    public availableConfigurations: AIConfigurationEntity[] = [];
+    public availableConfigurations: MJAIConfigurationEntity[] = [];
     public isLoadingConfigurations = false;
     
     // Result Selector Tree Data
@@ -97,12 +101,12 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
     /** Check if user can create Template Contents */
     public get UserCanCreateTemplateContents(): boolean {
-        return this.checkEntityPermission('Template Contents', 'Create');
+        return this.checkEntityPermission('MJ: Template Contents', 'Create');
     }
 
     /** Check if user can update Template Contents */
     public get UserCanUpdateTemplateContents(): boolean {
-        return this.checkEntityPermission('Template Contents', 'Update');
+        return this.checkEntityPermission('MJ: Template Contents', 'Update');
     }
 
     /** Check if user can create AI Prompt Models */
@@ -190,19 +194,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
     @ViewChild('templateEditor') templateEditor: TemplateEditorComponent | undefined;
 
-    constructor(
-        elementRef: ElementRef,
-        sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        public cdr: ChangeDetectorRef,
-        private testHarnessService: AITestHarnessDialogService,
-        private viewContainerRef: ViewContainerRef,
-        private promptManagementService: AIPromptManagementService
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-    }
-
     async ngOnInit() {
         await super.ngOnInit();
 
@@ -271,26 +262,27 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
         // First check if we already have this template in pending records (newly created)
         const pendingTemplate = this.PendingRecords.find(p => 
-            p.entityObject.EntityInfo.Name === 'Templates' && 
+            p.entityObject.EntityInfo.Name === 'MJ: Templates' && 
             p.entityObject.Get('ID') === this.record.TemplateID
         );
         
         if (pendingTemplate) {
             // Use the pending template
-            this.template = pendingTemplate.entityObject as TemplateEntity;
+            this.template = pendingTemplate.entityObject as MJTemplateEntity;
             this.templateNotFoundInDatabase = false;
             this.isLoadingTemplate = false;
-            
+
             // Clear template content and params since this is a new template
             this.templateContent = null;
             this.templateParams = [];
+            this.cdr.detectChanges();
             return;
         }
 
         this.isLoadingTemplate = true;
         this.templateNotFoundInDatabase = false; // Reset the flag
         try {
-            this.template = await this._metadata.GetEntityObject<TemplateEntity>('Templates');
+            this.template = await this._metadata.GetEntityObject<MJTemplateEntity>('MJ: Templates');
             await this.template.Load(this.record.TemplateID);
             
             if (!this.template.IsSaved) {
@@ -316,6 +308,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             );
         } finally {
             this.isLoadingTemplate = false;
+            this.cdr.detectChanges();
         }
     }
 
@@ -411,7 +404,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             // First, clean up any pending changes related to the old template
             this.cleanupOldTemplateRecords();
             
-            const newTemplate = await this._metadata.GetEntityObject<TemplateEntity>('Templates');
+            const newTemplate = await this._metadata.GetEntityObject<MJTemplateEntity>('MJ: Templates');
             console.log("Record Name:", this.record.Name);
             newTemplate.NewRecord();
             newTemplate.Name = `${this.record.Name || 'AI Prompt'} Template`;
@@ -470,7 +463,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         for (let i = currentPendingRecords.length - 1; i >= 0; i--) {
             const record = currentPendingRecords[i];
             const entityName = record.entityObject.EntityInfo.Name;
-            if (entityName === 'Template Contents' || entityName === 'Template Params') {
+            if (entityName === 'MJ: Template Contents' || entityName === 'MJ: Template Params') {
                 currentPendingRecords.splice(i, 1);
             }
         }
@@ -487,8 +480,8 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
         try {
             const rv = new RunView();
-            const results = await rv.RunView<TemplateContentEntity>({
-                EntityName: 'Template Contents',
+            const results = await rv.RunView<MJTemplateContentEntity>({
+                EntityName: 'MJ: Template Contents',
                 ExtraFilter: `TemplateID = '${this.template.ID}'`,
                 OrderBy: 'Priority ASC',
                 ResultType: 'entity_object'
@@ -502,7 +495,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         }
     }
 
-
     /**
      * Loads template parameters for the current template
      */
@@ -515,8 +507,8 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         this.isLoadingTemplateParams = true;
         try {
             const rv = new RunView();
-            const results = await rv.RunView<TemplateParamEntity>({
-                EntityName: 'Template Params',
+            const results = await rv.RunView<MJTemplateParamEntity>({
+                EntityName: 'MJ: Template Params',
                 ExtraFilter: `TemplateID = '${this.template.ID}'`,
                 OrderBy: 'Name ASC' 
             });
@@ -599,7 +591,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Handles template content changes from the editor
      */
-    public onTemplateContentChange(content: TemplateContentEntity[]) {
+    public onTemplateContentChange(content: MJTemplateContentEntity[]) {
         // Handle template content changes if needed
         console.log('Template content changed:', content);
         
@@ -614,7 +606,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
      * Handles template content record deletion
      * This method should be called by the template editor to properly manage deletions
      */
-    public handleTemplateContentDelete(templateContent: TemplateContentEntity) {
+    public handleTemplateContentDelete(templateContent: MJTemplateContentEntity) {
         if (templateContent.IsSaved) {
             // If it's saved, add to pending deletions
             this.PendingRecords.push({
@@ -627,7 +619,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             for (let i = currentPendingRecords.length - 1; i >= 0; i--) {
                 const record = currentPendingRecords[i];
                 if (record.entityObject === templateContent || 
-                    (record.entityObject.EntityInfo.Name === 'Template Contents' && 
+                    (record.entityObject.EntityInfo.Name === 'MJ: Template Contents' && 
                      record.entityObject.Get('ID') === templateContent.Get('ID'))) {
                     currentPendingRecords.splice(i, 1);
                     break;
@@ -641,7 +633,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
      * Handles template content record creation/modification
      * This method should be called by the template editor to properly manage saves
      */
-    public handleTemplateContentSave(templateContent: TemplateContentEntity) {
+    public handleTemplateContentSave(templateContent: MJTemplateContentEntity) {
         if (templateContent.Dirty || !templateContent.IsSaved) {
             // Add to pending saves
             this.PendingRecords.push({
@@ -677,7 +669,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Handles template run requests from the editor
      */
-    public onTemplateRun(template: TemplateEntity) {
+    public onTemplateRun(template: MJTemplateEntity) {
         console.log('Template run requested:', template);
         // Could open the template parameter dialog here if needed
         MJNotificationService.Instance.CreateSimpleNotification(
@@ -837,7 +829,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Loads vendors available for a specific model
      */
-    public async loadVendorsForModel(modelId: string): Promise<{ vendors: AIVendorEntity[], modelVendors: AIModelVendorEntity[] }> {
+    public async loadVendorsForModel(modelId: string): Promise<{ vendors: MJAIVendorEntity[], modelVendors: MJAIModelVendorEntity[] }> {
         if (!modelId) {
             return { vendors: [], modelVendors: [] };
         }
@@ -869,7 +861,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Gets vendors for a specific model from cache or loads them
      */
-    public async getVendorsForModel(modelId: string): Promise<AIVendorEntity[]> {
+    public async getVendorsForModel(modelId: string): Promise<MJAIVendorEntity[]> {
         const result = await this.loadVendorsForModel(modelId);
         return result.vendors;
     }
@@ -940,7 +932,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Gets vendors for a specific model
      */
-    public getVendorsForModelSync(modelId: string): AIVendorEntity[] {
+    public getVendorsForModelSync(modelId: string): MJAIVendorEntity[] {
         const modelVendorData = this.modelVendorsMap.get(modelId);
         return modelVendorData?.vendors || [];
     }
@@ -994,7 +986,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         if (!this.record?.ID) return;
         
         try {
-            const newModel = await this._metadata.GetEntityObject<AIPromptModelEntity>('MJ: AI Prompt Models');
+            const newModel = await this._metadata.GetEntityObject<MJAIPromptModelEntity>('MJ: AI Prompt Models');
             newModel.PromptID = this.record.ID;
             
             // Set priority to 1 (lowest) for new models added at the end
@@ -1073,7 +1065,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             );
         }
     }
-
 
     /**
      * Gets the display name for a model ID
@@ -1205,7 +1196,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
             // First, save any templates that need to be saved (they must be saved before AI Prompts)
             const templateRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'Templates'
+                p.entityObject.EntityInfo.Name === 'MJ: Templates'
             );
             
             for (const templateRecord of templateRecords) {
@@ -1239,7 +1230,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
             // Then save all other pending records (excluding templates which we already saved)
             const otherRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name !== 'Templates'
+                p.entityObject.EntityInfo.Name !== 'MJ: Templates'
             );
             
             for (const record of otherRecords) {
@@ -1290,7 +1281,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             return false;
         }
     }
-
 
     /**
      * Loads the result selector tree data (categories and prompts)
@@ -1404,7 +1394,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         return tree;
     }
 
-
     /**
      * Handles result selector selection
      */
@@ -1504,7 +1493,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Gets a stable identifier for a model (for form tracking)
      */
-    public getModelTrackId(model: AIPromptModelEntity): string {
+    public getModelTrackId(model: MJAIPromptModelEntity): string {
         return model.ID || (model as any)._tempId || '';
     }
 
@@ -1732,7 +1721,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Gets a friendly description of the parameter type
      */
-    public getParamTypeDescription(param: TemplateParamEntity): string {
+    public getParamTypeDescription(param: MJTemplateParamEntity): string {
         switch (param.Type) {
             case 'Scalar': 
                 return 'Single value (text, number, date, etc.)';
@@ -1754,8 +1743,4 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
                 return 'Unknown type';
         }
     }
-}
-
-export function LoadAIPromptFormComponentExtended() {
-    // This function ensures the class isn't tree-shaken and registers it with MemberJunction
 }

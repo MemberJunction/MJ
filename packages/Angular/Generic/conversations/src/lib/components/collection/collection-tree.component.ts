@@ -1,10 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/core';
 import { CollectionPermission, CollectionPermissionService } from '../../services/collection-permission.service';
 
 interface TreeNode {
-  collection: CollectionEntity;
+  collection: MJCollectionEntity;
   children: TreeNode[];
   expanded: boolean;
   level: number;
@@ -16,6 +16,7 @@ interface DragData {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-collection-tree',
   template: `
     <div class="collection-tree">
@@ -171,11 +172,11 @@ export class CollectionTreeComponent implements OnInit {
   @Input() selectedCollectionId: string | null = null;
   @Input() userPermissions: Map<string, CollectionPermission> = new Map();
 
-  @Output() collectionSelected = new EventEmitter<CollectionEntity>();
-  @Output() collectionCreated = new EventEmitter<CollectionEntity>();
-  @Output() collectionDeleted = new EventEmitter<CollectionEntity>();
+  @Output() collectionSelected = new EventEmitter<MJCollectionEntity>();
+  @Output() collectionCreated = new EventEmitter<MJCollectionEntity>();
+  @Output() collectionDeleted = new EventEmitter<MJCollectionEntity>();
 
-  public collections: CollectionEntity[] = [];
+  public collections: MJCollectionEntity[] = [];
   public treeNodes: TreeNode[] = [];
   public draggedNode: TreeNode | null = null;
   public dragOverNodeId: string | null = null;
@@ -189,7 +190,7 @@ export class CollectionTreeComponent implements OnInit {
   private async loadCollections(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>({
+      const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `EnvironmentID='${this.environmentId}'`,
         OrderBy: 'Sequence ASC, Name ASC',
@@ -210,7 +211,7 @@ export class CollectionTreeComponent implements OnInit {
     this.treeNodes = rootCollections.map(c => this.buildNode(c, 0));
   }
 
-  private buildNode(collection: CollectionEntity, level: number): TreeNode {
+  private buildNode(collection: MJCollectionEntity, level: number): TreeNode {
     const children = this.collections.filter(c => c.ParentID === collection.ID);
     return {
       collection,
@@ -225,7 +226,7 @@ export class CollectionTreeComponent implements OnInit {
     node.expanded = !node.expanded;
   }
 
-  onSelectCollection(collection: CollectionEntity): void {
+  onSelectCollection(collection: MJCollectionEntity): void {
     this.selectedCollectionId = collection.ID;
     this.collectionSelected.emit(collection);
   }
@@ -256,7 +257,7 @@ export class CollectionTreeComponent implements OnInit {
 
     try {
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = name;
       collection.EnvironmentID = this.environmentId;
@@ -282,7 +283,7 @@ export class CollectionTreeComponent implements OnInit {
     }
   }
 
-  async onDeleteCollection(collection: CollectionEntity): Promise<void> {
+  async onDeleteCollection(collection: MJCollectionEntity): Promise<void> {
     // Validate Delete permission
     if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
       const permission = await this.permissionService.checkPermission(
@@ -453,7 +454,7 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   // Permission checking methods
-  canEdit(collection: CollectionEntity): boolean {
+  canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
     if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
       return true;
@@ -464,7 +465,7 @@ export class CollectionTreeComponent implements OnInit {
     return permission?.canEdit || false;
   }
 
-  canDelete(collection: CollectionEntity): boolean {
+  canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
     if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
       return true;

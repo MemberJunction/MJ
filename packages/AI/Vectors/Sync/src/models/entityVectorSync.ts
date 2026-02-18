@@ -2,15 +2,19 @@ import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
-import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, TemplateContentEntity,
-  TemplateContentTypeEntity, TemplateEntity, TemplateEntityExtended, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
+import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJTemplateContentEntity,
+  MJTemplateContentTypeEntity, MJTemplateEntity, TemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
 import { BatchWorker } from './BatchWorker';
 import { EntityDocumentCache } from './EntityDocumentCache';
 import { PagedRecords } from './PagedRecords';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 import { PassThrough, Transform } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -48,8 +52,8 @@ export class EntityVectorSyncer extends VectorBase {
     super.CurrentUser = contextUser;
     await TemplateEngineServer.Instance.Config(false, contextUser);
     
-    const entityDocument: EntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
-    const vectorIndexEntity: VectorIndexEntity = await this.GetOrCreateVectorIndex(entityDocument);
+    const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
+    const vectorIndexEntity: MJVectorIndexEntity = await this.GetOrCreateVectorIndex(entityDocument);
     const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
 
     const md = new Metadata();
@@ -204,9 +208,9 @@ export class EntityVectorSyncer extends VectorBase {
    */
   public async CreateDefaultEntityDocument(
     EntityID: string,
-    VectorDatabase: VectorDatabaseEntity,
-    AIModel: AIModelEntity
-  ): Promise<EntityDocumentEntity> {
+    VectorDatabase: MJVectorDatabaseEntity,
+    AIModel: MJAIModelEntity
+  ): Promise<MJEntityDocumentEntity> {
     const md = new Metadata();
     const entity = md.Entities.find((e) => e.ID === EntityID);
     if (!entity) throw new Error(`Entity with ID ${EntityID} not found.`);
@@ -216,8 +220,8 @@ export class EntityVectorSyncer extends VectorBase {
     }).join(' ');
 
     const rv: RunView = new RunView();
-    const rvResult: RunViewResult<EntityDocumentTypeEntity> = await rv.RunView<EntityDocumentTypeEntity>({
-      EntityName: 'Entity Document Types',
+    const rvResult: RunViewResult<MJEntityDocumentTypeEntity> = await rv.RunView<MJEntityDocumentTypeEntity>({
+      EntityName: 'MJ: Entity Document Types',
       ExtraFilter: `Name = 'Record Duplicate'`,
     }, super.CurrentUser);
 
@@ -229,9 +233,9 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error('Record Duplicate Entity Document Type not found');
     }
 
-    const entityDocumentType: EntityDocumentTypeEntity = rvResult.Results[0];
+    const entityDocumentType: MJEntityDocumentTypeEntity = rvResult.Results[0];
 
-    const entityDocument: EntityDocumentEntity = await md.GetEntityObject<EntityDocumentEntity>('Entity Documents');
+    const entityDocument: MJEntityDocumentEntity = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
     entityDocument.NewRecord();
     entityDocument.Name = `Default duplicate record Entity Document for the ${entity.Name} entity using vector database ${VectorDatabase.Name} and AI Model ${AIModel.Name}`;
     entityDocument.EntityID = EntityID;
@@ -249,12 +253,12 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID( entityDocumentID: string, createDocumentIfNotFound?: boolean ): Promise<VectorEmeddingData> {
-    let entityDocument: EntityDocumentEntity | null = EntityDocumentCache.Instance.GetDocument(entityDocumentID);
+    let entityDocument: MJEntityDocumentEntity | null = EntityDocumentCache.Instance.GetDocument(entityDocumentID);
     if (!entityDocument) {
       if (createDocumentIfNotFound) {
           LogStatus(`No active Entity Document found for entity ${entityDocumentID}, creating one`);
-          const defaultVectorDB: VectorDatabaseEntity = this.GetVectorDatabase();
-          const defaultAIModel: AIModelEntity = this.GetAIModel();
+          const defaultVectorDB: MJVectorDatabaseEntity = this.GetVectorDatabase();
+          const defaultAIModel: MJAIModelEntity = this.GetAIModel();
           entityDocument = await this.CreateDefaultEntityDocument(entityDocumentID, defaultVectorDB, defaultAIModel);
       } 
       else {
@@ -262,8 +266,8 @@ export class EntityVectorSyncer extends VectorBase {
       }
     }
 
-    const vectorDBEntity: VectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
-    const aiModelEntity: AIModelEntity = this.GetAIModel(entityDocument.AIModelID);
+    const vectorDBEntity: MJVectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
+    const aiModelEntity: MJAIModelEntity = this.GetAIModel(entityDocument.AIModelID);
 
     const embeddingAPIKey: string = GetAIAPIKey(aiModelEntity.DriverClass);
     const vectorDBAPIKey: string = GetAIAPIKey(vectorDBEntity.ClassKey);
@@ -302,7 +306,7 @@ export class EntityVectorSyncer extends VectorBase {
     return obj;
   }
 
-  public async GetEntityDocument(EntityDocumentID: string): Promise<EntityDocumentEntity | null> {
+  public async GetEntityDocument(EntityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
     const cache = EntityDocumentCache.Instance;
     if (!cache.IsLoaded) {
       await cache.Refresh(false, super.CurrentUser);
@@ -310,7 +314,7 @@ export class EntityVectorSyncer extends VectorBase {
     return cache.GetDocument(EntityDocumentID);
   }
 
-  public async GetEntityDocumentByName(EntityDocumentName: string, ContextUser?: UserInfo): Promise<EntityDocumentEntity | null> {
+  public async GetEntityDocumentByName(EntityDocumentName: string, ContextUser?: UserInfo): Promise<MJEntityDocumentEntity | null> {
     const cache = EntityDocumentCache.Instance;
     if (!cache.IsLoaded) {
       await cache.Refresh(false, ContextUser);
@@ -324,9 +328,9 @@ export class EntityVectorSyncer extends VectorBase {
    * only the oldest one will be returned.
    * @param entityIDs If provided, only Entity Documents for the specified entities will be returned.
    */
-  public async GetActiveEntityDocuments(entityNames?: string[]): Promise<EntityDocumentEntity[]> {
+  public async GetActiveEntityDocuments(entityNames?: string[]): Promise<MJEntityDocumentEntity[]> {
     await EntityDocumentCache.Instance.Refresh(false, super.CurrentUser);
-    const entityDocumentType: EntityDocumentTypeEntity | undefined = EntityDocumentCache.Instance.GetDocumentTypeByName('Record Duplicate');
+    const entityDocumentType: MJEntityDocumentTypeEntity | undefined = EntityDocumentCache.Instance.GetDocumentTypeByName('Record Duplicate');
     if (!entityDocumentType) {
       throw new Error('Entity Document Type not found');
     }
@@ -336,8 +340,8 @@ export class EntityVectorSyncer extends VectorBase {
       filter += ` AND Entity IN (${entityNames.map((entityName: string) => `'${entityName}'`).join(',')})`;
     }
 
-    const runViewResult: RunViewResult<EntityDocumentEntity> = await super.RunView.RunView<EntityDocumentEntity>({
-      EntityName: 'Entity Documents',
+    const runViewResult: RunViewResult<MJEntityDocumentEntity> = await super.RunView.RunView<MJEntityDocumentEntity>({
+      EntityName: 'MJ: Entity Documents',
       ExtraFilter: filter,
       ResultType: 'entity_object',
     }, super.CurrentUser);
@@ -346,7 +350,7 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error(runViewResult.ErrorMessage);
     }
 
-    let entityDocuments: EntityDocumentEntity[] = [];
+    let entityDocuments: MJEntityDocumentEntity[] = [];
     let seenEntities: string[] = [];
 
     //we only want one entity document per entity
@@ -362,9 +366,9 @@ export class EntityVectorSyncer extends VectorBase {
     return entityDocuments;
   }
 
-  private async GetOrCreateVectorIndex(entityDocument: EntityDocumentEntity): Promise<VectorIndexEntity> {
-    let vectorIndexEntity: VectorIndexEntity = await super.RunViewForSingleValue(
-      'Vector Indexes',
+  private async GetOrCreateVectorIndex(entityDocument: MJEntityDocumentEntity): Promise<MJVectorIndexEntity> {
+    let vectorIndexEntity: MJVectorIndexEntity = await super.RunViewForSingleValue(
+      'MJ: Vector Indexes',
       `VectorDatabaseID = '${entityDocument.VectorDatabaseID}' AND EmbeddingModelID = '${entityDocument.AIModelID}'`
     );
 
@@ -374,7 +378,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     LogStatus(`No Vector Index found for entityDocument ${entityDocument.ID}, creating one`);
     try {
-      vectorIndexEntity = await super.Metadata.GetEntityObject<VectorIndexEntity>('Vector Indexes');
+      vectorIndexEntity = await super.Metadata.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes');
       vectorIndexEntity.NewRecord();
       vectorIndexEntity.VectorDatabaseID = entityDocument.VectorDatabaseID;
       vectorIndexEntity.EmbeddingModelID = entityDocument.AIModelID;
@@ -398,8 +402,8 @@ export class EntityVectorSyncer extends VectorBase {
     }
   }
 
-  protected async CreateTemplateForEntityDocument(entityDocument: EntityDocumentEntity): Promise<TemplateEntity> {
-    const templateEntity: TemplateEntityExtended = await super.Metadata.GetEntityObject<TemplateEntityExtended>('Templates');
+  protected async CreateTemplateForEntityDocument(entityDocument: MJEntityDocumentEntity): Promise<MJTemplateEntity> {
+    const templateEntity: TemplateEntityExtended = await super.Metadata.GetEntityObject<TemplateEntityExtended>('MJ: Templates');
     templateEntity.NewRecord();
     templateEntity.Name = `Template for EntityDocument ${entityDocument.EntityID}`;
     templateEntity.Description = `The template used by EntityDocument ${entityDocument.ID}`
@@ -416,14 +420,14 @@ export class EntityVectorSyncer extends VectorBase {
 
     //next, create the template contents record
     await TemplateEngineServer.Instance.Config(false, super.CurrentUser);
-    const textContentType: TemplateContentTypeEntity = TemplateEngineServer.Instance.TemplateContentTypes.find((type: TemplateContentTypeEntity) => type.Name === 'Text');
+    const textContentType: MJTemplateContentTypeEntity = TemplateEngineServer.Instance.TemplateContentTypes.find((type: MJTemplateContentTypeEntity) => type.Name === 'Text');
     if(!textContentType){
       throw new Error('Text template content type not found');
     }
 
     const entityFields: EntityField[] = await this.GetEntityFieldsForSimilaritySearch(entityDocument.EntityID);
 
-    const templateContentsEntity: TemplateContentEntity = await super.Metadata.GetEntityObject<TemplateContentEntity>('Template Contents');
+    const templateContentsEntity: MJTemplateContentEntity = await super.Metadata.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
     templateContentsEntity.NewRecord();
     templateContentsEntity.TemplateID = templateEntity.ID;
     templateContentsEntity.TypeID = textContentType.ID;
@@ -439,7 +443,7 @@ export class EntityVectorSyncer extends VectorBase {
     LogStatus(`Successfully created new Template Content Entity ${templateContentsEntity.ID}`);
 
     //next, create the template params record
-    const templateParamsEntity: TemplateParamEntity = await super.Metadata.GetEntityObject<TemplateParamEntity>('Template Params');
+    const templateParamsEntity: MJTemplateParamEntity = await super.Metadata.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params');
     templateParamsEntity.NewRecord();
     templateParamsEntity.TemplateID = templateEntity.ID;
     templateParamsEntity.Name = 'Entity';
@@ -478,7 +482,7 @@ export class EntityVectorSyncer extends VectorBase {
     //which means things such as IDs, timestamps, etc. are not useful
     //as they're likely to be unique or not that helpful in determining similarity
     const runViewResult: RunViewResult<EntityField> = await super.RunView.RunView<EntityField>({
-      EntityName: 'Entity Fields',
+      EntityName: 'MJ: Entity Fields',
       ExtraFilter: `EntityID = '${entityID}' AND IsPrimaryKey = 0 AND IsUnique = 0 AND AutoIncrement = 0 and Type NOT IN ('datetimeoffset', 'datetime')`,
       ResultType: 'entity_object',
     }, super.CurrentUser);
@@ -567,7 +571,7 @@ export class EntityVectorSyncer extends VectorBase {
     let md: Metadata = super.Metadata;
     let rv: RunView = super.RunView;
 
-    let vectorIndex: VectorIndexEntity = await md.GetEntityObject<VectorIndexEntity>('Vector Indexes', contextUser);
+    let vectorIndex: MJVectorIndexEntity = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', contextUser);
     let vectorIndexID: string = embeddingData.VectorIndexID.toString();
     let loadResult = await vectorIndex.Load(vectorIndexID);
     if(!loadResult){
@@ -580,7 +584,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     let existingRecords: BaseEntity[] = [];
     const runViewResult: RunViewResult<BaseEntity> = await rv.RunView<BaseEntity>({
-      EntityName: 'Entity Record Documents',
+      EntityName: 'MJ: Entity Record Documents',
       ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in ('${embeddingData.__mj_recordID}')`,
       ResultType: 'entity_object'
     }, contextUser);
@@ -594,7 +598,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     let erdEntity: BaseEntity | undefined = existingRecords.find((er: BaseEntity) => er.Get("RecordID").toString() === embeddingData.__mj_recordID.toString());
     if(!erdEntity){
-      erdEntity = await md.GetEntityObject<BaseEntity>('Entity Record Documents', contextUser);
+      erdEntity = await md.GetEntityObject<BaseEntity>('MJ: Entity Record Documents', contextUser);
       erdEntity.NewRecord();
     }
 
@@ -624,9 +628,9 @@ export class EntityVectorSyncer extends VectorBase {
    */
   protected ValidateTemplateContextParamAlignment(template: TemplateEntityExtended): boolean {
     // the params are defined in each template they will be in the Params property of the template
-    const seenParams: {[key: string]: TemplateParamEntity } = {};
+    const seenParams: {[key: string]: MJTemplateParamEntity } = {};
     for (const templateParam of template.Params) {
-      const param: TemplateParamEntity | undefined = seenParams[templateParam.Name];
+      const param: MJTemplateParamEntity | undefined = seenParams[templateParam.Name];
       // we have a duplicate parameter name, now we need to check if the definitions are the same
       if(param && param.Type !== templateParam.Type){
         throw new Error(`Parameter ${param.Name} has different types in different templates`);

@@ -6,7 +6,7 @@ import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import * as sql from 'mssql';
+import sql from 'mssql';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -59,7 +59,7 @@ export const loadModule = () => {
    */
   public async generateEntitySubClass(pool: sql.ConnectionPool, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
-      console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
+      console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
       return '';
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
@@ -92,21 +92,26 @@ export const loadModule = () => {
             typeString += ' | null';
           }
         }
-        const fieldDeprecatedFlag: string = e.Status === 'Deprecated' || e.Status === 'Disabled' ? 
+        const fieldDeprecatedFlag: string = e.Status === 'Deprecated' || e.Status === 'Disabled' ?
             `\n    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
-        const fieldDisabledFlag: string = e.Status === 'Disabled' ? 
+        const fieldDisabledFlag: string = e.Status === 'Disabled' ?
             `\n    * * @disabled This field is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
+
+        // IS-A parent field detection: virtual fields with AllowUpdateAPI on child entities
+        const isISAParentField = e.IsVirtual && e.AllowUpdateAPI && entity.IsChildType;
+        const isaSourceComment = isISAParentField
+            ? `\n    * * IS-A Source: Inherited from ${this.getISAFieldSourceEntity(entity, e)}`
+            : '';
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + e.Description : ''}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + e.Description : ''}${isaSourceComment}
     */
     get ${e.CodeName}(): ${typeString} {
         return this.Get('${e.Name}');
     }`;
-        if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement)) {
-          // Generate setter for non-readonly fields OR for primary keys that are not auto-increment
-          // This allows manual override of non-auto-increment primary keys (like UUIDs)
+        if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement) || isISAParentField) {
+          // Generate setter for non-readonly fields, non-auto-increment PKs, or IS-A parent fields
           sRet += `
     set ${e.CodeName}(value: ${typeString}) {
         this.Set('${e.Name}', value);
@@ -236,6 +241,23 @@ ${fields}
     }
   }
 
+  /**
+   * Finds the source parent entity for an IS-A inherited field by walking the parent chain.
+   * Returns the name of the parent entity that originally defines the field (as a non-virtual column).
+   */
+  protected getISAFieldSourceEntity(entity: EntityInfo, field: EntityFieldInfo): string {
+    for (const parent of entity.ParentChain) {
+      const parentField = parent.Fields.find(
+        pf => pf.Name === field.Name && !pf.IsVirtual
+      );
+      if (parentField) {
+        return parent.Name;
+      }
+    }
+    // Fallback: return the immediate parent entity name
+    return entity.ParentEntityInfo?.Name ?? 'parent entity';
+  }
+
   public async LogAndGenerateValidateFunction(pool: sql.ConnectionPool, entity: EntityInfo, skipDBUpdate: boolean): Promise<string | null> {
     // first generate the validate function
     const ret = this.GenerateValidateFunction(entity);
@@ -244,8 +266,8 @@ ${fields}
       // so that we have a record of what was generated
       // we need to update the database for each of the generated field validators where there was a change in the CHECK constraint for the generation results
       const md = new Metadata();
-      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'Entity Fields')?.ID;
-      const entitiesEntityID = md.Entities.find(e=>e.Name === 'Entities')?.ID;
+      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'MJ: Entity Fields')?.ID;
+      const entitiesEntityID = md.Entities.find(e=>e.Name === 'MJ: Entities')?.ID;
 
       if (!skipDBUpdate) {
         // only do the database update stuff if we are not skipping the DB update, of course the .justGenerated flag SHOULD be false in all of the records
@@ -357,7 +379,7 @@ ${validationFunctions}`
   public GenerateSchemaAndType(entity: EntityInfo): string {
     let content: string = '';
     if (entity.PrimaryKeys.length === 0) {
-      logStatus(`Entity ${entity.Name} has no primary keys.  Skipping.`);
+      logStatus(`SKIPPING SCHEMA GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);

@@ -19,7 +19,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { DashboardEngine, DashboardEntity, DashboardPartTypeEntity, DashboardCategoryEntity } from '@memberjunction/core-entities';
+import { DashboardEngine, MJDashboardEntity, MJDashboardPartTypeEntity, MJDashboardCategoryEntity } from '@memberjunction/core-entities';
 import { BreadcrumbNavigateEvent } from '../breadcrumb/dashboard-breadcrumb.component';
 import { ResolvedLayoutConfig } from 'golden-layout';
 import {
@@ -46,6 +46,7 @@ import { BaseDashboardPart } from '../parts/base-dashboard-part';
  * Navigation events are bubbled up for the parent component to handle.
  */
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-viewer',
     templateUrl: './dashboard-viewer.component.html',
     styleUrls: ['./dashboard-viewer.component.css'],
@@ -56,19 +57,19 @@ export class DashboardViewerComponent implements OnDestroy {
     // Inputs
     // ========================================
 
-    private _dashboard: DashboardEntity | null = null;
+    private _dashboard: MJDashboardEntity | null = null;
     private _dashboardId: string | null = null;
 
     /** The dashboard entity to display */
     @Input()
-    set dashboard(value: DashboardEntity | null) {
+    set dashboard(value: MJDashboardEntity | null) {
         const previous = this._dashboard;
         this._dashboard = value;
         if (value && value !== previous) {
             this.onDashboardChanged();
         }
     }
-    get dashboard(): DashboardEntity | null {
+    get dashboard(): MJDashboardEntity | null {
         return this._dashboard;
     }
 
@@ -134,7 +135,7 @@ export class DashboardViewerComponent implements OnDestroy {
     @Input() showEditButton = true;
 
     /** All categories for breadcrumb path resolution */
-    @Input() Categories: DashboardCategoryEntity[] = [];
+    @Input() Categories: MJDashboardCategoryEntity[] = [];
 
     /**
      * Computed: Should the toolbar be visible?
@@ -162,7 +163,7 @@ export class DashboardViewerComponent implements OnDestroy {
     @Output() panelInteraction = new EventEmitter<PanelInteractionEvent>();
 
     /** Emitted when the dashboard is saved */
-    @Output() dashboardSaved = new EventEmitter<DashboardEntity>();
+    @Output() dashboardSaved = new EventEmitter<MJDashboardEntity>();
 
     /** Emitted when an error occurs */
     @Output() error = new EventEmitter<{ message: string; error?: Error }>();
@@ -188,7 +189,7 @@ export class DashboardViewerComponent implements OnDestroy {
 
     public isLoading = false;
     public config: DashboardConfig | null = null;
-    public partTypes: DashboardPartTypeEntity[] = [];
+    public partTypes: MJDashboardPartTypeEntity[] = [];
     public hasUnsavedChanges = false;
 
     /**
@@ -365,7 +366,7 @@ export class DashboardViewerComponent implements OnDestroy {
     /**
      * Get available part types
      */
-    public getPartTypes(): DashboardPartTypeEntity[] {
+    public getPartTypes(): MJDashboardPartTypeEntity[] {
         return this.partTypes;
     }
 
@@ -380,7 +381,7 @@ export class DashboardViewerComponent implements OnDestroy {
     /**
      * Get the part type for a panel
      */
-    public getPartTypeForPanel(panelId: string): DashboardPartTypeEntity | null {
+    public getPartTypeForPanel(panelId: string): MJDashboardPartTypeEntity | null {
         const panel = this.getPanel(panelId);
         if (!panel) return null;
         return this.partTypes.find(pt => pt.ID === panel.partTypeId) ?? null;
@@ -499,7 +500,7 @@ export class DashboardViewerComponent implements OnDestroy {
             this.cdr.detectChanges();
 
             const md = new Metadata();
-            const dashboard = await md.GetEntityObject<DashboardEntity>('Dashboards');
+            const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards');
             const loaded = await dashboard.Load(id);
 
             if (loaded) {
@@ -727,7 +728,7 @@ export class DashboardViewerComponent implements OnDestroy {
      */
     private createDynamicPartComponent(
         panel: DashboardPanel,
-        partType: DashboardPartTypeEntity | undefined,
+        partType: MJDashboardPartTypeEntity | undefined,
         container: HTMLElement
     ): ComponentRef<BaseDashboardPart> | null {
         if (!partType?.DriverClass) {
@@ -876,7 +877,7 @@ export class DashboardViewerComponent implements OnDestroy {
         return header;
     }
 
-    private renderPartContent(panel: DashboardPanel, container: HTMLElement, partType: DashboardPartTypeEntity | undefined): void {
+    private renderPartContent(panel: DashboardPanel, container: HTMLElement, partType: MJDashboardPartTypeEntity | undefined): void {
         const config = panel.config;
 
         switch (config?.type) {
@@ -1043,7 +1044,7 @@ export class DashboardViewerComponent implements OnDestroy {
         `;
     }
 
-    private renderPlaceholderPart(panel: DashboardPanel, container: HTMLElement, partType: DashboardPartTypeEntity | undefined): void {
+    private renderPlaceholderPart(panel: DashboardPanel, container: HTMLElement, partType: MJDashboardPartTypeEntity | undefined): void {
         const partTypeName = partType?.Name || 'Custom';
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">

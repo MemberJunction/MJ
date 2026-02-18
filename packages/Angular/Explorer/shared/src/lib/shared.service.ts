@@ -1,6 +1,6 @@
 import { ElementRef, Injectable, Injector } from '@angular/core';
 import { CompositeKey, LocalCacheManager, LogError, Metadata, StartupManager } from '@memberjunction/core';
-import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
+import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, MJResourceTypeEntity, MJUserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
@@ -17,7 +17,7 @@ import { NavigationService } from './navigation.service';
 export class SharedService {
   private static _instance: SharedService;
   private static _loaded: boolean = false;
-  private static _resourceTypes: ResourceTypeEntity[] = [];
+  private static _resourceTypes: MJResourceTypeEntity[] = [];
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
@@ -114,31 +114,31 @@ export class SharedService {
     return (<GraphQLDataProvider>Metadata.Provider).sessionId;
   }
 
-  public get ResourceTypes(): ResourceTypeEntity[] {
+  public get ResourceTypes(): MJResourceTypeEntity[] {
     return SharedService._resourceTypes;
   }
-  public get ViewResourceType(): ResourceTypeEntity {
+  public get ViewResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'user views')!;
   }
-  public get RecordResourceType(): ResourceTypeEntity {
+  public get RecordResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'records')!;
   }
-  public get DashboardResourceType(): ResourceTypeEntity {
+  public get DashboardResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'dashboards')!;
   }
-  public get ReportResourceType(): ResourceTypeEntity {
+  public get ReportResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'reports')!;
   }
-  public get SearchResultsResourceType(): ResourceTypeEntity {
+  public get SearchResultsResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'search results')!;
   }
-  public get ListResourceType(): ResourceTypeEntity {
+  public get ListResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'lists')!;
   }
-  public ResourceTypeByID(id: string): ResourceTypeEntity | undefined {
+  public ResourceTypeByID(id: string): MJResourceTypeEntity | undefined {
     return SharedService._resourceTypes.find(rt => rt.ID === id);
   }
-  public ResourceTypeByName(name: string): ResourceTypeEntity | undefined {
+  public ResourceTypeByName(name: string): MJResourceTypeEntity | undefined {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === name.trim().toLowerCase());
   }
 
@@ -203,7 +203,7 @@ export class SharedService {
   }
 
   public ConvertMarkdownStringToHtmlList(listType: HtmlListType, text: string): string {
-    return ConvertMarkdownStringToHtmlList(listType, text);
+    return ConvertMarkdownStringToHtmlList(listType, text) ?? text;
   }
 
   
@@ -227,13 +227,13 @@ export class SharedService {
   /**
    * @deprecated Use MJNotificationService.UserNotifications instead
    */
-  public static get UserNotifications(): UserNotificationEntity[] {
+  public static get UserNotifications(): MJUserNotificationEntity[] {
     return MJNotificationService.UserNotifications;
   }
   /**
    * @deprecated Use MJNotificationService.UnreadUserNotifications instead
    */
-  public static get UnreadUserNotifications(): UserNotificationEntity[] {
+  public static get UnreadUserNotifications(): MJUserNotificationEntity[] {
     return MJNotificationService.UnreadUserNotifications;
   }
   /**
@@ -270,7 +270,7 @@ export class SharedService {
    * @returns 
    * @deprecated Use MJNotificationService.CreateNotification instead
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser : boolean = true): Promise<UserNotificationEntity> {
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser : boolean = true): Promise<MJUserNotificationEntity> {
     return this.mjNotificationsService.CreateNotification(title, message, resourceTypeId, resourceRecordId, resourceConfiguration, displayToUser);
   }
 

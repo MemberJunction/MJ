@@ -49,7 +49,7 @@ export class CreateUserAction extends CreateRecordAction {
             if (employeeID) {
                 const rv = new RunView();
                 const employeeCheck = await rv.RunView({
-                    EntityName: 'Employees',
+                    EntityName: 'MJ: Employees',
                     ExtraFilter: `ID='${employeeID}'`,
                     ResultType: 'simple'
                 }, params.ContextUser);
@@ -125,8 +125,4 @@ export class CreateUserAction extends CreateRecordAction {
             };
         }
     }
-}
-
-export function LoadCreateUserAction() {
-    // Prevent tree shaking
 }

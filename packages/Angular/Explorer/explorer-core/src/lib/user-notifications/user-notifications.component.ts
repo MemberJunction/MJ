@@ -1,6 +1,6 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
-import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity, UserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { SafeJSONParse } from '@memberjunction/global';
@@ -39,6 +39,7 @@ interface NotificationUrlInfo {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-user-notifications',
   templateUrl: './user-notifications.component.html',
   styleUrls: ['./user-notifications.component.css']
@@ -50,7 +51,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   public radioSelected: ReadFilterOption = 'All';
   public currentFilter: string = '';
-  public notificationTypes: UserNotificationTypeEntity[] = [];
+  public notificationTypes: MJUserNotificationTypeEntity[] = [];
   public selectedTypeFilter: string | null = null;
   public loadingTypes: boolean = true;
 
@@ -78,8 +79,8 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     this.loadingTypes = false;
   }
 
-  public get NotificationsToShow(): UserNotificationEntity[] {
-    let temp: UserNotificationEntity[] = [];
+  public get NotificationsToShow(): MJUserNotificationEntity[] {
+    let temp: MJUserNotificationEntity[] = [];
     switch (this.radioSelected) {
       case 'All':
         temp = this.AllNotifications;
@@ -108,12 +109,12 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     return temp;
   }
 
-  public isNotificationClickable(notification: UserNotificationEntity): boolean {
+  public isNotificationClickable(notification: MJUserNotificationEntity): boolean {
     const info = this.notificationUrl(notification);
     return (info !== null && info.urlParts && info.urlParts.length > 0);
   }
 
-  public notificationUrl(notification: UserNotificationEntity): NotificationUrlInfo {
+  public notificationUrl(notification: MJUserNotificationEntity): NotificationUrlInfo {
     const url: string[] = [];
     let queryString = '';
     if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 &&
@@ -163,15 +164,15 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     return { urlParts: url, queryString };
   }
 
-  public get AllNotifications(): UserNotificationEntity[] {
+  public get AllNotifications(): MJUserNotificationEntity[] {
     return SharedService.UserNotifications;
   }
 
-  public get UnreadNotifications(): UserNotificationEntity[] {
+  public get UnreadNotifications(): MJUserNotificationEntity[] {
     return this.AllNotifications.filter(n => n.Unread);
   }
 
-  public get ReadNotifications(): UserNotificationEntity[] {
+  public get ReadNotifications(): MJUserNotificationEntity[] {
     return this.AllNotifications.filter(n => !n.Unread);
   }
 
@@ -201,14 +202,14 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     this.currentFilter = value;
   }
 
-  getItemTitleClass(notification: UserNotificationEntity): string {
+  getItemTitleClass(notification: MJUserNotificationEntity): string {
     if (notification.Unread) {
       return 'notification-title notification-title-unread';
     }
     return 'notification-title';
   }
 
-  getItemWrapperClass(notification: UserNotificationEntity): string {
+  getItemWrapperClass(notification: MJUserNotificationEntity): string {
     let classInfo = 'notification-wrap';
 
     if (this.isNotificationClickable(notification))
@@ -220,19 +221,19 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     return classInfo;
   }
 
-  async markAsRead(notification: UserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
+  async markAsRead(notification: MJUserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
     if (notification) {
       const notificationId = notification.ID;
       notification.Unread = !bRead;
-      let notificationEntity: UserNotificationEntity;
-      if (notification instanceof UserNotificationEntity) {
-        // the passed in param truly is a UserNotificationEntity or subclass, so just use it, saves a DB round trip
+      let notificationEntity: MJUserNotificationEntity;
+      if (notification instanceof MJUserNotificationEntity) {
+        // the passed in param truly is a MJUserNotificationEntity or subclass, so just use it, saves a DB round trip
         notificationEntity = notification;
       }
       else {
         // the passed in param is just a plain object, so we need to load the entity
         const md = new Metadata();
-        notificationEntity = await md.GetEntityObject<UserNotificationEntity>('User Notifications');
+        notificationEntity = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications');
         await notificationEntity.Load(notificationId);  
         notificationEntity.Unread = !bRead;  
       }
@@ -267,7 +268,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     const md = new Metadata();
     const transGroup = await md.CreateTransactionGroup();
 
-    const conversation = await md.GetEntityObject<ConversationEntity>('Conversations');
+    const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations');
     conversation.UserID = md.CurrentUser.ID;
     conversation.Description = 'Test Conversation';
     conversation.TransactionGroup = transGroup;
@@ -278,7 +279,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     const tvDefine = new TransactionVariable('NewConvoID', conversation, 'ID', 'Define')
     transGroup.AddVariable(tvDefine);
 
-    const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details');
+    const conversationDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details');
     conversationDetail.Message = 'Test Message';
     conversationDetail.Role = 'User';
     conversationDetail.ConversationID = 'x'; // fake UUID must be non-null to pass validation, this will be replaced by the variable, since we're part of a TG, not a real save, so doesn't validate it as a true fkey
@@ -321,7 +322,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       SharedService.RefreshUserNotifications();
   }
   
-  notificationClicked(notification: UserNotificationEntity): void {
+  notificationClicked(notification: MJUserNotificationEntity): void {
     if (this.isNotificationClickable(notification)) {
       // also mark this as read when we click it
       this.markAsRead(notification, true, null);
@@ -337,22 +338,22 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     }
   }
 
-  public getNotificationType(typeId: string | null): UserNotificationTypeEntity | null {
+  public getNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {
     if (!typeId) return null;
     return this.notificationTypes.find(t => t.ID === typeId) || null;
   }
 
-  public getTypeIcon(notification: UserNotificationEntity): string {
+  public getTypeIcon(notification: MJUserNotificationEntity): string {
     const type = this.getNotificationType(notification.NotificationTypeID);
     return type?.Icon || 'fa-bell';
   }
 
-  public getTypeColor(notification: UserNotificationEntity): string {
+  public getTypeColor(notification: MJUserNotificationEntity): string {
     const type = this.getNotificationType(notification.NotificationTypeID);
     return type?.Color || '#999';
   }
 
-  public getTypeName(notification: UserNotificationEntity): string {
+  public getTypeName(notification: MJUserNotificationEntity): string {
     const type = this.getNotificationType(notification.NotificationTypeID);
     return type ? type.Name : 'Notification';
   }

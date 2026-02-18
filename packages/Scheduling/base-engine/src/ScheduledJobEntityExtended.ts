@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine-base
  */
 
-import { ScheduledJobEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { SchedulingEngineBase } from './SchedulingEngineBase';
 
@@ -15,8 +15,8 @@ import { SchedulingEngineBase } from './SchedulingEngineBase';
  * - Determining minimum intervals
  * - Validating cron expressions
  */
-@RegisterClass(ScheduledJobEntity, 'ScheduledJobEntityExtended')
-export class ScheduledJobEntityExtended extends ScheduledJobEntity {
+@RegisterClass(MJScheduledJobEntity, 'ScheduledJobEntityExtended')
+export class ScheduledJobEntityExtended extends MJScheduledJobEntity {
     /**
      * Calculate time in milliseconds until next execution
      * Note: Requires cron-parser, which is not available in base-engine
@@ -146,12 +146,4 @@ export class ScheduledJobEntityExtended extends ScheduledJobEntity {
         // Recalculate polling interval (will set to null if no jobs)
         engine.UpdatePollingInterval();
     }
-}
-
-/**
- * Loader function to ensure this class is registered
- * Prevents tree-shaking from removing the class
- */
-export function LoadScheduledJobEntityExtended(): void {
-    // No-op function, just ensures class is loaded
 }

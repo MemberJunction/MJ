@@ -1,12 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIKeyUsageLogEntity } from '@memberjunction/core-entities';
-
-/** Tree shaking prevention function */
-export function LoadAPIUsagePanel(): void {
-    // This function prevents tree shaking
-}
-
+import { MJAPIKeyEntity, MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
 /** Time bucket for aggregation */
 interface TimeBucket {
     label: string;
@@ -59,6 +53,7 @@ interface UsageLogItem {
  * Comprehensive usage statistics and drill-down capabilities
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-usage-panel',
     templateUrl: './api-usage-panel.component.html',
     styleUrls: ['./api-usage-panel.component.css']
@@ -139,7 +134,7 @@ export class APIUsagePanelComponent implements OnInit {
      */
     private async loadKeys(): Promise<void> {
         const rv = new RunView();
-        const result = await rv.RunView<APIKeyEntity>({
+        const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
             Fields: ['ID', 'Label'],
             ResultType: 'simple'
@@ -158,7 +153,7 @@ export class APIUsagePanelComponent implements OnInit {
         const rv = new RunView();
         const filter = this.getTimeFilter();
 
-        const result = await rv.RunView<APIKeyUsageLogEntity>({
+        const result = await rv.RunView<MJAPIKeyUsageLogEntity>({
             EntityName: 'MJ: API Key Usage Logs',
             ExtraFilter: filter,
             OrderBy: '__mj_CreatedAt DESC',
@@ -205,7 +200,7 @@ export class APIUsagePanelComponent implements OnInit {
     /**
      * Calculate summary KPIs
      */
-    private calculateSummaryKPIs(logs: APIKeyUsageLogEntity[]): void {
+    private calculateSummaryKPIs(logs: MJAPIKeyUsageLogEntity[]): void {
         this.TotalRequests = logs.length;
 
         // Count errors (4xx and 5xx status codes)
@@ -232,7 +227,7 @@ export class APIUsagePanelComponent implements OnInit {
     /**
      * Build time buckets for chart
      */
-    private buildTimeBuckets(logs: APIKeyUsageLogEntity[]): void {
+    private buildTimeBuckets(logs: MJAPIKeyUsageLogEntity[]): void {
         const bucketCount = this.TimeRange === 'day' ? 24 : this.TimeRange === 'week' ? 7 : 30;
         const bucketDuration = this.TimeRange === 'day' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
 
@@ -277,7 +272,7 @@ export class APIUsagePanelComponent implements OnInit {
     /**
      * Build endpoint statistics
      */
-    private buildEndpointStats(logs: APIKeyUsageLogEntity[]): void {
+    private buildEndpointStats(logs: MJAPIKeyUsageLogEntity[]): void {
         const endpointMap = new Map<string, {
             endpoint: string;
             method: string;
@@ -319,7 +314,7 @@ export class APIUsagePanelComponent implements OnInit {
     /**
      * Build key statistics
      */
-    private buildKeyStats(logs: APIKeyUsageLogEntity[]): void {
+    private buildKeyStats(logs: MJAPIKeyUsageLogEntity[]): void {
         const keyMap = new Map<string, { requests: number; lastUsed: Date | null }>();
 
         for (const log of logs) {
@@ -352,7 +347,7 @@ export class APIUsagePanelComponent implements OnInit {
     /**
      * Build status code groups
      */
-    private buildStatusGroups(logs: APIKeyUsageLogEntity[]): void {
+    private buildStatusGroups(logs: MJAPIKeyUsageLogEntity[]): void {
         const groups: Record<string, { count: number; label: string; color: string }> = {
             '2xx': { count: 0, label: 'Success (2xx)', color: '#10b981' },
             '3xx': { count: 0, label: 'Redirect (3xx)', color: '#3b82f6' },
@@ -382,7 +377,7 @@ export class APIUsagePanelComponent implements OnInit {
     /**
      * Map log entity to display item
      */
-    private mapLogToItem(log: APIKeyUsageLogEntity): UsageLogItem {
+    private mapLogToItem(log: MJAPIKeyUsageLogEntity): UsageLogItem {
         return {
             id: log.ID,
             timestamp: new Date(log.__mj_CreatedAt),
@@ -454,7 +449,7 @@ export class APIUsagePanelComponent implements OnInit {
             filter += `APIKeyID = '${this.LogsFilter.keyId}'`;
         }
 
-        const result = await rv.RunView<APIKeyUsageLogEntity>({
+        const result = await rv.RunView<MJAPIKeyUsageLogEntity>({
             EntityName: 'MJ: API Key Usage Logs',
             ExtraFilter: filter,
             OrderBy: '__mj_CreatedAt DESC',

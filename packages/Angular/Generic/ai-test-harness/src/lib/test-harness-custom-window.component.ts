@@ -20,6 +20,7 @@ export interface CustomWindowData {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-test-harness-custom-window',
     template: `
         <kendo-window
@@ -271,7 +272,7 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
                     this.agent = this.data.agent;
                     this.windowTitle = this.data.title || `Test: ${this.agent.Name}`;
                 } else if (this.data.agentId) {
-                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
                     await agentEntity.Load(this.data.agentId);
                     if (agentEntity.IsSaved) {
                         this.agent = agentEntity;
@@ -287,7 +288,7 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
                     this.prompt = this.data.prompt;
                     this.windowTitle = this.data.title || `Test: ${this.prompt.Name}`;
                 } else if (this.data.promptId) {
-                    const promptEntity = await this.metadata.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
+                    const promptEntity = await this.metadata.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts');
                     await promptEntity.Load(this.data.promptId);
                     if (promptEntity.IsSaved) {
                         this.prompt = promptEntity;

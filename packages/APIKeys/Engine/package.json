@@ -1,32 +1,32 @@
 {
   "name": "@memberjunction/api-keys",
-  "version": "3.4.0",
+  "version": "5.1.0",
   "description": "MemberJunction: Server-side API Key authorization engine with hierarchical scopes, pattern-based access control, and application-level restrictions. Requires Node.js crypto module.",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
-    "typescript": "^5.4.5"
+    "@types/node": "^24.10.11",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/api-keys-base": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0"
+    "@memberjunction/api-keys-base": "5.1.0",
+    "@memberjunction/global": "5.1.0",
+    "@memberjunction/core": "5.1.0",
+    "@memberjunction/core-entities": "5.1.0"
   },
   "repository": {
     "type": "git",

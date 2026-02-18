@@ -3,14 +3,9 @@ import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { BaseResourceComponent, NavigationService, DashboardConfig } from '@memberjunction/ng-shared';
-import { ResourceData, DashboardEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJDashboardEntity } from '@memberjunction/core-entities';
 import { DataExplorerDashboardComponent } from './data-explorer-dashboard.component';
 import { DataExplorerFilter } from './models/explorer-state.interface';
-
-export function LoadDataExplorerResource() {
-    // Prevents tree-shaking
-}
-
 /**
  * Resource component for the Data Explorer.
  * Wraps DataExplorerDashboardComponent as a BaseResourceComponent for use
@@ -18,6 +13,7 @@ export function LoadDataExplorerResource() {
  */
 @RegisterClass(BaseResourceComponent, 'DataExplorerResource')
 @Component({
+  standalone: false,
     selector: 'mj-data-explorer-resource',
     template: `
         <div class="data-explorer-resource-container">
@@ -137,7 +133,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
 
                 // Initialize with minimal config (no database dashboard)
                 const dashboardConfig: DashboardConfig = {
-                    dashboard: null as unknown as DashboardEntity,
+                    dashboard: null as unknown as MJDashboardEntity,
                     userState: {}
                 };
                 this.dataExplorer.Config = dashboardConfig;

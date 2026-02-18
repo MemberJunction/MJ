@@ -10,7 +10,7 @@
  * @since 2.50.0
  */
 
-import { AIAgentTypeEntity,  } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
@@ -24,58 +24,127 @@ import { AIPromptEntityExtended } from './AIPromptExtended';
 import { MediaModality } from './prompt.types';
 
 /**
- * Scope context for multi-tenant SaaS deployments.
+ * Value type for secondary scope dimensions.
+ * Supports strings, numbers, booleans, and string arrays (for multi-valued dimensions).
+ */
+export type SecondaryScopeValue = string | number | boolean | string[];
+
+/**
+ * Configuration for secondary scope dimensions on an AI Agent.
  *
- * Allows SaaS applications to scope agent memory (notes/examples) by custom entity
- * hierarchies without hardcoding any specific schema into MJ core. The scoping pattern
- * uses a primary scope (indexed for fast filtering) plus secondary scopes (JSON for flexibility).
+ * Defines what secondary scope dimensions are valid for an agent and how they
+ * should behave for memory retrieval and storage. This configuration is stored
+ * in the `SecondaryScopeConfig` JSON field on the AIAgent entity.
  *
- * Scope levels for retrieval (cascading inheritance):
- * - Global: primaryRecordId is null/undefined - applies to all users
- * - Primary-only: primaryRecordId set, no secondary - applies to all under primary scope
- * - Fully-scoped: both primary and secondary set - most specific
+ * @since 2.131.0
  *
- * @since 2.130.0
+ * @example Customer Service App (entity-backed dimensions)
+ * ```json
+ * {
+ *     "dimensions": [
+ *         {"name": "ContactID", "entityId": "uuid-for-contacts", "inheritanceMode": "cascading"},
+ *         {"name": "TeamID", "entityId": "uuid-for-teams", "inheritanceMode": "strict"}
+ *     ],
+ *     "allowSecondaryOnly": false
+ * }
+ * ```
  *
- * @example
- * ```typescript
- * // Izzy customer service app scoping
- * params.userScope = {
- *     primaryEntityName: 'Organizations',
- *     primaryRecordId: organization.ID,
- *     secondary: {
- *         ContactID: contact.ID,
- *         TeamID: contact.SupportTeamID
- *     }
- * };
- *
- * // Skip analytics app scoping
- * params.userScope = {
- *     primaryEntityName: 'Skip Tenants',
- *     primaryRecordId: tenant.ID,
- *     secondary: {
- *         AnalystID: analyst.ID
- *     }
- * };
+ * @example Analytics App (arbitrary value dimensions)
+ * ```json
+ * {
+ *     "dimensions": [
+ *         {"name": "Region", "inheritanceMode": "cascading"},
+ *         {"name": "DealStage", "inheritanceMode": "strict"}
+ *     ],
+ *     "allowSecondaryOnly": true
+ * }
  * ```
  */
-export interface UserScope {
+export interface SecondaryScopeConfig {
     /**
-     * Primary scope entity name (e.g., "Organizations", "Tenants").
-     * This should match an Entity name in MemberJunction.
+     * Array of dimension definitions.
+     * Each dimension defines a scope key that can be provided at runtime via
+     * `ExecuteAgentParams.SecondaryScopes`.
      */
-    primaryEntityName?: string;
+    dimensions: SecondaryDimension[];
+
     /**
-     * Primary scope record ID - the actual record ID within the primary entity.
-     * This is the main indexed filter for performance.
+     * Default inheritance mode for dimensions that don't specify one.
+     * - 'cascading': Notes without a dimension match queries with that dimension (broader retrieval)
+     * - 'strict': Notes must exactly match the dimension value or be absent
+     * @default 'cascading'
      */
-    primaryRecordId?: string;
+    defaultInheritanceMode?: 'cascading' | 'strict';
+
     /**
-     * Additional scope dimensions as key-value pairs.
-     * Keys are field names (e.g., "ContactID", "TeamID"), values are record IDs.
-     * Stored as JSON and used for fine-grained filtering after primary scope.
+     * Whether to allow secondary-only scoping (no primary scope required).
+     * When true, the agent can function with only secondary dimensions provided
+     * in `ExecuteAgentParams.SecondaryScopes` without requiring `PrimaryScopeRecordID`.
+     * @default false
      */
-    secondary?: Record<string, string>;
+    allowSecondaryOnly?: boolean;
+
+    /**
+     * Whether to validate runtime scope values against this config.
+     * When true, extra dimensions not defined in `dimensions` array will cause validation errors.
+     * When false, extra dimensions are accepted and stored but may not be used in filtering.
+     * @default false
+     */
+    strictValidation?: boolean;
+}
+
+/**
+ * Definition of a single secondary scope dimension.
+ *
+ * Secondary dimensions allow fine-grained scoping beyond the primary scope level.
+ * Each dimension can be configured for validation, inheritance behavior, and defaults.
+ *
+ * @since 2.131.0
+ */
+export interface SecondaryDimension {
+    /**
+     * Dimension name/key (e.g., "ContactID", "TeamName", "Region").
+     * This is the key used in `ExecuteAgentParams.SecondaryScopes` and stored
+     * in the `SecondaryScopes` JSON field on notes/examples/runs.
+     */
+    name: string;
+
+    /**
+     * Optional MemberJunction Entity ID for validation.
+     * When provided, runtime values can be validated as existing records in that entity.
+     * When null/omitted, the dimension accepts any string value (useful for non-entity
+     * dimensions like "Region", "DealStage", "ProductLine", etc.).
+     */
+    entityId?: string | null;
+
+    /**
+     * Whether this dimension is required at runtime.
+     * When true, `ExecuteAgentParams.SecondaryScopes` must include this dimension
+     * or have a `defaultValue` defined.
+     * @default false
+     */
+    required?: boolean;
+
+    /**
+     * Inheritance mode for this specific dimension, overrides `defaultInheritanceMode`.
+     * - 'cascading': Notes without this dimension match queries with it (broader retrieval).
+     *   For example, if querying with ContactID=123, notes without any ContactID will match.
+     * - 'strict': Notes must exactly match the provided dimension value.
+     *   Notes without the dimension do NOT match queries that include it.
+     */
+    inheritanceMode?: 'cascading' | 'strict';
+
+    /**
+     * Default value if not provided at runtime.
+     * Only used when `required=false`. If the dimension is not in the runtime scope
+     * and a defaultValue is set, this value will be used.
+     */
+    defaultValue?: string | null;
+
+    /**
+     * Human-readable description of this dimension for documentation.
+     */
+    description?: string;
 }
 
 // Import loop operation types from their dedicated modules
@@ -366,8 +435,8 @@ export type ExecuteAgentResult<P = any> = {
      * Includes the notes and examples that were retrieved and used for context.
      */
     memoryContext?: {
-        notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
-        examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
+        notes: any[]; // MJAIAgentNoteEntity[] - using any to avoid circular dependency
+        examples: any[]; // MJAIAgentExampleEntity[] - using any to avoid circular dependency
     };
 
     /**
@@ -501,28 +570,41 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /** Optional company ID for scoping context memory (notes/examples) */
     companyId?: string;
     /**
-     * Optional scope context for multi-tenant SaaS deployments.
+     * Primary scope entity name (e.g., 'Organizations', 'Skip Tenants').
+     * Resolved to PrimaryScopeEntityID on the AIAgentRun record.
+     * Used by external applications for multi-tenant memory scoping.
+     * Not used by MJ's own chat infrastructure.
      *
-     * When provided, agent memory (notes/examples) will be scoped to the specified
-     * entity hierarchy. This enables tenant isolation and hierarchical retrieval
-     * (global → org-level → fully-scoped notes).
+     * @since 2.132.0
+     */
+    PrimaryScopeEntityName?: string;
+    /**
+     * Primary scope record ID — the actual record ID within the primary entity.
+     * Stored as an indexed column on AIAgentRun/AIAgentNote for fast filtering.
+     * Used by external applications for multi-tenant memory scoping.
+     * Not used by MJ's own chat infrastructure.
      *
-     * The scope is recorded in AIAgentRun and propagated to Memory Manager for
-     * creating properly scoped notes/examples. The Context Injector uses it for
-     * hierarchical retrieval.
+     * @since 2.132.0
+     */
+    PrimaryScopeRecordID?: string;
+    /**
+     * Arbitrary key/value dimensions for external-app scoping.
+     * Stored as JSON in the SecondaryScopes column on AIAgentRun/AIAgentNote.
+     * Used by external applications (Skip, Izzy, etc.) to segment agent memory
+     * by custom dimensions. MJ's own chat infrastructure does not use this.
      *
-     * @since 2.130.0
+     * @since 2.132.0
      *
      * @example
      * ```typescript
-     * params.userScope = {
-     *     primaryEntityName: 'Organizations',
-     *     primaryRecordId: 'org-123',
-     *     secondary: { ContactID: '456', TeamID: 'alpha' }
+     * params.SecondaryScopes = {
+     *     ContactID: 'contact-456',
+     *     TeamID: 'team-alpha',
+     *     Region: 'EMEA'
      * };
      * ```
      */
-    userScope?: UserScope;
+    SecondaryScopes?: Record<string, SecondaryScopeValue>;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */
@@ -968,7 +1050,7 @@ export type AgentContextData = {
     subAgentDetails: string;
     /** Number of actions available to this agent */
     actionCount: number;
-    /** JSON stringified array of ActionEntity objects representing available actions */
+    /** JSON stringified array of MJActionEntity objects representing available actions */
     actionDetails: string;
 }
 
@@ -981,7 +1063,7 @@ export type AgentConfiguration = {
     /** Error message if configuration failed */
     errorMessage?: string;
     /** The loaded agent type entity */
-    agentType?: AIAgentTypeEntity;
+    agentType?: MJAIAgentTypeEntity;
     /** The loaded system prompt entity */
     systemPrompt?: AIPromptEntityExtended;
     /** The loaded child prompt entity */

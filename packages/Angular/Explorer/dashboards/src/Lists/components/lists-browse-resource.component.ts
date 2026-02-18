@@ -1,20 +1,15 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef, HostListener } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, ListCategoryEntity } from '@memberjunction/core-entities';
-import { ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
-
-export function LoadListsBrowseResource() {
-  // tree shaker
-}
-
 interface BrowseListItem {
-  list: ListEntity;
+  list: MJListEntity;
   itemCount: number;
   entityName: string;
   ownerName: string;
@@ -23,7 +18,7 @@ interface BrowseListItem {
 }
 
 interface CategoryNode {
-  category: ListCategoryEntity | null;
+  category: MJListCategoryEntity | null;
   lists: BrowseListItem[];
   children: CategoryNode[];
   isExpanded: boolean;
@@ -33,6 +28,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
 
 @RegisterClass(BaseResourceComponent, 'ListsBrowseResource')
 @Component({
+  standalone: false,
   selector: 'mj-lists-browse-resource',
   template: `
     <div class="lists-browse-container">
@@ -48,7 +44,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
             <span>New List</span>
           </button>
         </div>
-
+    
         <div class="header-actions">
           <div class="search-box">
             <i class="fa-solid fa-search"></i>
@@ -57,31 +53,37 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
               placeholder="Search lists..."
               [(ngModel)]="searchTerm"
               (ngModelChange)="onSearchChange($event)" />
-            <button *ngIf="searchTerm" class="clear-search" (click)="clearSearch()">
-              <i class="fa-solid fa-times"></i>
-            </button>
+            @if (searchTerm) {
+              <button class="clear-search" (click)="clearSearch()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
           </div>
-
+    
           <div class="filter-group">
             <select
               [(ngModel)]="selectedOwner"
               (ngModelChange)="onOwnerFilterChange($event)"
               class="filter-select"
               title="Filter by owner">
-              <option *ngFor="let opt of ownerOptions" [value]="opt.value">{{opt.name}}</option>
+              @for (opt of ownerOptions; track opt) {
+                <option [value]="opt.value">{{opt.name}}</option>
+              }
             </select>
           </div>
-
+    
           <div class="filter-group">
             <select
               [(ngModel)]="selectedEntity"
               (ngModelChange)="onEntityFilterChange($event)"
               class="filter-select"
               title="Filter by entity">
-              <option *ngFor="let opt of entityOptions" [value]="opt.value">{{opt.name}}</option>
+              @for (opt of entityOptions; track opt) {
+                <option [value]="opt.value">{{opt.name}}</option>
+              }
             </select>
           </div>
-
+    
           <div class="view-toggle-group">
             <button
               class="view-toggle"
@@ -107,395 +109,461 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           </div>
         </div>
       </div>
-
+    
       <!-- Loading State -->
-      <div class="loading-container" *ngIf="isLoading">
-        <mj-loading text="Loading lists..." size="medium"></mj-loading>
-      </div>
-
+      @if (isLoading) {
+        <div class="loading-container">
+          <mj-loading text="Loading lists..." size="medium"></mj-loading>
+        </div>
+      }
+    
       <!-- Empty State - No Lists -->
-      <div class="empty-state" *ngIf="!isLoading && allLists.length === 0">
-        <div class="empty-state-icon-wrapper">
-          <div class="icon-bg"></div>
-          <i class="fa-solid fa-list-check"></i>
+      @if (!isLoading && allLists.length === 0) {
+        <div class="empty-state">
+          <div class="empty-state-icon-wrapper">
+            <div class="icon-bg"></div>
+            <i class="fa-solid fa-list-check"></i>
+          </div>
+          <h3>No Lists Yet</h3>
+          <p>Lists help you organize and track groups of records across your data.</p>
+          <div class="empty-state-features">
+            <div class="feature-item">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>Group records from any entity</span>
+            </div>
+            <div class="feature-item">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>Organize with categories</span>
+            </div>
+            <div class="feature-item">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>Quick access from any view</span>
+            </div>
+          </div>
+          <button class="btn-create-large" (click)="createNewList()">
+            <i class="fa-solid fa-plus"></i>
+            Create Your First List
+          </button>
         </div>
-        <h3>No Lists Yet</h3>
-        <p>Lists help you organize and track groups of records across your data.</p>
-        <div class="empty-state-features">
-          <div class="feature-item">
-            <i class="fa-solid fa-check-circle"></i>
-            <span>Group records from any entity</span>
-          </div>
-          <div class="feature-item">
-            <i class="fa-solid fa-check-circle"></i>
-            <span>Organize with categories</span>
-          </div>
-          <div class="feature-item">
-            <i class="fa-solid fa-check-circle"></i>
-            <span>Quick access from any view</span>
-          </div>
-        </div>
-        <button class="btn-create-large" (click)="createNewList()">
-          <i class="fa-solid fa-plus"></i>
-          Create Your First List
-        </button>
-      </div>
-
+      }
+    
       <!-- Empty State - No Results -->
-      <div class="empty-state search-empty" *ngIf="!isLoading && allLists.length > 0 && filteredLists.length === 0">
-        <div class="empty-state-icon-wrapper search">
-          <i class="fa-solid fa-filter-circle-xmark"></i>
-        </div>
-        <h3>No Results Found</h3>
-        <p>No lists match your current filters.</p>
-        <p class="empty-hint">Try adjusting your search or filters.</p>
-        <button class="btn-clear" (click)="clearFilters()">Clear All Filters</button>
-      </div>
-
-      <!-- Results Content -->
-      <div class="browse-content" *ngIf="!isLoading && filteredLists.length > 0">
-        <div class="results-header">
-          <span class="result-count">{{filteredLists.length}} list{{filteredLists.length !== 1 ? 's' : ''}}</span>
-          <div class="sort-options">
-            <label>Sort:</label>
-            <select
-              [(ngModel)]="selectedSort"
-              (ngModelChange)="onSortChange($event)"
-              class="filter-select sort-select">
-              <option *ngFor="let opt of sortOptions" [value]="opt.value">{{opt.name}}</option>
-            </select>
+      @if (!isLoading && allLists.length > 0 && filteredLists.length === 0) {
+        <div class="empty-state search-empty">
+          <div class="empty-state-icon-wrapper search">
+            <i class="fa-solid fa-filter-circle-xmark"></i>
           </div>
+          <h3>No Results Found</h3>
+          <p>No lists match your current filters.</p>
+          <p class="empty-hint">Try adjusting your search or filters.</p>
+          <button class="btn-clear" (click)="clearFilters()">Clear All Filters</button>
         </div>
-
-        <!-- Table View -->
-        <div class="lists-table" *ngIf="viewMode === 'table'">
-          <table role="grid" aria-label="Lists table">
-            <thead>
-              <tr>
-                <th class="col-name" scope="col">Name</th>
-                <th class="col-entity" scope="col">Entity</th>
-                <th class="col-items" scope="col">Items</th>
-                <th class="col-sharing" scope="col">Shared</th>
-                <th class="col-owner" scope="col">Owner</th>
-                <th class="col-updated" scope="col">Updated</th>
-                <th class="col-actions" scope="col"><span class="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                *ngFor="let item of filteredLists"
-                (click)="openList(item)"
-                (keydown.enter)="openList(item)"
-                class="list-row"
-                tabindex="0"
-                role="row">
-                <td class="col-name" role="gridcell">
-                  <div class="name-cell">
-                    <div class="list-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
+      }
+    
+      <!-- Results Content -->
+      @if (!isLoading && filteredLists.length > 0) {
+        <div class="browse-content">
+          <div class="results-header">
+            <span class="result-count">{{filteredLists.length}} list{{filteredLists.length !== 1 ? 's' : ''}}</span>
+            <div class="sort-options">
+              <label>Sort:</label>
+              <select
+                [(ngModel)]="selectedSort"
+                (ngModelChange)="onSortChange($event)"
+                class="filter-select sort-select">
+                @for (opt of sortOptions; track opt) {
+                  <option [value]="opt.value">{{opt.name}}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <!-- Table View -->
+          @if (viewMode === 'table') {
+            <div class="lists-table">
+              <table role="grid" aria-label="Lists table">
+                <thead>
+                  <tr>
+                    <th class="col-name" scope="col">Name</th>
+                    <th class="col-entity" scope="col">Entity</th>
+                    <th class="col-items" scope="col">Items</th>
+                    <th class="col-sharing" scope="col">Shared</th>
+                    <th class="col-owner" scope="col">Owner</th>
+                    <th class="col-updated" scope="col">Updated</th>
+                    <th class="col-actions" scope="col"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of filteredLists; track item) {
+                    <tr
+                      (click)="openList(item)"
+                      (keydown.enter)="openList(item)"
+                      class="list-row"
+                      tabindex="0"
+                      role="row">
+                      <td class="col-name" role="gridcell">
+                        <div class="name-cell">
+                          <div class="list-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
+                            <i [class]="getEntityIcon(item.entityName)"></i>
+                          </div>
+                          <div class="name-content">
+                            <span class="list-name">{{item.list.Name}}</span>
+                            @if (item.list.Description) {
+                              <span class="list-desc">{{item.list.Description}}</span>
+                            }
+                          </div>
+                        </div>
+                      </td>
+                      <td class="col-entity" role="gridcell">
+                        <span class="entity-badge">{{item.entityName}}</span>
+                      </td>
+                      <td class="col-items" role="gridcell">{{item.itemCount}}</td>
+                      <td class="col-sharing" role="gridcell">
+                        @if (item.sharingInfo; as sharing) {
+                          @if (sharing.totalShares > 0) {
+                            <span class="sharing-indicator">
+                              <i class="fa-solid fa-share-nodes"></i>
+                              <span class="share-count">{{sharing.totalShares}}</span>
+                            </span>
+                          }
+                          @if (sharing.totalShares === 0) {
+                            <span class="sharing-private">
+                              <i class="fa-solid fa-lock"></i>
+                            </span>
+                          }
+                        }
+                        @if (!item.sharingInfo) {
+                          <span class="sharing-private">
+                            <i class="fa-solid fa-lock"></i>
+                          </span>
+                        }
+                      </td>
+                      <td class="col-owner" role="gridcell">
+                        <span class="owner-name" [class.is-me]="item.isOwner">
+                          {{item.isOwner ? 'You' : item.ownerName}}
+                        </span>
+                      </td>
+                      <td class="col-updated" role="gridcell">{{formatDate(item.list.__mj_UpdatedAt)}}</td>
+                      <td class="col-actions" role="gridcell">
+                        @if (item.isOwner) {
+                          <button
+                            class="action-btn"
+                            (click)="openListMenu($event, item)"
+                            title="More options">
+                            <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+          <!-- Card View -->
+          @if (viewMode === 'card') {
+            <div class="lists-grid" role="list" aria-label="Lists">
+              @for (item of filteredLists; track item) {
+                <div
+                  class="list-card"
+                  (click)="openList(item)"
+                  (keydown.enter)="openList(item)"
+                  tabindex="0"
+                  role="listitem">
+                  <div class="card-header">
+                    <div class="card-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
                       <i [class]="getEntityIcon(item.entityName)"></i>
                     </div>
-                    <div class="name-content">
-                      <span class="list-name">{{item.list.Name}}</span>
-                      <span class="list-desc" *ngIf="item.list.Description">{{item.list.Description}}</span>
+                    @if (item.isOwner) {
+                      <div class="card-menu">
+                        <button class="menu-btn" (click)="openListMenu($event, item)">
+                          <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                  <div class="card-body">
+                    <h3 class="card-title">{{item.list.Name}}</h3>
+                    @if (item.list.Description) {
+                      <p class="card-description">{{item.list.Description}}</p>
+                    }
+                    <div class="card-meta">
+                      <span class="meta-item">
+                        <i class="fa-solid fa-database"></i>
+                        {{item.entityName}}
+                      </span>
+                      <span class="meta-item">
+                        <i class="fa-solid fa-hashtag"></i>
+                        {{item.itemCount}} item{{item.itemCount !== 1 ? 's' : ''}}
+                      </span>
                     </div>
                   </div>
-                </td>
-                <td class="col-entity" role="gridcell">
-                  <span class="entity-badge">{{item.entityName}}</span>
-                </td>
-                <td class="col-items" role="gridcell">{{item.itemCount}}</td>
-                <td class="col-sharing" role="gridcell">
-                  <ng-container *ngIf="item.sharingInfo as sharing">
-                    <span class="sharing-indicator" *ngIf="sharing.totalShares > 0">
-                      <i class="fa-solid fa-share-nodes"></i>
-                      <span class="share-count">{{sharing.totalShares}}</span>
+                  <div class="card-footer">
+                    <span class="owner-tag" [class.is-me]="item.isOwner">
+                      <i class="fa-solid fa-user"></i>
+                      {{item.isOwner ? 'You' : item.ownerName}}
                     </span>
-                    <span class="sharing-private" *ngIf="sharing.totalShares === 0">
-                      <i class="fa-solid fa-lock"></i>
-                    </span>
-                  </ng-container>
-                  <span class="sharing-private" *ngIf="!item.sharingInfo">
-                    <i class="fa-solid fa-lock"></i>
-                  </span>
-                </td>
-                <td class="col-owner" role="gridcell">
-                  <span class="owner-name" [class.is-me]="item.isOwner">
-                    {{item.isOwner ? 'You' : item.ownerName}}
-                  </span>
-                </td>
-                <td class="col-updated" role="gridcell">{{formatDate(item.list.__mj_UpdatedAt)}}</td>
-                <td class="col-actions" role="gridcell">
-                  <button
-                    class="action-btn"
-                    *ngIf="item.isOwner"
-                    (click)="openListMenu($event, item)"
-                    title="More options">
-                    <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Card View -->
-        <div class="lists-grid" *ngIf="viewMode === 'card'" role="list" aria-label="Lists">
-          <div
-            class="list-card"
-            *ngFor="let item of filteredLists"
-            (click)="openList(item)"
-            (keydown.enter)="openList(item)"
-            tabindex="0"
-            role="listitem">
-            <div class="card-header">
-              <div class="card-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
-                <i [class]="getEntityIcon(item.entityName)"></i>
-              </div>
-              <div class="card-menu" *ngIf="item.isOwner">
-                <button class="menu-btn" (click)="openListMenu($event, item)">
-                  <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                </button>
-              </div>
+                    <div class="card-footer-right">
+                      @if (item.sharingInfo; as sharing) {
+                        @if (sharing.totalShares > 0) {
+                          <span class="sharing-badge" [title]="'Shared with ' + sharing.totalShares + ' user(s)/role(s)'">
+                            <i class="fa-solid fa-share-nodes"></i>
+                          </span>
+                        }
+                      }
+                      <span class="date-info">{{formatDate(item.list.__mj_UpdatedAt)}}</span>
+                    </div>
+                  </div>
+                </div>
+              }
             </div>
-            <div class="card-body">
-              <h3 class="card-title">{{item.list.Name}}</h3>
-              <p class="card-description" *ngIf="item.list.Description">{{item.list.Description}}</p>
-              <div class="card-meta">
-                <span class="meta-item">
-                  <i class="fa-solid fa-database"></i>
-                  {{item.entityName}}
-                </span>
-                <span class="meta-item">
-                  <i class="fa-solid fa-hashtag"></i>
-                  {{item.itemCount}} item{{item.itemCount !== 1 ? 's' : ''}}
-                </span>
-              </div>
+          }
+          <!-- Hierarchy View -->
+          @if (viewMode === 'hierarchy') {
+            <div class="category-tree">
+              @for (node of categoryTree; track node) {
+                <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { node: node, depth: 0 }"></ng-container>
+              }
             </div>
-            <div class="card-footer">
-              <span class="owner-tag" [class.is-me]="item.isOwner">
-                <i class="fa-solid fa-user"></i>
-                {{item.isOwner ? 'You' : item.ownerName}}
-              </span>
-              <div class="card-footer-right">
-                <ng-container *ngIf="item.sharingInfo as sharing">
-                  <span class="sharing-badge" *ngIf="sharing.totalShares > 0" [title]="'Shared with ' + sharing.totalShares + ' user(s)/role(s)'">
-                    <i class="fa-solid fa-share-nodes"></i>
-                  </span>
-                </ng-container>
-                <span class="date-info">{{formatDate(item.list.__mj_UpdatedAt)}}</span>
-              </div>
-            </div>
-          </div>
+          }
         </div>
-
-        <!-- Hierarchy View -->
-        <div class="category-tree" *ngIf="viewMode === 'hierarchy'">
-          <ng-container *ngFor="let node of categoryTree">
-            <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { node: node, depth: 0 }"></ng-container>
-          </ng-container>
-        </div>
-      </div>
-
+      }
+    
       <!-- Category Node Template -->
       <ng-template #categoryNodeTemplate let-node="node" let-depth="depth">
         <div class="category-section" [style.margin-left.px]="depth * 20">
           <!-- Category Header -->
-          <div
-            class="category-header"
-            *ngIf="node.category"
-            (click)="toggleCategory(node)">
-            <i [class]="node.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
-            <i class="fa-solid fa-folder" [class.fa-folder-open]="node.isExpanded"></i>
-            <span class="category-name">{{node.category.Name}}</span>
-            <span class="category-count">{{getListCountInCategory(node)}}</span>
-          </div>
-
-          <!-- Uncategorized Header -->
-          <div
-            class="category-header uncategorized"
-            *ngIf="!node.category && node.lists.length > 0"
-            (click)="toggleCategory(node)">
-            <i [class]="node.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
-            <i class="fa-solid fa-inbox"></i>
-            <span class="category-name">Uncategorized</span>
-            <span class="category-count">{{node.lists.length}}</span>
-          </div>
-
-          <!-- Lists in this category -->
-          <div class="category-lists" *ngIf="node.isExpanded" role="list">
+          @if (node.category) {
             <div
-              class="list-row hierarchy-row"
-              *ngFor="let item of node.lists"
-              (click)="openList(item)"
-              (keydown.enter)="openList(item)"
-              tabindex="0"
-              role="listitem">
-              <div class="list-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
-                <i [class]="getEntityIcon(item.entityName)"></i>
-              </div>
-              <div class="list-info">
-                <span class="list-name">{{item.list.Name}}</span>
-                <span class="list-meta">
-                  {{item.entityName}} &middot; {{item.itemCount}} items
-                  <span *ngIf="!item.isOwner"> &middot; {{item.ownerName}}</span>
-                </span>
-              </div>
-              <div class="list-actions" *ngIf="item.isOwner">
-                <button class="action-btn" (click)="openListMenu($event, item)">
-                  <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                </button>
-              </div>
+              class="category-header"
+              (click)="toggleCategory(node)">
+              <i [class]="node.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+              <i class="fa-solid fa-folder" [class.fa-folder-open]="node.isExpanded"></i>
+              <span class="category-name">{{node.category.Name}}</span>
+              <span class="category-count">{{getListCountInCategory(node)}}</span>
             </div>
-          </div>
-
+          }
+    
+          <!-- Uncategorized Header -->
+          @if (!node.category && node.lists.length > 0) {
+            <div
+              class="category-header uncategorized"
+              (click)="toggleCategory(node)">
+              <i [class]="node.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+              <i class="fa-solid fa-inbox"></i>
+              <span class="category-name">Uncategorized</span>
+              <span class="category-count">{{node.lists.length}}</span>
+            </div>
+          }
+    
+          <!-- Lists in this category -->
+          @if (node.isExpanded) {
+            <div class="category-lists" role="list">
+              @for (item of node.lists; track item) {
+                <div
+                  class="list-row hierarchy-row"
+                  (click)="openList(item)"
+                  (keydown.enter)="openList(item)"
+                  tabindex="0"
+                  role="listitem">
+                  <div class="list-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
+                    <i [class]="getEntityIcon(item.entityName)"></i>
+                  </div>
+                  <div class="list-info">
+                    <span class="list-name">{{item.list.Name}}</span>
+                    <span class="list-meta">
+                      {{item.entityName}} &middot; {{item.itemCount}} items
+                      @if (!item.isOwner) {
+                        <span> &middot; {{item.ownerName}}</span>
+                      }
+                    </span>
+                  </div>
+                  @if (item.isOwner) {
+                    <div class="list-actions">
+                      <button class="action-btn" (click)="openListMenu($event, item)">
+                        <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+    
           <!-- Child categories -->
-          <ng-container *ngIf="node.isExpanded">
-            <ng-container *ngFor="let child of node.children">
+          @if (node.isExpanded) {
+            @for (child of node.children; track child) {
               <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { node: child, depth: depth + 1 }"></ng-container>
-            </ng-container>
-          </ng-container>
+            }
+          }
         </div>
       </ng-template>
-
+    
       <!-- Context Menu -->
-      <div class="context-menu-overlay" *ngIf="showContextMenu" (click)="closeContextMenu()"></div>
-      <div class="context-menu" *ngIf="showContextMenu" [style.top.px]="contextMenuY" [style.left.px]="contextMenuX">
-        <button class="menu-item" (click)="editList()">
-          <i class="fa-solid fa-pen"></i>
-          Edit
-        </button>
-        <button class="menu-item" (click)="openShareDialog()">
-          <i class="fa-solid fa-share-nodes"></i>
-          Share
-        </button>
-        <button class="menu-item" (click)="duplicateList()">
-          <i class="fa-solid fa-copy"></i>
-          Duplicate
-        </button>
-        <div class="menu-divider"></div>
-        <button class="menu-item danger" (click)="confirmDeleteList()">
-          <i class="fa-solid fa-trash"></i>
-          Delete
-        </button>
-      </div>
-
-      <!-- Create/Edit Dialog -->
-      <div class="modal-overlay" *ngIf="showCreateDialog" (click)="closeCreateDialog()"></div>
-      <div class="modal-dialog" *ngIf="showCreateDialog">
-        <div class="modal-header">
-          <h3>{{editingList ? 'Edit List' : 'Create New List'}}</h3>
-          <button class="modal-close" (click)="closeCreateDialog()">
-            <i class="fa-solid fa-times"></i>
+      @if (showContextMenu) {
+        <div class="context-menu-overlay" (click)="closeContextMenu()"></div>
+      }
+      @if (showContextMenu) {
+        <div class="context-menu" [style.top.px]="contextMenuY" [style.left.px]="contextMenuX">
+          <button class="menu-item" (click)="editList()">
+            <i class="fa-solid fa-pen"></i>
+            Edit
+          </button>
+          <button class="menu-item" (click)="openShareDialog()">
+            <i class="fa-solid fa-share-nodes"></i>
+            Share
+          </button>
+          <button class="menu-item" (click)="duplicateList()">
+            <i class="fa-solid fa-copy"></i>
+            Duplicate
+          </button>
+          <div class="menu-divider"></div>
+          <button class="menu-item danger" (click)="confirmDeleteList()">
+            <i class="fa-solid fa-trash"></i>
+            Delete
           </button>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Name *</label>
-            <input
-              type="text"
-              [(ngModel)]="newListName"
-              placeholder="Enter list name"
-              class="form-input" />
+      }
+    
+      <!-- Create/Edit Dialog -->
+      @if (showCreateDialog) {
+        <div class="modal-overlay" (click)="closeCreateDialog()"></div>
+      }
+      @if (showCreateDialog) {
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h3>{{editingList ? 'Edit List' : 'Create New List'}}</h3>
+            <button class="modal-close" (click)="closeCreateDialog()">
+              <i class="fa-solid fa-times"></i>
+            </button>
           </div>
-          <div class="form-group">
-            <label>Description</label>
-            <textarea
-              [(ngModel)]="newListDescription"
-              placeholder="Optional description"
-              class="form-input"
-              rows="3"></textarea>
-          </div>
-          <div class="form-group" *ngIf="!editingList">
-            <label>Entity *</label>
-            <div class="custom-select-wrapper">
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Name *</label>
               <input
-                #entityInput
                 type="text"
-                [(ngModel)]="entitySearchTerm"
-                (ngModelChange)="filterEntities($event)"
-                (focus)="openEntityDropdown(entityInput)"
-                placeholder="Search and select an entity"
+                [(ngModel)]="newListName"
+                placeholder="Enter list name"
                 class="form-input" />
             </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea
+                [(ngModel)]="newListDescription"
+                placeholder="Optional description"
+                class="form-input"
+              rows="3"></textarea>
+            </div>
+            @if (!editingList) {
+              <div class="form-group">
+                <label>Entity *</label>
+                <div class="custom-select-wrapper">
+                  <input
+                    #entityInput
+                    type="text"
+                    [(ngModel)]="entitySearchTerm"
+                    (ngModelChange)="filterEntities($event)"
+                    (focus)="openEntityDropdown(entityInput)"
+                    placeholder="Search and select an entity"
+                    class="form-input" />
+                </div>
+              </div>
+            }
+            @if (editingList) {
+              <div class="form-group">
+                <label>Entity</label>
+                <input type="text" [value]="entitySearchTerm" class="form-input" disabled />
+              </div>
+            }
+            <div class="form-group">
+              <label>Category</label>
+              <select [(ngModel)]="selectedCategoryId" class="form-input">
+                <option [ngValue]="null">No category</option>
+                @for (cat of flatCategories; track cat) {
+                  <option [ngValue]="cat.ID">{{cat.displayName}}</option>
+                }
+              </select>
+            </div>
           </div>
-          <div class="form-group" *ngIf="editingList">
-            <label>Entity</label>
-            <input type="text" [value]="entitySearchTerm" class="form-input" disabled />
-          </div>
-          <div class="form-group">
-            <label>Category</label>
-            <select [(ngModel)]="selectedCategoryId" class="form-input">
-              <option [ngValue]="null">No category</option>
-              <option *ngFor="let cat of flatCategories" [ngValue]="cat.ID">{{cat.displayName}}</option>
-            </select>
+          <div class="modal-footer">
+            <button
+              class="btn-primary"
+              (click)="saveList()"
+              [disabled]="!newListName || (!editingList && !selectedEntityId) || isSaving">
+              @if (isSaving) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              }
+              {{isSaving ? 'Saving...' : (editingList ? 'Save' : 'Create')}}
+            </button>
+            <button class="btn-secondary" (click)="closeCreateDialog()" [disabled]="isSaving">Cancel</button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button
-            class="btn-primary"
-            (click)="saveList()"
-            [disabled]="!newListName || (!editingList && !selectedEntityId) || isSaving">
-            <i *ngIf="isSaving" class="fa-solid fa-spinner fa-spin"></i>
-            {{isSaving ? 'Saving...' : (editingList ? 'Save' : 'Create')}}
-          </button>
-          <button class="btn-secondary" (click)="closeCreateDialog()" [disabled]="isSaving">Cancel</button>
-        </div>
-      </div>
-
+      }
+    
       <!-- Delete Confirmation Dialog -->
-      <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()"></div>
-      <div class="modal-dialog confirm-dialog" *ngIf="showDeleteConfirm">
-        <div class="modal-header">
-          <h3>Delete List</h3>
-          <button class="modal-close" (click)="cancelDelete()">
-            <i class="fa-solid fa-times"></i>
-          </button>
+      @if (showDeleteConfirm) {
+        <div class="modal-overlay" (click)="cancelDelete()"></div>
+      }
+      @if (showDeleteConfirm) {
+        <div class="modal-dialog confirm-dialog">
+          <div class="modal-header">
+            <h3>Delete List</h3>
+            <button class="modal-close" (click)="cancelDelete()">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>Are you sure you want to delete "<strong>{{deleteListName}}</strong>"?</p>
+            <p class="warning-text">This will also remove all items in the list.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-danger" (click)="deleteList()" [disabled]="isDeleting">
+              @if (isDeleting) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              }
+              {{isDeleting ? 'Deleting...' : 'Delete'}}
+            </button>
+            <button class="btn-secondary" (click)="cancelDelete()" [disabled]="isDeleting">Cancel</button>
+          </div>
         </div>
-        <div class="modal-body">
-          <p>Are you sure you want to delete "<strong>{{deleteListName}}</strong>"?</p>
-          <p class="warning-text">This will also remove all items in the list.</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-danger" (click)="deleteList()" [disabled]="isDeleting">
-            <i *ngIf="isDeleting" class="fa-solid fa-spinner fa-spin"></i>
-            {{isDeleting ? 'Deleting...' : 'Delete'}}
-          </button>
-          <button class="btn-secondary" (click)="cancelDelete()" [disabled]="isDeleting">Cancel</button>
-        </div>
-      </div>
-
+      }
+    
       <!-- Share Dialog -->
-      <mj-list-share-dialog
-        *ngIf="shareDialogConfig"
-        [config]="shareDialogConfig"
-        [visible]="showShareDialog"
-        (complete)="onShareComplete($event)"
-        (cancel)="onShareCancel()">
-      </mj-list-share-dialog>
-
+      @if (shareDialogConfig) {
+        <mj-list-share-dialog
+          [config]="shareDialogConfig"
+          [visible]="showShareDialog"
+          (complete)="onShareComplete($event)"
+          (cancel)="onShareCancel()">
+        </mj-list-share-dialog>
+      }
+    
       <!-- Entity Dropdown Portal -->
-      <div
-        class="entity-dropdown-portal"
-        *ngIf="showEntityDropdown && !editingList"
-        [style.top.px]="entityDropdownPosition.top"
-        [style.left.px]="entityDropdownPosition.left"
-        [style.width.px]="entityDropdownPosition.width"
-        [class.dropdown-above]="entityDropdownPosition.openAbove">
-        <div class="entity-dropdown-backdrop" (click)="closeEntityDropdown()"></div>
-        <div class="entity-dropdown-content" [class.open-above]="entityDropdownPosition.openAbove">
-          <div
-            class="dropdown-item"
-            *ngFor="let entity of filteredEntitiesList"
-            (click)="selectEntity(entity)">
-            {{entity.Name}}
-          </div>
-          <div class="dropdown-empty" *ngIf="filteredEntitiesList.length === 0">
-            No entities found
+      @if (showEntityDropdown && !editingList) {
+        <div
+          class="entity-dropdown-portal"
+          [style.top.px]="entityDropdownPosition.top"
+          [style.left.px]="entityDropdownPosition.left"
+          [style.width.px]="entityDropdownPosition.width"
+          [class.dropdown-above]="entityDropdownPosition.openAbove">
+          <div class="entity-dropdown-backdrop" (click)="closeEntityDropdown()"></div>
+          <div class="entity-dropdown-content" [class.open-above]="entityDropdownPosition.openAbove">
+            @for (entity of filteredEntitiesList; track entity) {
+              <div
+                class="dropdown-item"
+                (click)="selectEntity(entity)">
+                {{entity.Name}}
+              </div>
+            }
+            @if (filteredEntitiesList.length === 0) {
+              <div class="dropdown-empty">
+                No entities found
+              </div>
+            }
           </div>
         </div>
-      </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: flex;
@@ -1616,7 +1684,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   allLists: BrowseListItem[] = [];
   filteredLists: BrowseListItem[] = [];
-  categories: ListCategoryEntity[] = [];
+  categories: MJListCategoryEntity[] = [];
   categoryTree: CategoryNode[] = [];
   flatCategories: Array<{ ID: string; displayName: string }> = [];
   availableEntities: Array<{ ID: string; Name: string }> = [];
@@ -1643,7 +1711,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   // Create/Edit dialog state
   showCreateDialog = false;
-  editingList: ListEntity | null = null;
+  editingList: MJListEntity | null = null;
   newListName = '';
   newListDescription = '';
   selectedEntityId = '';
@@ -1655,7 +1723,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   // Delete confirmation state
   showDeleteConfirm = false;
   deleteListName = '';
-  listToDelete: ListEntity | null = null;
+  listToDelete: MJListEntity | null = null;
 
   // Operation states
   isSaving = false;
@@ -1667,7 +1735,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   private entityColorMap: Map<string, string> = new Map();
   private entityIconMap: Map<string, string> = new Map();
-  private categoryMap: Map<string, ListCategoryEntity> = new Map();
+  private categoryMap: Map<string, MJListCategoryEntity> = new Map();
   private currentUserId = '';
 
   constructor(
@@ -1727,22 +1795,22 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       // Load all lists, categories, details, and users in parallel
       const [listsResult, categoriesResult, detailsResult, usersResult] = await rv.RunViews([
         {
-          EntityName: 'Lists',
+          EntityName: 'MJ: Lists',
           OrderBy: 'Name',
           ResultType: 'entity_object'
         },
         {
-          EntityName: 'List Categories',
+          EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
         },
         {
-          EntityName: 'List Details',
+          EntityName: 'MJ: List Details',
           Fields: ['ListID'],
           ResultType: 'simple'
         },
         {
-          EntityName: 'Users',
+          EntityName: 'MJ: Users',
           Fields: ['ID', 'Name'],
           ResultType: 'simple'
         }
@@ -1753,8 +1821,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         return;
       }
 
-      const lists = listsResult.Results as ListEntity[];
-      this.categories = (categoriesResult.Results || []) as ListCategoryEntity[];
+      const lists = listsResult.Results as MJListEntity[];
+      this.categories = (categoriesResult.Results || []) as MJListCategoryEntity[];
       const details = (detailsResult.Results || []) as Array<{ ListID: string }>;
       const users = (usersResult.Results || []) as Array<{ ID: string; Name: string }>;
 
@@ -1828,11 +1896,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
   }
 
-  private buildFlatCategories(categories: ListCategoryEntity[]): Array<{ ID: string; displayName: string }> {
+  private buildFlatCategories(categories: MJListCategoryEntity[]): Array<{ ID: string; displayName: string }> {
     const result: Array<{ ID: string; displayName: string }> = [];
     const topLevel = categories.filter(c => !c.ParentID);
 
-    const processCategory = (cat: ListCategoryEntity, level: number) => {
+    const processCategory = (cat: MJListCategoryEntity, level: number) => {
       const indent = '\u00A0\u00A0'.repeat(level);
       result.push({ ID: cat.ID, displayName: `${indent}${cat.Name}` });
 
@@ -2119,7 +2187,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       const md = new Metadata();
       const rv = new RunView();
 
-      const newList = await md.GetEntityObject<ListEntity>('Lists');
+      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
       newList.Name = `${listToDuplicate.Name} (Copy)`;
       newList.Description = listToDuplicate.Description;
       newList.EntityID = listToDuplicate.EntityID;
@@ -2132,8 +2200,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         return;
       }
 
-      const itemsResult = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const itemsResult = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
         ResultType: 'entity_object'
       });
@@ -2141,7 +2209,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       if (itemsResult.Success && itemsResult.Results.length > 0) {
         let copiedCount = 0;
         for (const item of itemsResult.Results) {
-          const newItem = await md.GetEntityObject<ListDetailEntity>('List Details');
+          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details');
           newItem.ListID = newList.ID;
           newItem.RecordID = item.RecordID;
           newItem.Sequence = item.Sequence;
@@ -2226,12 +2294,12 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
     try {
       const md = new Metadata();
-      let list: ListEntity;
+      let list: MJListEntity;
 
       if (this.editingList) {
         list = this.editingList;
       } else {
-        list = await md.GetEntityObject<ListEntity>('Lists');
+        list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
         list.UserID = md.CurrentUser!.ID;
         list.EntityID = this.selectedEntityId;
       }

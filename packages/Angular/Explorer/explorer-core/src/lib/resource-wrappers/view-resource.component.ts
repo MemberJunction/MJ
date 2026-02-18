@@ -5,11 +5,6 @@ import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
-
-export function LoadViewResource() {
-    // Force class to be included in production builds (tree shaking workaround)
-}
-
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -24,6 +19,7 @@ export function LoadViewResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ViewResource')
 @Component({
+  standalone: false,
     selector: 'mj-userview-resource',
     templateUrl: './view-resource.component.html',
     styles: [`
@@ -304,7 +300,7 @@ export class UserViewResource extends BaseResourceComponent {
     override async GetResourceDisplayName(data: ResourceData): Promise<string> {
         if (data.ResourceRecordID) {
             const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
-            const name = await this.metadata.GetEntityRecordName('User Views', compositeKey);
+            const name = await this.metadata.GetEntityRecordName('MJ: User Views', compositeKey);
             return name ? name : `View: ${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {

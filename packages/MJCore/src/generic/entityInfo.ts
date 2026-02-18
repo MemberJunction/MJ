@@ -786,9 +786,13 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     get ReadOnly(): boolean {
-        return this.IsVirtual || 
-               !this.AllowUpdateAPI || 
-               this.IsPrimaryKey || 
+        // Note: IsVirtual is intentionally NOT checked here. For IS-A (table-per-type) inheritance,
+        // parent entity fields on child entities are marked IsVirtual=1 (they don't exist in the
+        // child's base table) but ARE editable via the parent save chain. The AllowUpdateAPI flag
+        // already correctly distinguishes editable IS-A parent fields (AllowUpdateAPI=1) from
+        // truly read-only virtual fields like joined display names (AllowUpdateAPI=0).
+        return !this.AllowUpdateAPI ||
+               this.IsPrimaryKey ||
                this.IsSpecialDateField;
     }
 
@@ -986,6 +990,21 @@ export class EntityDocumentTypeInfo extends BaseInfo {
  
 
 /**
+ * Metadata about a single field category: its icon and description.
+ * Optionally indicates that the category contains fields inherited from an IS-A parent entity.
+ */
+export type FieldCategoryInfo = {
+    /** Font Awesome icon class (e.g. "fa-solid fa-chart-line") */
+    icon: string;
+    /** Human-readable description of what this category contains */
+    description: string;
+    /** If set, this category contains fields inherited from an IS-A parent entity */
+    inheritedFromEntityID?: string;
+    /** Display name of the parent entity (for UI badges like "Inherited from Products") */
+    inheritedFromEntityName?: string;
+}
+
+/**
  * Settings allow you to store key/value pairs of information that can be used to configure the behavior of the entity.
  */
 /**
@@ -1071,6 +1090,13 @@ export class EntityInfo extends BaseInfo {
      * Whether to track all changes to records in the RecordChange table
      */
     TrackRecordChanges: boolean = null
+    /**
+     * When false (default), child types are disjoint — a record can only be one child type at a time.
+     * When true, a record can simultaneously exist as multiple child types
+     * (e.g., a Person can be both a Member and a Volunteer).
+     * This flag is set on the **parent** entity and controls whether its children are exclusive.
+     */
+    AllowMultipleSubtypes: boolean = false
     /**
      * Whether to audit when users access records from this entity
      */
@@ -1313,10 +1339,11 @@ export class EntityInfo extends BaseInfo {
     ParentBaseView: string = null 
 
     // These are not in the database view and are added in code
-    private _Fields: EntityFieldInfo[] 
+    private _Fields: EntityFieldInfo[]
     private _RelatedEntities: EntityRelationshipInfo[]
     private _Permissions: EntityPermissionInfo[]
     private _Settings: EntitySettingInfo[]
+    private _FieldCategories: Record<string, FieldCategoryInfo> | null = null
     _hasIdField: boolean = false
     _virtualCount: number = 0 
     _manyToManyCount: number = 0 
@@ -1392,6 +1419,14 @@ export class EntityInfo extends BaseInfo {
         return this._Settings;
     }
 
+    /**
+     * Gets the parsed FieldCategoryInfo map for this entity, keyed by category name.
+     * Auto-populated from the 'FieldCategoryInfo' EntitySetting (with legacy 'FieldCategoryIcons' fallback)
+     * during EntityInfo construction. Returns null if no category info is configured.
+     */
+    get FieldCategories(): Record<string, FieldCategoryInfo> | null {
+        return this._FieldCategories;
+    }
 
     private static __createdAtFieldName = '__mj_CreatedAt';
     private static __updatedAtFieldName = '__mj_UpdatedAt';
@@ -1462,16 +1497,143 @@ export class EntityInfo extends BaseInfo {
     get NameField(): EntityFieldInfo | null {
       const f = this.Fields.find((f) => f.IsNameField);
 
-      if (!f) 
+      if (!f)
         return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
       else
         return f;
     }
 
+    /**************************************************************************
+     * IS-A Type Relationship Computed Properties
+     *
+     * These properties support the IS-A (parent/child type) inheritance model
+     * where child entities share their parent's primary key and inherit all
+     * parent fields. Example: Meeting IS-A Product, Webinar IS-A Meeting.
+     **************************************************************************/
+
+    /**
+     * Returns the parent EntityInfo for IS-A type inheritance, or null if this entity
+     * has no parent type. Uses the existing ParentID column on the Entity table.
+     * Example: For "Meetings" entity with ParentID pointing to "Products", returns the Products EntityInfo.
+     */
+    get ParentEntityInfo(): EntityInfo | null {
+        if (!this.ParentID) return null;
+        return Metadata.Provider?.Entities?.find(e => e.ID === this.ParentID) ?? null;
+    }
+
+    /**
+     * Returns all child entities that have their ParentID set to this entity's ID.
+     * These represent IS-A type specializations of this entity.
+     * Example: For "Products" entity, might return [Meetings, Publications].
+     *
+     * When `AllowMultipleSubtypes` is true on this entity, multiple children can
+     * coexist for the same parent record (overlapping subtypes). When false (default),
+     * only one child type is allowed per parent record (disjoint subtypes).
+     */
+    get ChildEntities(): EntityInfo[] {
+        return Metadata.Provider?.Entities?.filter(e => e.ParentID === this.ID) ?? [];
+    }
+
+    /**
+     * Convenience alias: returns true when this entity is a parent type that allows
+     * overlapping (non-disjoint) subtypes. Equivalent to checking both
+     * `IsParentType` and `AllowMultipleSubtypes`.
+     */
+    get HasOverlappingSubtypes(): boolean {
+        return this.IsParentType && this.AllowMultipleSubtypes;
+    }
+
+    // Cache for ParentChain to avoid repeated walks
+    private _parentChainCache: EntityInfo[] | null = null;
+
+    /**
+     * Walks the IS-A chain upward from this entity to the root, returning all parent entities.
+     * Does NOT include this entity itself.
+     * Example: For Webinars (IS-A Meetings IS-A Products), returns [Meetings, Products].
+     * Results are cached after first computation for performance.
+     */
+    get ParentChain(): EntityInfo[] {
+        if (this._parentChainCache !== null) return this._parentChainCache;
+
+        const chain: EntityInfo[] = [];
+        let current = this.ParentEntityInfo;
+        const visited = new Set<string>(); // circular reference protection
+        while (current) {
+            if (visited.has(current.ID)) break; // prevent infinite loop
+            visited.add(current.ID);
+            chain.push(current);
+            current = current.ParentEntityInfo;
+        }
+        this._parentChainCache = chain;
+        return chain;
+    }
+
+    /**
+     * Returns true if this entity is a child type in an IS-A relationship (has a parent entity).
+     */
+    get IsChildType(): boolean {
+        return this.ParentID != null;
+    }
+
+    /**
+     * Returns true if this entity is a parent type in an IS-A relationship (has child entities).
+     */
+    get IsParentType(): boolean {
+        return this.ChildEntities.length > 0;
+    }
+
+    /**
+     * Returns all fields from all parent entities in the IS-A chain, excluding primary keys,
+     * virtual fields, and timestamp fields (__mj_ prefixed). These represent the inherited
+     * fields that should be available on child entities.
+     */
+    get AllParentFields(): EntityFieldInfo[] {
+        const fields: EntityFieldInfo[] = [];
+        for (const parent of this.ParentChain) {
+            fields.push(...parent.Fields.filter(
+                f => !f.IsPrimaryKey && !f.Name.startsWith('__mj_') && !f.IsVirtual
+            ));
+        }
+        return fields;
+    }
+
+    // Cache for ParentEntityFieldNames
+    private _parentEntityFieldNamesCache: Set<string> | null = null;
+
+    /**
+     * Returns a cached Set of field names that belong to parent entities in the IS-A chain,
+     * including the shared primary key(s). Used for efficient field routing in
+     * BaseEntity.Set/Get/SetMany/Hydrate operations.
+     * The Set enables O(1) lookup to determine if a field should be routed to the parent entity.
+     *
+     * Note: AllParentFields excludes PKs (they aren't "inherited data" fields), but the
+     * routing set must include them so that SetMany and Hydrate can forward the shared
+     * IS-A primary key to parent entities.
+     */
+    get ParentEntityFieldNames(): Set<string> {
+        if (this._parentEntityFieldNamesCache !== null) return this._parentEntityFieldNamesCache;
+
+        const names = this.AllParentFields.map(f => f.Name);
+
+        // Add shared PK names from the immediate parent — these are excluded from
+        // AllParentFields but must be routed so parent entities receive their identity.
+        const parentEntity = this.ParentEntityInfo;
+        if (parentEntity) {
+            for (const pk of parentEntity.PrimaryKeys) {
+                if (!names.includes(pk.Name)) {
+                    names.push(pk.Name);
+                }
+            }
+        }
+
+        this._parentEntityFieldNamesCache = new Set(names);
+        return this._parentEntityFieldNamesCache;
+    }
+
     /**
      * Returns the Permissions for this entity for a given user, based on the roles the user is part of
-     * @param user 
-     * @returns 
+     * @param user
+     * @returns
      */
     public GetUserPermisions(user: UserInfo ): EntityUserPermissionInfo {
         try {
@@ -1701,6 +1863,9 @@ export class EntityInfo extends BaseInfo {
                 es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
             }
 
+            // auto-populate FieldCategories from the FieldCategoryInfo setting
+            this._FieldCategories = this.parseFieldCategoriesFromSettings();
+
             // copy the Related Entities
             this._RelatedEntities = [];
             const er = initData.EntityRelationships || initData._RelatedEntities;
@@ -1770,6 +1935,40 @@ export class EntityInfo extends BaseInfo {
         catch (e) {
             LogError(e);
         }
+    }
+
+    /**
+     * Parses FieldCategoryInfo from EntitySettings, with legacy FieldCategoryIcons fallback.
+     * Called once during construction so the result is cached on _FieldCategories.
+     */
+    private parseFieldCategoriesFromSettings(): Record<string, FieldCategoryInfo> | null {
+        if (!this._Settings || this._Settings.length === 0) {
+            return null;
+        }
+
+        // Try new format first
+        const infoSetting = this._Settings.find(s => s.Name === 'FieldCategoryInfo');
+        if (infoSetting?.Value) {
+            const parsed = SafeJSONParse<Record<string, FieldCategoryInfo>>(infoSetting.Value, false);
+            if (parsed) {
+                return parsed;
+            }
+        }
+
+        // Fallback to legacy FieldCategoryIcons format (icon-only map)
+        const iconSetting = this._Settings.find(s => s.Name === 'FieldCategoryIcons');
+        if (iconSetting?.Value) {
+            const icons = SafeJSONParse<Record<string, string>>(iconSetting.Value, false);
+            if (icons) {
+                const result: Record<string, FieldCategoryInfo> = {};
+                for (const [category, icon] of Object.entries(icons)) {
+                    result[category] = { icon, description: '' };
+                }
+                return result;
+            }
+        }
+
+        return null;
     }
 }
 

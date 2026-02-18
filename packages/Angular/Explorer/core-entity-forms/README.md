@@ -20,7 +20,7 @@ npm install @memberjunction/ng-core-entity-forms
 
 ## Requirements
 
-- Angular 18+
+- Angular 21+
 - @memberjunction/core
 - @memberjunction/core-entities
 - @memberjunction/ng-base-forms
@@ -371,8 +371,91 @@ AIAgentFormComponent (generated)
 
 ### Future Enhancements
 
-1. **Visual Flow Editor**: Integrate a proper flow visualization library (when Angular 18 compatible)
+1. **Visual Flow Editor**: Integrate a proper flow visualization library (when Angular 21 compatible)
 2. **Drag & Drop**: Allow visual workflow editing with drag and drop
 3. **Conditional UI**: Show/hide sections based on agent configuration
 4. **Template Library**: Pre-built custom sections for common agent types
+
+## IS-A Type Hierarchy Visualization
+
+The enhanced entity form provides comprehensive visualization of IS-A (inheritance) relationships between entities. This feature helps users understand type hierarchies and navigate entity inheritance chains.
+
+### Visual Indicators
+
+When viewing an entity that participates in IS-A relationships, the form displays several visual elements:
+
+1. **Purple Hierarchy Badges**: Entities with IS-A relationships display purple badges with hierarchy icons indicating their role:
+   - Parent entities show child entity counts
+   - Child entities display their inheritance relationships
+
+2. **Parent Entity Breadcrumb**: For child entities, a breadcrumb navigation shows the complete inheritance chain from the root parent down to the current entity. Users can click any parent in the chain to navigate to that entity.
+
+3. **Field Source Indicators**: Individual fields show which parent entity they originated from. This helps users understand where each field is defined in the inheritance hierarchy.
+
+4. **IS-A Hierarchy Visualization Panel**: A dedicated panel displays the complete type tree, showing:
+   - All parent entities in the chain
+   - All child entities (siblings in the hierarchy)
+   - Relationships between entities
+   - Navigation capabilities to any entity in the tree
+
+5. **IS-A Settings Panel**: A collapsible panel allows users to manage the IS-A relationship:
+   - View current parent entity assignment
+   - Change the parent entity (in edit mode)
+   - Configure inheritance settings
+   - Understand relationship constraints
+
+### Navigation Features
+
+- Click on parent entity badges to navigate up the hierarchy
+- Click on child entity badges to explore derived types
+- Use the breadcrumb navigation for quick access to any parent
+- Access the full hierarchy tree for comprehensive visualization
+
+### Implementation Details
+
+The IS-A visualization is built into the generated entity forms and automatically activates when an entity has IS-A relationships defined in the metadata. No additional configuration is required beyond setting up the IS-A relationships in the database schema.
+
+For more information on IS-A relationships and implementation, see:
+- [IS-A Relationships Documentation](../../../../MJCore/docs/isa-relationships.md)
+
+## Virtual Entity UI
+
+Virtual entities in MemberJunction are read-only entities backed by database views rather than physical tables. The entity forms provide specialized UI to clearly indicate virtual entity status and limitations.
+
+### Visual Indicators
+
+Virtual entities are displayed with distinctive visual elements:
+
+1. **Purple Badge with Eye Icon**: A prominent badge labeled "Virtual Entity (Read-Only)" appears at the top of the form, featuring an eye icon to indicate the view-based nature.
+
+2. **Underlying View Name**: The form displays the name of the database view that powers the virtual entity, helping users understand the data source.
+
+3. **Disabled Actions**: Virtual entities do not show Create, Edit, or Delete buttons, as these operations are not supported for read-only views.
+
+### Functional Characteristics
+
+Virtual entities behave identically to regular entities for read operations:
+
+- **RunView Queries**: Works exactly like regular entities for loading data
+- **Entity Loading**: Can load individual records using standard entity loading mechanisms
+- **Metadata Access**: Full metadata support for fields, relationships, and properties
+- **Grid Display**: Can be displayed in grids and lists like regular entities
+
+The key distinction is that mutation operations (Create, Update, Delete) are blocked at runtime, ensuring data integrity for view-based entities.
+
+### Use Cases
+
+Virtual entities are commonly used for:
+- Aggregated reporting data
+- Complex joined views for efficient querying
+- Denormalized read-optimized views
+- Cross-entity summary information
+- Calculated or derived data sets
+
+### Implementation Details
+
+Virtual entities are defined by setting the `IsVirtualEntity` flag in the entity metadata. The form UI automatically detects this flag and applies the appropriate read-only restrictions and visual indicators.
+
+For more information on virtual entities and implementation, see:
+- [Virtual Entities Documentation](../../../../MJCore/docs/virtual-entities.md)
 

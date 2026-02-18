@@ -5,8 +5,8 @@
       "Description": "Expert report writing and synthesis prompt for analyzing research findings and generating comprehensive reports with well-reasoned conclusions, confidence assessments, and proper citations.",
       "TemplateText": "@file:templates/research-agent/research-report-writer.md",
       "EffortLevel": 50,
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -14,7 +14,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=o4-mini",
+            "ModelID": "@lookup:MJ: AI Models.Name=o4-mini",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -22,14 +22,14 @@
             "ID": "54AC32BB-3FE2-42D4-90C7-12E27BDB0496"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:32.991Z",
-            "checksum": "6e9e4f8ee3e2b8ea083cc1561f69efbdf9d62b2a9586ffb7fe54439e356ffbf6"
+            "lastModified": "2026-02-13T20:49:10.685Z",
+            "checksum": "c525bf497120f3cca6f24902280c86662b793971d69e3d2f03ad976ea83d44b2"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-20B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
             "Priority": 1
@@ -38,14 +38,14 @@
             "ID": "CA17A4A4-704A-4151-AE3C-09F706544BC3"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:33.007Z",
-            "checksum": "e4c81a542904a01fb9189e45e97f2afad3f1cdcad22e496ce77cff900f35e406"
+            "lastModified": "2026-02-13T20:49:10.706Z",
+            "checksum": "9dcd6f026a8b2610cb716b378013f911764e9c160970cc1ca52710685e27159c"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude 4.5 Sonnet",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 2
@@ -54,14 +54,14 @@
             "ID": "9820890F-D814-486E-8994-2561669C48A3"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:33.009Z",
-            "checksum": "fd4ce4b5657ae51611e318faf6bc1736350f8374aad167a42e05fbe6f9a81ca1"
+            "lastModified": "2026-02-13T20:49:10.707Z",
+            "checksum": "c121d0da8beab3f406457aa482956a8f104627ad2c069fdf50cd18ad51168cf7"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT 5",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 1
@@ -70,14 +70,14 @@
             "ID": "AA48A0DD-5F77-4600-9127-8764A28E0C5C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:33.010Z",
-            "checksum": "d97a092638e52240638ebcce0402defe5e1162ada4eede38febc49d505d0c317"
+            "lastModified": "2026-02-13T20:49:10.708Z",
+            "checksum": "9d75b6479a186ce41f9fd2cf528b3263167b689e4b1811ecbdf423e57338ea1e"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2
           },
@@ -85,14 +85,14 @@
             "ID": "8A47DC4A-102E-4A48-A138-60C0D17FD237"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:32.996Z",
-            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+            "lastModified": "2026-02-13T20:49:10.690Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 3
           },
@@ -100,8 +100,8 @@
             "ID": "F558B38B-2880-4D64-B207-87E0F1C0423F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:32.998Z",
-            "checksum": "0358a3313172e346679f86333fa90506da62892127bf3add67a34e1ee89b36cd"
+            "lastModified": "2026-02-13T20:49:10.691Z",
+            "checksum": "51e11c64188d53b523f7f3c7d8685ef215875a0117e00a7b40818a425c9cc82a"
           }
         }
       ]
@@ -110,8 +110,8 @@
       "ID": "114726B5-D18E-48E3-B32B-9203BEF52DA3"
     },
     "sync": {
-      "lastModified": "2026-02-01T00:27:41.023Z",
-      "checksum": "8b62f74e5bdf3930bb17374f6f644a691cd36d26ff1326e69d17734870ebdd91"
+      "lastModified": "2026-02-13T20:49:10.517Z",
+      "checksum": "10cb2cf07adcef41754be002b6e153ca110509f00c4e47a5535c4f2a34de28cb"
     }
   }
 ]

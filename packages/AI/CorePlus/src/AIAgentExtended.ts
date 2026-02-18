@@ -1,27 +1,24 @@
 import { BaseEntity } from "@memberjunction/core";
-import { AIAgentActionEntity, AIAgentEntity, AIAgentModelEntity, AIAgentNoteEntity } from "@memberjunction/core-entities";
+import { MJAIAgentActionEntity, MJAIAgentEntity, MJAIAgentModelEntity, MJAIAgentNoteEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 
-@RegisterClass(BaseEntity, "AI Agents")
-export class AIAgentEntityExtended extends AIAgentEntity {
-    private _actions: AIAgentActionEntity[] = [];
-    public get Actions(): AIAgentActionEntity[] {
+@RegisterClass(BaseEntity, "MJ: AI Agents")
+export class AIAgentEntityExtended extends MJAIAgentEntity {
+    private _actions: MJAIAgentActionEntity[] = [];
+    public get Actions(): MJAIAgentActionEntity[] {
         return this._actions;
     }
 
-    private _models: AIAgentModelEntity[] = [];
+    private _models: MJAIAgentModelEntity[] = [];
     /**
      * @deprecated - models are associated with prompts now
      */
-    public get Models(): AIAgentModelEntity[] {
+    public get Models(): MJAIAgentModelEntity[] {
         return this._models;
     }
 
-    private _notes: AIAgentNoteEntity[] = [];
-    public get Notes(): AIAgentNoteEntity[] {
+    private _notes: MJAIAgentNoteEntity[] = [];
+    public get Notes(): MJAIAgentNoteEntity[] {
         return this._notes;
     }
 }
-
-// tree shaking load stub
-export function LoadAIAgentEntityExtended() {}

@@ -1,14 +1,15 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
-import { AIAgentExampleEntity } from "@memberjunction/core-entities";
+import { MJAIAgentExampleEntity } from "@memberjunction/core-entities";
 import { EmbedTextLocalHelper } from "./util";
+import { AIEngine } from "@memberjunction/aiengine";
 
 /**
- * Server-side extension of AIAgentExampleEntity that auto-generates embeddings
- * when the ExampleInput field changes, following the QueryEntity pattern.
+ * Server-side extension of MJAIAgentExampleEntity that auto-generates embeddings
+ * when the ExampleInput field changes, following the MJQueryEntity pattern.
  */
-@RegisterClass(BaseEntity, 'AI Agent Examples')
-export class AIAgentExampleEntityExtended extends AIAgentExampleEntity {
+@RegisterClass(BaseEntity, 'MJ: AI Agent Examples')
+export class AIAgentExampleEntityExtended extends MJAIAgentExampleEntity {
     /**
      * Override EmbedTextLocal to use helper
      */
@@ -25,6 +26,9 @@ export class AIAgentExampleEntityExtended extends AIAgentExampleEntity {
             // Generate embedding for ExampleInput field if needed
             if (shouldGenerateEmbedding && this.ExampleInput && this.ExampleInput.trim().length > 0) {
                 await this.GenerateEmbeddingByFieldName("ExampleInput", "EmbeddingVector", "EmbeddingModelID");
+
+                // update AI Engine to know about this updated embedding for the example
+                AIEngine.Instance.AddOrUpdateSingleExampleEmbedding(this);
             } else if (!this.ExampleInput || this.ExampleInput.trim().length === 0) {
                 // Clear embedding if input is empty
                 this.EmbeddingVector = null;
@@ -38,11 +42,4 @@ export class AIAgentExampleEntityExtended extends AIAgentExampleEntity {
             return false;
         }
     }
-}
-
-/**
- * Required export for MJ class factory registration
- */
-export function LoadAIAgentExampleEntityServerSubClass() {
-    // Registration happens via @RegisterClass decorator
 }

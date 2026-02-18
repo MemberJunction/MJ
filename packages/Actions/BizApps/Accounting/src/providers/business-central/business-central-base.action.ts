@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAccountingAction } from '../../base/base-accounting-action';
 import { UserInfo } from '@memberjunction/core';
-import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -190,7 +190,7 @@ export abstract class BusinessCentralBaseAction extends BaseAccountingAction {
      * Gets the appropriate Business Central API URL
      */
     protected async getBusinessCentralAPIUrl(
-        integration: CompanyIntegrationEntity,
+        integration: MJCompanyIntegrationEntity,
         tenantId: string,
         environment: string
     ): Promise<string> {

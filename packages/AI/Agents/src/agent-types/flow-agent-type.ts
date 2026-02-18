@@ -15,7 +15,7 @@ import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -113,7 +113,7 @@ export interface FlowAgentExecuteParams {
      * The step must belong to the agent being executed.
      * Use AIEngine.Instance.GetAgentSteps(agentId) to retrieve available steps.
      */
-    startAtStep?: AIAgentStepEntity;
+    startAtStep?: MJAIAgentStepEntity;
 
     /**
      * Steps to skip during execution.
@@ -128,7 +128,7 @@ export interface FlowAgentExecuteParams {
      * Skipped steps are still recorded in the execution path but marked as skipped.
      * The step's output mapping is not applied when skipped.
      */
-    skipSteps?: AIAgentStepEntity[];
+    skipSteps?: MJAIAgentStepEntity[];
 }
 
 /**
@@ -351,7 +351,7 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private async getStartingSteps(agentId: string): Promise<AIAgentStepEntity[]> {
+    private async getStartingSteps(agentId: string): Promise<MJAIAgentStepEntity[]> {
         const steps = AIEngine.Instance.GetAgentSteps(agentId, 'Active');
         return steps.filter(step => step.StartingStep).sort((a, b) => a.Name.localeCompare(b.Name));
     }
@@ -361,7 +361,7 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private async getStepById(stepId: string): Promise<AIAgentStepEntity | null> {
+    private async getStepById(stepId: string): Promise<MJAIAgentStepEntity | null> {
         return AIEngine.Instance.GetAgentStepByID(stepId);
     }
     
@@ -370,7 +370,7 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private async getStepByName(agentId: string, stepName: string): Promise<AIAgentStepEntity | null> {
+    private async getStepByName(agentId: string, stepName: string): Promise<MJAIAgentStepEntity | null> {
         const steps = AIEngine.Instance.GetAgentSteps(agentId);
         return steps.find(step => step.Name === stepName) || null;
     }
@@ -397,11 +397,11 @@ export class FlowAgentType extends BaseAgentType {
         payload: unknown,
         flowState: FlowExecutionState,
         params: ExecuteAgentParams<unknown, P>
-    ): Promise<AIAgentStepPathEntity[]> {
+    ): Promise<MJAIAgentStepPathEntity[]> {
         // Load all paths from this step
         const allPaths = AIEngine.Instance.GetPathsFromStep(stepId)
             .sort((a, b) => b.Priority - a.Priority);
-        const validPaths: AIAgentStepPathEntity[] = [];
+        const validPaths: MJAIAgentStepPathEntity[] = [];
 
         // Evaluate each path's condition
         for (const path of allPaths) {
@@ -615,7 +615,7 @@ export class FlowAgentType extends BaseAgentType {
      */
     private async createStepForFlowNode<P>(
         params: ExecuteAgentParams<P>,
-        node: AIAgentStepEntity,
+        node: MJAIAgentStepEntity,
         payload: P,
         flowState: FlowExecutionState
     ): Promise<BaseAgentNextStep<P>> {
@@ -1350,7 +1350,7 @@ export class FlowAgentType extends BaseAgentType {
      * that BaseAgent can execute
      */
     private async convertForEachStepToOperation<P>(
-        node: AIAgentStepEntity,
+        node: MJAIAgentStepEntity,
         payload: P,
         flowState: FlowExecutionState,
         params: ExecuteAgentParams<P>
@@ -1437,7 +1437,7 @@ export class FlowAgentType extends BaseAgentType {
      * that BaseAgent can execute
      */
     private async convertWhileStepToOperation<P>(
-        node: AIAgentStepEntity,
+        node: MJAIAgentStepEntity,
         payload: P,
         flowState: FlowExecutionState,
         params: ExecuteAgentParams<P>
@@ -1640,9 +1640,3 @@ export class FlowAgentType extends BaseAgentType {
  
 }
 
-/**
- * Export a load function to ensure the class is registered with the ClassFactory
- */
-export function LoadFlowAgentType() {
-    // This function ensures the class isn't tree-shaken
-}

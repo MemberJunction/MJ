@@ -6,6 +6,8 @@
  * when passing to functions that expect the real UserInfo type.
  */
 
+import { vi } from 'vitest';
+
 // Use 'any' base to allow type compatibility with the real UserInfo
 export class UserInfo {
     ID: string;
@@ -98,10 +100,10 @@ export class Metadata {
         const mockData: Record<string, unknown> = { ID: 'mock-entity-id' };
         return {
             ID: 'mock-entity-id',
-            Save: jest.fn().mockResolvedValue(true),
-            Load: jest.fn().mockResolvedValue(true),
-            GetAll: jest.fn().mockReturnValue(mockData),
-            NewRecord: jest.fn(),
+            Save: vi.fn().mockResolvedValue(true),
+            Load: vi.fn().mockResolvedValue(true),
+            GetAll: vi.fn().mockReturnValue(mockData),
+            NewRecord: vi.fn(),
             // Support setting any property
             set(key: string, value: unknown) { mockData[key] = value; }
         } as unknown as T;

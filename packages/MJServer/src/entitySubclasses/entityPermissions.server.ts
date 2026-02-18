@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
-import { EntityPermissionEntity } from '@memberjunction/core-entities';
+import { MJEntityPermissionEntity } from '@memberjunction/core-entities';
 import axios from 'axios';
 import { ___codeGenAPIPort, ___codeGenAPISubmissionDelay, ___codeGenAPIURL } from '../config.js';
 
@@ -11,8 +11,8 @@ import { ___codeGenAPIPort, ___codeGenAPISubmissionDelay, ___codeGenAPIURL } fro
  * This class is within the memberjunction/server package because it is closely coupled to other aspects of what
  * happens in the server. That's why it is not in the core-entities-server package.
  */
-@RegisterClass(BaseEntity, 'Entity Permissions')
-export class EntityPermissionsEntity_Server extends EntityPermissionEntity {
+@RegisterClass(BaseEntity, 'MJ: Entity Permissions')
+export class EntityPermissionsEntity_Server extends MJEntityPermissionEntity {
   protected static _entityIDQueue: string[] = [];
   protected static _lastModifiedTime: Date | null = null;
   protected static _submissionTimer: NodeJS.Timeout | null = null;
@@ -103,5 +103,3 @@ export class EntityPermissionsEntity_Server extends EntityPermissionEntity {
     return success;
   }
 }
-
-export function LoadEntityPermissionsServerSubClass() {}

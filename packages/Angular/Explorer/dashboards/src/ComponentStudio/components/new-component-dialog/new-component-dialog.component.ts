@@ -10,6 +10,7 @@ interface TypeOption {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-new-component-dialog',
   templateUrl: './new-component-dialog.component.html',
   styleUrls: ['./new-component-dialog.component.css']

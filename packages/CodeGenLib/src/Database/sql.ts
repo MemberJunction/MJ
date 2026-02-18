@@ -2,17 +2,17 @@ import { logError, logMessage, logWarning } from "../Misc/status_logging";
 import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { configInfo, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { RegisterClass } from "@memberjunction/global";
 import { SQLCodeGenBase } from './sql_codegen';
 import { sqlConfig } from "../Config/db-connection";
 
-import { exec, execFile, spawn } from 'child_process';
+import { exec, execFile, execSync, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
-import { mkdirSync } from "fs-extra";
+import { mkdirSync } from "fs";
 import { attemptDeleteFile, logIf } from "../Misc/util";
 
 const execAsync = promisify(exec);
@@ -395,7 +395,6 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     if (isWindows && absoluteFilePath.includes(' ')) {
       try {
         // Use fsutil to get the short path name on Windows
-        const { execSync } = require('child_process');
         const result = execSync(`for %I in ("${absoluteFilePath}") do @echo %~sI`, {
           encoding: 'utf8',
           shell: 'cmd.exe'
@@ -420,6 +419,11 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       '-V', '17',  // Only fail on severity >= 17 (system errors)
       '-i', absoluteFilePath
     ];
+
+    // Add -C flag to trust server certificate when configured
+    if (sqlConfig.options?.trustServerCertificate) {
+      args.push('-C');
+    }
 
     // Execute the command using spawn to completely bypass shell escaping issues
     logIf(configInfo.verboseOutput, `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`);

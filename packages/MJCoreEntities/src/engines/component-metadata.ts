@@ -1,10 +1,10 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { ComponentEntityExtended } from "../custom/ComponentEntityExtended";
 import { 
-    ComponentLibraryEntity, 
-    ComponentLibraryLinkEntity,
-    ComponentRegistryEntity,
-    ComponentDependencyEntity 
+    MJComponentLibraryEntity, 
+    MJComponentLibraryLinkEntity,
+    MJComponentRegistryEntity,
+    MJComponentDependencyEntity 
 } from "../generated/entity_subclasses";
 
 /**
@@ -19,10 +19,10 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
     }
 
     private _components: ComponentEntityExtended[];
-    private _componentLibraries: ComponentLibraryEntity[];
-    private _componentLibraryLinks: ComponentLibraryLinkEntity[];
-    private _componentRegistries: ComponentRegistryEntity[];
-    private _componentDependencies: ComponentDependencyEntity[];
+    private _componentLibraries: MJComponentLibraryEntity[];
+    private _componentLibraryLinks: MJComponentLibraryLinkEntity[];
+    private _componentRegistries: MJComponentRegistryEntity[];
+    private _componentDependencies: MJComponentDependencyEntity[];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
@@ -64,19 +64,19 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
         return this._components;
     }
 
-    public get ComponentLibraries(): ComponentLibraryEntity[] {
+    public get ComponentLibraries(): MJComponentLibraryEntity[] {
         return this._componentLibraries;
     }
 
-    public get ComponentLibraryLinks(): ComponentLibraryLinkEntity[] {
+    public get ComponentLibraryLinks(): MJComponentLibraryLinkEntity[] {
         return this._componentLibraryLinks;
     }
 
-    public get ComponentRegistries(): ComponentRegistryEntity[] {
+    public get ComponentRegistries(): MJComponentRegistryEntity[] {
         return this._componentRegistries;
     }
 
-    public get ComponentDependencies(): ComponentDependencyEntity[] {
+    public get ComponentDependencies(): MJComponentDependencyEntity[] {
         return this._componentDependencies;
     }
 

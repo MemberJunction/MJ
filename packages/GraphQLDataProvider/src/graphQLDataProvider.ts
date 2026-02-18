@@ -314,8 +314,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
             const u = this.ConvertBackToMJFields(d.CurrentUser);
-            const roles = u.UserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
-            u.UserRoles_UserIDArray = roles;
+            const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
+            u.MJUserRoles_UserIDArray = roles;
             return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
     }
@@ -1181,7 +1181,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async GetRecordChanges(entityName: string, primaryKey: CompositeKey): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
-                EntityName: 'Record Changes',
+                EntityName: 'MJ: Record Changes',
                 ExtraFilter: `RecordID = '${primaryKey.Values()}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
@@ -1355,6 +1355,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
+        // IS-A parent entity save: the full ORM pipeline (permissions, validation, events)
+        // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
+        // mutation will include all chain fields. Return current entity state.
+        if (options?.IsParentEntitySave) {
+            const result = new BaseEntityResult();
+            result.StartedAt = new Date();
+            result.EndedAt = new Date();
+            result.Type = entity.IsSaved ? 'update' : 'create';
+            result.Success = true;
+            result.NewValues = entity.GetAll();
+            entity.ResultHistory.push(result);
+            return result.NewValues;
+        }
+
         const result = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing(); // as of the time of writing, this isn't technically needed because we are not doing any async preprocessing, but it is good to have it here for future use in case something is added with async between here and the TransactionItem being added.
@@ -1388,7 +1402,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             `
             for (let i = 0; i < filteredFields.length; i++) {
                 const f = filteredFields[i];
-                let val = f.Value;
+                // use entity.Get() instead of f.Value
+                // in case there is an IsA relationship where parent entity 
+                // is where the value is. f.Value would still be old value
+                let val = entity.Get(f.Name); 
                 if (val) {
                     // type conversions as needed for GraphQL
                     switch(f.EntityFieldInfo.TSType) {
@@ -1643,7 +1660,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop
-            vars["options___"] = options ? options : {SkipEntityAIActions: false, SkipEntityActions: false};
+
+            // Build delete options ensuring all required fields are present.
+            // IMPORTANT: Must be kept in sync with DeleteOptionsInput in @memberjunction/server
+            // and EntityDeleteOptions in @memberjunction/core
+            vars["options___"] = {
+                SkipEntityAIActions: options?.SkipEntityAIActions ?? false,
+                SkipEntityActions: options?.SkipEntityActions ?? false,
+                ReplayOnly: options?.ReplayOnly ?? false,
+                IsParentEntityDelete: options?.IsParentEntityDelete ?? false
+            };
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const queryName: string = 'Delete' + graphQLTypeName;
@@ -1867,7 +1893,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.SetRecordFavoriteStatus.Success;
     }
 
-    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
+    protected async InternalGetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
         if (!entityName || !primaryKey || primaryKey.KeyValuePairs?.length === 0){
             return null;
         }
@@ -1888,7 +1914,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetEntityRecordName.RecordName;
     }
 
-    public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
+    protected async InternalGetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
         if (!info)
             return null;
 
@@ -1913,8 +1939,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                      CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(i.CompositeKey.KeyValuePairs)}
                     }
                 })});
-        if (data && data.GetEntityRecordNames)
-            return data.GetEntityRecordNames;
+        if (data && data.GetEntityRecordNames) {
+            // Convert plain CompositeKey objects from GraphQL response to real CompositeKey instances
+            return data.GetEntityRecordNames.map((result: EntityRecordNameResult) => ({
+                ...result,
+                CompositeKey: new CompositeKey(result.CompositeKey.KeyValuePairs)
+            }));
+        }
     }
 
     /**
@@ -2147,7 +2178,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        UserRoles_UserIDArray {
+        MJUserRoles_UserIDArray {
             ${this.userRoleInfoString()}
         }
     }
@@ -2594,6 +2625,99 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Dispose WebSocket client
         this.disposeWSClient();
+    }
+
+    /**************************************************************************
+     * IS-A Child Entity Discovery
+     *
+     * Discovers which IS-A child entity, if any, has a record with the given
+     * primary key. Calls the server-side FindISAChildEntity GraphQL query
+     * which executes a single UNION ALL for efficiency.
+     **************************************************************************/
+
+    /**
+     * Discovers which IS-A child entity has a record matching the given PK.
+     * Calls the server-side FindISAChildEntity resolver via GraphQL.
+     *
+     * @param entityInfo The parent entity to check children for
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user (unused on client, present for interface parity)
+     * @returns The child entity name if found, or null if no child record exists
+     */
+    public async FindISAChildEntity(
+        entityInfo: EntityInfo,
+        recordPKValue: string,
+        contextUser?: UserInfo
+    ): Promise<{ ChildEntityName: string } | null> {
+        if (!entityInfo.IsParentType) return null;
+
+        const gql = `query FindISAChildEntity($EntityName: String!, $RecordID: String!) {
+            FindISAChildEntity(EntityName: $EntityName, RecordID: $RecordID) {
+                Success
+                ChildEntityName
+                ErrorMessage
+            }
+        }`;
+
+        try {
+            const result = await this.ExecuteGQL(gql, {
+                EntityName: entityInfo.Name,
+                RecordID: recordPKValue
+            });
+
+            if (result?.FindISAChildEntity?.Success && result.FindISAChildEntity.ChildEntityName) {
+                return { ChildEntityName: result.FindISAChildEntity.ChildEntityName };
+            }
+            return null;
+        }
+        catch (e) {
+            LogError(`FindISAChildEntity failed for ${entityInfo.Name}: ${e}`);
+            return null;
+        }
+    }
+
+    /**
+     * Discovers ALL IS-A child entities that have records matching the given PK.
+     * Used for overlapping subtype parents (AllowMultipleSubtypes = true).
+     * Calls the server-side FindISAChildEntities resolver via GraphQL.
+     *
+     * @param entityInfo The parent entity to check children for
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user (unused on client, present for interface parity)
+     * @returns Array of child entity names found (empty if none)
+     */
+    public async FindISAChildEntities(
+        entityInfo: EntityInfo,
+        recordPKValue: string,
+        contextUser?: UserInfo
+    ): Promise<{ ChildEntityName: string }[]> {
+        if (!entityInfo.IsParentType) return [];
+
+        const gql = `query FindISAChildEntities($EntityName: String!, $RecordID: String!) {
+            FindISAChildEntities(EntityName: $EntityName, RecordID: $RecordID) {
+                Success
+                ChildEntityNames
+                ErrorMessage
+            }
+        }`;
+
+        try {
+            const result = await this.ExecuteGQL(gql, {
+                EntityName: entityInfo.Name,
+                RecordID: recordPKValue
+            });
+
+            if (result?.FindISAChildEntities?.Success && result.FindISAChildEntities.ChildEntityNames) {
+                return result.FindISAChildEntities.ChildEntityNames.map(
+                    (name: string) => ({ ChildEntityName: name })
+                );
+            }
+            return [];
+        }
+        catch (e) {
+            LogError(`FindISAChildEntities failed for ${entityInfo.Name}: ${e}`);
+            return [];
+        }
     }
 }
 

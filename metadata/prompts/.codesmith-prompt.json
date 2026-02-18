@@ -1,10 +1,10 @@
 {
   "fields": {
     "Name": "Codesmith Agent Prompt",
-    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
     "TemplateText": "@file:templates/agents/codesmith.template.md",
     "ResponseFormat": "JSON",
-    "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
     "Status": "Active",
     "Description": "Main prompt for the Codesmith Agent. Expert code generator that creates, tests, and refines JavaScript for data analysis and transformations."
   },
@@ -13,7 +13,7 @@
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
+          "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
           "Priority": 1
         },
@@ -21,14 +21,14 @@
           "ID": "A13702B9-EBE2-4453-A75C-91690390B015"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:29.759Z",
-          "checksum": "3eca5b86bd978e497a3962d5e7620d832f92357141432a9ef5d145a3b9da6e7a"
+          "lastModified": "2026-02-13T20:48:56.233Z",
+          "checksum": "888a1042e910c9f502887d46024d39d3169c4c6d58ac51dc058896b8bdfc4909"
         }
       },
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:AI Models.Name=GPT 5-mini",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-mini",
           "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
           "Priority": 2
         },
@@ -36,14 +36,14 @@
           "ID": "97E7D784-B50D-4D3D-BF25-4374964E84B2"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:29.760Z",
-          "checksum": "56a239afc04ecc93c41d240b7a3dd7cd6e1952d3a8d98bbab7747336bb6267dc"
+          "lastModified": "2026-02-13T20:48:56.234Z",
+          "checksum": "b33d8ad0139e5d79757bea1f8161e50630120103ffb0ecfa7c02fa037ae2f216"
         }
       },
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
           "Priority": 3
         },
@@ -51,14 +51,14 @@
           "ID": "B67C4EAB-432C-4328-8C4D-FDAAC616E04F"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:29.761Z",
-          "checksum": "cb95bfe72059c2c9430efbd04be9707704332334c9ab840765e1191e5f53a32d"
+          "lastModified": "2026-02-13T20:48:56.235Z",
+          "checksum": "6e7996fdb0ff357adf67d39f9efd3dfcc7ab2f0381dc6e78db0d22c4f04f569f"
         }
       },
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
           "Priority": 4
         },
@@ -66,8 +66,8 @@
           "ID": "22FD7026-521C-4880-98B9-27D9C23512F4"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:29.762Z",
-          "checksum": "43b384ebee01a466e77717aa26d8e48940f752578f1cb9c5498dc579a84331e4"
+          "lastModified": "2026-02-13T20:48:56.236Z",
+          "checksum": "17f4d7c80842eb25cf61e227677702ba786d1b56ae70aa3bcbceaf70cd511112"
         }
       }
     ]
@@ -76,7 +76,7 @@
     "ID": "A948FDCD-CB38-49EA-8480-6CC8AAFC0BE8"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:29.688Z",
-    "checksum": "9e741f986b7b7e5050422138c597f25e6bad11d96690b06fb323be49e36335bd"
+    "lastModified": "2026-02-13T20:48:56.124Z",
+    "checksum": "97522beeb585c02418b575e3f422e885f044ed3729cc02a739965f04a3c1f357"
   }
 }

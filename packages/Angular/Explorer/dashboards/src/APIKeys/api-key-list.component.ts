@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIKeyScopeEntity, APIScopeEntity } from '@memberjunction/core-entities';
+import { MJAPIKeyEntity, MJAPIKeyScopeEntity, MJAPIScopeEntity } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 /** Filter options for the list */
@@ -20,31 +20,26 @@ interface KeyScopeInfo {
     preview: string[];
     categories: CategoryScopeCount[];
 }
-
-/** Tree shaking prevention function */
-export function LoadAPIKeyList(): void {
-    // This function prevents tree shaking
-}
-
 /**
  * List view component for displaying and filtering API keys
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-key-list',
     templateUrl: './api-key-list.component.html',
     styleUrls: ['./api-key-list.component.css']
 })
 export class APIKeyListComponent implements OnInit, OnChanges {
     @Input() Filter: APIKeyFilter = 'all';
-    @Output() KeySelected = new EventEmitter<APIKeyEntity>();
+    @Output() KeySelected = new EventEmitter<MJAPIKeyEntity>();
     @Output() CreateRequested = new EventEmitter<void>();
 
     // Expose Math for template
     public Math = Math;
 
     // Data
-    public AllKeys: APIKeyEntity[] = [];
-    public FilteredKeys: APIKeyEntity[] = [];
+    public AllKeys: MJAPIKeyEntity[] = [];
+    public FilteredKeys: MJAPIKeyEntity[] = [];
     public IsLoading = true;
 
     // Search
@@ -70,7 +65,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
 
     // Scope counts per key
     public KeyScopeMap = new Map<string, KeyScopeInfo>();
-    private AllScopes: APIScopeEntity[] = [];
+    private AllScopes: MJAPIScopeEntity[] = [];
 
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
@@ -114,7 +109,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
             ]);
 
             if (keysResult.Success) {
-                this.AllKeys = keysResult.Results as APIKeyEntity[];
+                this.AllKeys = keysResult.Results as MJAPIKeyEntity[];
                 this.AllScopes = base.Scopes;
 
                 // Build category UI config from root scopes
@@ -130,7 +125,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
                 }
 
                 // Build scope lookup map
-                const scopeMap = new Map<string, APIScopeEntity>();
+                const scopeMap = new Map<string, MJAPIScopeEntity>();
                 for (const scope of this.AllScopes) {
                     scopeMap.set(scope.ID, scope);
                 }
@@ -138,7 +133,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
                 // Build key scope counts with category breakdown
                 this.KeyScopeMap.clear();
                 if (keyScopesResult.Success) {
-                    const keyScopes = keyScopesResult.Results as APIKeyScopeEntity[];
+                    const keyScopes = keyScopesResult.Results as MJAPIKeyScopeEntity[];
                     const keyToScopes = new Map<string, { names: string[]; categories: Map<string, number> }>();
 
                     for (const ks of keyScopes) {
@@ -188,7 +183,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
     /**
      * Get scope info for a key
      */
-    public getScopeInfo(key: APIKeyEntity): KeyScopeInfo {
+    public getScopeInfo(key: MJAPIKeyEntity): KeyScopeInfo {
         return this.KeyScopeMap.get(key.ID) || { count: 0, preview: [], categories: [] };
     }
 
@@ -354,7 +349,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
     /**
      * Get paginated keys
      */
-    public getPaginatedKeys(): APIKeyEntity[] {
+    public getPaginatedKeys(): MJAPIKeyEntity[] {
         const start = (this.CurrentPage - 1) * this.PageSize;
         return this.FilteredKeys.slice(start, start + this.PageSize);
     }
@@ -404,7 +399,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
     /**
      * Select a key
      */
-    public selectKey(key: APIKeyEntity): void {
+    public selectKey(key: MJAPIKeyEntity): void {
         this.KeySelected.emit(key);
     }
 
@@ -463,7 +458,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
     /**
      * Get expiration status class
      */
-    public getExpirationClass(key: APIKeyEntity): string {
+    public getExpirationClass(key: MJAPIKeyEntity): string {
         if (!key.ExpiresAt) return 'never';
 
         const now = new Date();

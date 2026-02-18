@@ -1,5 +1,63 @@
 # Angular Development Guidelines
 
+## 🚨 NPM Workspace and Peer Dependencies (For Downstream Projects)
+
+### Shared Singleton Services Pattern
+
+MemberJunction Angular packages use **peer dependencies** for shared singleton services to ensure proper npm deduplication in workspace monorepos. This prevents the "No provider found for MJAuthBase" error caused by multiple copies of `@memberjunction/ng-auth-services` being installed in nested `node_modules` directories.
+
+### Key Peer Dependencies
+
+The following packages are declared as peer dependencies and must be provided by the consuming application:
+
+- `@memberjunction/global` - Core MJ global utilities
+- `@memberjunction/core` - Core MJ metadata and entity system
+- `@memberjunction/ng-auth-services` - Authentication services (MJAuthBase)
+
+### For Downstream Projects Using MJ Packages
+
+If you're building an application that uses MJ Angular packages in an npm workspace monorepo, you **MUST** declare these packages as direct dependencies in your **root** `package.json`:
+
+```json
+{
+  "dependencies": {
+    "@memberjunction/global": "^4.2.0",
+    "@memberjunction/core": "^4.2.0",
+    "@memberjunction/ng-auth-services": "^4.2.0"
+  }
+}
+```
+
+This ensures npm hoists these packages to the root `node_modules` where all workspace packages can share them.
+
+### Why This Matters
+
+Without proper hoisting, npm may create nested copies:
+```
+node_modules/@memberjunction/ng-bootstrap/node_modules/@memberjunction/ng-auth-services
+node_modules/@memberjunction/ng-explorer-core/node_modules/@memberjunction/ng-auth-services
+```
+
+This causes Angular's dependency injection to fail because the `MJAuthBase` token from `AuthServicesModule.forRoot()` comes from a different module instance than what `APP_INITIALIZER` tries to inject.
+
+### Verification
+
+Run `npm ls @memberjunction/ng-auth-services` to verify only one copy exists at the root level:
+```bash
+# GOOD - single copy at root
+your-project@1.0.0
+└── @memberjunction/ng-auth-services@4.2.0
+
+# BAD - nested copies (will cause DI errors)
+your-project@1.0.0
+├─┬ @memberjunction/ng-bootstrap@4.2.0
+│ └── @memberjunction/ng-auth-services@4.2.0
+└─┬ @memberjunction/ng-explorer-core@4.2.0
+  └── @memberjunction/ng-auth-services@4.2.0
+```
+
+---
+
 ## 📚 Dashboard Development Guide
 
 **IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](/guides/DASHBOARD_BEST_PRACTICES.md)**.
@@ -19,17 +77,16 @@ This guide covers:
 
 ---
 
-## 🚨 CRITICAL: NO STANDALONE COMPONENTS 🚨
-- **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
-- **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`
-- **Why**: Standalone components cause style encapsulation issues, ::ng-deep doesn't work properly, and they bypass Angular's module system
-- When creating new components:
-  - Create or add to an NgModule
-  - Declare component in the module's `declarations` array
-  - Import `CommonModule` and other required modules in the module's `imports` array
-  - Export the component in the module's `exports` array if it needs to be used outside the module
-- **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
-- This is **non-negotiable** - standalone components are strictly forbidden
+## Angular Component & Module Strategy
+
+See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
+
+- **Standalone components are allowed and preferred for new leaf components** (dialogs, panels, widgets, lazy-loaded routes)
+- **NgModules are still used for feature modules** grouping many related components
+- **Follow the existing pattern** in whichever package you're working in
+- **Use `standalone: false` explicitly** for NgModule-declared components (Angular 21 defaults to standalone)
+- **Use `@if`/`@for`/`@switch`** block syntax for all new templates (not `*ngIf`/`*ngFor`)
+- **Use `inject()` function** for DI in new components (not constructor injection)
 
 ## Icon Libraries
 - **PRIMARY ICON LIBRARY: Font Awesome** - Use Font Awesome icons throughout all Angular components

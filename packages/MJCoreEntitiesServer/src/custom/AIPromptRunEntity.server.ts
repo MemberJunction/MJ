@@ -4,7 +4,7 @@ import { AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base";
 
 /**
- * Server-side subclass for AIPromptRunEntity that automatically calculates costs
+ * Server-side subclass for MJAIPromptRunEntity that automatically calculates costs
  * when a prompt run is completed or errors out. The cost calculation is based on
  * the active pricing configuration for the model and vendor used in the run.
  * 
@@ -242,8 +242,3 @@ export class AIPromptRunEntityServer extends AIPromptRunEntityExtended {
         this.TotalCost = descendantCost + cost; // update total cost
     }
 }
-
-/**
- * This function is used to ensure the class is loaded and registered
- */
-export function LoadAIPromptRunEntityServerSubClass() {}

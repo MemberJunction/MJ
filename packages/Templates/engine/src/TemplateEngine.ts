@@ -1,6 +1,6 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
-import { TemplateContentEntity, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
-import * as nunjucks from 'nunjucks';
+import { MJTemplateContentEntity, TemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
@@ -9,7 +9,7 @@ import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templa
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
 export class TemplateEntityLoader extends nunjucks.Loader {
-    public async: true; // tell nunjucks this is an async loader
+    public async = true; // tell nunjucks this is an async loader
 
     private templates: { [templateId: string]: TemplateEntityExtended } = {};
 
@@ -66,7 +66,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
             // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
             // only done once
             this._templateLoader = new TemplateEntityLoader();
-            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
 
             // Add custom filters
             this.addCustomFilters();
@@ -75,8 +75,11 @@ export class TemplateEngineServer extends TemplateEngineBase {
             const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
             if (extensions && extensions.length > 0) {
                 for (const ext of extensions) {
-                    const instance = new ext.SubClass(contextUser);                
-                    this._nunjucksEnv.addExtension(ext.Key, instance);
+                    const SubClassConstructor = ext.SubClass as new (contextUser: UserInfo) => TemplateExtensionBase;
+                    const instance = new SubClassConstructor(contextUser!);
+                    if (ext.Key) {
+                        this._nunjucksEnv.addExtension(ext.Key, instance);
+                    }
                 }
             }
         }
@@ -84,7 +87,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
 
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
-        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
         
         // Add custom filters
         this.addCustomFilters();
@@ -142,7 +145,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * @param templateContent the template content item (within the template)  
      * @param data 
      */
-    public async RenderTemplate(templateEntity: TemplateEntityExtended, templateContent: TemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: TemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -269,7 +272,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 if (err) {
                     reject(err);
                 } else {
-                    resolve(result);
+                    resolve(result!);
                 }
             });
         });
@@ -297,7 +300,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
         const params = templateEntity.GetParametersForContent(contentId);
         
         // Group parameters by name to handle precedence
-        const paramsByName = new Map<string, TemplateParamEntity>();
+        const paramsByName = new Map<string, MJTemplateParamEntity>();
         
         // First add global parameters
         params.filter(p => !(p as any).TemplateContentID).forEach(p => {

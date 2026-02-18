@@ -6,7 +6,7 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef
 } from '@angular/core';
-import { ActionCategoryEntity, ActionExecutionLogEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity, MJActionExecutionLogEntity } from '@memberjunction/core-entities';
 import { ActionEntityExtended } from '@memberjunction/actions-base';
 import { RunView } from '@memberjunction/core';
 
@@ -19,6 +19,7 @@ export interface ActionExecutionStats {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-action-card',
   templateUrl: './action-card.component.html',
   styleUrls: ['./action-card.component.css'],
@@ -26,7 +27,7 @@ export interface ActionExecutionStats {
 })
 export class ActionCardComponent {
   @Input() Action!: ActionEntityExtended;
-  @Input() Categories: Map<string, ActionCategoryEntity> = new Map();
+  @Input() Categories: Map<string, MJActionCategoryEntity> = new Map();
   @Output() ActionClick = new EventEmitter<ActionEntityExtended>();
   @Output() EditClick = new EventEmitter<ActionEntityExtended>();
   @Output() RunClick = new EventEmitter<ActionEntityExtended>();
@@ -83,7 +84,7 @@ export class ActionCardComponent {
       // Load both executions and result codes in parallel
       const [executionsResult, resultCodesResult] = await rv.RunViews([
         {
-          EntityName: 'Action Execution Logs',
+          EntityName: 'MJ: Action Execution Logs',
           ExtraFilter: `ActionID='${this.Action.ID}'`,
           OrderBy: 'StartedAt DESC',
           MaxRows: 100,
@@ -91,7 +92,7 @@ export class ActionCardComponent {
           Fields: ['ID', 'ResultCode', 'StartedAt']
         },
         {
-          EntityName: 'Action Result Codes',
+          EntityName: 'MJ: Action Result Codes',
           ExtraFilter: `ActionID='${this.Action.ID}'`,
           ResultType: 'simple',
           Fields: ['ResultCode', 'IsSuccess']

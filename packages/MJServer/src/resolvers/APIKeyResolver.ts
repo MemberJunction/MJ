@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { LogError, Metadata } from "@memberjunction/core";
-import { APIKeyScopeEntity } from "@memberjunction/core-entities";
+import { MJAPIKeyScopeEntity } from "@memberjunction/core-entities";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import { AppContext } from "../types.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
@@ -225,7 +225,7 @@ export class APIKeyResolver extends ResolverBase {
 
         for (const scopeId of scopeIds) {
             try {
-                const keyScope = await md.GetEntityObject<APIKeyScopeEntity>(
+                const keyScope = await md.GetEntityObject<MJAPIKeyScopeEntity>(
                     'MJ: API Key Scopes',
                     user
                 );

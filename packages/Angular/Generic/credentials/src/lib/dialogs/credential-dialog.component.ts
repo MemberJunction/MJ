@@ -6,20 +6,16 @@
  */
 
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { CredentialEntity, CredentialTypeEntity } from '@memberjunction/core-entities';
+import { MJCredentialEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 import { CredentialEditPanelComponent } from '../panels/credential-edit-panel/credential-edit-panel.component';
-
-export function LoadCredentialDialog() {
-    // Prevents tree-shaking
-}
 
 /**
  * Configuration options for opening the credential dialog
  */
 export interface CredentialDialogOptions {
     /** The credential to edit, or null for creating a new credential */
-    credential?: CredentialEntity | null;
+    credential?: MJCredentialEntity | null;
     /** Pre-selected credential type ID for new credentials */
     preselectedTypeId?: string;
     /** Pre-selected category ID for new credentials */
@@ -37,7 +33,7 @@ export interface CredentialDialogResult {
     /** Whether a credential was saved or deleted */
     success: boolean;
     /** The saved credential entity (if save was successful) */
-    credential?: CredentialEntity;
+    credential?: MJCredentialEntity;
     /** The ID of the deleted credential (if delete was successful) */
     deletedId?: string;
     /** The action that was taken */
@@ -45,6 +41,7 @@ export interface CredentialDialogResult {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-dialog',
     template: `
         @if (Visible) {
@@ -85,7 +82,7 @@ export class CredentialDialogComponent implements OnInit, OnChanges {
     @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
 
     @Input() Visible = false;
-    @Input() Credential: CredentialEntity | null = null;
+    @Input() Credential: MJCredentialEntity | null = null;
     @Input() PreselectedTypeId: string | undefined;
     @Input() PreselectedCategoryId: string | undefined;
     @Input() Title: string | undefined;
@@ -94,7 +91,7 @@ export class CredentialDialogComponent implements OnInit, OnChanges {
     @Output() close = new EventEmitter<CredentialDialogResult>();
 
     public IsLoading = false;
-    public credentialTypes: CredentialTypeEntity[] = [];
+    public credentialTypes: MJCredentialTypeEntity[] = [];
 
     private _dialogTitle = 'Credential';
 
@@ -163,7 +160,7 @@ export class CredentialDialogComponent implements OnInit, OnChanges {
 
         try {
             const rv = new RunView();
-            const result = await rv.RunView<CredentialTypeEntity>({
+            const result = await rv.RunView<MJCredentialTypeEntity>({
                 EntityName: 'MJ: Credential Types',
                 OrderBy: 'Category, Name',
                 ResultType: 'entity_object'
@@ -180,7 +177,7 @@ export class CredentialDialogComponent implements OnInit, OnChanges {
         }
     }
 
-    public onSaved(credential: CredentialEntity): void {
+    public onSaved(credential: MJCredentialEntity): void {
         this.Visible = false;
         this.close.emit({
             success: true,

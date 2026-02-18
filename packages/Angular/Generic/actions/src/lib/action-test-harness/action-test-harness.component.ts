@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ElementRef, ViewChild } from '@angular/core';
-import { ActionEntity, ActionParamEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionParamEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
@@ -7,7 +7,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 const ACTION_INPUT_CACHE_PREFIX = '__ACTION_DASHBOARD__action-run-inputs/';
 
 export interface ActionParamValue {
-    Param: ActionParamEntity;
+    Param: MJActionParamEntity;
     Value: unknown;
     Error?: string;
 }
@@ -20,6 +20,7 @@ export interface ActionResult {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-action-test-harness',
     templateUrl: './action-test-harness.component.html',
     styleUrls: ['./action-test-harness.component.css']
@@ -28,30 +29,30 @@ export class ActionTestHarnessComponent implements OnInit {
     @ViewChild('resultsSection') ResultsSectionRef!: ElementRef<HTMLDivElement>;
 
     // Private backing fields
-    private _action!: ActionEntity;
-    private _actionParams: ActionParamEntity[] = [];
+    private _action!: MJActionEntity;
+    private _actionParams: MJActionParamEntity[] = [];
     private _isVisible = false;
 
     // Input properties with getter/setters
     @Input()
-    set Action(value: ActionEntity) {
+    set Action(value: MJActionEntity) {
         this._action = value;
         if (value && this._actionParams.length > 0) {
             this.initializeParamValues();
         }
     }
-    get Action(): ActionEntity {
+    get Action(): MJActionEntity {
         return this._action;
     }
 
     @Input()
-    set ActionParams(value: ActionParamEntity[]) {
+    set ActionParams(value: MJActionParamEntity[]) {
         this._actionParams = value || [];
         if (this._action && value) {
             this.initializeParamValues();
         }
     }
-    get ActionParams(): ActionParamEntity[] {
+    get ActionParams(): MJActionParamEntity[] {
         return this._actionParams;
     }
 
@@ -156,7 +157,7 @@ export class ActionTestHarnessComponent implements OnInit {
         }
     }
 
-    private getDefaultValue(param: ActionParamEntity): unknown {
+    private getDefaultValue(param: MJActionParamEntity): unknown {
         if (param.DefaultValue) {
             return this.parseDefaultValue(param.DefaultValue, param.ValueType);
         }
@@ -191,7 +192,7 @@ export class ActionTestHarnessComponent implements OnInit {
         }
     }
 
-    public GetInputType(param: ActionParamEntity): string {
+    public GetInputType(param: MJActionParamEntity): string {
         if (param.IsArray || param.ValueType === 'Simple Object' || param.ValueType === 'BaseEntity Sub-Class') {
             return 'textarea';
         }
@@ -459,7 +460,7 @@ export class ActionTestHarnessComponent implements OnInit {
         return this.ExecutionResult.Success ? '#28a745' : '#dc3545';
     }
 
-    public GetOutputParams(): ActionParamEntity[] {
+    public GetOutputParams(): MJActionParamEntity[] {
         return this._actionParams.filter(p => p.Type === 'Output' || p.Type === 'Both');
     }
 
@@ -476,9 +477,4 @@ export class ActionTestHarnessComponent implements OnInit {
         }
         return String(data);
     }
-}
-
-// Tree-shaking prevention function
-export function LoadActionTestHarnessComponent(): void {
-    // This function ensures the component is included in the bundle
 }

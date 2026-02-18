@@ -1,7 +1,7 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
 import { ResourceData } from '@memberjunction/core-entities';
-import { DashboardEntityExtended, ResourceTypeEntity } from '@memberjunction/core-entities';
+import { DashboardEntityExtended, MJResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { SharedService, RecentAccessService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
@@ -10,6 +10,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'mj-single-dashboard',
   templateUrl: './single-dashboard.component.html',
   styleUrls: ['./single-dashboard.component.css']
@@ -33,7 +34,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   public allowResize: boolean = false;
   public allowReorder: boolean = false;
   public isEditingDashboard: boolean = false;
-  public selectedResource!: ResourceTypeEntity | null;
+  public selectedResource!: MJResourceTypeEntity | null;
   public selectedDashboardItem!: DashboardItem | null;
   private saveChangesSubject: Subject<any> = new Subject();
   private selectedComponent: SingleDashboardComponent | null = null;
@@ -83,7 +84,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     if (this.ResourceData) {
       const md = new Metadata();
       let uiConfig: any = {items:[]};
-      this.dashboardEntity = await md.GetEntityObject<DashboardEntityExtended>('Dashboards');
+      this.dashboardEntity = await md.GetEntityObject<DashboardEntityExtended>('MJ: Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {
         await this.dashboardEntity.Load(this.ResourceData.ResourceRecordID);
         // Log access to dashboard (fire-and-forget, don't await)

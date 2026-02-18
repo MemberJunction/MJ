@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogModule } from '@progress/kendo-angular-dialog';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { InputsModule } from '@progress/kendo-angular-inputs';
@@ -11,7 +11,7 @@ import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
 
 interface CollectionNode {
-  collection: CollectionEntity;
+  collection: MJCollectionEntity;
   selected: boolean;
   hasChildren: boolean;
   alreadyContainsArtifact: boolean;
@@ -30,172 +30,167 @@ interface CollectionNode {
   selector: 'mj-artifact-collection-picker-modal',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     DialogModule,
     ButtonsModule,
     InputsModule,
     SharedGenericModule
-  ],
+],
   template: `
-    <kendo-dialog
-      *ngIf="isOpen"
-      title="Save to Collection"
-      (close)="onCancel()"
-      [width]="700"
-      [minWidth]="500">
-      <div class="picker-modal">
-        <!-- Breadcrumb Navigation -->
-        @if (navigationPath.length > 0) {
-          <div class="breadcrumb-nav">
-            <button class="breadcrumb-btn" (click)="navigateToRoot()">
-              <i class="fas fa-home"></i> Root
-            </button>
-            @for (item of navigationPath; track item.collection.ID) {
-              <i class="fas fa-chevron-right breadcrumb-separator"></i>
-              <button class="breadcrumb-btn" (click)="navigateToCollection(item.collection)">
-                {{ item.collection.Name }}
+    @if (isOpen) {
+      <kendo-dialog
+        title="Save to Collection"
+        (close)="onCancel()"
+        [width]="700"
+        [minWidth]="500">
+        <div class="picker-modal">
+          <!-- Breadcrumb Navigation -->
+          @if (navigationPath.length > 0) {
+            <div class="breadcrumb-nav">
+              <button class="breadcrumb-btn" (click)="navigateToRoot()">
+                <i class="fas fa-home"></i> Root
               </button>
-            }
-          </div>
-        }
-
-        <!-- Search Bar -->
-        <div class="search-bar">
-          <i class="fas fa-search search-icon"></i>
-          <input
-            type="text"
-            class="k-textbox search-input"
-            [(ngModel)]="searchQuery"
-            (input)="onSearchChange()"
-            placeholder="Search collections..."
-            [disabled]="isLoading">
-        </div>
-
-        <!-- Collections List -->
-        <div class="collections-list" *ngIf="!isLoading && !errorMessage">
-          @if (displayedCollections.length === 0) {
-            <div class="empty-state">
-              @if (searchQuery) {
-                <i class="fas fa-search"></i>
-                <p>No collections found matching "{{ searchQuery }}"</p>
-              } @else if (currentParentId) {
-                <i class="fas fa-folder-open"></i>
-                <p>No sub-collections available</p>
-              } @else {
-                <i class="fas fa-folder"></i>
-                <p>No collections available</p>
-                <p class="hint">Create a new collection to get started</p>
+              @for (item of navigationPath; track item.collection.ID) {
+                <i class="fas fa-chevron-right breadcrumb-separator"></i>
+                <button class="breadcrumb-btn" (click)="navigateToCollection(item.collection)">
+                  {{ item.collection.Name }}
+                </button>
               }
             </div>
-          } @else {
-            @for (node of displayedCollections; track node.collection.ID) {
-              <div class="collection-item"
-                   [class.already-added]="node.alreadyContainsArtifact"
-                   (click)="toggleSelection(node)">
-                <div class="collection-checkbox">
-                  <input
-                    type="checkbox"
-                    [checked]="node.selected"
-                    [disabled]="node.alreadyContainsArtifact"
-                    (click)="$event.stopPropagation(); toggleSelection(node)">
-                </div>
-                <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
-                <span class="collection-name">{{ node.collection.Name }}</span>
-                @if (node.alreadyContainsArtifact) {
-                  <span class="already-added-badge">
-                    <i class="fas fa-check-circle"></i> Already added
-                  </span>
-                }
-                @if (node.hasChildren) {
-                  <button
-                    class="drill-down-btn"
-                    (click)="$event.stopPropagation(); drillIntoCollection(node.collection)"
-                    title="View sub-collections">
-                    <i class="fas fa-chevron-right"></i>
-                  </button>
-                }
-              </div>
-            }
           }
-        </div>
-
-        <!-- Loading State -->
-        @if (isLoading) {
-          <div class="loading-state">
-            <mj-loading text="Loading collections..." size="medium"></mj-loading>
+          <!-- Search Bar -->
+          <div class="search-bar">
+            <i class="fas fa-search search-icon"></i>
+            <input
+              type="text"
+              class="k-textbox search-input"
+              [(ngModel)]="searchQuery"
+              (input)="onSearchChange()"
+              placeholder="Search collections..."
+              [disabled]="isLoading">
           </div>
-        }
-
-        <!-- Error State -->
-        @if (errorMessage) {
-          <div class="error-state">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span>{{ errorMessage }}</span>
-          </div>
-        }
-
-        <!-- Selected Collections Summary -->
-        @if (selectedCollections.length > 0) {
-          <div class="selected-summary">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ selectedCollections.length }} collection(s) selected</span>
-          </div>
-        }
-
-        <!-- Create New Collection Section -->
-        <div class="create-section">
-          <div class="divider">
-            <span>OR CREATE NEW</span>
-          </div>
-          @if (!showCreateForm) {
-            <button class="btn-create-collection" (click)="showCreateForm = true">
-              <i class="fas fa-plus"></i>
-              Create New Collection
-            </button>
-          } @else {
-            <div class="create-form">
-              <input
-                type="text"
-                class="k-textbox create-input"
-                [(ngModel)]="newCollectionName"
-                placeholder="Enter collection name"
-                (keydown.enter)="createCollection()"
-                #newCollectionInput>
-              <div class="create-actions">
-                <button class="btn-create" kendoButton (click)="createCollection()" [disabled]="isCreatingCollection || !newCollectionName.trim()">
-                  @if (isCreatingCollection) {
-                    <i class="fas fa-spinner fa-spin"></i>
+          <!-- Collections List -->
+          @if (!isLoading && !errorMessage) {
+            <div class="collections-list">
+              @if (displayedCollections.length === 0) {
+                <div class="empty-state">
+                  @if (searchQuery) {
+                    <i class="fas fa-search"></i>
+                    <p>No collections found matching "{{ searchQuery }}"</p>
+                  } @else if (currentParentId) {
+                    <i class="fas fa-folder-open"></i>
+                    <p>No sub-collections available</p>
                   } @else {
-                    Create
+                    <i class="fas fa-folder"></i>
+                    <p>No collections available</p>
+                    <p class="hint">Create a new collection to get started</p>
                   }
-                </button>
-                <button class="btn-cancel" kendoButton (click)="showCreateForm = false; newCollectionName = ''">
-                  Cancel
-                </button>
-              </div>
+                </div>
+              } @else {
+                @for (node of displayedCollections; track node.collection.ID) {
+                  <div class="collection-item"
+                    [class.already-added]="node.alreadyContainsArtifact"
+                    (click)="toggleSelection(node)">
+                    <div class="collection-checkbox">
+                      <input
+                        type="checkbox"
+                        [checked]="node.selected"
+                        [disabled]="node.alreadyContainsArtifact"
+                        (click)="$event.stopPropagation(); toggleSelection(node)">
+                    </div>
+                    <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
+                    <span class="collection-name">{{ node.collection.Name }}</span>
+                    @if (node.alreadyContainsArtifact) {
+                      <span class="already-added-badge">
+                        <i class="fas fa-check-circle"></i> Already added
+                      </span>
+                    }
+                    @if (node.hasChildren) {
+                      <button
+                        class="drill-down-btn"
+                        (click)="$event.stopPropagation(); drillIntoCollection(node.collection)"
+                        title="View sub-collections">
+                        <i class="fas fa-chevron-right"></i>
+                      </button>
+                    }
+                  </div>
+                }
+              }
             </div>
           }
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()">
-          Cancel
-        </button>
-        <button kendoButton
-                [primary]="true"
-                (click)="onSave()"
-                [disabled]="selectedCollections.length === 0 || isSaving">
-          @if (isSaving) {
-            <i class="fas fa-spinner fa-spin"></i> Saving...
-          } @else {
-            <i class="fas fa-save"></i> Save to {{ selectedCollections.length }} Collection(s)
+          <!-- Loading State -->
+          @if (isLoading) {
+            <div class="loading-state">
+              <mj-loading text="Loading collections..." size="medium"></mj-loading>
+            </div>
           }
-        </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+          <!-- Error State -->
+          @if (errorMessage) {
+            <div class="error-state">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>{{ errorMessage }}</span>
+            </div>
+          }
+          <!-- Selected Collections Summary -->
+          @if (selectedCollections.length > 0) {
+            <div class="selected-summary">
+              <i class="fas fa-check-circle"></i>
+              <span>{{ selectedCollections.length }} collection(s) selected</span>
+            </div>
+          }
+          <!-- Create New Collection Section -->
+          <div class="create-section">
+            <div class="divider">
+              <span>OR CREATE NEW</span>
+            </div>
+            @if (!showCreateForm) {
+              <button class="btn-create-collection" (click)="showCreateForm = true">
+                <i class="fas fa-plus"></i>
+                Create New Collection
+              </button>
+            } @else {
+              <div class="create-form">
+                <input
+                  type="text"
+                  class="k-textbox create-input"
+                  [(ngModel)]="newCollectionName"
+                  placeholder="Enter collection name"
+                  (keydown.enter)="createCollection()"
+                  #newCollectionInput>
+                <div class="create-actions">
+                  <button class="btn-create" kendoButton (click)="createCollection()" [disabled]="isCreatingCollection || !newCollectionName.trim()">
+                    @if (isCreatingCollection) {
+                      <i class="fas fa-spinner fa-spin"></i>
+                    } @else {
+                      Create
+                    }
+                  </button>
+                  <button class="btn-cancel" kendoButton (click)="showCreateForm = false; newCollectionName = ''">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+        <kendo-dialog-actions>
+          <button kendoButton (click)="onCancel()">
+            Cancel
+          </button>
+          <button kendoButton
+            [primary]="true"
+            (click)="onSave()"
+            [disabled]="selectedCollections.length === 0 || isSaving">
+            @if (isSaving) {
+              <i class="fas fa-spinner fa-spin"></i> Saving...
+            } @else {
+              <i class="fas fa-save"></i> Save to {{ selectedCollections.length }} Collection(s)
+            }
+          </button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .picker-modal {
       display: flex;
@@ -499,14 +494,14 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   @Output() saved = new EventEmitter<string[]>(); // Emits selected collection IDs
   @Output() cancelled = new EventEmitter<void>();
 
-  public allCollections: CollectionEntity[] = [];
+  public allCollections: MJCollectionEntity[] = [];
   public displayedCollections: CollectionNode[] = [];
-  public selectedCollections: CollectionEntity[] = [];
+  public selectedCollections: MJCollectionEntity[] = [];
   public userPermissions: Map<string, CollectionPermission> = new Map();
 
   public navigationPath: CollectionNode[] = []; // Breadcrumb trail
   public currentParentId: string | null = null;
-  public currentParentCollection: CollectionEntity | undefined = undefined;
+  public currentParentCollection: MJCollectionEntity | undefined = undefined;
 
   public searchQuery: string = '';
   public isLoading: boolean = false;
@@ -555,7 +550,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
       // Load all collections in environment
       const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>({
+      const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `EnvironmentID='${this.environmentId}'`,
         OrderBy: 'Name ASC',
@@ -611,17 +606,17 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     });
   }
 
-  private displayRootCollections(editableCollections: CollectionEntity[]): void {
+  private displayRootCollections(editableCollections: MJCollectionEntity[]): void {
     const rootCollections = editableCollections.filter(c => !c.ParentID);
     this.displayedCollections = rootCollections.map(c => this.createNode(c, editableCollections));
   }
 
-  private displayChildCollections(parentId: string, editableCollections: CollectionEntity[]): void {
+  private displayChildCollections(parentId: string, editableCollections: MJCollectionEntity[]): void {
     const childCollections = editableCollections.filter(c => c.ParentID === parentId);
     this.displayedCollections = childCollections.map(c => this.createNode(c, editableCollections));
   }
 
-  private createNode(collection: CollectionEntity, allEditableCollections: CollectionEntity[]): CollectionNode {
+  private createNode(collection: MJCollectionEntity, allEditableCollections: MJCollectionEntity[]): CollectionNode {
     const hasChildren = allEditableCollections.some(c => c.ParentID === collection.ID);
     const alreadyContainsArtifact = this.excludeCollectionIds.includes(collection.ID);
     return {
@@ -632,7 +627,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     };
   }
 
-  canEdit(collection: CollectionEntity): boolean {
+  canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
     if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
       return true;
@@ -659,7 +654,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     }
   }
 
-  drillIntoCollection(collection: CollectionEntity): void {
+  drillIntoCollection(collection: MJCollectionEntity): void {
     // Add current location to navigation path
     const editableCollections = this.allCollections.filter(c => {
       return this.canEdit(c);
@@ -691,7 +686,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     this.searchQuery = '';
   }
 
-  navigateToCollection(collection: CollectionEntity): void {
+  navigateToCollection(collection: MJCollectionEntity): void {
     // Find the index of this collection in the navigation path
     const index = this.navigationPath.findIndex(n => n.collection.ID === collection.ID);
 
@@ -745,7 +740,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     try {
       this.isCreatingCollection = true;
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = this.newCollectionName.trim();
       collection.EnvironmentID = this.environmentId;

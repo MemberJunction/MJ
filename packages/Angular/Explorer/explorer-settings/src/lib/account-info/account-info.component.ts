@@ -1,22 +1,23 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 
 /**
  * Displays read-only account information for the current user.
  * Shows name, email, role, creation date, and last login.
  */
 @Component({
+  standalone: false,
   selector: 'mj-account-info',
   templateUrl: './account-info.component.html',
   styleUrls: ['./account-info.component.css']
 })
 export class AccountInfoComponent implements OnInit {
   IsLoading = true;
-  CurrentUser: UserEntity | null = null;
+  CurrentUser: MJUserEntity | null = null;
   ErrorMessage = '';
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
 
   async ngOnInit(): Promise<void> {
     await this.LoadAccountInfo();
@@ -31,7 +32,7 @@ export class AccountInfoComponent implements OnInit {
       const userInfo = md.CurrentUser;
 
       // Load full user entity for additional details
-      const user = await md.GetEntityObject<UserEntity>('Users');
+      const user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
       const loaded = await user.Load(userInfo.ID);
 
       if (loaded) {
@@ -43,8 +44,10 @@ export class AccountInfoComponent implements OnInit {
       this.ErrorMessage = 'Failed to load account information.';
       console.error('Error loading account info:', error);
     } finally {
-      this.IsLoading = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.IsLoading = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 

@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Auth Shell Component
+ * MemberJunction Auth Shell Component
  *
  * Handles authentication flow and initialization for MJ applications.
  * This component encapsulates all the auth logic that was previously in app.component.ts
@@ -15,17 +15,22 @@ import { MJInitializationService } from '../services/initialization.service';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '../bootstrap.types';
 
 @Component({
+  standalone: false,
   selector: 'mj-auth-shell',
   template: `
     <div class="mj-auth-shell">
-      <ng-content *ngIf="!HasError || showValidationOnly"></ng-content>
-
-      <div *ngIf="HasError && !showValidationOnly" class="error-container">
-        <h2>Error</h2>
-        <p>{{ ErrorMessage }}</p>
-      </div>
+      @if (!HasError || showValidationOnly) {
+        <ng-content></ng-content>
+      }
+    
+      @if (HasError && !showValidationOnly) {
+        <div class="error-container">
+          <h2>Error</h2>
+          <p>{{ ErrorMessage }}</p>
+        </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .mj-auth-shell {
       width: 100%;
@@ -61,7 +66,7 @@ export class MJAuthShellComponent implements OnInit {
   ) {}
 
   async ngOnInit() {
-    console.log('🚀 MemberJunction 3.0 - Auth Shell Initializing');
+    console.log('🚀 MemberJunction - Auth Shell Initializing');
 
     SetProductionStatus(this.environment.production);
     this.initialPath = window.location.pathname + (window.location.search ? window.location.search : '');

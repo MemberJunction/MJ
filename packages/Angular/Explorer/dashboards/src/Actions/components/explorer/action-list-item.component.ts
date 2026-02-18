@@ -5,10 +5,11 @@ import {
   EventEmitter,
   ChangeDetectionStrategy
 } from '@angular/core';
-import { ActionCategoryEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { ActionEntityExtended } from '@memberjunction/actions-base';
 
 @Component({
+  standalone: false,
   selector: 'mj-action-list-item',
   templateUrl: './action-list-item.component.html',
   styleUrls: ['./action-list-item.component.css'],
@@ -16,7 +17,7 @@ import { ActionEntityExtended } from '@memberjunction/actions-base';
 })
 export class ActionListItemComponent {
   @Input() Action!: ActionEntityExtended;
-  @Input() Categories: Map<string, ActionCategoryEntity> = new Map();
+  @Input() Categories: Map<string, MJActionCategoryEntity> = new Map();
   @Input() IsCompact = false;
   @Output() ActionClick = new EventEmitter<ActionEntityExtended>();
   @Output() EditClick = new EventEmitter<ActionEntityExtended>();

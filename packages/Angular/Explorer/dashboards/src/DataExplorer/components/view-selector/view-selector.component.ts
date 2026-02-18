@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, OnDestroy, ViewEncapsulation } from '@angular/core';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
@@ -43,9 +43,11 @@ export interface SaveViewRequestedEvent {
  * - "Open in Tab" button for saved views
  */
 @Component({
+  standalone: false,
   selector: 'mj-view-selector',
   templateUrl: './view-selector.component.html',
-  styleUrls: ['./view-selector.component.css']
+  styleUrls: ['./view-selector.component.css'],
+  encapsulation: ViewEncapsulation.None
 })
 export class ViewSelectorComponent implements OnChanges, OnDestroy {
   /**
@@ -98,12 +100,29 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
    */
   @Output() exportRequested = new EventEmitter<void>();
 
+  /**
+   * Emitted when user wants to duplicate a view (F-005)
+   */
+  @Output() duplicateViewRequested = new EventEmitter<string>();
+
+  /**
+   * Emitted when user wants to use the quick save dialog (F-001)
+   * Emits true when user explicitly requested "Save As New", false for general save
+   */
+  @Output() quickSaveRequested = new EventEmitter<boolean>();
+
+  /**
+   * Emitted when user wants to revert to saved state (F-007)
+   */
+  @Output() revertRequested = new EventEmitter<void>();
+
   // Internal state
   public isLoading: boolean = false;
   public isDropdownOpen: boolean = false;
   public myViews: ViewListItem[] = [];
   public sharedViews: ViewListItem[] = [];
   public selectedView: UserViewEntityExtended | null = null;
+  public searchText: string = '';
 
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
@@ -149,7 +168,7 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
 
       // Load all views for this entity that the user owns OR that are shared
       const result = await rv.RunView<UserViewEntityExtended>({
-        EntityName: 'User Views',
+        EntityName: 'MJ: User Views',
         ExtraFilter: `EntityID = '${this.entity.ID}' AND (UserID = '${userId}' OR IsShared = 1)`,
         OrderBy: 'Name',
         ResultType: 'entity_object'
@@ -243,6 +262,7 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
    */
   closeDropdown(): void {
     this.isDropdownOpen = false;
+    this.searchText = '';
     this.cdr.detectChanges();
   }
 
@@ -273,10 +293,10 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
   }
 
   /**
-   * Request to save as a new view
+   * Request to save as a new view - opens Quick Save dialog in "Save As New" mode
    */
   onSaveAsNewView(): void {
-    this.saveViewRequested.emit({ saveAsNew: true });
+    this.quickSaveRequested.emit(true);
     this.closeDropdown();
   }
 
@@ -319,6 +339,30 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
   }
 
   /**
+   * Request to duplicate a view (F-005)
+   */
+  onDuplicateView(viewId: string, event: MouseEvent): void {
+    event.stopPropagation(); // Don't select the view
+    this.duplicateViewRequested.emit(viewId);
+    this.closeDropdown();
+  }
+
+  /**
+   * Request to open the quick save dialog (F-001)
+   */
+  onQuickSave(): void {
+    this.quickSaveRequested.emit(false);
+    this.closeDropdown();
+  }
+
+  /**
+   * Request to revert view to saved state (F-007)
+   */
+  onRevert(): void {
+    this.revertRequested.emit();
+  }
+
+  /**
    * Check if there are any views to show
    */
   get hasViews(): boolean {
@@ -337,5 +381,115 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
    */
   onClickOutside(event: Event): void {
     this.closeDropdown();
+  }
+
+  // ========================================
+  // RICH VIEW PANEL: Search & Metadata
+  // ========================================
+
+  /**
+   * My views filtered by search text
+   */
+  get filteredMyViews(): ViewListItem[] {
+    if (!this.searchText.trim()) return this.myViews;
+    const term = this.searchText.toLowerCase();
+    return this.myViews.filter(v =>
+      v.name.toLowerCase().includes(term) ||
+      (v.entity.Description || '').toLowerCase().includes(term)
+    );
+  }
+
+  /**
+   * Shared views filtered by search text
+   */
+  get filteredSharedViews(): ViewListItem[] {
+    if (!this.searchText.trim()) return this.sharedViews;
+    const term = this.searchText.toLowerCase();
+    return this.sharedViews.filter(v =>
+      v.name.toLowerCase().includes(term) ||
+      (v.entity.Description || '').toLowerCase().includes(term)
+    );
+  }
+
+  /**
+   * Get the number of filters configured in a view by parsing its FilterState
+   */
+  getViewFilterCount(view: ViewListItem): number {
+    try {
+      const filterState = view.entity.FilterState;
+      if (!filterState) return 0;
+      const parsed = JSON.parse(filterState);
+      if (parsed?.filters?.length) return parsed.filters.length;
+      // CompositeFilterDescriptor format
+      if (parsed?.logic && parsed?.filters) return parsed.filters.length;
+      return 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Get the number of visible columns in a view by parsing GridState
+   */
+  getViewColumnCount(view: ViewListItem): number {
+    try {
+      const gridState = view.entity.GridState;
+      if (!gridState) return 0;
+      const parsed = JSON.parse(gridState);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((c: Record<string, unknown>) => !c['hidden']).length;
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Get sort info string from a view's SortState
+   */
+  getViewSortInfo(view: ViewListItem): string {
+    try {
+      const sortState = view.entity.SortState;
+      if (!sortState) return '';
+      const parsed = JSON.parse(sortState);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return `${parsed.length} sort${parsed.length > 1 ? 's' : ''}`;
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Select a specific view and open the config panel for it
+   */
+  onConfigureViewById(viewId: string, event: MouseEvent): void {
+    event.stopPropagation();
+    // First select the view, then open config
+    const item = this.myViews.find(v => v.id === viewId) || this.sharedViews.find(v => v.id === viewId);
+    if (item) {
+      this.selectedView = item.entity;
+      this.viewSelected.emit({ viewId: item.id, view: item.entity });
+    }
+    this.configureViewRequested.emit();
+    this.closeDropdown();
+  }
+
+  /**
+   * Open a specific view in a new tab
+   */
+  onOpenViewInTab(viewId: string, event: MouseEvent): void {
+    event.stopPropagation();
+    this.openInTabRequested.emit(viewId);
+    this.closeDropdown();
+  }
+
+  /**
+   * Reset to default view (select no view)
+   */
+  onResetToDefault(): void {
+    this.selectDefault();
   }
 }

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
 /**
@@ -14,69 +14,83 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
     <div class="simple-task-viewer">
       <div class="list-layout">
         <div class="task-list" [class.with-detail]="selectedTask">
-        <div *ngFor="let task of tasks"
-             class="task-item"
-             [class.completed]="task.Status === 'Complete'"
-             [class.selected]="selectedTask?.ID === task.ID"
-             (click)="onTaskClick(task)">
-
-          <!-- Status Icon -->
-          <div class="status-icon" [class.complete]="task.Status === 'Complete'">
-            <i class="fas" [ngClass]="getStatusIcon(task.Status)"></i>
-          </div>
-
-          <!-- Task Content -->
-          <div class="task-content">
-            <div class="task-header">
-              <div class="task-title-row">
-                <span class="task-title" [class.completed-text]="task.Status === 'Complete'">
-                  {{ task.Name }}
-                  <i *ngIf="task.Status === 'Complete'" class="fas fa-check completed-check"></i>
-                </span>
-                <!-- Compact progress indicator for all tasks -->
-                <div *ngIf="task.PercentComplete != null" class="task-progress-compact">
-                  <div class="progress-bar-compact">
-                    <div class="progress-fill-compact"
-                         [style.width.%]="task.PercentComplete"
-                         [class.complete]="task.Status === 'Complete'"></div>
+          @for (task of tasks; track task) {
+            <div
+              class="task-item"
+              [class.completed]="task.Status === 'Complete'"
+              [class.selected]="selectedTask?.ID === task.ID"
+              (click)="onTaskClick(task)">
+              <!-- Status Icon -->
+              <div class="status-icon" [class.complete]="task.Status === 'Complete'">
+                <i class="fas" [ngClass]="getStatusIcon(task.Status)"></i>
+              </div>
+              <!-- Task Content -->
+              <div class="task-content">
+                <div class="task-header">
+                  <div class="task-title-row">
+                    <span class="task-title" [class.completed-text]="task.Status === 'Complete'">
+                      {{ task.Name }}
+                      @if (task.Status === 'Complete') {
+                        <i class="fas fa-check completed-check"></i>
+                      }
+                    </span>
+                    <!-- Compact progress indicator for all tasks -->
+                    @if (task.PercentComplete != null) {
+                      <div class="task-progress-compact">
+                        <div class="progress-bar-compact">
+                          <div class="progress-fill-compact"
+                            [style.width.%]="task.PercentComplete"
+                          [class.complete]="task.Status === 'Complete'"></div>
+                        </div>
+                        <span class="progress-text-compact">{{ task.PercentComplete }}%</span>
+                      </div>
+                    }
                   </div>
-                  <span class="progress-text-compact">{{ task.PercentComplete }}%</span>
+                  <span class="task-meta">
+                    @if (task.DueAt) {
+                      <span class="due-date">
+                        <i class="far fa-calendar"></i>
+                        {{ formatDate(task.DueAt) }}
+                      </span>
+                    }
+                    @if (task.User) {
+                      <span class="assigned-to">
+                        <i class="far fa-user"></i>
+                        {{ task.User }}
+                      </span>
+                    }
+                  </span>
                 </div>
               </div>
-              <span class="task-meta">
-                <span *ngIf="task.DueAt" class="due-date">
-                  <i class="far fa-calendar"></i>
-                  {{ formatDate(task.DueAt) }}
-                </span>
-                <span *ngIf="task.User" class="assigned-to">
-                  <i class="far fa-user"></i>
-                  {{ task.User }}
-                </span>
-              </span>
             </div>
+          }
+    
+          @if (!tasks || tasks.length === 0) {
+            <div class="no-tasks">
+              <i class="fas fa-tasks"></i>
+              <p>No tasks to display</p>
+            </div>
+          }
+        </div>
+    
+        @if (selectedTask) {
+          <div class="list-resizer"
+          (mousedown)="startResize($event)"></div>
+        }
+    
+        @if (selectedTask) {
+          <div class="task-detail-panel" [style.width.px]="detailPanelWidth">
+            <mj-task-detail-panel
+              [task]="selectedTask"
+              [agentRunId]="getAgentRunId(selectedTask)"
+              (closePanel)="closeDetailPanel()"
+              (openEntityRecord)="onOpenEntityRecord($event)">
+            </mj-task-detail-panel>
           </div>
-        </div>
-
-        <div *ngIf="!tasks || tasks.length === 0" class="no-tasks">
-          <i class="fas fa-tasks"></i>
-          <p>No tasks to display</p>
-        </div>
-        </div>
-
-        <div *ngIf="selectedTask" class="list-resizer"
-             (mousedown)="startResize($event)"></div>
-
-        <div *ngIf="selectedTask" class="task-detail-panel" [style.width.px]="detailPanelWidth">
-          <mj-task-detail-panel
-            [task]="selectedTask"
-            [agentRunId]="getAgentRunId(selectedTask)"
-            (closePanel)="closeDetailPanel()"
-            (openEntityRecord)="onOpenEntityRecord($event)">
-          </mj-task-detail-panel>
-        </div>
+        }
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .simple-task-viewer {
       height: 100%;
@@ -281,12 +295,12 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
   `]
 })
 export class SimpleTaskViewerComponent implements OnChanges {
-  @Input() tasks: TaskEntity[] = [];
+  @Input() tasks: MJTaskEntity[] = [];
   @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
-  @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
-  public selectedTask: TaskEntity | null = null;
+  public selectedTask: MJTaskEntity | null = null;
   public detailPanelWidth: number = 400;
 
   private isResizing = false;
@@ -297,12 +311,12 @@ export class SimpleTaskViewerComponent implements OnChanges {
     // Tasks are already loaded
   }
 
-  public onTaskClick(task: TaskEntity): void {
+  public onTaskClick(task: MJTaskEntity): void {
     this.selectedTask = task;
     this.taskClicked.emit(task);
   }
 
-  public getAgentRunId(task: TaskEntity): string | null {
+  public getAgentRunId(task: MJTaskEntity): string | null {
     return this.agentRunMap?.get(task.ID) || null;
   }
 

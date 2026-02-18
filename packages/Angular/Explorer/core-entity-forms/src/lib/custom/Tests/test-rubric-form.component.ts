@@ -1,13 +1,12 @@
-import { Component, ChangeDetectionStrategy, ElementRef, ChangeDetectorRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
-import { TestRubricEntity } from '@memberjunction/core-entities';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { MJTestRubricEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
-import { TestRubricFormComponent } from '../../generated/Entities/TestRubric/testrubric.form.component';
+import { MJTestRubricFormComponent } from '../../generated/Entities/MJTestRubric/mjtestrubric.form.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Rubrics')
 @Component({
+  standalone: false,
   selector: 'mj-test-rubric-form',
   template: `
     <div class="rubric-form">
@@ -58,19 +57,6 @@ import { TestRubricFormComponent } from '../../generated/Entities/TestRubric/tes
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestRubricFormComponentExtended extends TestRubricFormComponent {
-  public override record!: TestRubricEntity;
-
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
+export class TestRubricFormComponentExtended extends MJTestRubricFormComponent {
+  public override record!: MJTestRubricEntity;
 }
-
-export function LoadTestRubricFormComponentExtended() {}
-LoadTestRubricFormComponentExtended();

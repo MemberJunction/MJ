@@ -4,7 +4,7 @@
       "Name": "Grok 4",
       "PowerRank": 19,
       "Description": "x.ai's frontier reasoning model with advanced capabilities for complex tasks. Features a 256K token context window and state-of-the-art performance across various domains.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 6,
       "CostRank": 8,
@@ -84,8 +84,8 @@
       "ID": "8B309C04-F5DC-4619-BA5E-F7A3BD55A41B"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.625Z",
-      "checksum": "5e0a8e7499fa97339334c9fd961904b2c1594bc495b9469daabc21e6d7f18bdc"
+      "lastModified": "2026-02-13T21:08:24.188Z",
+      "checksum": "a5bc4d855fedc89362e2711d5f29685932d1390f083084f105e0bb532fdb707a"
     }
   },
   {
@@ -93,7 +93,7 @@
       "Name": "Claude 4.5 Opus",
       "PowerRank": 21,
       "Description": "Anthropic's largest, intelligent, efficient, and the best model in the world for coding, agents, and computer use.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 10,
@@ -173,8 +173,8 @@
       "ID": "52B79053-6E59-44E9-B7D0-DA96C4EA3CF1"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.623Z",
-      "checksum": "e0d43ea456f013f063647e694e2f7a6f2cf7ba3a3ea6758ced4e273f5a3052ab"
+      "lastModified": "2026-02-13T21:08:24.191Z",
+      "checksum": "702367d438d1499cc5b040f2498f298e597008f4400e8617cef9ee44a40ae19a"
     }
   },
   {
@@ -182,7 +182,7 @@
       "Name": "Claude 4.5 Sonnet",
       "PowerRank": 19,
       "Description": "Anthropic's most capable coding model with advanced reasoning and analysis capabilities. Features a 200K token context window with extended thinking support, state-of-the-art performance on coding benchmarks, and excellent instruction following.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 6,
@@ -262,8 +262,8 @@
       "ID": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.623Z",
-      "checksum": "43462682a921eddbebfa906aad375c2f60292d16491fc40b398e33e7e1897a6e"
+      "lastModified": "2026-02-13T21:08:24.192Z",
+      "checksum": "48fa55504b1b1154bd2b8c314b0f1afce29aafc2193ab7191a0ed0941da99df1"
     }
   },
   {
@@ -271,7 +271,7 @@
       "Name": "GPT 4.o Image 1.5",
       "PowerRank": 18,
       "Description": "OpenAI's latest native multimodal image generation model (December 2025). Built on GPT-4o architecture for exceptional image quality. Supports up to 2K resolution, HD quality, and advanced prompt understanding. Includes editing and variation capabilities.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Image Generator",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 7,
@@ -350,8 +350,8 @@
       "ID": "4B9F8E72-1C5D-4A3E-B6F8-9D2E4A7C3B1A"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.628Z",
-      "checksum": "1f28ca179440950c757cf6969025611c9659765f18fda6f207376da639eb4474"
+      "lastModified": "2026-02-13T21:08:24.194Z",
+      "checksum": "7777ca4b97862393d6a47e8c949d4742824f851790bdd5dfc3d4384bcdfdd316"
     }
   },
   {
@@ -359,7 +359,7 @@
       "Name": "Nano Banana Pro",
       "PowerRank": 20,
       "Description": "Google's most advanced image generation model (November 2025), officially Gemini 3 Pro Image. Exceptional quality with support for up to 4K resolution (3840x2160). Features advanced style control, negative prompts, and seed-based reproducibility. State-of-the-art prompt understanding and image editing capabilities.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Image Generator",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 6,
@@ -438,8 +438,8 @@
       "ID": "A1E5C9D3-7B2F-48E6-9A4C-5D8F1E3B7C2A"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.627Z",
-      "checksum": "f89db26f74d6891808f01bfddefca48cc2c666b184311d22f8a26ddfcc69257c"
+      "lastModified": "2026-02-13T21:08:24.196Z",
+      "checksum": "c1b198db70367561246c03a0861389583e2f63ff0979c3b058480902bde847b1"
     }
   },
   {
@@ -447,7 +447,7 @@
       "Name": "Gemini 3 Flash",
       "PowerRank": 22,
       "Description": "Google's advanced multimodal model with 1M token input context window and 64k output capacity. Achieves Intelligence Index score of 71 (13-point improvement from previous version) with 89% on MMLU-Pro, 90% on GPQA Diamond, and second highest score on MMMU-Pro for multimodal reasoning. Supports text, image, video, and audio input with tool calling, structured outputs, and JSON mode. Knowledge cutoff of January 2025.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 3,
@@ -589,8 +589,8 @@
       "ID": "7B31F48E-EDA3-47B4-9602-D98B7EB1AF45"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.652Z",
-      "checksum": "37272f589aa5cfef5c36b6f3c748234fbc91f7f12ebc5e99c91beaf2ac449402"
+      "lastModified": "2026-02-13T21:08:24.197Z",
+      "checksum": "112ad83e1c0bc73a9c790e8b12f7cabbb06b908d7561d22a4e9fd6d82701a77b"
     }
   },
   {
@@ -598,7 +598,7 @@
       "Name": "Gemini 3 Pro",
       "PowerRank": 25,
       "Description": "Google's most powerful agentic and multimodal model with state-of-the-art reasoning. Features industry-leading 1M token input context window and 64k output capacity. Achieves top scores across 19 of 20 major AI benchmarks (1501 Elo on LMArena). Exceptional multimodal understanding, coding, and agentic capabilities with knowledge cutoff of January 2025.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 10,
@@ -740,15 +740,15 @@
       "ID": "B7267218-302B-4C09-9875-8DF06AAA1695"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:13.651Z",
-      "checksum": "2f0c5c4179d3bd2828ae6e089eee5acd39b4775ea4ca9566ea16f42b20542fef"
+      "lastModified": "2026-02-13T21:08:24.199Z",
+      "checksum": "e83c1066a20c429f9d78dbd03d5f0e1700e64717f0ebb35a7bfc0c24e8ef3a22"
     }
   },
   {
     "fields": {
       "Name": "LLM Reranker",
       "Description": "LLM-based semantic reranking using AI Prompts. Uses any configured language model to score document relevance. Useful when dedicated reranker APIs are not available.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Reranker",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
       "PowerRank": 50,
       "IsActive": true,
       "SpeedRank": 0,
@@ -759,15 +759,15 @@
       "ID": "7D3E8F5A-C621-4B89-9E12-8A4C2F7D1B90"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.310Z",
-      "checksum": "6856a7c8b71c98c4f3435c453fa3a0deecf691971bfb54bdafc53ac514bc0ce4"
+      "lastModified": "2026-02-13T21:08:24.200Z",
+      "checksum": "e1731a32d37edc3f13f5c4af1dc741f707d516630f0c80dfe72a68222e3db18f"
     }
   },
   {
     "fields": {
       "Name": "Qwen 3 235B",
       "Description": "Largest Qwen 3 series model. Provides advanced multilingual language model from the Qwen series supporting 100+ languages. Offers strong reasoning, instruction-following, and creative writing capabilities with efficient performance for general-purpose dialogue and complex logical tasks.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 12,
       "IsActive": true,
       "SpeedRank": 0,
@@ -870,15 +870,15 @@
       "ID": "46B2443E-F36B-1410-8DB7-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.494Z",
-      "checksum": "fc4b4d95a339ce22a7c0f74f819bfb967616395fb3b52137f8250f84e3397898"
+      "lastModified": "2026-02-13T21:08:24.202Z",
+      "checksum": "b19f6a7392ea252245b969ffa867f0dcb76efbe802d0a90c6be04385a04d47bf"
     }
   },
   {
     "fields": {
       "Name": "Llama 2 70B / Groq",
       "Description": "Llama 2 70B on Groq",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -913,15 +913,15 @@
       "ID": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.523Z",
-      "checksum": "e3c371ecd74275296cff9f47e9b1061841c0facb278bca0ccabc4804d7a43f42"
+      "lastModified": "2026-02-13T21:08:24.203Z",
+      "checksum": "83b6947f643442c9d7b7f4ac8c754998d0c5947ef256e9c309117df7ecec4da0"
     }
   },
   {
     "fields": {
       "Name": "Groq Compound",
       "Description": "Compound Agent Model from Groq",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 0,
@@ -957,15 +957,15 @@
       "ID": "F7D2EE33-2134-F011-A5F1-6045BDD9AD00"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.529Z",
-      "checksum": "565904fea1c6b956dbac39f7a18cd90b9be229e425eb1a6e8065c1f303872617"
+      "lastModified": "2026-02-13T21:08:24.334Z",
+      "checksum": "0a7e4e147b412bacd357e0fccb3ad8a38ec46d042268adb850b57440bea6db7f"
     }
   },
   {
     "fields": {
       "Name": "gte-small (Local)",
       "Description": "General Text Embeddings - Small model for efficiency. Good balance of quality and speed. Runs locally via Transformers.js.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "PowerRank": 7,
       "IsActive": true,
       "SpeedRank": 9,
@@ -1004,15 +1004,15 @@
       "ID": "43536203-DA8C-4232-B1A7-2D46E525B6CD"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.547Z",
-      "checksum": "3e9aabd4f42461bfc4faec3dddcd782b78dd9be95fa43b7b1b6d450ac426e3e1"
+      "lastModified": "2026-02-13T21:08:24.336Z",
+      "checksum": "a68fa60f869eb3cd24f7f73b613ec66c08e7b9fc22132dfaeba4f462f42512dc"
     }
   },
   {
     "fields": {
       "Name": "paraphrase-multilingual-MiniLM-L12-v2 (Local)",
       "Description": "Multilingual sentence embeddings supporting 50+ languages. Ideal for international applications. Runs locally via Transformers.js.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "PowerRank": 7,
       "IsActive": true,
       "SpeedRank": 7,
@@ -1051,15 +1051,15 @@
       "ID": "113FE682-82DB-487D-B943-472D130DAC53"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.547Z",
-      "checksum": "33e58321ffff685e823884a91f3d7fdd16ea47c6741aea358264d2f1e4f4eb83"
+      "lastModified": "2026-02-13T21:08:24.338Z",
+      "checksum": "ac2bca869148208da756533bf57cab18d495c41a340a0637e513b9689aa47451"
     }
   },
   {
     "fields": {
       "Name": "all-mpnet-base-v2 (Local)",
       "Description": "Best quality general-purpose sentence embeddings. Highest accuracy but larger model size. Runs locally via Transformers.js.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "PowerRank": 9,
       "IsActive": true,
       "SpeedRank": 6,
@@ -1098,15 +1098,15 @@
       "ID": "1D45AA65-41EC-4572-9ECD-AB2826C9B059"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.548Z",
-      "checksum": "cbaba835fc05855ff46cfda3c0992b0b4f522731e4eac28abdcc004ed20ca2f1"
+      "lastModified": "2026-02-13T21:08:24.339Z",
+      "checksum": "e732c547194a4b167ff9db73713c530f1312560fa3546938862dac4ffac7744f"
     }
   },
   {
     "fields": {
       "Name": "all-MiniLM-L12-v2 (Local)",
       "Description": "Higher quality sentence embeddings with more layers. Better accuracy than L6 variant. Runs locally via Transformers.js.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "PowerRank": 7,
       "IsActive": true,
       "SpeedRank": 8,
@@ -1145,15 +1145,15 @@
       "ID": "2E328C31-9B9D-4E78-B084-C8381BC82F2F"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.557Z",
-      "checksum": "10a8c7a215f8c1385571ffb8c8292022dbca4a78931b05f646d3ed2284c46a85"
+      "lastModified": "2026-02-13T21:08:24.341Z",
+      "checksum": "0dd56aa9e66694e0688289c2aa38b764b76c6aac102733a4e3a1702e6ba010ae"
     }
   },
   {
     "fields": {
       "Name": "bge-small-en-v1.5 (Local)",
       "Description": "BAAI General Embeddings - Small English model. State-of-the-art performance for English text. Runs locally via Transformers.js.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 9,
@@ -1192,15 +1192,15 @@
       "ID": "521F4AEE-A724-4190-8728-ADB47E9F39D1"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.558Z",
-      "checksum": "383f462595a1d3b0b2fce0885fb14592f99a51dd4ae3ca79b6beeb1dfb49bee5"
+      "lastModified": "2026-02-13T21:08:24.344Z",
+      "checksum": "f1fdaefca92251a0f133f251a1d899b66b35c02d00aedf1a38fcc8a596827ac0"
     }
   },
   {
     "fields": {
       "Name": "all-MiniLM-L6-v2 (Local)",
       "Description": "Lightweight general-purpose sentence embeddings model. Optimized for speed while maintaining good quality. Runs locally via Transformers.js.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "PowerRank": 6,
       "IsActive": true,
       "SpeedRank": 10,
@@ -1239,14 +1239,14 @@
       "ID": "1302E01E-6E69-42BE-BF00-DFF764FC63FE"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.558Z",
-      "checksum": "711f46bc7b2d6b53bff13c3d9016678ff77263cd795c8a0c30eaa4f05ec174e8"
+      "lastModified": "2026-02-13T21:08:24.346Z",
+      "checksum": "85b97a9f90f3fd3d147d48f05b909cc9cfb9ba05347ca42041e0ca96345d884f"
     }
   },
   {
     "fields": {
       "Name": "text-embedding-3-small",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "IsActive": true,
       "InheritTypeModalities": true
     },
@@ -1298,14 +1298,14 @@
       "ID": "DCA5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.615Z",
-      "checksum": "f095bd19ea7a420cedc1b3e75b8cf46e4d4ad884aa2295a0119a9453e48ef460"
+      "lastModified": "2026-02-13T21:08:24.347Z",
+      "checksum": "f4eebb8c16807edd322214a121e6f8efb6741b9c6fd6cec445be81e881162f7f"
     }
   },
   {
     "fields": {
       "Name": "GPT 4",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": false,
       "InheritTypeModalities": true
     },
@@ -1358,14 +1358,14 @@
       "ID": "D9A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.615Z",
-      "checksum": "11a3fdba24ee7eb02764d1b13a762c6a243e891af7476c7f16df653518ba1bb2"
+      "lastModified": "2026-02-13T21:08:24.349Z",
+      "checksum": "3a79342420b0500aeb8434f9a6e2441d9d7b5d0b0ce5cc21634450fffeb083ed"
     }
   },
   {
     "fields": {
       "Name": "GPT 3.5",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": false,
       "InheritTypeModalities": true
     },
@@ -1418,14 +1418,14 @@
       "ID": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.615Z",
-      "checksum": "8345031cda9c88fd95f4b5b0882975ed4471c421a83bfba10fdaaf1af312e423"
+      "lastModified": "2026-02-13T21:08:24.351Z",
+      "checksum": "43938e5dccc734fd54913a8b904919c0e540c767a478634f760858629d15685a"
     }
   },
   {
     "fields": {
       "Name": "claude-v1",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": false,
       "InheritTypeModalities": true
     },
@@ -1476,14 +1476,14 @@
       "ID": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.620Z",
-      "checksum": "8ab8031e79e01562f947d5bc3f56cb354f1abfa565da304e4d88ba55ad2de2fc"
+      "lastModified": "2026-02-13T21:08:24.475Z",
+      "checksum": "21883c616381d8f404e144fdb6717ce78d971124fb8264c2603fdee9325afc64"
     }
   },
   {
     "fields": {
       "Name": "text-embedding-3-large",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "IsActive": true,
       "InheritTypeModalities": true
     },
@@ -1535,14 +1535,14 @@
       "ID": "DDA5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.620Z",
-      "checksum": "0846651d17dd834c0353ed6b4d8bc8de14653750302b4365510275d8c9400baa"
+      "lastModified": "2026-02-13T21:08:24.477Z",
+      "checksum": "d24b4228ec7d7ed68339548d66094d944e16ce0b0cb8278079967ae169fc2c9c"
     }
   },
   {
     "fields": {
       "Name": "text-embedding-ada-002",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "IsActive": true,
       "InheritTypeModalities": true
     },
@@ -1594,14 +1594,14 @@
       "ID": "DEA5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.621Z",
-      "checksum": "591b59d782d07fe93c0dd899eacdf153264138d007d21468d72d394283cadaa2"
+      "lastModified": "2026-02-13T21:08:24.478Z",
+      "checksum": "e76aba0093e61b10c432a898b267a1bb89e117d559b987f9a57e714390905356"
     }
   },
   {
     "fields": {
       "Name": "mistral-embed",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Embeddings",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "IsActive": true,
       "InheritTypeModalities": true
     },
@@ -1653,14 +1653,14 @@
       "ID": "DBA5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.626Z",
-      "checksum": "8bcf57ab10dd4309fcbd251f4c05168dba54d7ce4ba796b0c6e349a0ccfd737e"
+      "lastModified": "2026-02-13T21:08:24.480Z",
+      "checksum": "c6d1176acb63f7a3c12b065c2184bc0ea43f9ab3143e478b3127fd6263bb4e0d"
     }
   },
   {
     "fields": {
       "Name": "Betty Bot",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 0,
       "IsActive": true,
       "SpeedRank": 0,
@@ -1715,15 +1715,15 @@
       "ID": "27C0423E-F36B-1410-8876-005D02743E8C"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.627Z",
-      "checksum": "b85c3fd64b869e5720db2872a4699ff8932ca3ad9b8b857bce2275ba9432ee5a"
+      "lastModified": "2026-02-13T21:08:24.481Z",
+      "checksum": "5618dd74ef046a747a224c47fe9bbe1554975b9bff8e05004ac77a5b7e010a86"
     }
   },
   {
     "fields": {
       "Name": "Claude 3 - Sonnet",
       "Description": "Medium Sized v3 Claude Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": false,
       "InheritTypeModalities": true
     },
@@ -1776,15 +1776,15 @@
       "ID": "E0A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.632Z",
-      "checksum": "02199ebb07eaa5174afcd1df23da42083469d58900d65422b4b059d6093984b4"
+      "lastModified": "2026-02-13T21:08:24.484Z",
+      "checksum": "cb99a867403c31b99b42336970662b4ddea60e617ef80acff1b4c91c5ba6ca66"
     }
   },
   {
     "fields": {
       "Name": "Eleven Labs",
       "Description": "Eleven Labs Audio Generation",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=TTS",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 1,
@@ -1838,15 +1838,15 @@
       "ID": "DAB9433E-F36B-1410-8DA0-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.632Z",
-      "checksum": "bafcdd3806df3bfd63ad91740a0f98f902aa5b55af716fdc82c138758a3791ac"
+      "lastModified": "2026-02-13T21:08:24.486Z",
+      "checksum": "f1f717749e2a355df14c99868b3010afeb4237d5199b3ac371a20c98b943cd41"
     }
   },
   {
     "fields": {
       "Name": "HeyGen",
       "Description": "HeyGen Video Generation",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Video",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 1,
@@ -1900,15 +1900,15 @@
       "ID": "E1B9433E-F36B-1410-8DA0-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.634Z",
-      "checksum": "8c54a5c1df60515d8785560d37567ab081abcbec92651b56c3b293d1b41137d5"
+      "lastModified": "2026-02-13T21:08:24.489Z",
+      "checksum": "cbd5805749c9cb0596b186381f128c13157b4779219268c31e5ba230ab10a1ad"
     }
   },
   {
     "fields": {
       "Name": "Llama 3.1 70b",
       "Description": "Llama 3.1 70 billion parameters",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": false,
       "InheritTypeModalities": true
@@ -1965,15 +1965,15 @@
       "ID": "F126ED5B-97B3-49E7-BD3B-E796B2099231"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.639Z",
-      "checksum": "59ca774b95263a6485db07604be434e00b0eaef6206aeb52d6ec26e8f9a521f8"
+      "lastModified": "2026-02-13T21:08:24.491Z",
+      "checksum": "70a011acab848471975946669c66e832beb6c22a9f584823e87eaf88d6b59278"
     }
   },
   {
     "fields": {
       "Name": "o4-mini",
       "Description": "Smaller model optimized for fast, cost-efficient reasoning",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -2027,15 +2027,15 @@
       "ID": "E1095D3C-E821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.659Z",
-      "checksum": "813a0c04db0f50083af90de3a594db19c4763e902558dd07b4b116b227b20a25"
+      "lastModified": "2026-02-13T21:08:24.493Z",
+      "checksum": "0556752a03643d259131fa4d5ab29999e5f5f6c62ce79220e85c2af444c88dab"
     }
   },
   {
     "fields": {
       "Name": "o3",
       "Description": "Well-rounded and powerful model across domains. It sets a new standard for math, science, coding, and visual reasoning tasks. It also excels at technical writing and instruction-following. Use it to think through multi-step problems that involve analysis across text, code, and images.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -2089,15 +2089,15 @@
       "ID": "03080654-F721-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.666Z",
-      "checksum": "c76512ca8ebc5920f95493139bb5cd1f3ad2d6c5d11b1817f91e57033f04a4ad"
+      "lastModified": "2026-02-13T21:08:24.615Z",
+      "checksum": "1e8ff8a372640d9ee7c1e87a8df3f8338e4bb820c7c7a4136cfa178b0cb2834b"
     }
   },
   {
     "fields": {
       "Name": "o1-pro",
       "Description": "Version of o1 with more compute for better responses",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -2151,15 +2151,15 @@
       "ID": "913EC3DB-F721-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.666Z",
-      "checksum": "92f53122d5dbcaa5bf9b01c6073965306c8aa9cba5cfe9f65f1d89155f0c63b4"
+      "lastModified": "2026-02-13T21:08:24.617Z",
+      "checksum": "1884303354a9fa995cdaea827b9ae280731a9c266e73a2154af289e8b6128b89"
     }
   },
   {
     "fields": {
       "Name": "OpenAI TTS",
       "Description": "OpenAI Text-to-Speech Audio Generation",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=TTS",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 1,
@@ -2215,15 +2215,15 @@
       "ID": "F2B9433E-F36B-1410-8DA0-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.671Z",
-      "checksum": "0b21684038e5add13ff2f567739e833d48767cb60bb28fd8d61a42d1a188c92d"
+      "lastModified": "2026-02-13T21:08:24.618Z",
+      "checksum": "a626cd6f285af5fc6029c1a46da84e260a8316f09acf2886ba0e5b5665e8ac30"
     }
   },
   {
     "fields": {
       "Name": "Qwen 3 14B",
       "Description": "14B version of Qwen 3 from Alibaba Cloud. Enhanced reasoning and generation capabilities with stronger performance on complex tasks, offering a good balance between capability and efficiency for professional applications.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 8,
@@ -2280,15 +2280,15 @@
       "ID": "7163007F-C555-4E02-BAD6-ADAC6D818F23"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.715Z",
-      "checksum": "7b375e247e868a1d3b05f7d1fb2ef411776cc53bf9e98426cf8a694593257a94"
+      "lastModified": "2026-02-13T21:08:24.620Z",
+      "checksum": "a52ce6bdf66f5b3378565a23ab3a1e9badcadd80c1e3991d270ef54d5b97148a"
     }
   },
   {
     "fields": {
       "Name": "Qwen 3 1.7B",
       "Description": "Smallest version of Qwen 3 from Alibaba Cloud. Ultra-lightweight model optimized for extreme efficiency, ideal for mobile devices, edge computing, and applications requiring minimal resource usage while maintaining basic language understanding.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
       "IsActive": true,
       "SpeedRank": 10,
@@ -2345,15 +2345,15 @@
       "ID": "9526887D-228B-4817-97F4-3AA0C6FABA5D"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.715Z",
-      "checksum": "7c29893676c29a025ecb575f354976afb9cd3ebe22b0d1fd9284f2a3ce80d4cf"
+      "lastModified": "2026-02-13T21:08:24.622Z",
+      "checksum": "01bdbf290c138747950bdd6e9c826911228573612fe562b1de4f62b9b3d29475"
     }
   },
   {
     "fields": {
       "Name": "Qwen 3 8B",
       "Description": "8B version of Qwen 3 from Alibaba Cloud. Balanced model offering solid performance across various tasks including reasoning, code generation, and conversation while maintaining reasonable resource requirements.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
       "IsActive": true,
       "SpeedRank": 9,
@@ -2410,15 +2410,15 @@
       "ID": "0B32729C-6911-49ED-A8ED-B5DFE18DAB7F"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.715Z",
-      "checksum": "591e48b6e3a1a5e33fb5bc8441abb75e36b341ca941e2e463498df0bb6551eba"
+      "lastModified": "2026-02-13T21:08:24.624Z",
+      "checksum": "a008c3fa9ad92449296bf1435e1b3787dc290e1fdf86b9132009561fb51d0740"
     }
   },
   {
     "fields": {
       "Name": "Qwen 3 Coder 30B",
       "Description": "Smaller code generation model from the Qwen 3 series, optimized for software development tasks including code generation, debugging, and technical documentation across multiple programming languages. Balanced size offering strong performance with efficient resource usage.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 8,
@@ -2475,15 +2475,15 @@
       "ID": "28E5835E-4464-495E-928B-4A6769C0EAA7"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.721Z",
-      "checksum": "8891646ca5a5f86f85fcbad17b7494e60c5a3ebad6c1402ed6ad02b876d0b98e"
+      "lastModified": "2026-02-13T21:08:24.625Z",
+      "checksum": "b2c45d00fd824097a05d9d8dd17f72a31931380b73382a44b24a3f8530ff98d4"
     }
   },
   {
     "fields": {
       "Name": "Qwen 3 4B",
       "Description": "4B version of Qwen 3 reasoning model from Alibaba Cloud. Offers good performance for common tasks while being resource-efficient, suitable for edge deployments and applications with limited computational resources.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": true,
       "SpeedRank": 10,
@@ -2540,14 +2540,14 @@
       "ID": "26EA1B87-ECAA-4BDF-83AD-4F8C1E33CC34"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.721Z",
-      "checksum": "8e1a8ae609701b7916cfdfdd4389621670c85da282eb9bb42cf0c80704b8643c"
+      "lastModified": "2026-02-13T21:08:24.627Z",
+      "checksum": "1ddec7fc8bcacda7f5511a111a167427e2a823c9d1f4e59dac6e51000e0d2cb0"
     }
   },
   {
     "fields": {
       "Name": "Llama 3 70b",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -2606,15 +2606,15 @@
       "ID": "E7A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.735Z",
-      "checksum": "c1839d6e0058238a4aca05f73bc95ed16fd7f2219f322cb3eec457d66f1e69b8"
+      "lastModified": "2026-02-13T21:08:24.629Z",
+      "checksum": "cfb625f401d44aefb65d705c07b6116c0cc0b1e299b2e93d993ed8f828e9a032"
     }
   },
   {
     "fields": {
       "Name": "Llama 3.1 405b",
       "Description": "Llama 3.1 405 billion parameters",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -2673,15 +2673,15 @@
       "ID": "16AFB4A5-3343-40C7-8982-03F979A15AE0"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.760Z",
-      "checksum": "8153adb3f70a94a0135260fa693ff661fb8a157eb3e847759a1dd26438be374d"
+      "lastModified": "2026-02-13T21:08:24.630Z",
+      "checksum": "f3ab3c7a375d5d07bb6af8f8a3c718db6a9b648138842946fca650cb74ec4563"
     }
   },
   {
     "fields": {
       "Name": "Llama 3.1 8b",
       "Description": "Llama 3.1 8 billion parameters",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -2740,15 +2740,15 @@
       "ID": "1D9493CE-1AF6-49F6-B2EA-EABCAB491571"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.765Z",
-      "checksum": "e6d6ec02499252389407dbbe1ec2c03acc6847f12812c0fd72047cf429f14883"
+      "lastModified": "2026-02-13T21:08:24.759Z",
+      "checksum": "fa042cd151bc1a9e836a063a19e1a6dce63ee5c1ef5acbaea37d4c557e985b46"
     }
   },
   {
     "fields": {
       "Name": "Claude 3 - Haiku",
       "Description": "Smallest Claude 3 Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": false,
       "InheritTypeModalities": true
     },
@@ -2825,15 +2825,15 @@
       "ID": "DFA5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.818Z",
-      "checksum": "b42fb56a234c2b2cb5da1739510d11590c77e3f8bbac02dd96e7743ee26815bc"
+      "lastModified": "2026-02-13T21:08:24.760Z",
+      "checksum": "684b967974475f7c05741bd3621e373364c767c210dc834347e4fe016c2857db"
     }
   },
   {
     "fields": {
       "Name": "GPT 4.1 Nano",
       "Description": "GPT 4.1 Nano is a highly efficient and cost-effective small language model optimized for lightweight tasks while maintaining quality performance.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": true,
       "SpeedRank": 10,
@@ -2914,15 +2914,15 @@
       "ID": "1BEC0566-9D7B-4A83-9701-DF5602A607EF"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.821Z",
-      "checksum": "edd7b3c2e54a98f609df633bad80e78c0f8ee341ce7492a37985324eeb08a68f"
+      "lastModified": "2026-02-13T21:08:24.762Z",
+      "checksum": "1c59e95b7cf062a18d17e2c488091b8feced2ad84a420fb6f18475398abc26d6"
     }
   },
   {
     "fields": {
       "Name": "GPT 4.1",
       "Description": "Flagship model for complex tasks. It is well suited for problem solving across domains.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -3000,15 +3000,15 @@
       "ID": "287E317F-BF26-F011-A770-AC1A3D21423D"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.821Z",
-      "checksum": "97f4232edc759170b45cf271ea7eb0552ff254b329d03c70c8fdf20859a98fe6"
+      "lastModified": "2026-02-13T21:08:24.763Z",
+      "checksum": "0ccdbaf9d587fcb865554bd4c333ef8566230170b9dfa1ae574631e101c29242"
     }
   },
   {
     "fields": {
       "Name": "GPT 5.1-codex-max",
       "Description": "OpenAI's frontier agentic coding model built on an update to the foundational reasoning model. Trained to operate across multiple context windows through compaction, coherently working over millions of tokens in a single task. Matches GPT 5.1-Codex performance on SWE-Bench Verified with ~30% fewer thinking tokens. Achieves 77.9% on SWE-Bench Verified, 79.9% on SWE-Lancer IC SWE, and 58.1% on TerminalBench 2.0. Capable of working on tasks for more than 24 hours in internal testing with knowledge cutoff of October 2024.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 7,
@@ -3089,15 +3089,15 @@
       "ID": "9C755A76-4BA7-4161-9041-B4E05302D6D0"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.822Z",
-      "checksum": "175ba69fed459ce790183ba86ba6d9bd15a37a900e1d476c06975fc0ff574ec8"
+      "lastModified": "2026-02-13T21:08:24.765Z",
+      "checksum": "bb4fad2cc74dc3cda719f4da07b76f18bd0a69d1a591b4d026028232665d15b2"
     }
   },
   {
     "fields": {
       "Name": "GPT 4o-mini",
       "Description": "Affordable and intelligent small model for fast, lightweight tasks. GPT-4o mini is cheaper and more capable than GPT-3.5 Turbo",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -3175,15 +3175,15 @@
       "ID": "0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.823Z",
-      "checksum": "e41f656c200bf56838426ed45cd0232ac4da2df7e2e3ada05ecdbbf0a65ae302"
+      "lastModified": "2026-02-13T21:08:24.766Z",
+      "checksum": "ec7e82b41971817841718654330f05386fb562f3acab6ec70c859e53a1113c91"
     }
   },
   {
     "fields": {
       "Name": "GPT-4o Image 1.0",
       "Description": "OpenAI's first GPT-4o native image generation model (April 2025). Multimodal architecture enables natural image generation from text. Supports multiple sizes and formats. Cost-effective option for standard quality needs.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Image Generator",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 8,
@@ -3263,15 +3263,15 @@
       "ID": "8C2D6F4E-3A7B-49C1-A5E2-1F8D3C6B9E7A"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.823Z",
-      "checksum": "f3523b88a624d1a0be3f59d2eca84a411bf1814f1d228b5db1ebe08faee90ff1"
+      "lastModified": "2026-02-13T21:08:24.768Z",
+      "checksum": "15ea45af2f3cc2ef6de6f52e4663d57150352a6e772ac207de91ea1f730b7602"
     }
   },
   {
     "fields": {
       "Name": "GPT 5.2",
       "Description": "OpenAI's enterprise-focused model with 400k token input context window and 128k output capacity. Features advanced reasoning capabilities optimized for complex, structured work and long-running agents. Includes response compaction via /responses/compact endpoint with loss-aware compression. Available in three tiers: Instant (speed-optimized), Thinking (deep reasoning), and Pro (highest accuracy). Knowledge cutoff of August 2025.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 11,
       "IsActive": true,
       "SpeedRank": 8,
@@ -3352,15 +3352,15 @@
       "ID": "318BDCAD-FF2A-45E4-AB51-98754DF08E7A"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.825Z",
-      "checksum": "074f5b4379bf31a281665beaacfa6e8bfc86d406dd98761fd4f77b98309fc8f4"
+      "lastModified": "2026-02-13T21:08:24.769Z",
+      "checksum": "410972e33049b0fb4ab3bbaf25486b703b69024494522ce0c62c5aca65053667"
     }
   },
   {
     "fields": {
       "Name": "GPT 5.1-codex-mini",
       "Description": "OpenAI's smaller, more cost-effective coding model optimized for efficient agentic coding tasks. Features 400,000 token context window with fast response times and significantly lower costs. Designed for local tasks and provides up to 4x more usage compared to standard Codex models. Ideal for simpler coding tasks where speed and cost efficiency are priorities while maintaining solid coding capabilities with knowledge cutoff of October 2024.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 10,
@@ -3441,15 +3441,15 @@
       "ID": "6430D534-5301-48F9-9E70-DA6D81686773"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.827Z",
-      "checksum": "1d7018ad3657a99aa509edd778834d8fadf3e67c5ee2ac1db14683b897031e2a"
+      "lastModified": "2026-02-13T21:08:24.770Z",
+      "checksum": "683a6c17fea96b094251b4a56fc5a11ade1cdc5099d21ae3ec3c1f43522289ea"
     }
   },
   {
     "fields": {
       "Name": "GPT 5.2-codex",
       "Description": "OpenAI's most advanced agentic coding model for complex, real-world software engineering. Features 400,000 token context window with 128,000 output capacity. Optimized for long-horizon work through context compaction, stronger performance on large code changes like refactors and migrations, improved Windows environment support, and significantly enhanced cybersecurity capabilities with knowledge cutoff of October 2024.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 11,
       "IsActive": true,
       "SpeedRank": 8,
@@ -3530,15 +3530,15 @@
       "ID": "0D67A020-6FE0-465F-9213-6B1D74ED7989"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.828Z",
-      "checksum": "6b863926700062429c1eaaa22a10110d90a4e0b4c0d7d9c4d77dfde810463cf0"
+      "lastModified": "2026-02-13T21:08:24.771Z",
+      "checksum": "eff5ddb87e51e485c50cdf8e5e0ac4fe830fd83adbe6ebcebf7e7f33640e3163"
     }
   },
   {
     "fields": {
       "Name": "GPT 4.1-mini",
       "Description": "GPT-4.1 mini provides a balance between intelligence, speed, and cost that makes it an attractive model for many use cases.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": true,
       "SpeedRank": 0,
@@ -3618,15 +3618,15 @@
       "ID": "9604B1A4-3A21-F011-8B3D-7C1E5249773E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.828Z",
-      "checksum": "bc8d86916d0644cf080a86cf868adc53a572c9e0f0f12b467042c96f112cd539"
+      "lastModified": "2026-02-13T21:08:24.884Z",
+      "checksum": "da98e867071b59fd775adc7696273c63ae6ac3d4a1088fd5362fdb6ba4308455"
     }
   },
   {
     "fields": {
       "Name": "GPT 4o",
       "Description": "GPT 4 Omni",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -3704,15 +3704,15 @@
       "ID": "E6A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.829Z",
-      "checksum": "c44f80b351710d991e59f0362948821dd6f15efd813ebe2c083f9fbde9353879"
+      "lastModified": "2026-02-13T21:08:24.885Z",
+      "checksum": "68bf1f1256f701ff8abc5f205f89556ecb187dd9de163d471662659cb40f7814"
     }
   },
   {
     "fields": {
       "Name": "o3-mini",
       "Description": "small reasoning model, providing high intelligence at the same cost and latency targets of o1-mini. o3-mini supports key developer features, like Structured Outputs, function calling, and Batch API.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -3790,15 +3790,15 @@
       "ID": "A647667B-F721-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.829Z",
-      "checksum": "566426947a000f5b95bc85d28be601f355135955ff7052eb27e2cb1b0c6ba4b7"
+      "lastModified": "2026-02-13T21:08:24.887Z",
+      "checksum": "763298d8811cc7fe8024307689d2eabca31afff6475180a9734af72881be7663"
     }
   },
   {
     "fields": {
       "Name": "Claude 3.7 Sonnet",
       "Description": "Claude 3.7 Sonnet",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
       "IsActive": true,
       "SpeedRank": 0,
@@ -3877,15 +3877,15 @@
       "ID": "5066433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.830Z",
-      "checksum": "5925f57305d0fb6596b6bab6aad61a702d555ed6a2f62c2f8b6798ec1f69eaf0"
+      "lastModified": "2026-02-13T21:08:24.888Z",
+      "checksum": "9b78fd1edfdd7c41dc1c8f6d87d3fd27dd22f123d281dc0ac3fa0f3a5ff75c46"
     }
   },
   {
     "fields": {
       "Name": "o1",
       "Description": "The o1 series of models are trained with reinforcement learning to perform complex reasoning. o1 models think before they answer, producing a long internal chain of thought before responding to the user.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -3963,15 +3963,15 @@
       "ID": "D8B332B2-F721-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.830Z",
-      "checksum": "5dda562f2749568a99b9dd1dae6edee825b6f7a086ead8272a62d66fc12b2c5c"
+      "lastModified": "2026-02-13T21:08:24.890Z",
+      "checksum": "f41ec80d6fabe2f8831d9a10204b01038ece583662312921e520d3caa786ff60"
     }
   },
   {
     "fields": {
       "Name": "o1-mini",
       "Description": "The o1 reasoning model is designed to solve hard problems across domains. o1-mini is a faster and more affordable reasoning model, but we recommend using the newer o3-mini model that features higher intelligence at the same latency and price as o1-mini.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -4049,15 +4049,15 @@
       "ID": "E54347C3-F721-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.831Z",
-      "checksum": "afb345ff47cb9ac36a278f5d6dabb37dbb477234373692bf4bc93278537236b1"
+      "lastModified": "2026-02-13T21:08:24.892Z",
+      "checksum": "5dee200b931a06109f7228e70c959a9ecb162dbda7f2e2c9319a91b4c77ff880"
     }
   },
   {
     "fields": {
       "Name": "Claude 3 - Opus",
       "Description": "Largest Claude 3 Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -4135,15 +4135,15 @@
       "ID": "E1A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.832Z",
-      "checksum": "9d0157eb0835c6f8279912d80eccb1fd7a3f0d8566df08d0897c7c75df3b1790"
+      "lastModified": "2026-02-13T21:08:24.894Z",
+      "checksum": "49fac27118b2e50323c1044634186b9467496d49781527a49b17c25892ee854f"
     }
   },
   {
     "fields": {
       "Name": "Claude 3.5 Sonnet",
       "Description": "First model of the Claude 3.5 model family",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -4221,15 +4221,15 @@
       "ID": "5D218BCF-B7F6-439E-97FD-DC3A79432562"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.833Z",
-      "checksum": "f901ba3a0f7731ccef983fca0f7a79b33fcce8699a3ab3d1b44ca004a5e92b04"
+      "lastModified": "2026-02-13T21:08:24.896Z",
+      "checksum": "06ebed1ab17343313cb7921ceb1ff6bf7977ac13850d723069e76fa131193e88"
     }
   },
   {
     "fields": {
       "Name": "Mistral Large 3",
       "Description": "Mistral AI's flagship open-weight multimodal model with granular Mixture-of-Experts architecture. 675B total parameters (41B active) with 256K token context window. Supports vision, function calling, structured outputs, and agents. Apache 2.0 license with weights available on Hugging Face.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
       "IsActive": true,
       "SpeedRank": 7,
@@ -4310,15 +4310,15 @@
       "ID": "742E556C-A75C-4B73-A762-639F1EF1CD4E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.833Z",
-      "checksum": "2a4be6be1496e2d9c62b44b8ce4c97fab6036a95c6e9bed8f75524273dab0413"
+      "lastModified": "2026-02-13T21:08:24.897Z",
+      "checksum": "ee5bf3019e947b6970591abd89f2d611c6c4e5d64343822edfa13abdd570b0e8"
     }
   },
   {
     "fields": {
       "Name": "Mistral Medium 3.1",
       "Description": "Mistral AI's frontier-class multimodal model with improved tone and performance. 128K token context window. Supports vision, OCR, function calling, structured outputs, and agents. Released August 2025.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 7,
@@ -4399,15 +4399,15 @@
       "ID": "A4704E68-B852-461D-9EBF-889164EB899C"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.834Z",
-      "checksum": "39ab823dd037f77a2db16ba8cb1f87cc6049f0a39ea83db60a4318ae0b02956c"
+      "lastModified": "2026-02-13T21:08:24.899Z",
+      "checksum": "13f838269e67f98573832be15af38b51821e3cf1262d4a83e52a494846b117c0"
     }
   },
   {
     "fields": {
       "Name": "Devstral 2",
       "Description": "Mistral AI's frontier code agents model for software engineering tasks. 123B parameters with 256K token context window. Excels at using tools to explore codebases, editing multiple files, and powering software engineering agents. Supports function calling, structured outputs, and built-in tools.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
       "IsActive": true,
       "SpeedRank": 7,
@@ -4488,15 +4488,15 @@
       "ID": "E4280B9A-76F3-4363-804A-8A3293BC5A85"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.834Z",
-      "checksum": "38bcbe6a4713c785b1e193aa51fb2cec61eade642d9695863737c3af2fdcf597"
+      "lastModified": "2026-02-13T21:08:25.020Z",
+      "checksum": "080c7bf580be977a3e7850efd50a2120f3656552a285a2f60261c48bf4fc3a6c"
     }
   },
   {
     "fields": {
       "Name": "Mistral Large",
       "Description": "Mistral Large Model - Latest",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 0,
@@ -4575,15 +4575,15 @@
       "ID": "7D9762F8-5332-F011-A5F1-6045BDD9AD00"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.835Z",
-      "checksum": "17e1cc5b17e42fd7e9694b35b66f778cd430c45aeaf17228c9b35747d578fa41"
+      "lastModified": "2026-02-13T21:08:25.021Z",
+      "checksum": "718bcc180193569d81ea6bfc510df042590e545d96d3d5f250a93ffb3eed6e6f"
     }
   },
   {
     "fields": {
       "Name": "Claude Haiku 4.5",
       "Description": "Anthropic's fastest and most affordable model with reasoning support. Features a 200K token context window (1M for developers), 64K max output tokens, and knowledge cutoff of February 2025. First Haiku model to support extended thinking and reasoning.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": true,
       "SpeedRank": 12,
@@ -4664,15 +4664,15 @@
       "ID": "4FD92457-0BA8-486F-978A-E5947154F4F4"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.835Z",
-      "checksum": "99377c7bcc5343323de56654759566ba36a788c8cf14924c3bec3c77b31ad6bd"
+      "lastModified": "2026-02-13T21:08:25.023Z",
+      "checksum": "9bc58bc90b641e0a30ee02f7ef0ca0aff94d1df7aaaf0cdf91ec84c15bfaa749"
     }
   },
   {
     "fields": {
       "Name": "Mistral Small 3.2",
       "Description": "Mistral AI's efficient 24B parameter multimodal model with vision capabilities. 128K token context window. Supports function calling, structured outputs, and agents. Open-weight model suitable for personal and commercial use. Very cost-effective.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
       "IsActive": true,
       "SpeedRank": 8,
@@ -4753,15 +4753,15 @@
       "ID": "2FDA1FD0-7E2B-42D6-AD6B-440F57B4EE1F"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.836Z",
-      "checksum": "8c80680367152732d465163ea1e13726b4f60cbb0525c5c4ddc85d658be70e7c"
+      "lastModified": "2026-02-13T21:08:25.024Z",
+      "checksum": "9afda61d3d004c3ceccfe0b16f20762bba29131d1675bcb59236745dfb7867b9"
     }
   },
   {
     "fields": {
       "Name": "Mistral Medium",
       "Description": "Mistral Medium Model - Latest",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
       "IsActive": true,
       "SpeedRank": 0,
@@ -4840,15 +4840,15 @@
       "ID": "7E9762F8-5332-F011-A5F1-6045BDD9AD00"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.836Z",
-      "checksum": "d7cd9372e5baedd1ad01d16ddaa0c1f3b74ed60b6bf2ba2badd853b984d38f56"
+      "lastModified": "2026-02-13T21:08:25.026Z",
+      "checksum": "8e6417ec1c01da63f56182338fb5f4719abb1cf8ccfcc06cccf2750c545be83b"
     }
   },
   {
     "fields": {
       "Name": "Mixtral 8x7B",
       "Description": "MoE Model from Mistral AI",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -4926,15 +4926,15 @@
       "ID": "E2A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.837Z",
-      "checksum": "10cce23270d9a4286ddf9f79bbbe4c8a14fe2a86a1cfdb084795890d7b4c1043"
+      "lastModified": "2026-02-13T21:08:25.027Z",
+      "checksum": "918dddfc85fc9d63650023b2bd39019fd48c2f95a4087bee161fcb4f9b52bbaa"
     }
   },
   {
     "fields": {
       "Name": "Kimi K2",
       "Description": "Kimi K2 is an advanced instruction-following language model with exceptional code writing and reasoning capabilities.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 12,
       "IsActive": true,
       "SpeedRank": 7,
@@ -5060,15 +5060,15 @@
       "ID": "71A6513F-1757-4FE5-9E78-0069198607C0"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.838Z",
-      "checksum": "585fe33949847f1b86de4920a17238b8101b8dd89f4f569773fafbedcba97d87"
+      "lastModified": "2026-02-13T21:08:25.029Z",
+      "checksum": "c2a40275bad0b4dee8038df68c45237aab90a68aff9c22d7ef43f3cfc7632678"
     }
   },
   {
     "fields": {
       "Name": "Deepseek R1 Distill Llama 3.3 70B",
       "Description": "Deepseek R1/Llama 3.3 70B Distillation",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
       "IsActive": true,
       "SpeedRank": 0,
@@ -5150,15 +5150,15 @@
       "ID": "845D433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.839Z",
-      "checksum": "16229d05b90fdf1215a1db6f748b6ec0e0c18c40dbb24b22f75e598d151a3eea"
+      "lastModified": "2026-02-13T21:08:25.030Z",
+      "checksum": "659f14502eeaee9e44a94f3e30793ed233f45ef75793e2fc5a2a82db75a90027"
     }
   },
   {
     "fields": {
       "Name": "Llama 3.3 70B Versatile",
       "Description": "Llama 3.3 70 billion parameters",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -5239,15 +5239,15 @@
       "ID": "853E890E-F2E3-EF11-B015-286B35C04427"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.843Z",
-      "checksum": "3ca1c046ab573c03953294fe86f91a234c665c88191d4a574dd653620b1eff60"
+      "lastModified": "2026-02-13T21:08:25.032Z",
+      "checksum": "842ff7df510e1c15eaa3e032996237465621444579b7d27b789441d9b62138a2"
     }
   },
   {
     "fields": {
       "Name": "FLUX.2 Pro",
       "Description": "Black Forest Labs' most capable image generation model. A 32B parameter rectified flow transformer delivering photorealistic images up to 4MP resolution. Features exceptional detail accuracy in hands, faces, fabrics, and small objects. Supports image editing, multi-reference control (up to 8 reference images), and advanced prompt understanding.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Image Generator",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 7,
@@ -5327,15 +5327,15 @@
       "ID": "D4E5F6A7-B8C9-4D0E-1F2A-3B4C5D6E7F8A"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.847Z",
-      "checksum": "2ab8c3ed6ea423cbb26440e8ddea646f0ddefaa2e8c741018ead1937d0608bab"
+      "lastModified": "2026-02-13T21:08:25.033Z",
+      "checksum": "699f90f4aa7138696b7988a097f94c7107a43851c00cb9b76b1228657e9ae9ed"
     }
   },
   {
     "fields": {
       "Name": "FLUX 1.1 Pro",
       "Description": "Black Forest Labs' production-ready image generation model. Offers excellent image quality with fast generation times. Well-suited for high-volume production workloads. Supports standard image generation with good prompt adherence and style control.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=Image Generator",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
       "PowerRank": 9,
       "IsActive": true,
       "SpeedRank": 8,
@@ -5415,15 +5415,15 @@
       "ID": "E5F6A7B8-C9D0-4E1F-2A3B-4C5D6E7F8A9B"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.848Z",
-      "checksum": "aac34f5b81ede652da4e8c4cab85f3b525e96cc4b97eabc11e26adba82235604"
+      "lastModified": "2026-02-13T21:08:25.150Z",
+      "checksum": "ae5d728c088132d4e0e8eab98ad6f117a187778cc7ceb00160487be52bb210d5"
     }
   },
   {
     "fields": {
       "Name": "Grok 4-1 Fast Non-Reasoning",
       "Description": "x.AI's fast non-reasoning model with 2M token context window. Optimized for speed without extended reasoning overhead. Supports text and image input with function calling. Rate limited to 4M tokens per minute and 480 requests per minute.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
       "IsActive": true,
       "SpeedRank": 10,
@@ -5504,15 +5504,15 @@
       "ID": "33FF4A6E-6162-48DF-832A-8C936DCD4AC7"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.848Z",
-      "checksum": "c4057bd96ccf9a4b21a5d33a1a4b43df2f327cbc17bf668b173c60ec7b25af95"
+      "lastModified": "2026-02-13T21:08:25.151Z",
+      "checksum": "7a723397db43bf855accb06674a5071cadb936d89f68698679f47b9e7a709495"
     }
   },
   {
     "fields": {
       "Name": "Grok 4 Fast (Non-Reasoning)",
       "Description": "x.ai's cost-efficient non-reasoning model for quick responses. Features a 2M token context window with the same unified architecture as the reasoning version but optimized for faster, lighter use cases without chain-of-thought processing.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 11,
       "IsActive": true,
       "SpeedRank": 10,
@@ -5593,15 +5593,15 @@
       "ID": "F4E7A821-6D3C-4B9E-A7C5-8D1B4F2A9E6C"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.849Z",
-      "checksum": "ad5ae8e119fec6a8f9c33fd1bc07d1a9fb513199c09368b7e1a4084de13e401c"
+      "lastModified": "2026-02-13T21:08:25.153Z",
+      "checksum": "25ad5962fbd08a30752477b2afe3846e7df3b5fe9b25c3623c104364e9b4b5d7"
     }
   },
   {
     "fields": {
       "Name": "Grok Code Fast 1",
       "Description": "x.ai's specialized coding model optimized for software development tasks. Features a 256K token context window with excellent code generation and understanding capabilities.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 9,
@@ -5682,15 +5682,15 @@
       "ID": "AF6B48C8-8E99-4472-BDDF-570BF59F7B22"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.850Z",
-      "checksum": "2e7d865b9220c878f37ff9d83e6af0e8b81e6ebd760a38c1bb7556e118f74ea1"
+      "lastModified": "2026-02-13T21:08:25.154Z",
+      "checksum": "e705434a36531e95fcbd66cc1dd97de127e13cf4edb6deb71049c8fc1b054c59"
     }
   },
   {
     "fields": {
       "Name": "Grok 4-1 Fast Reasoning",
       "Description": "x.AI's fast reasoning model with 2M token context window. Features reasoning capabilities with JSON and function calling support. Optimized for speed while maintaining reasoning depth. Rate limited to 4M tokens per minute and 480 requests per minute.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 9,
@@ -5771,15 +5771,15 @@
       "ID": "E7B8A63A-BE53-42FD-9401-02E07901D7F1"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.850Z",
-      "checksum": "db689ef96e741073ca59bc1d84ffe206ae79b52b19257e88357240ad25949c42"
+      "lastModified": "2026-02-13T21:08:25.156Z",
+      "checksum": "a81945f91accfb4ba3fb2f47299363766636d1843120c8d5fdaf8dac2f099643"
     }
   },
   {
     "fields": {
       "Name": "Grok 4 Fast (Reasoning)",
       "Description": "x.ai's cost-efficient reasoning model with long chain-of-thought capabilities. Features a 2M token context window, frontier-level performance, and state-of-the-art search capabilities. Optimized for complex reasoning tasks while using 40% fewer thinking tokens than Grok 4.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 13,
       "IsActive": true,
       "SpeedRank": 8,
@@ -5860,15 +5860,15 @@
       "ID": "B9C597E3-3AAF-4588-8EA8-92D85875B8A0"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.850Z",
-      "checksum": "2b86c15bcab9d92233a4e4060b648ca23ff4ce036bba47569c7136a342f3e163"
+      "lastModified": "2026-02-13T21:08:25.157Z",
+      "checksum": "13c661765b96dc91fbba53c06cd1ce6e2ba67778e28e3632bde938db0d889573"
     }
   },
   {
     "fields": {
       "Name": "Llama 4 Maverick",
       "Description": "Mid-sized Llama 4 Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 0,
@@ -5908,18 +5908,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.375,
-            "OutputPricePerUnit": 0.5775,
+            "InputPricePerUnit": 0.5,
+            "OutputPricePerUnit": 0.77,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Batch",
-            "Comments": "Llama 4 Maverick batch pricing on Groq (25% discount) as of Jan 2025"
+            "ProcessingType": "Realtime",
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025"
           },
           "primaryKey": {
             "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.984Z",
-            "checksum": "368b74020f7805bc3be76f60ef024723a9a9a4e5387bcb1b61faded500850aaa"
+            "lastModified": "2026-02-12T19:48:44.032Z",
+            "checksum": "73619cec0c2e97847c211954e9fd84056d979b3f040be8f0120dabc1aba23a60"
           }
         },
         {
@@ -5943,6 +5943,28 @@
             "lastModified": "2026-02-01T00:26:56.994Z",
             "checksum": "73619cec0c2e97847c211954e9fd84056d979b3f040be8f0120dabc1aba23a60"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "StartedAt": "2026-01-12T23:25:17.216Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.5,
+            "OutputPricePerUnit": 0.77,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025"
+          },
+          "primaryKey": {
+            "ID": "8C917BF3-1B35-49C3-941B-397EFFD0E7F4"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:48:44.446Z",
+            "checksum": "e95f44f9b8a040febce41841d8da08971995b263bc983f5c870365f4938b698d"
+          }
         }
       ]
     },
@@ -5950,15 +5972,15 @@
       "ID": "8A5D433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.857Z",
-      "checksum": "80fd41d775e50aa500bf7aef8c62c91ac7d8c7ebba791a8c8b10d9802e72a10e"
+      "lastModified": "2026-02-13T21:08:25.159Z",
+      "checksum": "8cf0fabc26147036dbff617b3b86e478469cfce21800c54f532a318ad8f0c8ab"
     }
   },
   {
     "fields": {
       "Name": "Qwen 3 32B",
       "Description": "Advanced multilingual language model from the Qwen series supporting 100+ languages. Offers strong reasoning, instruction-following, and creative writing capabilities with efficient performance for general-purpose dialogue and complex logical tasks.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 11,
       "IsActive": true,
       "SpeedRank": 10,
@@ -6061,15 +6083,15 @@
       "ID": "C496B988-4EA4-4D7E-A6DD-255F56D93933"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.887Z",
-      "checksum": "f0169c76c888930bdf212f188a3c869e959ec34745b623ad5486d0b6212d6ef0"
+      "lastModified": "2026-02-13T21:08:25.160Z",
+      "checksum": "6eee14646858647dd730cfde3dd9bd0165798382f5b701858001463c26bdcb99"
     }
   },
   {
     "fields": {
       "Name": "Qwen 3 Coder 480B",
       "Description": "Large code generation model from the Qwen series, optimized for software development tasks including code generation, debugging, and technical documentation across 100+ programming languages.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 13,
       "IsActive": true,
       "SpeedRank": 6,
@@ -6218,15 +6240,15 @@
       "ID": "711EDB52-2013-46E9-9A1F-59F439BC9E22"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.895Z",
-      "checksum": "a97d45ad23a5d02f67eae0858d3aaf681222fa1ee7fe435362773a3abf2020ff"
+      "lastModified": "2026-02-13T21:08:25.162Z",
+      "checksum": "35fe7fd85cbdd6dbc57a19ff622ed114827c9e43ddd5b9fd332d417a0580e891"
     }
   },
   {
     "fields": {
       "Name": "Claude 4 Sonnet",
       "Description": "Claude Medium Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 0,
@@ -6286,18 +6308,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 3,
-            "OutputPricePerUnit": 15,
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Realtime",
-            "Comments": "Claude 4 Sonnet pricing as of Jan 2025"
+            "ProcessingType": "Batch",
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025"
           },
           "primaryKey": {
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.191Z",
-            "checksum": "04ae96db93ac0497b640bffbfc227f5340422a1fc9543532aab4ddfaee23d8d2"
+            "lastModified": "2026-02-12T19:48:44.219Z",
+            "checksum": "b5b869576b542870b6b1952b2190917ef2d0c142be353772f19461647e064564"
           }
         },
         {
@@ -6321,6 +6343,28 @@
             "lastModified": "2026-02-01T00:26:57.313Z",
             "checksum": "b5b869576b542870b6b1952b2190917ef2d0c142be353772f19461647e064564"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-01-12T23:25:17.216Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Batch",
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025"
+          },
+          "primaryKey": {
+            "ID": "5DDA609E-8445-467E-BE78-EE31BCC385B7"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:48:44.497Z",
+            "checksum": "8b1d7da35472e673e5b6ef0226ed27ca7bbd64800801aff62e791a370f5c6059"
+          }
         }
       ]
     },
@@ -6328,15 +6372,15 @@
       "ID": "89C5433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.896Z",
-      "checksum": "8827409bb35faa0d43b0197fd0cda4d521d78fd6f3cf38fb6300143a3358b336"
+      "lastModified": "2026-02-13T21:08:25.163Z",
+      "checksum": "27742541fbba0dc64be51cdba1311e5407271a3aad3f3cf5f36304e6d9b5479c"
     }
   },
   {
     "fields": {
       "Name": "Claude 4 Opus",
       "Description": "Claude Largest Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 12,
       "IsActive": true,
       "SpeedRank": 0,
@@ -6396,18 +6440,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 15,
-            "OutputPricePerUnit": 75,
+            "InputPricePerUnit": 7.5,
+            "OutputPricePerUnit": 37.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Realtime",
-            "Comments": "Claude 4 Opus pricing as of Jan 2025"
+            "ProcessingType": "Batch",
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025"
           },
           "primaryKey": {
             "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.325Z",
-            "checksum": "5f5d34c08142f80365c56b7b515fe527282dd5c43484d092f8fa9ed3742bee7d"
+            "lastModified": "2026-02-12T19:48:44.217Z",
+            "checksum": "2a55ce83c01609580fa11e4259df84294e94471477d02983e573fc0d2fdee7bd"
           }
         },
         {
@@ -6431,6 +6475,28 @@
             "lastModified": "2026-02-01T00:26:57.336Z",
             "checksum": "2a55ce83c01609580fa11e4259df84294e94471477d02983e573fc0d2fdee7bd"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-01-12T23:25:17.216Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 7.5,
+            "OutputPricePerUnit": 37.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Batch",
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025"
+          },
+          "primaryKey": {
+            "ID": "F6C1FDB8-7BEF-4946-B3F8-B194B474543A"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:48:44.496Z",
+            "checksum": "88415174c6743126a3193188bba7ffec59a4cdadcf5c1243a6955e9dbeb5d382"
+          }
         }
       ]
     },
@@ -6438,15 +6504,15 @@
       "ID": "83C5433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.896Z",
-      "checksum": "1612d8b2a6ec0ec4b1c6b35b639e9265ff51883e5a21b48a3f2e3b104c006d98"
+      "lastModified": "2026-02-13T21:08:25.284Z",
+      "checksum": "4620955c0b42137e6e97f50d326b5cca4a941df53b2419786514de444d4d4954"
     }
   },
   {
     "fields": {
       "Name": "Llama 4 Scout",
       "Description": "Smallest Llama 4 Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
       "IsActive": true,
       "SpeedRank": 0,
@@ -6508,18 +6574,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.0825,
-            "OutputPricePerUnit": 0.255,
+            "InputPricePerUnit": 0.11,
+            "OutputPricePerUnit": 0.34,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Batch",
-            "Comments": "Llama 4 Scout batch pricing on Groq (25% discount) as of Jan 2025"
+            "ProcessingType": "Realtime",
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025"
           },
           "primaryKey": {
             "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.349Z",
-            "checksum": "373474215aa3b5592bf21d932a80a24172d61a2b3f1d77465965052e5915f856"
+            "lastModified": "2026-02-12T19:48:44.214Z",
+            "checksum": "205e47ff8c1f9f5c1b3b56f88de1d17d530071305f56757f5404779e10106702"
           }
         },
         {
@@ -6543,6 +6609,28 @@
             "lastModified": "2026-02-01T00:26:57.359Z",
             "checksum": "205e47ff8c1f9f5c1b3b56f88de1d17d530071305f56757f5404779e10106702"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "StartedAt": "2026-01-12T23:25:17.216Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.11,
+            "OutputPricePerUnit": 0.34,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025"
+          },
+          "primaryKey": {
+            "ID": "C0780A29-BC07-430C-B1B8-EB182183F820"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:48:44.496Z",
+            "checksum": "0f2c27d4efc734045aa29cd956382519b22ab8cdd25475bdfeef3c3995a3bdb0"
+          }
         }
       ]
     },
@@ -6550,15 +6638,15 @@
       "ID": "875D433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.896Z",
-      "checksum": "352d0224fd4672e59e42ff04daaac19cf628d9eda37955cabb07e9afd21b623a"
+      "lastModified": "2026-02-13T21:08:25.286Z",
+      "checksum": "b5eb3a65822b617ed3eccc97e15a439b1cc15d51fd2a005fc727158cf66e797e"
     }
   },
   {
     "fields": {
       "Name": "GPT-OSS-20B",
       "Description": "OpenAI's open-weight language model with 21B total parameters (3.6B active). Features configurable reasoning levels, native tool use capabilities, fine-tuning support, and runs within 16GB memory. Optimized for local/specialized use cases with Apache 2.0 license.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 11,
       "IsActive": true,
       "SpeedRank": 7,
@@ -6730,15 +6818,15 @@
       "ID": "F83CBC3E-2980-4C0F-AB74-BD2C192CF01D"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.908Z",
-      "checksum": "391d17a160f9825427226f1360210ac602383b0e78f8a86496206ab252bbf1ae"
+      "lastModified": "2026-02-13T21:08:25.287Z",
+      "checksum": "498f14c4fcf9f359f892ec386178ff423efe1b2a6772df9e3c1b3cc0fda6fd15"
     }
   },
   {
     "fields": {
       "Name": "Gemini 1.0 Ultra",
       "Description": "Gemini 1.0 Ultra",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": false,
       "InheritTypeModalities": true
     },
@@ -6855,15 +6943,15 @@
       "ID": "E5A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.910Z",
-      "checksum": "a95f384f49282d9ab6f2c11c9231ffccdc0bca4647f964c0c5447b8d5446e25d"
+      "lastModified": "2026-02-13T21:08:25.288Z",
+      "checksum": "166caf37cd4c428a877d994b1e0fc4822abf2f6c08efbe44ea6eb87c9b56dc82"
     }
   },
   {
     "fields": {
       "Name": "Gemini 1.5 Flash",
       "Description": "Gemini 1.5 Flash is a fast and versatile multimodal model for scaling across diverse tasks.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -6981,15 +7069,15 @@
       "ID": "791C357A-F821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.910Z",
-      "checksum": "b6efb11d92b394c2bf0cc3ccf14d45945eb6644cad07e94f249f89000d97755d"
+      "lastModified": "2026-02-13T21:08:25.290Z",
+      "checksum": "b53f7891f7d704811bcd8b416d9c5f1152e491fd68a6464954c6aa7ae10a9a1d"
     }
   },
   {
     "fields": {
       "Name": "Gemini 2.0 Flash",
       "Description": "Next-gen features and improved capabilities, including superior speed, native tool use, multimodal generation, and a 1M token context window.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -7107,15 +7195,15 @@
       "ID": "5A4DF845-F821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.911Z",
-      "checksum": "0afaae57899b82c73e3bc29067cea8f40ba300d963ab115b64cd752eff59aabc"
+      "lastModified": "2026-02-13T21:08:25.292Z",
+      "checksum": "42cd277997a9312e9c2dffaebf03cb640d1a2ed7c4366dc3e857bcdfb5fe80d5"
     }
   },
   {
     "fields": {
       "Name": "Gemini 2.5 Pro Preview",
       "Description": "Gemini 2.5 Pro Preview Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
       "IsActive": true,
       "SpeedRank": 0,
@@ -7234,15 +7322,15 @@
       "ID": "8D5D433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.911Z",
-      "checksum": "8f0dedc8819a66c4cbe40f109ba96adf4ad678b16e56c9822ed07c9a6d40de63"
+      "lastModified": "2026-02-13T21:08:25.294Z",
+      "checksum": "d0983b785783a97a9841a67f248e1911f0227de1866792244c50eb8b1b41a4dc"
     }
   },
   {
     "fields": {
       "Name": "Gemini 2.5 Flash Preview",
       "Description": "Gemini 2.5 Flash Preview Model",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
       "IsActive": true,
       "SpeedRank": 0,
@@ -7361,15 +7449,15 @@
       "ID": "905D433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.912Z",
-      "checksum": "b68f10533aa34a836482b9e0518fe74d0153f3c99302895d21e618b315406fbd"
+      "lastModified": "2026-02-13T21:08:25.296Z",
+      "checksum": "afa9d8658b54e899808ad89376e9ea8b074b7d992f41afb39a9325ca0e9f35ac"
     }
   },
   {
     "fields": {
       "Name": "Gemini 2.0 Flash-Lite",
       "Description": "A Gemini 2.0 Flash model optimized for cost efficiency and low latency.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -7487,15 +7575,15 @@
       "ID": "0C93395D-F821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.913Z",
-      "checksum": "efe159d43025d8432e416793a284614dda03bb20d5fb5974114386fc42c132d7"
+      "lastModified": "2026-02-13T21:08:25.298Z",
+      "checksum": "b05a7ebf4f4a4a809d193185da1baf782b84a702ca09ad09cd5c4e166b8fe26d"
     }
   },
   {
     "fields": {
       "Name": "Gemini 1.5 Pro",
       "Description": "Gemini 1.5 Pro",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
       "IsActive": true,
       "InheritTypeModalities": true
@@ -7613,15 +7701,15 @@
       "ID": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.913Z",
-      "checksum": "681cb998e8159345c77d27d526d83d77cfff1bbd3103e8da758e96c87480e189"
+      "lastModified": "2026-02-13T21:08:25.299Z",
+      "checksum": "f899ddd0cbd8b206ec7f9edef8ac68e25c96da3cfae0b95bdbc777a81e7258b1"
     }
   },
   {
     "fields": {
       "Name": "GLM 4.6",
       "Description": "Z.AI's (Zhipu AI) flagship model with Mixture-of-Experts architecture. 355B total parameters (32B active) with 200K token context window. Excels at agentic workflows, coding (LiveCodeBench v6 #1), and tool-augmented problem-solving. Supports function calling, structured outputs, and native tool invocation. MIT license.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
       "IsActive": true,
       "SpeedRank": 8,
@@ -7792,15 +7880,15 @@
       "ID": "8231B487-2D85-4515-9B7F-9EB2014011F5"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.917Z",
-      "checksum": "a1e5694df97072c1cdaa6a09e594493a38edee3555088704b7da25ce31388618"
+      "lastModified": "2026-02-13T21:08:25.404Z",
+      "checksum": "57539a6a17cba8b1d8a636f49360ab4d5212436ba3463569fcf2bc2394a22af8"
     }
   },
   {
     "fields": {
       "Name": "GPT 5-mini",
       "Description": "Smaller, cost-efficient version of GPT-5 with excellent performance for most tasks. Supports 272k input and 128k output tokens with fast response times.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 15,
       "IsActive": true,
       "SpeedRank": 10,
@@ -7926,15 +8014,15 @@
       "ID": "028491AF-48A3-4235-93A7-44A4E91F14C0"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.917Z",
-      "checksum": "601beca77ca8f3b2f63c96591cdf13f4e7f4a903b2360ba264dede6713d937e3"
+      "lastModified": "2026-02-13T21:08:25.405Z",
+      "checksum": "0ccdf38c412c2f4ec0e3e99bd98f846baec204c9fc3fb12eab2ca98ef254adbc"
     }
   },
   {
     "fields": {
       "Name": "GPT 5",
       "Description": "OpenAI's flagship model combining reasoning abilities with fast responses. Smartest, fastest, most useful model with 272k input and 128k output token limits. 45% less likely to hallucinate than GPT-4o.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 20,
       "IsActive": true,
       "SpeedRank": 9,
@@ -8060,15 +8148,15 @@
       "ID": "87C351DF-5039-4E1D-A2E9-CF5B91927E5E"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.917Z",
-      "checksum": "75f2062f35b33ac45f506e83042a7db20882748fafefc3031095b029fc86d5c3"
+      "lastModified": "2026-02-13T21:08:25.407Z",
+      "checksum": "9b911d47b417053ed8d2b2fa49a2cf434913c5122219afa8fb60bf31b4d1b624"
     }
   },
   {
     "fields": {
       "Name": "Codestral 2508",
       "Description": "Mistral's code generation model released July 2025. State-of-the-art performance for code completion, generation, and analysis across 80+ programming languages with enhanced understanding of complex codebases.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 14,
       "IsActive": true,
       "SpeedRank": 8,
@@ -8194,15 +8282,15 @@
       "ID": "EEBC4377-20B3-4114-8665-CEFD2C1AA6B5"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.918Z",
-      "checksum": "c2d4612d40b01973a320553cb9dbc256fb9482401c06d52bdc7217c67d41d375"
+      "lastModified": "2026-02-13T21:08:25.408Z",
+      "checksum": "3c5dbcc654f22f388202bf1e6a009885f0450c6b23e84590f437f9b635b4e71f"
     }
   },
   {
     "fields": {
       "Name": "GPT 5-nano",
       "Description": "Ultra-efficient smallest version of GPT-5 optimized for high-volume, low-latency applications. Supports 272k input and 128k output tokens.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 12,
       "IsActive": true,
       "SpeedRank": 10,
@@ -8328,15 +8416,15 @@
       "ID": "0221217D-2037-48F8-AED0-286F53A165DF"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.919Z",
-      "checksum": "b6c98e242340e846fce7ef304dcc3723e7897f95d0da1e937f2a47667f2abc03"
+      "lastModified": "2026-02-13T21:08:25.409Z",
+      "checksum": "5663257a3b0c89bce289e88f4563f3fd1281fac8b2ed25a7479d8edf68a642a5"
     }
   },
   {
     "fields": {
       "Name": "Claude Opus 4.1",
       "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 19,
       "IsActive": true,
       "SpeedRank": 7,
@@ -8462,15 +8550,15 @@
       "ID": "2C5EA224-85A1-4D09-ABA6-0D52F2E6AFBB"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.920Z",
-      "checksum": "5b750b19c26b760717e5d7b58d5a5c760d18d384e924d9d5ac1b5f73f1be1625"
+      "lastModified": "2026-02-13T21:08:25.411Z",
+      "checksum": "2c2e87341a7c6f2885fbe3c9da6cb4c940b7fe4fd3b772da0308694d93885561"
     }
   },
   {
     "fields": {
       "Name": "GLM 4.7",
       "Description": "Z.AI's (Zhipu AI) latest flagship model released December 2025. 355B total parameters (32B active) with 200K token context window and up to 128K output capacity. Features enhanced \"Vibe Coding\" for cleaner UI generation, improved multi-step reasoning stability, and strong agentic capabilities. SWE-bench Verified: 73.8%, LiveCodeBench-v6: 84.9%, AIME 2025: 95.7%.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 8,
@@ -8642,15 +8730,15 @@
       "ID": "47C3B17A-2ABA-4F18-B2F6-8B62792F1EC7"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.921Z",
-      "checksum": "f03a8dd976ae030aca0232dda791b9c637b615f63381f38c97e98d0ef2f6c29a"
+      "lastModified": "2026-02-13T21:08:30.579Z",
+      "checksum": "f9f437e4904eeb1d45f8785cb574a3094e9675d8fced7e97211eec85e5b8e946"
     }
   },
   {
     "fields": {
       "Name": "Gemini 2.5 Flash-Lite",
       "Description": "Google's smallest and most cost-effective model, built for scale usage. Optimized for speed with 10K token input limit and 400 token output limit.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 10,
@@ -8793,15 +8881,15 @@
       "ID": "13297942-3AE2-4584-832C-551237847140"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.924Z",
-      "checksum": "9e076272eead922aeab7cb89e094ed5b33ed2613bb2a135a3dbcd58e440cd2f5"
+      "lastModified": "2026-02-13T21:08:25.412Z",
+      "checksum": "bc5175f0c315289254ddda05042e789568849d221e286c4928db28371d0870a0"
     }
   },
   {
     "fields": {
       "Name": "Gemini 2.5 Flash",
       "Description": "Google's hybrid reasoning model with a 1M token context window and thinking budgets. Balances performance and speed for production use cases. Supports 30K token input and 2.5K token output.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 12,
       "IsActive": true,
       "SpeedRank": 8,
@@ -8944,15 +9032,15 @@
       "ID": "072969C3-7D19-43FF-83E9-051E7A2D3586"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.924Z",
-      "checksum": "59e79bd4f5180decf3c1d40a805edf77f811b0fb3428cae7f0e6f7dfc6352098"
+      "lastModified": "2026-02-13T21:08:25.414Z",
+      "checksum": "1eb9d0d91f5fa43d3a9dae8bb250bee94463732f252f839ea45936d8023466e8"
     }
   },
   {
     "fields": {
       "Name": "Gemini 2.5 Pro",
       "Description": "Google's most powerful reasoning model, excelling at coding and complex reasoning tasks. Features a 200K token context window, 200K token input limit, and 10K token output limit.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 16,
       "IsActive": true,
       "SpeedRank": 4,
@@ -9095,15 +9183,15 @@
       "ID": "C478D8CD-9D81-491A-9992-139F45789309"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.925Z",
-      "checksum": "4305253a1ee68fdc1973e58df0bf7fa8cd22a2818bf8434109e5fb91b89dad43"
+      "lastModified": "2026-02-13T21:08:25.416Z",
+      "checksum": "f737e05c1f9dc1d2a24f394acd8cc31e25aaaf8b90034f6dcefb489a66e274c2"
     }
   },
   {
     "fields": {
       "Name": "GPT-OSS-120B",
       "Description": "OpenAI's open-weight language model with 117B total parameters (5.1B active). Features configurable reasoning levels, full chain-of-thought access, native function calling, web browsing, and Python code execution. Designed for production and general-purpose high-reasoning use cases with Apache 2.0 license.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 14,
       "IsActive": true,
       "SpeedRank": 5,
@@ -9320,8 +9408,8 @@
       "ID": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
     },
     "sync": {
-      "lastModified": "2026-01-28T22:07:14.927Z",
-      "checksum": "1d320d87757e1078b67d1dec01015fee7ac769f7de92a404a2534b4d2ab69e19"
+      "lastModified": "2026-02-13T21:08:25.417Z",
+      "checksum": "904bd090eb9736c2ea4a4f36e82e88bf774e0b9825327bc1a1ac7de6fa41671b"
     }
   },
   {
@@ -9329,7 +9417,7 @@
       "Name": "Kimi K2.5",
       "PowerRank": 15,
       "Description": "Moonshot AI's most powerful 1T parameter native multimodal model with Mixture-of-Experts architecture. Features 256K token context window and advanced reasoning capabilities with Thinking Mode and Instant Mode. Released January 27, 2026 with state-of-the-art performance on visual and text understanding tasks.",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 7,
       "CostRank": 6,
@@ -9454,8 +9542,98 @@
       "ID": "1C7F940F-436D-49D2-B258-162FD535DD49"
     },
     "sync": {
-      "lastModified": "2026-02-01T00:26:53.584Z",
-      "checksum": "4be2942ad204b42dba7e62d05fc9f54136b1b248b5938ec2cf4142cfc1c5cbc5"
+      "lastModified": "2026-02-13T21:08:25.433Z",
+      "checksum": "6f2ca5c1bfe30ae78ba2382a911f4f072056b4bd3124b218ab7ef1a4e7735b32"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5",
+      "PowerRank": 20,
+      "Description": "Z.AI's (Zhipu AI) fifth-generation frontier model released February 11, 2026. Features 745B total parameters in a Mixture-of-Experts architecture (256 experts, 44B active per inference) with 200K token context window and 128K output capacity. Achieves 77.8% on SWE-bench Verified, 92.7% on AIME 2026 I, and 86.0% on GPQA-Diamond. Includes Deep Thinking mode for self-critique loops and record-low hallucination rates. Open-source under MIT license.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 4.7"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "DA488608-6A6B-4955-8266-8DF3B89E36DC"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.220Z",
+            "checksum": "579fd3b8c146054746c1a753ca0a35ccc313e73417014bb46aa8b2d1a1713452"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "ZhipuLLM",
+            "APIName": "glm-5",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E6CC92D4-8EDA-4C2D-BBFD-3F15055B48E6"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.232Z",
+            "checksum": "81b5c688ba73cba90b91c60ea81d4d1e9b880e480c15111a1471ca28e9e280bc"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-02-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 3.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 5 pricing on Z.AI as of February 2026. 745B parameter MoE model (44B active) with 200K context and 128K output. Cached input tokens available at $0.20/1M. State-of-the-art open-source model rivaling Claude Opus on benchmarks."
+          },
+          "primaryKey": {
+            "ID": "5A453FFB-DBF1-4363-B08F-7FC1AAB158CA"
+          },
+          "sync": {
+            "lastModified": "2026-02-12T19:54:35.268Z",
+            "checksum": "5432e8153bdad5642a36a0c2cf7b7f8386a23afe62befa03db1ef7b62d34d343"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A4F2213B-E99D-46E5-806B-B71BF4DE653E"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T21:08:31.338Z",
+      "checksum": "cc3482b007f476dbbdf590abdb2159b2e0c3576cf9e54c5f8619b61dc3eaa5cf"
     }
   }
 ]

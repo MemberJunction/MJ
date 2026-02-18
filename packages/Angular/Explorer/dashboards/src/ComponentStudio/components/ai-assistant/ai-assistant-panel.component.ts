@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef 
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
-import { AIModelEntity } from '@memberjunction/core-entities';
+import { MJAIModelEntity } from '@memberjunction/core-entities';
 import { ComponentStudioStateService, ComponentError } from '../../services/component-studio-state.service';
 
 /**
@@ -35,6 +35,7 @@ interface AIModelOption {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-assistant-panel',
   templateUrl: './ai-assistant-panel.component.html',
   styleUrls: ['./ai-assistant-panel.component.css']
@@ -88,8 +89,8 @@ export class AIAssistantPanelComponent implements OnInit, OnDestroy {
     this.IsLoadingModels = true;
     try {
       const rv = new RunView();
-      const result = await rv.RunView<AIModelEntity>({
-        EntityName: 'AI Models',
+      const result = await rv.RunView<MJAIModelEntity>({
+        EntityName: 'MJ: AI Models',
         ExtraFilter: `IsActive = 1 AND AIModelTypeID IN (SELECT ID FROM __mj.vwAIModelTypes WHERE Name = 'LLM')`,
         OrderBy: 'PowerRank DESC, Name ASC',
         ResultType: 'entity_object'

@@ -1,93 +1,105 @@
 <!-- Dashboard Viewer Component -->
 <div class="dashboard-viewer" [class.editing]="isEditing" [class.has-toolbar]="shouldShowToolbar">
-    <!-- Breadcrumb Navigation (hidden in edit mode) -->
+  <!-- Breadcrumb Navigation (hidden in edit mode) -->
+  @if (showBreadcrumb && !isEditing && dashboard) {
     <mj-dashboard-breadcrumb
-        *ngIf="showBreadcrumb && !isEditing && dashboard"
-        [Categories]="Categories"
-        [CurrentCategoryId]="dashboard.CategoryID"
-        [CurrentDashboard]="dashboard"
-        [ShowDashboardName]="true"
-        [AllowDragDrop]="false"
-        Size="large"
-        RootIcon="fa-solid fa-gauge-high"
-        RootLabel="Dashboards"
-        (Navigate)="onBreadcrumbNavigate($event)">
+      [Categories]="Categories"
+      [CurrentCategoryId]="dashboard.CategoryID"
+      [CurrentDashboard]="dashboard"
+      [ShowDashboardName]="true"
+      [AllowDragDrop]="false"
+      Size="large"
+      RootIcon="fa-solid fa-gauge-high"
+      RootLabel="Dashboards"
+      (Navigate)="onBreadcrumbNavigate($event)">
     </mj-dashboard-breadcrumb>
+  }
 
-    <!-- Toolbar (auto-hides when all elements are disabled) -->
-    <div class="dashboard-toolbar" *ngIf="shouldShowToolbar">
-        <div class="toolbar-left">
-            <span class="dashboard-title" *ngIf="dashboard && (isEditing || !showBreadcrumb)">
-                <i class="fa-solid fa-chart-line"></i>
-                {{ dashboard.Name }}
-            </span>
-        </div>
-
-        <div class="toolbar-center">
-            <span class="unsaved-indicator" *ngIf="hasUnsavedChanges && isEditing">
-                <i class="fa-solid fa-circle"></i>
-                Unsaved changes
-            </span>
-        </div>
-
-        <div class="toolbar-right">
-            <!-- Open in New Tab button (when embedded) -->
-            <button
-                class="toolbar-button"
-                *ngIf="showOpenInTabButton && !isEditing"
-                (click)="onOpenInTabClick()"
-                title="Open in its own tab">
-                <i class="fa-solid fa-up-right-from-square"></i>
-                Open in Tab
-            </button>
-
-            <button
-                class="toolbar-button"
-                *ngIf="isEditing"
-                (click)="onAddPanelClick()">
-                <i class="fa-solid fa-plus"></i>
-                Add Part
-            </button>
-
-            <button
-                class="toolbar-button"
-                [class.active]="isEditing"
-                *ngIf="showEditButton"
-                (click)="toggleEditMode()">
-                <i class="fa-solid fa-edit"></i>
-                {{ isEditing ? 'Editing' : 'Edit' }}
-            </button>
-
-            <button
-                class="toolbar-button primary"
-                *ngIf="isEditing && hasUnsavedChanges"
-                (click)="save()">
-                <i class="fa-solid fa-save"></i>
-                Save
-            </button>
-        </div>
-    </div>
-
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" *ngIf="isLoading">
-        <mj-loading text="Loading dashboard..."></mj-loading>
-    </div>
-
-    <!-- Layout Container -->
-    <div class="layout-container" #layoutContainer>
-        <!-- Golden Layout will render panels here -->
-    </div>
-
-    <!-- Empty State -->
-    <div class="empty-state" *ngIf="!hasPanels && !isLoading">
-        <div class="empty-icon">
-            <i class="fa-solid fa-layer-group"></i>
-        </div>
-        <h3>No parts configured</h3>
-        <p>This dashboard has no parts yet. Add your first part to start visualizing your data.</p>
-        <button class="add-part-button" (click)="onAddPanelClick()" *ngIf="isEditing">
+  <!-- Toolbar (auto-hides when all elements are disabled) -->
+  @if (shouldShowToolbar) {
+    <div class="dashboard-toolbar">
+      <div class="toolbar-left">
+        @if (dashboard && (isEditing || !showBreadcrumb)) {
+          <span class="dashboard-title">
+            <i class="fa-solid fa-chart-line"></i>
+            {{ dashboard.Name }}
+          </span>
+        }
+      </div>
+      <div class="toolbar-center">
+        @if (hasUnsavedChanges && isEditing) {
+          <span class="unsaved-indicator">
+            <i class="fa-solid fa-circle"></i>
+            Unsaved changes
+          </span>
+        }
+      </div>
+      <div class="toolbar-right">
+        <!-- Open in New Tab button (when embedded) -->
+        @if (showOpenInTabButton && !isEditing) {
+          <button
+            class="toolbar-button"
+            (click)="onOpenInTabClick()"
+            title="Open in its own tab">
+            <i class="fa-solid fa-up-right-from-square"></i>
+            Open in Tab
+          </button>
+        }
+        @if (isEditing) {
+          <button
+            class="toolbar-button"
+            (click)="onAddPanelClick()">
             <i class="fa-solid fa-plus"></i>
-            Add Your First Part
-        </button>
+            Add Part
+          </button>
+        }
+        @if (showEditButton) {
+          <button
+            class="toolbar-button"
+            [class.active]="isEditing"
+            (click)="toggleEditMode()">
+            <i class="fa-solid fa-edit"></i>
+            {{ isEditing ? 'Editing' : 'Edit' }}
+          </button>
+        }
+        @if (isEditing && hasUnsavedChanges) {
+          <button
+            class="toolbar-button primary"
+            (click)="save()">
+            <i class="fa-solid fa-save"></i>
+            Save
+          </button>
+        }
+      </div>
     </div>
+  }
+
+  <!-- Loading Overlay -->
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <mj-loading text="Loading dashboard..."></mj-loading>
+    </div>
+  }
+
+  <!-- Layout Container -->
+  <div class="layout-container" #layoutContainer>
+    <!-- Golden Layout will render panels here -->
+  </div>
+
+  <!-- Empty State -->
+  @if (!hasPanels && !isLoading) {
+    <div class="empty-state">
+      <div class="empty-icon">
+        <i class="fa-solid fa-layer-group"></i>
+      </div>
+      <h3>No parts configured</h3>
+      <p>This dashboard has no parts yet. Add your first part to start visualizing your data.</p>
+      @if (isEditing) {
+        <button class="add-part-button" (click)="onAddPanelClick()">
+          <i class="fa-solid fa-plus"></i>
+          Add Your First Part
+        </button>
+      }
+    </div>
+  }
 </div>

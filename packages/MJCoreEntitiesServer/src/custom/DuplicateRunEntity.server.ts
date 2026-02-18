@@ -1,10 +1,10 @@
 import { BaseEntity, PotentialDuplicateRequest } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { DuplicateRunEntity } from "@memberjunction/core-entities";
+import { MJDuplicateRunEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
-@RegisterClass(BaseEntity, 'Duplicate Runs')
-export class DuplicateRunEntity_Server extends DuplicateRunEntity  {
+@RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
+export class DuplicateRunEntity_Server extends MJDuplicateRunEntity  {
     public async Save(): Promise<boolean> {
         const saveResult: boolean = await super.Save();
         if (saveResult && this.EndedAt === null) {
@@ -23,5 +23,3 @@ export class DuplicateRunEntity_Server extends DuplicateRunEntity  {
         return saveResult;
     }
 }
-
-export function LoadDuplicateRunEntityServerSubClass() {}
