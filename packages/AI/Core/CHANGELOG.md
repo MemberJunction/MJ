@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ai
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [4aa1b54]
+  - @memberjunction/global@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 /**
  * Commands that do NOT require @memberjunction/server-bootstrap-lite.
- * These commands use only lightweight dependencies (zod, cosmiconfig, node-flyway,
+ * These commands use only lightweight dependencies (zod, cosmiconfig, @memberjunction/skyway-core,
  * fast-glob, fs-extra, etc.) and can start instantly without loading ~1,400 class
  * registrations.
  *
@@ -21,7 +21,7 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // Bump - uses zod, fast-glob, fs only
   'bump',
 
-  // Database commands - use node-flyway + config only
+  // Database commands - use @memberjunction/skyway-core + config only
   'clean',
   'migrate',
 

@@ -14,7 +14,7 @@
  *
  * @remarks
  * **TEMPORARY INTERFACE**: This interface is an interim solution for the 2.x patch release.
- * In MemberJunction 3.0, this will be replaced by a more comprehensive credential management
+ * In a future release, this will be replaced by a more comprehensive credential management
  * system with database storage, encryption, and multi-tenancy support. The replacement
  * interface will be located in `@memberjunction/credentials` or `@memberjunction/core`.
  *

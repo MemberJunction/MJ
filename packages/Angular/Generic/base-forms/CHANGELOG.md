@@ -1,5 +1,25 @@
 # @memberjunction/ng-base-forms
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [3cca644]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+- Updated dependencies [90bfa37]
+  - @memberjunction/ng-entity-viewer@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ng-base-types@5.0.0
+  - @memberjunction/ng-list-management@5.0.0
+  - @memberjunction/ng-record-changes@5.0.0
+  - @memberjunction/global@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

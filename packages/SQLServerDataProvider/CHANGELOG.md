@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Minor Changes
+
+- a3e7cb6: migration
+
+### Patch Changes
+
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ai@5.0.0
+  - @memberjunction/aiengine@5.0.0
+  - @memberjunction/ai-provider-bundle@5.0.0
+  - @memberjunction/ai-vector-dupe@5.0.0
+  - @memberjunction/actions-base@5.0.0
+  - @memberjunction/actions@5.0.0
+  - @memberjunction/encryption@5.0.0
+  - @memberjunction/global@5.0.0
+  - @memberjunction/queue@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

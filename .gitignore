@@ -152,3 +152,5 @@ packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
 
 # Test coverage output
 coverage/
+docker/workbench/workspace/.env.database
+docker/workbench/workspace/screenshots/

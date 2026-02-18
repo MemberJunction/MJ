@@ -1041,3 +1041,166 @@ When contributing to CodeGenLib:
 2. Generated SQL must be compatible with SQL Server and produce valid Flyway migration output
 3. Generated TypeScript must compile without errors and follow MJ naming conventions (PascalCase public members)
 4. AI-powered features must enforce stability guarantees (existing categories and icons are never changed)
+
+## CLI Usage Guide
+
+CodeGen is invoked through the MemberJunction CLI (`mj` command). Two subcommands are available:
+
+### `mj codegen` — Full Code Generation Pipeline
+
+Runs the complete pipeline: database schema analysis, metadata sync, and code generation across all layers.
+
+```bash
+# Run the full pipeline (most common usage)
+mj codegen
+
+# Skip database operations, only regenerate code files from existing metadata
+mj codegen --skipdb
+```
+
+| Flag | Description |
+|------|-------------|
+| `--skipdb` | Skip all database operations (metadata sync, SQL object generation). Only regenerates TypeScript entities, Angular components, and GraphQL resolvers from existing metadata. |
+
+#### Verbose Mode
+
+Verbose output is controlled via `mj.config.cjs` (not a CLI flag):
+
+```javascript
+module.exports = {
+    verboseOutput: true,  // Enable detailed logging during code generation
+};
+```
+
+When enabled, you see additional detail about each pipeline stage including per-entity processing, AI prompt calls, and SQL statement execution.
+
+### `mj codegen manifest` — Class Registration Manifest
+
+Generates a TypeScript manifest file that prevents modern bundlers (ESBuild, Vite) from tree-shaking `@RegisterClass`-decorated classes.
+
+```bash
+# Generate manifest with defaults
+mj codegen manifest
+
+# Generate for a specific app, excluding MJ packages
+mj codegen manifest --appDir ./packages/MJAPI \
+  --output ./packages/MJAPI/src/generated/class-registrations-manifest.ts \
+  --exclude-packages @memberjunction
+
+# Only include classes extending specific base classes
+mj codegen manifest --filter BaseEngine --filter BaseAction --verbose
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--output <path>` | `-o` | Output file path. Default: `./src/generated/class-registrations-manifest.ts` |
+| `--appDir <path>` | `-a` | Root directory whose `package.json` dependency tree is scanned. Default: cwd |
+| `--filter <class>` | `-f` | Only include classes extending this base class. Repeatable. |
+| `--exclude-packages <prefix>` | `-e` | Skip packages whose name starts with this prefix. Repeatable. |
+| `--quiet` | `-q` | Suppress all output except errors. |
+| `--verbose` | `-v` | Show detailed per-package scanning progress. |
+
+### Example Workflows
+
+#### First-Time Setup
+
+```bash
+# 1. Configure database connection in mj.config.cjs
+# 2. Run the full pipeline
+mj codegen
+
+# 3. Generated output lands in directories specified in mj.config.cjs:
+#    - TypeScript entities  → packages/GeneratedEntities/src/generated/
+#    - Angular forms        → packages/MJExplorer/src/app/generated/
+#    - GraphQL resolvers    → packages/MJAPI/src/generated/
+#    - SQL migration file   → migrations/v3/
+```
+
+#### After Schema Changes
+
+```bash
+# CodeGen detects schema changes automatically
+mj codegen
+
+# Review the generated Flyway migration file
+ls -la migrations/v3/CodeGen_Run_*.sql
+```
+
+#### Regenerating Code Only (No DB Changes)
+
+```bash
+# Skip database operations for a faster run
+mj codegen --skipdb
+```
+
+#### Forcing Regeneration of Specific Entities
+
+Use `forceRegeneration` in `mj.config.cjs`:
+
+```javascript
+module.exports = {
+    forceRegeneration: {
+        enabled: true,
+        entityWhereClause: "SchemaName = 'CRM' AND Name LIKE 'Customer%'",
+        baseViews: true,
+        spUpdate: true,
+    },
+};
+```
+
+Then run `mj codegen`. Set `enabled: false` afterward to avoid unnecessary work on future runs.
+
+## Troubleshooting
+
+### Database Connection Failures
+
+**Symptom:** CodeGen fails immediately with a connection error or timeout.
+
+**Common fixes:**
+
+1. **Wrong credentials** — Verify `dbHost`, `dbDatabase`, `codeGenLogin`, and `codeGenPassword` in `mj.config.cjs`. Environment variables `DB_HOST`, `DB_DATABASE`, `CODEGEN_DB_USERNAME`, `CODEGEN_DB_PASSWORD` serve as fallbacks.
+
+2. **Named instance** — If using a named instance (e.g., `localhost\SQLEXPRESS`), set `dbInstanceName` in config.
+
+3. **Certificate trust** — For self-signed certificates, set `dbTrustServerCertificate: true`.
+
+### Missing Output Directories
+
+**Symptom:** `ENOENT` errors when writing generated files.
+
+**Fix:** Ensure all directories listed in the `output` array of `mj.config.cjs` exist. CodeGen does not create parent directories automatically.
+
+### Entity Relationship Errors
+
+**Common causes:**
+
+1. **Missing referenced tables** — If a foreign key references a table excluded via `excludeSchemas` or `excludeTables`, either include the referenced table or remove the foreign key.
+
+2. **Stale metadata** — If you dropped and recreated tables, metadata may be out of sync. Run a full `mj codegen` (without `--skipdb`) to refresh.
+
+### When to Use --skipdb
+
+**Use it when:**
+- You only need to regenerate code files from existing metadata
+- The database is temporarily unavailable but you have valid metadata from a previous run
+
+**Don't use it when:**
+- You have made schema changes (new tables, altered columns, new constraints)
+- You are running CodeGen for the first time
+- You have changed `forceRegeneration` settings
+
+### Configuration Validation Errors
+
+**Symptom:** Zod validation errors at startup.
+
+CodeGen validates all configuration using Zod schemas. Common issues:
+- Missing required fields (`dbHost`, `dbDatabase`, `codeGenLogin`, `codeGenPassword`)
+- Invalid types (`dbPort` must be a positive integer, `verboseOutput` must be a boolean)
+- Malformed `output` array (each entry needs `type` and `directory` properties)
+
+### AI-Powered Features Not Running
+
+1. Verify `advancedGeneration.enableAdvancedGeneration` is `true` in `mj.config.cjs`
+2. Verify the specific feature is `enabled: true` in the `features` array
+3. Ensure the AI Prompts referenced by CodeGen exist in the database
+4. Confirm that at least one AI model is configured and accessible

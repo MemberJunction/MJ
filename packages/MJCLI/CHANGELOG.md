@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/cli
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- 93e1367: Replace flyway with skyway
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/server-bootstrap-lite@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/sqlserver-dataprovider@5.0.0
+  - @memberjunction/ai-cli@5.0.0
+  - @memberjunction/codegen-lib@5.0.0
+  - @memberjunction/config@5.0.0
+  - @memberjunction/db-auto-doc@5.0.0
+  - @memberjunction/metadata-sync@5.0.0
+  - @memberjunction/query-gen@5.0.0
+  - @memberjunction/testing-cli@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

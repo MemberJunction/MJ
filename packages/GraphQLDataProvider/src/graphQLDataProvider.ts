@@ -1660,7 +1660,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop
-            vars["options___"] = options ? options : {SkipEntityAIActions: false, SkipEntityActions: false};
+
+            // Build delete options ensuring all required fields are present.
+            // IMPORTANT: Must be kept in sync with DeleteOptionsInput in @memberjunction/server
+            // and EntityDeleteOptions in @memberjunction/core
+            vars["options___"] = {
+                SkipEntityAIActions: options?.SkipEntityAIActions ?? false,
+                SkipEntityActions: options?.SkipEntityActions ?? false,
+                ReplayOnly: options?.ReplayOnly ?? false,
+                IsParentEntityDelete: options?.IsParentEntityDelete ?? false
+            };
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const queryName: string = 'Delete' + graphQLTypeName;

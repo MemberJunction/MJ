@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [786a390]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/communication-types@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/sqlserver-dataprovider@5.0.0
+  - @memberjunction/ai-agent-manager@5.0.0
+  - @memberjunction/ai-agents@5.0.0
+  - @memberjunction/ai-engine-base@5.0.0
+  - @memberjunction/ai@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/aiengine@5.0.0
+  - @memberjunction/ai-mcp-client@5.0.0
+  - @memberjunction/ai-prompts@5.0.0
+  - @memberjunction/ai-betty-bot@5.0.0
+  - @memberjunction/ai-vector-sync@5.0.0
+  - @memberjunction/actions-base@5.0.0
+  - @memberjunction/code-execution@5.0.0
+  - @memberjunction/actions@5.0.0
+  - @memberjunction/communication-engine@5.0.0
+  - @memberjunction/content-autotagging@5.0.0
+  - @memberjunction/external-change-detection@5.0.0
+  - @memberjunction/core-entities-server@5.0.0
+  - @memberjunction/export-engine@5.0.0
+  - @memberjunction/global@5.0.0
+  - @memberjunction/storage@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes
