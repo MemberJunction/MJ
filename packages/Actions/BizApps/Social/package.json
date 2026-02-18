@@ -8,8 +8,7 @@
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
-    "clean": "rimraf dist",
-    "prepublishOnly": "npm run clean && npm run build"
+    "clean": "rimraf dist"
   },
   "keywords": [
     "memberjunction",
