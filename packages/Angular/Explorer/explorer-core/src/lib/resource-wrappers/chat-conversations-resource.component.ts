@@ -42,6 +42,7 @@ import { Subject, takeUntil, filter } from 'rxjs';
                 [isSidebarPinned]="isSidebarPinned"
                 [isMobileView]="isMobileView"
                 (conversationSelected)="onConversationSelected($event)"
+                (conversationDeleted)="onConversationDeleted($event)"
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
                 (unpinSidebarRequested)="unpinSidebar()">
@@ -575,6 +576,25 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   // ============================================
   // EVENT HANDLERS FROM CHILD COMPONENTS
   // ============================================
+  /**
+   * Handle conversation deletion from the list.
+   * If the deleted conversation was selected, navigate to the first remaining conversation.
+   */
+  onConversationDeleted(deletedId: string): void {
+    if (this.selectedConversationId === deletedId) {
+      const remaining = this.conversationData.conversations.filter(c => c.ID !== deletedId);
+      if (remaining.length > 0) {
+        void this.selectConversation(remaining[0].ID);
+        this.updateUrl();
+      } else {
+        this.selectedConversationId = null;
+        this.selectedConversation = null;
+        this.selectedThreadId = null;
+        this.isNewUnsavedConversation = true;
+        this.updateUrl();
+      }
+    }
+  }
 
   /**
    * Handle conversation selection from the list

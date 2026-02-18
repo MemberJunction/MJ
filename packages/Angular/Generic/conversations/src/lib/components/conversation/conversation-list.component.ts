@@ -725,6 +725,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Input() isMobileView: boolean = false; // Whether we're on mobile (no pin options)
 
   @Output() conversationSelected = new EventEmitter<string>();
+  @Output() conversationDeleted = new EventEmitter<string>(); // Emits the deleted conversation ID
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>(); // Request to pin sidebar
   @Output() unpinSidebarRequested = new EventEmitter<void>(); // Request to unpin (collapse) sidebar
@@ -824,6 +825,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       await this.dialogService.alert('Error', 'Failed to refresh conversations. Please try again.');
     } finally {
       this.isRefreshing = false;
+      this.cdr.detectChanges();
       this.closeHeaderMenu();
     }
   }
@@ -905,7 +907,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       });
 
       if (confirmed) {
-        await this.conversationData.deleteConversation(conversation.ID, this.currentUser);
+        const deletedId = conversation.ID;
+        await this.conversationData.deleteConversation(deletedId, this.currentUser);
+        this.cdr.detectChanges();
+        this.conversationDeleted.emit(deletedId);
       }
     } catch (error) {
       console.error('Error deleting conversation:', error);

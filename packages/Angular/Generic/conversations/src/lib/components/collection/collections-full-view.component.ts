@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
@@ -17,7 +17,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
   standalone: false,
   selector: 'mj-collections-full-view',
   template: `
-    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">
+    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)" kendoDialogContainer>
       <!-- Mac Finder-style Header -->
       <div class="collections-header">
         <!-- Breadcrumb navigation -->
@@ -1625,6 +1625,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     await this.loadCurrentCollectionPermission();
     // Rebuild unified list to show new collection
     this.buildUnifiedItemList();
+    this.cdr.detectChanges();
   }
 
   onFormCancelled(): void {
@@ -1646,6 +1647,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   async onArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
     this.isArtifactModalOpen = false;
     await this.loadArtifacts();
+    this.cdr.detectChanges();
   }
 
   onArtifactModalCancelled(): void {
@@ -1797,6 +1799,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   async onPermissionsChanged(): Promise<void> {
     // Reload collections and permissions after sharing changes
     await this.loadCollections();
+    this.cdr.detectChanges();
   }
 
   onShareModalCancelled(): void {
@@ -1855,6 +1858,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     // Apply sorting
     this.unifiedItems = this.sortItems(items);
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1914,8 +1918,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public toggleSelectMode(): void {
     this.isSelectMode = !this.isSelectMode;
     if (!this.isSelectMode) {
-      // Clear selection when exiting select mode
+      // Clear selection when exiting select mode (clearSelection calls buildUnifiedItemList which calls cdr)
       this.clearSelection();
+    } else {
+      this.cdr.detectChanges();
     }
   }
 
@@ -2015,7 +2021,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Multi-select: Delete selected items (Phase 3)
+   * Multi-select: Delete selected items
    */
   public async deleteSelected(): Promise<void> {
     if (this.selectedItems.size === 0) return;
@@ -2028,8 +2034,42 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     if (!confirmed) return;
 
-    // TODO: Implement batch delete
-    this.clearSelection();
+    const selectedViewItems = this.unifiedItems.filter(item => this.selectedItems.has(item.id));
+    const folderItems = selectedViewItems.filter(item => item.type === 'folder' && item.collection);
+    const artifactItems = selectedViewItems.filter(item => item.type === 'artifact' && item.version);
+
+    try {
+      for (const item of folderItems) {
+        await this.deleteCollectionRecursive(item.collection!.ID);
+      }
+
+      if (artifactItems.length > 0 && this.currentCollectionId) {
+        const rv = new RunView();
+        for (const item of artifactItems) {
+          const result = await rv.RunView<MJCollectionArtifactEntity>({
+            EntityName: 'MJ: Collection Artifacts',
+            ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version!.ID}'`,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          if (result.Success && result.Results) {
+            for (const joinRecord of result.Results) {
+              await joinRecord.Delete();
+            }
+          }
+        }
+      }
+
+      this.clearSelection();
+      await this.loadCollections();
+      if (artifactItems.length > 0) {
+        await this.loadArtifacts();
+      }
+      this.buildUnifiedItemList();
+    } catch (error) {
+      console.error('Error deleting selected items:', error);
+      await this.dialogService.alert('Error', `An error occurred while deleting: ${error}`);
+    }
   }
 
   /**

@@ -1002,6 +1002,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
     } catch (error) {
       console.error(`Error handling message completion for ${message.ID}:`, error);
+      this.cdr.detectChanges();
     }
   }
 
@@ -1107,7 +1108,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Use optimized single query to reload all conversation data
       const result = await rq.RunQuery({
         QueryName: 'GetConversationComplete',
-        CategoryPath: '/MJ/Conversations',
+        CategoryPath: 'MJ/Conversations',
         Parameters: { ConversationID: detail.ConversationID }
       }, this.currentUser);
 
@@ -1603,6 +1604,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.showCollectionPicker = false;
       this.collectionPickerArtifactId = null;
       this.collectionPickerExcludedIds = [];
+      this.cdr.detectChanges();
     }
   }
 
@@ -1816,8 +1818,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     const dialogRef = this.dialogService.open({
       content: TestFeedbackDialogComponent,
+      title: 'Provide Test Feedback',
       width: 600,
-      height: 680
+      minHeight: 500
     });
 
     const dialogInstance = dialogRef.content.instance as TestFeedbackDialogComponent;
@@ -1889,6 +1892,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     if (artifact) {
       this.artifactToShare = artifact;
       this.isArtifactShareModalOpen = true;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1898,6 +1902,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   onArtifactShareModalClose(): void {
     this.isArtifactShareModalOpen = false;
     this.artifactToShare = null;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1911,6 +1916,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     if (this.selectedArtifactId) {
       await this.loadArtifactPermissions(this.selectedArtifactId);
     }
+    this.cdr.detectChanges();
   }
 
   // Scroll functionality (pattern from skip-chat)
