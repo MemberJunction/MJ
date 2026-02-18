@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 5.1.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.1.0
+- @memberjunction/core@5.1.0
+
 ## 5.0.0
 
 ### Major Changes

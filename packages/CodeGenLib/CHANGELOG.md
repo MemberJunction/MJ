@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.1.0
+
+### Patch Changes
+
+- f426d43: Fix CodeGen to apply excludeSchemas filter consistently across all generators (TypeScript, Angular, GraphQL), not just SQL generation. Also adds cleanup for orphaned Angular entity form directories when entities are renamed or deleted.
+- ae7e9e7: Fix DELETE cascade behavior for nullable foreign keys in composite unique constraints
+- Updated dependencies [f426d43]
+- Updated dependencies [61079e9]
+  - @memberjunction/server-bootstrap-lite@5.1.0
+  - @memberjunction/global@5.1.0
+  - @memberjunction/ai@5.1.0
+  - @memberjunction/ai-core-plus@5.1.0
+  - @memberjunction/aiengine@5.1.0
+  - @memberjunction/ai-prompts@5.1.0
+  - @memberjunction/actions-base@5.1.0
+  - @memberjunction/actions@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+  - @memberjunction/core-entities-server@5.1.0
+  - @memberjunction/sqlserver-dataprovider@5.1.0
+  - @memberjunction/ai-provider-bundle@5.1.0
+  - @memberjunction/config@5.1.0
+
 ## 5.0.0
 
 ### Major Changes
