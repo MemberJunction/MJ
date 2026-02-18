@@ -49,6 +49,36 @@ const schemaPlaceholderSchema = z.object({
   placeholder: z.string(),
 });
 
+// Schema for dynamic package entries managed by `mj app install/remove`
+const dynamicPackageEntrySchema = z.object({
+  PackageName: z.string(),
+  StartupExport: z.string(),
+  AppName: z.string(),
+  Enabled: z.boolean().default(true),
+});
+
+// Schema for Open App configuration section
+const openAppsConfigSchema = z.object({
+  github: z.object({
+    token: z.string().optional(),
+  }).optional(),
+  registries: z.array(z.object({
+    name: z.string(),
+    url: z.string().url(),
+    token: z.string().optional(),
+  })).optional(),
+  codeGenExclusions: z.object({
+    includeAppSchemas: z.boolean().default(false),
+    overrideApps: z.array(z.string()).default([]),
+  }).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+}).optional();
+
+// Schema for dynamic packages section
+const dynamicPackagesSchema = z.object({
+  server: z.array(dynamicPackageEntrySchema).optional(),
+}).optional();
+
 // Schema for database-dependent config (required fields)
 const mjConfigSchema = z.object({
   dbHost: z.string().default('localhost'),
@@ -67,6 +97,8 @@ const mjConfigSchema = z.object({
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
+  openApps: openAppsConfigSchema,
+  dynamicPackages: dynamicPackagesSchema,
 });
 
 // Schema for non-database commands (all fields optional)
@@ -87,6 +119,8 @@ const mjConfigSchemaOptional = z.object({
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
+  openApps: openAppsConfigSchema,
+  dynamicPackages: dynamicPackagesSchema,
 });
 
 // Don't validate at module load - let commands decide when they need validated config

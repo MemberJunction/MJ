@@ -25,7 +25,8 @@
     "packages/Scheduling/*",
     "packages/TestingFramework/*",
     "packages/Credentials/*",
-    "packages/APIKeys/*"
+    "packages/APIKeys/*",
+    "packages/OpenApp/*"
   ],
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
@@ -126,6 +127,9 @@
     "inflight": "^1.0.6",
     "fstream": "npm:tar-fs@^3.0.4",
     "lodash.isequal": "npm:fast-deep-equal@^3.1.3",
-    "unzipper": "^0.12.3"
+    "unzipper": "^0.12.3",
+    "@memberjunction/credentials": {
+      "ajv": "$ajv"
+    }
   }
 }

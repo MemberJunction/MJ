@@ -470,7 +470,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (282 classes)
+// @memberjunction/core-entities (285 classes)
 import {
     ComponentEntityExtended,
     DashboardEntityExtended,
@@ -667,6 +667,9 @@ import {
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
     MJOAuthTokenEntity,
+    MJOpenAppDependencyEntity,
+    MJOpenAppEntity,
+    MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
@@ -1351,6 +1354,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
     MJOAuthTokenEntity,
+    MJOpenAppDependencyEntity,
+    MJOpenAppEntity,
+    MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
@@ -1491,7 +1497,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 624;
+export const CLASS_REGISTRATIONS_COUNT = 627;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

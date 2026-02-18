@@ -721,7 +721,7 @@ export class SQLCodeGenBase {
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
                         logStatus(`  Regenerating ${spName} due to cascade dependency changes`);
                     }
-                    const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPDelete(options.entity)
+                    const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + await this.generateSPDelete(options.entity, options.pool)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
 
@@ -862,7 +862,7 @@ export class SQLCodeGenBase {
         if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
             if (entity.spDeleteGenerated)
                 // generated SP, will include permissions
-                sOutput += this.generateSPDelete(entity) + '\n\n';
+                sOutput += await this.generateSPDelete(entity, pool) + '\n\n';
             else
                 // custom SP, still generate the permissions
                 sOutput += this.generateSPPermissions(entity, entity.spDelete, SPType.Delete) + '\n\n';
@@ -1889,9 +1889,9 @@ ${updatedAtTrigger}
     }
 
 
-    protected generateSPDelete(entity: EntityInfo): string {
+    protected async generateSPDelete(entity: EntityInfo, pool: sql.ConnectionPool): Promise<string> {
         const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.BaseTableCodeName}`;
-        const sCascadeDeletes: string = this.generateCascadeDeletes(entity);
+        const sCascadeDeletes: string = await this.generateCascadeDeletes(entity, pool);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Delete);
         let sVariables: string = '';
         let sSelect: string = '';
@@ -1957,7 +1957,7 @@ GO${permissions}
     `
     }
 
-    protected generateCascadeDeletes(entity: EntityInfo): string {
+    protected async generateCascadeDeletes(entity: EntityInfo, pool: sql.ConnectionPool): Promise<string> {
         let sOutput: string = '';
         if (entity.CascadeDeletes) {
             const md = new Metadata();
@@ -1966,12 +1966,12 @@ GO${permissions}
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
                     if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
-                        const sql = this.generateSingleCascadeOperation(entity, e, ef);
-                        
-                        if (sql !== '') {
+                        const cascadeSql = await this.generateSingleCascadeOperation(entity, e, ef, pool);
+
+                        if (cascadeSql !== '') {
                             if (sOutput !== '')
                                 sOutput += '\n    ';
-                            sOutput += sql;
+                            sOutput += cascadeSql;
                         }
                     }
                 }
@@ -1980,7 +1980,32 @@ GO${permissions}
         return sOutput === '' ? '' : `${sOutput}\n    `;
     }
 
-    protected generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
+    protected async generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo, pool: sql.ConnectionPool): Promise<string> {
+        // Check if nullable FK is part of composite unique constraint
+        // If so, we must DELETE instead of UPDATE to avoid unique constraint violations
+        if (fkField.AllowsNull) {
+            const isCompositeUnique = await this.isFieldInCompositeUniqueConstraint(
+                pool,
+                relatedEntity.SchemaName,
+                relatedEntity.BaseTable,
+                fkField.Name
+            );
+
+            if (isCompositeUnique) {
+                if (relatedEntity.AllowDeleteAPI) {
+                    // FK is part of composite unique - use DELETE instead of UPDATE
+                    logStatus(`    ${relatedEntity.Name}.${fkField.Name} is part of composite unique constraint - using DELETE cascade`);
+                    return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
+                } else {
+                    // Can't delete and can't safely update - warn
+                    const msg = `${relatedEntity.Name}.${fkField.Name} is part of composite unique constraint but entity doesn't allow delete API`;
+                    logWarning(`WARNING in spDelete${parentEntity.BaseTableCodeName}: ${msg}`);
+                    return `
+    -- WARNING: ${msg} - cascade operation may fail due to unique constraint violation`;
+                }
+            }
+        }
+
         if (fkField.AllowsNull === false && relatedEntity.AllowDeleteAPI) {
             // Non-nullable FK: generate cursor-based cascade delete
             return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
@@ -2007,7 +2032,7 @@ GO${permissions}
     -- ${sqlComment}
     -- This will cause a referential integrity violation`;
         }
-        
+
         return '';
     }
 
@@ -2169,6 +2194,56 @@ GO${permissions}
         }
         
         return { declarations, selectFields, fetchInto, allParams };
+    }
+
+    /**
+     * Checks if a field is part of a composite (multi-column) unique constraint.
+     * Returns true if the field participates in a unique index with 2+ columns.
+     * This is used to determine if a nullable FK should use DELETE instead of UPDATE
+     * during cascade operations, since setting to NULL could violate uniqueness.
+     */
+    protected async isFieldInCompositeUniqueConstraint(
+        pool: sql.ConnectionPool,
+        schemaName: string,
+        tableName: string,
+        columnName: string
+    ): Promise<boolean> {
+        const query = `
+            SELECT i.index_id
+            FROM sys.indexes i
+            INNER JOIN sys.tables t ON i.object_id = t.object_id
+            INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE i.is_unique = 1
+              AND i.is_primary_key = 0
+              AND s.name = @schemaName
+              AND t.name = @tableName
+              -- This index contains the specified column
+              AND EXISTS (
+                  SELECT 1
+                  FROM sys.index_columns ic
+                  INNER JOIN sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+                  WHERE ic.object_id = i.object_id
+                    AND ic.index_id = i.index_id
+                    AND c.name = @columnName
+              )
+              -- This index has more than one column (composite)
+              AND (SELECT COUNT(*)
+                   FROM sys.index_columns ic2
+                   WHERE ic2.object_id = i.object_id
+                     AND ic2.index_id = i.index_id) > 1
+        `;
+
+        try {
+            const result = await pool.request()
+                .input('schemaName', sql.NVarChar, schemaName)
+                .input('tableName', sql.NVarChar, tableName)
+                .input('columnName', sql.NVarChar, columnName)
+                .query(query);
+            return result.recordset.length > 0;
+        } catch (error) {
+            logWarning(`Failed to check composite unique constraint for ${schemaName}.${tableName}.${columnName}: ${error}`);
+            return false; // Fallback to existing UPDATE behavior
+        }
     }
 
     /**

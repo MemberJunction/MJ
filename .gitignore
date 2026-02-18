@@ -148,3 +148,4 @@ packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
 coverage/
 docker/workbench/workspace/.env.database
 docker/workbench/workspace/screenshots/
+test-run-log.txt

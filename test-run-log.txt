@@ -1,0 +1,289 @@
+=== Open App System Test Run ===
+Started: Fri Feb 13 14:30:59 CST 2026
+
+=== BUILD: MJOpenApp Engine ===
+
+> @memberjunction/mj-open-app-engine@4.3.1 build
+> tsc && tsc-alias -f
+
+Engine build: SUCCESS
+
+=== BUILD: MJCLI ===
+
+> @memberjunction/cli@4.3.1 build
+> tsc && tsc-alias -f && oclif manifest
+
+ ›   Warning: oclif update available from 4.22.73 to 4.22.77.
+wrote manifest to /Users/madhavsubramaniyam/Projects/MJ/MJ/packages/MJCLI/oclif.manifest.json
+CLI build: SUCCESS
+
+========================================
+=== TEST 1: mj app install ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+LocalCacheManager initialized in 0ms
+- [Fetch] Fetching manifest from https://github.com/MemberJunction/mj-sample-open-app...
+- [Validate] Validating manifest...
+- [Validate] Checking MJ version compatibility and resolving dependencies...
+- [Install] Installing mj-sample-app v1.0.0...
+- [Schema] Checking schema 'sample_app'...
+- [Schema] Creating schema 'sample_app'...
+- [Migration] Downloading migration files...
+- [Migration] Running 2 migration(s)...
+- [Record] Recording app installation...
+- [Record] Recording app installation...
+Loading embedding model Xenova/all-mpnet-base-v2 from HuggingFace (first-time download may take a moment)...
+Model Xenova/all-mpnet-base-v2 loaded successfully
+✔ [Record] App 'mj-sample-app' recorded as installed
+- [Record] Committing installation records...
+- [Config] Updating configuration files...
+- [Packages] Adding npm packages...
+- [Packages] Running npm install...
+✖ Install failed: npm install failed: Command failed: npm install --loglevel=warn
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/@mj-test%2fsample-app-server - Not found
+npm error 404
+npm error 404  The requested resource '@mj-test/sample-app-server@^1.0.0' could not be found or you do not have permission to access it.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: /Users/madhavsubramaniyam/.npm/_logs/2026-02-13T20_31_22_679Z-debug-0.log
+
+✖ Install failed
+ ›   Error: EEXIT: 1
+Exit code: 2
+
+========================================
+=== SQL VERIFICATION AFTER TEST 1 ===
+========================================
+Name                                                             Version                                            Status               SchemaName                                                                                                                      
+---------------------------------------------------------------- -------------------------------------------------- -------------------- --------------------------------------------------------------------------------------------------------------------------------
+mj-sample-app                                                    1.0.0                                              Error                sample_app                                                                                                                      
+
+(1 row affected)
+---
+Action               Success Summary                                                                                                                                                                                                                                                         
+-------------------- ------- ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Install                    0 Failed during Packages phase: npm install failed: Command failed: npm install --loglevel=warn
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/@mj-test%2fsample-app-server - Not found
+npm error 404
+npm error 404  The requested r
+
+(1 row affected)
+---
+name                                                                                                                            
+--------------------------------------------------------------------------------------------------------------------------------
+sample_app                                                                                                                      
+
+(1 row affected)
+---
+=== FILE CHECK: mj.config.cjs ===
+No dynamicPackages found in mj.config.cjs
+---
+=== FILE CHECK: MJAPI package.json ===
+    "@mj-test/sample-app-server": "^1.0.0"
+
+========================================
+=== TEST 2: mj app list ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+LocalCacheManager initialized in 0ms
+
+Installed Open Apps:
+
+Name                            Version       Status      
+----------------------------------------------------------
+mj-sample-app                   1.0.0         Error       
+Exit code: 0
+
+========================================
+=== TEST 3: mj app info ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+LocalCacheManager initialized in 1ms
+
+MJ Sample App
+
+  Name:        mj-sample-app
+  Version:     1.0.0
+  Status:      Error
+  Publisher:   MemberJunction
+  Email:       dev@memberjunction.com
+  URL:         https://memberjunction.com
+  Repository:  https://github.com/MemberJunction/mj-sample-open-app
+  Schema:      sample_app
+  MJ Range:    >=4.0.0 <5.0.0
+  License:     MIT
+
+  A minimal sample Open App for testing the MJ Open App install system.
+
+Exit code: 0
+
+========================================
+=== TEST 4: mj app disable ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+- Disabling mj-sample-app...
+LocalCacheManager initialized in 0ms
+Loading embedding model Xenova/all-mpnet-base-v2 from HuggingFace (first-time download may take a moment)...
+Model Xenova/all-mpnet-base-v2 loaded successfully
+✔ Disabled mj-sample-app
+
+App disabled. Restart MJAPI and rebuild MJExplorer.
+Exit code: 0
+---
+SQL after disable:
+Name                                                             Status              
+---------------------------------------------------------------- --------------------
+mj-sample-app                                                    Disabled            
+
+(1 row affected)
+
+========================================
+=== TEST 5: mj app enable ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+- Enabling mj-sample-app...
+LocalCacheManager initialized in 1ms
+Loading embedding model Xenova/all-mpnet-base-v2 from HuggingFace (first-time download may take a moment)...
+Model Xenova/all-mpnet-base-v2 loaded successfully
+✔ Enabled mj-sample-app
+
+App enabled. Restart MJAPI and rebuild MJExplorer.
+Exit code: 0
+---
+SQL after enable:
+Name                                                             Status              
+---------------------------------------------------------------- --------------------
+mj-sample-app                                                    Active              
+
+(1 row affected)
+
+========================================
+=== TEST 6: mj app check-updates ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+ ›   Error: command app:check-updates:mj-sample-app not found
+Exit code: 2
+
+========================================
+=== TEST 7: Double Install ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+LocalCacheManager initialized in 0ms
+✖ Install failed: App 'mj-sample-app' is already installed with status 'Active'. Use 'mj app upgrade' to update it.
+✖ Install failed
+ ›   Error: EEXIT: 1
+Exit code: 2
+
+========================================
+=== TEST 8: mj app remove ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+? Are you sure you want to remove 'mj-sample-app'? This will DROP the app schema
+ and all data. (y/N)[1A[102GWarning: Detected unsettled top-level await at file:///Users/madhavsubramaniyam/Projects/MJ/MJ/packages/MJCLI/bin/run.js:16
+await execute({ dir: import.meta.url });
+^
+
+
+
+[1B
+[?25hExit code: 13
+---
+SQL after remove:
+Name                                                             Status              
+---------------------------------------------------------------- --------------------
+mj-sample-app                                                    Active              
+
+(1 row affected)
+---
+Action               Success Summary                                                                                                                                                                                                                                                         
+-------------------- ------- ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Install                    0 Failed during Packages phase: npm install failed: Command failed: npm install --loglevel=warn
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/@mj-test%2fsample-app-server - Not found
+npm error 404
+npm error 404  The requested r
+
+(1 row affected)
+---
+name                                                                                                                            
+--------------------------------------------------------------------------------------------------------------------------------
+sample_app                                                                                                                      
+
+(1 row affected)
+---
+File check after remove:
+No mj-sample-app in mj.config.cjs (correct)
+    "@mj-test/sample-app-server": "^1.0.0"
+
+========================================
+=== TEST 9: mj app list after remove ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+LocalCacheManager initialized in 0ms
+
+Installed Open Apps:
+
+Name                            Version       Status      
+----------------------------------------------------------
+mj-sample-app                   1.0.0         Active      
+Exit code: 0
+
+========================================
+=== TEST 10: Reinstall ===
+========================================
+ ›   Warning: @memberjunction/cli update available from 4.3.1 to 4.4.0.
+~ M e m b e r J u n c t i o n ~
+@memberjunction/cli/4.3.1 darwin-arm64 node-v24.12.0
+
+LocalCacheManager initialized in 0ms
+- [Fetch] Fetching manifest from https://github.com/MemberJunction/mj-sample-open-app...
+- [Validate] Validating manifest...
+- [Validate] Checking MJ version compatibility and resolving dependencies...
+✖ Install failed: App 'mj-sample-app' is already installed with status 'Active'. Use 'mj app upgrade' to update it.
+✖ Install failed
+ ›   Error: EEXIT: 1
+Exit code: 2
+---
+SQL after reinstall:
+Name                                                             Version                                            Status              
+---------------------------------------------------------------- -------------------------------------------------- --------------------
+mj-sample-app                                                    1.0.0                                              Active              
+
+(1 row affected)
+Action               Success
+-------------------- -------
+Install                    0
+
+(1 row affected)
+
+========================================
+=== TEST RUN COMPLETE ===
+========================================
+Finished: Fri Feb 13 14:36:40 CST 2026
