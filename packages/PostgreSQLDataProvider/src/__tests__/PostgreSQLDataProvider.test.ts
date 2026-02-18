@@ -98,10 +98,11 @@ describe('PostgreSQLDataProvider', () => {
     });
 
     describe('GetCurrentUser', () => {
-        it('should throw when called without auth context', async () => {
+        it('should return null when called without auth context', async () => {
             // Access the protected method via type assertion for testing
             const providerWithAccess = provider as unknown as { GetCurrentUser(): Promise<unknown> };
-            await expect(providerWithAccess.GetCurrentUser()).rejects.toThrow('auth context');
+            const result = await providerWithAccess.GetCurrentUser();
+            expect(result).toBeNull();
         });
     });
 
