@@ -1,0 +1,22 @@
+{
+  "name": "@memberjunction/sql-converter",
+  "version": "5.0.0",
+  "description": "Verified SQL conversion pipeline with statement-by-statement transpilation, database verification, LLM fallback, and audit reporting.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["/dist"],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/sqlglot-ts": "5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
