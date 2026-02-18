@@ -729,6 +729,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>(); // Request to pin sidebar
   @Output() unpinSidebarRequested = new EventEmitter<void>(); // Request to unpin (collapse) sidebar
+  @Output() refreshRequested = new EventEmitter<void>(); // Emitted after list refresh so chat area can also reload
 
   public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
@@ -820,6 +821,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.isRefreshing = true;
     try {
       await this.conversationData.refreshConversations(this.environmentId, this.currentUser);
+      // Signal parent to also reload messages in the active conversation
+      this.refreshRequested.emit();
     } catch (error) {
       console.error('Error refreshing conversations:', error);
       await this.dialogService.alert('Error', 'Failed to refresh conversations. Please try again.');

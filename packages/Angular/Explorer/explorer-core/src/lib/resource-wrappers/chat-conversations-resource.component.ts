@@ -45,7 +45,8 @@ import { Subject, takeUntil, filter } from 'rxjs';
                 (conversationDeleted)="onConversationDeleted($event)"
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
-                (unpinSidebarRequested)="unpinSidebar()">
+                (unpinSidebarRequested)="unpinSidebar()"
+                (refreshRequested)="onRefreshRequested()">
               </mj-conversation-list>
             }
           </div>
@@ -576,6 +577,16 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   // ============================================
   // EVENT HANDLERS FROM CHILD COMPONENTS
   // ============================================
+
+  /**
+   * Handle refresh request from the conversation list.
+   * After the list refreshes, also reload messages in the active chat area so any
+   * new agent responses are visible without a full page reload.
+   */
+  onRefreshRequested(): void {
+    void this.chatArea?.reloadMessages();
+  }
+
   /**
    * Handle conversation deletion from the list.
    * If the deleted conversation was selected, navigate to the first remaining conversation.
