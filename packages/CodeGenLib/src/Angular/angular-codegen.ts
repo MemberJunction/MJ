@@ -88,6 +88,30 @@ export class AngularFormSectionInfo {
  */
 export class AngularClientGeneratorBase {
     /**
+     * Recursively removes a directory and all its contents (files and subdirectories).
+     * @param dirPath The path to the directory to remove
+     */
+    protected removeDirectoryRecursively(dirPath: string): void {
+        if (!fs.existsSync(dirPath)) {
+            return;
+        }
+
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = path.join(dirPath, entry.name);
+            if (entry.isDirectory()) {
+                // Recursively remove subdirectory
+                this.removeDirectoryRecursively(fullPath);
+            } else {
+                // Remove file
+                fs.unlinkSync(fullPath);
+            }
+        }
+        // Remove the now-empty directory
+        fs.rmdirSync(dirPath);
+    }
+
+    /**
      * Removes orphaned Angular entity form directories that no longer correspond to existing entities.
      * This handles cleanup when entities are renamed or deleted.
      * @param entityPath The path to the Entities directory containing entity form subdirectories
@@ -116,13 +140,8 @@ export class AngularClientGeneratorBase {
                 if (!validClassNames.has(dir)) {
                     const dirPath = path.join(entityPath, dir);
                     try {
-                        // Remove all files in the directory first
-                        const files = fs.readdirSync(dirPath);
-                        for (const file of files) {
-                            fs.unlinkSync(path.join(dirPath, file));
-                        }
-                        // Then remove the directory itself
-                        fs.rmdirSync(dirPath);
+                        // Recursively remove the directory and all its contents
+                        this.removeDirectoryRecursively(dirPath);
                         logStatus(`   Removed orphaned entity form directory: ${dir}`);
                     } catch (err) {
                         logError(`   Failed to remove orphaned directory ${dir}: ${err}`);
