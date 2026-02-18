@@ -254,7 +254,6 @@ export const contextFunction =
     let p: DatabaseProviderBase;
     if (isPostgres) {
       const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-      const pgPool = (dataSource as unknown as Record<string, unknown>)['_pgPool'] as import('pg').Pool;
       const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
       const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
       const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
@@ -270,7 +269,15 @@ export const contextFunction =
         undefined,
         false, // use existing metadata from global provider
       );
-      await pgProvider.Config(pgConfig);
+
+      // Share the connection pool from the primary provider to avoid pool exhaustion.
+      // Each per-request provider was creating its own pool, leading to "too many clients" errors.
+      const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool };
+      if (primaryProvider?.DatabaseConnection) {
+        await pgProvider.ConfigWithSharedPool(pgConfig, primaryProvider.DatabaseConnection);
+      } else {
+        await pgProvider.Config(pgConfig);
+      }
       p = pgProvider;
     } else {
       const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);

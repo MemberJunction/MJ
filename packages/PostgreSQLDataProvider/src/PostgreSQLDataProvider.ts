@@ -131,6 +131,22 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         }
     }
 
+    /**
+     * Configures this provider to share an existing pool from another PostgreSQLDataProvider.
+     * Used for per-request providers that should reuse the primary provider's connection pool.
+     */
+    async ConfigWithSharedPool(configData: PostgreSQLProviderConfigData, existingPool: pg.Pool): Promise<boolean> {
+        try {
+            this._configData = configData;
+            this._schemaName = configData.MJCoreSchemaName || '__mj';
+            this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+            return await super.Config(configData);
+        } catch (err) {
+            LogError(`PostgreSQLDataProvider.ConfigWithSharedPool failed: ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
+
     async Dispose(): Promise<void> {
         await this._connectionManager.Close();
     }

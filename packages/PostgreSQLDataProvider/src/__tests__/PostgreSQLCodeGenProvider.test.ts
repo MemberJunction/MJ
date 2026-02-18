@@ -263,6 +263,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('fn_delete_test_entity');
             expect(sql).toContain('DELETE FROM');
             expect(sql).toContain('RETURNS TABLE');
+            expect(sql).toContain('#variable_conflict use_column');
         });
 
         it('should generate soft delete with UPDATE', () => {

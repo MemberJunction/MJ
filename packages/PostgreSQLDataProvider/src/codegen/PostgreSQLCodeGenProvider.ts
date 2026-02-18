@@ -181,6 +181,7 @@ ${trigger}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramDecl}
 ) RETURNS ${returnType} AS $$
+#variable_conflict use_column
 DECLARE
     v_affected_count INTEGER;
 BEGIN

@@ -61,14 +61,21 @@ export class PGConnectionManager {
     }
 
     /**
+     * Whether this manager owns its pool (created it) vs sharing an external one.
+     * Shared pools are NOT closed when Close() is called.
+     */
+    private _ownsPool: boolean = true;
+
+    /**
      * Initializes the connection pool with the given configuration.
      */
     async Initialize(config: PGConnectionConfig): Promise<void> {
-        if (this._pool) {
+        if (this._pool && this._ownsPool) {
             await this.Close();
         }
 
         this._config = config;
+        this._ownsPool = true;
         this._pool = new pg.Pool({
             host: config.Host,
             port: config.Port ?? 5432,
@@ -92,6 +99,17 @@ export class PGConnectionManager {
     }
 
     /**
+     * Sets an existing pool for this manager to use without creating a new one.
+     * The manager will NOT close a shared pool when Close() is called.
+     * This is used for per-request providers that share the primary pool.
+     */
+    InitializeWithExistingPool(pool: pg.Pool, config: PGConnectionConfig): void {
+        this._pool = pool;
+        this._config = config;
+        this._ownsPool = false;
+    }
+
+    /**
      * Acquires a client from the pool for manual connection management.
      */
     async AcquireClient(): Promise<pg.PoolClient> {
@@ -110,11 +128,13 @@ export class PGConnectionManager {
 
     /**
      * Closes the connection pool and releases all connections.
+     * If the pool was shared via InitializeWithExistingPool(), this is a no-op
+     * since the pool lifecycle is managed by the original owner.
      */
     async Close(): Promise<void> {
-        if (this._pool) {
+        if (this._pool && this._ownsPool) {
             await this._pool.end();
-            this._pool = null;
         }
+        this._pool = null;
     }
 }
