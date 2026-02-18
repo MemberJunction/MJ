@@ -10,6 +10,7 @@ import {
     UserInfo,
     EntityInfo,
     EntityFieldInfo,
+    EntityPermissionType,
     ProviderType,
     CompositeKey,
     EntityRecordNameInput,
@@ -20,6 +21,7 @@ import {
     EntitySaveOptions,
     EntityDeleteOptions,
     LogError,
+    LogStatus,
     PotentialDuplicateRequest,
     PotentialDuplicateResponse,
     RecordMergeRequest,
@@ -32,6 +34,7 @@ import {
     DatasetStatusEntityUpdateDateType,
     DatasetItemFilterType,
     RunViewWithCacheCheckParams,
+    RunViewWithCacheCheckResult,
     RunViewsWithCacheCheckResponse,
     EntityMergeOptions,
     IEntityDataProvider,
@@ -718,10 +721,287 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
     // ─── Cache Check Methods ─────────────────────────────────────────
 
     async RunViewsWithCacheCheck<T>(
-        _params: RunViewWithCacheCheckParams[],
-        _contextUser?: UserInfo
+        params: RunViewWithCacheCheckParams[],
+        contextUser?: UserInfo
     ): Promise<RunViewsWithCacheCheckResponse<T>> {
-        return { success: false, results: [], errorMessage: 'Not yet implemented for PostgreSQL' };
+        try {
+            const user = contextUser || this.CurrentUser;
+            if (!user) {
+                return { success: false, results: [], errorMessage: 'No user context available' };
+            }
+
+            // Separate items that need cache check from those that don't
+            const itemsNeedingCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+            const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
+            const errorResults: RunViewWithCacheCheckResult<T>[] = [];
+
+            for (let i = 0; i < params.length; i++) {
+                const item = params[i];
+                if (!item.cacheStatus) {
+                    itemsWithoutCacheCheck.push({ index: i, item });
+                    continue;
+                }
+
+                const entityInfo = this.Entities.find(
+                    (e) => e.Name.trim().toLowerCase() === item.params.EntityName?.trim().toLowerCase()
+                );
+                if (!entityInfo) {
+                    errorResults.push({ viewIndex: i, status: 'error', errorMessage: `Entity ${item.params.EntityName} not found in metadata` });
+                    continue;
+                }
+
+                try {
+                    this.checkUserReadPermissions(entityInfo.Name, user);
+                    const whereSQL = this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
+                    itemsNeedingCacheCheck.push({ index: i, item, entityInfo, whereSQL });
+                } catch (e) {
+                    errorResults.push({ viewIndex: i, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
+                }
+            }
+
+            // Execute cache status checks
+            const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
+
+            // Determine current vs stale
+            const differentialItems: Array<{
+                index: number; params: RunViewParams; entityInfo: EntityInfo; whereSQL: string;
+                clientMaxUpdatedAt: string; clientRowCount: number;
+                serverStatus: { maxUpdatedAt?: string; rowCount?: number };
+            }> = [];
+            const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
+            const currentResults: RunViewWithCacheCheckResult<T>[] = [];
+
+            for (const { index, item, entityInfo, whereSQL } of itemsNeedingCacheCheck) {
+                const serverStatus = cacheStatusResults.get(index);
+                if (!serverStatus || !serverStatus.success) {
+                    errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
+                    continue;
+                }
+
+                if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                    currentResults.push({ viewIndex: index, status: 'current' });
+                } else if (entityInfo.TrackRecordChanges) {
+                    differentialItems.push({
+                        index, params: item.params, entityInfo, whereSQL,
+                        clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+                        clientRowCount: item.cacheStatus!.rowCount,
+                        serverStatus,
+                    });
+                } else {
+                    staleItemsNoTracking.push({ index, params: item.params });
+                }
+            }
+
+            // Run all queries in parallel
+            const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
+                ...itemsWithoutCacheCheck.map(({ index, item }) =>
+                    this.runFullQueryAndReturn<T>(item.params, index, contextUser)
+                ),
+                ...staleItemsNoTracking.map(({ index, params: vp }) =>
+                    this.runFullQueryAndReturn<T>(vp, index, contextUser)
+                ),
+                ...differentialItems.map(({ index, params: vp, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
+                    this.runDifferentialQueryAndReturn<T>(vp, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser)
+                ),
+            ];
+
+            const fullQueryResults = await Promise.all(queryPromises);
+            const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+            allResults.sort((a, b) => a.viewIndex - b.viewIndex);
+
+            return { success: true, results: allResults };
+        } catch (e) {
+            LogError(e);
+            return { success: false, results: [], errorMessage: e instanceof Error ? e.message : String(e) };
+        }
+    }
+
+    private async getBatchedServerCacheStatus(
+        items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
+        contextUser?: UserInfo
+    ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+        const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
+        if (items.length === 0) return results;
+
+        // Execute each status query individually since PG doesn't have multi-result-set batching
+        const promises = items.map(async ({ index, entityInfo, whereSQL }) => {
+            try {
+                const statusSQL = `SELECT COUNT(*) AS "TotalRows", MAX("__mj_UpdatedAt") AS "MaxUpdatedAt" FROM ${this.viewName(entityInfo)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+                const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, { description: `CacheStatus: ${entityInfo.Name}` }, contextUser);
+                if (rows && rows.length > 0) {
+                    const row = rows[0];
+                    results.set(index, {
+                        success: true,
+                        rowCount: Number(row.TotalRows),
+                        maxUpdatedAt: row.MaxUpdatedAt ? new Date(String(row.MaxUpdatedAt)).toISOString() : undefined,
+                    });
+                } else {
+                    results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+                }
+            } catch (e) {
+                results.set(index, { success: false, errorMessage: e instanceof Error ? e.message : String(e) });
+            }
+        });
+
+        await Promise.all(promises);
+        return results;
+    }
+
+    private isCacheCurrent(
+        clientStatus: { maxUpdatedAt: string; rowCount: number },
+        serverStatus: { maxUpdatedAt?: string; rowCount?: number }
+    ): boolean {
+        if (clientStatus.rowCount !== serverStatus.rowCount) return false;
+        const clientDate = new Date(clientStatus.maxUpdatedAt);
+        const serverDate = serverStatus.maxUpdatedAt ? new Date(serverStatus.maxUpdatedAt) : null;
+        if (!serverDate) return clientStatus.rowCount === 0;
+        return clientDate.toISOString() === serverDate.toISOString();
+    }
+
+    private async runFullQueryAndReturn<T>(
+        params: RunViewParams,
+        viewIndex: number,
+        contextUser?: UserInfo
+    ): Promise<RunViewWithCacheCheckResult<T>> {
+        const result = await this.InternalRunView<T>(params, contextUser);
+        if (!result.Success) {
+            return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
+        }
+        const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.Results.length };
+    }
+
+    private async runDifferentialQueryAndReturn<T>(
+        params: RunViewParams,
+        entityInfo: EntityInfo,
+        clientMaxUpdatedAt: string,
+        clientRowCount: number,
+        serverStatus: { maxUpdatedAt?: string; rowCount?: number },
+        whereSQL: string,
+        viewIndex: number,
+        contextUser?: UserInfo
+    ): Promise<RunViewWithCacheCheckResult<T>> {
+        try {
+            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, clientMaxUpdatedAt, whereSQL, contextUser);
+            const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, clientMaxUpdatedAt, contextUser);
+
+            // Validation: detect hidden deletes
+            const clientMaxUpdatedDate = new Date(clientMaxUpdatedAt);
+            const newInserts = updatedRows.filter(row => {
+                const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
+                if (!createdAt) return false;
+                return new Date(String(createdAt)) > clientMaxUpdatedDate;
+            }).length;
+
+            const serverRowCount = serverStatus.rowCount ?? 0;
+            const impliedDeletes = clientRowCount + newInserts - serverRowCount;
+            const actualDeletes = deletedRecordIDs.length;
+
+            if (impliedDeletes < 0) {
+                LogStatus(`Differential validation failed for ${entityInfo.Name}: impliedDeletes=${impliedDeletes} (negative). Falling back to full refresh.`);
+                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+            }
+            if (impliedDeletes > actualDeletes) {
+                LogStatus(`Differential validation failed for ${entityInfo.Name}: hidden deletes detected (implied=${impliedDeletes}, actual=${actualDeletes}). Falling back to full refresh.`);
+                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+            }
+
+            const newMaxUpdatedAt = updatedRows.length > 0
+                ? this.extractMaxUpdatedAt(updatedRows)
+                : serverStatus.maxUpdatedAt || new Date().toISOString();
+
+            return {
+                viewIndex,
+                status: 'differential',
+                differentialData: { updatedRows, deletedRecordIDs },
+                maxUpdatedAt: newMaxUpdatedAt,
+                rowCount: serverStatus.rowCount,
+            };
+        } catch (e) {
+            LogError(e);
+            return { viewIndex, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) };
+        }
+    }
+
+    private async getDeletedRecordIDsSince(
+        entityID: string,
+        sinceTimestamp: string,
+        contextUser?: UserInfo
+    ): Promise<string[]> {
+        try {
+            const sql = `SELECT DISTINCT "RecordID" FROM ${this._schemaName}."vwRecordChanges" WHERE "EntityID" = $1 AND "Type" = 'Delete' AND "ChangedAt" > $2`;
+            const results = await this.ExecuteSQL<Record<string, unknown>>(sql, [entityID, sinceTimestamp], undefined, contextUser);
+            return results.map(r => String(r.RecordID));
+        } catch (e) {
+            LogError(e);
+            return [];
+        }
+    }
+
+    private async getUpdatedRowsSince<T>(
+        params: RunViewParams,
+        entityInfo: EntityInfo,
+        sinceTimestamp: string,
+        whereSQL: string,
+        contextUser?: UserInfo
+    ): Promise<T[]> {
+        try {
+            const timestampFilter = `"__mj_UpdatedAt" > '${sinceTimestamp}'`;
+            const combinedWhere = whereSQL
+                ? `(${whereSQL}) AND ${timestampFilter}`
+                : timestampFilter;
+
+            const fields = params.Fields && params.Fields.length > 0
+                ? params.Fields.map(f => pgDialect.QuoteIdentifier(f)).join(', ')
+                : '*';
+
+            let sql = `SELECT ${fields} FROM ${this.viewName(entityInfo)} WHERE ${combinedWhere}`;
+
+            const orderByStr = this.ResolveSQL(params.OrderBy ?? '');
+            if (orderByStr) {
+                sql += ` ORDER BY ${this.quoteIdentifiersInSQL(orderByStr, entityInfo)}`;
+            }
+
+            return await this.ExecuteSQL<T>(sql, undefined, undefined, contextUser);
+        } catch (e) {
+            LogError(e);
+            return [];
+        }
+    }
+
+    private buildWhereClauseForCacheCheck(
+        params: RunViewParams,
+        entityInfo: EntityInfo,
+        user: UserInfo
+    ): string {
+        const parts: string[] = [];
+
+        let extraFilter = this.ResolveSQL(params.ExtraFilter ?? '');
+        if (extraFilter) {
+            extraFilter = this.quoteIdentifiersInSQL(extraFilter, entityInfo);
+            parts.push(`(${extraFilter})`);
+        }
+
+        // Row Level Security
+        if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            if (rlsWhereClause && rlsWhereClause.length > 0) {
+                parts.push(`(${rlsWhereClause})`);
+            }
+        }
+
+        return parts.join(' AND ');
+    }
+
+    private checkUserReadPermissions(entityName: string, contextUser: UserInfo): void {
+        const entityInfo = this.Entities.find((e) => e.Name === entityName);
+        if (!contextUser) throw new Error('contextUser is null');
+        if (entityInfo) {
+            const userPermissions = entityInfo.GetUserPermisions(contextUser);
+            if (!userPermissions.CanRead) throw new Error(`User ${contextUser.Email} does not have read permissions on ${entityInfo.Name}`);
+        } else {
+            throw new Error('Entity not found in metadata');
+        }
     }
 
     // ─── SQL Building Helpers ────────────────────────────────────────
