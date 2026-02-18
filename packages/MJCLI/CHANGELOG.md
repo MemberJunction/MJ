@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/cli
 
+## 5.1.0
+
+### Minor Changes
+
+- 61079e9: Add Open App system for installing, managing, and removing third-party apps via `mj app` CLI commands. Includes manifest validation, dependency resolution, schema isolation, migration execution, npm package management, and config-manager integration.
+
+### Patch Changes
+
+- Updated dependencies [f426d43]
+- Updated dependencies [ae7e9e7]
+  - @memberjunction/codegen-lib@5.1.0
+  - @memberjunction/server-bootstrap-lite@5.1.0
+  - @memberjunction/metadata-sync@5.1.0
+  - @memberjunction/db-auto-doc@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/query-gen@5.1.0
+  - @memberjunction/sqlserver-dataprovider@5.1.0
+  - @memberjunction/testing-cli@5.1.0
+  - @memberjunction/ai-cli@5.1.0
+  - @memberjunction/config@5.1.0
+
 ## 5.0.0
 
 ### Major Changes

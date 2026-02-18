@@ -1,5 +1,28 @@
 # @memberjunction/ng-bootstrap
 
+## 5.1.0
+
+### Patch Changes
+
+- f426d43: Fix CodeGen to apply excludeSchemas filter consistently across all generators (TypeScript, Angular, GraphQL), not just SQL generation. Also adds cleanup for orphaned Angular entity form directories when entities are renamed or deleted.
+  - @memberjunction/ai-engine-base@5.1.0
+  - @memberjunction/ai-core-plus@5.1.0
+  - @memberjunction/actions-base@5.1.0
+  - @memberjunction/ng-auth-services@5.1.0
+  - @memberjunction/ng-core-entity-forms@5.1.0
+  - @memberjunction/ng-dashboards@5.1.0
+  - @memberjunction/ng-explorer-core@5.1.0
+  - @memberjunction/ng-explorer-settings@5.1.0
+  - @memberjunction/ng-shared@5.1.0
+  - @memberjunction/ng-artifacts@5.1.0
+  - @memberjunction/ng-dashboard-viewer@5.1.0
+  - @memberjunction/ng-file-storage@5.1.0
+  - @memberjunction/communication-types@5.1.0
+  - @memberjunction/entity-communications-base@5.1.0
+  - @memberjunction/graphql-dataprovider@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+
 ## 5.0.0
 
 ### Major Changes

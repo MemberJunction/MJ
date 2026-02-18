@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 5.1.0
+
+### Minor Changes
+
+- 61079e9: Add Open App system for installing, managing, and removing third-party apps via `mj app` CLI commands. Includes manifest validation, dependency resolution, schema isolation, migration execution, npm package management, and config-manager integration.
+
 ## 5.0.0
 
 ### Major Changes

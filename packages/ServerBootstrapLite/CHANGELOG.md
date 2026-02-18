@@ -1,5 +1,37 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.1.0
+
+### Patch Changes
+
+- f426d43: Fix CodeGen to apply excludeSchemas filter consistently across all generators (TypeScript, Angular, GraphQL), not just SQL generation. Also adds cleanup for orphaned Angular entity form directories when entities are renamed or deleted.
+  - @memberjunction/ai-agent-manager@5.1.0
+  - @memberjunction/ai-agents@5.1.0
+  - @memberjunction/ai-engine-base@5.1.0
+  - @memberjunction/ai-core-plus@5.1.0
+  - @memberjunction/ai-reranker@5.1.0
+  - @memberjunction/actions-apollo@5.1.0
+  - @memberjunction/actions-base@5.1.0
+  - @memberjunction/actions-bizapps-accounting@5.1.0
+  - @memberjunction/actions-bizapps-crm@5.1.0
+  - @memberjunction/actions-bizapps-formbuilders@5.1.0
+  - @memberjunction/actions-bizapps-lms@5.1.0
+  - @memberjunction/actions-bizapps-social@5.1.0
+  - @memberjunction/core-actions@5.1.0
+  - @memberjunction/actions@5.1.0
+  - @memberjunction/doc-utils@5.1.0
+  - @memberjunction/encryption@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+  - @memberjunction/core-entities-server@5.1.0
+  - @memberjunction/data-context-server@5.1.0
+  - @memberjunction/scheduling-actions@5.1.0
+  - @memberjunction/scheduling-engine-base@5.1.0
+  - @memberjunction/scheduling-engine@5.1.0
+  - @memberjunction/templates@5.1.0
+  - @memberjunction/testing-engine@5.1.0
+  - @memberjunction/ai-provider-bundle@5.1.0
+
 ## 5.0.0
 
 ### Major Changes
