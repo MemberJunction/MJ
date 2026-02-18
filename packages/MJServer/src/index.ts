@@ -5,7 +5,7 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
@@ -218,6 +218,24 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const sysUser = UserCache.Instance.GetSystemUser();
     const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
     await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider);
+
+    // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
+    // Generated resolvers call this static method with bracket-quoted SQL.
+    // When the pool is our PG-compat wrapper, translate and execute via pg.Pool.
+    const origExecuteSQLWithPool = SQLServerDataProvider.ExecuteSQLWithPool;
+    SQLServerDataProvider.ExecuteSQLWithPool = async function(
+      pool: sql.ConnectionPool, query: string, parameters?: unknown[], contextUser?: import('@memberjunction/core').UserInfo
+    ): Promise<unknown[]> {
+      const poolAny = pool as unknown as Record<string, unknown>;
+      if (poolAny._pgPool) {
+        const thePgPool = poolAny._pgPool as import('pg').Pool;
+        // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
+        const pgQuery = translateBracketsToPG(query);
+        const result = await thePgPool.query(pgQuery);
+        return result.rows;
+      }
+      return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
+    };
 
     const md = new Metadata();
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
@@ -573,4 +591,13 @@ async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: str
     const cache = UserCache.Instance;
     (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
   }
+}
+
+/**
+ * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
+ * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
+ */
+function translateBracketsToPG(sql: string): string {
+  // Replace [identifier] with "identifier"
+  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
 }

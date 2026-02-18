@@ -774,16 +774,50 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         return entityInfo.Fields.map(f => f.Name);
     }
 
-    private buildWhereClause(params: RunViewParams, _entityInfo: EntityInfo, _contextUser?: UserInfo): string {
+    private buildWhereClause(params: RunViewParams, entityInfo: EntityInfo, _contextUser?: UserInfo): string {
         const parts: string[] = [];
-        const extraFilter = this.ResolveSQL(params.ExtraFilter ?? '');
-        if (extraFilter) parts.push(extraFilter);
+        let extraFilter = this.ResolveSQL(params.ExtraFilter ?? '');
+        if (extraFilter) {
+            extraFilter = this.quoteIdentifiersInSQL(extraFilter, entityInfo);
+            parts.push(extraFilter);
+        }
         return parts.join(' AND ');
+    }
+
+    /**
+     * Quotes bare column identifiers in a SQL fragment (e.g. ExtraFilter) so that
+     * mixed-case column names work on PostgreSQL.  Already-quoted identifiers
+     * (surrounded by double-quotes) and values inside single-quoted strings are
+     * left untouched.
+     */
+    private quoteIdentifiersInSQL(sql: string, entityInfo: EntityInfo): string {
+        // Build a set of field names for this entity
+        const fieldNames = new Set(entityInfo.Fields.map(f => f.Name));
+
+        // Tokenise: keep single-quoted strings and double-quoted identifiers
+        // as opaque tokens so we only transform bare identifiers.
+        const tokens = sql.match(/'[^']*'|"[^"]*"|\S+/g);
+        if (!tokens) return sql;
+
+        return tokens.map(token => {
+            // Skip string literals and already-quoted identifiers
+            if (token.startsWith("'") || token.startsWith('"')) return token;
+
+            // Replace bare field names: e.g.  UserID='...'  →  "UserID"='...'
+            // A bare field name can appear as  FieldName=  or  FieldName =  etc.
+            for (const fieldName of fieldNames) {
+                // Match the field name at word boundary (case-insensitive match
+                // so that callers who write 'userid' still find 'UserID')
+                const re = new RegExp(`\\b${fieldName}\\b`, 'gi');
+                token = token.replace(re, pgDialect.QuoteIdentifier(fieldName));
+            }
+            return token;
+        }).join(' ');
     }
 
     private resolveOrderBy(params: RunViewParams, entityInfo: EntityInfo): string {
         const orderBy = this.ResolveSQL(params.OrderBy ?? '');
-        if (orderBy) return orderBy;
+        if (orderBy) return this.quoteIdentifiersInSQL(orderBy, entityInfo);
 
         // Default: order by first PK field
         const pks = entityInfo.PrimaryKeys;
@@ -821,11 +855,17 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
     // ─── CRUD Function Helpers ───────────────────────────────────────
 
     private getCRUDFunctionName(type: 'create' | 'update' | 'delete', entityInfo: EntityInfo): string {
-        const tableName = this.toSnakeCase(entityInfo.BaseTable);
+        // Check if entity has custom SP name from metadata first
         switch (type) {
-            case 'create': return `fn_create_${tableName}`;
-            case 'update': return `fn_update_${tableName}`;
-            case 'delete': return `fn_delete_${tableName}`;
+            case 'create':
+                if (entityInfo.spCreate?.length > 0) return entityInfo.spCreate;
+                return `spCreate${entityInfo.BaseTable}`;
+            case 'update':
+                if (entityInfo.spUpdate?.length > 0) return entityInfo.spUpdate;
+                return `spUpdate${entityInfo.BaseTable}`;
+            case 'delete':
+                if (entityInfo.spDelete?.length > 0) return entityInfo.spDelete;
+                return `spDelete${entityInfo.BaseTable}`;
         }
     }
 
@@ -842,7 +882,10 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
             const field = fields[i];
             const value = entity.Get(field.Name);
             paramValues.push(PGQueryParameterProcessor.ProcessParameterValue(value));
-            placeholders.push(`$${i + 1}`);
+            // Use named parameter notation (p_fieldname => $N) to avoid
+            // parameter ordering mismatches with the stored functions
+            const paramName = `p_${field.Name.toLowerCase()}`;
+            placeholders.push(`${paramName} => $${i + 1}`);
         }
 
         return { paramValues, paramPlaceholders: placeholders.join(', ') };
