@@ -1,4 +1,4 @@
-import { Component, Input, Type } from '@angular/core';
+import { Component, EventEmitter, Input, Type } from '@angular/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 
@@ -162,6 +162,14 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
   protected getDescription(): string {
     return this.artifactVersion?.Description || '';
   }
+
+  /**
+   * Optional: Emitted when the plugin's additional tabs change after async loading.
+   * Plugins that load data asynchronously (e.g., from a component registry) should
+   * emit this when loading completes and new tabs become available. The parent panel
+   * listens for this to re-run change detection and render the updated tab list.
+   */
+  public tabsChanged?: EventEmitter<void>;
 
   /**
    * Get additional tabs that this plugin wants to provide to the artifact viewer.

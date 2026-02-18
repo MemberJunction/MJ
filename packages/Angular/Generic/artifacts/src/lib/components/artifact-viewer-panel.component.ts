@@ -248,6 +248,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
           // Reload links data
           await this.loadLinksData();
+
+          this.cdr.detectChanges(); // zone.js 0.15: async chain doesn't trigger CD
         } else {
           // Need to reload to get this version (shouldn't normally happen)
           await this.loadArtifact(newVersionNumber);
@@ -396,6 +398,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
@@ -479,6 +483,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   /**
+   * Called when a plugin's async tab data changes (e.g., ComponentArtifactViewer loads
+   * the full spec from the registry after initial render with a stripped spec).
+   * Forces re-evaluation of allTabs so new tab labels render correctly.
+   */
+  onTabsChanged(): void {
+    this.cdr.detectChanges(); // zone.js 0.15: plugin emitted tabsChanged, force CD to re-evaluate allTabs
+  }
+
+  /**
    * Called when the plugin viewer finishes loading.
    * Selects the first available tab now that plugin tabs are available.
    */
@@ -489,6 +502,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     if (tabs.length > 0) {
       this.activeTab = tabs[0].toLowerCase();
     }
+    this.cdr.detectChanges(); // zone.js 0.15: plugin loaded via async callback, force CD
   }
 
   private parseAttributeValue(value: string | null | undefined): string | null {
@@ -571,6 +585,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
     } catch (err) {
       console.error('Error loading collection associations:', err);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
@@ -672,6 +688,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     // Also reload links data to update conversation/collection links
     await this.loadLinksData();
+
+    this.cdr.detectChanges(); // zone.js 0.15: async chain doesn't trigger CD
   }
 
   async onSaveToLibrary(): Promise<void> {
@@ -866,6 +884,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
     } catch (error) {
       console.error('Error loading links data:', error);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async chain doesn't trigger CD
     }
   }
 
