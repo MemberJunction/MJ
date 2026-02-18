@@ -9,7 +9,6 @@
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
-    "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
