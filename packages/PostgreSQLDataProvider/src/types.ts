@@ -29,7 +29,8 @@ export class PostgreSQLProviderConfigData extends ProviderConfigDataBase<Postgre
         MJCoreSchemaName?: string,
         checkRefreshIntervalSeconds: number = 0,
         includeSchemas?: string[],
-        excludeSchemas?: string[]
+        excludeSchemas?: string[],
+        ignoreExistingMetadata: boolean = true
     ) {
         super(
             {
@@ -38,7 +39,8 @@ export class PostgreSQLProviderConfigData extends ProviderConfigDataBase<Postgre
             },
             MJCoreSchemaName,
             includeSchemas,
-            excludeSchemas
+            excludeSchemas,
+            ignoreExistingMetadata
         );
     }
 }
