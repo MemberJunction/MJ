@@ -1,4 +1,5 @@
 import express from 'express';
+import BodyParser from 'body-parser';
 import { RESTEndpointHandler } from './RESTEndpointHandler.js';
 
 export const ___REST_API_BASE_PATH = '/api/v1';
@@ -81,9 +82,9 @@ export function setupRESTEndpoints(
     // Mount REST API at the specified base path with authentication
     // This must come AFTER OAuth routes so they take precedence
     if (authMiddleware) {
-        app.use(basePath, authMiddleware, restHandler.getRouter());
+        app.use(basePath, BodyParser.json({ limit: '50mb' }), authMiddleware, restHandler.getRouter());
     } else {
-        app.use(basePath, restHandler.getRouter());
+        app.use(basePath, BodyParser.json({ limit: '50mb' }), restHandler.getRouter());
     }
 
     console.log(`REST API endpoints have been set up at ${basePath}`);
