@@ -1,0 +1,34 @@
+{
+  "manifestVersion": 1,
+  "name": "mj-sample-app",
+  "displayName": "MJ Sample App",
+  "description": "A minimal sample Open App for testing the MJ Open App install system.",
+  "version": "1.0.0",
+  "publisher": {
+    "name": "MemberJunction",
+    "email": "dev@memberjunction.com",
+    "url": "https://memberjunction.com"
+  },
+  "repository": "https://github.com/MemberJunction/mj-sample-open-app",
+  "mjVersionRange": ">=4.0.0 <5.0.0",
+  "license": "MIT",
+  "schema": {
+    "name": "sample_app",
+    "createIfNotExists": true
+  },
+  "migrations": {
+    "directory": "migrations",
+    "engine": "skyway"
+  },
+  "packages": {
+    "server": [
+      {
+        "name": "is-odd",
+        "role": "bootstrap",
+        "startupExport": "registerSampleApp"
+      }
+    ]
+  },
+  "categories": ["testing"],
+  "tags": ["sample", "test"]
+}
