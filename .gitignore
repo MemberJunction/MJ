@@ -5,6 +5,7 @@
 
 # Playwright CLI snapshots
 .playwright-cli/
+.playwright-mcp/
 
 # Turbo local cache
 .turbo/
@@ -145,3 +146,6 @@ packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
 
 # Test coverage output
 coverage/
+docker/workbench/workspace/.env.database
+docker/workbench/workspace/screenshots/
+test-run-log.txt

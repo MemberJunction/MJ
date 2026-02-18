@@ -47,11 +47,10 @@ export type ComponentQueryDataRequirement = {
 
     /**
      * A list of the fields that the component will use out of the possible fields returned by the query.
-     * Uses the @see SimpleEntityFieldInfo type to describe each field. **NOTE** not all of the fields are actually
-     * directly related to entity fields as some might be computed/etc, but SimpleEntityFieldInfo helps define some key aspects
-     * like the data type of the column and a description of the field.
+     * Uses the @see SimpleQueryFieldInfo type to describe each field, which extends SimpleEntityFieldInfo
+     * with query-specific properties like source entity tracking and summary field indicators.
      */
-    fields: SimpleEntityFieldInfo[];
+    fields: SimpleQueryFieldInfo[];
 
     /**
      * A list of the entities that are part of this query. This is vital information for matching query requests
@@ -254,6 +253,48 @@ export class SimpleEntityFieldInfo {
             // Note: possibleValues cannot be directly mapped back as EntityFieldValues
             // requires EntityFieldValueInfo objects with additional metadata
         };
+    }
+}
+
+/**
+ * Extended field info class for query fields that includes data lineage tracking.
+ * Query fields may come from joins across multiple entities, so this class tracks
+ * the source entity and field for each column in the query result.
+ *
+ * Use this class for ComponentQueryDataRequirement.fields instead of SimpleEntityFieldInfo.
+ */
+export class SimpleQueryFieldInfo extends SimpleEntityFieldInfo {
+    /**
+     * The source entity this field originates from (for data lineage tracking).
+     * For query fields, this indicates which MemberJunction entity the data comes from.
+     * May be undefined for computed fields that don't map to a single entity.
+     */
+    sourceEntity?: string;
+    /**
+     * The field name in the source entity (for data lineage tracking).
+     * Combined with sourceEntity, this provides full lineage back to the original data source.
+     */
+    sourceFieldName?: string;
+    /**
+     * Whether this field represents a summary/aggregate value (COUNT, SUM, AVG, etc.).
+     * Important for chart axis choices, grid formatting, and data interpretation.
+     */
+    isSummary?: boolean;
+    /**
+     * Description of the summary calculation (e.g., "Count of orders per customer").
+     * Provides context for how the aggregate value is computed.
+     */
+    summaryDescription?: string;
+
+    constructor(init?: Partial<SimpleQueryFieldInfo>) {
+        super(init);
+        if (init) {
+            // Assign query-specific properties that aren't handled by super()
+            this.sourceEntity = init.sourceEntity;
+            this.sourceFieldName = init.sourceFieldName;
+            this.isSummary = init.isSummary;
+            this.summaryDescription = init.summaryDescription;
+        }
     }
 }
 

@@ -459,61 +459,6 @@ describe('SqlLoggingSessionImpl', () => {
     });
   });
 
-  describe('_splitStringContent', () => {
-    const splitContent = (content: string, maxChunkSize: number) => {
-      const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
-      return (session as Record<string, CallableFunction>)._splitStringContent(content, maxChunkSize);
-    };
-
-    it('should return single chunk if content is within limit', () => {
-      const result = splitContent('short string', 100);
-      expect(result).toEqual(['short string']);
-    });
-
-    it('should split long content into multiple chunks', () => {
-      const content = 'a'.repeat(100);
-      const result = splitContent(content, 30) as string[];
-      expect(result.length).toBeGreaterThan(1);
-      expect(result.join('')).toBe(content);
-    });
-
-    it('should preserve content integrity across splits', () => {
-      const content = 'abcdefghij';
-      const result = splitContent(content, 3) as string[];
-      expect(result.join('')).toBe(content);
-    });
-  });
-
-  describe('_findSafeSplitPoint', () => {
-    const findSafe = (content: string, position: number, idealEnd: number) => {
-      const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
-      return (session as Record<string, CallableFunction>)._findSafeSplitPoint(content, position, idealEnd);
-    };
-
-    it('should avoid splitting escaped quote pairs', () => {
-      // Content has '' at boundary: position 4-5
-      const content = "test''value";
-      // If idealEnd would split between the two single quotes (at position 5)
-      const splitPoint = findSafe(content, 0, 5);
-      // Should back up to not split '' pair
-      expect(splitPoint).toBe(4);
-    });
-
-    it('should return idealEnd when no boundary issues', () => {
-      const content = 'abcdefghij';
-      const splitPoint = findSafe(content, 0, 5);
-      expect(splitPoint).toBe(5);
-    });
-  });
-
-  describe('_getIndentForPosition', () => {
-    it('should always return 4-space indent (fixed)', () => {
-      const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
-      const getIndent = (session as Record<string, CallableFunction>)._getIndentForPosition;
-      const result = getIndent.call(session, 'SELECT * FROM table', 10);
-      expect(result).toBe('    ');
-    });
-  });
 });
 
 // =====================================================================

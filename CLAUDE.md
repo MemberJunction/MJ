@@ -94,6 +94,44 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
   - New required parameters that test mocks don't provide
   - Removed exports that tests still import
 
+### 7. USE BaseSingleton FOR ALL SINGLETONS
+- **NEVER use manual `static _instance` singleton patterns** — always extend `BaseSingleton<T>` from `@memberjunction/global`
+- **Why**: `BaseSingleton` uses a Global Object Store (`GetGlobalObjectStore()`) that guarantees a single instance across the entire process — even when bundlers duplicate code across multiple execution paths. A plain `static _instance` field lives on the class constructor, so if a module gets loaded twice (common with ESBuild/Vite code splitting), you silently get two "singletons" with divergent state.
+- **How to use it**:
+  ```typescript
+  import { BaseSingleton } from '@memberjunction/global';
+
+  export class MySingleton extends BaseSingleton<MySingleton> {
+      // Constructor MUST be protected (BaseSingleton enforces this)
+      protected constructor() {
+          super();
+      }
+
+      // Expose a static accessor that calls the inherited getInstance()
+      public static get Instance(): MySingleton {
+          return MySingleton.getInstance<MySingleton>();
+      }
+
+      // ... your singleton methods and properties
+  }
+
+  // Usage
+  const instance = MySingleton.Instance;
+  ```
+- **Anti-pattern to avoid**:
+  ```typescript
+  // ❌ BAD — weak singleton, breaks under code duplication
+  export class MySingleton {
+      private static _instance: MySingleton;
+      public static get Instance(): MySingleton {
+          if (!MySingleton._instance)
+              MySingleton._instance = new MySingleton();
+          return MySingleton._instance;
+      }
+  }
+  ```
+- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+
 ---
 
 ## 📚 Development Guides

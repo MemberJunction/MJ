@@ -397,6 +397,50 @@ export interface ViewDisplayState {
 /**
  * Default configuration values
  */
+/**
+ * Summary of what a view configuration includes, for preview in Quick Save dialog
+ */
+export interface ViewConfigSummary {
+  /** Number of visible columns */
+  ColumnCount: number;
+  /** Number of active filters */
+  FilterCount: number;
+  /** Number of sort levels */
+  SortCount: number;
+  /** Whether smart filter is active */
+  SmartFilterActive: boolean;
+  /** Smart filter prompt text (if active) */
+  SmartFilterPrompt: string;
+  /** Number of enabled aggregates */
+  AggregateCount: number;
+}
+
+/**
+ * Event emitted by QuickSaveDialog when user saves
+ */
+export interface QuickSaveEvent {
+  /** View name */
+  Name: string;
+  /** View description (optional) */
+  Description: string;
+  /** Whether the view is shared */
+  IsShared: boolean;
+  /** Whether to save as new (true) or update existing (false) */
+  SaveAsNew: boolean;
+}
+
+/**
+ * Result of a view save operation (for notification display)
+ */
+export interface ViewSaveResult {
+  /** Whether the save succeeded */
+  Success: boolean;
+  /** Error message (on failure) */
+  ErrorMessage?: string;
+  /** Whether this was a new view or update */
+  IsNew: boolean;
+}
+
 export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
   showFilter: true,
   showViewModeToggle: true,

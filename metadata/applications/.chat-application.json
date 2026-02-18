@@ -8,6 +8,7 @@
     "DefaultSequence": 1,
     "Status": "Active",
     "NavigationStyle": "Both",
+    "HideNavBarIconWhenActive": true,
     "TopNavLocation": "Left of User Menu",
     "DefaultNavItems": [
       {

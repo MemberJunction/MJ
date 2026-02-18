@@ -47,7 +47,7 @@ export interface DynamicLoadResult {
  */
 export class DynamicPackageLoader {
     /**
-     * Loads all enabled dynamic packages in order.
+     * Loads all enabled dynamic packages in parallel for better performance.
      * For each package:
      * 1. Skips if `Enabled` is false
      * 2. Dynamically imports the package via `await import()`
@@ -55,19 +55,14 @@ export class DynamicPackageLoader {
      * 4. Records success or failure
      *
      * Errors are isolated per-package — a broken package does not crash the server.
+     * All enabled packages are loaded concurrently using Promise.all().
      *
      * @param packages - Array of packages to load
      * @returns Array of results indicating success/failure for each package
      */
     static async LoadPackages(packages: DynamicPackageLoad[]): Promise<DynamicLoadResult[]> {
-        const results: DynamicLoadResult[] = [];
-
-        for (const pkg of packages.filter(p => p.Enabled)) {
-            const result = await DynamicPackageLoader.LoadSinglePackage(pkg);
-            results.push(result);
-        }
-
-        return results;
+        const enabledPackages = packages.filter(p => p.Enabled);
+        return Promise.all(enabledPackages.map(pkg => DynamicPackageLoader.LoadSinglePackage(pkg)));
     }
 
     /**

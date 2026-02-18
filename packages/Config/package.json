@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/config",
   "type": "module",
-  "version": "4.4.0",
+  "version": "5.0.0",
   "description": "Central configuration package for MemberJunction framework with default configurations and merge utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
