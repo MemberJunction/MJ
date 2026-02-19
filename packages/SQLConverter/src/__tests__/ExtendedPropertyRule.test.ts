@@ -83,13 +83,14 @@ describe('ExtendedPropertyRule', () => {
   });
 
   describe('level1type fallback', () => {
-    it('should default to COMMENT ON TABLE for unknown level1type', () => {
+    it('should skip COMMENT ON FUNCTION for PROCEDURE level1type', () => {
       const sql = `EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Some description',
         @level0type=N'SCHEMA', @level0name=N'__mj',
         @level1type=N'PROCEDURE', @level1name=N'spDoSomething'`;
       const result = convert(sql);
-      // Unknown level1type falls back to COMMENT ON TABLE
-      expect(result).toContain("COMMENT ON TABLE __mj.\"spDoSomething\" IS 'Some description';");
+      // PROCEDURE type generates a commented-out line (PG COMMENT ON FUNCTION needs signature)
+      expect(result).toContain('-- COMMENT ON FUNCTION __mj."spDoSomething"');
+      expect(result).toContain('procedure-level comment skipped');
     });
   });
 

@@ -164,27 +164,122 @@ export function convertStringConcat(sql: string): string {
   sql = sql.replace(/\)\s*\+\s*(\w+\.)/g, ') || $1');
   // Quoted identifiers: "Col1" + "Col2"
   sql = sql.replace(/"([\w]+)"\s*\+\s*"([\w]+)"/g, '"$1" || "$2"');
+  // After quoted identifier + string literal: "Col" + 'text'
+  sql = sql.replace(/"(\w+)"\s*\+\s*N?'/g, (m) => m.replace('+', '||'));
+  // After quoted identifier + function/identifier: "Col" + COALESCE/REPLACE/etc or "Col" + alias.
+  sql = sql.replace(/"(\w+)"\s*\+\s*(?=[A-Za-z_])/g, (m) => m.replace('+', '||'));
+  // After closing paren + function/identifier: ) + FUNC(  or  ) + alias.
+  sql = sql.replace(/\)\s*\+\s*(?=[A-Za-z_"'])/g, (m) => m.replace('+', '||'));
   return sql;
 }
 
 /**
  * Convert IIF(condition, true_val, false_val) → CASE WHEN condition THEN true_val ELSE false_val END
- * Handles nested IIF by iterating from innermost outward.
+ * Uses paren-aware argument splitting to handle nested function calls.
  */
 export function convertIIF(sql: string): string {
   let iterations = 0;
   const maxIterations = 50;
 
   while (/\bIIF\s*\(/i.test(sql) && iterations < maxIterations) {
-    sql = sql.replace(
-      /\bIIF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/i,
-      (_match, cond: string, trueVal: string, falseVal: string) => {
-        return `CASE WHEN ${cond.trim()} THEN ${trueVal.trim()} ELSE ${falseVal.trim()} END`;
-      }
-    );
+    const iifMatch = sql.match(/\bIIF\s*\(/i);
+    if (!iifMatch || iifMatch.index === undefined) break;
+
+    const startPos = iifMatch.index;
+    const parenStart = sql.indexOf('(', startPos);
+    if (parenStart < 0) break;
+
+    const parenEnd = findMatchingParen(sql, parenStart);
+    if (parenEnd < 0) break;
+
+    const argsStr = sql.slice(parenStart + 1, parenEnd);
+    const args = splitTopLevelCommas(argsStr);
+
+    if (args.length >= 3) {
+      const cond = args[0].trim();
+      const trueVal = args[1].trim();
+      const falseVal = args.slice(2).join(',').trim();
+
+      const before = sql.slice(0, startPos);
+      const after = sql.slice(parenEnd + 1);
+      sql = `${before}CASE WHEN ${cond} THEN ${trueVal} ELSE ${falseVal} END${after}`;
+    } else {
+      break;
+    }
     iterations++;
   }
   return sql;
+}
+
+/** Find the position of the matching closing parenthesis, respecting nesting and string literals */
+function findMatchingParen(sql: string, openPos: number): number {
+  let depth = 0;
+  let inSingleQuote = false;
+
+  for (let i = openPos; i < sql.length; i++) {
+    const ch = sql[i];
+
+    if (inSingleQuote) {
+      if (ch === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
+        i++; // Skip escaped quote
+      } else if (ch === "'") {
+        inSingleQuote = false;
+      }
+      continue;
+    }
+
+    if (ch === "'") {
+      inSingleQuote = true;
+    } else if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/** Split a string on commas at parenthesis depth 0, respecting string literals */
+function splitTopLevelCommas(str: string): string[] {
+  const args: string[] = [];
+  let current = '';
+  let depth = 0;
+  let inSingleQuote = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+
+    if (inSingleQuote) {
+      current += ch;
+      if (ch === "'" && i + 1 < str.length && str[i + 1] === "'") {
+        current += str[i + 1];
+        i++;
+      } else if (ch === "'") {
+        inSingleQuote = false;
+      }
+      continue;
+    }
+
+    if (ch === "'") {
+      inSingleQuote = true;
+      current += ch;
+    } else if (ch === '(') {
+      depth++;
+      current += ch;
+    } else if (ch === ')') {
+      depth--;
+      current += ch;
+    } else if (ch === ',' && depth === 0) {
+      args.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+
+  args.push(current);
+  return args;
 }
 
 /**

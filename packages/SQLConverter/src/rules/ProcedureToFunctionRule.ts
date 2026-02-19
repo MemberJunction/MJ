@@ -19,7 +19,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
   Priority = 30;
   BypassSqlglot = true;
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     // Extract proc name via regex
     let procMatch = sql.match(
       /CREATE\s+PROC(?:EDURE)?\s+\[?__mj\]?\.\[?(\w+)\]?\s*(.*?)(?:\bAS\b)/is
@@ -43,7 +43,12 @@ export class ProcedureToFunctionRule implements IConversionRule {
 
     const pgParams = this.convertProcParams(paramsBlock);
     const pgBody = this.convertProcBody(body, procName);
-    const returnsClause = this.determineReturnType(body, procName);
+    const returnsClause = this.determineReturnType(body, procName, context);
+
+    // If the return type references a view that doesn't exist, skip this procedure
+    if (returnsClause.startsWith('-- SKIPPED')) {
+      return returnsClause;
+    }
 
     let result = `CREATE OR REPLACE FUNCTION __mj."${procName}"(${pgParams})\n`;
     result += `${returnsClause}\n$$\n`;
@@ -480,13 +485,18 @@ export class ProcedureToFunctionRule implements IConversionRule {
   // Return type detection
   // ---------------------------------------------------------------------------
 
-  private determineReturnType(body: string, _procName: string): string {
+  private determineReturnType(body: string, _procName: string, context: ConversionContext): string {
     // Check for SELECT * FROM __mj.vwViewName → RETURNS SETOF
     const viewMatch = body.match(
       /SELECT\s+(?:\*|[\w\s,.*]+)\s+FROM\s+\[?__mj\]?\.\[?(vw\w+)\]?/i
     );
     if (viewMatch) {
-      return `RETURNS SETOF __mj."${viewMatch[1]}" AS`;
+      const viewName = viewMatch[1];
+      // If the view doesn't exist, skip this procedure entirely
+      if (context.CreatedViews.size > 0 && !context.CreatedViews.has(viewName)) {
+        return `-- SKIPPED: Procedure references non-existent view ${viewName}\n`;
+      }
+      return `RETURNS SETOF __mj."${viewName}" AS`;
     }
 
     // Delete procs return SELECT @ID AS [ID] or SELECT NULL AS [ID]

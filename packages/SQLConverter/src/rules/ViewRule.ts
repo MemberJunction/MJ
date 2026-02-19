@@ -32,7 +32,7 @@ const SQL_KEYWORDS = new Set([
   'INSTEAD', 'OF', 'EXECUTE', 'PERFORM', 'RAISE', 'NOTICE', 'EXCEPTION',
   'SCHEMA', 'CONSTRAINT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CHECK',
   'UNIQUE', 'DEFAULT', 'IDENTITY', 'GENERATED', 'ALWAYS', 'INTERVAL',
-  'TYPE', 'ENUM', 'ARRAY', 'RECORD', 'SETOF', 'RETURNS',
+  'ENUM', 'ARRAY', 'RECORD', 'SETOF', 'RETURNS',
 ]);
 
 export class ViewRule implements IConversionRule {
@@ -69,6 +69,7 @@ export class ViewRule implements IConversionRule {
     result = this.quoteColumnRefs(result);
     result = this.quoteBareColumnAliases(result);
     result = this.quoteAsAliases(result);
+    result = this.quoteBareIdentifiers(result);
 
     // Expression conversions
     result = removeNPrefix(result);
@@ -170,21 +171,95 @@ export class ViewRule implements IConversionRule {
     });
   }
 
+  /** Quote bare PascalCase identifiers that appear as column references without table alias prefix */
+  private quoteBareIdentifiers(sql: string): string {
+    // Quote PascalCase word after ORDER BY: ORDER BY StartedAt → ORDER BY "StartedAt"
+    sql = sql.replace(
+      /(\bORDER\s+BY\s+)([A-Z][a-z]\w+)(\s+(?:ASC|DESC)\b)?/gi,
+      (match, prefix: string, ident: string, suffix: string) => {
+        if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
+        return `${prefix}"${ident}"${suffix || ''}`;
+      }
+    );
+    // Quote PascalCase word after CASE keyword: CASE PascalName WHEN → CASE "PascalName" WHEN
+    sql = sql.replace(
+      /(\bCASE\s+)([A-Z][a-z]\w+)(\s+WHEN\b)/gi,
+      (match, prefix: string, ident: string, suffix: string) => {
+        if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
+        return `${prefix}"${ident}"${suffix}`;
+      }
+    );
+    // Quote bare PascalCase at start of expression (after tab/spaces at line start, or after comma):
+    // matches patterns like "    AutoRunInterval * (" where PascalCase starts a column expression
+    sql = sql.replace(
+      /^(\s+)([A-Z][a-z]\w+)(\s*[*+\-/])/gm,
+      (match, ws: string, ident: string, op: string) => {
+        if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
+        return `${ws}"${ident}"${op}`;
+      }
+    );
+    // Quote bare PascalCase in bare column aliases after a quoted column: "Col" PascalAlias,
+    sql = sql.replace(
+      /("[\w]+"\s+)([A-Z][a-z]\w+)([\s,])/g,
+      (match, prefix: string, alias: string, suffix: string) => {
+        if (SQL_KEYWORDS.has(alias.toUpperCase())) return match;
+        // Don't quote if it's followed by ( — it's a function call
+        if (suffix === '(') return match;
+        return `${prefix}"${alias}"${suffix}`;
+      }
+    );
+    return sql;
+  }
+
   /** Add ON TRUE for LEFT JOIN LATERAL that lacks an ON clause */
   private addLateralOnTrue(sql: string): string {
-    // Look for LEFT JOIN LATERAL ... AS alias\n  (next line starts with something other than ON)
-    // Simple approach: regex to find LATERAL ... AS "alias" not followed by ON
     const lines = sql.split('\n');
     const result: string[] = [];
+    let lateralDepth = 0;
+    let inLateral = false;
+
     for (let i = 0; i < lines.length; i++) {
       result.push(lines[i]);
-      // Check if this line has LEFT JOIN LATERAL ... AS alias at end
-      if (/LEFT\s+JOIN\s+LATERAL\b/i.test(lines[i])) {
-        // Check if current or next few lines have the AS alias but no ON clause before next JOIN/WHERE/GROUP/ORDER
-        const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
-        if (/\)\s+AS\s+"?\w+"?\s*$/.test(lines[i]) && !nextLine.toUpperCase().startsWith('ON ')) {
-          // Insert ON TRUE
-          result.push('    ON TRUE');
+
+      // Detect LATERAL block start
+      if (/\bLATERAL\b/i.test(lines[i]) && !inLateral) {
+        const lateralIdx = lines[i].search(/\bLATERAL\b/i);
+        const rest = lines[i].slice(lateralIdx);
+        let openCount = 0;
+        let closeCount = 0;
+        for (const ch of rest) {
+          if (ch === '(') openCount++;
+          else if (ch === ')') closeCount++;
+        }
+
+        if (openCount > closeCount) {
+          // Multi-line LATERAL: opening paren not closed on this line
+          inLateral = true;
+          lateralDepth = openCount - closeCount;
+        } else if (openCount > 0 && openCount === closeCount) {
+          // Single-line LATERAL: fully closed on this line
+          const nextLine = i + 1 < lines.length ? lines[i + 1].trim().toUpperCase() : '';
+          if (!nextLine.startsWith('ON ')) {
+            result.push('    ON TRUE');
+          }
+        }
+        continue;
+      }
+
+      // Track multi-line LATERAL depth
+      if (inLateral) {
+        for (const ch of lines[i]) {
+          if (ch === '(') lateralDepth++;
+          else if (ch === ')') lateralDepth--;
+        }
+
+        if (lateralDepth <= 0) {
+          inLateral = false;
+          // Check if next line needs ON TRUE
+          const nextLine = i + 1 < lines.length ? lines[i + 1].trim().toUpperCase() : '';
+          if (!nextLine.startsWith('ON ')) {
+            result.push('    ON TRUE');
+          }
         }
       }
     }

@@ -23,7 +23,9 @@ const SQLSERVER_PROC_PATTERNS = [
  * Tests patterns in priority order matching the Python classify_batch() logic.
  */
 export function classifyBatch(batch: string): StatementType {
-  const upper = batch.trimStart().toUpperCase();
+  const rawUpper = batch.trimStart().toUpperCase();
+  // Strip leading comments to detect the real SQL keyword
+  const upper = stripLeadingComments(batch).trimStart().toUpperCase() || rawUpper;
 
   // Session settings to skip
   const sessionPattern = new RegExp(
@@ -42,7 +44,7 @@ export function classifyBatch(batch: string): StatementType {
   if (upper.includes('SERVERPROPERTY') || upper.replace(/\s/g, '').includes('SP_EXECUTESQL')) {
     return 'SKIP_SQLSERVER';
   }
-  if (/^DECLARE\s+@(ASSOCIATE|USER_EXISTS|ROLE_EXISTS)/i.test(upper)) {
+  if (/^DECLARE\s+@/i.test(upper)) {
     return 'SKIP_SQLSERVER';
   }
 
@@ -86,7 +88,9 @@ export function classifyBatch(batch: string): StatementType {
     return 'CREATE_INDEX';
   }
 
-  // DML
+  // DML — but skip table variable operations (INSERT INTO @var, SELECT FROM @var)
+  if (/^INSERT\s+INTO\s+@/i.test(upper)) return 'SKIP_SQLSERVER';
+  if (/^SELECT\b[\s\S]*\bFROM\s+@/i.test(upper)) return 'SKIP_SQLSERVER';
   if (/^INSERT\s+(?:INTO\s+)?/i.test(upper)) return 'INSERT';
   if (/^UPDATE\s/i.test(upper)) return 'UPDATE';
   if (/^DELETE\s/i.test(upper)) return 'DELETE';
@@ -102,12 +106,27 @@ export function classifyBatch(batch: string): StatementType {
   // Extended properties
   if (upper.includes('SP_ADDEXTENDEDPROPERTY')) return 'EXTENDED_PROPERTY';
 
-  // Comment-only batches
-  if (isCommentOnly(batch, upper)) return 'COMMENT_ONLY';
+  // Comment-only batches (use rawUpper to detect comment-prefixed text)
+  if (isCommentOnly(batch, rawUpper)) return 'COMMENT_ONLY';
 
   // BEGIN TRY wrapping extended properties
-  if (upper.includes('BEGIN TRY') && upper.includes('SP_ADDEXTENDEDPROPERTY')) {
+  if (rawUpper.includes('BEGIN TRY') && rawUpper.includes('SP_ADDEXTENDEDPROPERTY')) {
     return 'EXTENDED_PROPERTY';
+  }
+
+  // CREATE USER / CREATE ROLE — SQL Server-specific
+  if (/^CREATE\s+(USER|ROLE)\s/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
+  }
+
+  // Orphaned control flow fragments from sub-splitting
+  if (/^(END|ELSE\s+IF|ELSE)\b/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
+  }
+
+  // Standalone variable declarations (orphaned from IF blocks)
+  if (/^DECLARE\s+@/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
   }
 
   return 'UNKNOWN';
@@ -138,6 +157,23 @@ function classifyAlterTable(upper: string): StatementType {
   if (upper.includes('WITH CHECK CHECK CONSTRAINT')) return 'ENABLE_CONSTRAINT';
   if (upper.includes('NOCHECK CONSTRAINT')) return 'SKIP_NOCHECK';
   return 'ALTER_TABLE';
+}
+
+/** Strip leading single-line (--) and block comments from SQL text */
+function stripLeadingComments(sql: string): string {
+  let s = sql.trimStart();
+  while (s.length > 0) {
+    if (s.startsWith('--')) {
+      const nl = s.indexOf('\n');
+      s = nl < 0 ? '' : s.slice(nl + 1).trimStart();
+    } else if (s.startsWith('/*')) {
+      const end = s.indexOf('*/');
+      s = end < 0 ? '' : s.slice(end + 2).trimStart();
+    } else {
+      break;
+    }
+  }
+  return s;
 }
 
 /** Check if batch is comment-only (no SQL after removing comments) */

@@ -35,6 +35,14 @@ export class AlterTableRule implements IConversionRule {
       result += ' DEFERRABLE INITIALLY DEFERRED';
     }
 
+    // CHECK constraints: add NOT VALID to skip validation of existing rows.
+    // SQL Server's case-insensitive collation and CHAR padding can produce data
+    // that violates PG's case-sensitive CHECK constraints.
+    if (/\bCHECK\b/i.test(result) && !/FOREIGN\s+KEY/i.test(result)) {
+      result = result.trimEnd().replace(/;?\s*$/, '');
+      result += ' NOT VALID';
+    }
+
     // Remove N prefix from strings
     result = result.replace(/(?<![a-zA-Z])N'/g, "'");
 

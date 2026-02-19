@@ -7,9 +7,17 @@ export class ExtendedPropertyRule implements IConversionRule {
   BypassSqlglot = true;
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
-    // Strip BEGIN TRY...END TRY...BEGIN CATCH...END CATCH wrapper if present
-    const execMatch = sql.match(/EXEC\s+sp_addextendedproperty\b[^;]*/is);
-    const execSQL = execMatch ? execMatch[0] : sql;
+    // Strip BEGIN TRY wrapper: extract just the EXEC sp_addextendedproperty call.
+    // For single-line positional params, match to end of line (handles ; inside strings).
+    // For multi-line named params (@name=, @value=), use a broader extraction.
+    let execSQL = sql;
+    if (/BEGIN\s+TRY/i.test(sql)) {
+      // Try single-line extraction first (handles semicolons in quoted strings)
+      const singleLine = sql.match(/EXEC\s+sp_addextendedproperty\b(?:'(?:[^']|'')*'|[^'\n])*$/im);
+      if (singleLine) {
+        execSQL = singleLine[0];
+      }
+    }
 
     // Try named parameters first: @name=N'...', @value=N'...'
     const namedResult = this.parseNamedParams(execSQL);
@@ -20,7 +28,9 @@ export class ExtendedPropertyRule implements IConversionRule {
     const positionalResult = this.parsePositionalParams(execSQL);
     if (positionalResult) return positionalResult;
 
-    return `-- Extended property (could not parse)\n-- ${sql.slice(0, 200)}\n`;
+    // Comment out the entire batch so no executable SQL leaks through
+    const commented = sql.split('\n').map(line => `-- ${line}`).join('\n');
+    return `-- Extended property (could not parse)\n${commented}\n`;
   }
 
   private parseNamedParams(sql: string): string | null {
@@ -78,6 +88,10 @@ export class ExtendedPropertyRule implements IConversionRule {
     }
     if (type === 'VIEW') {
       return `COMMENT ON VIEW __mj."${level1Name}" IS '${pgValue}';\n`;
+    }
+    if (type === 'PROCEDURE' || type === 'FUNCTION') {
+      // PG doesn't support COMMENT ON FUNCTION without signature; skip these
+      return `-- COMMENT ON FUNCTION __mj."${level1Name}" (procedure-level comment skipped)\n`;
     }
 
     return `COMMENT ON TABLE __mj."${level1Name}" IS '${pgValue}';\n`;

@@ -53,6 +53,17 @@ export interface ConversionContext {
   TableColumns: Map<string, Map<string, string>>;
   /** Hand-written function replacements keyed by lowercase function name */
   HandWrittenFunctions: Map<string, string>;
+  /**
+   * Set of function/procedure names that were successfully converted (not skipped).
+   * Used by GrantRule to skip grants on functions that don't exist.
+   * Names are stored as-is (case-sensitive, without schema prefix).
+   */
+  CreatedFunctions: Set<string>;
+  /**
+   * Set of view names that were successfully converted (not skipped).
+   * Used by GrantRule to skip grants on views that don't exist.
+   */
+  CreatedViews: Set<string>;
 }
 
 /**
@@ -136,6 +147,8 @@ export function createConversionContext(
     Schema: schema,
     TableColumns: new Map(),
     HandWrittenFunctions: new Map(),
+    CreatedFunctions: new Set(),
+    CreatedViews: new Set(),
   };
 }
 

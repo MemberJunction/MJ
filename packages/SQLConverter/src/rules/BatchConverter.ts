@@ -302,10 +302,34 @@ function convertBatch(
     }
   }
 
+  // Track created object names for downstream grant filtering
+  // Only track if the output is actual SQL (not a skip/comment)
+  trackCreatedObject(batch, batchType, sql, context);
+
   // Update stats
   updateStats(batchType, stats);
 
   return sql;
+}
+
+/** Extract and track the name of a created function/view for downstream grant filtering */
+function trackCreatedObject(
+  batch: string, batchType: StatementType, convertedSQL: string, context: ConversionContext,
+): void {
+  // Don't track objects that were skipped during conversion
+  if (convertedSQL.startsWith('-- SKIPPED')) return;
+
+  if (batchType === 'CREATE_PROCEDURE' || batchType === 'CREATE_FUNCTION') {
+    const match = batch.match(/CREATE\s+(?:PROC(?:EDURE)?|FUNCTION)\s+(?:\[?\w+\]?\.)?\[?(\w+)\]?/i);
+    if (match) {
+      context.CreatedFunctions.add(match[1]);
+    }
+  } else if (batchType === 'CREATE_VIEW') {
+    const match = batch.match(/CREATE\s+(?:OR\s+ALTER\s+)?VIEW\s+(?:\[?\w+\]?\.)?\[?(\w+)\]?/i);
+    if (match) {
+      context.CreatedViews.add(match[1]);
+    }
+  }
 }
 
 /** Route converted batch to the appropriate output group */

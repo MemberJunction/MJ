@@ -37,15 +37,18 @@ export function subSplitCompoundBatch(batch: string): string[] {
   const lines = batch.split('\n');
   const upper = batch.trimStart().toUpperCase();
 
+  // Strip leading single-line comments to get the first real SQL keyword
+  const upperNoComments = stripLeadingComments(batch).trimStart().toUpperCase();
+
   // Don't sub-split CREATE TABLE/VIEW/PROCEDURE/FUNCTION/TRIGGER blocks
-  if (/^CREATE\s+(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upper)) return [batch];
-  if (/^CREATE\s+PROC\s/i.test(upper)) return [batch];
+  if (/^CREATE\s+(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upperNoComments)) return [batch];
+  if (/^CREATE\s+PROC\s/i.test(upperNoComments)) return [batch];
   // Don't split ALTER TABLE with column definitions
-  if (/^ALTER\s+TABLE\s/i.test(upper)) return [batch];
+  if (/^ALTER\s+TABLE\s/i.test(upperNoComments)) return [batch];
   // Don't split BEGIN TRY blocks
-  if (upper.startsWith('BEGIN TRY')) return [batch];
+  if (upperNoComments.startsWith('BEGIN TRY') || upper.startsWith('BEGIN TRY')) return [batch];
   // Don't split DECLARE blocks
-  if (upper.startsWith('DECLARE')) return [batch];
+  if (upperNoComments.startsWith('DECLARE') || upper.startsWith('DECLARE')) return [batch];
 
   // Check if the batch contains multiple top-level statements
   let keywordCount = 0;
@@ -88,4 +91,21 @@ export function subSplitCompoundBatch(batch: string): string[] {
   }
 
   return statements.length > 0 ? statements : [batch];
+}
+
+/** Strip leading single-line (--) and block comments from SQL text */
+function stripLeadingComments(sql: string): string {
+  let s = sql.trimStart();
+  while (s.length > 0) {
+    if (s.startsWith('--')) {
+      const nl = s.indexOf('\n');
+      s = nl < 0 ? '' : s.slice(nl + 1).trimStart();
+    } else if (s.startsWith('/*')) {
+      const end = s.indexOf('*/');
+      s = end < 0 ? '' : s.slice(end + 2).trimStart();
+    } else {
+      break;
+    }
+  }
+  return s;
 }
