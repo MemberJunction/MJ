@@ -1,0 +1,342 @@
+[
+  {
+    "fields": {
+      "Name": "Query Builder",
+      "Description": "Business-friendly orchestrator agent that helps users explore their data and build saved queries. Delegates technical SQL work to the Query Strategist sub-agent. Presents results visually with diagrams and formatted tables, hiding SQL complexity unless the user asks for it.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Data",
+      "ArtifactCreationMode": "Always",
+      "ExecutionOrder": 0,
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-hammer",
+      "FinalPayloadValidation": "@file:validation/query-builder-payload-validation.json",
+      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMaxRetries": 3
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Query Builder - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D2EEABA7-5C83-4C1C-9DBC-9A8DE5B4140F"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T14:21:45.348Z",
+            "checksum": "4a4c30e20a48614881fd02b9279a3b5065f720799dca6a4b111cc393a5725ead"
+          }
+        }
+      ],
+      "MJ: AI Agent Data Sources": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "ALL_ENTITIES",
+            "Description": "Complete list of all entities in the system for schema exploration",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Entities",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 1,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "E1E14230-0061-4CDC-B04B-8AD79881AD92"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T23:13:24.801Z",
+            "checksum": "2e4ca340b49e365ea51bbf154dc2743aa323a2784cbbaa9a5dffea29007f3852"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "ALL_QUERIES",
+            "Description": "Complete list of existing queries for reference and composition",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Queries",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"Status\"]",
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 2,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "87D8E91D-A10C-43A8-91D2-694819E422C3"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T14:21:45.257Z",
+            "checksum": "4c9476d9b4fb3172cac3fed3d515fbe787ae64a6b9b3a68b9805149847df1d03"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "QUERY_CATEGORIES",
+            "Description": "Query categories for organizing new queries",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Query Categories",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"ParentID\"]",
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 3,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "457C449C-A983-4E92-BCD6-30D3F516EFDE"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T23:13:24.819Z",
+            "checksum": "d4e217eb977f0ce0b4b27ae425f23a986fb807bdf8bc9890659f98436e19d25e"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F77AEFDE-EE1F-42B4-B1A2-C862281E98E0"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T14:21:45.405Z",
+            "checksum": "f677b284d019d5cf93ba0125433e3f29cb520831c238683cf1303d6ca4ae1cf4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Update Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B103E41-9A08-46D4-A1C9-2716167A6A85"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T14:21:45.421Z",
+            "checksum": "ba214e4880b2c5272046116869798e9c65b9d2e3c16d9576af8d264ebfe09095"
+          }
+        }
+      ],
+      "MJ: AI Agent Configurations": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Draft",
+            "DisplayName": "Draft",
+            "Description": "Fast/Lower Quality",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
+            "IsDefault": false,
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F29D4592-82A0-49DB-9A01-CF42C17B8DB6"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T14:21:45.446Z",
+            "checksum": "25062bdd58fb8eb04195952f28074232f0537f6ffacd4a37bda9fa4851543e59"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Standard",
+            "DisplayName": "Standard",
+            "Description": "Balanced Quality/Speed",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard",
+            "IsDefault": true,
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "455D0DEA-596C-40B4-9FEE-1045CFD3C153"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T14:21:45.460Z",
+            "checksum": "f05bfc1b449cf5af313395326ddab1833862b8ff756d2959f24dcacd0ff19cf2"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "High",
+            "DisplayName": "High",
+            "Description": "Highest Quality/Slower",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
+            "IsDefault": false,
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EDE08022-D695-4F22-B262-9118184AC016"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T14:21:45.480Z",
+            "checksum": "e52c4a945d3b8167ab08c06476656634a22731a8a2c47b18add90629450ae9eb"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Query Strategist",
+            "Status": "Active",
+            "SubAgentOutputMapping": {
+              "*": "queryResults"
+            },
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "C08A26CB-EDBD-4887-BC1B-3E197678DCFF"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T15:22:15.094Z",
+            "checksum": "7887a345780ceb1d09e5a4f7ea990d46822d68abe87c6962643bd45b5175549d"
+          }
+        }
+      ],
+      "MJ: AI Agents": [
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Query Strategist",
+            "Description": "Technical sub-agent that handles schema exploration, SQL generation, query testing, and structured result formatting. Translates business requirements from the Query Builder orchestrator into optimized SQL queries.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ArtifactCreationMode": "Never",
+            "ExecutionOrder": 0,
+            "ModelSelectionMode": "Agent",
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-database",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "*"
+            ],
+            "FinalPayloadValidation": "@file:validation/query-builder-payload-validation.json",
+            "FinalPayloadValidationMode": "Retry",
+            "FinalPayloadValidationMaxRetries": 3
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Query Builder - Query Strategist Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "38401B20-3B59-4BEC-909D-A39AE0246285"
+                },
+                "sync": {
+                  "lastModified": "2026-02-18T15:22:15.141Z",
+                  "checksum": "6c165f30e4bb790a75bdba5ddb0f9a9fe9ff96134c41194be031c414517c226b"
+                }
+              }
+            ],
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ALL_ENTITIES",
+                  "Description": "Complete list of all entities in the system for schema exploration",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Entities",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "78B008BC-9361-4331-B08F-1386A8E00B51"
+                },
+                "sync": {
+                  "lastModified": "2026-02-18T23:13:24.865Z",
+                  "checksum": "2e4ca340b49e365ea51bbf154dc2743aa323a2784cbbaa9a5dffea29007f3852"
+                }
+              }
+            ],
+            "MJ: AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Entity Details",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "97A5AC30-98AF-4249-8A50-3F09C5D8AB26"
+                },
+                "sync": {
+                  "lastModified": "2026-02-18T15:22:15.156Z",
+                  "checksum": "92455f8e2545c27c8abcae2c023f2fd838e5b780c9430bf238fe308effa4eccd"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Execute Research Query",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9A611437-1CC2-4B91-B375-722F2BD1B1CD"
+                },
+                "sync": {
+                  "lastModified": "2026-02-18T15:22:15.167Z",
+                  "checksum": "3a9ed68c620a32ff70c017ae8b88472a30d1336bf7c27e3244dc11e382c1f6e1"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "17E1C958-909C-41B2-8B52-138AED224108"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T23:20:39.816Z",
+            "checksum": "846d1e3e9b02152dffcc489d7c15bb26aa636aeb25e84d645251cdc68cf65268"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
+    },
+    "sync": {
+      "lastModified": "2026-02-18T16:01:14.962Z",
+      "checksum": "03b22577674b7cbc00833e374673b5893cf7432998999b9c0b8a3a0cb3b9120d"
+    }
+  }
+]

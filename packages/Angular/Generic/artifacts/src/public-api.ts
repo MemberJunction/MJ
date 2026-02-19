@@ -29,3 +29,4 @@ export * from './lib/components/plugins/markdown-artifact-viewer.component';
 export * from './lib/components/plugins/html-artifact-viewer.component';
 export * from './lib/components/plugins/svg-artifact-viewer.component';
 export * from './lib/components/plugins/component-artifact-viewer.component';
+export * from './lib/components/plugins/data-artifact-viewer.component';

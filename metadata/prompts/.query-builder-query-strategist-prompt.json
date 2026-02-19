@@ -1,0 +1,70 @@
+[
+  {
+    "fields": {
+      "Name": "Query Builder - Query Strategist Prompt",
+      "Description": "System prompt for the Query Strategist sub-agent. Handles schema exploration, SQL generation, query testing, and structured result formatting.",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "PromptRole": "System",
+      "TemplateText": "@file:templates/query-builder/query-strategist-prompt.md",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "Status": "Active",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 15
+          },
+          "primaryKey": {
+            "ID": "EF1C066F-9FDB-485B-B095-7EDC1B123E7A"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T15:22:13.018Z",
+            "checksum": "be351745fd5a0ea6310d65bb442a21d90c96deda88206cff4ab854a3c902e0ec"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "7671652C-A611-4BB2-B0B8-B64A54CE9B5E"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T15:22:13.034Z",
+            "checksum": "396b6b95a45a5014cbc680ab3c5120a8f874c0e083fa3342f8c62b5ed973e09f"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "A5443ACA-CAE8-4132-AFD7-535E8482F9A0"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T15:22:13.050Z",
+            "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6712859D-9958-416D-A99B-D9517CB00553"
+    },
+    "sync": {
+      "lastModified": "2026-02-19T01:37:14.749Z",
+      "checksum": "298bdf99da3cb3115e54f466b4ed8534bd7b244663c1ea0a0cbd2879199e03d0"
+    }
+  }
+]

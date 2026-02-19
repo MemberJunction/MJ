@@ -15,6 +15,7 @@ import { MarkdownArtifactViewerComponent } from './components/plugins/markdown-a
 import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-viewer.component';
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
+import { DataArtifactViewerComponent } from './components/plugins/data-artifact-viewer.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 
 // Import artifact type plugin viewer component
@@ -47,6 +48,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
+    DataArtifactViewerComponent,
 
     // Custom tab components (used by plugins via dynamic component tabs)
     DataRequirementsViewerComponent
@@ -74,7 +76,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MarkdownArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
-    ComponentArtifactViewerComponent
+    ComponentArtifactViewerComponent,
+    DataArtifactViewerComponent
   ],
   providers: [
     // Plugins are registered via @RegisterClass decorator on component classes, no providers needed
@@ -90,7 +93,8 @@ export class ArtifactsModule {
       MarkdownArtifactViewerComponent,
       HtmlArtifactViewerComponent,
       SvgArtifactViewerComponent,
-      ComponentArtifactViewerComponent
+      ComponentArtifactViewerComponent,
+      DataArtifactViewerComponent
     ];
   }
 }

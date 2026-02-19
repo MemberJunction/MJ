@@ -1,0 +1,55 @@
+[
+  {
+    "fields": {
+      "Name": "Query Builder - System Prompt",
+      "Description": "System prompt for the Query Builder orchestrator agent. Guides the agent in understanding business requirements, presenting data visually, and coordinating with the SQL Engine sub-agent.",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "PromptRole": "System",
+      "TemplateText": "@file:templates/query-builder/system-prompt.md",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "Status": "Active",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 15
+          },
+          "primaryKey": {
+            "ID": "A02E4591-B247-47A1-AE27-23E339F65E62"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T15:22:11.166Z",
+            "checksum": "edf1cc638dde7b343458fa3ca2fb709163fe716219f1671d1c93b98ffaf9ad80"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "7D113352-7C64-4F94-8574-FCD8822DAA4A"
+          },
+          "sync": {
+            "lastModified": "2026-02-18T14:21:40.967Z",
+            "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6B5F08B2-BE23-4462-96DA-FC60B238FEF0"
+    },
+    "sync": {
+      "lastModified": "2026-02-18T15:42:01.014Z",
+      "checksum": "d8a1894788a9cb6058fcc581bff4b3bb593f48fd0b592ad2cf0bbdc8a649c171"
+    }
+  }
+]
