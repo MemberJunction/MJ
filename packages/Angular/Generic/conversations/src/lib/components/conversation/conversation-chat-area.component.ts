@@ -443,9 +443,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         });
       }
 
-      this.isLoadingConversation = true;
-      this.messages = [];
-      this.cdr.detectChanges();
+      // Only show loading spinner if we don't have cached data for this conversation.
+      // When switching between previously visited conversations, the cache provides
+      // instant display without the loading flash.
+      const hasCachedData = this.conversationDataCache.has(conversationId);
+      if (!hasCachedData) {
+        this.isLoadingConversation = true;
+        this.messages = [];
+        this.cdr.detectChanges();
+      }
 
       try {
         await this.loadMessages(conversationId);
