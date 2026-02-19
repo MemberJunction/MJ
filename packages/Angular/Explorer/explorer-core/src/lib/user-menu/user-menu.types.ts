@@ -126,6 +126,9 @@ export interface UserMenuContext {
 
     /** Function to open settings dialog */
     openSettings: () => void;
+
+    /** Current theme preference (light/dark/system) */
+    themePreference?: 'light' | 'dark' | 'system';
 }
 
 /**

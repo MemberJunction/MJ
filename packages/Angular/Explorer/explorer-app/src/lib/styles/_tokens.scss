@@ -22,7 +22,9 @@
   --mj-color-brand-100: #b3dbed;
   --mj-color-brand-200: #80c3e1;
   --mj-color-brand-300: #4dabd5;
+  --mj-color-brand-350: #3395c8;  /* Primary hover (lighter blue) */
   --mj-color-brand-400: #2699cc;
+  --mj-color-brand-450: #1a88bf;  /* Between 400 and 500 */
   --mj-color-brand-500: #0076b6;  /* MJ Primary Blue */
   --mj-color-brand-600: #006aa3;
   --mj-color-brand-700: #005a8a;
@@ -70,18 +72,30 @@
   /* Status Colors */
   --mj-color-success-50: #f0fdf4;
   --mj-color-success-100: #dcfce7;
+  --mj-color-success-200: #bbf7d0;
+  --mj-color-success-300: #86efac;
+  --mj-color-success-400: #4ade80;
   --mj-color-success-500: #22c55e;
   --mj-color-success-600: #16a34a;
   --mj-color-success-700: #15803d;
+  --mj-color-success-800: #166534;
 
   --mj-color-warning-50: #fffbeb;
   --mj-color-warning-100: #fef3c7;
+  --mj-color-warning-200: #fde68a;
+  --mj-color-warning-300: #fcd34d;
+  --mj-color-warning-400: #fbbf24;
   --mj-color-warning-500: #f59e0b;
   --mj-color-warning-600: #d97706;
   --mj-color-warning-700: #b45309;
+  --mj-color-warning-800: #92400e;
+  --mj-color-warning-900: #78350f;
 
   --mj-color-error-50: #fef2f2;
   --mj-color-error-100: #fee2e2;
+  --mj-color-error-200: #fecaca;
+  --mj-color-error-300: #fca5a5;
+  --mj-color-error-400: #f87171;
   --mj-color-error-500: #ef4444;
   --mj-color-error-600: #dc2626;
   --mj-color-error-700: #b91c1c;
@@ -92,6 +106,22 @@
   --mj-color-info-600: #2563eb;
   --mj-color-info-700: #1d4ed8;
 
+  /* Violet Colors (applications, special features) */
+  --mj-color-violet-50: #f5f3ff;
+  --mj-color-violet-100: #ede9fe;
+  --mj-color-violet-200: #ddd6fe;
+  --mj-color-violet-300: #c4b5fd;
+  --mj-color-violet-400: #a78bfa;
+  --mj-color-violet-500: #8b5cf6;
+  --mj-color-violet-600: #7c3aed;
+  --mj-color-violet-700: #6d28d9;
+
+  /* Indigo Colors (updated actions, indicators) */
+  --mj-color-indigo-50: #eef2ff;
+  --mj-color-indigo-100: #e0e7ff;
+  --mj-color-indigo-500: #6366f1;
+  --mj-color-indigo-600: #4f46e5;
+
   /* ========================================
      SEMANTIC TOKENS
      USE THESE in components
@@ -101,6 +131,7 @@
   --mj-bg-page: var(--mj-color-neutral-50);
   --mj-bg-surface: var(--mj-color-neutral-0);
   --mj-bg-surface-elevated: var(--mj-color-neutral-0);
+  --mj-bg-surface-card: var(--mj-color-neutral-50);
   --mj-bg-surface-sunken: var(--mj-color-neutral-100);
   --mj-bg-surface-hover: var(--mj-color-neutral-100);
   --mj-bg-surface-active: var(--mj-color-neutral-200);
@@ -126,6 +157,7 @@
   --mj-brand-primary: var(--mj-color-brand-500);
   --mj-brand-primary-hover: var(--mj-color-brand-600);
   --mj-brand-primary-active: var(--mj-color-brand-700);
+  --mj-brand-primary-light: var(--mj-color-brand-350);
   --mj-brand-secondary: var(--mj-color-brand-900);
   --mj-brand-on-primary: var(--mj-color-neutral-0);
   --mj-brand-on-secondary: var(--mj-color-neutral-0);
@@ -265,6 +297,10 @@
   --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   --mj-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
 
+  /* Brand Shadows */
+  --mj-shadow-brand-sm: 0 2px 8px rgba(0, 118, 182, 0.3);
+  --mj-shadow-brand-md: 0 4px 12px rgba(0, 118, 182, 0.4);
+
   /* Focus Ring */
   --mj-ring-width: 2px;
   --mj-ring-offset: 2px;
@@ -297,10 +333,13 @@
    ======================================== */
 
 [data-theme="dark"] {
+
   /* Background Colors */
+  
   --mj-bg-page: var(--mj-color-neutral-900);
   --mj-bg-surface: var(--mj-color-neutral-800);
   --mj-bg-surface-elevated: var(--mj-color-neutral-700);
+  --mj-bg-surface-card: var(--mj-color-neutral-800);
   --mj-bg-surface-sunken: var(--mj-color-neutral-950);
   --mj-bg-surface-hover: var(--mj-color-neutral-700);
   --mj-bg-surface-active: var(--mj-color-neutral-600);

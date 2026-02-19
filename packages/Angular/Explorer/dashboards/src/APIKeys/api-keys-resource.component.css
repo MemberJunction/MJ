@@ -35,7 +35,7 @@
 }
 
 .nav-title i {
-    color: #f59e0b;
+    color: var(--mj-brand-primary);
     font-size: 18px;
 }
 
@@ -69,9 +69,9 @@
 }
 
 .nav-item.active {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    color: white;
-    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    box-shadow: var(--mj-shadow-brand-sm);
 }
 
 .nav-item i {
@@ -197,8 +197,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    color: white;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 8px;
     font-weight: 600;
@@ -209,7 +209,7 @@
 
 .btn-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+    box-shadow: var(--mj-shadow-brand-md);
 }
 
 /* Health Banner */
@@ -217,19 +217,19 @@
     display: flex;
     align-items: center;
     padding: 20px 24px;
-    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    background: linear-gradient(135deg, var(--mj-color-success-50) 0%, var(--mj-color-success-100) 100%);
     border: 1px solid #a7f3d0;
     border-radius: 16px;
     margin-bottom: 24px;
 }
 
 .health-banner.health-warning {
-    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-    border-color: #fcd34d;
+    background: linear-gradient(135deg, var(--mj-color-warning-50) 0%, var(--mj-color-brand-100) 100%);
+    border-color: var(--mj-color-accent-300);
 }
 
 .health-banner.health-critical {
-    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    background: linear-gradient(135deg, var(--mj-color-error-50) 0%, var(--mj-color-error-100) 100%);
     border-color: #fca5a5;
 }
 
@@ -252,7 +252,7 @@
 
 .circle-bg {
     fill: none;
-    stroke: #e5e7eb;
+    stroke: var(--mj-border-default);
     stroke-width: 3.8;
 }
 
@@ -260,16 +260,16 @@
     fill: none;
     stroke-width: 3.8;
     stroke-linecap: round;
-    stroke: #10b981;
+    stroke: var(--mj-status-success);
     animation: progress 1s ease-out forwards;
 }
 
 .health-banner.health-warning .circle {
-    stroke: #f59e0b;
+    stroke: var(--mj-color-warning-500);
 }
 
 .health-banner.health-critical .circle {
-    stroke: #ef4444;
+    stroke: var(--mj-status-error);
 }
 
 @keyframes progress {
@@ -295,16 +295,16 @@
 .health-label {
     font-size: 18px;
     font-weight: 700;
-    color: #059669;
+    color: var(--mj-color-success-600);
     margin-bottom: 4px;
 }
 
 .health-banner.health-warning .health-label {
-    color: #d97706;
+    color: var(--mj-brand-primary-hover);
 }
 
 .health-banner.health-critical .health-label {
-    color: #dc2626;
+    color: var(--mj-color-error-600);
 }
 
 .health-details {
@@ -317,7 +317,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #dc2626;
+    color: var(--mj-color-error-600);
     font-weight: 500;
     font-size: 14px;
     cursor: pointer;
@@ -331,7 +331,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #d97706;
+    color: var(--mj-brand-primary-hover);
     font-weight: 500;
     font-size: 14px;
     cursor: pointer;
@@ -345,7 +345,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #6b7280;
+    color: var(--mj-text-secondary);
     font-weight: 500;
     font-size: 14px;
     cursor: pointer;
@@ -359,7 +359,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #059669;
+    color: var(--mj-color-success-600);
     font-weight: 500;
     font-size: 14px;
 }
@@ -392,15 +392,15 @@
 }
 
 .kpi-card.active .kpi-icon {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, var(--mj-status-success) 0%, var(--mj-color-success-600) 100%);
 }
 
 .kpi-card.warning .kpi-icon {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, var(--mj-color-warning-500) 0%, var(--mj-brand-primary-hover) 100%);
 }
 
 .kpi-card.danger .kpi-icon {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    background: linear-gradient(135deg, var(--mj-status-error) 0%, var(--mj-color-error-600) 100%);
 }
 
 .kpi-icon {
@@ -409,7 +409,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: var(--mj-brand-primary);
     border-radius: 10px;
     margin-right: 14px;
     flex-shrink: 0;
@@ -417,7 +417,7 @@
 
 .kpi-icon i {
     font-size: 20px;
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .kpi-content {
@@ -447,11 +447,11 @@
 }
 
 .kpi-trend.success {
-    color: #10b981;
+    color: var(--mj-status-success);
 }
 
 .kpi-trend.warning {
-    color: #f59e0b;
+    color: var(--mj-color-warning-500);
 }
 
 .kpi-trend .percentage {
@@ -508,7 +508,7 @@
 }
 
 .panel-title i {
-    color: #f59e0b;
+    color: var(--mj-brand-primary);
 }
 
 .panel-subtitle {
@@ -532,9 +532,9 @@
 }
 
 .panel-action:hover {
-    background: #f59e0b;
-    border-color: #f59e0b;
-    color: white;
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
 }
 
 .panel-body {
@@ -578,12 +578,12 @@
 }
 
 .key-icon.active {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: var(--mj-brand-primary);
 }
 
 .key-icon i {
     font-size: 16px;
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .key-info {
@@ -636,17 +636,17 @@
 }
 
 .expiration.expiring-soon {
-    color: #f59e0b;
+    color: var(--mj-color-warning-500);
     font-weight: 500;
 }
 
 .expiration.expiring-critical {
-    color: #ef4444;
+    color: var(--mj-status-error);
     font-weight: 500;
 }
 
 .expiration.expired {
-    color: #ef4444;
+    color: var(--mj-status-error);
     font-weight: 600;
 }
 
@@ -784,7 +784,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--icon-background, #fef3c7);
+    background: var(--icon-background, var(--mj-color-brand-100));
     border-radius: 6px;
     margin-right: 12px;
     flex-shrink: 0;
@@ -792,39 +792,39 @@
 
 .activity-icon i {
     font-size: 12px;
-    color: #f59e0b;
+    color: var(--mj-brand-primary);
 }
 
 .activity-icon.action-created {
-    background: #d1fae5;
+    background: var(--mj-color-success-100);
 }
 
 .activity-icon.action-created i {
-    color: #059669;
+    color: var(--mj-color-success-600);
 }
 
 .activity-icon.action-updated {
-    background: #e0e7ff;
+    background: var(--mj-color-indigo-100);
 }
 
 .activity-icon.action-updated i {
-    color: #6366f1;
+    color: var(--mj-color-indigo-500);
 }
 
 .activity-icon.action-revoked {
-    background: #fee2e2;
+    background: var(--mj-color-error-100);
 }
 
 .activity-icon.action-revoked i {
-    color: #dc2626;
+    color: var(--mj-color-error-600);
 }
 
 .activity-icon.action-used {
-    background: #fef3c7;
+    background: var(--mj-color-brand-100);
 }
 
 .activity-icon.action-used i {
-    color: #d97706;
+    color: var(--mj-brand-primary-hover);
 }
 
 .activity-icon.action-extended {
@@ -901,14 +901,14 @@
 }
 
 .quick-action:hover {
-    border-color: #f59e0b;
-    background: #fffbeb;
+    border-color: var(--mj-brand-primary);
+    background: var(--mj-color-brand-50);
     transform: translateY(-2px);
 }
 
 .quick-action i {
     font-size: 20px;
-    color: #f59e0b;
+    color: var(--mj-brand-primary);
 }
 
 .quick-action span {
@@ -939,21 +939,21 @@
     display: flex;
     align-items: flex-start;
     padding: 16px 20px;
-    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    background: linear-gradient(135deg, var(--mj-color-brand-50) 0%, var(--mj-color-brand-100) 100%);
     border-radius: 12px;
-    border: 1px solid #fcd34d;
+    border: 1px solid var(--mj-color-accent-300);
 }
 
 .security-notice i {
     font-size: 20px;
-    color: #f59e0b;
+    color: var(--mj-brand-primary);
     margin-right: 12px;
     margin-top: 2px;
 }
 
 .notice-content {
     font-size: 13px;
-    color: #92400e;
+    color: var(--mj-color-brand-800);
     line-height: 1.5;
 }
 
@@ -969,12 +969,12 @@
     right: 20px;
     width: 56px;
     height: 56px;
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: var(--mj-brand-primary);
     border: none;
     border-radius: 50%;
-    color: white;
+    color: var(--mj-text-inverse);
     font-size: 24px;
-    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+    box-shadow: var(--mj-shadow-brand-md);
     cursor: pointer;
     z-index: 50;
     transition: transform 0.2s ease;

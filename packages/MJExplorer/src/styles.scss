@@ -8,7 +8,7 @@
  * MD3 design tokens are now in @memberjunction/ng-explorer-app styles/_md3-theme.scss
  */
 
- @use "@memberjunction/ng-explorer-app/dist/styles.scss" as *;
+@use "@memberjunction/ng-explorer-app/dist/styles.scss";
 
 /* Application-specific layout adjustments */
 html,

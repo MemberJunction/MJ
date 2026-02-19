@@ -77,6 +77,7 @@ describe('WorkspaceInitializerService.classifyError', () => {
     const { StartupValidationService } = await import('@memberjunction/ng-explorer-core');
     service = new mod.WorkspaceInitializerService(
       {} as never,
+      {} as never,
       {} as never
     );
   });
@@ -149,6 +150,7 @@ describe('WorkspaceInitializerService.handleAuthRetry', () => {
     const { MJAuthBase } = await import('@memberjunction/ng-auth-services');
     const { StartupValidationService } = await import('@memberjunction/ng-explorer-core');
     service = new mod.WorkspaceInitializerService(
+      {} as never,
       {} as never,
       {} as never
     );

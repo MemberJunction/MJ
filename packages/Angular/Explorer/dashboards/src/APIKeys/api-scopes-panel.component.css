@@ -30,7 +30,7 @@
 }
 
 .panel-title i {
-    color: #10b981;
+    color: var(--mj-status-success);
 }
 
 .panel-subtitle {
@@ -59,7 +59,7 @@
 }
 
 .stat.active {
-    color: #10b981;
+    color: var(--mj-status-success);
 }
 
 .stat i {
@@ -98,8 +98,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--mj-status-success) 0%, var(--mj-color-success-600) 100%);
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 8px;
     font-weight: 600;
@@ -125,14 +125,14 @@
 }
 
 .message.success {
-    background: #d1fae5;
-    color: #065f46;
+    background: var(--mj-color-success-100);
+    color: var(--mj-color-success-800);
     border: 1px solid #a7f3d0;
 }
 
 .message.error {
-    background: #fee2e2;
-    color: #991b1b;
+    background: var(--mj-color-error-100);
+    color: var(--mj-color-error-700);
     border: 1px solid #fca5a5;
 }
 
@@ -212,7 +212,7 @@
 
 .scope-icon i {
     font-size: 14px;
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .scope-details {
@@ -244,8 +244,8 @@
     font-weight: 500;
     padding: 2px 6px;
     border-radius: 4px;
-    background: #f3f4f6;
-    color: #6b7280;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
 }
 
 .scope-meta {
@@ -302,9 +302,9 @@
 }
 
 .btn-node-action:hover {
-    background: #10b981;
-    border-color: #10b981;
-    color: white;
+    background: var(--mj-status-success);
+    border-color: var(--mj-status-success);
+    color: var(--mj-text-inverse);
 }
 
 .btn-node-action i {
@@ -368,7 +368,7 @@
     justify-content: space-between;
     padding: 18px 24px !important;
     background: linear-gradient(135deg, #fafafa 0%, #f3f4f6 100%) !important;
-    border-bottom: 1px solid #e5e7eb !important;
+    border-bottom: 1px solid var(--mj-border-default) !important;
 }
 
 .dialog-title {
@@ -377,17 +377,17 @@
     gap: 12px;
     font-weight: 600;
     font-size: 17px;
-    color: #1f2937;
+    color: var(--mj-text-primary);
 }
 
 .dialog-title i {
-    color: #10b981;
+    color: var(--mj-status-success);
     font-size: 18px;
 }
 
 .window-close-btn {
     margin-left: auto;
-    color: #9ca3af;
+    color: var(--mj-text-muted);
     transition: all 0.2s ease;
     width: 32px;
     height: 32px;
@@ -398,7 +398,7 @@
 }
 
 .window-close-btn:hover {
-    color: #374151;
+    color: var(--mj-color-neutral-700);
     background: rgba(0, 0, 0, 0.05);
 }
 
@@ -426,7 +426,7 @@
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: #374151;
+    color: var(--mj-color-neutral-700);
     margin-bottom: 8px;
     letter-spacing: 0.01em;
 }
@@ -447,7 +447,7 @@
     padding: 10px 14px;
     border-radius: 8px;
     font-size: 14px;
-    border-color: #e5e7eb;
+    border-color: var(--mj-border-default);
     transition: all 0.2s ease;
 }
 
@@ -460,7 +460,7 @@
 .field-hint {
     display: block;
     font-size: 12px;
-    color: #6b7280;
+    color: var(--mj-text-secondary);
     margin-top: 6px;
     line-height: 1.4;
 }
@@ -480,15 +480,15 @@
     gap: 12px;
     cursor: pointer;
     padding: 12px 16px;
-    background: #f9fafb;
+    background: var(--mj-bg-page);
     border-radius: 10px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--mj-border-default);
     transition: all 0.2s ease;
 }
 
 .checkbox-label:hover {
-    background: #f3f4f6;
-    border-color: #d1d5db;
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-color-neutral-300);
 }
 
 .checkbox-label input {
@@ -498,14 +498,14 @@
 
 .checkbox-label span:first-of-type {
     font-weight: 600;
-    color: #374151;
+    color: var(--mj-color-neutral-700);
     font-size: 14px;
 }
 
 .checkbox-hint {
     display: block;
     font-size: 12px;
-    color: #6b7280;
+    color: var(--mj-text-secondary);
     margin-top: 4px;
     line-height: 1.4;
 }
@@ -515,8 +515,8 @@
     display: flex;
     gap: 12px;
     padding: 20px 24px;
-    background: #f9fafb;
-    border-top: 1px solid #e5e7eb;
+    background: var(--mj-bg-page);
+    border-top: 1px solid var(--mj-border-default);
     margin: 0 -24px -24px -24px;
 }
 
@@ -529,7 +529,7 @@
 }
 
 :host ::ng-deep .dialog-actions .k-button-solid-primary {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, var(--mj-status-success) 0%, var(--mj-color-success-600) 100%);
     border: none;
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }

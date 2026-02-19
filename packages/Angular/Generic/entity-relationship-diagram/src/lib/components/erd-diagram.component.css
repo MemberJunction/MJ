@@ -1,6 +1,6 @@
 /**
- * ERD Diagram Component - MD3 Styled
- * Material Design 3 theming for the Entity Relationship Diagram visualization
+ * ERD Diagram Component - MJ Design Tokens
+ * MJ theming for the Entity Relationship Diagram visualization
  */
 
 :host {
@@ -10,7 +10,7 @@
 }
 
 .erd-section {
-  background: var(--mat-sys-surface);
+  background: var(--mj-bg-page);
   overflow: hidden;
   height: 100%;
   display: flex;
@@ -23,15 +23,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: var(--mat-sys-surface-container);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
 .section-header h3 {
   margin: 0;
-  font: var(--mat-sys-title-medium);
-  color: var(--mat-sys-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .erd-controls {
@@ -44,19 +43,18 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  font: var(--mat-sys-label-medium);
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface-variant);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .control-btn:hover:not(:disabled) {
-  background: var(--mat-sys-surface-container);
-  border-color: var(--mat-sys-outline);
-  color: var(--mat-sys-on-surface);
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-color-neutral-400);
+  color: var(--mj-text-primary);
 }
 
 .control-btn:disabled {
@@ -67,7 +65,7 @@
 .erd-container {
   flex: 1;
   position: relative;
-  background: var(--mat-sys-surface-container-low);
+  background: var(--mj-bg-surface-sunken);
   overflow: hidden;
   width: 100%;
   min-height: 400px;
@@ -90,7 +88,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--mat-sys-surface);
+  background: var(--mj-bg-page);
   opacity: 0.95;
   backdrop-filter: blur(2px);
   display: flex;
@@ -123,25 +121,24 @@
 }
 
 .spinner-ring:nth-child(1) {
-  border-top-color: var(--mat-sys-primary);
+  border-top-color: var(--mj-brand-primary);
   animation-delay: 0s;
 }
 
 .spinner-ring:nth-child(2) {
-  border-top-color: var(--mat-sys-secondary);
+  border-top-color: var(--mj-color-warning-500);
   animation-delay: 0.3s;
   transform: scale(0.8);
 }
 
 .spinner-ring:nth-child(3) {
-  border-top-color: var(--mat-sys-tertiary);
+  border-top-color: var(--mj-status-success);
   animation-delay: 0.6s;
   transform: scale(0.6);
 }
 
 .loading-text {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   font-weight: 500;
   text-align: center;
 }
@@ -167,9 +164,9 @@
 
 /* Node highlighting styles */
 :host ::ng-deep .erd-container svg .node .entity-rect.highlighted {
-  stroke: var(--mat-sys-tertiary) !important;
+  stroke: var(--mj-status-success) !important;
   stroke-width: 4px !important;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mat-sys-tertiary) 60%, transparent));
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mj-status-success) 60%, transparent));
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-rect {
@@ -193,33 +190,33 @@
 
 /* Related/connected nodes - using tertiary accent */
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-rect.relationship-highlighted {
-  stroke: var(--mat-sys-tertiary) !important;
+  stroke: var(--mj-status-success) !important;
   stroke-width: 3px !important;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mat-sys-tertiary) 50%, transparent));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-success) 50%, transparent));
 }
 
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-header {
-  fill: var(--mat-sys-tertiary) !important;
+  fill: var(--mj-status-success) !important;
 }
 
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-header-bottom {
-  fill: var(--mat-sys-tertiary) !important;
+  fill: var(--mj-status-success) !important;
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-rect.connection-highlighted {
-  stroke: var(--mat-sys-secondary) !important;
+  stroke: var(--mj-color-warning-500) !important;
   stroke-width: 3px !important;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mat-sys-secondary) 50%, transparent));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-color-warning-500) 50%, transparent));
   opacity: 0.9;
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header {
-  fill: var(--mat-sys-secondary) !important;
+  fill: var(--mj-color-warning-500) !important;
   opacity: 0.8;
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header-bottom {
-  fill: var(--mat-sys-secondary) !important;
+  fill: var(--mj-color-warning-500) !important;
   opacity: 0.8;
 }
 
@@ -232,15 +229,15 @@
 
 :host ::ng-deep .erd-container svg .link-group .link:hover {
   stroke-width: 3px;
-  stroke: var(--mat-sys-tertiary);
+  stroke: var(--mj-status-success);
   opacity: 1;
 }
 
 :host ::ng-deep .erd-container svg .link-group .link.highlighted {
-  stroke: var(--mat-sys-tertiary) !important;
+  stroke: var(--mj-status-success) !important;
   stroke-width: 4px !important;
   opacity: 1 !important;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mat-sys-tertiary) 60%, transparent));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-success) 60%, transparent));
 }
 
 :host ::ng-deep .erd-container svg .link-group .link-label {
@@ -253,7 +250,7 @@
 :host ::ng-deep .erd-container svg .link-group .link-label.highlighted {
   opacity: 1;
   font-weight: bold;
-  fill: var(--mat-sys-tertiary);
+  fill: var(--mj-status-success);
 }
 
 :host ::ng-deep .erd-container svg .link-group.highlighted {
@@ -266,6 +263,6 @@
 }
 
 :host ::ng-deep .erd-container svg .field-group:hover .field-bg {
-  fill: var(--mat-sys-primary-container) !important;
+  fill: var(--mj-color-accent-300) !important;
 }
 
