@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-agent-manager-actions",
   "type": "module",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "Agent Management actions for creating and managing AI agents in MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,7 +9,6 @@
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
-    "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -22,14 +21,14 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "5.0.0",
-    "@memberjunction/actions-base": "5.0.0",
-    "@memberjunction/core": "5.0.0",
-    "@memberjunction/core-entities": "5.0.0",
-    "@memberjunction/global": "5.0.0",
-    "@memberjunction/ai-agent-manager": "5.0.0",
-    "@memberjunction/ai-core-plus": "5.0.0",
-    "@memberjunction/ai-engine-base": "5.0.0"
+    "@memberjunction/actions": "5.1.0",
+    "@memberjunction/actions-base": "5.1.0",
+    "@memberjunction/core": "5.1.0",
+    "@memberjunction/core-entities": "5.1.0",
+    "@memberjunction/global": "5.1.0",
+    "@memberjunction/ai-agent-manager": "5.1.0",
+    "@memberjunction/ai-core-plus": "5.1.0",
+    "@memberjunction/ai-engine-base": "5.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",
