@@ -31,6 +31,9 @@ interface DataArtifactSpec {
   /** Inline row data (when results are embedded directly) */
   rows?: Record<string, unknown>[];
 
+  /** Optional markdown plan/approach description (mermaid diagrams, explanations) */
+  plan?: string;
+
   /** Query metadata */
   metadata?: {
     sql?: string;
@@ -61,30 +64,28 @@ interface DataArtifactColumn {
   template: `
     <div class="data-artifact-viewer" [ngClass]="cssClass">
       @if (spec) {
-        <!-- Title bar -->
-        <div class="data-toolbar">
-          <div class="data-title">
-            <i class="fas fa-table"></i>
-            <span>{{ spec.title || 'Data Results' }}</span>
-            @if (spec.metadata?.rowCount != null) {
-              <span class="row-count">{{ spec.metadata!.rowCount }} rows</span>
-            }
-            @if (spec.metadata?.executionTimeMs != null) {
-              <span class="exec-time">{{ spec.metadata!.executionTimeMs }}ms</span>
-            }
-          </div>
-          <div class="data-actions">
-            <button class="btn-icon" title="Copy as CSV" (click)="OnCopyCsv()">
-              <i class="fas fa-copy"></i> CSV
-            </button>
-            <button class="btn-icon" title="Copy as JSON" (click)="OnCopyJson()">
-              <i class="fas fa-brackets-curly"></i> JSON
-            </button>
-          </div>
-        </div>
-
-        <!-- Inline data table -->
         @if (HasInlineData) {
+          <!-- Data results view -->
+          <div class="data-toolbar">
+            <div class="data-title">
+              <i class="fas fa-table"></i>
+              <span>{{ spec.title || 'Data Results' }}</span>
+              @if (spec.metadata?.rowCount != null) {
+                <span class="row-count">{{ spec.metadata!.rowCount }} rows</span>
+              }
+              @if (spec.metadata?.executionTimeMs != null) {
+                <span class="exec-time">{{ spec.metadata!.executionTimeMs }}ms</span>
+              }
+            </div>
+            <div class="data-actions">
+              <button class="btn-icon" title="Copy as CSV" (click)="OnCopyCsv()">
+                <i class="fas fa-copy"></i> CSV
+              </button>
+              <button class="btn-icon" title="Copy as JSON" (click)="OnCopyJson()">
+                <i class="fas fa-brackets-curly"></i> JSON
+              </button>
+            </div>
+          </div>
           <div class="table-container">
             <table class="data-table">
               <thead>
@@ -107,10 +108,28 @@ interface DataArtifactColumn {
               </tbody>
             </table>
           </div>
+        } @else if (spec.plan) {
+          <!-- Plan-only view (no results yet) -->
+          <div class="data-toolbar">
+            <div class="data-title">
+              <i class="fas fa-diagram-project"></i>
+              <span>{{ spec.title || 'Query Plan' }}</span>
+            </div>
+          </div>
+          <div class="plan-content">
+            <mj-markdown
+              [data]="spec.plan"
+              [enableMermaid]="true"
+              [enableHighlight]="true"
+              [enableCollapsibleHeadings]="false"
+              [enableSmartypants]="true">
+            </mj-markdown>
+          </div>
         } @else {
+          <!-- No data and no plan -->
           <div class="empty-state">
             <i class="fas fa-inbox"></i>
-            <p>No data rows available</p>
+            <p>No data to display</p>
           </div>
         }
       } @else if (HasError) {
@@ -262,6 +281,12 @@ interface DataArtifactColumn {
     .error-state {
       color: #dc3545;
     }
+
+    .plan-content {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+    }
   `]
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DataArtifactViewerPlugin')
@@ -276,7 +301,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     super();
   }
   public override get hasDisplayContent(): boolean {
-    return this.spec != null;
+    return this.spec != null && (this.HasInlineData || !!this.spec.plan);
   }
 
   public override get parentShouldShowRawContent(): boolean {
@@ -322,10 +347,19 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   /**
-   * Provide SQL tab when query metadata includes the SQL
+   * Provide Plan tab (markdown) and SQL tab (code) when available
    */
   public GetAdditionalTabs(): ArtifactViewerTab[] {
     const tabs: ArtifactViewerTab[] = [];
+
+    if (this.spec?.plan) {
+      tabs.push({
+        label: 'Plan',
+        icon: 'fa-diagram-project',
+        contentType: 'markdown',
+        content: this.spec.plan
+      });
+    }
 
     if (this.spec?.metadata?.sql) {
       tabs.push({

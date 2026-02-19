@@ -1,8 +1,9 @@
 /**
- * @fileoverview Unified SQL Expression Validation
+ * @fileoverview Unified SQL Expression and Query Validation
  *
- * Central utility for validating user-provided SQL expressions against injection attacks.
- * Used by RunView, aggregates, smart filters, and any other feature accepting SQL input.
+ * Central utility for validating user-provided SQL expressions and full queries
+ * against injection attacks. Used by RunView, aggregates, smart filters, ad-hoc
+ * query execution, and any other feature accepting SQL input.
  *
  * Located in MJGlobal (lowest-level package) so all packages can use it.
  *
@@ -57,6 +58,21 @@ export const DANGEROUS_SQL_KEYWORDS = [
 ] as const;
 
 /**
+ * Keywords from DANGEROUS_SQL_KEYWORDS that are legitimate in full SELECT queries.
+ * These are only unblocked when context is 'full_query'.
+ */
+export const FULL_QUERY_ALLOWED_KEYWORDS = [
+  // Subquery operators — valid in WHERE EXISTS(...), x > ANY(...)
+  'EXISTS', 'ANY', 'ALL', 'SOME',
+
+  // Set operations — valid for UNION/INTERSECT/EXCEPT queries
+  'UNION', 'INTERSECT', 'EXCEPT',
+
+  // IIF() uses IF internally, CASE WHEN patterns are common
+  'IF',
+] as const;
+
+/**
  * Safe SQL functions allowed in expressions, organized by category
  */
 export const ALLOWED_SQL_FUNCTIONS = {
@@ -95,7 +111,8 @@ export type SQLValidationContext =
   | 'where_clause'      // WHERE expressions (most permissive)
   | 'order_by'          // ORDER BY expressions
   | 'aggregate'         // Aggregate expressions (must include aggregate function)
-  | 'field_reference';  // Simple field references only
+  | 'field_reference'   // Simple field references only
+  | 'full_query';       // Full SELECT/WITH statements — allows SELECT, subqueries, set operations, comments
 
 /**
  * Validation result with detailed error information
@@ -194,9 +211,12 @@ export class SQLExpressionValidator {
     const dangerCheck = this.checkDangerousPatterns(withoutStrings, options);
     if (!dangerCheck.valid) return dangerCheck;
 
-    // Step 3: Validate function names are in allowlist
-    const functionCheck = this.checkFunctionNames(withoutStrings, options);
-    if (!functionCheck.valid) return functionCheck;
+    // Step 3: Validate function names are in allowlist (skip for full queries —
+    // the function allowlist is designed for expression fragments, not full SQL statements)
+    if (options.context !== 'full_query') {
+      const functionCheck = this.checkFunctionNames(withoutStrings, options);
+      if (!functionCheck.valid) return functionCheck;
+    }
 
     // Step 4: Context-specific validation
     const contextCheck = this.checkContextRules(withoutStrings, options);
@@ -224,23 +244,46 @@ export class SQLExpressionValidator {
    * Check for dangerous SQL patterns that indicate injection attempts
    */
   private checkDangerousPatterns(expression: string, options: SQLValidationOptions): SQLValidationResult {
-    const upper = expression.toUpperCase();
+    const isFullQuery = options.context === 'full_query';
 
     // Build blocked list - explicitly typed as string[] for mutability
-    const blocked: string[] = [...DANGEROUS_SQL_KEYWORDS];
+    let blocked: string[] = [...DANGEROUS_SQL_KEYWORDS];
     if (options.additionalBlocked) {
       blocked.push(...options.additionalBlocked);
     }
 
-    // Add SELECT to blocked unless explicitly allowed (prevents subqueries)
-    if (!options.allowSubqueries && !blocked.includes('SELECT')) {
+    // For full_query context, remove keywords that are legitimate in SELECT statements
+    if (isFullQuery) {
+      const allowedSet = new Set(FULL_QUERY_ALLOWED_KEYWORDS.map(k => k.toUpperCase()));
+      blocked = blocked.filter(kw => !allowedSet.has(kw.toUpperCase()));
+    }
+
+    // Add SELECT to blocked unless context allows it (prevents subqueries in expressions)
+    if (!isFullQuery && !options.allowSubqueries && !blocked.includes('SELECT')) {
       blocked.push('SELECT');
+    }
+
+    // For full_query, strip comments before keyword checking (agent SQL has header comment blocks).
+    // For expressions, comments are still rejected outright as injection vectors.
+    let textToCheck: string;
+    if (isFullQuery) {
+      textToCheck = this.stripSQLComments(expression).toUpperCase();
+    } else {
+      const upper = expression.toUpperCase();
+      if (upper.includes('--') || upper.includes('/*') || upper.includes('*/')) {
+        return {
+          valid: false,
+          error: 'Comments are not allowed in SQL expressions',
+          trigger: 'comment'
+        };
+      }
+      textToCheck = upper;
     }
 
     for (const keyword of blocked) {
       // Use word boundaries to avoid false positives (e.g., "DESCRIPTION" containing "EXEC")
       const pattern = new RegExp(`\\b${this.escapeRegex(keyword)}\\b`, 'i');
-      if (pattern.test(upper)) {
+      if (pattern.test(textToCheck)) {
         return {
           valid: false,
           error: `Dangerous SQL keyword detected: ${keyword}`,
@@ -248,15 +291,6 @@ export class SQLExpressionValidator {
           suggestion: keyword === 'SELECT' ? 'Subqueries are not allowed. Use a direct expression instead.' : undefined
         };
       }
-    }
-
-    // Check comment patterns (common injection technique)
-    if (upper.includes('--') || upper.includes('/*') || upper.includes('*/')) {
-      return {
-        valid: false,
-        error: 'Comments are not allowed in SQL expressions',
-        trigger: 'comment'
-      };
     }
 
     // Check statement terminator (prevents multi-statement injection)
@@ -321,6 +355,19 @@ export class SQLExpressionValidator {
       }
     }
 
+    // For full_query context, the query must start with SELECT or WITH (CTE)
+    if (options.context === 'full_query') {
+      const stripped = this.stripSQLComments(expression).trim();
+      const upper = stripped.toUpperCase();
+      if (!upper.startsWith('SELECT') && !upper.startsWith('WITH')) {
+        return {
+          valid: false,
+          error: 'Ad-hoc query must start with SELECT or WITH',
+          suggestion: 'Only SELECT statements and CTEs (WITH ... AS) are allowed'
+        };
+      }
+    }
+
     return { valid: true };
   }
 
@@ -356,9 +403,29 @@ export class SQLExpressionValidator {
   }
 
   /**
+   * Strip SQL comments (single-line -- and multi-line block comments) from a query.
+   * Used by full_query context to allow agent-generated header comments
+   * without triggering the comment injection check.
+   */
+  private stripSQLComments(sql: string): string {
+    return sql
+      .replace(/--[^\n]*/g, '')          // Single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, ''); // Block comments
+  }
+
+  /**
    * Escape special regex characters in a string
    */
   private escapeRegex(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Validate a full SQL query (SELECT or WITH/CTE statement).
+   * Blocks mutations, dangerous operations, and multi-statement injection.
+   * Allows SELECT, subqueries, set operations, and SQL comments.
+   */
+  public validateFullQuery(sql: string): SQLValidationResult {
+    return this.validate(sql, { context: 'full_query' });
   }
 }

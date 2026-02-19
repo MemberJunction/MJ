@@ -356,15 +356,52 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
-        if (params.QueryID) {
+        if (params.SQL) {
+            return this.RunAdhocQuery(params.SQL, params.MaxRows);
+        }
+        else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else if (params.QueryName) {
             return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else {
-            throw new Error("No QueryID or QueryName provided to RunQuery");
+            throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
         }
+    }
+
+    /**
+     * Executes an ad-hoc SQL query via the ExecuteAdhocQuery GraphQL resolver.
+     * The server validates the SQL (SELECT/WITH only) and executes on a read-only connection.
+     */
+    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number): Promise<RunQueryResult> {
+        const query = gql`
+            query ExecuteAdhocQuery($input: AdhocQueryInput!) {
+                ExecuteAdhocQuery(input: $input) {
+                    ${this.QueryReturnFieldList}
+                }
+            }
+        `;
+
+        const input: { SQL: string; TimeoutSeconds?: number } = { SQL: sql };
+        if (timeoutSeconds !== undefined) {
+            input.TimeoutSeconds = timeoutSeconds;
+        }
+
+        const result = await this.ExecuteGQL(query, { input });
+        if (result?.ExecuteAdhocQuery) {
+            return this.TransformQueryPayload(result.ExecuteAdhocQuery);
+        }
+        return {
+            QueryID: '',
+            QueryName: 'Ad-Hoc Query',
+            Success: false,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 0,
+            ErrorMessage: 'Ad-hoc query execution failed — no response from server'
+        };
     }
 
     protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
