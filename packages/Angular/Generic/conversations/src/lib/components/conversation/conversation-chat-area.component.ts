@@ -206,6 +206,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   // Track initialization state to prevent loading messages before agents are ready
   private isInitialized: boolean = false;
 
+  // Track whether we had active agents on the current conversation's last poll cycle.
+  // Used to detect when polling transitions from active → no active agents (completion via poll).
+  private hadActiveAgents: boolean = false;
+
   // Resize state
   private isResizing: boolean = false;
   private startX: number = 0;
@@ -285,6 +289,27 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         if (message) {
           await this.handleMessageCompletion(message, event.agentRunId);
         }
+      });
+
+    // Subscribe to polling-based agent state to detect completions after page refresh.
+    // After a refresh the server publishes completion events for the OLD sessionId, so the
+    // WebSocket subscription (which uses the NEW sessionId) never receives them.
+    // The polling mechanism is our fallback: when agents transition from active → none
+    // for the current conversation, we reload messages to show the final response.
+    this.agentStateService.activeAgents$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(async (agents) => {
+        if (!this.conversationId) return;
+        const conversationAgents = agents.filter(a => a.run.ConversationID === this.conversationId);
+        const hasActiveAgents = conversationAgents.length > 0;
+        if (this.hadActiveAgents && !hasActiveAgents) {
+          // Agents just completed — reload messages to pick up final response and any
+          // delegated-agent messages that were created during the run.
+          this.invalidateConversationCache(this.conversationId);
+          await this.reloadMessagesForActiveConversation();
+          this.cdr.detectChanges();
+        }
+        this.hadActiveAgents = hasActiveAgents;
       });
   }
 
@@ -404,6 +429,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
 
+    // Reset poll-based completion tracking whenever we switch conversations,
+    // so the first empty poll on the new conversation doesn't trigger a spurious reload.
+    this.hadActiveAgents = false;
+
     if (conversationId) {
       this.currentlyLoadingConversationId = conversationId;
 
@@ -414,9 +443,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         });
       }
 
-      this.isLoadingConversation = true;
-      this.messages = [];
-      this.cdr.detectChanges();
+      // Only show loading spinner if we don't have cached data for this conversation.
+      // When switching between previously visited conversations, the cache provides
+      // instant display without the loading flash.
+      const hasCachedData = this.conversationDataCache.has(conversationId);
+      if (!hasCachedData) {
+        this.isLoadingConversation = true;
+        this.messages = [];
+        this.cdr.detectChanges();
+      }
 
       try {
         await this.loadMessages(conversationId);
@@ -785,6 +820,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Scroll to bottom when new message is sent
     this.scrollToBottom = true;
+
+    // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
+    // so progress updates that arrive via PubSub run outside Angular's zone. Without this,
+    // the UI does not update when the messages array is modified from a streaming callback.
+    this.cdr.detectChanges();
   }
 
   /**
@@ -889,6 +929,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
+   * Public entry point to reload messages in the active conversation.
+   * Called by the parent resource wrapper when the user clicks the Refresh button,
+   * so that new agent responses are visible without a full page reload.
+   */
+  public async reloadMessages(): Promise<void> {
+    await this.reloadMessagesForActiveConversation();
+  }
+
+  /**
    * Reload messages for the active conversation from the database
    * Called when completion is detected to discover newly delegated agent messages
    */
@@ -972,6 +1021,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // When Sage delegates to Marketing Agent, a new message is created
       await this.reloadMessagesForActiveConversation();
 
+      // Invalidate cache since reloadMessages may have loaded new delegated-agent messages
+      // that are not in the cache set by reloadArtifactsForMessage().
+      // Without this, navigating away and back would show stale data.
+      if (message.ConversationID) {
+        this.invalidateConversationCache(message.ConversationID);
+      }
+
       // Update inProgressMessageIds to include new delegated agents
       // This triggers callback registration via the setter in message-input
       this.inProgressMessageIds = [...this.messages
@@ -1002,6 +1058,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
     } catch (error) {
       console.error(`Error handling message completion for ${message.ID}:`, error);
+      this.cdr.detectChanges();
     }
   }
 
@@ -1107,7 +1164,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Use optimized single query to reload all conversation data
       const result = await rq.RunQuery({
         QueryName: 'GetConversationComplete',
-        CategoryPath: '/MJ/Conversations',
+        CategoryPath: 'MJ/Conversations',
         Parameters: { ConversationID: detail.ConversationID }
       }, this.currentUser);
 
@@ -1603,6 +1660,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.showCollectionPicker = false;
       this.collectionPickerArtifactId = null;
       this.collectionPickerExcludedIds = [];
+      this.cdr.detectChanges();
     }
   }
 
@@ -1816,8 +1874,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     const dialogRef = this.dialogService.open({
       content: TestFeedbackDialogComponent,
+      title: 'Provide Test Feedback',
       width: 600,
-      height: 680
+      minHeight: 500
     });
 
     const dialogInstance = dialogRef.content.instance as TestFeedbackDialogComponent;
@@ -1889,6 +1948,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     if (artifact) {
       this.artifactToShare = artifact;
       this.isArtifactShareModalOpen = true;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1898,6 +1958,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   onArtifactShareModalClose(): void {
     this.isArtifactShareModalOpen = false;
     this.artifactToShare = null;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1911,6 +1972,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     if (this.selectedArtifactId) {
       await this.loadArtifactPermissions(this.selectedArtifactId);
     }
+    this.cdr.detectChanges();
   }
 
   // Scroll functionality (pattern from skip-chat)

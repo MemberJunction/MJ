@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
@@ -515,7 +515,8 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   constructor(
     private toastService: ToastService,
-    private permissionService: CollectionPermissionService
+    private permissionService: CollectionPermissionService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit() {
@@ -581,6 +582,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       this.errorMessage = 'An error occurred while loading collections';
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -794,6 +796,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       this.toastService.error('An error occurred while creating the collection');
     } finally {
       this.isCreatingCollection = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -805,11 +808,14 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
     this.isSaving = true;
 
-    // Emit the selected collection IDs
-    const collectionIds = this.selectedCollections.map(c => c.ID);
-    this.saved.emit(collectionIds);
-
-    // Note: Parent component will handle the actual saving and close the modal
+    try {
+      // Emit the selected collection IDs - parent handles actual saving and modal close
+      const collectionIds = this.selectedCollections.map(c => c.ID);
+      this.saved.emit(collectionIds);
+    } finally {
+      this.isSaving = false;
+      this.cdr.detectChanges();
+    }
   }
 
   onCancel(): void {
