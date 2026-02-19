@@ -5,7 +5,7 @@
 This document details the plan for building a "sidecar" integration with LearnWorlds (LW) where MemberJunction (MJ) owns the checkout and authentication flow, and LearnWorlds serves as the course delivery platform. The two primary objectives are:
 
 1. **Onboarding Flow**: Stripe checkout → Auth0 account creation → LW user provisioning + enrollment → immediate redirect into LW (no password-reset email)
-2. **Recurring Data Sync**: Pull learner progress, enrollment status, certificates, and other data from LW into local MJ database entities on a scheduled basis
+2. **Data Retrieval Actions**: Actions that pull learner progress, enrollment status, certificates, and other data from LW — consumers handle their own DB storage, scheduling, and mapping
 
 ---
 
@@ -19,15 +19,14 @@ This document details the plan for building a "sidecar" integration with LearnWo
 │                                                                         │
 │  1. User lands on signup/purchase page                                  │
 │  2. Stripe Checkout form collects payment + email                       │
-│  3. Stripe payment succeeds → webhook fires                             │
-│  4. Page shows Auth0 Universal Login widget                             │
+│  3. Stripe payment succeeds                                             │
+│  4. Same page transitions to Auth0 login widget (inline, not redirect)  │
 │     └─ If user already has Auth0 account → they log in                  │
 │     └─ If new user → they create Auth0 account (email prefilled)        │
 │  5. Auth0 callback returns to our app with auth token                   │
-│  6. Our app calls backend "Onboard Learner" endpoint                    │
-│     └─ Backend binds Auth0 user to Stripe transaction                   │
+│  6. Our app calls backend "Onboard Learner" action                      │
 │     └─ Backend creates user in LW (if not exists)                       │
-│     └─ Backend enrolls user in purchased course(s)                      │
+│     └─ Backend enrolls user in purchased course(s)/bundle(s)            │
 │     └─ Backend generates SSO login URL from LW                          │
 │  7. User is immediately redirected to LW school (auto-logged in)        │
 │                                                                         │
@@ -48,220 +47,305 @@ The Auth0 widget approach solves all of these:
 - **Binding is clean**: Auth0 account ↔ Stripe transaction ↔ LW user are all linked by email
 - **No LW auth dependency**: We never rely on LW's own authentication — Auth0 is the single source of truth
 
-### 1.3 Architecture Decision: Service Class (Not Agent, Not Composite Action)
+### 1.3 Architecture Decision: Action with Strongly-Typed Class Composition
 
-Per MJ's Actions design philosophy, the onboarding orchestration should be built as a **service class** with a thin **Action wrapper** for discoverability. Here's why:
+The onboarding orchestration is built as an **Action** that directly instantiates other action classes and calls their **strongly-typed public methods** (not via the Action execution interface). This gives us:
 
-| Approach | Pros | Cons | Verdict |
-|----------|------|------|---------|
-| **AI Agent** | Can reason about edge cases, adapt | Overkill for deterministic flow, slow, expensive (LLM calls), non-deterministic | No |
-| **Composite Action (Action calling Actions)** | Reuses existing actions | Violates MJ's "no action-to-action calls" rule, loses type safety | No |
-| **Service class + Action wrapper** | Type-safe, fast, testable, follows MJ patterns | Need to write the service class | **Yes** |
-| **Standalone code (no Action)** | Simplest | Not discoverable by agents/workflows | Partial — still wrap in Action |
+- **Agent/workflow discoverability**: It's a registered Action, so agents can find and invoke it, and it can be scheduled
+- **Type safety**: Direct class instantiation with typed method signatures, not serialized params
+- **Code reuse**: The individual action classes (CreateUser, EnrollUser, SSO) are both standalone Actions AND reusable building blocks
+- **No rule violation**: We're not calling actions through the Action interface — we're using classes directly
 
-**Recommendation**: Build a `LearnWorldsOnboardingService` class that directly uses the LW API (via the existing `makeLearnWorldsRequest` patterns), and expose it through a thin `OnboardLearnerAction` for workflow/agent discoverability.
+**The refactor pattern** applied to all existing and new action classes:
 
-For the **scheduled sync**, use the existing `ScheduledJob` infrastructure with an `ActionScheduledJobDriver` pointing to a `SyncLearnWorldsDataAction`.
+```typescript
+// Each action class exposes a strongly-typed public method
+// alongside the InternalRunAction entry point
+
+class CreateUserAction extends LearnWorldsBaseAction {
+    /** Strongly-typed, directly callable by other code */
+    public async CreateUser(params: CreateUserParams, contextUser: UserInfo): Promise<CreateUserResult> {
+        // Core logic with typed params and result
+    }
+
+    /** Action framework entry point — maps untyped params to typed method */
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        const typed = this.extractParams(params.Params);
+        const result = await this.CreateUser(typed, params.ContextUser);
+        return this.mapToActionResult(result);
+    }
+}
+
+// Onboarding action instantiates classes directly and calls typed methods
+class OnboardLearnerAction extends LearnWorldsBaseAction {
+    public async OnboardLearner(params: OnboardLearnerParams, contextUser: UserInfo): Promise<OnboardResult> {
+        const createAction = new CreateUserAction();
+        const lwUser = await createAction.CreateUser({ Email: params.Email, ... }, contextUser);
+
+        const enrollAction = new EnrollUserAction();
+        await enrollAction.EnrollUser({ UserId: lwUser.Id, ... }, contextUser);
+
+        const ssoAction = new SSOLoginAction();
+        const ssoResult = await ssoAction.GenerateSSOUrl({ Email: params.Email, ... }, contextUser);
+
+        return { LoginURL: ssoResult.Url, ... };
+    }
+
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        const typed = this.extractParams(params.Params);
+        const result = await this.OnboardLearner(typed, params.ContextUser);
+        return this.mapToActionResult(result);
+    }
+}
+```
 
 ### 1.4 Detailed Onboarding Flow — Technical Sequence
 
 ```
-Frontend (Angular)                    Backend (MJAPI)                    External Services
-─────────────────                    ───────────────                    ─────────────────
+Frontend (Angular Element Widget)    Backend (MJAPI)                    External Services
+─────────────────────────────────    ───────────────                    ─────────────────
 
-1. Show Stripe Checkout
+1. Embedded Angular Element shows
+   Stripe Checkout form
    ─── Stripe.js ───────────────────────────────────────────────────── Stripe
    Payment succeeds
    Stripe returns payment_intent.id
    and customer email
 
-2. Show Auth0 Universal Login
+2. Widget seamlessly transitions to
+   Auth0 login/signup (inline, same widget)
    (email prefilled from Stripe)
    ─── Auth0 SDK ──────────────────────────────────────────────────── Auth0
    User logs in OR creates account
    Auth0 returns ID token + user info
 
-3. POST /api/onboard-learner
+3. Widget calls backend
+   POST /api/onboard-learner
    {
-     stripePaymentIntentId,
-     auth0UserId,
      email,
      firstName, lastName,
-     courseIds[]
+     courseIds[],     ← caller provides LW course/bundle IDs
+     bundleIds[],     ← optional LW bundle IDs
+     redirectTo
    }
-                                     4. Validate Stripe payment
-                                        ─── Stripe API ─────────────── Stripe
-                                        Confirm payment_intent is paid
-                                        Extract purchased product IDs
-
-                                     5. Create/find LW user
+                                     4. Create/find LW user
                                         ─── LW API ─────────────────── LearnWorlds
                                         POST /v2/users (if new)
                                         GET /v2/users?email= (if exists)
 
-                                     6. Enroll in course(s)
+                                     5. Enroll in course(s) and/or bundle(s)
                                         ─── LW API ─────────────────── LearnWorlds
-                                        POST /v2/courses/{id}/enrollments
+                                        POST /v2/enrollments (product_type: course|bundle)
 
-                                     7. Generate SSO login URL
+                                     6. Generate SSO login URL
                                         ─── LW API ─────────────────── LearnWorlds
                                         POST /v2/sso
                                         { email, redirect_to: course_url }
                                         Returns: { url, user_id }
 
-                                     8. Store onboarding record
-                                        ─── MJ DB ──────────────────── SQL Server
-                                        LW_Onboarding entity record
+                                     7. Return SSO URL to frontend
 
-                                     9. Return SSO URL to frontend
-
-10. window.location.href = ssoUrl
-    User lands in LW, auto-logged in,
-    on the course they purchased
+8. window.location.href = ssoUrl
+   User lands in LW, auto-logged in,
+   on the course they purchased
 ```
 
-### 1.5 New Components to Build
+### 1.5 Course/Bundle Mapping — Consumer Responsibility
 
-#### 1.5.1 SSO Action (`sso-login.action.ts`)
+The onboarding action accepts LW course IDs and/or LW bundle IDs directly. **The mapping from a Stripe product/purchase to specific LW course/bundle IDs is the consumer's responsibility**, not this package's.
+
+- The action's `CourseIds` and `BundleIds` input parameters take LW-native identifiers
+- Each MJ instance consumer (e.g., BC CDP) maintains their own mapping logic
+- This keeps the LMS package generic and reusable across different deployments
+- LearnWorlds bundles ARE a real API concept — the enrollment endpoint (`POST /v2/enrollments`) accepts `product_type: "course"` or `product_type: "bundle"` (bundles map to "Learning Programs" in LW's new platform version)
+
+### 1.6 New Components to Build
+
+#### 1.6.1 SSO Login Action (`sso-login.action.ts`)
 
 **LW API Endpoint**: `POST /v2/sso`
 
 ```typescript
-// New action: Generate SSO login URL
-@RegisterClass(BaseAction, 'LearnWorldsSSOLoginAction')
-export class LearnWorldsSSOLoginAction extends LearnWorldsBaseAction {
-    // Input params:
-    //   - CompanyID (required)
-    //   - Email (required) — OR — UserID (required)
-    //   - RedirectTo (optional) — URL to land on after login
-    //
-    // Output params:
-    //   - LoginURL — the auto-login URL to redirect the user to
-    //   - LearnWorldsUserID — the LW user_id returned
-    //
-    // LW API call:
-    //   POST /v2/sso
-    //   Body: { email, redirect_to } or { user_id, redirect_to }
-    //   Response: { url: string, user_id: string }
+// Strongly-typed public method
+public async GenerateSSOUrl(params: SSOLoginParams, contextUser: UserInfo): Promise<SSOLoginResult> { ... }
+
+// Types
+interface SSOLoginParams {
+    CompanyID: string;
+    Email?: string;       // Use email OR UserID
+    UserID?: string;
+    RedirectTo?: string;  // URL to land on after login
+}
+
+interface SSOLoginResult {
+    LoginURL: string;
+    LearnWorldsUserID: string;
 }
 ```
 
-#### 1.5.2 Update User Action (`update-user.action.ts`)
+#### 1.6.2 Update User Action (`update-user.action.ts`)
 
 **LW API Endpoint**: `PUT /v2/users/{userId}`
 
 ```typescript
-// New action: Update existing LW user
-@RegisterClass(BaseAction, 'UpdateLearnWorldsUserAction')
-export class UpdateLearnWorldsUserAction extends LearnWorldsBaseAction {
-    // Input params:
-    //   - CompanyID (required)
-    //   - UserID (required) — LW user ID
-    //   - Email, FirstName, LastName, Username, Role, IsActive, Tags, CustomFields (all optional)
-    //
-    // Output params:
-    //   - UserDetails — updated user object
-    //
-    // LW API call:
-    //   PUT /v2/users/{userId}
-    //   Body: { email?, first_name?, last_name?, username?, role?, is_active?, tags?, custom_fields? }
+public async UpdateUser(params: UpdateUserParams, contextUser: UserInfo): Promise<UpdateUserResult> { ... }
+
+interface UpdateUserParams {
+    CompanyID: string;
+    UserID: string;          // LW user ID
+    Email?: string;
+    FirstName?: string;
+    LastName?: string;
+    Username?: string;
+    Role?: string;
+    IsActive?: boolean;
+    Tags?: string[];
+    CustomFields?: Record<string, string>;
 }
 ```
 
-#### 1.5.3 Tag Management Actions
+#### 1.6.3 Tag Management Actions
 
 **LW API Endpoints**: `POST /v2/users/{userId}/tags`, `DELETE /v2/users/{userId}/tags`
 
 ```typescript
-// New actions: Attach/detach tags
-@RegisterClass(BaseAction, 'AttachLearnWorldsTagsAction')
-export class AttachLearnWorldsTagsAction extends LearnWorldsBaseAction { ... }
+public async AttachTags(params: TagParams, contextUser: UserInfo): Promise<TagResult> { ... }
+public async DetachTags(params: TagParams, contextUser: UserInfo): Promise<TagResult> { ... }
 
-@RegisterClass(BaseAction, 'DetachLearnWorldsTagsAction')
-export class DetachLearnWorldsTagsAction extends LearnWorldsBaseAction { ... }
+interface TagParams {
+    CompanyID: string;
+    UserID: string;
+    Tags: string[];
+}
 ```
 
-#### 1.5.4 Onboarding Service Class
+#### 1.6.4 Onboard Learner Action (`onboard-learner.action.ts`)
+
+The orchestration action — callable by agents, schedulable, AND used directly by the REST endpoint:
 
 ```typescript
-// NOT an action — direct service class for code-to-code orchestration
-export class LearnWorldsOnboardingService {
-    constructor(
-        private companyId: string,
-        private contextUser: UserInfo
-    ) {}
-
+@RegisterClass(BaseAction, 'OnboardLearnerAction')
+export class OnboardLearnerAction extends LearnWorldsBaseAction {
     /**
-     * Full onboarding flow:
-     * 1. Validate Stripe payment
-     * 2. Find or create LW user
-     * 3. Enroll in purchased courses
-     * 4. Generate SSO login URL
-     * 5. Record onboarding in MJ DB
+     * Strongly-typed onboarding method:
+     * 1. Find or create LW user
+     * 2. Enroll in purchased courses/bundles
+     * 3. Generate SSO login URL
      */
-    public async OnboardLearner(params: OnboardLearnerParams): Promise<OnboardLearnerResult> {
-        const stripePayment = await this.validateStripePayment(params.StripePaymentIntentId);
-        const lwUser = await this.findOrCreateLearnWorldsUser(params);
-        const enrollments = await this.enrollInCourses(lwUser.Id, params.CourseIds);
-        const ssoResult = await this.generateSSOLoginUrl(lwUser.Email, params.RedirectTo);
-        await this.recordOnboarding(params, lwUser, enrollments, stripePayment);
+    public async OnboardLearner(
+        params: OnboardLearnerParams,
+        contextUser: UserInfo
+    ): Promise<OnboardLearnerResult> {
+        // Instantiate action classes directly
+        const createUserAction = new CreateUserAction();
+        const enrollAction = new EnrollUserAction();
+        const ssoAction = new SSOLoginAction();
+
+        // Step 1: Find or create user
+        let lwUser: CreateUserResult;
+        const existingUser = await this.findUserByEmail(params.Email, contextUser);
+        if (existingUser) {
+            lwUser = existingUser;
+        } else {
+            lwUser = await createUserAction.CreateUser({
+                CompanyID: params.CompanyID,
+                Email: params.Email,
+                FirstName: params.FirstName,
+                LastName: params.LastName,
+                SendWelcomeEmail: false  // We handle auth via Auth0
+            }, contextUser);
+        }
+
+        // Step 2: Enroll in courses
+        const enrollments = [];
+        for (const courseId of (params.CourseIds || [])) {
+            const enrollment = await enrollAction.EnrollUser({
+                CompanyID: params.CompanyID,
+                UserId: lwUser.UserId,
+                CourseId: courseId,
+                ProductType: 'course'
+            }, contextUser);
+            enrollments.push(enrollment);
+        }
+
+        // Step 2b: Enroll in bundles
+        for (const bundleId of (params.BundleIds || [])) {
+            const enrollment = await enrollAction.EnrollUser({
+                CompanyID: params.CompanyID,
+                UserId: lwUser.UserId,
+                CourseId: bundleId,
+                ProductType: 'bundle'
+            }, contextUser);
+            enrollments.push(enrollment);
+        }
+
+        // Step 3: Generate SSO URL
+        const ssoResult = await ssoAction.GenerateSSOUrl({
+            CompanyID: params.CompanyID,
+            Email: params.Email,
+            RedirectTo: params.RedirectTo
+        }, contextUser);
 
         return {
             Success: true,
-            LoginURL: ssoResult.Url,
-            LearnWorldsUserId: lwUser.Id,
+            LoginURL: ssoResult.LoginURL,
+            LearnWorldsUserId: lwUser.UserId,
             Enrollments: enrollments
         };
     }
 
-    // Internal methods use LW API directly (not through Actions)
-    private async findOrCreateLearnWorldsUser(...) { ... }
-    private async enrollInCourses(...) { ... }
-    private async generateSSOLoginUrl(...) { ... }
-    private async validateStripePayment(...) { ... }
-    private async recordOnboarding(...) { ... }
-}
-```
-
-#### 1.5.5 Onboard Learner Action (Thin Wrapper)
-
-```typescript
-// Thin Action wrapper for workflow/agent discoverability
-@RegisterClass(BaseAction, 'OnboardLearnerAction')
-export class OnboardLearnerAction extends LearnWorldsBaseAction {
+    /** Action framework entry point */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const service = new LearnWorldsOnboardingService(companyId, params.ContextUser);
-        const result = await service.OnboardLearner({
-            StripePaymentIntentId: this.getParamValue(params.Params, 'StripePaymentIntentId'),
-            Email: this.getParamValue(params.Params, 'Email'),
-            // ...
-        });
-        // Map result to ActionResultSimple
+        const typed = this.extractOnboardParams(params.Params);
+        const result = await this.OnboardLearner(typed, params.ContextUser);
+        return this.mapToActionResult(result);
     }
 }
 ```
 
-#### 1.5.6 REST Endpoint for Frontend
+#### 1.6.5 Typed Interfaces (Exported for Consumers)
 
 ```typescript
-// Custom REST endpoint in MJAPI for the frontend to call
+// Published in package exports for TypeScript consumers
+
+export interface OnboardLearnerParams {
+    CompanyID: string;
+    Email: string;
+    FirstName?: string;
+    LastName?: string;
+    CourseIds?: string[];     // LW course IDs
+    BundleIds?: string[];     // LW bundle IDs (Learning Programs)
+    RedirectTo?: string;      // Where to land in LW after login
+}
+
+export interface OnboardLearnerResult {
+    Success: boolean;
+    LoginURL: string;
+    LearnWorldsUserId: string;
+    Enrollments: EnrollmentResult[];
+    ErrorMessage?: string;
+}
+```
+
+#### 1.6.6 REST Endpoint for Frontend Widget
+
+```typescript
+// Custom REST endpoint in MJAPI for the Angular Element widget to call
 // POST /api/onboard-learner
-// This is NOT a webhook — it's a direct API call from the authenticated frontend
 app.post('/api/onboard-learner', authenticateJWT, async (req, res) => {
-    const { stripePaymentIntentId, courseIds, redirectTo } = req.body;
+    const { courseIds, bundleIds, redirectTo } = req.body;
+    const contextUser = req.user;  // From Auth0 JWT
 
-    // contextUser comes from the Auth0 JWT token
-    const contextUser = req.user;
-
-    const service = new LearnWorldsOnboardingService(companyId, contextUser);
-    const result = await service.OnboardLearner({
-        StripePaymentIntentId: stripePaymentIntentId,
+    const action = new OnboardLearnerAction();
+    const result = await action.OnboardLearner({
+        CompanyID: resolveCompanyId(contextUser),
         Email: contextUser.Email,
         FirstName: contextUser.FirstName,
         LastName: contextUser.LastName,
         CourseIds: courseIds,
+        BundleIds: bundleIds,
         RedirectTo: redirectTo
-    });
+    }, contextUser);
 
     res.json({
         success: result.Success,
@@ -271,479 +355,491 @@ app.post('/api/onboard-learner', authenticateJWT, async (req, res) => {
 });
 ```
 
-### 1.6 Frontend Component
+### 1.7 Frontend: Angular Element Checkout Widget
 
-The signup/purchase page needs a component that orchestrates:
+The checkout experience is built as a **custom Angular Element** (Web Component) that can be dropped into any website. It seamlessly transitions from Stripe checkout to Auth0 login within the same widget — no page redirects, no jarring context switches.
 
-1. **Stripe Checkout** — embedded form or Stripe Checkout Session redirect
-2. **Auth0 Widget** — shown after payment succeeds, with email prefilled
-3. **Onboarding Call** — POST to `/api/onboard-learner` after Auth0 login
-4. **Redirect** — `window.location.href = loginUrl` to send user to LW
+This is a separate deliverable built by consumers (e.g., BC CDP) but the LMS package provides the backend actions it calls. The widget would:
 
-```typescript
-// Simplified flow in Angular component
-@Component({ ... })
-export class CourseCheckoutComponent {
-    async onStripePaymentSuccess(paymentIntent: { id: string; email: string }) {
-        // Store payment info
-        this.stripePaymentIntentId = paymentIntent.id;
-        this.userEmail = paymentIntent.email;
+1. **Step 1 — Stripe**: Embed Stripe Elements form for payment collection
+2. **Step 2 — Auth0**: On payment success, transition to inline Auth0 login/signup (email prefilled from Stripe)
+3. **Step 3 — Onboard**: After Auth0 login, call `POST /api/onboard-learner` with course/bundle IDs
+4. **Step 4 — Redirect**: On success, `window.location.href = loginUrl` to send user to LW
 
-        // Show Auth0 login/signup widget with email prefilled
-        this.showAuth0Widget = true;
-    }
-
-    async onAuth0LoginSuccess(auth0User: { sub: string; email: string }) {
-        // Call onboarding endpoint
-        const result = await this.http.post('/api/onboard-learner', {
-            stripePaymentIntentId: this.stripePaymentIntentId,
-            courseIds: this.selectedCourseIds,
-            redirectTo: `/course/${this.selectedCourseIds[0]}`
-        }).toPromise();
-
-        // Redirect to LearnWorlds
-        if (result.success && result.loginUrl) {
-            window.location.href = result.loginUrl;
-        }
-    }
-}
-```
-
-### 1.7 Edge Cases and Error Handling
+### 1.8 Edge Cases and Error Handling
 
 | Scenario | Handling |
 |----------|----------|
-| **User already exists in LW** | `findOrCreateLearnWorldsUser` does GET by email first; if found, uses existing user |
-| **User already enrolled** | LW API returns enrollment details; we skip re-enrollment and proceed to SSO |
-| **Stripe payment not found/not paid** | Return error before creating LW user — no partial state |
-| **LW user creation fails** | Return error with details; Stripe payment is still valid (can retry) |
+| **User already exists in LW** | `findUserByEmail` finds them; skip creation, proceed to enrollment + SSO |
+| **User already enrolled** | LW API returns enrollment details; skip re-enrollment, proceed to SSO |
+| **LW user creation fails** | Return error with details; payment is still valid (can retry) |
 | **SSO URL generation fails** | Fall back to LW's `login_url` from user creation response |
 | **Auth0 account exists but LW doesn't** | Normal flow — create LW user, enroll, generate SSO |
-| **User closes browser after Stripe, before Auth0** | Stripe payment exists but no LW user; handle in reconciliation sync job |
+| **User closes browser after Stripe, before Auth0** | Payment exists but no LW user; consumer handles reconciliation |
 | **LW API rate limiting** | Exponential backoff retry in `makeLearnWorldsRequest`; surface error if exhausted |
-
-### 1.8 Data Model: Onboarding Record
-
-A new MJ entity to track the binding between Stripe, Auth0, and LW:
-
-```
-LW Learner Onboarding
-├── ID (PK)
-├── Email
-├── Auth0UserID
-├── StripePaymentIntentID
-├── StripeCustomerID
-├── LearnWorldsUserID
-├── CompanyID (FK → Companies)
-├── Status ('pending' | 'completed' | 'failed' | 'partial')
-├── ErrorMessage (nullable)
-├── CourseIDs (JSON array of enrolled course IDs)
-├── SSOLoginURL (the generated login URL)
-├── OnboardedAt (timestamp when fully completed)
-├── Notes
-```
 
 ---
 
-## Part 2: Recurring Data Sync
+## Part 2: Data Retrieval Actions
 
-### 2.1 Purpose
+### 2.1 Design Philosophy
 
-Pull data from LearnWorlds into local MJ database entities on a regular schedule so that:
-- Dashboards and reports can query local data without hitting LW API
-- Cross-referencing LW data with other MJ entities (CRM contacts, Stripe payments, etc.) is possible
-- Historical trend analysis is available
-- AI agents and actions can access learner data without API calls
+The LMS package provides **actions that retrieve data from LearnWorlds and return strongly-typed JSON payloads**. The package does NOT:
+- Define database entities for storing LW data
+- Handle scheduling of sync jobs
+- Map LW data to local database schemas
 
-### 2.2 Architecture: Scheduled Job + Sync Action
+These are all **consumer responsibilities**. Each MJ instance (e.g., BC CDP) decides:
+- Which data to pull and how often
+- What local tables/entities to store it in
+- How to schedule the sync (via MJ's ScheduledJob infrastructure)
+- How to map LW data structures to their own schemas
 
-MJ already has a production-ready scheduled job engine (`SchedulingEngine`) with:
-- Cron-based scheduling
-- Distributed locking (multi-server safe)
-- Run tracking and notification
-- Two drivers: `ActionScheduledJobDriver` and `AgentScheduledJobDriver`
+### 2.2 What the Package Provides
 
-**We'll use `ActionScheduledJobDriver`** pointing to a `SyncLearnWorldsDataAction` that runs a `LearnWorldsSyncService` class.
+#### Existing Retrieval Actions (Already Built)
+- `GetLearnWorldsUsersAction` — list/search users with filters
+- `GetLearnWorldsUserDetailsAction` — comprehensive user profile
+- `GetLearnWorldsUserProgressAction` — learning progress across courses
+- `GetLearnWorldsCoursesAction` — course catalog
+- `GetLearnWorldsCourseDetailsAction` — full course info with curriculum
+- `GetLearnWorldsUserEnrollmentsAction` — user's enrollments with progress
+- `GetCourseAnalyticsAction` — course performance analytics
+- `GetQuizResultsAction` — quiz/assessment results
+- `GetCertificatesAction` — earned certificates
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    SCHEDULED SYNC ARCHITECTURE                       │
-│                                                                      │
-│  SchedulingEngine (polling)                                          │
-│       │                                                              │
-│       ▼                                                              │
-│  ScheduledJob: "Sync LW Data - Every 6 Hours"                       │
-│       │  CronExpression: "0 0 */6 * * *"                             │
-│       │  JobType: ActionScheduledJobDriver                           │
-│       │                                                              │
-│       ▼                                                              │
-│  SyncLearnWorldsDataAction (thin wrapper)                            │
-│       │                                                              │
-│       ▼                                                              │
-│  LearnWorldsSyncService (business logic)                             │
-│       │                                                              │
-│       ├─► Sync Users:  GET /v2/users → upsert LW_User              │
-│       ├─► Sync Enrollments: GET /v2/users/{id}/enrollments          │
-│       │                     → upsert LW_Enrollment                   │
-│       ├─► Sync Progress: GET /v2/users/{id}/courses/{id}/progress   │
-│       │                  → upsert LW_CourseProgress                  │
-│       ├─► Sync Courses:  GET /v2/courses → upsert LW_Course        │
-│       └─► Sync Certificates: per user → upsert LW_Certificate      │
-│                                                                      │
-│  Run tracking: ScheduledJobRun entity records each execution         │
-│  Error handling: Partial failures logged, job continues               │
-│  Delta sync: Track last sync timestamp, only pull changed records    │
-└─────────────────────────────────────────────────────────────────────┘
-```
+#### New Retrieval Action
+- `GetLearnWorldsBundlesAction` — list bundles/learning programs (`GET /v2/bundles`)
 
-### 2.3 Local Database Entities
+#### Exported TypeScript Interfaces for Consumers
 
-New MJ entities to store synced LW data:
-
-#### `LW Users`
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | uniqueidentifier | MJ primary key |
-| CompanyID | uniqueidentifier | FK → Companies |
-| LearnWorldsUserID | nvarchar(100) | LW's internal user ID |
-| Email | nvarchar(255) | |
-| Username | nvarchar(255) | |
-| FirstName | nvarchar(255) | |
-| LastName | nvarchar(255) | |
-| FullName | nvarchar(500) | |
-| Status | nvarchar(50) | active, inactive, suspended |
-| Role | nvarchar(50) | student, instructor, admin |
-| AvatarURL | nvarchar(1000) | |
-| Tags | nvarchar(max) | JSON array |
-| CustomFields | nvarchar(max) | JSON object |
-| LWCreatedAt | datetimeoffset | When created in LW |
-| LastLoginAt | datetimeoffset | |
-| LastActivityAt | datetimeoffset | |
-| TotalCertificates | int | |
-| TotalBadges | int | |
-| Points | int | |
-| LastSyncedAt | datetimeoffset | When we last pulled this record |
-
-#### `LW Courses`
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | uniqueidentifier | MJ primary key |
-| CompanyID | uniqueidentifier | FK → Companies |
-| LearnWorldsCourseID | nvarchar(100) | LW's internal course ID |
-| Title | nvarchar(500) | |
-| Description | nvarchar(max) | |
-| ShortDescription | nvarchar(1000) | |
-| Status | nvarchar(50) | draft, published, archived |
-| Level | nvarchar(50) | |
-| Language | nvarchar(50) | |
-| ImageURL | nvarchar(1000) | |
-| Duration | int | In seconds |
-| Price | decimal(18,2) | |
-| Currency | nvarchar(10) | |
-| IsFree | bit | |
-| InstructorName | nvarchar(255) | |
-| CertificateEnabled | bit | |
-| TotalEnrollments | int | |
-| TotalCompletions | int | |
-| AverageRating | decimal(3,2) | |
-| Tags | nvarchar(max) | JSON array |
-| LWCreatedAt | datetimeoffset | |
-| LWUpdatedAt | datetimeoffset | |
-| LastSyncedAt | datetimeoffset | |
-
-#### `LW Enrollments`
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | uniqueidentifier | MJ primary key |
-| CompanyID | uniqueidentifier | FK → Companies |
-| LWUserID | uniqueidentifier | FK → LW Users |
-| LWCourseID | uniqueidentifier | FK → LW Courses |
-| LearnWorldsEnrollmentID | nvarchar(100) | LW's internal enrollment ID |
-| Status | nvarchar(50) | active, completed, expired, suspended |
-| EnrolledAt | datetimeoffset | |
-| StartsAt | datetimeoffset | |
-| ExpiresAt | datetimeoffset | |
-| CompletedAt | datetimeoffset | |
-| ProgressPercentage | decimal(5,2) | 0.00 to 100.00 |
-| CompletedLessons | int | |
-| TotalLessons | int | |
-| CompletedUnits | int | |
-| TotalUnits | int | |
-| TotalTimeSpent | int | Seconds |
-| LastAccessedAt | datetimeoffset | |
-| Grade | decimal(5,2) | |
-| CertificateEligible | bit | |
-| CertificateIssuedAt | datetimeoffset | |
-| LastSyncedAt | datetimeoffset | |
-
-#### `LW Course Progress`
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | uniqueidentifier | MJ primary key |
-| LWEnrollmentID | uniqueidentifier | FK → LW Enrollments |
-| ProgressPercentage | decimal(5,2) | |
-| CompletedLessons | int | |
-| TotalLessons | int | |
-| CompletedUnits | int | |
-| TotalUnits | int | |
-| TotalTimeSpent | int | Seconds |
-| AverageSessionTime | int | Seconds |
-| QuizScoreAverage | decimal(5,2) | |
-| AssignmentsCompleted | int | |
-| AssignmentsTotal | int | |
-| CurrentGrade | decimal(5,2) | |
-| EstimatedTimeToComplete | int | Seconds |
-| LastAccessedAt | datetimeoffset | |
-| SyncedAt | datetimeoffset | Snapshot timestamp |
-
-#### `LW Certificates`
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | uniqueidentifier | MJ primary key |
-| LWUserID | uniqueidentifier | FK → LW Users |
-| LWCourseID | uniqueidentifier | FK → LW Courses |
-| LearnWorldsCertificateID | nvarchar(100) | |
-| IssuedAt | datetimeoffset | |
-| ExpiresAt | datetimeoffset | |
-| CertificateURL | nvarchar(1000) | |
-| VerificationCode | nvarchar(255) | |
-| VerificationURL | nvarchar(1000) | |
-| LastSyncedAt | datetimeoffset | |
-
-#### `LW Learner Onboardings`
-(As described in section 1.8 above)
-
-### 2.4 Sync Service Class
+The package exports strongly-typed interfaces that consumers can use when processing action results in TypeScript:
 
 ```typescript
-export class LearnWorldsSyncService {
-    /**
-     * Full sync: pulls all data types from LW and upserts to local DB
-     */
-    public async RunFullSync(params: SyncParams): Promise<SyncResult> {
-        const result = new SyncResult();
+// Consumers import these for type-safe processing of action output
+export interface LearnWorldsUser {
+    Id: string;
+    Email: string;
+    Username: string;
+    FirstName: string;
+    LastName: string;
+    Status: 'active' | 'inactive' | 'suspended';
+    Role: 'student' | 'instructor' | 'admin';
+    Tags: string[];
+    CustomFields: Record<string, string>;
+    CreatedAt: string;
+    LastLoginAt: string;
+    LastActivityAt: string;
+    TotalCertificates: number;
+    Points: number;
+}
 
-        // Phase 1: Sync courses (no dependencies)
-        result.Courses = await this.syncCourses();
+export interface LearnWorldsEnrollment {
+    Id: string;
+    CourseId: string;
+    UserId: string;
+    Status: 'active' | 'completed' | 'expired' | 'suspended';
+    EnrolledAt: string;
+    CompletedAt: string | null;
+    ProgressPercentage: number;
+    CompletedLessons: number;
+    TotalLessons: number;
+    TotalTimeSpent: number;
+    Grade: number | null;
+    CertificateEligible: boolean;
+    CertificateIssuedAt: string | null;
+}
 
-        // Phase 2: Sync users (no dependencies)
-        result.Users = await this.syncUsers();
+export interface LearnWorldsCourse {
+    Id: string;
+    Title: string;
+    Description: string;
+    Status: 'draft' | 'published' | 'archived';
+    Price: number;
+    Currency: string;
+    IsFree: boolean;
+    Duration: number;
+    TotalEnrollments: number;
+    CertificateEnabled: boolean;
+}
 
-        // Phase 3: Sync enrollments (depends on users + courses existing locally)
-        result.Enrollments = await this.syncEnrollments();
+export interface LearnWorldsBundle {
+    Id: string;
+    Title: string;
+    Description: string;
+    Price: number;
+    Currency: string;
+    CourseIds: string[];
+    Status: string;
+}
 
-        // Phase 4: Sync progress (depends on enrollments)
-        result.Progress = await this.syncProgress();
+export interface LearnWorldsCourseProgress {
+    UserId: string;
+    CourseId: string;
+    ProgressPercentage: number;
+    CompletedLessons: number;
+    TotalLessons: number;
+    CompletedUnits: number;
+    TotalUnits: number;
+    TotalTimeSpent: number;
+    QuizScoreAverage: number | null;
+    LastAccessedAt: string;
+}
 
-        // Phase 5: Sync certificates (depends on users + courses)
-        result.Certificates = await this.syncCertificates();
+export interface LearnWorldsCertificate {
+    Id: string;
+    UserId: string;
+    CourseId: string;
+    IssuedAt: string;
+    ExpiresAt: string | null;
+    CertificateURL: string;
+    VerificationCode: string;
+    VerificationURL: string;
+}
 
-        return result;
-    }
+// Sync result types for consumers building sync services
+export interface LearnWorldsSyncPayload {
+    Users: LearnWorldsUser[];
+    Courses: LearnWorldsCourse[];
+    Bundles: LearnWorldsBundle[];
+    Enrollments: LearnWorldsEnrollment[];
+    Progress: LearnWorldsCourseProgress[];
+    Certificates: LearnWorldsCertificate[];
+    SyncTimestamp: string;
+    TotalApiCalls: number;
+    Errors: SyncError[];
+}
 
-    /**
-     * Delta sync: only pull records changed since last sync
-     */
-    public async RunDeltaSync(params: SyncParams): Promise<SyncResult> {
-        // Use lastSyncTimestamp to filter API calls where supported
-        // Fall back to full pull + upsert where LW API doesn't support delta
-    }
+export interface SyncError {
+    Entity: string;
+    EntityId: string;
+    ErrorMessage: string;
+    Timestamp: string;
 }
 ```
 
-### 2.5 Sync Strategies
+### 2.3 Consumer-Side Sync Pattern (Example for BC CDP)
 
-**Users and Courses**: LW's `GET /v2/users` and `GET /v2/courses` endpoints support sorting by date. We can:
-- Track `LastSyncedAt` per entity
-- Pull records sorted by `updated_at DESC`
-- Stop pagination when we hit records older than our last sync
+The consumer (e.g., BC CDP) would build their own sync infrastructure using the LMS package:
 
-**Enrollments and Progress**: These are per-user, so the sync must:
-1. Get list of active LW users from local DB
-2. For each user, pull enrollments from LW
-3. For each active enrollment, pull progress
-4. Batch upsert locally
+```typescript
+// Example consumer-side sync service (NOT in the LMS package)
+import {
+    GetLearnWorldsUsersAction,
+    GetLearnWorldsUserEnrollmentsAction,
+    LearnWorldsUser,
+    LearnWorldsEnrollment
+} from '@memberjunction/actions-bizapps-lms';
 
-This is where the sync can get expensive (N+1 API calls). Mitigations:
-- Run in parallel with controlled concurrency (e.g., 5 concurrent user syncs)
-- Only sync users with `LastActivityAt > LastSyncedAt` (skip inactive users)
-- Run full sync less frequently (daily), delta sync more frequently (every 6 hours)
+class BCLearnerSyncService {
+    async syncFromLearnWorlds() {
+        // Use the typed public methods directly
+        const getUsersAction = new GetLearnWorldsUsersAction();
+        const users = await getUsersAction.GetUsers({
+            CompanyID: myCompanyId,
+            MaxResults: 1000
+        }, contextUser);
 
-### 2.6 Scheduled Job Configuration
-
-```json
-{
-    "entity": "MJ: Scheduled Jobs",
-    "fields": {
-        "Name": "Sync LearnWorlds Data - Every 6 Hours",
-        "Description": "Pulls user, enrollment, progress, and certificate data from LearnWorlds",
-        "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=ActionScheduledJobDriver",
-        "CronExpression": "0 0 */6 * * *",
-        "Timezone": "UTC",
-        "Status": "Active",
-        "ConcurrencyMode": "Skip",
-        "Configuration": {
-            "ActionID": "@lookup:Actions.Name=LearnWorlds - Sync Data",
-            "Params": [
-                {
-                    "ActionParamID": "@lookup:Action Params.Name=CompanyID",
-                    "ValueType": "Static",
-                    "Value": "your-company-id"
-                },
-                {
-                    "ActionParamID": "@lookup:Action Params.Name=SyncMode",
-                    "ValueType": "Static",
-                    "Value": "delta"
-                }
-            ]
+        // Map to local DB entities (consumer's schema)
+        for (const lwUser of users.Users) {
+            await this.upsertLocalLearnerRecord(lwUser);
         }
     }
 }
 ```
 
----
+The consumer would then schedule this via MJ's `ScheduledJob` infrastructure.
 
-## Part 3: Implementation Plan
+### 2.4 Bulk Data Retrieval Action (New)
 
-### Phase 1: New LW Actions (Foundation)
+For consumers who want to pull everything in one call:
 
-Build the missing LearnWorlds API actions that both the onboarding and sync flows need:
+```typescript
+@RegisterClass(BaseAction, 'GetLearnWorldsBulkDataAction')
+export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
+    /**
+     * Pulls all data types from LW in a single call.
+     * Returns a LearnWorldsSyncPayload with all entities.
+     * Consumer decides what to do with the data.
+     */
+    public async GetBulkData(
+        params: BulkDataParams,
+        contextUser: UserInfo
+    ): Promise<LearnWorldsSyncPayload> {
+        // Orchestrate all retrieval actions
+        const getUsersAction = new GetLearnWorldsUsersAction();
+        const getCoursesAction = new GetLearnWorldsCoursesAction();
+        // ... etc
 
-| # | Item | File | LW Endpoint |
-|---|------|------|-------------|
-| 1 | SSO Login action | `sso-login.action.ts` | `POST /v2/sso` |
-| 2 | Update User action | `update-user.action.ts` | `PUT /v2/users/{id}` |
-| 3 | Attach Tags action | `attach-tags.action.ts` | `POST /v2/users/{id}/tags` |
-| 4 | Detach Tags action | `detach-tags.action.ts` | `DELETE /v2/users/{id}/tags` |
-| 5 | Find User by Email (utility, not action) | In base or service | `GET /v2/users?email=` |
-| 6 | Action metadata for new actions | `.bizapps-actions.json` | N/A |
-| 7 | Unit tests for all new actions | `__tests__/` | N/A |
+        const users = await getUsersAction.GetUsers({ ... }, contextUser);
+        const courses = await getCoursesAction.GetCourses({ ... }, contextUser);
+        // ...
 
-### Phase 2: Database Schema (Local Entities)
-
-Create migration for local LW data storage:
-
-| # | Item | Details |
-|---|------|---------|
-| 1 | Migration SQL file | `migrations/v2/VYYYYMMDDHHMM__vX.X.x_LW_Sidecar_Entities.sql` |
-| 2 | Create `LW Users` table | See schema in 2.3 |
-| 3 | Create `LW Courses` table | See schema in 2.3 |
-| 4 | Create `LW Enrollments` table | See schema in 2.3 |
-| 5 | Create `LW Course Progress` table | See schema in 2.3 |
-| 6 | Create `LW Certificates` table | See schema in 2.3 |
-| 7 | Create `LW Learner Onboardings` table | See schema in 1.8 |
-| 8 | Run CodeGen to generate entity classes | Auto-generates TypeScript classes, views, SPs |
-
-### Phase 3: Onboarding Service + Action
-
-| # | Item | Details |
-|---|------|---------|
-| 1 | `LearnWorldsOnboardingService` | Core orchestration logic |
-| 2 | `OnboardLearnerAction` | Thin wrapper for discoverability |
-| 3 | REST endpoint `/api/onboard-learner` | Frontend calls this after Auth0 login |
-| 4 | Stripe payment validation utility | Verify payment_intent status |
-| 5 | Onboarding record creation | Write to `LW Learner Onboardings` entity |
-| 6 | Error handling and retry logic | Handle partial failures gracefully |
-| 7 | Unit tests | Mock LW API, Stripe, and DB calls |
-
-### Phase 4: Sync Service + Scheduled Job
-
-| # | Item | Details |
-|---|------|---------|
-| 1 | `LearnWorldsSyncService` | Core sync logic with full/delta modes |
-| 2 | `SyncLearnWorldsDataAction` | Action wrapper for scheduler |
-| 3 | Individual sync methods | `syncUsers()`, `syncCourses()`, `syncEnrollments()`, `syncProgress()`, `syncCertificates()` |
-| 4 | Scheduled job metadata | JSON file for mj-sync |
-| 5 | Upsert logic | Match by LW ID, create or update local records |
-| 6 | Concurrency control | Limit parallel API calls to avoid rate limiting |
-| 7 | Sync logging and reporting | Track counts, errors, duration per sync type |
-| 8 | Unit tests | Mock LW API responses, verify upsert logic |
-
-### Phase 5: Frontend Component
-
-| # | Item | Details |
-|---|------|---------|
-| 1 | Course checkout page/component | Stripe Checkout → Auth0 → Redirect flow |
-| 2 | Auth0 widget integration | Prefill email from Stripe, handle callback |
-| 3 | Onboarding API call | POST to `/api/onboard-learner` |
-| 4 | Loading/error states | Handle each step's success/failure |
-| 5 | Redirect to LW | Use SSO login URL from backend |
-
-### Phase 6: Webhook Support (Optional Enhancement)
-
-| # | Item | Details |
-|---|------|---------|
-| 1 | Webhook receiver endpoint | `POST /api/webhooks/learnworlds` |
-| 2 | Webhook signature validation | Verify LW webhook authenticity |
-| 3 | Event handlers | Process enrollment.completed, user.updated, etc. |
-| 4 | Real-time sync trigger | Update local entities immediately on webhook events |
+        return {
+            Users: users,
+            Courses: courses,
+            // ...
+            SyncTimestamp: new Date().toISOString(),
+            TotalApiCalls: totalCalls,
+            Errors: errors
+        };
+    }
+}
+```
 
 ---
 
-## Part 4: Package Structure
+## Part 3: Stripe Integration in Core MJ (Separate Workstream)
 
-All new code lives in the existing `@memberjunction/actions-bizapps-lms` package:
+### 3.1 Current State
+
+There is **no Stripe SDK or integration** anywhere in MJ today. The Accounting BizApps package covers Business Central and QuickBooks, but not Stripe.
+
+### 3.2 Two-Part Stripe Integration
+
+Stripe is ubiquitous enough to warrant a core MJ integration with both server-side actions (non-visual) and a client-side Angular widget (visual).
+
+#### Server-Side: `@memberjunction/actions-bizapps-payments` (new BizApps package)
+
+Non-visual integration — actions that agents, workflows, and scheduled jobs can call:
+
+```
+packages/Actions/BizApps/Payments/
+├── src/
+│   ├── base/
+│   │   └── base-payment.action.ts           # Shared payment provider patterns
+│   ├── providers/
+│   │   └── stripe/
+│   │       ├── stripe-base.action.ts        # Stripe API auth, common utilities
+│   │       └── actions/
+│   │           ├── verify-payment.action.ts          # Verify payment_intent status
+│   │           ├── create-checkout-session.action.ts  # Create Stripe Checkout session
+│   │           ├── get-customer.action.ts             # Get customer details
+│   │           ├── get-payment-intent.action.ts       # Get payment intent details
+│   │           ├── list-subscriptions.action.ts       # List customer subscriptions
+│   │           ├── create-payment-link.action.ts      # Generate payment links
+│   │           └── list-invoices.action.ts            # List customer invoices
+│   ├── interfaces/
+│   │   └── stripe.types.ts                  # Exported typed interfaces
+│   └── index.ts
+├── package.json                             # Depends on `stripe` npm package
+```
+
+Same pattern as LMS — each action exposes a strongly-typed public method alongside `InternalRunAction`. Extensible for future payment providers (PayPal, Square, etc.) via the base class.
+
+#### Client-Side: `@memberjunction/ng-stripe` (new Angular/Generic package)
+
+Visual integration — an Angular wrapper widget for Stripe Elements:
+
+```
+packages/Angular/Generic/stripe/
+├── src/lib/
+│   ├── components/
+│   │   ├── stripe-payment-form/             # Wraps Stripe Elements (card, payment)
+│   │   ├── stripe-checkout-button/          # One-click checkout button
+│   │   └── stripe-payment-status/           # Payment confirmation display
+│   ├── services/
+│   │   ├── stripe-config.service.ts         # Publishable key management
+│   │   └── stripe-elements.service.ts       # Stripe.js SDK lifecycle
+│   ├── types/
+│   │   └── stripe-widget.types.ts
+│   └── module.ts                            # StripeModule for NgModule consumers
+├── package.json                             # Depends on `@stripe/stripe-js`
+```
+
+The widget provides:
+- Drop-in `<mj-stripe-payment-form>` component for embedding in any Angular app or Angular Element
+- Event emitters: `(paymentSuccess)`, `(paymentError)`, `(paymentProcessing)`
+- Configurable via `@Input()` properties: amount, currency, publishable key, payment method types
+- Handles Stripe.js SDK loading and lifecycle
+- Can be combined with auth widgets in a checkout flow
+
+### 3.3 Scope for This Project
+
+For the LW sidecar integration, the onboarding action does NOT need Stripe payment verification. The flow is:
+1. Frontend handles Stripe checkout (via `@memberjunction/ng-stripe` widget or consumer's own Stripe integration)
+2. Frontend handles Auth0 login
+3. Frontend calls onboard-learner with LW course/bundle IDs
+4. Backend only talks to LW — no Stripe server-side calls needed
+
+If Stripe server-side verification is desired as an extra safety layer (verifying the payment_intent is actually paid before provisioning), that would be part of the Payments BizApps package and called from the consumer's REST endpoint, not from the LMS package itself.
+
+---
+
+## Part 3b: Generic Auth Widget in Core MJ (Separate Workstream)
+
+### Current State
+
+The existing auth integration lives at `packages/Angular/Explorer/auth-services/` and is **tightly coupled to the Explorer app**. It provides Auth0 authentication via `MJAuth0Provider` but is not reusable outside Explorer.
+
+### Recommendation: Generic Auth Package Under `Angular/Generic`
+
+Build a provider-agnostic auth widget under `packages/Angular/Generic/` that:
+- Provides embeddable login/signup UI components
+- Supports multiple auth providers (Auth0 initially, extensible to others)
+- Can be used in Angular Elements (Web Components) for embedding in external sites
+- Can be consumed by Explorer (replacing or wrapping the current Explorer-specific auth)
+
+#### Proposed Structure
+
+```
+packages/Angular/Generic/auth/
+├── src/lib/
+│   ├── components/
+│   │   ├── auth-login-widget/               # Embeddable login/signup form
+│   │   ├── auth-status-indicator/           # Shows logged-in state
+│   │   └── auth-profile-menu/              # User profile dropdown
+│   ├── providers/
+│   │   ├── auth-provider.base.ts            # Abstract base for auth providers
+│   │   ├── auth0/
+│   │   │   └── auth0-provider.service.ts    # Auth0 implementation
+│   │   └── index.ts
+│   ├── services/
+│   │   ├── auth-config.service.ts           # Configuration management
+│   │   └── auth-state.service.ts            # Observable auth state
+│   ├── types/
+│   │   └── auth.types.ts
+│   └── module.ts                            # GenericAuthModule
+├── package.json
+```
+
+#### Key Design Goals
+
+- **Provider-agnostic**: The widget components work with any auth provider that implements the base interface
+- **Embeddable**: Works in Angular Elements (Web Components) for embedding in marketing sites, checkout pages, etc.
+- **Email prefill**: The login widget accepts an `email` input to prefill from a prior step (e.g., Stripe checkout)
+- **Event-driven**: Emits `(loginSuccess)`, `(loginError)`, `(signupSuccess)` events
+- **Explorer-compatible**: Explorer's auth can migrate to use this generic package, reducing duplication
+
+#### Relationship to the LW Sidecar Checkout Widget
+
+The consumer's Angular Element checkout widget (e.g., BC CDP) would compose:
+1. `<mj-stripe-payment-form>` from `@memberjunction/ng-stripe`
+2. `<mj-auth-login-widget>` from `@memberjunction/ng-auth` (with email prefilled from Stripe)
+3. Custom checkout logic that calls the onboarding REST endpoint
+4. Redirect to LW on success
+
+This gives maximum reusability — both widgets are useful independently and together.
+
+---
+
+## Part 4: Implementation Plan
+
+### Phase 1: Refactor Existing Actions + Build New Actions
+
+Refactor existing action classes to expose strongly-typed public methods, and build the new actions:
+
+| # | Item | File | Details |
+|---|------|------|---------|
+| 1 | Refactor `CreateUserAction` | `create-user.action.ts` | Extract `CreateUser(params, contextUser)` public method |
+| 2 | Refactor `EnrollUserAction` | `enroll-user.action.ts` | Extract `EnrollUser(params, contextUser)` public method; add bundle support via `product_type` |
+| 3 | Refactor all other existing actions | Various | Same pattern: typed public method + thin InternalRunAction |
+| 4 | **NEW**: SSO Login action | `sso-login.action.ts` | `POST /v2/sso` — `GenerateSSOUrl()` |
+| 5 | **NEW**: Update User action | `update-user.action.ts` | `PUT /v2/users/{id}` — `UpdateUser()` |
+| 6 | **NEW**: Attach Tags action | `attach-tags.action.ts` | `POST /v2/users/{id}/tags` — `AttachTags()` |
+| 7 | **NEW**: Detach Tags action | `detach-tags.action.ts` | `DELETE /v2/users/{id}/tags` — `DetachTags()` |
+| 8 | **NEW**: Get Bundles action | `get-bundles.action.ts` | `GET /v2/bundles` — `GetBundles()` |
+| 9 | Export typed interfaces | `interfaces/` | All strongly-typed param/result interfaces |
+| 10 | Action metadata | `.bizapps-actions.json` | Metadata entries for new actions |
+| 11 | Unit tests | `__tests__/` | Tests for all new and refactored actions |
+
+### Phase 2: Onboarding Action
+
+| # | Item | Details |
+|---|------|---------|
+| 1 | `OnboardLearnerAction` | Orchestration action with typed `OnboardLearner()` method |
+| 2 | `findUserByEmail` utility | Shared method in base class for user lookup |
+| 3 | Action metadata | Entry in `.bizapps-actions.json` |
+| 4 | Unit tests | Mock LW API calls, test full flow + edge cases |
+
+### Phase 3: Bulk Data Retrieval Action
+
+| # | Item | Details |
+|---|------|---------|
+| 1 | `GetLearnWorldsBulkDataAction` | Orchestrates all retrieval actions, returns `LearnWorldsSyncPayload` |
+| 2 | Concurrency control | Limit parallel API calls to avoid LW rate limiting |
+| 3 | Error collection | Partial failures logged in `Errors` array, doesn't abort entire sync |
+| 4 | Action metadata | Entry in `.bizapps-actions.json` |
+| 5 | Unit tests | Mock all sub-action calls, verify payload assembly |
+
+### Phase 4: Frontend (Consumer-Built, Not in LMS Package)
+
+The Angular Element checkout widget is built by the consumer (BC CDP). The LMS package provides:
+- Backend actions the widget calls
+- TypeScript interfaces the widget can use
+- REST endpoint pattern (documented, consumer implements in their MJAPI instance)
+
+---
+
+## Part 5: Package Structure
 
 ```
 packages/Actions/BizApps/LMS/
 ├── src/
 │   ├── base/
-│   │   └── base-lms.action.ts                    (existing)
+│   │   └── base-lms.action.ts                    (existing, unchanged)
 │   ├── providers/
 │   │   └── learnworlds/
-│   │       ├── learnworlds-base.action.ts         (existing)
+│   │       ├── learnworlds-base.action.ts         (existing, unchanged)
 │   │       ├── actions/
-│   │       │   ├── create-user.action.ts          (existing)
-│   │       │   ├── enroll-user.action.ts          (existing)
+│   │       │   ├── create-user.action.ts          (REFACTOR: add typed public method)
+│   │       │   ├── enroll-user.action.ts          (REFACTOR: add typed public method + bundle support)
+│   │       │   ├── get-users.action.ts            (REFACTOR: add typed public method)
+│   │       │   ├── get-user-details.action.ts     (REFACTOR: add typed public method)
+│   │       │   ├── get-user-progress.action.ts    (REFACTOR: add typed public method)
+│   │       │   ├── get-user-enrollments.action.ts (REFACTOR: add typed public method)
+│   │       │   ├── get-courses.action.ts          (REFACTOR: add typed public method)
+│   │       │   ├── get-course-details.action.ts   (REFACTOR: add typed public method)
+│   │       │   ├── get-course-analytics.action.ts (REFACTOR: add typed public method)
+│   │       │   ├── get-quiz-results.action.ts     (REFACTOR: add typed public method)
+│   │       │   ├── get-certificates.action.ts     (REFACTOR: add typed public method)
+│   │       │   ├── update-user-progress.action.ts (REFACTOR: add typed public method)
 │   │       │   ├── sso-login.action.ts            ← NEW
 │   │       │   ├── update-user.action.ts          ← NEW
 │   │       │   ├── attach-tags.action.ts          ← NEW
 │   │       │   ├── detach-tags.action.ts          ← NEW
-│   │       │   ├── onboard-learner.action.ts      ← NEW (thin wrapper)
-│   │       │   ├── sync-data.action.ts            ← NEW (thin wrapper)
-│   │       │   ├── ... (existing actions)
+│   │       │   ├── get-bundles.action.ts          ← NEW
+│   │       │   ├── onboard-learner.action.ts      ← NEW (orchestration)
+│   │       │   ├── get-bulk-data.action.ts        ← NEW (bulk retrieval)
 │   │       │   └── index.ts                       (update exports)
-│   │       └── services/
-│   │           ├── onboarding.service.ts           ← NEW
-│   │           ├── sync.service.ts                 ← NEW
+│   │       └── interfaces/
+│   │           ├── user.types.ts                   ← NEW (or refactored from inline)
+│   │           ├── course.types.ts                 ← NEW
+│   │           ├── enrollment.types.ts             ← NEW
+│   │           ├── onboarding.types.ts             ← NEW
+│   │           ├── sync.types.ts                   ← NEW
 │   │           └── index.ts                        ← NEW
-│   ├── interfaces/
-│   │   ├── onboarding.types.ts                     ← NEW
-│   │   └── sync.types.ts                           ← NEW
 │   └── index.ts                                    (update exports)
-├── __tests__/
-│   ├── onboarding.service.test.ts                  ← NEW
-│   ├── sync.service.test.ts                        ← NEW
+├── src/__tests__/
 │   ├── sso-login.action.test.ts                    ← NEW
+│   ├── update-user.action.test.ts                  ← NEW
+│   ├── onboard-learner.action.test.ts              ← NEW
+│   ├── get-bulk-data.action.test.ts                ← NEW
 │   └── ...
-└── package.json                                    (add stripe dependency)
+└── package.json                                    (no new deps needed — Stripe is consumer-side)
 ```
 
-### New Dependencies
+### No New Dependencies
 
-```json
-{
-    "stripe": "^14.x"     // For Stripe payment verification
-}
-```
-
-Note: Auth0 Management API calls (if needed) would use the existing `@auth0/auth0-angular` SDK on the frontend side. Server-side Auth0 integration is already handled by MJ's auth provider system.
+The LMS package does NOT need Stripe as a dependency. Stripe handling happens:
+- **Client-side**: In the Angular Element widget (consumer-built) via `@stripe/stripe-js`
+- **Server-side** (if needed): In a future `@memberjunction/actions-bizapps-payments` package
 
 ---
 
-## Part 5: Open Questions
+## Part 6: Resolved Questions
 
-1. **Stripe integration scope**: Do we need a full Stripe integration package, or just payment verification for onboarding? If we already process Stripe webhooks elsewhere, we should reuse that.
+| # | Question | Decision |
+|---|----------|----------|
+| 1 | **Course-to-product mapping** | Consumer's responsibility. The onboarding action accepts LW course IDs and bundle IDs directly. Each MJ instance maintains its own mapping (e.g., BC CDP has its own mapping table). |
+| 2 | **Auth0 widget placement** | Inline within a custom Angular Element widget. The widget transitions seamlessly from Stripe to Auth0 within the same embedded component — no redirects. |
+| 3 | **Data sync approach** | Actions return JSON payloads with typed interfaces. Consumers handle their own DB storage, scheduling, and mapping. The package exports `LearnWorldsSyncPayload` and related interfaces for TypeScript consumers. |
+| 4 | **Stripe integration** | Not in the LMS package. A future `@memberjunction/actions-bizapps-payments` package is recommended for core MJ. For now, Stripe is handled client-side in the Angular Element widget. |
+| 5 | **SSO plan level** | Confirmed — high-end LW plan with SSO API access. |
+| 6 | **Multi-course purchases** | Supported. `OnboardLearner` accepts arrays of `CourseIds` and `BundleIds`. Bundles are a real LW API concept (`product_type: "bundle"` in the enrollment endpoint). |
 
-2. **LW API rate limits**: Need to verify LearnWorlds' rate limits for the sync service. The progress sync could generate hundreds of API calls per run.
+## Part 7: Open Items
 
-3. **SSO endpoint availability**: The `POST /v2/sso` endpoint requires a specific LearnWorlds plan level. Need to confirm our LW account has SSO API access.
-
-4. **Course-to-product mapping**: When someone buys via Stripe, how do we map the Stripe product/price to LW course IDs? Options:
-   - Store mapping in a new MJ entity (`LW Course Stripe Mappings`)
-   - Use Stripe product metadata (`learnworlds_course_id` field)
-   - Use a configuration table
-
-5. **Auth0 widget placement**: Should the Auth0 Universal Login widget appear inline on the checkout page, or should we redirect to Auth0's hosted login page? Inline is smoother but requires more frontend work.
-
-6. **Webhook vs. polling priority**: Should we invest in LW webhook receiver for real-time sync in Phase 1, or is 6-hour polling sufficient initially?
+1. **LW API rate limits** — Need to verify LW's rate limits. The bulk data retrieval could generate many API calls. May need to add configurable concurrency limits.
+2. **LW bundle enrollment API** — Need to verify the exact endpoint and parameters for bundle enrollment. The enrollment endpoint may use `POST /v2/enrollments` with `product_type: "bundle"` or a separate path.
+3. **Webhook support (future)** — Not in initial scope. If consumers need real-time sync, LW webhooks can be added later as a separate enhancement.
