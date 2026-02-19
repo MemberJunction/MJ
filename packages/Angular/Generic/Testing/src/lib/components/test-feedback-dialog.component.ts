@@ -1,4 +1,4 @@
-import { Component, OnInit, Input } from '@angular/core';
+import { Component, OnInit, Input, ChangeDetectorRef } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
@@ -13,13 +13,6 @@ export interface TestFeedbackDialogData {
   standalone: false,
   selector: 'mj-test-feedback-dialog',
   template: `
-    <kendo-dialog
-      [title]="existingFeedback ? 'Update Test Feedback' : 'Provide Test Feedback'"
-      [width]="600"
-      [minHeight]="500"
-      [autoFocusedElement]="'none'"
-      (close)="onCancel()">
-    
       @if (!isLoading) {
         <div class="feedback-dialog-content">
           <div class="feedback-section">
@@ -115,7 +108,6 @@ export interface TestFeedbackDialogData {
         </button>
         <button kendoButton (click)="onCancel()" [disabled]="isSaving || isLoading">Cancel</button>
       </kendo-dialog-actions>
-    </kendo-dialog>
     `,
   styles: [`
     :host {
@@ -381,7 +373,10 @@ export class TestFeedbackDialogComponent implements OnInit {
 
   private metadata = new Metadata();
 
-  constructor(private dialogRef: DialogRef) {}
+  constructor(
+    private dialogRef: DialogRef,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   async ngOnInit(): Promise<void> {
     // If data was set via template binding (not DialogService), load here
@@ -423,6 +418,7 @@ export class TestFeedbackDialogComponent implements OnInit {
       // Don't show error to user - just allow them to create new feedback
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 

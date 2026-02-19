@@ -122,6 +122,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
 
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() pluginLoaded = new EventEmitter<void>();
+  @Output() tabsChanged = new EventEmitter<void>();
 
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
   viewerContainer!: ViewContainerRef;
@@ -254,9 +255,16 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
 
       // Subscribe to openEntityRecord event if the plugin emits it
       const componentInstance = this.componentRef.instance;
-      if ((componentInstance as any).openEntityRecord) {
-        (componentInstance as any).openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
+      if (componentInstance.openEntityRecord) {
+        componentInstance.openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
           this.openEntityRecord.emit(event);
+        });
+      }
+
+      // Subscribe to tabsChanged event if the plugin emits it (e.g., after async spec loading)
+      if (componentInstance.tabsChanged) {
+        componentInstance.tabsChanged.subscribe(() => {
+          this.tabsChanged.emit();
         });
       }
 

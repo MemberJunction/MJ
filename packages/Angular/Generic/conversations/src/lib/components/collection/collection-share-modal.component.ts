@@ -250,6 +250,7 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
         if (this.collection) {
             await this.loadPermissions();
             this.updateAvailablePermissions();
+            this.cdr.detectChanges(); // zone.js 0.15: sync changes after async don't trigger CD
         }
     }
 
@@ -262,6 +263,7 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
         if ((modalOpened || collectionChanged || permissionsChanged) && this.collection) {
             await this.loadPermissions();
             this.updateAvailablePermissions();
+            this.cdr.detectChanges(); // zone.js 0.15: sync changes after async don't trigger CD
         }
     }
 

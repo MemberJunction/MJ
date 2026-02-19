@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactTypeEntity, MJArtifactVersionEntity, MJCollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
@@ -176,7 +176,8 @@ export class ArtifactCreateModalComponent implements OnChanges {
 
   constructor(
     private toastService: ToastService,
-    private permissionService: CollectionPermissionService
+    private permissionService: CollectionPermissionService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnChanges(changes: SimpleChanges) {
@@ -222,6 +223,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       this.toastService.error('Failed to load artifact types');
     } finally {
       this.isLoadingTypes = false;
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
