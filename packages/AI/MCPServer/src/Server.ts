@@ -703,12 +703,20 @@ async function registerAllTools(
     systemUser: UserInfo
 ): Promise<void> {
     // Helper to register a tool with filter check and authorization
+    const registeredOnServer = new Set<string>();
     const addToolWithFilter = (config: ToolConfig): void => {
         registeredToolNames.push(config.name);
 
         if (!shouldIncludeTool(config.name, activeFilterOptions)) {
             return;
         }
+
+        // Guard against duplicate tool registration (e.g., overlapping agent patterns)
+        if (registeredOnServer.has(config.name)) {
+            console.warn(`[MCP] Skipping duplicate tool registration: ${config.name}`);
+            return;
+        }
+        registeredOnServer.add(config.name);
 
         // Use registerTool with explicit type assertions to avoid infinite type inference
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1853,13 +1861,16 @@ async function loadAgentTools(
         }
 
         // Process each agent tool configuration for specific agent tools
+        // Track registered agent IDs to prevent duplicate tools from overlapping patterns
+        const registeredAgentIds = new Set<string>();
         for (const tool of agentTools) {
             const agentPattern = tool.agentName || "*";
             const agents = await discoverAgents(agentPattern, systemUser);
 
-            // Add tools for each matching agent
+            // Add tools for each matching agent (skip if already registered by a prior config entry)
             for (const agent of agents) {
-                if (tool.execute) {
+                if (tool.execute && !registeredAgentIds.has(agent.ID)) {
+                    registeredAgentIds.add(agent.ID);
                     addAgentExecuteTool(addToolWithFilter, agent, sessionContext);
                 }
             }
