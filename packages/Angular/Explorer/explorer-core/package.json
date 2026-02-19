@@ -55,7 +55,7 @@
     "@memberjunction/ng-file-storage": "5.1.0",
     "@memberjunction/ng-generic-dialog": "5.1.0",
     "@memberjunction/ng-notifications": "5.1.0",
-    "@memberjunction/ng-query-grid": "5.1.0",
+    "@memberjunction/ng-query-viewer": "5.1.0",
     "@memberjunction/ng-record-changes": "5.1.0",
     "@memberjunction/ng-record-selector": "5.1.0",
     "@memberjunction/ng-resource-permissions": "5.1.0",

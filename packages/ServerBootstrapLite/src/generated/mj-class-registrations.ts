@@ -348,7 +348,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-actions (95 classes)
+// @memberjunction/core-actions (97 classes)
 import {
     APIRateLimiterAction,
     AddRecordsToListAction,
@@ -395,6 +395,8 @@ import {
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GetDownloadUrlAction,
+    GetEntityDetailsAction,
+    GetEntityListAction,
     GetFileContentAction,
     GetListRecordsAction,
     GetMetadataAction,
@@ -1051,6 +1053,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GetDownloadUrlAction,
+    GetEntityDetailsAction,
+    GetEntityListAction,
     GetFileContentAction,
     GetListRecordsAction,
     GetMetadataAction,
@@ -1427,7 +1431,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 608;
+export const CLASS_REGISTRATIONS_COUNT = 610;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
