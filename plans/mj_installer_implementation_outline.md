@@ -1,98 +1,115 @@
-# MemberJunction Installer — Implementation Outline
+# MemberJunction Installer — Implementation Reference
 
-> **Purpose:** Authoritative implementation spec for `@memberjunction/installer` and the reworked `mj install` / `mj doctor` CLI commands.
+> **Package:** `@memberjunction/installer` (`packages/MJInstaller/`)
 >
-> **Supersedes:** `mj_cli_automation_plan_revised_from_v_3_4_new.md` (that document captures the friction-driven reasoning; this one is the build plan).
+> **Status:** Core engine implemented and functional. All 9 phases work end-to-end. CLI integration complete for `mj install` and `mj doctor`.
+>
+> **Branch:** `feature/mj-install-v2` (targets `next`)
 >
 > **Companion docs:**
 > - `member_junction_install_friction_report_draft_new.md` — friction findings that motivated this work
-> - `complete/proposed-auto-cli-guidelines-draft.md` — original guidelines from stakeholder review
 
 ---
 
 ## Architecture Overview
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    Frontends (thin)                       │
-│                                                          │
-│  ┌─────────────┐  ┌───────────────┐  ┌───────────────┐  │
-│  │  mj install  │  │  VSCode Ext   │  │  Docker /     │  │
-│  │  mj doctor   │  │  (MJ/VSCode)  │  │  CI runner    │  │
-│  └──────┬───────┘  └──────┬────────┘  └──────┬────────┘  │
-│         │                 │                   │           │
-│         └────────────┬────┘───────────────────┘           │
-│                      │                                    │
-│         ┌────────────▼────────────┐                       │
-│         │  @memberjunction/       │                       │
-│         │  installer              │                       │
-│         │  (headless engine)      │                       │
-│         └─────────────────────────┘                       │
-└──────────────────────────────────────────────────────────┘
+Frontends (thin rendering + prompt handling)
+┌─────────────┐  ┌───────────────┐  ┌───────────────┐
+│  mj install  │  │  VSCode Ext   │  │  Docker /     │
+│  mj doctor   │  │  (future)     │  │  CI (future)  │
+└──────┬───────┘  └──────┬────────┘  └──────┬────────┘
+       │                 │                   │
+       └────────────┬────┘───────────────────┘
+                    │
+       ┌────────────▼────────────┐
+       │  @memberjunction/       │
+       │  installer              │  ← Headless, event-driven engine
+       │  (InstallerEngine)      │     Never writes to stdout
+       └─────────┬───────────────┘
+                 │
+    ┌────────────┼────────────────────┐
+    │            │                    │
+┌───▼────┐ ┌────▼─────┐  ┌───────────▼──────┐
+│ Phases │ │ Adapters  │  │ Models / Events  │
+│ (9)    │ │ (4)       │  │ / Errors         │
+└────────┘ └───────────┘  └──────────────────┘
 ```
 
-The engine is headless and event-driven. Frontends subscribe to events to render progress, handle prompts, and display diagnostics. The engine never writes to stdout directly — all output goes through events.
+### Design Principles
+
+1. **Headless engine**: `InstallerEngine` communicates exclusively through typed events. No `console.log`, no `process.stdout`. This makes it usable from CLI, VSCode, Docker, or tests.
+2. **Event-driven prompts**: When the engine needs user input, it emits a `prompt` event with a `Resolve` callback. The frontend handles the UI and calls `Resolve(answer)`.
+3. **Checkpoint/resume**: After each phase completes, state is persisted to `.mj-install-state.json`. On re-run, completed phases are skipped automatically.
+4. **Adapter pattern**: All I/O is behind adapter classes (`FileSystemAdapter`, `ProcessRunner`, `GitHubReleaseProvider`, `SqlServerAdapter`) for testability and future mocking.
+5. **Fail-fast with actionable errors**: Every `InstallerError` includes a `Phase`, `Code`, and `SuggestedFix` — no cryptic stack traces for end users.
 
 ---
 
-## 1. Package Structure: `@memberjunction/installer`
-
-**Location:** `packages/MJInstaller/` — published to npm as `@memberjunction/installer`.
-
-**Consumers:**
-- `packages/MJCLI/` — the `mj install` and `mj doctor` commands import the engine directly.
-- `MemberJunction/VSCode` repo — the VS Code extension depends on the published npm package and runs it in the extension-host Node context.
-- Docker / CI — headless mode via `--config` + `--yes`.
+## Package Structure
 
 ```
 packages/MJInstaller/
 ├── package.json
 ├── tsconfig.json
 ├── src/
-│   ├── index.ts                        # Public API exports
+│   ├── index.ts                        # Public API exports (all types + classes)
 │   │
-│   ├── InstallerEngine.ts              # Orchestrates phases, emits events
+│   ├── InstallerEngine.ts              # Orchestrator: plan, run, resume, doctor
 │   │
-│   ├── phases/
-│   │   ├── PreflightPhase.ts           # Phase A: Node, disk, ports, OS
-│   │   ├── ScaffoldPhase.ts            # Phase B: Version selection, download, extract
-│   │   ├── DatabaseProvisionPhase.ts   # Phase C: SQL script generation + validation
-│   │   ├── MigratePhase.ts            # Phase D: mj migrate
-│   │   ├── ConfigurePhase.ts           # Phase E: .env + environment files
-│   │   ├── PlatformCompatPhase.ts      # Phase F: Cross-platform script checks
-│   │   ├── DependencyPhase.ts          # Phase G: npm install + npm run build
-│   │   ├── CodeGenPhase.ts             # Phase H: mj codegen + artifact validation
-│   │   └── SmokeTestPhase.ts           # Phase I: Start MJAPI + Explorer, verify
+│   ├── phases/                         # One class per install phase
+│   │   ├── PreflightPhase.ts           # Node, npm, disk, ports, DB, OS
+│   │   ├── ScaffoldPhase.ts            # Version selection, GitHub download, ZIP extract
+│   │   ├── ConfigurePhase.ts           # .env, mj.config.cjs, environment.ts generation
+│   │   ├── DatabaseProvisionPhase.ts   # SQL script generation + validation
+│   │   ├── PlatformCompatPhase.ts      # cross-env fixes for Windows
+│   │   ├── DependencyPhase.ts          # npm install + npm run build (workspace)
+│   │   ├── MigratePhase.ts             # mj migrate orchestration
+│   │   ├── CodeGenPhase.ts             # mj codegen + post-codegen pipeline + known-issue patches
+│   │   └── SmokeTestPhase.ts           # Start MJAPI + Explorer, health checks
 │   │
-│   ├── adapters/
-│   │   ├── GitHubReleaseProvider.ts    # List versions, download ZIP assets
-│   │   ├── FileSystemAdapter.ts        # Extract ZIP, write files, check paths
-│   │   ├── ProcessRunner.ts            # Spawn child processes, capture output
-│   │   └── SqlServerAdapter.ts         # TCP connectivity check, run validation queries
+│   ├── adapters/                       # I/O boundary abstractions
+│   │   ├── GitHubReleaseProvider.ts    # List releases, download ZIP assets from GitHub
+│   │   ├── FileSystemAdapter.ts        # ZIP extract, file read/write, disk space, timestamps
+│   │   ├── ProcessRunner.ts            # Spawn child processes, capture output, timeout
+│   │   └── SqlServerAdapter.ts         # TCP connectivity, login validation, query execution
 │   │
-│   ├── models/
-│   │   ├── InstallPlan.ts              # Phase sequence + config for a specific install
-│   │   ├── InstallConfig.ts            # User-provided config (DB, auth, ports)
-│   │   ├── InstallState.ts             # Checkpoint state for resume
-│   │   └── Diagnostics.ts              # mj doctor result model
+│   ├── models/                         # Data structures
+│   │   ├── InstallPlan.ts              # Plan + phase sequence, CreatePlanInput, RunOptions
+│   │   ├── InstallConfig.ts            # User config (DB, auth, ports) + defaults
+│   │   ├── InstallState.ts             # Checkpoint persistence (.mj-install-state.json)
+│   │   ├── Diagnostics.ts              # Doctor result model
+│   │   └── VersionInfo.ts              # GitHub release metadata
 │   │
 │   ├── events/
-│   │   └── InstallerEvents.ts          # Event type definitions + emitter
+│   │   └── InstallerEvents.ts          # 8 event types + typed emitter
 │   │
 │   └── errors/
-│       └── InstallerError.ts           # Typed errors with phase + suggested fix
+│       └── InstallerError.ts           # Typed errors with phase + code + suggested fix
 ```
 
-### Public API
+### Dependencies
+
+- `adm-zip` — ZIP extraction
+- `semver` — Version comparison
+- No runtime dependency on `@memberjunction/codegen-lib` or `@memberjunction/global` — the engine spawns CodeGen as a child process via `ProcessRunner`.
+
+---
+
+## Public API
 
 ```typescript
-// index.ts — the full public surface
-
 export class InstallerEngine {
-  /** List available MJ release versions from GitHub */
-  ListVersions(): Promise<VersionInfo[]>;
+  /** Subscribe to installer events */
+  On<K extends keyof InstallerEventMap>(event: K, handler: (...args: InstallerEventMap[K]) => void): void;
 
-  /** Build a plan (dry-run friendly — no side effects) */
+  /** Unsubscribe from installer events */
+  Off<K extends keyof InstallerEventMap>(event: K, handler: (...args: InstallerEventMap[K]) => void): void;
+
+  /** List available MJ release versions from GitHub */
+  ListVersions(includePrerelease?: boolean): Promise<VersionInfo[]>;
+
+  /** Build an install plan (dry-run friendly — no side effects) */
   CreatePlan(input: CreatePlanInput): Promise<InstallPlan>;
 
   /** Execute an install plan, emitting events throughout */
@@ -101,66 +118,70 @@ export class InstallerEngine {
   /** Run diagnostics on an existing or target install directory */
   Doctor(targetDir: string, options?: DoctorOptions): Promise<Diagnostics>;
 
-  /** Subscribe to installer events */
-  On(event: InstallerEventType, handler: InstallerEventHandler): void;
+  /** Resume a previously interrupted install from a state file */
+  Resume(stateFileDir: string, options?: RunOptions): Promise<InstallResult>;
+}
+```
 
-  /** Resume a previously interrupted install */
-  Resume(stateFile: string, options?: RunOptions): Promise<InstallResult>;
+### Key Types
+
+```typescript
+interface CreatePlanInput {
+  Tag?: string;           // Release tag, e.g. "v5.1.0". Omit for interactive selection.
+  Dir: string;            // Target directory
+  Config?: PartialInstallConfig;  // Pre-filled config values
+  SkipDB?: boolean;       // Skip database provisioning
+  SkipStart?: boolean;    // Skip MJAPI/Explorer startup
+  SkipCodeGen?: boolean;  // Skip codegen phase
+  Fast?: boolean;         // Fast mode: skip smoke test + optimize post-codegen
+}
+
+interface RunOptions {
+  Yes?: boolean;          // Non-interactive mode
+  DryRun?: boolean;       // Show plan without executing
+  Verbose?: boolean;      // Verbose logging
+  NoResume?: boolean;     // Ignore checkpoint, start fresh
+  Config?: PartialInstallConfig;
+  Fast?: boolean;         // Fast mode
+}
+
+interface InstallResult {
+  Success: boolean;
+  DurationMs: number;
+  Warnings: string[];
+  PhasesCompleted: PhaseId[];
+  PhasesFailed: PhaseId[];
 }
 ```
 
 ---
 
-## 2. Event API Contract
+## Event API
 
-The engine communicates exclusively through events. This is the contract that CLI, VSCode, Docker, and tests all build against.
+The engine communicates exclusively through 8 typed events:
 
-### Event Types
+| Event | When | CLI Rendering |
+|---|---|---|
+| `phase:start` | A phase begins | Start `ora` spinner |
+| `phase:end` | A phase completes (success/failure) | spinner.succeed() or spinner.fail() |
+| `step:progress` | Progress within a phase | Update spinner text (verbose only in default mode) |
+| `log` | Informational message (`info` or `verbose` level) | `console.log` (verbose level only with `--verbose`) |
+| `warn` | Non-fatal warning (actual problem) | Always shown with `chalk.yellow("  ⚠ ...")` |
+| `error` | Fatal error | Always shown with details + suggested fix |
+| `prompt` | Engine needs user input | Render with `@inquirer/prompts`, call `event.Resolve(answer)` |
+| `diagnostic` | Doctor check result | Print `[PASS]`/`[FAIL]`/`[WARN]`/`[INFO]` lines |
+
+### Output Level Classification (implemented)
+
+Messages are classified by severity to keep default output clean:
+
+- **`warn`** (always shown): Actual problems — build failures, timeouts, stale entity names found, known-issue patches applied
+- **`step:progress`** (verbose only): Progress indicators — "Post-codegen step X/4: ...", "Codegen output packages force-rebuilt", "Manifest regeneration completed", "Known-issue patches: no patches needed"
+- **`log` verbose** (verbose only): Diagnostic details — "Manifest diagnostic: ... — OK"
+
+### Prompt Event Pattern
 
 ```typescript
-type InstallerEventType =
-  | 'phase:start'      // A phase is beginning
-  | 'phase:end'        // A phase completed (success or failure)
-  | 'step:progress'    // Progress within a phase (e.g., "Downloading... 45%")
-  | 'log'              // Informational message
-  | 'warn'             // Non-fatal warning
-  | 'error'            // Error (may or may not be fatal)
-  | 'prompt'           // Engine needs user input
-  | 'diagnostic';      // Doctor check result
-
-interface PhaseStartEvent {
-  Type: 'phase:start';
-  Phase: PhaseId;
-  Description: string;
-}
-
-interface PhaseEndEvent {
-  Type: 'phase:end';
-  Phase: PhaseId;
-  Status: 'completed' | 'failed' | 'skipped';
-  DurationMs: number;
-  Error?: InstallerError;
-}
-
-interface StepProgressEvent {
-  Type: 'step:progress';
-  Phase: PhaseId;
-  Message: string;
-  Percent?: number;        // 0-100 if known
-}
-
-interface LogEvent {
-  Type: 'log';
-  Level: 'info' | 'verbose';
-  Message: string;
-}
-
-interface WarnEvent {
-  Type: 'warn';
-  Message: string;
-  Phase?: PhaseId;
-}
-
 interface PromptEvent {
   Type: 'prompt';
   PromptId: string;
@@ -168,385 +189,255 @@ interface PromptEvent {
   Message: string;
   Choices?: { Label: string; Value: string }[];
   Default?: string;
-  Resolve: (answer: string) => void;   // Frontend calls this with the user's answer
-}
-
-interface DiagnosticEvent {
-  Type: 'diagnostic';
-  Check: string;
-  Status: 'pass' | 'fail' | 'warn' | 'info';
-  Message: string;
-  SuggestedFix?: string;
+  Resolve: (answer: string) => void;  // Frontend calls this with the answer
 }
 ```
 
-### How frontends use events
-
-**CLI (terminal):**
-- `phase:start` → start an `ora` spinner
-- `phase:end` → spinner.succeed() or spinner.fail()
-- `step:progress` → update spinner text
-- `log` → `console.log` (or skip if not `--verbose`)
-- `prompt` → render with `@inquirer/prompts`, call `event.Resolve(answer)`
-- `diagnostic` → print `[PASS]`/`[FAIL]` lines
-
-**VSCode Extension:**
-- `phase:start` → show progress notification
-- `step:progress` → update progress bar
-- `prompt` → show input box / quick pick dialog, call `event.Resolve(answer)`
-- `diagnostic` → populate a webview panel
-
-**Docker / CI:**
-- All prompts answered by `--config` file + `--yes` flag
-- `prompt` events auto-resolve from config; if no answer available, fail with a clear message
-
 ---
 
-## 3. Error Types
+## Error Model
 
 ```typescript
 class InstallerError extends Error {
-  Phase: PhaseId;
-  Code: string;
-  SuggestedFix: string;
-
-  constructor(phase: PhaseId, code: string, message: string, suggestedFix: string) {
-    super(message);
-    this.Phase = phase;
-    this.Code = code;
-    this.SuggestedFix = suggestedFix;
-  }
+  Phase: PhaseId;        // Which phase failed
+  Code: string;          // Machine-readable code (e.g., 'NODE_VERSION_LOW')
+  SuggestedFix: string;  // Human-readable fix suggestion
 }
-
-// Example instances:
-// new InstallerError('preflight', 'NODE_VERSION_LOW',
-//   'Node.js 20.1.0 found, but >= 22 is required (24 recommended).',
-//   'Download Node.js 22 LTS (or 24) from https://nodejs.org')
-//
-// new InstallerError('codegen', 'GENERATED_ENTITIES_MISSING',
-//   'mj_generatedentities not found after CodeGen.',
-//   'Run "mj codegen" manually and check for errors in the output.')
-//
-// new InstallerError('smoke_test', 'API_TIMEOUT',
-//   'MJAPI did not report ready within 120 seconds.',
-//   'Check the MJAPI console output for errors. Common cause: database connectivity issues.')
 ```
+
+Every error includes a suggested fix. Examples:
+- `('preflight', 'NODE_VERSION_LOW', 'Node.js 20.1.0 found, >= 22 required.', 'Download Node.js 22 LTS from https://nodejs.org')`
+- `('codegen', 'GENERATED_ENTITIES_MISSING', '...', 'Run "mj codegen" manually and check for errors.')`
 
 ---
 
-## 4. Phases (Detailed)
+## Install Phases (9 total)
 
-### Phase A — Preflight
+Execution order: `preflight → scaffold → configure → database → platform → dependencies → migrate → codegen → smoke_test`
 
-**Purpose:** Catch predictable failures before downloading or modifying anything.
+### Phase 1 — Preflight
 
-**Checks:**
+**Checks:** Node.js >= 22, npm available, disk space >= 2 GB, ports available (4000, 4200), SQL Server reachable (TCP), target DB exists, OS detection, write permissions.
 
-| Check | Pass Criteria | Failure Behavior |
-|---|---|---|
-| Node.js version | >= 22 (hard minimum); recommend 24 if available | Hard stop with download link |
-| npm available | `npm --version` succeeds | Hard stop |
-| Disk space | >= 2 GB free in target dir | Hard stop |
-| Ports available | 4000 and 4200 (or configured ports) not in use | Warn (don't block — user may intend to stop existing processes) |
-| SQL Server reachable | TCP connection to host:port succeeds | Warn with connection details; hard stop only if `--skip-db` not set |
-| Target DB exists | Query `sys.databases` | Warn and print `CREATE DATABASE` snippet if missing |
-| OS detection | Identify Windows / macOS / Linux | Store for Phase F |
-| Write permissions | Can write to target directory | Hard stop |
+Hard stops on: Node version too low, no npm, insufficient disk, can't write to target dir.
+Warns on: Ports in use, DB unreachable (unless `--skip-db`), DB missing.
 
-**Version policy:** Node >= 22 is the hard minimum today. If Node 24 is detected, emit an `info` diagnostic recommending it. When MJ formally raises the minimum (likely to 24 for a future release), the constant changes in one place. The engine should also read a `nodeVersion` field from the release manifest if one is included in the ZIP, falling back to the hardcoded default.
+### Phase 2 — Scaffold
 
-### Phase B — Version Selection + Scaffold
+**Steps:** Resolve tag to GitHub release → download ZIP → extract to `--dir` → verify contents.
 
-**Steps:**
-1. If `-t <tag>` provided, resolve to a GitHub release asset URL.
-2. If no tag, call `ListVersions()` and emit a `prompt` event for the user to select.
-3. Download ZIP to a temp directory (emit `step:progress` with download percentage).
-4. Extract into `--dir` (default: current directory).
-5. If target dir is non-empty, emit a `prompt` (confirm overwrite) unless `--yes`.
-6. Write initial `.mj-install-state.json`.
+If no tag provided, lists available releases and emits a `prompt` for selection. Handles non-empty target dirs with confirmation prompt (unless `--yes`).
 
-**Error handling:**
-- Tag not found → list available tags, suggest closest match.
-- Network failure → print manual download URL as fallback.
-
-### Phase C — Database Provisioning
-
-**Default behavior:** Generate SQL scripts, do not auto-execute.
-
-**Scripts generated:**
-- `mj-db-setup.sql` — idempotent (all `IF NOT EXISTS` guarded):
-  - Create logins in `master`
-  - Create users in target DB
-  - Grant roles
-- `mj-db-validate.sql` — validation queries
-
-**Flow:**
-1. Emit `prompt` for DB credentials (or read from `--config`).
-2. Generate scripts with user-provided values.
-3. Save scripts to target directory.
-4. Emit `prompt`: "Run the script in SSMS, then press Enter to validate."
-5. Validate by connecting as `MJ_CodeGen` and `MJ_Connect`.
-6. If validation fails, emit error with specific fix.
-
-**Idempotent:** Safe to re-run. `IF NOT EXISTS` guards on all creates.
-
-### Phase D — Migrate
-
-**Steps:**
-1. Run `mj migrate` using the release's migration files.
-2. Validate that the `__mj` schema and baseline tables exist.
-
-**Notes:**
-- If the database already has the `__mj` schema at the expected version, skip.
-- Forward compatibility: SQL Server 2025 may introduce new features (e.g., native JSON columns). Migrations should use standard T-SQL that works across 2022 and 2025.
-
-### Phase E — Configure
+### Phase 3 — Configure
 
 **Purpose:** Generate all config files from a single prompt flow.
 
-**Files generated/updated:**
-- Root `.env` (MJAPI + CodeGen credentials, ports, auth)
-- `mj.config.cjs` (CLI configuration — note: correct filename, not `.js`)
-- Explorer environment files:
-  - `apps/MJExplorer/src/environments/environment.ts`
-  - `apps/MJExplorer/src/environments/environment.development.ts`
-  - Both must have matching values.
+**Files generated:** Root `.env`, `mj.config.cjs`, Explorer `environment.ts` + `environment.development.ts`.
 
-**Prompt flow:**
-1. DB connection details (host, port, name, trust cert)
-2. CodeGen credentials
-3. MJAPI credentials
-4. API port (default 4000)
-5. Explorer port (default 4200)
-6. Auth provider: Entra / Auth0 / None
-7. Auth provider-specific values (conditional on choice)
-8. Optional: AI API keys (OpenAI, Anthropic, Mistral)
-9. Optional: New user creation
+**Prompts:** DB connection details, CodeGen/MJAPI credentials, API port (default 4000), Explorer port (default 4200), auth provider (Entra/Auth0/None), provider-specific values, optional AI API keys, optional new user creation.
 
-**Config overwrite behavior:**
-- If files exist, show diff and prompt before overwriting (unless `--yes`).
+Respects existing files — shows diff and prompts before overwriting (unless `--yes`).
 
-**Reuse from existing code:** The current `mj install` command's `.env` template, Zod config schema, and `updateEnvironmentFiles()` method are directly reusable here. Move them into this phase as helpers.
+### Phase 4 — Database Provisioning
 
-### Phase F — Platform Compatibility
+**Generates** idempotent SQL scripts (all `IF NOT EXISTS` guarded): `mj-db-setup.sql` (logins, users, roles), `mj-db-validate.sql` (validation queries).
 
-This phase has two distinct concerns, split so that the required fix is never blocked by the optional one.
+**Flow:** Prompt for DB credentials → generate scripts → prompt user to run in SSMS → validate by connecting as `MJ_CodeGen` and `MJ_Connect`.
 
-#### F1 — Cross-Platform Script Fix (required)
+Skippable with `--skip-db`.
 
-**Purpose:** Detect and fix Unix-only env var syntax (`FOO=bar command`) in `package.json` scripts so builds and starts work on Windows.
+### Phase 5 — Platform Compatibility
 
-**Steps:**
-1. Scan `package.json` `scripts` sections across the workspace for Unix-only env var syntax.
-2. If found on Windows:
-   - Ensure `cross-env` is a dev dependency (add if missing).
-   - Patch affected scripts to use `cross-env`.
-   - Report what was changed.
-3. If found on macOS/Linux: no action needed (works natively), but emit a `warn` that these scripts won't work on Windows (useful for CI awareness).
+**Purpose:** Fix Unix-only env var syntax (`FOO=bar command`) in `package.json` scripts for Windows.
 
-**Idempotent:** If scripts already use `cross-env`, skip.
+On Windows: adds `cross-env` dependency and patches affected scripts. Idempotent — already-patched scripts are skipped.
 
-**CI integration (future):** Add a lint rule or CI check that fails if any `package.json` script uses Unix-only env var syntax. This prevents regressions. Not part of the installer itself, but a complementary deliverable.
+Also handles `--max-old-space-size` advisory for Node >= 24.
 
-#### F2 — Heap Size / `NODE_OPTIONS` (optional, auto-detect)
+### Phase 6 — Dependencies
 
-**Purpose:** Handle `--max-old-space-size` flags in scripts. This is separate from the cross-env fix because the heap-size tweaks may be removed entirely in MJ 4.x.
+**Steps:** `npm install` at repo root (workspace-aware) → `npm run build` at repo root.
 
-**Behavior:**
-- **Do not add** `--max-old-space-size` to any script that doesn't already have it.
-- If a script already contains `--max-old-space-size`, leave it in place (Phase F1 will have already ensured it's cross-platform via `cross-env`).
-- If Node >= 24 is detected, emit an `info` diagnostic: "Node 24 has improved memory defaults. The `--max-old-space-size` flag in Explorer's start script may no longer be necessary. You can remove it if memory usage is acceptable without it."
-- Per stakeholder feedback, MJ 4.x may remove these flags entirely. The installer should never be the source of new memory flags.
+Captures build output. Emits `warn` for npm audit vulnerabilities with guidance not to run `npm audit fix --force`.
 
-### Phase G — Dependencies (Install + Build)
+### Phase 7 — Migrate
 
-**Steps:**
-1. Run `npm install` at repo root.
-2. If `npm audit` reports vulnerabilities, emit a `warn` event:
-   > "Vulnerability output is common in large workspaces. Do not run `npm audit fix --force`."
-3. Run `npm run build` at repo root.
-4. Capture build output. If build fails, emit error with the last 50 lines of output.
+Runs `mj migrate` using the release's migration files. Validates `__mj` schema and baseline tables exist. Skips if already at expected version.
 
-**Note:** The existing `mj install` only ran `npm install` inside `GeneratedEntities/` and used `npm link` for MJAPI/Explorer. The new flow runs `npm install` at the repo root (workspace-aware) which handles all packages. The `npm link` steps from the old code may no longer be needed — verify during implementation.
+### Phase 8 — CodeGen + Post-CodeGen Pipeline
 
-### Phase H — CodeGen + Validation
+The most complex phase. Two sub-parts:
 
-**Steps:**
-1. Run `mj codegen`.
-2. Handle AFTER command output:
-   - If AFTER commands fail, emit `warn` (not error).
-   - Write full AFTER command output to `./logs/mj-codegen-after.log`.
-3. Verify required artifacts exist:
-   - `mj_generatedentities` package
-   - Generated TypeScript files in expected locations
-   - Manifest files
-4. If artifacts missing:
-   - Retry `mj codegen` **once**.
-   - If still missing after retry, hard stop with actionable error.
+**Part A — CodeGen execution:**
+1. Run `mj codegen` via `ProcessRunner`
+2. Verify required artifacts exist (`mj_generatedentities`, generated TypeScript, manifests)
+3. If artifacts missing, retry once. If still missing after retry, hard stop.
 
-**Reuse from existing code:** The current `mj install` calls `this.config.runCommand('codegen')`. The engine should invoke CodeGen through the same mechanism or import `@memberjunction/codegen-lib` directly.
+**Part B — Post-codegen pipeline (4 steps):**
 
-### Phase I — Start + Smoke Test
+| Step | What | Default Output |
+|---|---|---|
+| Step 1 | Force-rebuild codegen output packages (`.d.ts` exports) | `step:progress` (verbose only) |
+| Step 2 | Regenerate class registration manifests | `step:progress` (verbose only) |
+| Step 3 | Rebuild manifest packages | `step:progress` (verbose only) |
+| Step 4 | Apply known-issue patches | `warn` only if patches applied |
 
-**Pre-start verification:**
-- Confirm `mj_generatedentities` exists before starting MJAPI.
-- If missing, emit error suggesting `mj codegen`.
+**Known-Issue Patching System:**
 
-**MJAPI:**
-- Start command: `npm run start:api` (or release equivalent).
-- Timeout: **120 seconds** (metadata loading can be slow on first run).
-- Success: "ready" log line detected OR port responds to HTTP.
+An extensible registry of source-level bugs that the installer proactively fixes in fresh installs. Each patch is defined as a `KnownIssuePatch`:
 
-**Explorer:**
-- Start command: `npm run start:explorer`.
-- Timeout: **210 seconds** (Angular/Vite first compilation is slow).
-- Success: HTTP GET `http://localhost:<explorerPort>/` returns 200.
-
-**On success:**
-```
-MJ Install Complete
--------------------
-[PASS] Database connected
-[PASS] Migrations applied
-[PASS] CodeGen verified
-[PASS] MJAPI running on http://localhost:4000
-[PASS] MJExplorer running on http://localhost:4200
-
-Next steps:
-  1. Open http://localhost:4200 in your browser
-  2. Log in with your configured auth provider
+```typescript
+interface KnownIssuePatch {
+  Id: string;                          // e.g., 'resource-permission-engine-null-safety'
+  Description: string;
+  RelativePath: string;                // Path to the file to patch
+  PackageRelativeDir: string;          // Package to rebuild after patching
+  NeedsPatch: (content: string) => boolean;  // Detection function
+  Apply: (content: string) => string;        // Transformation function
+}
 ```
 
-**On failure:** Emit error with phase to re-run, log locations, and most likely fixes.
+Currently registered patches:
+- **`resource-permission-engine-null-safety`**: Fixes null reference in `ResourcePermissionEngine.ts` where `this._ResourceTypes.ResourceTypes` and `this._Permissions` can be undefined on first access. Changes to use optional chaining (`?.`) and nullish coalescing (`?? []`).
+
+The `mj doctor` command also checks for known issues and reports their status.
+
+### Phase 9 — Smoke Test
+
+Starts MJAPI (`npm run start:api`, 120s timeout) and Explorer (`npm run start:explorer`, 210s timeout). Verifies both respond to health checks.
+
+Skippable with `--skip-start` or automatically skipped in `--fast` mode.
+
+**Known limitation:** On fresh installs, both services often fail to respond within the timeout, wasting ~5.5 minutes. Needs investigation in a future PR.
 
 ---
 
-## 5. Checkpoint / Resume
+## `--fast` Mode
 
-Write `.mj-install-state.json` after each phase completes:
+**Flag:** `mj install --fast`
+
+**Purpose:** Optimistic approach that saves ~7-8 minutes on installs where manifests are already correct. If it causes runtime issues, the user re-runs without `--fast`.
+
+**What `--fast` does:**
+
+1. **Automatically skips smoke test** (saves ~5.5 min) — implies `--skip-start`
+2. **Smart-skips post-codegen Steps 1-3** if manifests are already correct:
+   - **Timestamp check**: Compares source file `mtime` vs compiled `.d.ts` `mtime` for key codegen output files (`entity_subclasses.ts`, `action_subclasses.ts`). If source is newer than dist, codegen regenerated files and a full rebuild is needed.
+   - **Stale name check**: Reads manifest source files and searches for known stale entity class names that were renamed in recent versions.
+   - If BOTH checks pass → skip Steps 1-3 entirely (saves ~2-3 min)
+   - If EITHER check fails → fall back to full Steps 1-3
+3. **Always applies known-issue patches (Step 4)** — fast and essential
+4. **Prints a note** at the end: "Fast mode was used. If you encounter runtime errors, re-run without --fast."
+
+**Implementation details:**
+
+- `quickCheckManifests()` method in `CodeGenPhase.ts` performs both checks
+- `CODEGEN_TIMESTAMP_CHECKS` static array defines source→dist pairs to compare
+- `MANIFEST_SOURCE_PATHS` + `STALE_ENTITY_NAMES` used for name checking
+- `FileSystemAdapter.GetModifiedTime()` provides timestamp comparison
+
+---
+
+## Checkpoint / Resume
+
+State file: `.mj-install-state.json` in the install directory.
 
 ```json
 {
-  "Tag": "v3.4.0",
-  "StartedAt": "2025-01-15T10:30:00Z",
+  "Tag": "v5.1.0",
+  "StartedAt": "2026-02-19T10:30:00Z",
   "Phases": {
     "preflight": { "Status": "completed", "CompletedAt": "..." },
     "scaffold": { "Status": "completed", "CompletedAt": "..." },
+    "configure": { "Status": "completed", "CompletedAt": "..." },
     "database": { "Status": "failed", "Error": "Connection refused", "FailedAt": "..." },
-    "migrate": { "Status": "pending" },
-    "configure": { "Status": "pending" },
     "platform": { "Status": "pending" },
     "dependencies": { "Status": "pending" },
+    "migrate": { "Status": "pending" },
     "codegen": { "Status": "pending" },
     "smoke_test": { "Status": "pending" }
   }
 }
 ```
 
-- `Run()` auto-detects the state file and resumes from the first non-completed phase.
-- `--no-resume` flag forces a fresh start.
-- Failed phases re-run from the beginning of that phase.
+**Behavior:**
+- `Run()` auto-detects the state file and resumes from the first non-completed phase
+- `--no-resume` flag forces a fresh start (ignores existing state)
+- Failed phases re-run from the beginning of that phase
+- Skipped phases are recorded as `"skipped"` (not re-run on resume)
+- State is saved after every phase completion/failure
 
 ---
 
-## 6. CLI Command Changes
+## CLI Commands
 
-### `mj install` (reworked)
+### `mj install`
 
-```
-packages/MJCLI/src/commands/install/index.ts
-```
+**Location:** `packages/MJCLI/src/commands/install/index.ts`
 
-The command becomes a thin wrapper:
+| Flag | Short | Description |
+|---|---|---|
+| `--tag <tag>` | `-t` | Release tag (e.g., `v5.1.0`). Omit for interactive selection. |
+| `--dir <path>` | | Target directory (default: `.`) |
+| `--yes` | | Non-interactive mode — auto-answer prompts with defaults/config |
+| `--config <path>` | | Config file path for pre-filling prompts |
+| `--dry-run` | | Show plan without executing |
+| `--verbose` | `-v` | Verbose output (show `step:progress` and `log` verbose messages) |
+| `--skip-start` | | Skip MJAPI/Explorer startup (smoke test phase) |
+| `--skip-db` | | Skip database provisioning phase |
+| `--skip-codegen` | | Skip codegen phase entirely |
+| `--no-resume` | | Ignore checkpoint, start fresh |
+| `--fast` | | Fast mode: skip smoke test + optimize post-codegen steps |
+| `--legacy` | | Uses the old ZIP-style interactive installer |
 
-```typescript
-export default class Install extends Command {
-  static description = 'Install MemberJunction from a release';
-
-  static flags = {
-    tag: Flags.string({ char: 't', description: 'Release tag (e.g., v4.0.0)' }),
-    dir: Flags.string({ description: 'Target directory', default: '.' }),
-    yes: Flags.boolean({ description: 'Non-interactive mode' }),
-    config: Flags.string({ description: 'Config file path' }),
-    'dry-run': Flags.boolean({ description: 'Show plan without executing' }),
-    verbose: Flags.boolean({ char: 'v', description: 'Verbose output' }),
-    'skip-start': Flags.boolean({ description: 'Skip MJAPI/Explorer startup' }),
-    'skip-db': Flags.boolean({ description: 'Skip database provisioning' }),
-    legacy: Flags.boolean({ description: 'Run legacy ZIP-style installer (deprecated)', hidden: true }),
-    'no-resume': Flags.boolean({ description: 'Ignore checkpoint, start fresh' }),
-  };
-
-  async run(): Promise<void> {
-    const { flags } = await this.parse(Install);
-
-    if (flags.legacy) {
-      // Run the old interactive installer for transition period
-      return this.RunLegacyInstall();
-    }
-
-    const engine = new InstallerEngine();
-
-    // Wire up events to CLI output
-    engine.On('phase:start', (e) => spinner.start(e.Description));
-    engine.On('phase:end', (e) => e.Status === 'completed' ? spinner.succeed() : spinner.fail());
-    engine.On('prompt', (e) => this.HandlePrompt(e));
-    engine.On('log', (e) => this.log(e.Message));
-    // ... etc
-
-    // Build and run the plan
-    const plan = await engine.CreatePlan({ Tag: flags.tag, Dir: flags.dir, ... });
-
-    if (flags['dry-run']) {
-      this.log(plan.Summarize());
-      return;
-    }
-
-    await engine.Run(plan);
-  }
-}
+**Examples:**
+```bash
+mj install                              # Interactive: pick version, answer prompts
+mj install -t v5.1.0                    # Install specific version
+mj install -t v5.1.0 --yes             # Non-interactive with defaults
+mj install -t v5.1.0 --fast            # Optimistic fast install
+mj install --dir /opt/mj --skip-db     # Custom dir, skip DB setup
+mj install --dry-run                    # Show plan only
+mj install --no-resume                  # Fresh start (ignore checkpoint)
+mj install -v                           # Verbose output
 ```
 
-**Behavior:**
-- `mj install` (no tag) → calls `ListVersions()` to fetch available releases from GitHub, displays them in a numbered list (most recent first), and emits a `prompt` event for the user to select a version. After selection, proceeds with the full install flow.
-- `mj install -t v4.0.0` → skips version selection entirely, resolves the tag to a GitHub release asset, and installs that specific release directly.
-- `mj install --legacy` → runs the old ZIP-style interactive installer for a short transition period. This mode does **not** fetch releases from GitHub or download tags — it only supports the existing local-ZIP-based flow. Hidden flag, deprecated after 1-2 releases, then removed.
-- `mj install --dry-run` → shows the plan without executing
-
-### `mj doctor` (new)
-
+**Output format (default):**
 ```
-packages/MJCLI/src/commands/doctor/index.ts
-```
+Install Plan
+────────────
+  Tag:       v5.1.0
+  Directory: /opt/mj
+  ...
 
-```typescript
-export default class Doctor extends Command {
-  static description = 'Diagnose MemberJunction installation';
+▸ Check prerequisites (Node, npm, disk, ports, DB)
+  ✓ preflight completed (294ms)
+▸ Download and extract release
+  ✓ scaffold completed (34s)
+...
+▸ Run CodeGen and validate artifacts
+  ⚠ Known-issue patch applied: resource-permission-engine-null-safety
+  ✓ codegen completed (7m 8s)
+▸ Start services and run smoke tests
+  ✓ smoke_test completed (5m 34s)
 
-  static flags = {
-    dir: Flags.string({ description: 'Target directory to diagnose', default: '.' }),
-    verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
-  };
-
-  async run(): Promise<void> {
-    const { flags } = await this.parse(Doctor);
-    const engine = new InstallerEngine();
-
-    engine.On('diagnostic', (e) => {
-      const icon = { pass: '[PASS]', fail: '[FAIL]', warn: '[WARN]', info: '[INFO]' }[e.Status];
-      this.log(`${icon} ${e.Message}`);
-    });
-
-    const result = await engine.Doctor(flags.dir);
-
-    if (result.HasFailures) {
-      this.log('\nSuggested fixes:');
-      result.Failures.forEach(f => this.log(`  - ${f.SuggestedFix}`));
-    }
-  }
-}
+MJ Install Complete
+───────────────────
+  Tag:      v5.1.0
+  Duration: 10m 54s
+  Warnings: 1
 ```
 
-**Checks:**
+### `mj doctor`
+
+**Location:** `packages/MJCLI/src/commands/doctor/index.ts`
+
+| Flag | Short | Description |
+|---|---|---|
+| `--dir <path>` | | Target directory to diagnose (default: `.`) |
+| `--verbose` | `-v` | Show detailed output |
+
+**Checks performed:**
 - OS, Node.js version, npm version
 - DB connectivity + login validation
 - Port availability
@@ -554,175 +445,102 @@ export default class Doctor extends Command {
 - Config filename check (warn if `mj.config.js` exists instead of `.cjs`)
 - CodeGen artifacts present (`mj_generatedentities`)
 - Last install state (tag + timestamp from `.mj-install-state.json`)
+- Known-issue checks (scans for each registered `KnownIssuePatch`)
 
----
-
-## 7. VSCode Extension Integration
-
-**Repository:** `github.com/MemberJunction/VSCode`
-
-**Dependency:** `@memberjunction/installer` (runs in extension-host Node context)
-
-**Integration pattern:**
-1. Extension imports `InstallerEngine` from the published package.
-2. Subscribes to events and renders them in VS Code UI:
-   - `phase:start` / `phase:end` → progress notification
-   - `step:progress` → progress bar
-   - `prompt` → VS Code input box / quick pick
-   - `diagnostic` → webview panel
-   - `error` → error notification with action buttons
-3. Commands registered in VS Code:
-   - "MJ: Install MemberJunction" → wizard UI
-   - "MJ: Run Doctor" → diagnostic panel
-   - "MJ: Resume Install" → resume from checkpoint
-
-**Implementation note:** The event API contract (Section 2) is the interface boundary. The extension team can build against it as soon as it stabilizes in Milestone 1.
-
----
-
-## 8. Docker Support
-
-### Dev/Test Docker Compose
-
+**Output format:**
 ```
-docker/install-test/
-├── docker-compose.yml
-├── Dockerfile.installer        # Node image + MJ CLI
-├── install.config.json         # Pre-filled config for headless install
-└── init-db.sql                 # Create target database on startup
+MJ Doctor — Diagnosing /opt/mj
+──────────────────────────────
+  [PASS] Node.js 22.4.0
+  [PASS] npm 10.2.0
+  [PASS] SQL Server reachable
+  [PASS] MJ_CodeGen login valid
+  [WARN] Known issue: resource-permission-engine-null-safety
+         Run "mj install" to auto-patch
+  [INFO] Last install: v5.1.0 (2026-02-19T10:30:00Z)
 ```
 
-**Compose services:**
+---
 
-| Service | Image | Purpose |
-|---|---|---|
-| `sqlserver` | `mcr.microsoft.com/mssql/server:2022-latest` | Database (health check: `SELECT 1`) |
-| `mj-install` | Custom (Dockerfile.installer) | Runs `mj install -t <tag> --yes --config install.config.json` |
-| `mj-api` | Reuse from `docker/MJAPI/` or start from install dir | MJAPI (depends on install success) |
-| `mj-explorer` | Node or nginx | Explorer (depends on API health) |
+## Adapters
 
-**Usage:**
-```bash
-cd docker/install-test
-docker compose up
-# Full MJ environment running at localhost:4000 (API) and localhost:4200 (Explorer)
-```
+### FileSystemAdapter
 
-**Forward compatibility:** Use `mcr.microsoft.com/mssql/server:2025-latest` as an alternate target for testing SQL Server 2025 compatibility. The compose file can accept a build arg to select the SQL Server version.
+ZIP extraction (strips single-root GitHub folders), directory/file operations, disk space checks, write permission tests, JSON/text read/write, recursive file search, and file modification timestamp retrieval.
 
-### Key requirement
+### ProcessRunner
 
-The installer engine must run headless with `--config` and `--yes`. All `prompt` events auto-resolve from the config file. If a required prompt has no answer in the config, the engine emits an error (not a hang).
+Spawns child processes with configurable timeout, captures stdout/stderr, returns structured `ProcessResult` with exit code. Used for `npm install`, `npm run build`, `mj codegen`, `mj migrate`, and service startup.
+
+### GitHubReleaseProvider
+
+Lists releases from the MemberJunction GitHub repo, downloads ZIP assets, handles pre-release filtering.
+
+### SqlServerAdapter
+
+TCP connectivity check (raw socket), SQL Server login validation, query execution for database validation.
 
 ---
 
-## 9. Forward Compatibility
+## What Has Been Implemented (Done)
 
-### Node.js
+- [x] Package skeleton with full directory structure
+- [x] `InstallerEngine` with `CreatePlan()`, `Run()`, `Doctor()`, `Resume()`, `ListVersions()`
+- [x] All 9 phases implemented and functional end-to-end
+- [x] Event API with 8 typed events
+- [x] `InstallerError` with phase, code, and suggested fix
+- [x] Checkpoint/resume via `.mj-install-state.json`
+- [x] All 4 adapters (FileSystem, ProcessRunner, GitHub, SqlServer)
+- [x] `mj install` CLI command with all flags
+- [x] `mj doctor` CLI command with all flags
+- [x] `--fast` mode with timestamp + stale-name detection
+- [x] Known-issue patching system (extensible registry)
+- [x] `resource-permission-engine-null-safety` patch
+- [x] Output level classification (warn vs step:progress vs log verbose)
+- [x] Post-codegen 4-step pipeline (force-rebuild, manifest regen, manifest rebuild, known-issue patches)
+- [x] `InstallPlan.Summarize()` for dry-run display
+- [x] Full `index.ts` public API exports
+- [x] MJInstaller builds clean (`npm run build`)
 
-- **Hard minimum today:** Node >= 22.
-- **Recommended:** Node 24 (when available as LTS, expected October 2026). If Node 24 is detected, the preflight phase emits an `info` diagnostic acknowledging the recommendation.
-- **Approach:** The preflight check reads the minimum Node version from a constant (`MIN_NODE_VERSION = 22`). When MJ formally raises the minimum (likely to 24 for a future release), change the constant. The engine should also check for a `nodeVersion` field in the release manifest (if one is included in the ZIP), allowing different releases to declare different requirements.
-- **What to watch for:**
-  - `--max-old-space-size` may become unnecessary with Node 24's improved defaults. Phase F2 handles this as an advisory, not a required change.
-  - ESM changes in Node 24 may affect module resolution. Test `npm install` and `npm run build` on Node 24 during development.
+## What Remains (Future PRs)
 
-### SQL Server
+### High Priority
 
-- **Baseline:** SQL Server 2022 (this is the version the installer generates scripts for and tests against).
-- **Compatibility target:** SQL Server 2025. The installer should not hard-check for a specific SQL Server version — the preflight phase validates connectivity and login permissions, not server version. Standard T-SQL used in migrations is backward- and forward-compatible.
-- **What to watch for:**
-  - New JSON column types or features in 2025 may be useful for future migrations but should not be required (to maintain 2022 compat).
-  - Connection driver (`tedious` / `mssql`) versions may need updates for 2025-specific TLS or auth changes.
-  - The Docker Compose setup should test against both 2022 and 2025 images.
+- [ ] **Smoke test investigation**: Both MJAPI and Explorer fail to respond on fresh installs, wasting ~5.5 minutes. Need to investigate root cause (likely first-run metadata loading timeout).
+- [ ] **MJCLI build fixes**: Pre-existing build errors in unrelated MJCLI modules (`app/*`, `codegen/*`, `sync/*`, `hooks/prerun.ts`) about missing module declarations. Not caused by installer changes but prevent full MJCLI build.
+
+### Medium Priority
+
+- [ ] **More known-issue patches**: Add patches as new bugs are discovered in fresh installs.
+- [ ] **Doctor enhancements**: Add more diagnostic checks beyond preflight + known issues (e.g., check built artifact staleness, config validity, package version consistency).
+- [ ] **Dependency phase optimization**: `npm install` + `npm run build` takes ~2m 44s. Investigate if workspace-aware partial builds can speed this up.
+- [ ] **CodeGen speed optimization**: CodeGen itself takes ~4.5 minutes. May benefit from parallelization or caching.
+
+### Low Priority / Future Milestones
+
+- [ ] **VSCode extension integration**: Extension imports `InstallerEngine` from published npm package. Event API is the interface boundary. Commands: "MJ: Install", "MJ: Run Doctor", "MJ: Resume Install".
+- [ ] **Docker CI**: `docker/install-test/docker-compose.yml` with SQL Server + headless installer for automated regression testing.
+- [ ] **Cross-platform CI lint rule**: Fail CI if any `package.json` script uses Unix-only env var syntax.
+- [ ] **Unit tests**: Add Vitest tests for all phases, adapters, and engine logic.
+- [ ] **`--legacy` flag removal**: The old ZIP-style interactive installer is still reachable via `--legacy` (hidden). Remove after transition period.
 
 ---
 
-## 10. Handling Today's `mj install` Code
+## Timing Reference (v5.1.0 fresh install, no `--fast`)
 
-### What to keep (move into engine)
-
-| Existing code | Where it goes |
+| Phase | Notes |
 |---|---|
-| Zod config schema (`configSchema`) | `models/InstallConfig.ts` — extend and reuse |
-| `.env` template generation | `phases/ConfigurePhase.ts` |
-| `updateEnvironmentFiles()` (regex replace in Angular env files) | `phases/ConfigurePhase.ts` |
-| `checkNodeVersion()` | `phases/PreflightPhase.ts` |
-| `checkAvailableDiskSpace()` | `phases/PreflightPhase.ts` |
-| `verifyDirs()` | `phases/ScaffoldPhase.ts` (post-extract verification) |
-| `renameFolderToMJ_BASE()` | `phases/ConfigurePhase.ts` |
-| `updateConfigNewUserSetup()` (AST-based mj.config.cjs update) | `phases/ConfigurePhase.ts` |
-| Interactive prompt flow | `phases/ConfigurePhase.ts` (via `prompt` events) |
-| `this.config.runCommand('codegen')` | `phases/CodeGenPhase.ts` |
-
-### What to drop
-
-- `npm link` for GeneratedEntities/GeneratedActions — the new flow uses `npm install` at repo root (workspace-aware), which handles linking. Verify during implementation and remove if redundant.
-
-### CLI compatibility
-
-- `mj install` = new engine-based install (default). Fetches releases from GitHub (or installs a specific tag with `-t`).
-- `mj install --legacy` = old ZIP-style interactive installer. Does **not** download tags or fetch releases — it only works with a local ZIP that the user has already extracted. Hidden flag, deprecated, removed after 1-2 releases.
+| preflight | Fast — all local checks |
+| scaffold | GitHub download + ZIP extract |
+| configure | Interactive prompts |
+| database | Script generation + validation |
+| platform | cross-env check |
+| dependencies | `npm install` + `npm run build` |
+| migrate | Database migrations |
+| codegen | CodeGen + post-codegen pipeline |
+| smoke_test | Both services timed out (known issue) |
+| **Total** | With `--fast`: (skip smoke test + optimize post-codegen) |
 
 ---
 
-## 11. Milestones
-
-### Milestone 1 — Engine Skeleton + Doctor + Version Listing
-
-**Deliverables:**
-- `@memberjunction/installer` package skeleton with event API contract
-- `InstallerEngine` class with `ListVersions()`, `CreatePlan()`, and `Doctor()`
-- Phase A (Preflight) fully implemented
-- Phase B (Scaffold) — version listing and download (extract can follow)
-- `mj doctor` CLI command wired to the engine
-- Event API contract documented and stable (so VSCode extension team can start)
-- `.mj-install-state.json` read/write logic
-
-**Why first:** `mj doctor` is immediately useful on its own. The event API contract enables parallel work on the VSCode extension.
-
-### Milestone 2 — DB + Migrate + Config
-
-**Deliverables:**
-- Phase C (Database Provisioning) — script generation + validation
-- Phase D (Migrate) — `mj migrate` orchestration + validation
-- Phase E (Configure) — config file generation from single prompt flow
-- Existing `mj install` code migrated into engine phases
-
-**Parallelism:** Phases C, D, and E are largely independent of each other and can be developed concurrently.
-
-### Milestone 3 — Build + CodeGen + Smoke Tests
-
-**Deliverables:**
-- Phase F (Platform Compatibility) — cross-platform script checks
-- Phase G (Dependencies) — `npm install` + `npm run build`
-- Phase H (CodeGen) — `mj codegen` + artifact validation
-- Phase I (Smoke Test) — start MJAPI + Explorer, verify
-- Full `mj install -t <tag>` end-to-end flow working
-- Checkpoint/resume fully functional
-
-### Milestone 4 — VSCode Extension + Docker CI
-
-**Deliverables:**
-- VSCode extension wrapping the installer engine (Install wizard, Doctor panel)
-- `docker/install-test/` Docker Compose setup
-- CI integration test running the full install in Docker
-- Cross-platform script lint rule (optional)
-
-**Note:** VSCode extension skeleton can start during Milestone 2 once the event API is stable. Docker Compose can start during Milestone 3 to serve as the test harness.
-
----
-
-## 12. Decisions Needed Before Implementation
-
-1. **Release asset resolution:** Do GitHub Releases consistently include a ZIP asset for each tag? Or should `ListVersions()` also support a direct URL for manual download?
-
-2. **Canonical GraphQL URL:** During the v3.4.0 install, Explorer worked with `GRAPHQL_URI: http://localhost:4000/` (root path). Is this the intended convention, or should it be `/graphql`? The installer should enforce one consistent default.
-
-3. **`npm link` still needed?** The old installer used `npm link` to connect GeneratedEntities into MJAPI/Explorer. The new flow runs `npm install` at the workspace root. Need to verify whether workspace linking makes `npm link` redundant.
-
-4. **Existing `mj install` transition period:** How long should `--legacy` be supported? Recommendation: 1-2 releases, then remove.
-
----
-
-*This outline is the build plan. The companion friction report documents why each decision was made.*
+*This document reflects the actual implementation as of February 2026. Updated from the original implementation outline to serve as an ongoing reference.*

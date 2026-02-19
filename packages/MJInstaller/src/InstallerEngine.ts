@@ -94,7 +94,7 @@ export class InstallerEngine {
     if (input.SkipDB) {
       skipPhases.add('database');
     }
-    if (input.SkipStart) {
+    if (input.SkipStart || input.Fast) {
       skipPhases.add('smoke_test');
     }
     if (input.SkipCodeGen) {
@@ -115,6 +115,7 @@ export class InstallerEngine {
     const phasesFailed: PhaseId[] = [];
     const verbose = options?.Verbose ?? false;
     const yes = options?.Yes ?? false;
+    const fast = options?.Fast ?? false;
     const config: PartialInstallConfig = {
       ...plan.Config,
       ...options?.Config,
@@ -172,7 +173,7 @@ export class InstallerEngine {
       });
 
       try {
-        const result = await this.executePhase(phaseInfo.Id, plan, config, yes);
+        const result = await this.executePhase(phaseInfo.Id, plan, config, yes, fast);
 
         // Collect warnings
         if (result.Warnings) {
@@ -261,6 +262,25 @@ export class InstallerEngine {
       });
     }
 
+    // Run known-issue checks (source-level bugs that the installer auto-patches)
+    const knownIssueResults = await this.codeGen.RunKnownIssueChecks(targetDir, this.emitter);
+    for (const result of knownIssueResults) {
+      if (result.Status === 'needs_patch') {
+        diagnostics.AddCheck({
+          Name: `Known issue: ${result.Id}`,
+          Status: 'warn',
+          Message: result.Description,
+          SuggestedFix: `Run "mj install" to auto-patch, or manually edit ${result.RelativePath}`,
+        });
+      } else if (result.Status === 'ok') {
+        diagnostics.AddCheck({
+          Name: `Known issue: ${result.Id}`,
+          Status: 'pass',
+          Message: `${result.Id}: not present or already patched`,
+        });
+      }
+    }
+
     return diagnostics;
   }
 
@@ -291,7 +311,8 @@ export class InstallerEngine {
     phaseId: PhaseId,
     plan: InstallPlan,
     config: PartialInstallConfig,
-    yes: boolean
+    yes: boolean,
+    fast: boolean
   ): Promise<PhaseExecutionResult> {
     switch (phaseId) {
       case 'preflight':
@@ -309,7 +330,7 @@ export class InstallerEngine {
       case 'dependencies':
         return this.executeDependencies(plan);
       case 'codegen':
-        return this.executeCodeGen(plan);
+        return this.executeCodeGen(plan, fast);
       case 'smoke_test':
         return this.executeSmokeTest(plan);
     }
@@ -435,10 +456,11 @@ export class InstallerEngine {
     return { Warnings: result.Warnings };
   }
 
-  private async executeCodeGen(plan: InstallPlan): Promise<PhaseExecutionResult> {
+  private async executeCodeGen(plan: InstallPlan, fast: boolean): Promise<PhaseExecutionResult> {
     const result = await this.codeGen.Run({
       Dir: plan.Dir,
       Emitter: this.emitter,
+      Fast: fast,
     });
 
     const warnings: string[] = [];

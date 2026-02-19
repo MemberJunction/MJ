@@ -57,6 +57,9 @@ export default class Install extends Command {
     'no-resume': Flags.boolean({
       description: 'Ignore any existing checkpoint and start fresh',
     }),
+    fast: Flags.boolean({
+      description: 'Fast mode: skip smoke test and optimize post-codegen steps. Re-run without --fast if you encounter issues.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -83,8 +86,10 @@ export default class Install extends Command {
     'skip-db'?: boolean;
     'skip-start'?: boolean;
     'no-resume'?: boolean;
+    fast?: boolean;
   }): Promise<void> {
     const engine = new InstallerEngine();
+    const fast = flags.fast ?? false;
 
     this.wireEventHandlers(engine, flags.verbose ?? false);
 
@@ -93,6 +98,7 @@ export default class Install extends Command {
       Dir: flags.dir,
       SkipDB: flags['skip-db'],
       SkipStart: flags['skip-start'],
+      Fast: fast,
     });
 
     if (flags['dry-run']) {
@@ -106,9 +112,10 @@ export default class Install extends Command {
       Yes: flags.yes,
       Verbose: flags.verbose,
       NoResume: flags['no-resume'],
+      Fast: fast,
     });
 
-    this.renderResult(result);
+    this.renderResult(result, fast);
   }
 
   // ---------------------------------------------------------------------------
@@ -219,7 +226,7 @@ export default class Install extends Command {
     Warnings: string[];
     PhasesCompleted: string[];
     PhasesFailed: string[];
-  }): void {
+  }, fast: boolean = false): void {
     this.log('');
 
     if (result.Success) {
@@ -229,6 +236,12 @@ export default class Install extends Command {
       }
       this.log(chalk.dim(`  Duration: ${this.formatDuration(result.DurationMs)}`));
       this.log(chalk.dim(`  Phases: ${result.PhasesCompleted.join(', ')}`));
+      if (fast) {
+        this.log('');
+        this.log(chalk.cyan('  Fast mode was used. Smoke test was skipped and some post-codegen'));
+        this.log(chalk.cyan('  rebuild steps were optimized. If you encounter runtime errors,'));
+        this.log(chalk.cyan('  re-run without --fast for a full install.'));
+      }
       return;
     }
 

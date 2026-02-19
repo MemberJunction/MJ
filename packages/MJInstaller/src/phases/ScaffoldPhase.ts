@@ -178,11 +178,19 @@ export class ScaffoldPhase {
     return selected;
   }
 
+  /**
+   * Files created by the installer itself that should be ignored when deciding
+   * whether the target directory is "empty".
+   */
+  private static readonly INSTALLER_OWNED_FILES = new Set([
+    '.mj-install-state.json',
+  ]);
+
   private async confirmTargetDir(dir: string, yes: boolean, emitter: InstallerEventEmitter): Promise<void> {
     const exists = await this.fileSystem.DirectoryExists(dir);
     if (!exists) return; // Will be created during extraction
 
-    const empty = await this.fileSystem.IsDirectoryEmpty(dir);
+    const empty = await this.isEffectivelyEmpty(dir);
     if (empty) return;
 
     if (yes) {
@@ -213,6 +221,15 @@ export class ScaffoldPhase {
         'Choose an empty directory or use --yes to skip this confirmation.'
       );
     }
+  }
+
+  /**
+   * Returns true if the directory contains no files other than installer-owned
+   * artifacts (e.g. `.mj-install-state.json` from a previous run).
+   */
+  private async isEffectivelyEmpty(dir: string): Promise<boolean> {
+    const entries = await this.fileSystem.ListDirectoryEntries(dir);
+    return entries.every((name) => ScaffoldPhase.INSTALLER_OWNED_FILES.has(name));
   }
 
   private async downloadRelease(version: VersionInfo, emitter: InstallerEventEmitter): Promise<string> {

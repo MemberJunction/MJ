@@ -71,5 +71,5 @@ export { DatabaseProvisionPhase, type DatabaseProvisionContext, type DatabasePro
 export { MigratePhase, type MigrateContext, type MigrateResult } from './phases/MigratePhase.js';
 export { PlatformCompatPhase, type PlatformCompatContext, type PlatformCompatResult } from './phases/PlatformCompatPhase.js';
 export { DependencyPhase, type DependencyContext, type DependencyResult } from './phases/DependencyPhase.js';
-export { CodeGenPhase, type CodeGenContext, type CodeGenResult } from './phases/CodeGenPhase.js';
+export { CodeGenPhase, type CodeGenContext, type CodeGenResult, type KnownIssuePatch, type KnownIssueDiagnostic } from './phases/CodeGenPhase.js';
 export { SmokeTestPhase, type SmokeTestContext, type SmokeTestResult } from './phases/SmokeTestPhase.js';

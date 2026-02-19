@@ -25,6 +25,8 @@ export interface CreatePlanInput {
   SkipStart?: boolean;
   /** Skip CodeGen */
   SkipCodeGen?: boolean;
+  /** Fast mode: skip smoke test and optimize post-codegen steps */
+  Fast?: boolean;
 }
 
 export interface RunOptions {
@@ -38,6 +40,8 @@ export interface RunOptions {
   NoResume?: boolean;
   /** Pre-filled configuration for auto-answering prompts */
   Config?: PartialInstallConfig;
+  /** Fast mode: skip smoke test and optimize post-codegen steps */
+  Fast?: boolean;
 }
 
 export interface DoctorOptions {

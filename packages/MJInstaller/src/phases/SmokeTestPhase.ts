@@ -13,9 +13,9 @@ import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 
 /** How long to wait for MJAPI to start (ms) */
-const API_STARTUP_TIMEOUT = 120_000;
+const API_STARTUP_TIMEOUT = 90_000;
 /** How long to wait for Explorer to start (ms) */
-const EXPLORER_STARTUP_TIMEOUT = 210_000;
+const EXPLORER_STARTUP_TIMEOUT = 180_000;
 /** Interval between HTTP health checks (ms) */
 const HEALTH_CHECK_INTERVAL = 5_000;
 /** Max retries for HTTP health checks */

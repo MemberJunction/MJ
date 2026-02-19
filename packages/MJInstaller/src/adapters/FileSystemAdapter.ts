@@ -101,6 +101,18 @@ export class FileSystemAdapter {
   }
 
   /**
+   * List all entries (files and directories) in a directory.
+   * Returns an empty array if the directory doesn't exist.
+   */
+  async ListDirectoryEntries(dirPath: string): Promise<string[]> {
+    try {
+      return await fs.readdir(dirPath);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Get free disk space in bytes at a given path.
    */
   async GetFreeDiskSpace(dirPath: string): Promise<number> {
@@ -202,6 +214,19 @@ export class FileSystemAdapter {
       return files;
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Get the last-modified time of a file in milliseconds since epoch.
+   * Returns null if the file doesn't exist.
+   */
+  async GetModifiedTime(filePath: string): Promise<number | null> {
+    try {
+      const stat = await fs.stat(filePath);
+      return stat.mtimeMs;
+    } catch {
+      return null;
     }
   }
 
