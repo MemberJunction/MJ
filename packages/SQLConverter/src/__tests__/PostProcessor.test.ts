@@ -389,8 +389,8 @@ describe('postProcess', () => {
       const result = postProcess(input);
       // The original long name should be gone
       expect(result).not.toContain(longName);
-      // The implementation uses name.slice(0, 55) + '_' + 8-char hash = 64 chars
-      const match = result.match(/CREATE INDEX "([^"]+)"/);
+      // postProcess injects IF NOT EXISTS, so match that too
+      const match = result.match(/CREATE INDEX IF NOT EXISTS "([^"]+)"/);
       expect(match).not.toBeNull();
       expect(match![1].length).toBeLessThanOrEqual(64);
       // Verify it contains the hash suffix pattern

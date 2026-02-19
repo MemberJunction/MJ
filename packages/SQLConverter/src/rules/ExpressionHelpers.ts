@@ -401,6 +401,105 @@ export function removeCollate(sql: string): string {
     .replace(/\s+COLLATE\s+\S+/gi, '');
 }
 
+/** SQL keywords that should NOT be quoted by quotePascalCaseIdentifiers */
+const PASCAL_QUOTE_KEYWORDS = new Set([
+  'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'NULL', 'IN', 'IS',
+  'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'ALTER', 'TABLE',
+  'ADD', 'COLUMN', 'DEFAULT', 'CONSTRAINT', 'CHECK', 'PRIMARY', 'KEY',
+  'FOREIGN', 'REFERENCES', 'UNIQUE', 'INDEX', 'ON', 'AS', 'BEGIN', 'END',
+  'IF', 'THEN', 'ELSE', 'EXISTS', 'CREATE', 'DROP', 'TRUE', 'FALSE',
+  'VARCHAR', 'TEXT', 'UUID', 'BOOLEAN', 'INTEGER', 'BIGINT', 'SMALLINT',
+  'TIMESTAMPTZ', 'BYTEA', 'REAL', 'NUMERIC', 'DOUBLE', 'PRECISION', 'XML',
+  'CHAR', 'LIKE', 'SIMILAR', 'TO', 'WITH', 'NOCHECK', 'DEFERRABLE',
+  'INITIALLY', 'DEFERRED', 'CASCADE', 'RESTRICT', 'VALID', 'GRANT',
+  'EXECUTE', 'FUNCTION', 'PROCEDURE', 'VIEW', 'TRIGGER', 'SCHEMA',
+  'DO', 'DECLARE', 'RETURN', 'RETURNS', 'LANGUAGE', 'PLPGSQL',
+  'COMMENT', 'RAISE', 'NOTICE', 'EXCEPTION', 'PERFORM', 'NEW', 'OLD',
+  'FOR', 'EACH', 'ROW', 'AFTER', 'BEFORE', 'INSTEAD', 'OF',
+  'GENERATED', 'BY', 'IDENTITY', 'SERIAL', 'REPLACE', 'ACTION',
+  'ASC', 'DESC', 'ORDER', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET',
+  'INNER', 'LEFT', 'RIGHT', 'OUTER', 'JOIN', 'CROSS', 'FULL',
+  'UNION', 'ALL', 'DISTINCT', 'BETWEEN', 'CASE', 'WHEN', 'COALESCE',
+  'CAST', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG', 'NOW', 'CURRENT_USER',
+  'INFORMATION_SCHEMA', 'NONCLUSTERED', 'CLUSTERED', 'NO',
+  // SQL functions that should not be quoted
+  'LENGTH', 'SUBSTRING', 'REPLACE', 'LTRIM', 'RTRIM', 'TRIM', 'UPPER', 'LOWER',
+  'POSITION', 'OVERLAY', 'EXTRACT', 'FLOOR', 'CEIL', 'ROUND', 'ABS',
+  'CONVERT', 'CHARINDEX', 'STUFF', 'PATINDEX', 'REVERSE',
+  'ROW_NUMBER', 'RANK', 'OVER', 'PARTITION',
+]);
+
+/**
+ * Quote bare PascalCase identifiers in SQL while preserving string literals
+ * and block comments. Splits SQL into segments: code / string / comment,
+ * and only quotes identifiers in code segments.
+ * Used by InsertRule to quote column names in INSERT/UPDATE/DELETE statements.
+ */
+export function quotePascalCaseIdentifiers(sql: string): string {
+  // segmentType: 'code' | 'string' | 'comment'
+  const segments: Array<{ text: string; type: 'code' | 'string' | 'comment' }> = [];
+  let current = '';
+  let inString = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    // Block comment handling
+    if (inBlockComment) {
+      current += sql[i];
+      if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') {
+        current += '/';
+        i++;
+        segments.push({ text: current, type: 'comment' });
+        current = '';
+        inBlockComment = false;
+      }
+      continue;
+    }
+
+    // String literal handling
+    if (inString) {
+      current += sql[i];
+      if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
+        current += "'";
+        i++;
+      } else if (sql[i] === "'") {
+        segments.push({ text: current, type: 'string' });
+        current = '';
+        inString = false;
+      }
+      continue;
+    }
+
+    // Check for start of block comment
+    if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
+      segments.push({ text: current, type: 'code' });
+      current = '/*';
+      i++;
+      inBlockComment = true;
+      continue;
+    }
+
+    // Check for start of string
+    if (sql[i] === "'") {
+      segments.push({ text: current, type: 'code' });
+      current = "'";
+      inString = true;
+      continue;
+    }
+
+    current += sql[i];
+  }
+  if (current) segments.push({ text: current, type: inString ? 'string' : inBlockComment ? 'comment' : 'code' });
+
+  return segments.map(seg => {
+    if (seg.type !== 'code') return seg.text; // String literals and comments — don't touch
+    return seg.text.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string) => {
+      if (PASCAL_QUOTE_KEYWORDS.has(word.toUpperCase())) return match;
+      return `"${word}"`;
+    });
+  }).join('');
+}
+
 /** Common function replacements */
 export function convertCommonFunctions(sql: string): string {
   sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');

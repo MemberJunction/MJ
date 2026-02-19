@@ -11,6 +11,12 @@ export class AlterTableRule implements IConversionRule {
     let result = convertIdentifiers(sql);
     result = removeCollate(result);
 
+    // Convert SQL Server types to PG types (for ALTER TABLE ADD COLUMN)
+    result = this.convertTypes(result);
+
+    // Convert default functions (for ALTER TABLE ADD COLUMN)
+    result = this.convertDefaults(result);
+
     // Remove CLUSTERED/NONCLUSTERED
     result = result.replace(/\bCLUSTERED\b/gi, '');
     result = result.replace(/\bNONCLUSTERED\b/gi, '');
@@ -49,5 +55,32 @@ export class AlterTableRule implements IConversionRule {
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
     return result + '\n';
+  }
+
+  /** Convert SQL Server types to PostgreSQL equivalents */
+  private convertTypes(sql: string): string {
+    sql = sql.replace(/\bNVARCHAR\s*\(\s*MAX\s*\)/gi, 'TEXT');
+    sql = sql.replace(/\bNVARCHAR\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
+    sql = sql.replace(/\bVARCHAR\s*\(\s*MAX\s*\)/gi, 'TEXT');
+    sql = sql.replace(/\bUNIQUEIDENTIFIER\b/gi, 'UUID');
+    sql = sql.replace(/(?<!")BIT\b(?!")/gi, 'BOOLEAN');
+    sql = sql.replace(/\bDATETIMEOFFSET\b(?:\s*\(\s*\d+\s*\))?/gi, 'TIMESTAMPTZ');
+    sql = sql.replace(/\bDATETIME2?\b(?:\s*\(\s*\d+\s*\))?/gi, 'TIMESTAMPTZ');
+    sql = sql.replace(/\bSMALLDATETIME\b/gi, 'TIMESTAMPTZ');
+    sql = sql.replace(/\bTINYINT\b/gi, 'SMALLINT');
+    sql = sql.replace(/\bIMAGE\b/gi, 'BYTEA');
+    sql = sql.replace(/\bVARBINARY\s*\(\s*MAX\s*\)/gi, 'BYTEA');
+    sql = sql.replace(/\bMONEY\b/gi, 'NUMERIC(19,4)');
+    return sql;
+  }
+
+  /** Convert SQL Server default functions to PostgreSQL equivalents */
+  private convertDefaults(sql: string): string {
+    sql = sql.replace(/\bGETUTCDATE\s*\(\s*\)/gi, 'NOW()');
+    sql = sql.replace(/\bGETDATE\s*\(\s*\)/gi, 'NOW()');
+    sql = sql.replace(/\bSYSDATETIMEOFFSET\s*\(\s*\)/gi, 'NOW()');
+    sql = sql.replace(/\bNEWSEQUENTIALID\s*\(\s*\)/gi, 'gen_random_uuid()');
+    sql = sql.replace(/\bNEWID\s*\(\s*\)/gi, 'gen_random_uuid()');
+    return sql;
   }
 }

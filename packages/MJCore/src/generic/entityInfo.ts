@@ -933,15 +933,20 @@ export class EntityFieldInfo extends BaseInfo {
     }    
 
     /**
-     * Readonly array of SQL Server date/time functions that return the current date/time
+     * Readonly array of SQL date/time functions that return the current date/time.
+     * Includes both SQL Server and PostgreSQL variants.
      */
     private static readonly SQL_CURRENT_DATE_FUNCTIONS: readonly string[] = [
         'getdate()',
-        'getutcdate()', 
+        'getutcdate()',
         'sysdatetimeoffset()',
         'current_timestamp',
         'sysdatetime()',
-        'sysutcdatetime()'
+        'sysutcdatetime()',
+        'now()',
+        'clock_timestamp()',
+        'statement_timestamp()',
+        'transaction_timestamp()'
     ] as const;
 
     /**

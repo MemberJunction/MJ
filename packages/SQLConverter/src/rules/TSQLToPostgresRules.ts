@@ -13,6 +13,7 @@ import { AlterTableRule } from './AlterTableRule.js';
 import { CreateIndexRule } from './CreateIndexRule.js';
 import { GrantRule } from './GrantRule.js';
 import { ExtendedPropertyRule } from './ExtendedPropertyRule.js';
+import { ConditionalDDLRule } from './ConditionalDDLRule.js';
 
 /**
  * Get all TSQL → PostgreSQL conversion rules in priority order.
@@ -25,6 +26,7 @@ export function getTSQLToPostgresRules(): IConversionRule[] {
     new FunctionRule(),         // Priority 35
     new TriggerRule(),          // Priority 40
     new InsertRule(),           // Priority 50
+    new ConditionalDDLRule(),   // Priority 55
     new AlterTableRule(),       // Priority 60
     new CreateIndexRule(),      // Priority 70
     new GrantRule(),            // Priority 80

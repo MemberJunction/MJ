@@ -58,6 +58,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS "${triggerName}" ON __mj."${tableName}";
 CREATE TRIGGER "${triggerName}"
     BEFORE UPDATE ON __mj."${tableName}"
     FOR EACH ROW
@@ -83,6 +84,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS "${triggerName}" ON __mj."${tableName}";
 CREATE TRIGGER "${triggerName}"
     ${timing} ${event} ON __mj."${tableName}"
     FOR EACH ROW

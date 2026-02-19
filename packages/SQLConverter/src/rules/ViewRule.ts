@@ -108,8 +108,9 @@ export class ViewRule implements IConversionRule {
     result = result.replace(/\bAS\s+(root_\w+)\s+ON\s+TRUE/gi, 'AS "$1" ON TRUE');
     result = result.replace(/\b(root_\w+)\."(\w+)"/g, '"$1"."$2"');
 
-    // CREATE OR ALTER VIEW → CREATE OR REPLACE VIEW
+    // CREATE [OR ALTER] VIEW → CREATE OR REPLACE VIEW
     result = result.replace(/\bCREATE\s+OR\s+ALTER\s+VIEW\b/gi, 'CREATE OR REPLACE VIEW');
+    result = result.replace(/\bCREATE\s+VIEW\b/gi, 'CREATE OR REPLACE VIEW');
 
     // Strip interior semicolons (only final semicolon should remain)
     const viewBodyMatch = result.match(/(CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+.+?\s+AS\s+)([\s\S]+)/i);

@@ -40,6 +40,21 @@ export function classifyBatch(batch: string): StatementType {
     return 'SKIP_ERROR';
   }
 
+  // IF OBJECT_ID ... DROP PROCEDURE/FUNCTION → skip (CREATE OR REPLACE handles it)
+  if (/^IF\s+OBJECT_ID\s*\(/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
+  }
+
+  // IF NOT EXISTS ... → conditional DDL or SKIP depending on body content
+  if (/^IF\s+NOT\s+EXISTS\s*\(/i.test(upper)) {
+    // Skip IF NOT EXISTS blocks that use SQL Server system features
+    if (upper.includes('SERVERPROPERTY') || upper.includes('CREATE LOGIN') ||
+        upper.includes('SYS.SERVER_PRINCIPAL') || upper.includes('SYS.DATABASE_PRINCIPAL')) {
+      return 'SKIP_SQLSERVER';
+    }
+    return 'CONDITIONAL_DDL';
+  }
+
   // User/role creation blocks (SQL Server-specific)
   if (upper.includes('SERVERPROPERTY') || upper.replace(/\s/g, '').includes('SP_EXECUTESQL')) {
     return 'SKIP_SQLSERVER';
@@ -105,6 +120,9 @@ export function classifyBatch(batch: string): StatementType {
 
   // Extended properties
   if (upper.includes('SP_ADDEXTENDEDPROPERTY')) return 'EXTENDED_PROPERTY';
+
+  // EXEC calls (not sp_addextendedproperty, which is handled above) → skip
+  if (/^EXEC\s/i.test(upper)) return 'SKIP_SQLSERVER';
 
   // Comment-only batches (use rawUpper to detect comment-prefixed text)
   if (isCommentOnly(batch, rawUpper)) return 'COMMENT_ONLY';

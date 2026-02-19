@@ -29,6 +29,15 @@ export function postProcess(sql: string): string {
   // Remove SET NUMERIC_ROUNDABORT OFF
   sql = sql.replace(/SET\s+NUMERIC_ROUNDABORT\s+OFF\s*;?/gi, '');
 
+  // Remove SET XACT_ABORT ON/OFF
+  sql = sql.replace(/SET\s+XACT_ABORT\s+(ON|OFF)\s*;?/gi, '');
+
+  // Convert RAISERROR → RAISE EXCEPTION (PG syntax)
+  sql = sql.replace(
+    /\bRAISERROR\s*\(\s*N?'([^']*)'\s*,\s*\d+\s*,\s*\d+\s*\)\s*;?/gi,
+    "RAISE EXCEPTION '$1';"
+  );
+
   // Fix quoted type names — PG types are case-sensitive when quoted
   sql = sql.replace(/"UUID"/g, 'UUID');
   sql = sql.replace(/"BOOLEAN"/g, 'BOOLEAN');
@@ -89,6 +98,21 @@ export function postProcess(sql: string): string {
     '$2 $1'
   );
 
+  // Fix SQL Server LIKE character classes converted to quotes by identifier conversion:
+  // NOT LIKE '%"^chars"%' → ~ '^[chars]+$'  (negated char class = positive match)
+  // LIKE '%"chars"%' → ~ '[chars]'
+  sql = sql.replace(
+    /NOT\s+LIKE\s+'%"(\^[^"]+)"%'/gi,
+    (_match, charClass: string) => {
+      const chars = charClass.slice(1); // remove ^ prefix
+      return `~ '^[${chars}]+$'`;
+    }
+  );
+  sql = sql.replace(
+    /LIKE\s+'%"([^"]+)"%'/gi,
+    `~ '[$1]'`
+  );
+
   // Fix CHECK constraints: len() → LENGTH()
   sql = sql.replace(/\blen\s*\(/gi, 'LENGTH(');
 
@@ -119,6 +143,54 @@ export function postProcess(sql: string): string {
   sql = sql.replace(/"COLUMN_NAME"/g, 'column_name');
   sql = sql.replace(/"DATA_TYPE"/g, 'data_type');
 
+  // Quote unquoted table names after __mj. (PascalCase identifiers)
+  // e.g., __mj.OpenApp → __mj."OpenApp"   but NOT __mj."OpenApp" (already quoted)
+  // Also skip all-lowercase names like __mj.information_schema
+  sql = sql.replace(/__mj\.(?!")([A-Z][a-zA-Z_]\w*)/g, '__mj."$1"');
+
+  // Also handle quoted schema: "__mj".PascalCase → "__mj"."PascalCase"
+  sql = sql.replace(/"__mj"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"__mj"."$1"');
+
+  // ISNULL → COALESCE (SQL Server function)
+  sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
+
+  // Convert IF OBJECT_ID(...) IS NOT NULL DROP VIEW/PROCEDURE/FUNCTION → DROP ... IF EXISTS
+  sql = sql.replace(
+    /IF\s+OBJECT_ID\s*\([^)]*\)\s*IS\s+NOT\s+NULL\s*\n?\s*DROP\s+(VIEW|PROCEDURE|FUNCTION)\s+(\S+)\s*;?/gi,
+    (_match, objType: string, objName: string) => {
+      const pgType = objType.toUpperCase() === 'PROCEDURE' ? 'FUNCTION' : objType.toUpperCase();
+      return `DROP ${pgType} IF EXISTS ${objName};`;
+    }
+  );
+
+  // Remove orphaned EXEC statements that slipped through
+  sql = sql.replace(/^\s*EXEC\s+.*$/gm, '-- SKIPPED EXEC (not supported in PG)');
+
+  // Convert GRANT EXEC (SQL Server shorthand) to GRANT EXECUTE
+  sql = sql.replace(/GRANT\s+EXEC\s+ON\s+/gi, 'GRANT EXECUTE ON ');
+
+  // Wrap GRANT EXECUTE on functions in DO $$ blocks to handle overloaded
+  // functions or functions that may not exist.
+  sql = sql.replace(
+    /^(GRANT\s+EXECUTE\s+ON\s+(?:FUNCTION\s+)?\S+\s+TO\s+[^;\n]+);?\s*$/gm,
+    (_match, grantStmt: string) => `DO $$ BEGIN ${grantStmt}; EXCEPTION WHEN others THEN NULL; END $$;`
+  );
+
+  // Convert CREATE INDEX → CREATE INDEX IF NOT EXISTS (idempotency)
+  sql = sql.replace(
+    /\bCREATE\s+((?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX)\s+(?!IF\s+NOT\s+EXISTS)/gi,
+    'CREATE $1 IF NOT EXISTS '
+  );
+
+  // Remove SQL Server IF EXISTS(...) BEGIN ... END blocks (pre-flight checks)
+  sql = sql.replace(
+    /IF\s+EXISTS\s*\([\s\S]*?\)\s*\n\s*BEGIN[\s\S]*?\bEND\s*;?/gi,
+    '-- SKIPPED: SQL Server IF EXISTS check'
+  );
+
+  // Fix GRANT statements missing semicolons (only at end of line, no semicolons already)
+  sql = sql.replace(/^(GRANT\s+[^\n;]+[^\s;])$/gm, '$1;');
+
   // Remove flyway_schema_history references
   sql = sql.replace(/.*flyway_schema_history.*\n?/g, '');
 
@@ -137,12 +209,12 @@ export function postProcess(sql: string): string {
 /** Truncate index names longer than 63 chars with hash suffix */
 function fixLongIndexNames(sql: string): string {
   return sql.replace(
-    /(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX)\s+"([^"]+)"(\s)/gi,
+    /(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?)"([^"]+)"(\s)/gi,
     (match, keyword: string, name: string, rest: string) => {
       if (name.length <= 63) return match;
       const hash = createHash('md5').update(name).digest('hex').slice(0, 8);
       const shortName = name.slice(0, 54) + '_' + hash;
-      return `${keyword} "${shortName}"${rest}`;
+      return `${keyword}"${shortName}"${rest}`;
     }
   );
 }

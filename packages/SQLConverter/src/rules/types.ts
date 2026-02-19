@@ -22,6 +22,7 @@ export type StatementType =
   | 'CHECK_CONSTRAINT'
   | 'UNIQUE_CONSTRAINT'
   | 'ENABLE_CONSTRAINT'
+  | 'CONDITIONAL_DDL'
   | 'GRANT'
   | 'DENY'
   | 'REVOKE'

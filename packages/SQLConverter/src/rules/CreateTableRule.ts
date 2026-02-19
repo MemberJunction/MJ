@@ -14,13 +14,27 @@ export class CreateTableRule implements IConversionRule {
   Priority = 10;
   BypassSqlglot = true;
 
+  /** SQL keywords and PG types that should NOT be quoted as column names */
+  private static readonly RESERVED_WORDS = new Set([
+    'NOT', 'NULL', 'DEFAULT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES',
+    'CONSTRAINT', 'CHECK', 'UNIQUE', 'INDEX', 'ON', 'CASCADE', 'SET',
+    'IN', 'AND', 'OR', 'AS', 'IF', 'THEN', 'ELSE', 'BEGIN', 'END',
+    'TABLE', 'CREATE', 'ALTER', 'DROP', 'INSERT', 'INTO', 'VALUES',
+    'UUID', 'BOOLEAN', 'TIMESTAMPTZ', 'TEXT', 'INTEGER', 'BIGINT',
+    'SMALLINT', 'VARCHAR', 'CHAR', 'DOUBLE', 'PRECISION', 'REAL',
+    'NUMERIC', 'BYTEA', 'XML', 'SERIAL', 'GENERATED', 'BY', 'IDENTITY',
+    'TRUE', 'FALSE', 'DEFERRABLE', 'INITIALLY', 'DEFERRED', 'NOW',
+    'LIKE', 'SIMILAR', 'TO', 'RESTRICT', 'NO', 'ACTION', 'DELETE',
+    'UPDATE', 'ADD', 'COLUMN', 'WITH', 'NOCHECK', 'VALID',
+  ]);
+
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = sql;
 
     // Phase 1: Bracketed type conversions (before identifier conversion)
     result = this.convertBracketedTypes(result);
 
-    // Phase 2: Identifier conversion
+    // Phase 2: Identifier conversion (brackets → quotes)
     result = convertIdentifiers(result);
 
     // Phase 3: Unbracketed type conversions (broad word-boundary patterns)
@@ -28,6 +42,9 @@ export class CreateTableRule implements IConversionRule {
 
     // Phase 4: Constraint and default handling
     result = this.convertConstraintsAndDefaults(result);
+
+    // Phase 5a: Quote unquoted PascalCase column names (AFTER type conversion)
+    result = this.quoteColumnDefinitions(result);
 
     // Phase 5: Remove SQL Server keywords
     result = result.replace(/\bCLUSTERED\b/gi, '');
@@ -129,6 +146,175 @@ export class CreateTableRule implements IConversionRule {
     return sql;
   }
 
+  /** Keywords that should NOT be quoted inside CHECK constraint bodies */
+  private static readonly CHECK_BODY_KEYWORDS = new Set([
+    'IN', 'IS', 'NULL', 'NOT', 'OR', 'AND', 'LIKE', 'BETWEEN',
+    'TRUE', 'FALSE', 'CHECK', 'CONSTRAINT', 'SIMILAR', 'TO',
+  ]);
+
+  /**
+   * Quote unquoted PascalCase column names in CREATE TABLE column definitions,
+   * constraint column references, and CHECK constraint bodies.
+   */
+  private quoteColumnDefinitions(sql: string): string {
+    const lines = sql.split('\n');
+    const result: string[] = [];
+    let insideCreateTable = false;
+    let parenDepth = 0;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      if (/^CREATE\s+TABLE\b/i.test(trimmed)) {
+        insideCreateTable = true;
+        parenDepth = 0;
+      }
+
+      if (insideCreateTable) {
+        for (const ch of trimmed) {
+          if (ch === '(') parenDepth++;
+          if (ch === ')') parenDepth--;
+        }
+
+        // Column definitions: ColName TYPE ... (includes both PG and SQL Server type
+        // names since type conversion may not have run yet at this phase)
+        if (parenDepth >= 1) {
+          const colMatch = trimmed.match(/^([A-Za-z_]\w*)\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR|NVARCHAR|CHAR|NCHAR|INTEGER|INT|BIGINT|SMALLINT|TINYINT|DOUBLE|FLOAT|REAL|NUMERIC|DECIMAL|MONEY|BYTEA|IMAGE|VARBINARY|XML|BIT|UNIQUEIDENTIFIER|DATETIMEOFFSET|DATETIME2|DATETIME|GENERATED)\b/i);
+          if (colMatch && !trimmed.startsWith('"') && !trimmed.startsWith('CONSTRAINT')) {
+            const colName = colMatch[1];
+            if (/[A-Z]/.test(colName)) {
+              result.push(line.replace(colName, `"${colName}"`));
+              continue;
+            }
+          }
+        }
+
+        if (parenDepth <= 0 && trimmed.includes(')')) {
+          insideCreateTable = false;
+        }
+      }
+
+      result.push(line);
+    }
+
+    let joined = result.join('\n');
+
+    // Quote column references inside PK/UNIQUE/FK constraint parentheses
+    joined = joined.replace(
+      /((?:PRIMARY\s+KEY|UNIQUE|FOREIGN\s+KEY)\s*\()([^)]+)(\))/gi,
+      (_match, prefix: string, cols: string, suffix: string) => {
+        const quotedCols = cols.split(',').map(c => {
+          const t = c.trim();
+          if (t.startsWith('"') || !t) return c;
+          if (/[A-Z]/.test(t) && /^[A-Za-z_]\w*$/.test(t)) return c.replace(t, `"${t}"`);
+          return c;
+        }).join(',');
+        return `${prefix}${quotedCols}${suffix}`;
+      }
+    );
+
+    // REFERENCES table(Column) — handle both quoted and unquoted table names
+    joined = joined.replace(
+      /(REFERENCES\s+(?:__mj\.)?(?:"[^"]+"|\w+)\s*\()([A-Za-z_]\w*)(\))/gi,
+      (_match, prefix: string, colName: string, suffix: string) => {
+        if (/[A-Z]/.test(colName)) return `${prefix}"${colName}"${suffix}`;
+        return _match;
+      }
+    );
+
+    // Quote ALL bare PascalCase identifiers in CHECK constraint bodies
+    joined = this.quoteCheckIdentifiers(joined);
+
+    return joined;
+  }
+
+  /** Quote all unquoted PascalCase column identifiers inside CHECK (...) blocks.
+   *  String-literal-aware: preserves values inside single quotes. */
+  private quoteCheckIdentifiers(sql: string): string {
+    const checkRegex = /CHECK\s*\(/gi;
+    let match: RegExpExecArray | null;
+    const replacements: Array<{ start: number; end: number; body: string }> = [];
+
+    while ((match = checkRegex.exec(sql)) !== null) {
+      const parenStart = sql.indexOf('(', match.index + 5);
+      if (parenStart < 0) continue;
+      const parenEnd = CreateTableRule.findMatchingParen(sql, parenStart);
+      if (parenEnd < 0) continue;
+
+      const body = sql.slice(parenStart + 1, parenEnd);
+      replacements.push({ start: parenStart + 1, end: parenEnd, body });
+    }
+
+    let result = sql;
+    for (let i = replacements.length - 1; i >= 0; i--) {
+      const { start, end, body } = replacements[i];
+      // Split into string/non-string segments to preserve string literal values
+      const quotedBody = CreateTableRule.quoteCheckBody(body);
+      result = result.slice(0, start) + quotedBody + result.slice(end);
+    }
+
+    return result;
+  }
+
+  /** Quote PascalCase identifiers in CHECK body, preserving string literals */
+  private static quoteCheckBody(body: string): string {
+    const segments: string[] = [];
+    let current = '';
+    let inString = false;
+
+    for (let i = 0; i < body.length; i++) {
+      if (body[i] === "'") {
+        if (inString) {
+          if (i + 1 < body.length && body[i + 1] === "'") {
+            current += "''";
+            i++;
+            continue;
+          }
+          current += "'";
+          segments.push(current);
+          current = '';
+          inString = false;
+        } else {
+          segments.push(current);
+          current = "'";
+          inString = true;
+        }
+      } else {
+        current += body[i];
+      }
+    }
+    if (current) segments.push(current);
+
+    return segments.map(seg => {
+      if (seg.startsWith("'")) return seg; // String literal — don't touch
+      return seg.replace(
+        /(?<!")([A-Z][a-zA-Z_]\w*)(?!")/g,
+        (m, name: string) => {
+          if (CreateTableRule.CHECK_BODY_KEYWORDS.has(name.toUpperCase())) return m;
+          return `"${name}"`;
+        }
+      );
+    }).join('');
+  }
+
+  /** Find matching closing paren, respecting nesting and string literals */
+  private static findMatchingParen(sql: string, openPos: number): number {
+    let depth = 0;
+    let inString = false;
+    for (let i = openPos; i < sql.length; i++) {
+      const ch = sql[i];
+      if (inString) {
+        if (ch === "'" && i + 1 < sql.length && sql[i + 1] === "'") { i++; }
+        else if (ch === "'") { inString = false; }
+        continue;
+      }
+      if (ch === "'") { inString = true; }
+      else if (ch === '(') { depth++; }
+      else if (ch === ')') { depth--; if (depth === 0) return i; }
+    }
+    return -1;
+  }
+
   /** Phase 4: Convert constraints and defaults */
   private convertConstraintsAndDefaults(sql: string): string {
     // Remove inline constraint names for defaults
@@ -151,7 +337,7 @@ export class CreateTableRule implements IConversionRule {
     sql = sql.replace(/DEFAULT\s+\(?\s*user_name\(\)\s*\)?/gi, 'DEFAULT current_user');
 
     // Context-aware DEFAULT (0)/(1) conversion.
-    // BOOLEAN columns: DEFAULT (0) → DEFAULT FALSE, (1) → DEFAULT TRUE
+    // BOOLEAN columns: DEFAULT (0) / DEFAULT 0 → DEFAULT FALSE, (1) / 1 → DEFAULT TRUE
     // Other types: DEFAULT (0) → DEFAULT 0, (1) → DEFAULT 1
     sql = sql.split('\n').map(line => {
       const isBool = /\bBOOLEAN\b/i.test(line);
@@ -160,6 +346,9 @@ export class CreateTableRule implements IConversionRule {
         line = line.replace(/DEFAULT\s+\(+1\)+/gi, 'DEFAULT TRUE');
         line = line.replace(/DEFAULT\s+\(+N?'0'\)+/gi, 'DEFAULT FALSE');
         line = line.replace(/DEFAULT\s+\(+N?'1'\)+/gi, 'DEFAULT TRUE');
+        // Handle bare DEFAULT 0 / DEFAULT 1 (no parens, common in newer migrations)
+        line = line.replace(/DEFAULT\s+0(?=\s|,|$)/gi, 'DEFAULT FALSE');
+        line = line.replace(/DEFAULT\s+1(?=\s|,|$)/gi, 'DEFAULT TRUE');
       } else {
         line = line.replace(/DEFAULT\s+\(+0\)+/gi, 'DEFAULT 0');
         line = line.replace(/DEFAULT\s+\(+1\)+/gi, 'DEFAULT 1');

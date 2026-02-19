@@ -21,7 +21,7 @@ import {
 } from './types.js';
 
 /** Batch type groupings for ordered output */
-const TABLE_TYPES = new Set<StatementType>(['CREATE_TABLE', 'ALTER_TABLE', 'PK_CONSTRAINT', 'CREATE_INDEX']);
+const TABLE_TYPES = new Set<StatementType>(['CREATE_TABLE', 'ALTER_TABLE', 'PK_CONSTRAINT', 'CREATE_INDEX', 'CONDITIONAL_DDL']);
 const FK_TYPES = new Set<StatementType>(['FK_CONSTRAINT', 'CHECK_CONSTRAINT', 'UNIQUE_CONSTRAINT', 'ENABLE_CONSTRAINT']);
 const VIEW_TYPES = new Set<StatementType>(['CREATE_VIEW']);
 const FUNC_TYPES = new Set<StatementType>(['CREATE_PROCEDURE', 'CREATE_FUNCTION']);
@@ -155,7 +155,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     try {
       const result = convertBatch(batch, batchType, sortedRules, context, stats);
       if (result !== null) {
-        routeToGroup(result, batchType, groups);
+        routeToGroup(result, batchType, groups, batch);
         stats.Converted++;
       }
     } catch (err) {
@@ -333,7 +333,12 @@ function trackCreatedObject(
 }
 
 /** Route converted batch to the appropriate output group */
-function routeToGroup(result: string, batchType: StatementType, groups: OutputGroups): void {
+function routeToGroup(result: string, batchType: StatementType, groups: OutputGroups, originalBatch?: string): void {
+  // CONDITIONAL_DDL containing INSERT INTO should go to Data (not Tables) for correct FK ordering
+  if (batchType === 'CONDITIONAL_DDL' && originalBatch && /\bINSERT\s+INTO\b/i.test(originalBatch) && !/\bALTER\s+TABLE\b/i.test(originalBatch)) {
+    groups.Data.push(result);
+    return;
+  }
   if (TABLE_TYPES.has(batchType)) {
     groups.Tables.push(result);
   } else if (FK_TYPES.has(batchType)) {

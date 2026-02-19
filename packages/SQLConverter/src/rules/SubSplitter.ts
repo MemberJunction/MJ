@@ -7,31 +7,90 @@
  * We split these so each is classified and converted separately.
  */
 
-/** Track single-quoted string literal state across a line */
-function isInsideString(line: string, inString: boolean): boolean {
-  let i = 0;
-  while (i < line.length) {
-    if (line[i] === "'") {
-      if (i + 1 < line.length && line[i + 1] === "'") {
-        i += 2; // Doubled quote — no state change
-        continue;
-      }
-      inString = !inString;
-    }
-    i++;
-  }
-  return inString;
+/** SQL parse state tracked across lines */
+interface ParseState {
+  inString: boolean;
+  inBlockComment: boolean;
 }
 
-/** Statement keywords that indicate a new statement boundary */
-const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|SET\s|IF\s+@@|CREATE\s)/i;
+/**
+ * Track SQL parse state (string literal + block comment) across a single line.
+ * Handles:
+ *   - Line comments (--): rest of line ignored
+ *   - Block comments (/* ... * /): may span multiple lines
+ *   - String literals ('...'): doubled '' is an escape, not a boundary
+ */
+function trackLineState(line: string, state: ParseState): ParseState {
+  let inString = state.inString;
+  let inBlockComment = state.inBlockComment;
+  let i = 0;
+
+  while (i < line.length) {
+    if (inBlockComment) {
+      // Inside block comment — only look for closing */
+      if (line[i] === '*' && i + 1 < line.length && line[i + 1] === '/') {
+        inBlockComment = false;
+        i += 2;
+        continue;
+      }
+      i++;
+      continue;
+    }
+
+    if (inString) {
+      // Inside string literal — only look for closing '
+      if (line[i] === "'") {
+        if (i + 1 < line.length && line[i + 1] === "'") {
+          i += 2; // Doubled quote — escape, not boundary
+          continue;
+        }
+        inString = false;
+      }
+      i++;
+      continue;
+    }
+
+    // Normal code context
+    // Line comment — rest of line is comment, skip entirely
+    if (line[i] === '-' && i + 1 < line.length && line[i + 1] === '-') {
+      return { inString, inBlockComment };
+    }
+
+    // Block comment start
+    if (line[i] === '/' && i + 1 < line.length && line[i + 1] === '*') {
+      inBlockComment = true;
+      i += 2;
+      continue;
+    }
+
+    // String literal start
+    if (line[i] === "'") {
+      if (i + 1 < line.length && line[i + 1] === "'") {
+        i += 2; // Doubled quote outside string — skip
+        continue;
+      }
+      inString = true;
+    }
+
+    i++;
+  }
+
+  return { inString, inBlockComment };
+}
+
+/** Statement keywords that indicate a new statement boundary.
+ * NOTE: SET is intentionally excluded — it would split UPDATE...SET into two
+ * statements. Standalone SET commands (SET NOEXEC, SET ANSI_NULLS, etc.) are
+ * already handled by preprocessor/postprocessor removal rules. */
+const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+NOT\s+EXISTS|IF\s+OBJECT_ID|EXEC\s|CREATE\s)/i;
 
 /**
  * Sub-split a compound batch into individual statements.
  *
- * IMPORTANT: Tracks single-quoted string literal state so that keyword
- * patterns inside string data (e.g., embedded SQL examples in template
- * text) are NOT treated as statement boundaries.
+ * IMPORTANT: Tracks single-quoted string literal state AND block comment
+ * state so that keyword patterns inside string data or comments (e.g.,
+ * apostrophes in `-- we're checking` comments) are NOT treated as
+ * statement boundaries.
  */
 export function subSplitCompoundBatch(batch: string): string[] {
   const lines = batch.split('\n');
@@ -51,38 +110,57 @@ export function subSplitCompoundBatch(batch: string): string[] {
   if (upperNoComments.startsWith('DECLARE') || upper.startsWith('DECLARE')) return [batch];
 
   // Check if the batch contains multiple top-level statements
+  // Track BEGIN/END depth so we don't count keywords inside IF...BEGIN...END blocks
   let keywordCount = 0;
   let hasMultiple = false;
-  let inString = false;
+  let state: ParseState = { inString: false, inBlockComment: false };
+  let beginDepth = 0;
 
   for (const line of lines) {
-    if (!inString && STMT_KEYWORDS.test(line.trim())) {
-      keywordCount++;
+    const stripped = line.trim();
+    if (!state.inString && !state.inBlockComment) {
+      if (/^\bBEGIN\b/i.test(stripped)) beginDepth++;
+      if (/^\bEND\b/i.test(stripped)) beginDepth = Math.max(0, beginDepth - 1);
+      if (beginDepth === 0 && STMT_KEYWORDS.test(stripped)) {
+        keywordCount++;
+      }
     }
     if (keywordCount > 1) {
       hasMultiple = true;
       break;
     }
-    inString = isInsideString(line, inString);
+    state = trackLineState(line, state);
   }
 
   if (!hasMultiple) return [batch];
 
-  // Split into individual statements, respecting string literal boundaries
+  // Split into individual statements, respecting string literal, block comment,
+  // and BEGIN/END boundaries
   const statements: string[] = [];
   let current: string[] = [];
-  inString = false;
+  state = { inString: false, inBlockComment: false };
+  beginDepth = 0;
 
   for (const line of lines) {
     const stripped = line.trim();
-    if (!inString && STMT_KEYWORDS.test(stripped) && current.length > 0) {
-      const stmt = current.join('\n').trim();
-      if (stmt) statements.push(stmt);
-      current = [line];
+    if (!state.inString && !state.inBlockComment) {
+      // Track BEGIN/END depth BEFORE deciding whether to split
+      if (/^\bBEGIN\b/i.test(stripped)) beginDepth++;
+
+      // Only split at top level (outside BEGIN/END blocks)
+      if (beginDepth === 0 && STMT_KEYWORDS.test(stripped) && current.length > 0) {
+        const stmt = current.join('\n').trim();
+        if (stmt) statements.push(stmt);
+        current = [line];
+      } else {
+        current.push(line);
+      }
+
+      if (/^\bEND\b/i.test(stripped)) beginDepth = Math.max(0, beginDepth - 1);
     } else {
       current.push(line);
     }
-    inString = isInsideString(line, inString);
+    state = trackLineState(line, state);
   }
 
   if (current.length > 0) {

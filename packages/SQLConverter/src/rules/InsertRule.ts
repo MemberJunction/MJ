@@ -1,5 +1,9 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeNPrefix, removeCollate, convertCastTypes } from './ExpressionHelpers.js';
+import {
+  convertIdentifiers, removeNPrefix, removeCollate, convertCastTypes,
+  quotePascalCaseIdentifiers, convertCommonFunctions, convertStringConcat,
+  convertCharIndex, convertStuff, convertConvertFunction, convertIIF,
+} from './ExpressionHelpers.js';
 
 export class InsertRule implements IConversionRule {
   Name = 'InsertRule';
@@ -11,13 +15,16 @@ export class InsertRule implements IConversionRule {
     let result = convertIdentifiers(sql);
     result = removeNPrefix(result);
     result = removeCollate(result);
-    // Common function replacements
-    result = result.replace(/\bGETUTCDATE\s*\(\s*\)/gi, 'NOW()');
-    result = result.replace(/\bGETDATE\s*\(\s*\)/gi, 'NOW()');
-    result = result.replace(/\bNEWID\s*\(\s*\)/gi, 'gen_random_uuid()');
-    result = result.replace(/\bNEWSEQUENTIALID\s*\(\s*\)/gi, 'gen_random_uuid()');
-    // CAST type conversions
+    // Function conversions BEFORE quoting (prevents "LEN", "SUBSTRING" etc. from being quoted)
+    result = convertCommonFunctions(result);
+    result = convertStringConcat(result);
+    result = convertCharIndex(result);
+    result = convertStuff(result);
+    result = convertConvertFunction(result);
+    result = convertIIF(result);
     result = convertCastTypes(result);
+    // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
+    result = quotePascalCaseIdentifiers(result);
     // Ensure semicolon
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';

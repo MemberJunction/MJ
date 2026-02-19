@@ -582,7 +582,12 @@ CREATE TABLE [__mj].[Action] (ID UNIQUEIDENTIFIER NOT NULL)`;
   // ============================================================
   describe('UNKNOWN', () => {
     it('should classify unrecognized SQL as UNKNOWN', () => {
-      expect(classifyBatch('EXEC [__mj].[spSomeCustomProc]')).toBe('UNKNOWN');
+      expect(classifyBatch('MERGE INTO [__mj].[SomeTable] USING source ...')).toBe('UNKNOWN');
+    });
+
+    it('should classify EXEC calls as SKIP_SQLSERVER', () => {
+      expect(classifyBatch('EXEC [__mj].[spSomeCustomProc]')).toBe('SKIP_SQLSERVER');
+      expect(classifyBatch('EXEC __mj.spUpdateEntityFieldRelatedEntityNameFieldMap @EntityFieldID=\'abc\'')).toBe('SKIP_SQLSERVER');
     });
 
     it('should classify TRUNCATE as UNKNOWN', () => {

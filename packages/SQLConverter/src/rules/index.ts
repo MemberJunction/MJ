@@ -32,6 +32,7 @@ export { AlterTableRule } from './AlterTableRule.js';
 export { CreateIndexRule } from './CreateIndexRule.js';
 export { GrantRule } from './GrantRule.js';
 export { ExtendedPropertyRule } from './ExtendedPropertyRule.js';
+export { ConditionalDDLRule } from './ConditionalDDLRule.js';
 
 // Rule registry
 export { getTSQLToPostgresRules } from './TSQLToPostgresRules.js';
