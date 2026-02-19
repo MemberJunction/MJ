@@ -32,6 +32,15 @@ export class CreateTableRule implements IConversionRule {
     // Phase 5: Remove SQL Server keywords
     result = result.replace(/\bCLUSTERED\b/gi, '');
     result = result.replace(/\bNONCLUSTERED\b/gi, '');
+    // Remove ON [PRIMARY] / ON "PRIMARY" filegroup clause
+    result = result.replace(/\)\s*ON\s+\[?PRIMARY\]?\s*;?/gi, ');');
+    result = result.replace(/\bON\s+"PRIMARY"/g, '');
+    // Remove ASC/DESC in PRIMARY KEY definitions
+    result = result.replace(/(PRIMARY\s+KEY\s*\([^)]*)\b(ASC|DESC)\b/gi, '$1');
+    // Remove TEXTIMAGE_ON filegroup
+    result = result.replace(/\bTEXTIMAGE_ON\s+\[?\w+\]?/gi, '');
+    // Remove WITH (PAD_INDEX = ...) etc.
+    result = result.replace(/\bWITH\s*\(\s*PAD_INDEX\s*=\s*\w+[^)]*\)/gi, '');
     result = removeCollate(result);
 
     // Phase 6: Cleanup
@@ -141,13 +150,24 @@ export class CreateTableRule implements IConversionRule {
     sql = sql.replace(/DEFAULT\s+\(?\s*suser_s?name\(\)\s*\)?/gi, 'DEFAULT current_user');
     sql = sql.replace(/DEFAULT\s+\(?\s*user_name\(\)\s*\)?/gi, 'DEFAULT current_user');
 
-    // BIT/BOOLEAN column defaults: 0→FALSE, 1→TRUE
-    // Handle nested parens like DEFAULT ((0)) or DEFAULT (((0)))
-    sql = sql.replace(/DEFAULT\s+\(+0\)+/gi, 'DEFAULT FALSE');
-    sql = sql.replace(/DEFAULT\s+\(+1\)+/gi, 'DEFAULT TRUE');
-    // With N-prefix strings: DEFAULT ((N'0')) → FALSE, ((N'1')) → TRUE
-    sql = sql.replace(/DEFAULT\s+\(+N?'0'\)+/gi, 'DEFAULT FALSE');
-    sql = sql.replace(/DEFAULT\s+\(+N?'1'\)+/gi, 'DEFAULT TRUE');
+    // Context-aware DEFAULT (0)/(1) conversion.
+    // BOOLEAN columns: DEFAULT (0) → DEFAULT FALSE, (1) → DEFAULT TRUE
+    // Other types: DEFAULT (0) → DEFAULT 0, (1) → DEFAULT 1
+    sql = sql.split('\n').map(line => {
+      const isBool = /\bBOOLEAN\b/i.test(line);
+      if (isBool) {
+        line = line.replace(/DEFAULT\s+\(+0\)+/gi, 'DEFAULT FALSE');
+        line = line.replace(/DEFAULT\s+\(+1\)+/gi, 'DEFAULT TRUE');
+        line = line.replace(/DEFAULT\s+\(+N?'0'\)+/gi, 'DEFAULT FALSE');
+        line = line.replace(/DEFAULT\s+\(+N?'1'\)+/gi, 'DEFAULT TRUE');
+      } else {
+        line = line.replace(/DEFAULT\s+\(+0\)+/gi, 'DEFAULT 0');
+        line = line.replace(/DEFAULT\s+\(+1\)+/gi, 'DEFAULT 1');
+        line = line.replace(/DEFAULT\s+\(+N?'0'\)+/gi, "DEFAULT '0'");
+        line = line.replace(/DEFAULT\s+\(+N?'1'\)+/gi, "DEFAULT '1'");
+      }
+      return line;
+    }).join('\n');
 
     // String defaults with nested parens: DEFAULT ((N'value')) → DEFAULT 'value'
     sql = sql.replace(/DEFAULT\s+\(+N?'([^']*)'\)+/gi, "DEFAULT '$1'");

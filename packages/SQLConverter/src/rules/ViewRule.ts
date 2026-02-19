@@ -126,13 +126,23 @@ export class ViewRule implements IConversionRule {
   /** Quote PascalCase column references: alias.PascalCol → alias."PascalCol" */
   private quoteColumnRefs(sql: string): string {
     // alias.PascalColumn (unquoted alias)
+    // If alias starts with uppercase and isn't a keyword, quote it too
+    // so it matches the AS "Alias" definition from quoteAsAliases.
     sql = sql.replace(/\b(\w+)\.(?!")([A-Z]\w*)\b/g, (match, alias: string, col: string) => {
       if (SQL_KEYWORDS.has(col.toUpperCase()) || SQL_KEYWORDS.has(alias.toUpperCase())) return match;
-      return `${alias}."${col}"`;
+      const needsQuote = /^[A-Z]/.test(alias) && !SQL_KEYWORDS.has(alias.toUpperCase());
+      const quotedAlias = needsQuote ? `"${alias}"` : alias;
+      return `${quotedAlias}."${col}"`;
     });
-    // "alias".PascalColumn (quoted alias)
+    // "alias".PascalColumn (quoted alias, unquoted column)
     sql = sql.replace(/"(\w+)"\.(?!")([A-Z]\w*)\b/g, (_match, alias: string, col: string) => {
       if (SQL_KEYWORDS.has(col.toUpperCase())) return `"${alias}".${col}`;
+      return `"${alias}"."${col}"`;
+    });
+    // UnquotedPascalAlias."QuotedColumn" (unquoted alias, already-quoted column)
+    // Handles cases where convertIdentifiers already quoted [Col] → "Col"
+    sql = sql.replace(/\b([A-Z]\w*)\."(\w+)"/g, (match, alias: string, col: string) => {
+      if (SQL_KEYWORDS.has(alias.toUpperCase())) return match;
       return `"${alias}"."${col}"`;
     });
     return sql;

@@ -14,6 +14,11 @@ export class AlterTableRule implements IConversionRule {
     // Remove CLUSTERED/NONCLUSTERED
     result = result.replace(/\bCLUSTERED\b/gi, '');
     result = result.replace(/\bNONCLUSTERED\b/gi, '');
+    // Remove ASC/DESC inside constraint column lists
+    result = result.replace(/(\([^)]*)\b(ASC|DESC)\b/gi, '$1');
+    // Remove ON [PRIMARY] filegroup
+    result = result.replace(/\bON\s+\[?PRIMARY\]?/gi, '');
+    result = result.replace(/\bON\s+"PRIMARY"/g, '');
 
     // ENABLE_CONSTRAINT: WITH CHECK CHECK CONSTRAINT → skip or just comment
     if (/WITH\s+CHECK\s+CHECK\s+CONSTRAINT/i.test(result)) {
