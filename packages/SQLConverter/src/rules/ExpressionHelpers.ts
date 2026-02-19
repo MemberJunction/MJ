@@ -1,0 +1,324 @@
+/**
+ * Expression-level conversion helpers shared across multiple rules.
+ * Ported from Python functions: convert_identifiers, convert_date_functions,
+ * convert_charindex, convert_stuff, convert_string_concat, convert_iif,
+ * convert_top_to_limit, etc.
+ */
+
+/** Convert [schema].[name] bracket identifiers to "schema"."name" double-quote format */
+export function convertIdentifiers(sql: string): string {
+  // Replace [__mj].[Name] with __mj."Name"
+  sql = sql.replace(/\[__mj\]\.\[([^\]]+)\]/g, '__mj."$1"');
+  // Replace remaining [Name] with "Name"
+  sql = sql.replace(/\[([^\]]+)\]/g, '"$1"');
+  return sql;
+}
+
+/**
+ * Convert DATEADD(unit, num, date) → (date + num * INTERVAL '1 unit')
+ * Convert DATEDIFF(unit, start, end) → EXTRACT/age patterns
+ * Convert DATEPART(unit, date) → EXTRACT(field FROM date)
+ */
+export function convertDateFunctions(sql: string): string {
+  sql = convertDateAdd(sql);
+  sql = convertDateDiff(sql);
+  sql = convertDatePart(sql);
+  return sql;
+}
+
+/** DATEADD unit → PG interval unit mapping */
+const DATEADD_UNIT_MAP: Record<string, string> = {
+  'year': 'year', 'yy': 'year', 'yyyy': 'year',
+  'quarter': 'month', 'qq': 'month', 'q': 'month', // multiply by 3
+  'month': 'month', 'mm': 'month', 'm': 'month',
+  'day': 'day', 'dd': 'day', 'd': 'day',
+  'week': 'week', 'wk': 'week', 'ww': 'week',
+  'hour': 'hour', 'hh': 'hour',
+  'minute': 'minute', 'mi': 'minute', 'n': 'minute',
+  'second': 'second', 'ss': 'second', 's': 'second',
+  'millisecond': 'milliseconds', 'ms': 'milliseconds',
+};
+
+const QUARTER_UNITS = new Set(['quarter', 'qq', 'q']);
+
+function convertDateAdd(sql: string): string {
+  return sql.replace(
+    /\bDATEADD\s*\(\s*(\w+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi,
+    (_match, unit: string, num: string, dateExpr: string) => {
+      const unitLower = unit.toLowerCase();
+      const pgUnit = DATEADD_UNIT_MAP[unitLower] ?? 'day';
+      const numTrimmed = num.trim();
+      const dateTrimmed = dateExpr.trim();
+
+      if (QUARTER_UNITS.has(unitLower)) {
+        return `(${dateTrimmed} + (${numTrimmed} * 3) * INTERVAL '1 month')`;
+      }
+      return `(${dateTrimmed} + ${numTrimmed} * INTERVAL '1 ${pgUnit}')`;
+    }
+  );
+}
+
+/** DATEPART unit → EXTRACT field mapping */
+const DATEPART_UNIT_MAP: Record<string, string> = {
+  'year': 'YEAR', 'yy': 'YEAR', 'yyyy': 'YEAR',
+  'quarter': 'QUARTER', 'qq': 'QUARTER', 'q': 'QUARTER',
+  'month': 'MONTH', 'mm': 'MONTH', 'm': 'MONTH',
+  'day': 'DAY', 'dd': 'DAY', 'd': 'DAY',
+  'dayofyear': 'DOY', 'dy': 'DOY', 'y': 'DOY',
+  'week': 'WEEK', 'wk': 'WEEK', 'ww': 'WEEK',
+  'weekday': 'DOW', 'dw': 'DOW',
+  'hour': 'HOUR', 'hh': 'HOUR',
+  'minute': 'MINUTE', 'mi': 'MINUTE', 'n': 'MINUTE',
+  'second': 'SECOND', 'ss': 'SECOND', 's': 'SECOND',
+};
+
+function convertDateDiff(sql: string): string {
+  return sql.replace(
+    /\bDATEDIFF\s*\(\s*(\w+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi,
+    (_match, unit: string, startExpr: string, endExpr: string) => {
+      const unitLower = unit.toLowerCase();
+      const s = startExpr.trim();
+      const e = endExpr.trim();
+
+      switch (unitLower) {
+        case 'day': case 'dd': case 'd':
+          return `EXTRACT(DAY FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`;
+        case 'hour': case 'hh':
+          return `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ)) / 3600`;
+        case 'minute': case 'mi': case 'n':
+          return `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ)) / 60`;
+        case 'second': case 'ss': case 's':
+          return `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`;
+        case 'year': case 'yy': case 'yyyy':
+          return `EXTRACT(YEAR FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ))`;
+        case 'month': case 'mm': case 'm':
+          return `(EXTRACT(YEAR FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ)) * 12 + EXTRACT(MONTH FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ)))`;
+        default:
+          return `EXTRACT(DAY FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`;
+      }
+    }
+  );
+}
+
+function convertDatePart(sql: string): string {
+  return sql.replace(
+    /\bDATEPART\s*\(\s*(\w+)\s*,\s*([^)]+)\)/gi,
+    (_match, unit: string, dateExpr: string) => {
+      const field = DATEPART_UNIT_MAP[unit.toLowerCase()] ?? 'DAY';
+      return `EXTRACT(${field} FROM ${dateExpr.trim()})`;
+    }
+  );
+}
+
+/**
+ * Convert CHARINDEX(substr, str[, start]) → POSITION(substr IN str)
+ * 3-arg form: → (POSITION(substr IN SUBSTRING(str FROM start)) + start - 1)
+ */
+export function convertCharIndex(sql: string): string {
+  return sql.replace(
+    /\bCHARINDEX\s*\(\s*([^,]+)\s*,\s*([^,)]+)(?:\s*,\s*([^)]+))?\s*\)/gi,
+    (_match, substr: string, str: string, start?: string) => {
+      const subTrimmed = substr.trim();
+      const strTrimmed = str.trim();
+      if (start) {
+        const startTrimmed = start.trim();
+        return `(POSITION(${subTrimmed} IN SUBSTRING(${strTrimmed} FROM ${startTrimmed})) + ${startTrimmed} - 1)`;
+      }
+      return `POSITION(${subTrimmed} IN ${strTrimmed})`;
+    }
+  );
+}
+
+/**
+ * Convert STUFF(string, start, length, replacement) →
+ * OVERLAY(string PLACING replacement FROM start FOR length)
+ */
+export function convertStuff(sql: string): string {
+  return sql.replace(
+    /\bSTUFF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi,
+    (_match, str: string, start: string, length: string, replacement: string) => {
+      return `OVERLAY(${str.trim()} PLACING ${replacement.trim()} FROM ${start.trim()} FOR ${length.trim()})`;
+    }
+  );
+}
+
+/**
+ * Convert T-SQL string concatenation with + to PostgreSQL || operator.
+ * Must not affect numeric + operations.
+ */
+export function convertStringConcat(sql: string): string {
+  // Adjacent string literals: 'a' + 'b' → 'a' || 'b'
+  sql = sql.replace(/'\s*\+\s*'/g, "' || '");
+  // String + non-numeric expression: 'text' + expr (but not 'text' + 5)
+  sql = sql.replace(/'\s*\+\s*(?![\d\s]*[+\-*/])/g, "' || ");
+  // After closing paren: ) + 'text'
+  sql = sql.replace(/\)\s*\+\s*'/g, ") || '");
+  // Before CAST: 'text' + CAST
+  sql = sql.replace(/'\s*\+\s*CAST/gi, "' || CAST");
+  // Function result + string: COALESCE/REPLACE/etc.() + 'text'
+  sql = sql.replace(
+    /\b(COALESCE|REPLACE|CASE|CAST|TRIM|UPPER|LOWER|SUBSTRING|LEFT|RIGHT|LTRIM|RTRIM)\s*\([^)]*\)\s*\+\s*'/gi,
+    (m) => m.replace(/\+\s*'/, "|| '")
+  );
+  // After closing paren + column ref: ) + colname.
+  sql = sql.replace(/\)\s*\+\s*(\w+\.)/g, ') || $1');
+  // Quoted identifiers: "Col1" + "Col2"
+  sql = sql.replace(/"([\w]+)"\s*\+\s*"([\w]+)"/g, '"$1" || "$2"');
+  return sql;
+}
+
+/**
+ * Convert IIF(condition, true_val, false_val) → CASE WHEN condition THEN true_val ELSE false_val END
+ * Handles nested IIF by iterating from innermost outward.
+ */
+export function convertIIF(sql: string): string {
+  let iterations = 0;
+  const maxIterations = 50;
+
+  while (/\bIIF\s*\(/i.test(sql) && iterations < maxIterations) {
+    sql = sql.replace(
+      /\bIIF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/i,
+      (_match, cond: string, trueVal: string, falseVal: string) => {
+        return `CASE WHEN ${cond.trim()} THEN ${trueVal.trim()} ELSE ${falseVal.trim()} END`;
+      }
+    );
+    iterations++;
+  }
+  return sql;
+}
+
+/**
+ * Convert SELECT TOP N ... to SELECT ... LIMIT N.
+ * Moves TOP N from after SELECT to LIMIT N at end of statement.
+ */
+export function convertTopToLimit(sql: string): string {
+  // Find all SELECT TOP N patterns
+  const topPattern = /\bSELECT\s+(DISTINCT\s+)?TOP\s+(\d+)\s/gi;
+  let match: RegExpExecArray | null;
+  const replacements: Array<{ start: number; end: number; selectPrefix: string; distinct: string; n: string }> = [];
+
+  while ((match = topPattern.exec(sql)) !== null) {
+    replacements.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      selectPrefix: 'SELECT ',
+      distinct: match[1] ?? '',
+      n: match[2],
+    });
+  }
+
+  // Process in reverse to preserve positions
+  for (let i = replacements.length - 1; i >= 0; i--) {
+    const r = replacements[i];
+    // Remove TOP N from SELECT clause
+    const before = sql.slice(0, r.start);
+    const after = sql.slice(r.end);
+
+    // Find end of this SELECT statement (semicolon, closing paren at depth 0, or end)
+    let depth = 0;
+    let endPos = after.length;
+    for (let j = 0; j < after.length; j++) {
+      if (after[j] === '(') depth++;
+      else if (after[j] === ')') {
+        if (depth === 0) { endPos = j; break; }
+        depth--;
+      } else if (after[j] === ';' && depth === 0) { endPos = j; break; }
+    }
+
+    const selectBody = after.slice(0, endPos);
+    const rest = after.slice(endPos);
+    sql = `${before}${r.selectPrefix}${r.distinct}${selectBody}\nLIMIT ${r.n}${rest}`;
+  }
+  return sql;
+}
+
+/**
+ * Convert common T-SQL CAST patterns to PostgreSQL types.
+ * Used in views, procedures, and expressions.
+ */
+export function convertCastTypes(sql: string): string {
+  sql = sql.replace(/\bAS\s+UNIQUEIDENTIFIER\b/gi, 'AS UUID');
+  sql = sql.replace(/\bAS\s+NVARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');
+  sql = sql.replace(/\bAS\s+NVARCHAR\s*\(\s*(\d+)\s*\)/gi, 'AS VARCHAR($1)');
+  sql = sql.replace(/\bAS\s+NVARCHAR\b/gi, 'AS TEXT');
+  sql = sql.replace(/\bAS\s+VARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');
+  sql = sql.replace(/\bAS\s+BIT\b/gi, 'AS BOOLEAN');
+  sql = sql.replace(/\bAS\s+DATETIMEOFFSET(?:\s*\(\s*\d+\s*\))?\b/gi, 'AS TIMESTAMPTZ');
+  sql = sql.replace(/\bAS\s+DATETIME2?(?:\s*\(\s*\d+\s*\))?\b/gi, 'AS TIMESTAMPTZ');
+  sql = sql.replace(/\bAS\s+FLOAT(?:\s*\(\s*\d+\s*\))?\b/gi, 'AS DOUBLE PRECISION');
+  sql = sql.replace(/\bAS\s+TINYINT\b/gi, 'AS SMALLINT');
+  sql = sql.replace(/\bAS\s+IMAGE\b/gi, 'AS BYTEA');
+  sql = sql.replace(/\bAS\s+MONEY\b/gi, 'AS NUMERIC(19,4)');
+  sql = sql.replace(/\bAS\s+INT\b/gi, 'AS INTEGER');
+  return sql;
+}
+
+/**
+ * Convert T-SQL CONVERT(type, expr[, style]) → CAST(expr AS mapped_type).
+ * Drops the optional style parameter.
+ */
+export function convertConvertFunction(sql: string): string {
+  // 3-arg: CONVERT(type, expr, style)
+  sql = sql.replace(
+    /\bCONVERT\s*\(\s*(\w+(?:\s*\([^)]*\))?)\s*,\s*([^,)]+)\s*,\s*[^)]+\)/gi,
+    (_match, type: string, expr: string) => {
+      return `CAST(${expr.trim()} AS ${mapInlineType(type.trim())})`;
+    }
+  );
+  // 2-arg: CONVERT(type, expr)
+  sql = sql.replace(
+    /\bCONVERT\s*\(\s*(\w+(?:\s*\([^)]*\))?)\s*,\s*([^)]+)\)/gi,
+    (_match, type: string, expr: string) => {
+      return `CAST(${expr.trim()} AS ${mapInlineType(type.trim())})`;
+    }
+  );
+  return sql;
+}
+
+/** Map a T-SQL type name to PostgreSQL for inline CAST/CONVERT usage */
+function mapInlineType(tsqlType: string): string {
+  const upper = tsqlType.toUpperCase().trim();
+  if (upper === 'UNIQUEIDENTIFIER') return 'UUID';
+  if (upper === 'BIT') return 'BOOLEAN';
+  if (/^NVARCHAR\s*\(\s*MAX\s*\)$/i.test(upper)) return 'TEXT';
+  if (/^NVARCHAR\s*\(\s*(\d+)\s*\)$/i.test(upper)) return upper.replace(/^NVARCHAR/i, 'VARCHAR');
+  if (upper === 'NVARCHAR') return 'TEXT';
+  if (/^VARCHAR\s*\(\s*MAX\s*\)$/i.test(upper)) return 'TEXT';
+  if (/^DATETIMEOFFSET/i.test(upper)) return 'TIMESTAMPTZ';
+  if (/^DATETIME/i.test(upper)) return 'TIMESTAMPTZ';
+  if (/^FLOAT/i.test(upper)) return 'DOUBLE PRECISION';
+  if (upper === 'INT') return 'INTEGER';
+  if (upper === 'TINYINT') return 'SMALLINT';
+  if (upper === 'IMAGE') return 'BYTEA';
+  if (upper === 'MONEY') return 'NUMERIC(19,4)';
+  return tsqlType;
+}
+
+/** Remove N' prefix from string literals, but only when preceded by non-alphanumeric */
+export function removeNPrefix(sql: string): string {
+  // N' at start of string or after non-alpha character → '
+  return sql.replace(/(?<![a-zA-Z])N'/g, "'");
+}
+
+/** Remove COLLATE clauses */
+export function removeCollate(sql: string): string {
+  return sql.replace(/\s+COLLATE\s+SQL_Latin1_General_CP1_CI_AS/gi, '')
+    .replace(/\s+COLLATE\s+\S+/gi, '');
+}
+
+/** Common function replacements */
+export function convertCommonFunctions(sql: string): string {
+  sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
+  sql = sql.replace(/\bGETUTCDATE\s*\(\s*\)/gi, 'NOW()');
+  sql = sql.replace(/\bGETDATE\s*\(\s*\)/gi, 'NOW()');
+  sql = sql.replace(/\bSYSDATETIMEOFFSET\s*\(\s*\)/gi, 'NOW()');
+  sql = sql.replace(/\bSYSUTCDATETIME\s*\(\s*\)/gi, 'NOW()');
+  sql = sql.replace(/\bNEWID\s*\(\s*\)/gi, 'gen_random_uuid()');
+  sql = sql.replace(/\bNEWSEQUENTIALID\s*\(\s*\)/gi, 'gen_random_uuid()');
+  sql = sql.replace(/\bLEN\s*\(/gi, 'LENGTH(');
+  sql = sql.replace(/\bSCOPE_IDENTITY\s*\(\s*\)/gi, 'lastval()');
+  sql = sql.replace(/\bSUSER_SNAME\s*\(\s*\)/gi, 'current_user');
+  sql = sql.replace(/\bSUSER_NAME\s*\(\s*\)/gi, 'current_user');
+  sql = sql.replace(/\bUSER_NAME\s*\(\s*\)/gi, 'current_user');
+  return sql;
+}
