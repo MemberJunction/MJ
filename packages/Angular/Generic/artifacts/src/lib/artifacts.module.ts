@@ -7,6 +7,8 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -59,7 +61,9 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MarkdownModule,
     CodeEditorModule,
     MJReactModule,
-    MJNotificationsModule
+    MJNotificationsModule,
+    QueryViewerModule,
+    SharedGenericModule
   ],
   exports: [
     // Export artifact type plugin viewer
