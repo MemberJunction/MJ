@@ -20,11 +20,11 @@ export function postProcess(sql: string): string {
   // Remove any remaining COLLATE clauses
   sql = sql.replace(/\s+COLLATE\s+SQL_Latin1_General_CP1_CI_AS/gi, '');
 
+  // Remove IF @@ERROR <> 0 SET NOEXEC ON (must come BEFORE generic SET NOEXEC removal)
+  sql = sql.replace(/IF\s+@@ERROR\s*<>\s*0\s+SET\s+NOEXEC\s+ON\s*;?/gi, '');
+
   // Remove SET NOEXEC ON/OFF
   sql = sql.replace(/SET\s+NOEXEC\s+(ON|OFF)\s*;?/gi, '');
-
-  // Remove IF @@ERROR <> 0 SET NOEXEC ON
-  sql = sql.replace(/IF\s+@@ERROR\s*<>\s*0\s+SET\s+NOEXEC\s+ON\s*;?/gi, '');
 
   // Remove SET NUMERIC_ROUNDABORT OFF
   sql = sql.replace(/SET\s+NUMERIC_ROUNDABORT\s+OFF\s*;?/gi, '');
@@ -141,7 +141,7 @@ function fixLongIndexNames(sql: string): string {
     (match, keyword: string, name: string, rest: string) => {
       if (name.length <= 63) return match;
       const hash = createHash('md5').update(name).digest('hex').slice(0, 8);
-      const shortName = name.slice(0, 55) + '_' + hash;
+      const shortName = name.slice(0, 54) + '_' + hash;
       return `${keyword} "${shortName}"${rest}`;
     }
   );

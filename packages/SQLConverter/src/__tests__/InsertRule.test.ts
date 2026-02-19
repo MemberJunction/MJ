@@ -1,0 +1,165 @@
+import { describe, it, expect } from 'vitest';
+import { InsertRule } from '../rules/InsertRule.js';
+import { createConversionContext } from '../rules/types.js';
+
+const rule = new InsertRule();
+const context = createConversionContext('tsql', 'postgres');
+
+function convert(sql: string): string {
+  return rule.PostProcess!(sql, sql, context);
+}
+
+describe('InsertRule', () => {
+  describe('metadata', () => {
+    it('should have the correct name, priority, and applies-to types', () => {
+      expect(rule.Name).toBe('InsertRule');
+      expect(rule.Priority).toBe(50);
+      expect(rule.AppliesTo).toEqual(['INSERT', 'UPDATE', 'DELETE']);
+      expect(rule.BypassSqlglot).toBe(true);
+    });
+  });
+
+  describe('identifier conversion', () => {
+    it('should convert bracket identifiers in a simple INSERT', () => {
+      const sql = "INSERT INTO [__mj].[Users] ([Name], [Email]) VALUES ('Alice', 'alice@example.com')";
+      const result = convert(sql);
+      expect(result).toContain('__mj."Users"');
+      expect(result).toContain('"Name"');
+      expect(result).toContain('"Email"');
+      expect(result).not.toContain('[');
+      expect(result).not.toContain(']');
+    });
+  });
+
+  describe('N-prefix removal', () => {
+    it('should remove N prefix from string literals', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([Name]) VALUES (N'Hello World')";
+      const result = convert(sql);
+      expect(result).toContain("'Hello World'");
+      expect(result).not.toMatch(/(?<![a-zA-Z])N'/);
+    });
+
+    it('should NOT corrupt words containing N like JOIN, IN, ON', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([Name]) VALUES (N'JOIN IN ON')";
+      const result = convert(sql);
+      // The word JOIN should not be corrupted; the N' before the string should be removed
+      expect(result).toContain("'JOIN IN ON'");
+    });
+  });
+
+  describe('function conversions', () => {
+    it('should convert GETUTCDATE() to NOW()', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([CreatedAt]) VALUES (GETUTCDATE())";
+      const result = convert(sql);
+      expect(result).toContain('NOW()');
+      expect(result).not.toMatch(/GETUTCDATE/i);
+    });
+
+    it('should convert NEWID() to gen_random_uuid()', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([ID]) VALUES (NEWID())";
+      const result = convert(sql);
+      expect(result).toContain('gen_random_uuid()');
+      expect(result).not.toMatch(/NEWID/i);
+    });
+
+    it('should convert NEWSEQUENTIALID() to gen_random_uuid()', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([ID]) VALUES (NEWSEQUENTIALID())";
+      const result = convert(sql);
+      expect(result).toContain('gen_random_uuid()');
+      expect(result).not.toMatch(/NEWSEQUENTIALID/i);
+    });
+
+    it('should convert GETDATE() to NOW()', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([ModifiedAt]) VALUES (GETDATE())";
+      const result = convert(sql);
+      expect(result).toContain('NOW()');
+      expect(result).not.toMatch(/GETDATE/i);
+    });
+  });
+
+  describe('CAST type conversions', () => {
+    it('should convert CAST(x AS UNIQUEIDENTIFIER) to CAST(x AS UUID)', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([ID]) VALUES (CAST('abc' AS UNIQUEIDENTIFIER))";
+      const result = convert(sql);
+      expect(result).toContain('AS UUID');
+      expect(result).not.toMatch(/UNIQUEIDENTIFIER/i);
+    });
+
+    it('should convert CAST AS NVARCHAR(MAX) to CAST AS TEXT', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([Data]) VALUES (CAST([Col] AS NVARCHAR(MAX)))";
+      const result = convert(sql);
+      expect(result).toContain('AS TEXT');
+    });
+
+    it('should convert CAST AS BIT to CAST AS BOOLEAN', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([Flag]) VALUES (CAST(1 AS BIT))";
+      const result = convert(sql);
+      expect(result).toContain('AS BOOLEAN');
+      expect(result).not.toMatch(/\bAS BIT\b/i);
+    });
+  });
+
+  describe('COLLATE removal', () => {
+    it('should remove COLLATE clauses', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([Name]) VALUES ('test' COLLATE SQL_Latin1_General_CP1_CI_AS)";
+      const result = convert(sql);
+      expect(result).not.toMatch(/COLLATE/i);
+    });
+  });
+
+  describe('UPDATE statements', () => {
+    it('should convert UPDATE statement functions and identifiers', () => {
+      const sql = "UPDATE [__mj].[Users] SET [ModifiedAt] = GETUTCDATE(), [Name] = N'Bob' WHERE [ID] = NEWID()";
+      const result = convert(sql);
+      expect(result).toContain('__mj."Users"');
+      expect(result).toContain('NOW()');
+      expect(result).toContain("'Bob'");
+      expect(result).toContain('gen_random_uuid()');
+    });
+  });
+
+  describe('DELETE statements', () => {
+    it('should convert DELETE statement identifiers', () => {
+      const sql = "DELETE FROM [__mj].[Foo] WHERE [ID] = CAST('abc' AS UNIQUEIDENTIFIER)";
+      const result = convert(sql);
+      expect(result).toContain('__mj."Foo"');
+      expect(result).toContain('AS UUID');
+    });
+  });
+
+  describe('output formatting', () => {
+    it('should ensure output ends with semicolon and newline', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([Name]) VALUES ('test')";
+      const result = convert(sql);
+      expect(result).toMatch(/;\n$/);
+    });
+
+    it('should not double semicolons if already present', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([Name]) VALUES ('test');";
+      const result = convert(sql);
+      expect(result).not.toContain(';;');
+      expect(result).toMatch(/;\n$/);
+    });
+
+    it('should preserve multi-line format', () => {
+      const sql = `INSERT INTO [__mj].[Foo]
+  ([Name], [Value])
+VALUES
+  (N'Hello', GETUTCDATE())`;
+      const result = convert(sql);
+      expect(result).toContain('\n');
+      expect(result).toContain("'Hello'");
+      expect(result).toContain('NOW()');
+    });
+  });
+
+  describe('multiple values', () => {
+    it('should convert multiple values in one INSERT', () => {
+      const sql = "INSERT INTO [__mj].[Foo] ([ID], [Name], [CreatedAt]) VALUES (NEWID(), N'Alice', GETUTCDATE())";
+      const result = convert(sql);
+      expect(result).toContain('gen_random_uuid()');
+      expect(result).toContain("'Alice'");
+      expect(result).toContain('NOW()');
+    });
+  });
+});
