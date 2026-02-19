@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
@@ -94,7 +94,8 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
 
   constructor(
     private artifactPermissionService: ArtifactPermissionService,
-    private artifactIconService: ArtifactIconService
+    private artifactIconService: ArtifactIconService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -126,6 +127,8 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
       );
     } catch (err) {
       console.error('Error loading artifact permissions:', err);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async permission checks don't trigger CD
     }
   }
 

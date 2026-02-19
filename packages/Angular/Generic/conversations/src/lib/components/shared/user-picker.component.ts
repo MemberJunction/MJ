@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView } from '@memberjunction/core';
@@ -205,6 +205,8 @@ export class UserPickerComponent implements OnInit, OnDestroy {
     @Input() excludeUserIds: string[] = [];
     @Input() placeholder: string = 'Search for a user (press Enter)...';
 
+    constructor(private cdr: ChangeDetectorRef) {}
+
     @Output() userSelected = new EventEmitter<UserSearchResult>();
 
     searchQuery: string = '';
@@ -307,6 +309,7 @@ export class UserPickerComponent implements OnInit, OnDestroy {
             this.searchResults = [];
         } finally {
             this.isSearching = false;
+            this.cdr.detectChanges();
         }
     }
 }

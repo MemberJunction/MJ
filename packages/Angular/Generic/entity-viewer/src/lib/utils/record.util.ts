@@ -46,8 +46,27 @@ export function computeFieldsList(entityInfo: EntityInfo, gridState?: ViewGridSt
             }
         }
     } else {
-        for (const f of entityInfo.Fields) {
-            if (f.DefaultInView) {
+        // First try to use DefaultInView fields
+        const defaultInViewFields = entityInfo.Fields.filter(f => f.DefaultInView);
+
+        if (defaultInViewFields.length > 0) {
+            for (const f of defaultInViewFields) {
+                fields.add(f.Name);
+            }
+        } else {
+            // Fallback: when no DefaultInView fields are defined, include the first 10
+            // non-system fields. This matches the fallback in generateAgColumnDefs()
+            // which uses getDefaultFieldsFallback() to show columns even when
+            // DefaultInView isn't configured.
+            const fallbackFields = entityInfo.Fields
+                .filter(f =>
+                    !f.Name.startsWith('__mj_') &&
+                    !(f.IsPrimaryKey && f.SQLFullType?.toLowerCase() === 'uniqueidentifier') &&
+                    (f.Length <= 500 || f.Length < 0)  // Exclude very long text unless nvarchar(max)
+                )
+                .slice(0, 10);
+
+            for (const f of fallbackFields) {
                 fields.add(f.Name);
             }
         }
