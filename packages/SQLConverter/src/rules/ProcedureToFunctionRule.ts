@@ -88,7 +88,8 @@ export class ProcedureToFunctionRule implements IConversionRule {
         /@(\w+)\s+([\w(),\s]+?)(?:\s*=\s*(.+?))?(?:\s+OUTPUT|\s+OUT)?\s*$/i
       );
       if (m) {
-        const isOutput = /\bOUTPUT\b|\bOUT\b/i.test(param);
+        // Only match OUTPUT/OUT as a trailing keyword, not as part of the param name
+        const isOutput = /\s+(?:OUTPUT|OUT)\s*$/i.test(param);
         parsedParams.push({
           Name: m[1],
           Type: m[2].trim(),

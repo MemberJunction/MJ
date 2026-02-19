@@ -140,8 +140,10 @@ function classifyProcedure(batch: string, upper: string): StatementType {
   }
   // Skip procs using temp tables (SELECT INTO #table, INSERT INTO #table)
   if (/INTO\s+#\w+/i.test(batch)) return 'SKIP_SQLSERVER';
-  // Skip procs using table variables (@var TABLE(...))
-  if (/@\w+\s+TABLE\s*\(/i.test(batch)) return 'SKIP_SQLSERVER';
+  // Skip procs using complex table variables, but allow @InsertedRow TABLE (simple output capture)
+  if (/@\w+\s+TABLE\s*\(/i.test(batch) && !/@InsertedRow\s+TABLE\s*\(/i.test(batch)) {
+    return 'SKIP_SQLSERVER';
+  }
   // Skip procs using STRING_SPLIT
   if (upper.includes('STRING_SPLIT')) return 'SKIP_SQLSERVER';
 
