@@ -3,13 +3,13 @@
     "fields": {
       "Name": "Computer Use - Controller",
       "Description": "System prompt for the Computer Use browser automation controller. Instructs the LLM to analyze screenshots of a web browser and decide what actions to take (click, type, navigate, scroll, etc.) to accomplish a stated goal. Outputs structured JSON with reasoning, actions, and optional tool calls.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/computer-use/controller.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -24,7 +24,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
           },
@@ -32,8 +32,8 @@
             "ID": "8C56B221-225D-4AA0-ADDA-6804AEAE332A"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:32:49.211Z",
-            "checksum": "afa5f21741141bd915f9aff726e967f5cfe4fab89a7f28caaf780d442d5de0a2"
+            "lastModified": "2026-02-19T20:08:12.707Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
           }
         }
       ]
@@ -42,21 +42,21 @@
       "ID": "35FF7A4B-B64A-4052-AD78-9DA8FBCF021A"
     },
     "sync": {
-      "lastModified": "2026-02-12T19:32:49.140Z",
-      "checksum": "0b4a94c753758c07d06c32d5fd85cf6e7c29309d84e44b5287a64a46e5da4989"
+      "lastModified": "2026-02-19T20:08:12.657Z",
+      "checksum": "b67c1b8308419175f9eeb754e9ff07485aa15fd71952c739daa42f200f2f8b13"
     }
   },
   {
     "fields": {
       "Name": "Computer Use - Judge",
       "Description": "System prompt for the Computer Use judge evaluator. Analyzes screenshots and step history to determine whether the browser automation agent has accomplished its stated goal. Returns a structured JSON verdict with done/confidence/reason/feedback fields.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/computer-use/judge.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -71,7 +71,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
           },
@@ -79,8 +79,8 @@
             "ID": "855B1D42-9D3D-4B2B-9AFC-A61DB0993D47"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:32:49.224Z",
-            "checksum": "afa5f21741141bd915f9aff726e967f5cfe4fab89a7f28caaf780d442d5de0a2"
+            "lastModified": "2026-02-19T20:08:12.716Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
           }
         }
       ]
@@ -89,8 +89,8 @@
       "ID": "DAFE960C-1CDA-4612-965C-A3CD400387E6"
     },
     "sync": {
-      "lastModified": "2026-02-12T19:32:48.599Z",
-      "checksum": "199bf93377020a67f251ca9aca50d0493a3f0294208f6bda78e471cff0740e46"
+      "lastModified": "2026-02-19T20:08:12.136Z",
+      "checksum": "c50b5dd3559abaa66d7187fd6f27466a305533b005bcf50852cff4dbf34c50b9"
     }
   }
 ]
