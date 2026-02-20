@@ -3020,7 +3020,6 @@ NumberedRows AS (
     * Checks if a table has a soft primary key defined in the additionalSchemaInfo JSON file (configured in mj.config.cjs)
     */
    protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
-      // Check if additionalSchemaInfo is configured
       if (!configInfo.additionalSchemaInfo) {
          return false;
       }
@@ -3032,21 +3031,22 @@ NumberedRows AS (
       }
 
       try {
-         const config = ManageMetadataBase.getSoftPKFKConfig();
-         if (!config || !config.tables) {
-            logStatus(`         [Soft PK Check] Config file found but no tables array`);
+         const Config = ManageMetadataBase.getSoftPKFKConfig();
+         if (!Config) {
+            logStatus(`         [Soft PK Check] Config file found but could not be loaded`);
             return false;
          }
-         const tableConfig = config.tables.find(
-            (t: { schemaName?: string; tableName?: string }) =>
-               t.schemaName?.toLowerCase() === schemaName?.toLowerCase() &&
-               t.tableName?.toLowerCase() === tableName?.toLowerCase()
+         const Tables = this.extractTablesFromConfig(Config);
+         const TableConfig = Tables.find(
+            (t) =>
+               t.SchemaName.toLowerCase() === schemaName?.toLowerCase() &&
+               t.TableName.toLowerCase() === tableName?.toLowerCase()
          );
-         const found = Boolean(tableConfig?.primaryKeys && tableConfig.primaryKeys.length > 0);
-         if (!found) {
-            logStatus(`         [Soft PK Check] No config found for ${schemaName}.${tableName} (config has ${config.tables.length} tables)`);
+         const Found = Boolean(TableConfig?.PrimaryKey && TableConfig.PrimaryKey.length > 0);
+         if (!Found) {
+            logStatus(`         [Soft PK Check] No config found for ${schemaName}.${tableName} (config has ${Tables.length} tables)`);
          }
-         return found;
+         return Found;
       } catch (e) {
          logStatus(`         [Soft PK Check] Error reading config: ${e}`);
          return false;
