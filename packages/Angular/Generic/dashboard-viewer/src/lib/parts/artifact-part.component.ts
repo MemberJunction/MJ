@@ -2,6 +2,7 @@ import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
+import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 
@@ -57,7 +58,8 @@ import { Subject } from 'rxjs';
               [isMaximized]="false"
               [refreshTrigger]="refreshTrigger"
               (navigateToLink)="onNavigateToLink($event)"
-              (openEntityRecord)="onOpenEntityRecord($event)">
+              (openEntityRecord)="onOpenEntityRecord($event)"
+              (navigationRequest)="onNavigationRequest($event)">
             </mj-artifact-viewer-panel>
           }
         </div>
@@ -241,6 +243,18 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
                 false
             );
         }
+    }
+
+    /**
+     * Handle general navigation request events from artifact viewer plugins
+     */
+    public onNavigationRequest(event: NavigationRequest): void {
+        this.RequestOpenNavItem(
+            event.navItemName,
+            event.appName,
+            event.queryParams,
+            false
+        );
     }
 
     protected override cleanup(): void {

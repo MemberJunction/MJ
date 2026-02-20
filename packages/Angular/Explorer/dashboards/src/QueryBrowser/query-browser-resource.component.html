@@ -1,7 +1,7 @@
 <!-- Query Browser Resource -->
-<div class="query-browser-container">
+<div class="query-browser-container" [class.resizing]="IsResizing">
   <!-- Left Panel: Query Tree -->
-  <div class="query-tree-panel">
+  <div class="query-tree-panel" [style.width.px]="PanelWidth">
     <!-- Header -->
     <div class="tree-header">
       <div class="header-title">
@@ -73,6 +73,13 @@
         </div>
       }
     </div>
+  </div>
+
+  <!-- Resize Handle -->
+  <div class="resize-handle"
+    [class.active]="IsResizing"
+    (mousedown)="onResizeStart($event)">
+    <div class="resize-handle-grip"></div>
   </div>
 
   <!-- Right Panel: Query Viewer -->

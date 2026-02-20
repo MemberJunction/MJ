@@ -15,7 +15,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
-import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
+import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
@@ -86,6 +86,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
   @Output() sidebarToggleClicked = new EventEmitter<void>();
@@ -122,6 +123,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   public memberCount: number = 1;
   public artifactCount: number = 0;
+  public artifactCountDisplay: number = 0;
   public isShared: boolean = false;
   public showExportModal: boolean = false;
   public showAgentPanel: boolean = false;
@@ -753,6 +755,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       // Update artifact count for header display (unique artifacts, not versions)
       this.artifactCount = this.calculateUniqueArtifactCount();
+      this.updateArtifactCountDisplay();
 
       // Debug: Log summary
       const systemArtifactCount = this.systemArtifactsByDetailId.size;
@@ -1219,6 +1222,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
           // Update artifact count
           this.artifactCount = this.calculateUniqueArtifactCount();
+          this.updateArtifactCountDisplay();
 
           break; // Found and updated the target message
         }
@@ -1241,18 +1245,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Calculate count of unique artifacts (not versions)
-   * Works with LazyArtifactInfo - uses artifactId from display data
-   * Respects showSystemArtifacts toggle to update count dynamically
+   * Recompute the cached artifactCountDisplay from the effective artifacts map.
+   * Must be called whenever artifactsByDetailId, systemArtifactsByDetailId,
+   * or showSystemArtifacts changes, instead of using a getter that can produce
+   * different values between Angular change-detection passes (NG0100).
    */
-  public get artifactCountDisplay(): number {
+  private updateArtifactCountDisplay(): void {
     const uniqueArtifactIds = new Set<string>();
     for (const artifactList of this.effectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         uniqueArtifactIds.add(info.artifactId);
       }
     }
-    return uniqueArtifactIds.size;
+    this.artifactCountDisplay = uniqueArtifactIds.size;
   }
 
   /**
@@ -1315,6 +1320,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public toggleSystemArtifacts(): void {
     this.showSystemArtifacts = !this.showSystemArtifacts;
     this._combinedArtifactsMap = null; // Clear cache
+    this.updateArtifactCountDisplay();
     this.cdr.detectChanges(); // Force update
   }
 
@@ -1848,6 +1854,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Pass the event up to the parent component (workspace or explorer wrapper)
     this.openEntityRecord.emit(event);
+  }
+
+  onNavigationRequest(event: NavigationRequest): void {
+    // Pass the event up to the parent component for app-level navigation
+    this.navigationRequest.emit(event);
   }
 
   viewTestRun(testRunId: string): void {

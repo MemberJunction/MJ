@@ -1,7 +1,8 @@
 {
   "source:string:!empty": "query",
   "title:string:!empty": "Descriptive title",
-  "columns:[1+]": [
+  "plan:string?": "Optional markdown plan",
+  "columns:[0+]": [
     {
       "field:string:!empty": "ColumnName",
       "headerName?": "Display Name"

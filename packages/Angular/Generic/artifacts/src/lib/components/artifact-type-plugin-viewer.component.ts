@@ -15,7 +15,7 @@ import { MJArtifactVersionEntity, MJArtifactTypeEntity, ArtifactMetadataEngine }
 import { Metadata, LogError, RunView, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
-import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, NavigationRequest } from './base-artifact-viewer.component';
 
 /**
  * Artifact type plugin viewer that loads the appropriate plugin based on the artifact's DriverClass.
@@ -121,6 +121,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   @Input() cssClass?: string;
 
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() pluginLoaded = new EventEmitter<void>();
   @Output() tabsChanged = new EventEmitter<void>();
 
@@ -258,6 +259,13 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       if (componentInstance.openEntityRecord) {
         componentInstance.openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
           this.openEntityRecord.emit(event);
+        });
+      }
+
+      // Subscribe to navigationRequest event if the plugin emits it
+      if (componentInstance.navigationRequest) {
+        componentInstance.navigationRequest.subscribe((event: NavigationRequest) => {
+          this.navigationRequest.emit(event);
         });
       }
 
