@@ -122,6 +122,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   public memberCount: number = 1;
   public artifactCount: number = 0;
+  public artifactCountDisplay: number = 0;
   public isShared: boolean = false;
   public showExportModal: boolean = false;
   public showAgentPanel: boolean = false;
@@ -753,6 +754,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       // Update artifact count for header display (unique artifacts, not versions)
       this.artifactCount = this.calculateUniqueArtifactCount();
+      this.updateArtifactCountDisplay();
 
       // Debug: Log summary
       const systemArtifactCount = this.systemArtifactsByDetailId.size;
@@ -1219,6 +1221,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
           // Update artifact count
           this.artifactCount = this.calculateUniqueArtifactCount();
+          this.updateArtifactCountDisplay();
 
           break; // Found and updated the target message
         }
@@ -1241,18 +1244,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Calculate count of unique artifacts (not versions)
-   * Works with LazyArtifactInfo - uses artifactId from display data
-   * Respects showSystemArtifacts toggle to update count dynamically
+   * Recompute the cached artifactCountDisplay from the effective artifacts map.
+   * Must be called whenever artifactsByDetailId, systemArtifactsByDetailId,
+   * or showSystemArtifacts changes, instead of using a getter that can produce
+   * different values between Angular change-detection passes (NG0100).
    */
-  public get artifactCountDisplay(): number {
+  private updateArtifactCountDisplay(): void {
     const uniqueArtifactIds = new Set<string>();
     for (const artifactList of this.effectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         uniqueArtifactIds.add(info.artifactId);
       }
     }
-    return uniqueArtifactIds.size;
+    this.artifactCountDisplay = uniqueArtifactIds.size;
   }
 
   /**
@@ -1315,6 +1319,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public toggleSystemArtifacts(): void {
     this.showSystemArtifacts = !this.showSystemArtifacts;
     this._combinedArtifactsMap = null; // Clear cache
+    this.updateArtifactCountDisplay();
     this.cdr.detectChanges(); // Force update
   }
 
