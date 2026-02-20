@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
+import { SaveQueryResult } from './save-query-dialog.component';
 
 /**
  * JSON schema for Data artifact content.
@@ -42,6 +43,12 @@ interface DataArtifactSpec {
     rowCount?: number;
     executionTimeMs?: number;
   };
+
+  /** ID of saved query (set after user saves from artifact) */
+  savedQueryId?: string;
+
+  /** Name of saved query (for display) */
+  savedQueryName?: string;
 }
 
 interface DataArtifactColumn {
@@ -101,6 +108,18 @@ interface DataArtifactColumn {
               @if (IsLive) {
                 <button class="btn-icon" title="Refresh data" (click)="OnRefresh()" [disabled]="IsLoading">
                   <i class="fas fa-sync-alt" [class.fa-spin]="IsLoading"></i> Refresh
+                </button>
+              }
+              @if (CanSaveQuery) {
+                <button class="btn-icon btn-save" title="Save as reusable query"
+                  (click)="ShowSaveDialog = true">
+                  <i class="fas fa-save"></i> Save Query
+                </button>
+              }
+              @if (spec.savedQueryId) {
+                <button class="btn-icon btn-open" title="Open saved query record"
+                  (click)="OnOpenSavedQuery()">
+                  <i class="fas fa-external-link-alt"></i> Open Query
                 </button>
               }
             </div>
@@ -178,6 +197,17 @@ interface DataArtifactColumn {
           <i class="fas fa-inbox"></i>
           <p>No data to display</p>
         </div>
+      }
+
+      <!-- Save Query Panel (slide-in) -->
+      @if (ShowSaveDialog) {
+        <mj-save-query-panel
+          [QueryName]="spec?.title || 'Untitled Query'"
+          [QueryDescription]="''"
+          [SQL]="spec?.metadata?.sql || ''"
+          (Saved)="OnQuerySaved($event)"
+          (Cancelled)="ShowSaveDialog = false">
+        </mj-save-query-panel>
       }
     </div>
   `,
@@ -266,6 +296,26 @@ interface DataArtifactColumn {
       cursor: not-allowed;
     }
 
+    .btn-icon.btn-save {
+      color: #16a34a;
+      border-color: #86efac;
+    }
+
+    .btn-icon.btn-save:hover {
+      background: #f0fdf4;
+      border-color: #16a34a;
+    }
+
+    .btn-icon.btn-open {
+      color: #2563eb;
+      border-color: #93c5fd;
+    }
+
+    .btn-icon.btn-open:hover {
+      background: #eff6ff;
+      border-color: #2563eb;
+    }
+
     .grid-container {
       flex: 1;
       overflow: hidden;
@@ -326,6 +376,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public IsLive = false;
   public HasError = false;
   public ErrorMessage = '';
+  public ShowSaveDialog = false;
 
   /** Metadata from live execution (overrides spec.metadata when live) */
   private liveRowCount: number | null = null;
@@ -493,6 +544,43 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     if (this.HasInlineData) {
       this.GridData = this.spec!.rows!;
     }
+  }
+
+  /** Whether this query can be saved (has SQL but hasn't been saved yet) */
+  public get CanSaveQuery(): boolean {
+    return !!this.spec?.metadata?.sql && !this.spec?.savedQueryId;
+  }
+
+  /** Open the saved query's entity record */
+  public OnOpenSavedQuery(): void {
+    if (!this.spec?.savedQueryId) return;
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', this.spec.savedQueryId)
+    ]);
+    this.openEntityRecord.emit({
+      entityName: 'MJ: Queries',
+      compositeKey
+    });
+  }
+
+  /** Handle successful save from the dialog */
+  public async OnQuerySaved(event: SaveQueryResult): Promise<void> {
+    this.ShowSaveDialog = false;
+
+    // Mutate spec to record the saved query
+    this.spec!.savedQueryId = event.queryId;
+    this.spec!.savedQueryName = event.queryName;
+
+    // Persist updated content to artifact version
+    await this.UpdateArtifactContent();
+    this.cdr.detectChanges();
+  }
+
+  /** Persist updated spec back to the artifact version entity */
+  private async UpdateArtifactContent(): Promise<void> {
+    if (!this.artifactVersion || !this.spec) return;
+    this.artifactVersion.Content = JSON.stringify(this.spec);
+    await this.artifactVersion.Save();
   }
 
   /**

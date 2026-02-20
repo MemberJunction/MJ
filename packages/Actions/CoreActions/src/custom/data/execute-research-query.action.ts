@@ -77,9 +77,13 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 (analysisRequest ? 'data and analysis' : 'data only');
             const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 50); // Default: 50 chars, 0 = no limit
 
+            // Normalize literal escape sequences — agent-generated SQL may have
+            // literal \n instead of real newlines from double-escaped JSON
+            const normalizedQuery = this.normalizeSQLWhitespace(query);
+
             // Validate query security using centralized SQLExpressionValidator
             const validator = SQLExpressionValidator.Instance;
-            const securityValidation = validator.validateFullQuery(query);
+            const securityValidation = validator.validateFullQuery(normalizedQuery);
             if (!securityValidation.valid) {
                 return {
                     Success: false,
@@ -89,7 +93,7 @@ export class ExecuteResearchQueryAction extends BaseAction {
             }
 
             // Ensure query returns limited results
-            const limitedQuery = this.ensureRowLimit(query, maxRows);
+            const limitedQuery = this.ensureRowLimit(normalizedQuery, maxRows);
 
             const dataProvider = BaseEntity.Provider as SQLServerDataProvider;
 
@@ -437,6 +441,19 @@ export class ExecuteResearchQueryAction extends BaseAction {
             p.Name.trim().toLowerCase() === name.trim().toLowerCase() &&
             p.Category?.trim().toLowerCase() === category?.trim().toLowerCase()
         );
+    }
+
+    /**
+     * Normalize literal escape sequences in SQL strings.
+     * Agent-generated SQL sometimes arrives with literal \n (backslash + n)
+     * instead of actual newlines from double-escaped JSON.
+     */
+    private normalizeSQLWhitespace(sql: string): string {
+        return sql
+            .replace(/\\r\\n/g, '\n')
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '\r')
+            .replace(/\\t/g, '\t');
     }
 
     /**

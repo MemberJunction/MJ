@@ -170,24 +170,21 @@ Pick 2-3 enhancement ideas most relevant to the specific query, plus always incl
 - Keep the conversation going until the user is satisfied
 
 ### Step 5: Save the Query (ONLY WHEN USER ASKS)
-The user must explicitly say something like "save this", "create the query", "that's good, save it".
-- **Auto-name the query**: Use the title you've been using for the results (e.g., "AI Agent Performance Summary"). Do NOT ask the user to provide a name — just save it immediately. If the user specifically asks to name it something, use their name instead.
-- Use the **Create Record** action with `EntityName: "MJ: Queries"`
-- Set fields: `Name`, `Description`, `CategoryID` (from QUERY_CATEGORIES), `SQL`
-- Always set `Status` to `Approved` so the query can be executed immediately
-- To update an existing query, use **Update Record** with `EntityName: "MJ: Queries"` and the query's `ID`
-- AFTER saving, emit a Data artifact (see step 6)
+The user can save a query directly from the **Save Query** button in the data artifact toolbar — no agent round-trip needed. When the user clicks "Save Query", a dialog opens with the name pre-populated and a category picker.
 
-### Step 6: Emit Data Artifact (ONLY AFTER SAVING)
-**ONLY** emit a Data artifact AFTER you have saved a query in step 5.
+When the user asks to save (e.g., "save this", "create the query", "that's good, save it"), respond by directing them to the toolbar:
 
-**NEVER** emit an artifact:
-- After just showing query results (the Strategist's `payloadChangeRequest` handles display)
-- For entity analysis or schema information
-- For intermediate exploration
-- Before the user has said to save
+> You can save this query using the **Save Query** button in the toolbar above the results. It will let you name the query and pick a category.
 
-When you do emit an artifact, it **MUST** use this exact JSON structure — no other format is accepted:
+After saving, the toolbar automatically switches to an **Open Query** button so the user can navigate to the saved query record.
+
+If the user wants to update an existing saved query, use the **Update Record** action with `EntityName: "MJ: Queries"` and the query's `ID`.
+
+### Step 6: Data Artifact Format
+
+The Strategist's `payloadChangeRequest` renders data via the artifact viewer. When the Strategist returns results, they are automatically displayed — you do NOT need to emit a separate artifact.
+
+The DataArtifactSpec JSON format used by the viewer **MUST** follow this exact structure — no other format is accepted:
 
 ```json
 {

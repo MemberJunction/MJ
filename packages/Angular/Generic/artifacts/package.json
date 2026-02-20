@@ -42,6 +42,7 @@
     "@memberjunction/ng-react": "5.1.0",
     "@memberjunction/ng-shared-generic": "5.1.0",
     "@memberjunction/ng-query-viewer": "5.1.0",
+    "@memberjunction/ng-trees": "5.1.0",
     "@memberjunction/ng-export-service": "5.1.0",
     "@memberjunction/ng-markdown": "5.1.0",
     "marked": "^17.0.1",

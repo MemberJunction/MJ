@@ -267,6 +267,25 @@ describe('SQLExpressionValidator', () => {
       const r = validator.validateFullQuery('');
       expect(r.valid).toBe(false);
     });
+
+    it('should normalize literal \\n sequences and pass SQL with comment header', () => {
+      // Agent-generated SQL arrives with literal \n instead of real newlines
+      const sql = '-- Header Comment\\nSELECT TOP 10 * FROM Users\\nWHERE Status = \'Active\'';
+      const r = validator.validateFullQuery(sql);
+      expect(r.valid).toBe(true);
+    });
+
+    it('should normalize literal \\r\\n sequences', () => {
+      const sql = '-- Header\\r\\nSELECT 1 AS One';
+      const r = validator.validateFullQuery(sql);
+      expect(r.valid).toBe(true);
+    });
+
+    it('should still reject dangerous queries after normalization', () => {
+      const sql = '-- Innocent header\\nDELETE FROM Users';
+      const r = validator.validateFullQuery(sql);
+      expect(r.valid).toBe(false);
+    });
   });
 
   // ---------------------------------------------------------------

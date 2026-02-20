@@ -152,7 +152,8 @@ Include all sections. The **Query Logic** flowchart is the most important — bu
 **Then wait for the parent to relay the user's decision.** Incorporate any feedback before moving to step 3.
 
 ### 3. Write SQL
-- Always use **BaseView** names with the `__mj` schema prefix: `__mj.vwEntityName`
+- Always use **BaseView** names with the correct schema prefix: `SchemaName.vwEntityName`
+- **Get the schema from entity metadata**: Each entity has a `SchemaName` property (returned by **Get Entity Details**). Many entities use `__mj`, but entities can live in **any schema** (e.g., `dbo`, `sales`, `hr`, `custom`). **Never assume `__mj`** — always check.
 - **Never** use raw table names — always use views
 - Use proper JOINs, WHERE clauses, and aggregations
 - For parameters, use Nunjucks syntax: `{{paramName}}`
@@ -160,13 +161,19 @@ Include all sections. The **Query Logic** flowchart is the most important — bu
 - Name parameters descriptively: `startDate`, `customerStatus`, `minOrderTotal`
 
 ### 4. Test the Query
-- Use **Execute Research Query** action to run the SQL and get sample results
-- Verify the results make sense and match the requirements
+- Use **Execute Research Query** action to run the SQL and get a **sample** of results
+- **Set `MaxRows` to 10** when testing — you only need a small sample to verify correctness. The action defaults to 1000 rows if you don't specify, which wastes tokens during development.
+- Verify the columns, data types, and sample values make sense
 - Refine the SQL if results are unexpected
+- **Do NOT modify your SQL with TOP** — the action's `MaxRows` parameter handles row limiting at execution time, keeping your SQL clean for the final result
 
 ### 5. Return Results as Payload
 
 Return your response in this exact structure (note: the DataArtifactSpec goes inside `payloadChangeRequest.replaceElements`):
+
+**CRITICAL — String Formatting:**
+- **Use real newlines** in `plan`, `metadata.sql`, and all multi-line string values. Do NOT use `\n` escape sequences — they render as literal backslash-n in the UI instead of line breaks.
+- Your response is already JSON — the transport layer handles escaping. Just write natural multi-line strings.
 
 ```json
 {
@@ -176,7 +183,7 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
     "replaceElements": {
       "source": "query",
       "title": "Descriptive Title of What This Query Shows",
-      "plan": "## Approach\n\n```mermaid\nerDiagram\n    EntityA ||--o{ EntityB : \"relates to\"\n```\n\n```mermaid\nflowchart TD\n    A[Source] -->|filter| B[Filtered]\n    B -->|group| C[Aggregated]\n```\n\nQueried EntityB joined to EntityA, filtered to last 30 days, grouped by name...",
+      "plan": "## Approach\n\n(see plan template in Step 2 — include Overview, Query Logic, Data Sources, Relationships, Filters)",
       "columns": [
         {
           "field": "AgentID",
@@ -195,8 +202,6 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
         {
           "field": "TotalRuns",
           "headerName": "Total Runs",
-          "sourceEntity": "MJ: AI Agent Runs",
-          "sourceFieldName": "ID",
           "isComputed": true,
           "isSummary": true,
           "sqlBaseType": "int"
@@ -207,7 +212,7 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
         { "ColumnName1": "value2", "ColumnName2": 17 }
       ],
       "metadata": {
-        "sql": "SELECT ... FROM __mj.vwSomeView ...",
+        "sql": "SELECT a.Name AS AgentName, COUNT(r.ID) AS TotalRuns FROM __mj.vwAIAgents a INNER JOIN __mj.vwAIAgentRuns r ON r.AgentID = a.ID GROUP BY a.Name ORDER BY TotalRuns DESC",
         "rowCount": 2,
         "executionTimeMs": 45
       }
@@ -224,7 +229,7 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
 - `title`: Clear, business-friendly description of the query results
 - `plan`: **ALWAYS include this field.** Use the plan template from Step 2 (Overview → Query Logic flowchart → Data Sources → Relationships ERD → Filters & Conditions). Even for simple queries, include the plan. It renders in a dedicated "Plan" tab.
 - `columns`: Array of ALL columns with enriched metadata (see Column Metadata below)
-- `rows`: The actual result data, using the same field names as in `columns`. **Limit to TOP 100 rows** — do not include the full result set if it exceeds 100 rows.
+- `rows`: The actual result data, using the same field names as in `columns`.
 - `metadata.sql`: The exact SQL query you ran
 - `metadata.rowCount`: Number of rows returned
 - `metadata.executionTimeMs`: Execution time from the Execute Research Query result
@@ -240,7 +245,7 @@ Each column object in the `columns` array **MUST** include enriched metadata. Th
 - `headerName`: Human-readable display label
 - `sqlBaseType`: SQL data type — `int`, `nvarchar`, `uniqueidentifier`, `datetime`, `decimal`, `bit`, `money`, `float`, `bigint`
 
-**Entity linking fields** (include when the column maps to an entity field):
+**Entity linking fields** (include ONLY for direct, non-aggregated column references):
 - `sourceEntity`: The **exact MJ entity name** this column comes from (e.g., `"Members"`, `"MJ: AI Agent Runs"`, `"Event Registrations"`). Must match entity names from ALL_ENTITIES exactly.
 - `sourceFieldName`: The original field name in that entity before aliasing (e.g., `"ID"`, `"Name"`, `"Status"`). For JOINed columns, use the entity the field actually belongs to.
 
@@ -254,10 +259,27 @@ Each column object in the `columns` array **MUST** include enriched metadata. Th
 - Columns without `sourceEntity`/`sourceFieldName` display as plain text
 - Always provide `sourceEntity` + `sourceFieldName` for ID columns and foreign key columns — this is what makes the grid interactive
 
+**CRITICAL — When to OMIT `sourceEntity`/`sourceFieldName`:**
+- **NEVER** set `sourceEntity`/`sourceFieldName` on aggregated or computed columns. These fields mean "this cell contains a direct value from that entity field" — which enables clickable entity links. An aggregate like `COUNT(r.ID)` does NOT contain a record ID, it contains a count. Tagging it with `sourceEntity`/`sourceFieldName` would make the grid try to render "42" as a clickable link to record "42", which is wrong.
+- If `isComputed` or `isSummary` is `true`, **omit** `sourceEntity` and `sourceFieldName`
+- Only use entity linking on **pass-through columns** — columns that directly output a single field value from one entity row (e.g., `m.ID`, `m.Name`, `r.Status`)
+
+**Examples:**
+```
+✅ { "field": "MemberID",    "sourceEntity": "Members", "sourceFieldName": "ID" }        — direct PK, clickable
+✅ { "field": "MemberName",  "sourceEntity": "Members", "sourceFieldName": "Name" }      — direct field
+✅ { "field": "EventID",     "sourceEntity": "Events",  "sourceFieldName": "ID" }        — direct FK, clickable
+❌ { "field": "TotalEvents", "sourceEntity": "Event Registrations", "sourceFieldName": "ID", "isSummary": true }  — WRONG! COUNT(er.ID) is not a record ID
+✅ { "field": "TotalEvents", "isSummary": true, "sqlBaseType": "int" }                   — CORRECT, no entity link
+❌ { "field": "AvgCost",     "sourceEntity": "Orders", "sourceFieldName": "TotalCost", "isComputed": true, "isSummary": true }  — WRONG! AVG(o.TotalCost) is not a single order's cost
+✅ { "field": "AvgCost",     "isComputed": true, "isSummary": true, "sqlBaseType": "decimal" }  — CORRECT
+```
+
 ## SQL Guidelines
 
 ### Always Use Views
-- Reference `__mj.vwEntityName`, never raw tables
+- Reference `SchemaName.vwEntityName`, never raw tables — e.g., `__mj.vwMembers`, `dbo.vwOrders`, `sales.vwProducts`
+- **Use each entity's actual `SchemaName`** from Get Entity Details — do NOT assume all entities are in `__mj`
 - Views include computed fields and proper joins
 
 ### Formatting Standard
@@ -265,19 +287,20 @@ Each column object in the `columns` array **MUST** include enriched metadata. Th
 Every query you write must follow this formatting standard. Study these examples carefully — this is the quality bar.
 
 **Example 1 — Simple JOIN with aggregation:**
+*(Note: These examples use `__mj` because those entities happen to be in that schema. Always check each entity's `SchemaName` — it could be `dbo`, `sales`, etc.)*
 ```sql
 -- ============================================================
 -- Member Event Attendance Summary
 -- Which members attend the most events?
 -- ============================================================
-SELECT TOP 100
+SELECT
     -- Build display name from first + last
     m.FirstName + ' ' + m.LastName       AS MemberName,
 
     -- Count distinct attended events per member
     COUNT(er.ID)                          AS TotalEventsAttended
 
-FROM __mj.vwMembers m
+FROM __mj.vwMembers m                    -- SchemaName: __mj
 
     -- Link to event registrations (one member → many registrations)
     INNER JOIN __mj.vwEventRegistrations er
@@ -301,7 +324,7 @@ ORDER BY
 -- Compare agents by volume, reliability, speed, and cost
 -- over the last 30 days
 -- ============================================================
-SELECT TOP 100
+SELECT
     a.Name                                AS AgentName,
     COUNT(r.ID)                           AS TotalRuns,
 
@@ -344,7 +367,7 @@ ORDER BY
 
 **Key formatting rules:**
 - Header comment block with title and one-line description
-- `SELECT TOP 100` always (never unbounded)
+- **Do NOT use `TOP N`** — the result grid supports pagination and handles large result sets. Let WHERE/GROUP BY naturally scope the data.
 - One column per line, right-aligned `AS` aliases for readability
 - Inline comments on computed columns explaining the logic
 - JOINs indented under FROM, each with a comment explaining the relationship
@@ -352,9 +375,9 @@ ORDER BY
 - Trailing comments on filter conditions explaining "why"
 
 ### Performance
-- **Always use TOP 100** for result queries — never return unbounded result sets
-- Use TOP 50 for exploration queries (schema discovery, sampling)
-- Use appropriate WHERE clauses to limit result sets
+- **Do NOT use `SELECT TOP N`** for result queries — the viewer grid supports client-side pagination and can handle thousands of rows. Let the query return the full result set scoped by your WHERE clause.
+- For exploration queries (schema discovery, sampling), use TOP 50 to keep things fast
+- Use appropriate WHERE clauses to scope result sets (date ranges, status filters, etc.)
 - Add ORDER BY for predictable output
 - Prefer JOINs over subqueries when possible
 

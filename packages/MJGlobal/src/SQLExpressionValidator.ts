@@ -427,11 +427,31 @@ export class SQLExpressionValidator {
   }
 
   /**
+   * Normalize literal escape sequences in SQL strings.
+   * Agent-generated SQL sometimes arrives with literal \n, \r, \t sequences
+   * (backslash + letter) instead of actual whitespace characters. This happens
+   * when JSON is double-escaped or the SQL passes through a transport layer
+   * that doesn't interpret escape sequences. Without normalization, comment
+   * stripping fails because the regex expects real newlines.
+   */
+  private normalizeSQLWhitespace(sql: string): string {
+    return sql
+      .replace(/\\r\\n/g, '\n')  // Literal \r\n → newline
+      .replace(/\\n/g, '\n')     // Literal \n → newline
+      .replace(/\\r/g, '\r')     // Literal \r → carriage return
+      .replace(/\\t/g, '\t');    // Literal \t → tab
+  }
+
+  /**
    * Validate a full SQL query (SELECT or WITH/CTE statement).
    * Blocks mutations, dangerous operations, and multi-statement injection.
    * Allows SELECT, subqueries, set operations, and SQL comments.
    */
   public validateFullQuery(sql: string): SQLValidationResult {
-    return this.validate(sql, { context: 'full_query' });
+    // Normalize literal escape sequences before validation — agent-generated
+    // SQL may arrive with literal \n instead of real newlines, which breaks
+    // comment stripping and the "must start with SELECT" check.
+    const normalized = this.normalizeSQLWhitespace(sql);
+    return this.validate(normalized, { context: 'full_query' });
   }
 }
