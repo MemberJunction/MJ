@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getTSQLToPostgresRules } from '../rules/TSQLToPostgresRules.js';
 import { CreateTableRule } from '../rules/CreateTableRule.js';
+import { CatalogViewRule } from '../rules/CatalogViewRule.js';
 import { ViewRule } from '../rules/ViewRule.js';
 import { ProcedureToFunctionRule } from '../rules/ProcedureToFunctionRule.js';
 import { FunctionRule } from '../rules/FunctionRule.js';
@@ -16,8 +17,8 @@ describe('getTSQLToPostgresRules', () => {
   const rules = getTSQLToPostgresRules();
 
   describe('rule count', () => {
-    it('should return exactly 11 rules', () => {
-      expect(rules).toHaveLength(11);
+    it('should return exactly 12 rules', () => {
+      expect(rules).toHaveLength(12);
     });
   });
 
@@ -30,7 +31,7 @@ describe('getTSQLToPostgresRules', () => {
 
     it('should have specific priority values', () => {
       const priorities = rules.map(r => r.Priority);
-      expect(priorities).toEqual([10, 20, 30, 35, 40, 50, 55, 60, 70, 80, 90]);
+      expect(priorities).toEqual([10, 15, 20, 30, 35, 40, 50, 55, 60, 70, 80, 90]);
     });
   });
 
@@ -45,6 +46,10 @@ describe('getTSQLToPostgresRules', () => {
   describe('rule types', () => {
     it('should contain a CreateTableRule', () => {
       expect(rules.some(r => r instanceof CreateTableRule)).toBe(true);
+    });
+
+    it('should contain a CatalogViewRule', () => {
+      expect(rules.some(r => r instanceof CatalogViewRule)).toBe(true);
     });
 
     it('should contain a ViewRule', () => {

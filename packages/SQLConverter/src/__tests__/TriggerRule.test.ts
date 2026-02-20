@@ -103,25 +103,31 @@ END`;
     });
   });
 
-  describe('skip conditions', () => {
-    it('should skip triggers using TRIGGER_NESTLEVEL', () => {
+  describe('advanced trigger conversion (TRIGGER_NESTLEVEL / UPDATE())', () => {
+    it('should convert triggers using TRIGGER_NESTLEVEL to pg_trigger_depth', () => {
       const sql = `CREATE TRIGGER [__mj].[trgNested] ON [__mj].[Foo] AFTER INSERT AS BEGIN
   IF TRIGGER_NESTLEVEL() > 1 RETURN;
   UPDATE [__mj].[Foo] SET [Val] = 1 FROM INSERTED WHERE [__mj].[Foo].[ID] = INSERTED.[ID]
 END`;
       const result = convert(sql);
-      expect(result).toContain('SKIPPED');
+      expect(result).toContain('pg_trigger_depth()');
+      expect(result).toContain('CREATE OR REPLACE FUNCTION');
       expect(result).toContain('trgNested');
+      expect(result).not.toContain('SKIPPED');
+      expect(result).not.toMatch(/TRIGGER_NESTLEVEL/);
     });
 
-    it('should skip triggers using UPDATE() function', () => {
+    it('should convert triggers using UPDATE() function to TG_OP checks', () => {
       const sql = `CREATE TRIGGER [__mj].[trgColCheck] ON [__mj].[Foo] AFTER UPDATE AS BEGIN
   IF UPDATE(Name)
     INSERT INTO [__mj].[Log] ([Msg]) VALUES ('Name changed')
 END`;
       const result = convert(sql);
-      expect(result).toContain('SKIPPED');
-      expect(result).toContain('trgColCheck');
+      expect(result).toContain('TG_OP');
+      expect(result).toContain('IS DISTINCT FROM');
+      expect(result).toContain('"Name"');
+      expect(result).toContain('CREATE OR REPLACE FUNCTION');
+      expect(result).not.toContain('SKIPPED');
     });
   });
 
