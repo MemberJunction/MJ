@@ -132,7 +132,7 @@
   flex-direction: column;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background: var(--mj-color-accent-300);
+  background: var(--mj-brand-accent-subtle);
   border-bottom: 1px solid var(--mj-border-default);
   animation: slideDown 0.2s ease;
 }
@@ -152,7 +152,7 @@
   gap: 0.75rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--mj-color-brand-900);
+  color: var(--mj-brand-primary);
 }
 
 .bulk-selection-info i {
@@ -253,7 +253,7 @@
 }
 
 .stat-icon-total {
-  background: var(--mj-color-accent-300);
+  background: color-mix(in srgb, var(--mj-brand-accent) 25%, transparent);
   color: var(--mj-brand-primary);
 }
 
@@ -698,7 +698,7 @@
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--mj-brand-primary);
-  background: var(--mj-color-accent-300);
+  background: color-mix(in srgb, var(--mj-brand-accent) 25%, transparent);
   padding: 0.25rem 0.75rem;
   border-radius: var(--mj-radius-full);
 }
@@ -723,7 +723,7 @@
 }
 
 .user-card.selected {
-  background: var(--mj-color-accent-300);
+  background: var(--mj-brand-accent-subtle);
   border-color: var(--mj-brand-primary);
 }
 
