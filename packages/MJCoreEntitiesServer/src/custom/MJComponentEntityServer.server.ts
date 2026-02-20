@@ -1,10 +1,10 @@
 import { BaseEntity, SimpleEmbeddingResult } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { ComponentEntityExtended } from "@memberjunction/core-entities";
+import { MJComponentEntityExtended } from "@memberjunction/core-entities";
 import { EmbedTextLocalHelper } from "./util";
 
 @RegisterClass(BaseEntity, 'MJ: Components')
-export class ComponentEntityExtended_Server extends ComponentEntityExtended  {
+export class MJComponentEntityServer extends MJComponentEntityExtended  {
     public async Save(): Promise<boolean> {
         await this.GenerateEmbeddingsByFieldName([
             { 

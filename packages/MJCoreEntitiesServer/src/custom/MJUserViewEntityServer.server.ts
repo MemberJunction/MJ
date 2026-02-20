@@ -1,6 +1,6 @@
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { BaseEntity, EntityInfo, LogError, IMetadataProvider } from "@memberjunction/core";
-import { UserViewEntityExtended } from '@memberjunction/core-entities'
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
@@ -15,7 +15,7 @@ interface SmartFilterResponse {
 }
 
 @RegisterClass(BaseEntity, 'MJ: User Views')
-export class UserViewEntity_Server extends UserViewEntityExtended  {
+export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
     /**
      * This property is hard-coded to true in this class because we DO support smart filters in this class. If you want to disable smart filters for a specific view you can override this property in your subclass and set it to false.
      */

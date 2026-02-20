@@ -3,7 +3,7 @@ import { MJAIAgentActionEntity, MJAIAgentEntity, MJAIAgentModelEntity, MJAIAgent
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, "MJ: AI Agents")
-export class AIAgentEntityExtended extends MJAIAgentEntity {
+export class MJAIAgentEntityExtended extends MJAIAgentEntity {
     private _actions: MJAIAgentActionEntity[] = [];
     public get Actions(): MJAIAgentActionEntity[] {
         return this._actions;

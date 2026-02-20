@@ -38,7 +38,7 @@ interface ParameterExtractionResult {
 }
 
 @RegisterClass(BaseEntity, 'MJ: Queries')
-export class QueryEntityExtended extends MJQueryEntity {
+export class MJQueryEntityServer extends MJQueryEntity {
     private _queryEntities: QueryEntityInfo[] = [];
     private _queryFields: QueryFieldInfo[] = [];
     private _queryParameters: QueryParameterInfo[] = [];

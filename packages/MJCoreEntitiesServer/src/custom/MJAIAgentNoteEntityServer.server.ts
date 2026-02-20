@@ -9,7 +9,7 @@ import { AIEngine } from "@memberjunction/aiengine";
  * when the Note field changes, following the MJQueryEntity pattern.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Notes')
-export class AIAgentNoteEntityExtended extends MJAIAgentNoteEntity {
+export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
     /**
      * Override EmbedTextLocal to use helper
      */

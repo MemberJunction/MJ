@@ -9,7 +9,7 @@ import { AIEngineBase } from './BaseAIEngine';
  * CredentialTypeID expected by the vendor (as declared on the AIVendor record).
  */
 @RegisterClass(BaseEntity, 'MJ: AI Credential Bindings')
-export class AICredentialBindingEntityExtended extends MJAICredentialBindingEntity {
+export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEntity {
 
     /**
      * Async validation that checks credential type compatibility.

@@ -5,7 +5,7 @@ import { ResourcePermissionEngine } from "./ResourcePermissions/ResourcePermissi
 
 
 @RegisterClass(BaseEntity, 'MJ: User Views')
-export class UserViewEntityExtended extends MJUserViewEntity  {
+export class MJUserViewEntityExtended extends MJUserViewEntity  {
     private _ViewEntityInfo: EntityInfo = null
 
     /**
@@ -701,7 +701,7 @@ export class ViewInfo {
      * @static
      * @async
      */
-    static async GetViewsForUser(entityId?: string, contextUser?: UserInfo): Promise<UserViewEntityExtended[]> {
+    static async GetViewsForUser(entityId?: string, contextUser?: UserInfo): Promise<MJUserViewEntityExtended[]> {
         const rv = new RunView();
         const md = new Metadata();
         const result = await rv.RunView({
@@ -741,7 +741,7 @@ export class ViewInfo {
      * @static
      * @async
      */
-    static async GetViewEntity(viewId: string, contextUser?: UserInfo): Promise<UserViewEntityExtended> {
+    static async GetViewEntity(viewId: string, contextUser?: UserInfo): Promise<MJUserViewEntityExtended> {
         const { UserViewEngine } = await import('../engines/UserViewEngine');
         // Ensure the engine is configured before use
         await UserViewEngine.Instance.Config(false, contextUser);
@@ -762,7 +762,7 @@ export class ViewInfo {
      * @static
      * @async
      */
-    static async GetViewEntityByName(viewName: string, contextUser?: UserInfo): Promise<UserViewEntityExtended> {
+    static async GetViewEntityByName(viewName: string, contextUser?: UserInfo): Promise<MJUserViewEntityExtended> {
         const { UserViewEngine } = await import('../engines/UserViewEngine');
         // Ensure the engine is configured before use
         await UserViewEngine.Instance.Config(false, contextUser);

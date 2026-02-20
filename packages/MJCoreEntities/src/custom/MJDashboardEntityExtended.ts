@@ -4,7 +4,7 @@ import { MJDashboardEntity } from "../generated/entity_subclasses";
 import { DashboardEngine } from "../engines/dashboards";
 
 @RegisterClass(BaseEntity, 'MJ: Dashboards')
-export class DashboardEntityExtended extends MJDashboardEntity  {
+export class MJDashboardEntityExtended extends MJDashboardEntity  {
     public NewRecord(): boolean {
         try{
             super.NewRecord();

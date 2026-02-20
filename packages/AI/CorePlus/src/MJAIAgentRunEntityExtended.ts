@@ -1,16 +1,16 @@
 import { BaseEntity, CompositeKey, LogErrorEx, Metadata } from "@memberjunction/core";
 import { MJAIAgentRunEntity } from "@memberjunction/core-entities";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
-import { AIAgentRunStepEntityExtended } from "./AIAgentRunStepExtended";
+import { MJAIAgentRunStepEntityExtended } from "./MJAIAgentRunStepEntityExtended";
 
 @RegisterClass(BaseEntity, "MJ: AI Agent Runs")
-export class AIAgentRunEntityExtended extends MJAIAgentRunEntity {
-    private _runSteps: AIAgentRunStepEntityExtended[] = [];
+export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
+    private _runSteps: MJAIAgentRunStepEntityExtended[] = [];
 
     /**
      * Steps is the array of steps that are excuted within this run.
      */
-    public get Steps(): AIAgentRunStepEntityExtended[] {
+    public get Steps(): MJAIAgentRunStepEntityExtended[] {
         return this._runSteps;
     }
 
@@ -81,7 +81,7 @@ export class AIAgentRunEntityExtended extends MJAIAgentRunEntity {
             this._runSteps = [];
             const md = new Metadata();
             for (const stepData of __runSteps) {
-                const step = await md.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', this.ContextCurrentUser);
+                const step = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', this.ContextCurrentUser);
                 await step.LoadFromData(stepData);
                 this._runSteps.push(step);
             }
@@ -111,7 +111,7 @@ export class AIAgentRunEntityExtended extends MJAIAgentRunEntity {
             if (this.ID?.length > 0) {
                 // only do this for existing records
                 const rv = this.RunViewProviderToUse;
-                const result = await rv.RunView<AIAgentRunStepEntityExtended>({
+                const result = await rv.RunView<MJAIAgentRunStepEntityExtended>({
                     EntityName: "MJ: AI Agent Run Steps",
                     ExtraFilter: "AgentRunID='" + this.ID + "'",
                     OrderBy: "StepNumber",

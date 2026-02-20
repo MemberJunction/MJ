@@ -3,7 +3,7 @@ import { MJTemplateContentEntity, MJTemplateEntity, MJTemplateParamEntity } from
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, 'MJ: Templates')
-export class TemplateEntityExtended extends MJTemplateEntity {
+export class MJTemplateEntityExtended extends MJTemplateEntity {
     private _Content: MJTemplateContentEntity[] = [];
     public get Content(): MJTemplateContentEntity[] {
         return this._Content;

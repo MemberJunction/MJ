@@ -1,17 +1,17 @@
 import { BaseEntity, BaseEntityResult, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogErrorEx, TransactionGroupBase } from "@memberjunction/core";
 import { RegisterClass, uuidv4 } from "@memberjunction/global";
-import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntity } from "@memberjunction/core-entities";
 
 /**
  * Server specific sub-class that handles the automatic creation and updating of
  * Templates and Template Contents entity records linked to the AI Prompt.
- * This class extends the AIPromptEntityExtended class and overrides the Save() method and
+ * This class extends the MJAIPromptEntityExtended class and overrides the Save() method and
  * also provides additional utility functionality that is used within Save() and can be overridden
  * by subclasses to provide custom logic for creating or updating the linked Template and Template Contents, etc.
  */
 @RegisterClass(BaseEntity, "MJ: AI Prompts")
-export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
+export class MJAIPromptEntityServer extends MJAIPromptEntityExtended {
     private static _templateContentTypeID: string | null = null;
     /**
      * The Template Content Type ID that will be used for creating new Template Contents
@@ -55,8 +55,8 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      * @protected
      */ 
     protected async getOrCreateRootTemplateCategoryID(): Promise<string> {
-        if (AIPromptEntityExtendedServer.RootTemplateCategoryID) {
-            return AIPromptEntityExtendedServer.RootTemplateCategoryID;
+        if (MJAIPromptEntityServer.RootTemplateCategoryID) {
+            return MJAIPromptEntityServer.RootTemplateCategoryID;
         }
 
         // look for an existing root level category with the name "MJ: AI Prompts"
@@ -71,8 +71,8 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         }, this.ContextCurrentUser);
         if (result && result.Success && result.Results.length > 0) {
             // we found an existing root category, cache it and return it
-            AIPromptEntityExtendedServer.RootTemplateCategoryID = result.Results[0].ID;
-            return AIPromptEntityExtendedServer.RootTemplateCategoryID;
+            MJAIPromptEntityServer.RootTemplateCategoryID = result.Results[0].ID;
+            return MJAIPromptEntityServer.RootTemplateCategoryID;
         }
         else {
             // we did not find an existing root category, so create one
@@ -97,8 +97,8 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
 
         // save the category
         if (rootCategory.Save()) {
-            AIPromptEntityExtendedServer.RootTemplateCategoryID = rootCategory.ID;
-            return AIPromptEntityExtendedServer.RootTemplateCategoryID;
+            MJAIPromptEntityServer.RootTemplateCategoryID = rootCategory.ID;
+            return MJAIPromptEntityServer.RootTemplateCategoryID;
         }
         else {
             // this is an error state, we failed to create the root category
@@ -273,8 +273,8 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      * @returns 
      */
     protected async getTemplateContentTypeID(): Promise<string> {
-        if (AIPromptEntityExtendedServer.TemplateContentTypeID) {
-            return AIPromptEntityExtendedServer.TemplateContentTypeID;
+        if (MJAIPromptEntityServer.TemplateContentTypeID) {
+            return MJAIPromptEntityServer.TemplateContentTypeID;
         }
         // we will use the MJTemplateEntityType for AI Prompts
         const rv = this.ProviderToUse as any as IRunViewProvider;
@@ -285,7 +285,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         }, this.ContextCurrentUser);
         if (result && result.Success && result.Results.length > 0) {
             // we found a Template Content Type, return its ID but cache it first
-            AIPromptEntityExtendedServer.TemplateContentTypeID = result.Results[0].ID;
+            MJAIPromptEntityServer.TemplateContentTypeID = result.Results[0].ID;
             return result.Results[0].ID;
         }
         else {

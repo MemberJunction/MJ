@@ -3,7 +3,7 @@ import { MJScheduledActionEntity, MJScheduledActionParamEntity } from "../genera
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, 'MJ: Scheduled Actions')
-export class ScheduledActionEntityExtended extends MJScheduledActionEntity {
+export class MJScheduledActionEntityExtended extends MJScheduledActionEntity {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // The purpose of this override is to generate the the CronExpression field in the ScheduledAction entity
         // based on the settings we have for Type/IntervalDays/DayOfWeek/DayOfMonth/Month

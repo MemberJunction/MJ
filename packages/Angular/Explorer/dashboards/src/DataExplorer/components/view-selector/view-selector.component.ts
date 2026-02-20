@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, OnDestroy, ViewEncapsulation } from '@angular/core';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
-import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -14,7 +14,7 @@ export interface ViewListItem {
   isShared: boolean;
   isDefault: boolean;
   userCanEdit: boolean;
-  entity: UserViewEntityExtended;
+  entity: MJUserViewEntityExtended;
 }
 
 /**
@@ -22,7 +22,7 @@ export interface ViewListItem {
  */
 export interface ViewSelectedEvent {
   viewId: string | null;
-  view: UserViewEntityExtended | null;
+  view: MJUserViewEntityExtended | null;
 }
 
 /**
@@ -121,7 +121,7 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
   public isDropdownOpen: boolean = false;
   public myViews: ViewListItem[] = [];
   public sharedViews: ViewListItem[] = [];
-  public selectedView: UserViewEntityExtended | null = null;
+  public selectedView: MJUserViewEntityExtended | null = null;
   public searchText: string = '';
 
   private destroy$ = new Subject<void>();
@@ -167,7 +167,7 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
       const rv = new RunView();
 
       // Load all views for this entity that the user owns OR that are shared
-      const result = await rv.RunView<UserViewEntityExtended>({
+      const result = await rv.RunView<MJUserViewEntityExtended>({
         EntityName: 'MJ: User Views',
         ExtraFilter: `EntityID = '${this.entity.ID}' AND (UserID = '${userId}' OR IsShared = 1)`,
         OrderBy: 'Name',
@@ -201,7 +201,7 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
   /**
    * Map a view entity to a list item
    */
-  private mapViewToListItem(view: UserViewEntityExtended, isOwned: boolean): ViewListItem {
+  private mapViewToListItem(view: MJUserViewEntityExtended, isOwned: boolean): ViewListItem {
     return {
       id: view.ID,
       name: view.Name,

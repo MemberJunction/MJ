@@ -4,7 +4,7 @@ import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { ComponentSpec } from "@memberjunction/interactive-component-types";
 
 @RegisterClass(BaseEntity, 'MJ: Components')
-export class ComponentEntityExtended extends MJComponentEntity {
+export class MJComponentEntityExtended extends MJComponentEntity {
     /**
      * Whenever a Component record is saved, if it is a new record or if the Specification field
      * has changed, we will recalculate the values of the hasCustomProps, hasCustomEvents, RequiresData, DependencyCount fields,
@@ -44,7 +44,7 @@ export class ComponentEntityExtended extends MJComponentEntity {
             }
         }
         catch (ex) {
-            console.error('Error saving ComponentEntityExtended:', ex);
+            console.error('Error saving MJComponentEntityExtended:', ex);
         }
 
         return await super.Save(options);

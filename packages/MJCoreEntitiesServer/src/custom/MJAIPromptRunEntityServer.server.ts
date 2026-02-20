@@ -1,6 +1,6 @@
 import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
-import { AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base";
 
 /**
@@ -8,10 +8,10 @@ import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base"
  * when a prompt run is completed or errors out. The cost calculation is based on
  * the active pricing configuration for the model and vendor used in the run.
  * 
- * Now extends AIPromptRunEntityExtended to inherit message parsing capabilities.
+ * Now extends MJAIPromptRunEntityExtended to inherit message parsing capabilities.
  */
 @RegisterClass(BaseEntity, "MJ: AI Prompt Runs")
-export class AIPromptRunEntityServer extends AIPromptRunEntityExtended {
+export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
     
     /**
      * Override Save to calculate costs when status changes to Complete or Error
@@ -40,7 +40,7 @@ export class AIPromptRunEntityServer extends AIPromptRunEntityExtended {
             return result;
         }
         catch (err) {
-            LogError(`Error in AIPromptRunEntityServer.Save: ${err}`);
+            LogError(`Error in MJAIPromptRunEntityServer.Save: ${err}`);
             throw err;
         }
     }
@@ -154,7 +154,7 @@ export class AIPromptRunEntityServer extends AIPromptRunEntityExtended {
         try {
             // Load the parent prompt run using entity's provider
             const md = this.ProviderToUse as any as IMetadataProvider;
-            const parent = await md.GetEntityObject<AIPromptRunEntityServer>(
+            const parent = await md.GetEntityObject<MJAIPromptRunEntityServer>(
                 'MJ: AI Prompt Runs',
                 this.ContextCurrentUser
             );

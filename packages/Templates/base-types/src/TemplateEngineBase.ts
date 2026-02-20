@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, TemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
@@ -16,7 +16,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     private _Metadata: {
         TemplateContentTypes: MJTemplateContentTypeEntity[],
         TemplateCategories: MJTemplateCategoryEntity[],
-        Templates: TemplateEntityExtended[],
+        Templates: MJTemplateEntityExtended[],
         TemplateContents: MJTemplateContentEntity[],
         TemplateParams: MJTemplateParamEntity[]
     };
@@ -41,7 +41,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         });
     }
 
-    public get Templates(): TemplateEntityExtended[] {
+    public get Templates(): MJTemplateEntityExtended[] {
         return this._Metadata.Templates;
     }
 
@@ -63,7 +63,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
      * @param templateName 
      * @returns 
      */
-    public FindTemplate(templateName: string): TemplateEntityExtended {
+    public FindTemplate(templateName: string): MJTemplateEntityExtended {
         return this.Templates.find((t) => t.Name.trim().toLowerCase() === templateName.trim().toLowerCase())
     }
 }

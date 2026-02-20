@@ -9,7 +9,7 @@ import { AIEngine } from "@memberjunction/aiengine";
  * when the ExampleInput field changes, following the MJQueryEntity pattern.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Examples')
-export class AIAgentExampleEntityExtended extends MJAIAgentExampleEntity {
+export class MJAIAgentExampleEntityServer extends MJAIAgentExampleEntity {
     /**
      * Override EmbedTextLocal to use helper
      */

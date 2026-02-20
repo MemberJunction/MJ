@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { MJEnvironmentEntity } from "../generated/entity_subclasses";
 
 @RegisterClass(BaseEntity, 'MJ: Environments')
-export class EnvironmentEntityExtended extends MJEnvironmentEntity  {
+export class MJEnvironmentEntityExtended extends MJEnvironmentEntity  {
     /**
      * The default environment ID for MemberJunction. This is the standard environment
      * that is used throughout the system when no specific environment is specified.

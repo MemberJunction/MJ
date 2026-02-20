@@ -4,7 +4,7 @@ import { MJReportEntity, MJReportSnapshotEntity, MJReportVersionEntity } from "@
 import { SkipAPIAnalysisCompleteResponse } from "@memberjunction/skip-types";
 
 @RegisterClass(BaseEntity, 'MJ: Reports')
-export class ReportEntity_Server extends MJReportEntity  {
+export class MJReportEntityServer extends MJReportEntity  {
     /**
      * The server side Report Entity sub-class has a simple logic that will create a snapshot of the report when it is first created and each time it is modified, but only
      * if it is either newly created or if the Configuration field has changed.
@@ -87,8 +87,8 @@ export class ReportEntity_Server extends MJReportEntity  {
                             }
                             else {
                                 newVersionNumber = 1; // this is an error state as we previously had a saved report, BUT there were no saved versions for the report, so we are going to use 1 here, but let's log a warning
-                                console.warn('ReportEntity_Server.Save(): No report versions found for report ID:', this.ID);
-                                console.warn('ReportEntity_Server.Save(): Using version number 1 for new report version');
+                                console.warn('MJReportEntityServer.Save(): No report versions found for report ID:', this.ID);
+                                console.warn('MJReportEntityServer.Save(): Using version number 1 for new report version');
                             }
                         }
                         reportVersion.Name = this.Name; // copy current name to the new version
@@ -97,7 +97,7 @@ export class ReportEntity_Server extends MJReportEntity  {
                         reportVersion.Configuration = JSON.stringify(this.Configuration);
                         success = success && await reportVersion.Save();
                         if (!success) {
-                            console.error('ReportEntity_Server.Save(): Error saving report version\n' + reportVersion.LatestResult.CompleteMessage);
+                            console.error('MJReportEntityServer.Save(): Error saving report version\n' + reportVersion.LatestResult.CompleteMessage);
                         }
                     }
 
@@ -122,7 +122,7 @@ export class ReportEntity_Server extends MJReportEntity  {
             }
         }
         catch (e) {
-            console.error('Error in ReportEntity_Server.Save():', e);
+            console.error('Error in MJReportEntityServer.Save():', e);
             return false;
         }
     }

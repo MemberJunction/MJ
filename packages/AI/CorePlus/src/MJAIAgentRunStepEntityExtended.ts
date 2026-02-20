@@ -1,10 +1,10 @@
 import { BaseEntity, CompositeKey, LogErrorEx, Metadata } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJAIAgentRunStepEntity, MJAIPromptRunEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
-import { AIAgentRunEntityExtended } from "./AIAgentRunExtended";
+import { MJAIAgentRunEntityExtended } from "./MJAIAgentRunEntityExtended";
 
 @RegisterClass(BaseEntity, "MJ: AI Agent Run Steps")
-export class AIAgentRunStepEntityExtended extends MJAIAgentRunStepEntity {
+export class MJAIAgentRunStepEntityExtended extends MJAIAgentRunStepEntity {
     private _actionExecutionLog?: MJActionExecutionLogEntity;
     /**
      * If StepType == 'Actions', this property can be used to stash the MJActionExecutionLogEntity
@@ -21,18 +21,18 @@ export class AIAgentRunStepEntityExtended extends MJAIAgentRunStepEntity {
         this._actionExecutionLog = value;
     }
 
-    private _subAgentRun?: AIAgentRunEntityExtended;
+    private _subAgentRun?: MJAIAgentRunEntityExtended;
     /**
-     * If StepType == 'Sub-Agent', this property can be used to stash the AIAgentRunEntityExtended
+     * If StepType == 'Sub-Agent', this property can be used to stash the MJAIAgentRunEntityExtended
      * which contains the sub-agent run details.
      * This is useful for tracking the execution of sub-agents within the agent run step.
      * 
      * NOTE: This property is only applicable when StepType is 'Sub-Agent'.
      */
-    public get SubAgentRun(): AIAgentRunEntityExtended | undefined {
+    public get SubAgentRun(): MJAIAgentRunEntityExtended | undefined {
         return this._subAgentRun;
     }
-    public set SubAgentRun(value: AIAgentRunEntityExtended | undefined) {
+    public set SubAgentRun(value: MJAIAgentRunEntityExtended | undefined) {
         this._subAgentRun = value;
     }
 
@@ -92,7 +92,7 @@ export class AIAgentRunStepEntityExtended extends MJAIAgentRunStepEntity {
             this._actionExecutionLog = await md.GetEntityObject<MJActionExecutionLogEntity>('MJ: Action Execution Logs', this.ContextCurrentUser);
             await this._actionExecutionLog.LoadFromData(__actionExecutionLog);
         } else if (this.StepType === 'Sub-Agent' && __subAgentRun) {
-            this._subAgentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.ContextCurrentUser);
+            this._subAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.ContextCurrentUser);
             await this._subAgentRun.LoadFromData(__subAgentRun);
         } else if (this.ID?.length > 0) {
             await this.LoadRelatedData();
@@ -124,7 +124,7 @@ export class AIAgentRunStepEntityExtended extends MJAIAgentRunStepEntity {
                         await this._actionExecutionLog.Load(this.TargetLogID);
                         break;
                     case "Sub-Agent":
-                        this._subAgentRun = await md.GetEntityObject<AIAgentRunEntityExtended>("MJ: AI Agent Runs", this.ContextCurrentUser);
+                        this._subAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>("MJ: AI Agent Runs", this.ContextCurrentUser);
                         await this._subAgentRun.Load(this.TargetLogID);
                         break;
                     case "Prompt":

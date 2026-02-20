@@ -4,7 +4,7 @@ import { MJDuplicateRunEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
-export class DuplicateRunEntity_Server extends MJDuplicateRunEntity  {
+export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity  {
     public async Save(): Promise<boolean> {
         const saveResult: boolean = await super.Save();
         if (saveResult && this.EndedAt === null) {

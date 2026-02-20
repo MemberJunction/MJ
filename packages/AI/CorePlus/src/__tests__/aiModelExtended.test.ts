@@ -52,12 +52,12 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 }));
 
 // Import after mocking
-import { AIModelEntityExtended } from '../AIModelExtended';
+import { MJAIModelEntityExtended } from '../MJAIModelEntityExtended';
 
-describe('AIModelEntityExtended', () => {
+describe('MJAIModelEntityExtended', () => {
     describe('APINameOrName', () => {
         it('should return APIName when it exists', () => {
-            const model = new AIModelEntityExtended();
+            const model = new MJAIModelEntityExtended();
             model.APIName = 'gpt-4o';
             model.Name = 'GPT-4o';
 
@@ -65,7 +65,7 @@ describe('AIModelEntityExtended', () => {
         });
 
         it('should return Name when APIName is empty', () => {
-            const model = new AIModelEntityExtended();
+            const model = new MJAIModelEntityExtended();
             model.APIName = '';
             model.Name = 'GPT-4o';
 
@@ -73,7 +73,7 @@ describe('AIModelEntityExtended', () => {
         });
 
         it('should return Name when APIName is null/undefined', () => {
-            const model = new AIModelEntityExtended();
+            const model = new MJAIModelEntityExtended();
             (model as Record<string, unknown>).APIName = null;
             model.Name = 'My Model';
 
@@ -83,13 +83,13 @@ describe('AIModelEntityExtended', () => {
 
     describe('ModelVendors', () => {
         it('should start with empty array', () => {
-            const model = new AIModelEntityExtended();
+            const model = new MJAIModelEntityExtended();
 
             expect(model.ModelVendors).toEqual([]);
         });
 
         it('should be a readonly getter', () => {
-            const model = new AIModelEntityExtended();
+            const model = new MJAIModelEntityExtended();
             const vendors = model.ModelVendors;
 
             expect(Array.isArray(vendors)).toBe(true);

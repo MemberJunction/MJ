@@ -7,7 +7,7 @@ import { MJEntityFieldEntity } from '../generated/entity_subclasses';
  * These properties should only be updated by the CodeGen system when reflecting changes from the database schema.
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Fields')
-export class EntityFieldEntityExtended extends MJEntityFieldEntity {
+export class MJEntityFieldEntityExtended extends MJEntityFieldEntity {
     /**
      * Properties that are reflected from the database schema and should not be modified directly
      */
@@ -59,7 +59,7 @@ export class EntityFieldEntityExtended extends MJEntityFieldEntity {
         // If we're updating an existing record, check for restricted field modifications
         if (!this.NewRecord) {
             // Check each database-reflected property
-            for (const prop of EntityFieldEntityExtended.DATABASE_REFLECTED_PROPERTIES) {
+            for (const prop of MJEntityFieldEntityExtended.DATABASE_REFLECTED_PROPERTIES) {
                 const field = this.GetFieldByName(prop);
                 if (field && field.Dirty) {
                     result.Success = false;

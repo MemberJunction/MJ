@@ -7,7 +7,7 @@ import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
  * Subclass for the Resource Permissiosn entity that implements some workflow logic
  */
 @RegisterClass(BaseEntity, 'MJ: Resource Permissions')
-export class ResourcePermissionEntityExtended extends MJResourcePermissionEntity  {
+export class MJResourcePermissionEntityExtended extends MJResourcePermissionEntity  {
     /**
      * This override encapsulates some busienss logic for the Resource Permissions entity as follows:
      * 1) Whenever a new permission record is created that has a status of "Requested", we generate a new Notifications record for the owner of the resource being requested

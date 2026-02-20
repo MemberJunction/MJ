@@ -8,7 +8,7 @@ import { ChatMessage } from '@memberjunction/ai';
  * conversation messages and data from the stored JSON.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Runs')
-export class AIPromptRunEntityExtended extends MJAIPromptRunEntity {
+export class MJAIPromptRunEntityExtended extends MJAIPromptRunEntity {
     
     /**
      * Parses and extracts all message data from the Messages field.

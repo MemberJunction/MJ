@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { MJAIModelEntity, MJAIModelVendorEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(BaseEntity, 'MJ: AI Models')  
-export class AIModelEntityExtended extends MJAIModelEntity  {
+export class MJAIModelEntityExtended extends MJAIModelEntity  {
     /**
      * Returns the APIName if it exists, otherwise returns the Name
      */

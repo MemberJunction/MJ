@@ -4,7 +4,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { createHash } from 'crypto';
 
 @RegisterClass(BaseEntity, "MJ: Artifact Versions")
-export class ArtifactVersionExtended extends MJArtifactVersionEntity {
+export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
     private _pendingAttributes: any[] | null = null;
     private _loadedAttributes: MJArtifactVersionAttributeEntity[] | null = null;
 
@@ -69,7 +69,7 @@ export class ArtifactVersionExtended extends MJArtifactVersionEntity {
                 await this.ExtractAndSaveAttributes();
             }
             catch (error) {
-                LogError(`Error in ArtifactVersionExtended.Save pre-processing: ${error instanceof Error ? error.message : error}`);
+                LogError(`Error in MJArtifactVersionEntityServer.Save pre-processing: ${error instanceof Error ? error.message : error}`);
             }
         }
 

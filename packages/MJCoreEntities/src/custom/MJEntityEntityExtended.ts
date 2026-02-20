@@ -8,7 +8,7 @@ import { MJEntityEntity } from '../generated/entity_subclasses';
  * to prevent CodeGen from overwriting the custom description.
  */
 @RegisterClass(BaseEntity, 'MJ: Entities')
-export class EntityEntityExtended extends MJEntityEntity {
+export class MJEntityEntityExtended extends MJEntityEntity {
     /**
      * Override Set to handle Description field changes
      */

@@ -11,7 +11,7 @@ import { RegisterClass } from "@memberjunction/global";
  *    b. An existing application's DefaultForNewUser is changed from false to true
  */
 @RegisterClass(BaseEntity, 'MJ: Applications')
-export class ApplicationEntityServerEntity extends MJApplicationEntity {
+export class MJApplicationEntityServer extends MJApplicationEntity {
     constructor(Entity: EntityInfo) {
         super(Entity);
 

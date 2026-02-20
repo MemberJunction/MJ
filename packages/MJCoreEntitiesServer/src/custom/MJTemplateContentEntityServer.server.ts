@@ -20,7 +20,7 @@ interface ParameterExtractionResult {
 }
 
 @RegisterClass(BaseEntity, 'MJ: Template Contents')
-export class TemplateContentEntityExtended extends MJTemplateContentEntity {
+export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const provider = Metadata.Provider as SQLServerDataProvider;
         

@@ -10,7 +10,7 @@ import { MJConversationDetailEntity } from "@memberjunction/core-entities";
  * flag is set to true, allowing the UI to display an "(Edited)" indicator.
  */
 @RegisterClass(BaseEntity, "MJ: Conversation Details")
-export class ConversationDetailEntityServer extends MJConversationDetailEntity {
+export class MJConversationDetailEntityServer extends MJConversationDetailEntity {
     /**
      * Override Save to detect message changes and set the OriginalMessageChanged flag.
      * This is done as pre-processing before calling super.Save() to ensure it's a single DB round trip.

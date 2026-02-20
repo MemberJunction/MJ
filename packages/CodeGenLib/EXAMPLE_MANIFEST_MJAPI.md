@@ -41,8 +41,8 @@ import {
 
 // @memberjunction/actions-base (2 classes)
 import {
-    ActionEntityExtended,
-    EntityActionEntityExtended,
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended,
 } from '@memberjunction/actions-base';
 
 // @memberjunction/actions-bizapps-lms (14 classes)
@@ -139,8 +139,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     EntityActionInvocationValidate,
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
-    ActionEntityExtended,
-    EntityActionEntityExtended,
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended,
     // ... all 705 classes listed here ...
     BaseLMSAction,
     CreateUserAction_actions_bizapps_lms,  // aliased import used here

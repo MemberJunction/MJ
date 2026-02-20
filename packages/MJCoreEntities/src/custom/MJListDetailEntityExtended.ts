@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { MJListDetailEntity } from "../generated/entity_subclasses";
 
 @RegisterClass(BaseEntity, 'MJ: List Details')
-export class ListDetailEntityExtended extends MJListDetailEntity  {
+export class MJListDetailEntityExtended extends MJListDetailEntity  {
     private _recordCompositeKey: CompositeKey | null = null;
     private _sourceEntityInfo: EntityInfo | null = null;
 

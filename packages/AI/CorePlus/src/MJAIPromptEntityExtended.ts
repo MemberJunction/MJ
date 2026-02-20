@@ -4,7 +4,7 @@ import { compareStringsByLine, RegisterClass } from "@memberjunction/global";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 
 @RegisterClass(BaseEntity, "MJ: AI Prompts")
-export class AIPromptEntityExtended extends MJAIPromptEntity {
+export class MJAIPromptEntityExtended extends MJAIPromptEntity {
     /**
      * private property to hold the template text.
      */

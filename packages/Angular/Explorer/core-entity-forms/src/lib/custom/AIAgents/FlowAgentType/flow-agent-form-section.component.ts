@@ -1,7 +1,7 @@
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Form section component for Flow Agent types.
@@ -20,7 +20,7 @@ export class FlowAgentFormSectionComponent extends BaseFormSectionComponent {
     public IsFullScreen = false;
 
     get AgentID(): string | null {
-        return this.record && 'ID' in this.record ? (this.record as AIAgentEntityExtended).ID : null;
+        return this.record && 'ID' in this.record ? (this.record as MJAIAgentEntityExtended).ID : null;
     }
 
     constructor(private cdr: ChangeDetectorRef) {

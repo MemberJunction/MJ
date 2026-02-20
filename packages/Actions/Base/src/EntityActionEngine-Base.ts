@@ -1,7 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { ActionParam, RunActionParams } from "./ActionEngine-Base";
-import { EntityActionEntityExtended } from "./EntityActionEntity-Extended";
+import { MJEntityActionEntityExtended } from "./MJEntityActionEntityExtended";
 
 /**
  * Parameters type for invoking an entity action
@@ -10,7 +10,7 @@ export class EntityActionInvocationParams {
     /**
      * The entity action to be invoked
      */
-    public EntityAction: EntityActionEntityExtended;
+    public EntityAction: MJEntityActionEntityExtended;
 
     /**
      * The type of entity/action invocation to be performed
@@ -83,7 +83,7 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
 
  
     // internal instance properties used for the singleton pattern
-    private _EntityActions: EntityActionEntityExtended[] = [];
+    private _EntityActions: MJEntityActionEntityExtended[] = [];
     private _EntityActionParams: MJEntityActionParamEntity[] = [];
     private _EntityActionInvocationTypes: MJEntityActionInvocationTypeEntity[] = [];
     private _EntityActionFilters: MJEntityActionFilterEntity[] = [];
@@ -151,7 +151,7 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
     /** 
      * List of all the Entity Action objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
-    public get EntityActions(): EntityActionEntityExtended[] {
+    public get EntityActions(): MJEntityActionEntityExtended[] {
         return this._EntityActions;
     }
 
@@ -163,32 +163,32 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
     }
 
     /**
-     * Helper method to get the EntityActionEntityExtended object for a given entity name
+     * Helper method to get the MJEntityActionEntityExtended object for a given entity name
      * @param entityName 
      * @param status Optional, if provided will filter the results based on the status
      * @returns 
      */
-    public GetActionsByEntityName(entityName: string, status?: 'Active' | 'Pending' | 'Disabled'): EntityActionEntityExtended[] {
+    public GetActionsByEntityName(entityName: string, status?: 'Active' | 'Pending' | 'Disabled'): MJEntityActionEntityExtended[] {
         return this._EntityActions.filter(e => (!status || e.Status === status) && e.Entity.trim().toLowerCase() === entityName.trim().toLowerCase());
     }
 
     /**
-     * Helper method to get the EntityActionEntityExtended object for a given entity ID
+     * Helper method to get the MJEntityActionEntityExtended object for a given entity ID
      * @param entityID 
      * @returns 
      */
-    public GetActionsByEntityID(entityID: string): EntityActionEntityExtended[] {
+    public GetActionsByEntityID(entityID: string): MJEntityActionEntityExtended[] {
         return this._EntityActions.filter(e => e.EntityID === entityID);
     }
 
     /**
-     * Helper method to get the EntityActionEntityExtended object for a given entity name and invocation type
+     * Helper method to get the MJEntityActionEntityExtended object for a given entity name and invocation type
      * @param entityName 
      * @param invocationType 
      * @param status Optional, if provided will filter the results based on the status
      * @returns 
      */
-    public GetActionsByEntityNameAndInvocationType(entityName: string, invocationType: string, status?: 'Active' | 'Pending' | 'Disabled'): EntityActionEntityExtended[] {
+    public GetActionsByEntityNameAndInvocationType(entityName: string, invocationType: string, status?: 'Active' | 'Pending' | 'Disabled'): MJEntityActionEntityExtended[] {
         const entityActions = this.GetActionsByEntityName(entityName, status);
         // now extract the ones that have the right invocation type
         return entityActions.filter(e => { 

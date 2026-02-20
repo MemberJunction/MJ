@@ -5,13 +5,13 @@ import { AIEngine } from "@memberjunction/aiengine";
 
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
-import { DocumentationEngine, LibraryEntityExtended, LibraryItemEntityExtended } from "@memberjunction/doc-utils";
-import { ActionEngineBase, ActionEntityExtended, ActionLibrary, GeneratedCode } from "@memberjunction/actions-base";
+import { DocumentationEngine, MJLibraryEntityExtended, MJLibraryItemEntityExtended } from "@memberjunction/doc-utils";
+import { ActionEngineBase, MJActionEntityExtended, ActionLibrary, GeneratedCode } from "@memberjunction/actions-base";
 
 /**
  * Extended GeneratedCode interface to include parameters and result codes
  */
-interface GeneratedCodeExtended extends GeneratedCode {
+interface MJGeneratedCodeExtended extends GeneratedCode {
     Parameters?: Array<{
         Name: string;
         Type: 'Input' | 'Output' | 'Both';
@@ -32,7 +32,7 @@ interface GeneratedCodeExtended extends GeneratedCode {
  * Server-Only custom sub-class for Actions entity. This sub-class handles the process of auto-generation code for the Actions entity.
  */
 @RegisterClass(BaseEntity, 'MJ: Actions') // high priority make sure this class is used ahead of other things
-export class ActionEntityServerEntity extends ActionEntityExtended {
+export class MJActionEntityServer extends MJActionEntityExtended {
     constructor(Entity: EntityInfo) {
         super(Entity); // call super
 
@@ -191,7 +191,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
      * the mj_actions library for each user environment. The mj_actions library will have a class for each action and that class will have certain libraries imported at the top of the file and available for use.
      * That information along with a detailed amount of system prompt steering goes into the AI model in order to generate contextually appropriate and reliable code that maps to the business logic of the user
      */
-    public async GenerateCode(maxAttempts: number = 3): Promise<GeneratedCodeExtended> {
+    public async GenerateCode(maxAttempts: number = 3): Promise<MJGeneratedCodeExtended> {
         try {
             this.SendMessage('Generating code... ');
 
@@ -239,7 +239,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
             }>(params);
 
             if (result.success && result.result) {
-                const generatedCode: GeneratedCodeExtended = {
+                const generatedCode: MJGeneratedCodeExtended = {
                     Success: true,
                     Code: result.result.code.trim(),
                     Comments: result.result.explanation,
@@ -346,12 +346,12 @@ ${JSON.stringify(parentAction.Params.map(p => {
     /**
      * Loads the parent action entity if this is a child action
      */
-    protected async LoadParentAction(): Promise<ActionEntityExtended | null> {
+    protected async LoadParentAction(): Promise<MJActionEntityExtended | null> {
         if (!this.ParentID) return null;
 
         // Use the entity's provider instead of creating new Metadata instance
         const md = this.ProviderToUse as any as IMetadataProvider;
-        const parent = await md.GetEntityObject<ActionEntityExtended>('MJ: Actions', this.ContextCurrentUser);
+        const parent = await md.GetEntityObject<MJActionEntityExtended>('MJ: Actions', this.ContextCurrentUser);
         if (await parent.Load(this.ParentID)) {
             return parent;
         }
@@ -545,7 +545,7 @@ ${JSON.stringify(parentAction.Params.map(p => {
     /**
      * Validates the generated code
      */
-    protected async ValidateGeneratedCode(generatedCode: GeneratedCodeExtended, attemptsRemaining: number): Promise<GeneratedCodeExtended> {
+    protected async ValidateGeneratedCode(generatedCode: MJGeneratedCodeExtended, attemptsRemaining: number): Promise<MJGeneratedCodeExtended> {
         // For now, return the code as-is
         // TODO: Implement validation logic using a separate prompt
         return generatedCode;
@@ -564,11 +564,11 @@ ${JSON.stringify(parentAction.Params.map(p => {
             }[];
         }[] 
     {
-        return DocumentationEngine.Instance.Libraries.map((library: LibraryEntityExtended) => {
+        return DocumentationEngine.Instance.Libraries.map((library: MJLibraryEntityExtended) => {
             return {
                 Name: library.Name,
                 Description: library.Description,
-                Items: library.Items.map((item: LibraryItemEntityExtended) => {
+                Items: library.Items.map((item: MJLibraryItemEntityExtended) => {
                     return {
                         Name: item.Name,
                         Content: item.HTMLContent

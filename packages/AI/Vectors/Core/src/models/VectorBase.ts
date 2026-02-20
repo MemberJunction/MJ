@@ -2,7 +2,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError } from "@memberjunction/core";
 import { MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { PageRecordsParams } from "../generic/VectorCore.types";
-import { AIModelEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
 export class VectorBase {
     _runView: RunView;
@@ -70,8 +70,8 @@ export class VectorBase {
         }).join("\n OR ");
     }
 
-    protected GetAIModel(id?: string): AIModelEntityExtended {
-        let model: AIModelEntityExtended;
+    protected GetAIModel(id?: string): MJAIModelEntityExtended {
+        let model: MJAIModelEntityExtended;
         if(id){
             model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings" && m.ID === id);
         }

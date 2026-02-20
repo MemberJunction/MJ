@@ -12,7 +12,7 @@ import { ___codeGenAPIPort, ___codeGenAPISubmissionDelay, ___codeGenAPIURL } fro
  * happens in the server. That's why it is not in the core-entities-server package.
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Permissions')
-export class EntityPermissionsEntity_Server extends MJEntityPermissionEntity {
+export class MJEntityPermissionEntityServer extends MJEntityPermissionEntity {
   protected static _entityIDQueue: string[] = [];
   protected static _lastModifiedTime: Date | null = null;
   protected static _submissionTimer: NodeJS.Timeout | null = null;
@@ -89,7 +89,7 @@ export class EntityPermissionsEntity_Server extends MJEntityPermissionEntity {
 
   override Save(options?: EntitySaveOptions): Promise<boolean> {
     // simply queue up the entity ID
-    if (this.Dirty || options?.IgnoreDirtyState) EntityPermissionsEntity_Server.AddToQueue(this.EntityID);
+    if (this.Dirty || options?.IgnoreDirtyState) MJEntityPermissionEntityServer.AddToQueue(this.EntityID);
 
     return super.Save(options);
   }
@@ -98,7 +98,7 @@ export class EntityPermissionsEntity_Server extends MJEntityPermissionEntity {
     const success = await super.Delete(options);
 
     // simply queue up the entity ID if the delete worked
-    if (success) EntityPermissionsEntity_Server.AddToQueue(this.EntityID);
+    if (success) MJEntityPermissionEntityServer.AddToQueue(this.EntityID);
 
     return success;
   }
