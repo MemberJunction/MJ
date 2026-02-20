@@ -6,9 +6,9 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
-interface ModelDisplayData extends AIModelEntityExtended {
+interface ModelDisplayData extends MJAIModelEntityExtended {
   VendorName?: string;
   VendorID?: string; // Add this since we're using it for filtering
   ModelTypeName?: string;
@@ -55,9 +55,9 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public showFilters = true;
   public expandedModelId: string | null = null;
 
-  // Data - Keep as AIModelEntityExtended to preserve getters
-  public models: AIModelEntityExtended[] = [];
-  public filteredModels: AIModelEntityExtended[] = [];
+  // Data - Keep as MJAIModelEntityExtended to preserve getters
+  public models: MJAIModelEntityExtended[] = [];
+  public filteredModels: MJAIModelEntityExtended[] = [];
   public vendors: MJAIVendorEntity[] = [];
   public modelTypes: MJAIModelTypeEntity[] = [];
 
@@ -515,7 +515,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   /**
    * Show the detail panel for a model
    */
-  public showModelDetails(model: AIModelEntityExtended, event?: Event): void {
+  public showModelDetails(model: MJAIModelEntityExtended, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
@@ -548,7 +548,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public async createNewModel(): Promise<void> {
     try {
       const md = new Metadata();
-      const newModel = await md.GetEntityObject<AIModelEntityExtended>('MJ: AI Models');
+      const newModel = await md.GetEntityObject<MJAIModelEntityExtended>('MJ: AI Models');
       
       if (newModel) {
         newModel.Name = 'New AI Model';

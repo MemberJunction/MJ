@@ -15,7 +15,7 @@ import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@me
     templateUrl: './action-form.component.html',
     styleUrls: ['./action-form.component.css']
 })
-export class ActionFormComponentExtended extends MJActionFormComponent implements OnInit {
+export class MJActionFormComponentExtended extends MJActionFormComponent implements OnInit {
     public record!: MJActionEntity;
     
     // Related entities
@@ -90,7 +90,7 @@ export class ActionFormComponentExtended extends MJActionFormComponent implement
     
     /**
      * Override InternalSaveRecord to handle Action and related ActionParams in a transaction
-     * This follows the same pattern as AIAgentFormComponent
+     * This follows the same pattern as MJAIAgentFormComponent
      */
     protected async InternalSaveRecord(): Promise<boolean> {
         if (!this.record) {

@@ -6,7 +6,7 @@ import { MJQueryCategoryEntity, MJQueryPermissionEntity } from '@memberjunction/
 import { MJQueryResolver } from '../generated/generated.js';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
-import { QueryEntityExtended } from '@memberjunction/core-entities-server';
+import { MJQueryEntityServer } from '@memberjunction/core-entities-server';
 
 /**
  * Query status enumeration for GraphQL
@@ -425,8 +425,8 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 };
             }
 
-            // Use QueryEntityExtended which handles AI processing
-            const record = await provider.GetEntityObject<QueryEntityExtended>("MJ: Queries", context.userPayload.userRecord);
+            // Use MJQueryEntityServer which handles AI processing
+            const record = await provider.GetEntityObject<MJQueryEntityServer>("MJ: Queries", context.userPayload.userRecord);
             
             // Set the fields from input, handling CategoryPath resolution
             const fieldsToSet = {
@@ -638,9 +638,9 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         @PubSub() pubSub: PubSubEngine
     ): Promise<UpdateQueryResultType> {
         try {
-            // Load the existing query using QueryEntityExtended
+            // Load the existing query using MJQueryEntityServer
             const provider = GetReadWriteProvider(context.providers);
-            const queryEntity = await provider.GetEntityObject<QueryEntityExtended>('MJ: Queries', context.userPayload.userRecord);
+            const queryEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', context.userPayload.userRecord);
             if (!queryEntity || !await queryEntity.Load(input.ID)) {
                 return {
                     Success: false,

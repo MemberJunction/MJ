@@ -55,7 +55,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
         attemptJSONRepair = false;
         data: unknown = null;
     },
-    AIPromptEntityExtended: class {},
+    MJAIPromptEntityExtended: class {},
 }));
 
 import { LLMReranker, createLLMReranker } from '../LLMReranker';

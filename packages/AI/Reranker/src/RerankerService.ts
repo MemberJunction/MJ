@@ -13,7 +13,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
 import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { BaseReranker, RerankDocument } from '@memberjunction/ai';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, parseRerankerConfiguration } from './config.types';
 
 // Re-export config types for convenience
@@ -223,7 +223,7 @@ export class RerankerService {
      * Looks up ModelVendor relationships to find the active vendor.
      */
     private async getModelDriverInfo(
-        model: AIModelEntityExtended,
+        model: MJAIModelEntityExtended,
         contextUser: UserInfo
     ): Promise<{ driverClass: string | null; apiKey: string | null; apiName: string | null }> {
         // Find the active model vendor relationship

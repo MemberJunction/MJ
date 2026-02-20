@@ -11,7 +11,7 @@ graph TD
     A["Core Entities Server"] --> B["AIPromptEntityExtended"]
     A --> C["QueryEntityExtended"]
     A --> D["ComponentEntityExtended"]
-    A --> E["ActionEntityExtended"]
+    A --> E["MJActionEntityExtended"]
     A --> F["ApplicationEntityExtended"]
     A --> G["Other Server Entities"]
 
