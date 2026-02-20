@@ -15,8 +15,8 @@ import { SchedulingEngineBase } from './SchedulingEngineBase';
  * - Determining minimum intervals
  * - Validating cron expressions
  */
-@RegisterClass(MJScheduledJobEntity, 'ScheduledJobEntityExtended')
-export class ScheduledJobEntityExtended extends MJScheduledJobEntity {
+@RegisterClass(MJScheduledJobEntity, 'MJScheduledJobEntityExtended')
+export class MJScheduledJobEntityExtended extends MJScheduledJobEntity {
     /**
      * Calculate time in milliseconds until next execution
      * Note: Requires cron-parser, which is not available in base-engine

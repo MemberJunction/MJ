@@ -4,7 +4,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { ActionEngineBase } from "./ActionEngine-Base";
 
 @RegisterClass(BaseEntity, 'MJ: Actions') // high priority make sure this class is used ahead of other things
-export class ActionEntityExtended extends MJActionEntity {
+export class MJActionEntityExtended extends MJActionEntity {
     /**
      * Returns true if this action is a core MemberJunction framework action, false otherwise.
      */

@@ -4,7 +4,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { EntityActionEngineBase } from "./EntityActionEngine-Base";
 
 @RegisterClass(BaseEntity, 'MJ: Entity Actions')
-export class EntityActionEntityExtended extends MJEntityActionEntity {
+export class MJEntityActionEntityExtended extends MJEntityActionEntity {
     private _filters: MJEntityActionFilterEntity[] = null;
     private _invocations: MJEntityActionInvocationEntity[] = null;
     private _params: MJEntityActionParamEntity[] = null;
