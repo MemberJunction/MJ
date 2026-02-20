@@ -110,7 +110,9 @@
                 [contentType]="contentType"
                 [readonly]="true"
                 (openEntityRecord)="onOpenEntityRecord($event)"
-                (pluginLoaded)="onPluginLoaded()">
+                (navigationRequest)="onNavigationRequest($event)"
+                (pluginLoaded)="onPluginLoaded()"
+                (tabsChanged)="onTabsChanged()">
               </mj-artifact-type-plugin-viewer>
             </div>
           }

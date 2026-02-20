@@ -20,5 +20,25 @@
       "lastModified": "2026-02-13T21:09:32.633Z",
       "checksum": "1d4d11d4ecedd1a1e859d711c7a0a83a302c0e2f74c723a75dc5186a610db3a3"
     }
+  },
+  {
+    "fields": {
+      "Name": "Server Installed Version History",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Admin",
+      "UserQuestion": "Show me a list of versions installed on the server in order of most recent version first",
+      "SQL": "@file:SQL/server-installed-version-history.sql",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "23F8423E-F36B-1410-8D9C-00021F8B792E"
+    },
+    "sync": {
+      "lastModified": "2026-02-17T00:09:26.825Z",
+      "checksum": "857e76035d5ea6be171b01ca2823580b8bc2a1e58a8d5d1a8fdfe367efb7d482"
+    }
   }
 ]

@@ -324,7 +324,9 @@ Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`
 
 ### SQLExpressionValidator
 
-Validates user-provided SQL expressions against injection attacks. Provides context-aware validation (WHERE clauses, ORDER BY, aggregates, field references) with an allowlist of safe SQL functions.
+Validates user-provided SQL expressions and full queries against injection attacks. Provides context-aware validation (WHERE clauses, ORDER BY, aggregates, field references, full queries) with an allowlist of safe SQL functions.
+
+**Expression validation** (WHERE clauses, aggregates, ORDER BY):
 
 ```typescript
 import { SQLExpressionValidator } from '@memberjunction/global';
@@ -342,8 +344,21 @@ const bad = validator.validate("Name = 'test'; 1=1", {
     context: 'where_clause'
 });
 // bad.valid === false
-// bad.error === "Semicolons are not allowed in SQL expressions"
 ```
+
+**Full query validation** (ad-hoc SELECT/WITH statements):
+
+```typescript
+// Validate a complete SQL query — allows SELECT, JOINs, subqueries, set operations, comments
+const result = validator.validateFullQuery('SELECT TOP 10 * FROM __mj.vwUsers WHERE IsActive = 1');
+// result.valid === true
+
+// Mutations and dangerous operations are blocked
+const bad = validator.validateFullQuery("INSERT INTO Users (Name) VALUES ('hacked')");
+// bad.valid === false, bad.trigger === 'INSERT'
+```
+
+The `full_query` context allows keywords that are legitimate in SELECT statements (EXISTS, ANY, ALL, UNION, INTERSECT, EXCEPT, IF) while still blocking all mutations (INSERT, UPDATE, DELETE, DROP, etc.), dangerous operations (EXEC, OPENROWSET, WAITFOR), and multi-statement injection (semicolons).
 
 ### ClassUtils -- Reflection Helpers
 
@@ -589,7 +604,8 @@ function RegisterClass(
 | Method | Returns | Description |
 |---|---|---|
 | `Instance` (static) | `SQLExpressionValidator` | Singleton accessor |
-| `validate(expression, options)` | `SQLValidationResult` | Validate a SQL expression |
+| `validate(expression, options)` | `SQLValidationResult` | Validate a SQL expression with context-specific rules |
+| `validateFullQuery(sql)` | `SQLValidationResult` | Validate a full SELECT/WITH query (convenience for `validate(sql, { context: 'full_query' })`) |
 
 ### WarningManager
 

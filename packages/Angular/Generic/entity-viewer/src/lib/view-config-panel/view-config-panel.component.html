@@ -74,16 +74,18 @@
         <span class="tab-badge">{{ enabledAggregatesCount }}</span>
       }
     </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeTab === 'settings'"
-      (click)="setActiveTab('settings')"
-      [title]="isIconOnlyMode ? 'Settings' : ''">
-      <i class="fa-solid fa-cog"></i>
-      @if (!isIconOnlyMode) {
-        <span>Settings</span>
-      }
-    </button>
+    @if (viewEntity) {
+      <button
+        class="tab-btn"
+        [class.active]="activeTab === 'settings'"
+        (click)="setActiveTab('settings')"
+        [title]="isIconOnlyMode ? 'Settings' : ''">
+        <i class="fa-solid fa-cog"></i>
+        @if (!isIconOnlyMode) {
+          <span>Settings</span>
+        }
+      </button>
+    }
   </div>
 
   <!-- Panel Content -->
@@ -865,10 +867,14 @@
               id="viewName"
               type="text"
               class="form-input"
+              [class.invalid]="!viewName || !viewName.trim()"
               placeholder="Enter view name..."
               [(ngModel)]="viewName"
               [disabled]="!canEdit"
             />
+            @if (!viewName || !viewName.trim()) {
+              <span class="validation-error">View name is required</span>
+            }
           </div>
           <div class="form-group">
             <label for="viewDescription">Description</label>
@@ -919,6 +925,14 @@
     }
   </div>
 
+  <!-- Validation Errors Banner -->
+  @if (ValidationErrors.length > 0 && visibleColumns.length === 0) {
+    <div class="validation-banner">
+      <i class="fa-solid fa-exclamation-triangle"></i>
+      <span>At least one column must be visible</span>
+    </div>
+  }
+
   <!-- Panel Footer -->
   <div class="panel-footer">
     <!-- Action buttons on LEFT -->
@@ -928,7 +942,7 @@
         <button
           class="footer-btn save-btn primary"
           (click)="onSave()"
-          [disabled]="isSaving || !viewName">
+          [disabled]="isSaving || !IsValid">
           @if (isSaving) {
             <i class="fa-solid fa-spinner fa-spin"></i>
           } @else {
@@ -950,32 +964,6 @@
           }
           {{ isSaving ? 'Saving...' : 'Save' }}
         </button>
-        <!-- Save As New - creates a named view -->
-        <button
-          class="footer-btn save-as-btn"
-          (click)="onSaveAsNew()"
-          [disabled]="isSaving || !viewName">
-          @if (isSaving) {
-            <i class="fa-solid fa-spinner fa-spin"></i>
-          } @else {
-            <i class="fa-solid fa-plus"></i>
-          }
-          {{ isSaving ? 'Creating...' : 'Save As New' }}
-        </button>
-      }
-      @if (viewEntity && canEdit) {
-        <!-- Save As New for existing view -->
-        <button
-          class="footer-btn save-as-btn"
-          (click)="onSaveAsNew()"
-          [disabled]="isSaving">
-          @if (isSaving) {
-            <i class="fa-solid fa-spinner fa-spin"></i>
-          } @else {
-            <i class="fa-solid fa-plus"></i>
-          }
-          Save As New
-        </button>
       }
     </div>
     <!-- Cancel button on RIGHT -->
@@ -993,3 +981,29 @@
   (Close)="closeAggregateDialog()"
   (Save)="onAggregateSave($event)">
 </mj-aggregate-setup-dialog>
+
+<!-- Delete Confirmation Dialog -->
+<mj-ev-confirm-dialog
+  [IsOpen]="showDeleteConfirm"
+  Title="Delete View"
+  [Message]="'Are you sure you want to delete \'' + viewName + '\'?'"
+  DetailMessage="This action cannot be undone. All users who have access to this view will lose it."
+  ConfirmText="Delete"
+  ConfirmStyle="danger"
+  Icon="fa-solid fa-trash"
+  (Confirmed)="OnDeleteConfirmed()"
+  (Cancelled)="OnDeleteCancelled()">
+</mj-ev-confirm-dialog>
+
+<!-- Filter Mode Switch Confirmation Dialog (BUG-006) -->
+<mj-ev-confirm-dialog
+  [IsOpen]="showFilterModeSwitchConfirm"
+  Title="Switch Filter Mode"
+  [Message]="filterMode === 'smart' ? 'Switching to Traditional mode will clear your smart filter prompt.' : 'Switching to Smart mode will clear your traditional filter rules.'"
+  DetailMessage="You can switch back later, but the current filter data will be lost."
+  ConfirmText="Switch"
+  ConfirmStyle="primary"
+  Icon="fa-solid fa-exchange-alt"
+  (Confirmed)="OnFilterModeSwitchConfirmed()"
+  (Cancelled)="OnFilterModeSwitchCancelled()">
+</mj-ev-confirm-dialog>

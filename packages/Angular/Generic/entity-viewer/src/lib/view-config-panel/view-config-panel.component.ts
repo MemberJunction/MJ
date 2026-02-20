@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
 import {
-  UserViewEntityExtended,
+  MJUserViewEntityExtended,
   ViewColumnInfo,
   ViewGridState,
   ViewGridColumnSetting,
@@ -19,6 +19,7 @@ import {
   FilterFieldType,
   createEmptyFilter
 } from '@memberjunction/ng-filter-builder';
+import { ViewConfigSummary } from '../types';
 
 /**
  * Column configuration for the view (internal use)
@@ -95,7 +96,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   /**
    * The current view entity (null for default view)
    */
-  @Input() viewEntity: UserViewEntityExtended | null = null;
+  @Input() viewEntity: MJUserViewEntityExtended | null = null;
 
   /**
    * Whether the panel is open
@@ -147,6 +148,16 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    */
   @Input() externalFilterState: CompositeFilterDescriptor | null = null;
 
+  /**
+   * When true, auto-focus on Settings tab when panel opens (BUG-011: forward saveAsNew intent)
+   */
+  @Input() DefaultSaveAsNew: boolean = false;
+
+  /**
+   * Emitted when user wants to duplicate the current view (F-005)
+   */
+  @Output() duplicate = new EventEmitter<void>();
+
   // Form state
   public viewName: string = '';
   public viewDescription: string = '';
@@ -186,6 +197,17 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   public aggregates: ViewGridAggregate[] = [];
   public showAggregateDialog: boolean = false;
   public editingAggregate: ViewGridAggregate | null = null;
+
+  // Saved filter state for mode switching (BUG-006: preserve both modes' data)
+  private savedSmartFilterPrompt: string = '';
+  private savedTraditionalFilter: CompositeFilterDescriptor = createEmptyFilter();
+
+  // Filter mode switch confirmation (BUG-006)
+  public showFilterModeSwitchConfirm: boolean = false;
+  public pendingFilterModeSwitch: 'smart' | 'traditional' | null = null;
+
+  // Local saving guard (BUG-003: race condition on double-click)
+  private _localSaving: boolean = false;
 
   // UI state
   public activeTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' = 'columns';
@@ -323,14 +345,24 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     // Reset to first tab and clear search when panel opens
     if (changes['isOpen'] && this.isOpen) {
-      this.activeTab = 'columns';
+      // BUG-011: If DefaultSaveAsNew is set, open on Settings tab with name focused
+      this.activeTab = this.DefaultSaveAsNew ? 'settings' : 'columns';
       this.columnSearchText = '';
       this.formatEditingColumn = null;
+      this._localSaving = false;
       // Also close any open aggregate dialog
       this.showAggregateDialog = false;
       this.editingAggregate = null;
+      // Close filter mode switch confirm
+      this.showFilterModeSwitchConfirm = false;
+      this.pendingFilterModeSwitch = null;
       // Re-initialize from entity to get fresh state
       this.initializeFromEntity();
+    }
+
+    // BUG-003: Reset local saving guard when isSaving transitions from true to false
+    if (changes['isSaving'] && !this.isSaving && changes['isSaving'].previousValue === true) {
+      this._localSaving = false;
     }
 
     if (changes['entity'] || changes['viewEntity'] || changes['currentGridState']) {
@@ -1306,13 +1338,62 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     return this.filterState?.filters?.length > 0;
   }
 
+  // ========================================
+  // VALIDATION (BUG-004)
+  // ========================================
+
+  /**
+   * Get validation errors for the current form state
+   */
+  get ValidationErrors(): string[] {
+    const errors: string[] = [];
+    if (!this.viewName || !this.viewName.trim()) {
+      errors.push('View name is required');
+    }
+    if (this.visibleColumns.length === 0) {
+      errors.push('At least one column must be visible');
+    }
+    return errors;
+  }
+
+  /**
+   * Whether the form is valid for saving
+   */
+  get IsValid(): boolean {
+    return this.ValidationErrors.length === 0;
+  }
+
+  /**
+   * Whether the form is valid for save-as-new (name can default to 'New View')
+   */
+  get IsValidForSaveAsNew(): boolean {
+    return this.visibleColumns.length > 0;
+  }
+
+  /**
+   * Build a ViewConfigSummary for quick-save preview (F-003)
+   */
+  BuildSummary(): ViewConfigSummary {
+    return {
+      ColumnCount: this.visibleColumns.length,
+      FilterCount: this.filterMode === 'traditional' ? this.getFilterCount() : 0,
+      SortCount: this.sortItems.length,
+      SmartFilterActive: this.smartFilterEnabled && !!this.smartFilterPrompt.trim(),
+      SmartFilterPrompt: this.smartFilterPrompt,
+      AggregateCount: this.aggregates.filter(a => a.enabled !== false).length
+    };
+  }
+
   /**
    * Save the view
    */
   onSave(): void {
-    // Guard against double-clicks or rapid repeated calls
-    if (this.isSaving) return;
+    // BUG-003: Guard against double-clicks with local flag
+    if (this.isSaving || this._localSaving) return;
+    // BUG-004: Validate before saving
+    if (!this.IsValid) return;
 
+    this._localSaving = true;
     this.save.emit({
       name: this.viewName,
       description: this.viewDescription,
@@ -1333,9 +1414,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Save as a new view
    */
   onSaveAsNew(): void {
-    // Guard against double-clicks or rapid repeated calls
-    if (this.isSaving) return;
+    // BUG-003: Guard against double-clicks with local flag
+    if (this.isSaving || this._localSaving) return;
+    // BUG-004: Validate (name defaults to 'New View' if empty)
+    if (!this.IsValidForSaveAsNew) return;
 
+    this._localSaving = true;
     this.save.emit({
       name: this.viewName || 'New View',
       description: this.viewDescription,
@@ -1357,9 +1441,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Used for dynamic/default views that don't have a stored view entity
    */
   onSaveDefaults(): void {
-    // Guard against double-clicks or rapid repeated calls
-    if (this.isSaving) return;
+    // BUG-003: Guard against double-clicks with local flag
+    if (this.isSaving || this._localSaving) return;
 
+    this._localSaving = true;
     this.saveDefaults.emit({
       name: 'Default',
       description: '',
@@ -1376,13 +1461,38 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     });
   }
 
+  // Delete confirmation state
+  public showDeleteConfirm: boolean = false;
+
   /**
-   * Delete the view
+   * Delete the view - shows confirmation dialog
    */
   onDelete(): void {
-    if (confirm('Are you sure you want to delete this view?')) {
-      this.delete.emit();
-    }
+    this.showDeleteConfirm = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Confirmed delete from dialog
+   */
+  OnDeleteConfirmed(): void {
+    this.showDeleteConfirm = false;
+    this.delete.emit();
+  }
+
+  /**
+   * Cancelled delete from dialog
+   */
+  OnDeleteCancelled(): void {
+    this.showDeleteConfirm = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Duplicate the current view (F-005)
+   */
+  OnDuplicate(): void {
+    this.duplicate.emit();
   }
 
   /**
@@ -1396,23 +1506,78 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
   /**
    * Set the filter mode (smart or traditional)
-   * When switching modes, clear the other mode's settings
+   * BUG-006: Shows confirmation when switching if active mode has data
    */
   setFilterMode(mode: 'smart' | 'traditional'): void {
     if (this.filterMode === mode) return;
 
+    // Check if current mode has data that would be lost
+    const currentModeHasData = this.currentFilterModeHasData();
+
+    if (currentModeHasData) {
+      // Show confirmation dialog before switching
+      this.pendingFilterModeSwitch = mode;
+      this.showFilterModeSwitchConfirm = true;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.applyFilterModeSwitch(mode);
+  }
+
+  /**
+   * Check if the current filter mode has user-entered data
+   */
+  private currentFilterModeHasData(): boolean {
+    if (this.filterMode === 'smart') {
+      return !!this.smartFilterPrompt.trim();
+    } else {
+      return this.getFilterCount() > 0;
+    }
+  }
+
+  /**
+   * Confirm the filter mode switch (called from ConfirmDialog)
+   */
+  OnFilterModeSwitchConfirmed(): void {
+    if (this.pendingFilterModeSwitch) {
+      this.applyFilterModeSwitch(this.pendingFilterModeSwitch);
+    }
+    this.showFilterModeSwitchConfirm = false;
+    this.pendingFilterModeSwitch = null;
+  }
+
+  /**
+   * Cancel the filter mode switch (called from ConfirmDialog)
+   */
+  OnFilterModeSwitchCancelled(): void {
+    this.showFilterModeSwitchConfirm = false;
+    this.pendingFilterModeSwitch = null;
+  }
+
+  /**
+   * Apply the filter mode switch - saves current mode data and restores target mode data
+   */
+  private applyFilterModeSwitch(mode: 'smart' | 'traditional'): void {
+    // Save current mode's data before switching
+    if (this.filterMode === 'smart') {
+      this.savedSmartFilterPrompt = this.smartFilterPrompt;
+    } else {
+      this.savedTraditionalFilter = this.filterState;
+    }
+
     this.filterMode = mode;
 
-    // When switching to smart mode, clear traditional filters and enable smart filter
+    // Restore target mode's saved data or clear
     if (mode === 'smart') {
       this.smartFilterEnabled = true;
+      this.smartFilterPrompt = this.savedSmartFilterPrompt;
       this.filterState = createEmptyFilter();
-    }
-    // When switching to traditional mode, disable smart filter and clear its prompt
-    else {
+    } else {
       this.smartFilterEnabled = false;
       this.smartFilterPrompt = '';
       this.smartFilterExplanation = '';
+      this.filterState = this.savedTraditionalFilter;
     }
 
     this.cdr.detectChanges();
@@ -1566,7 +1731,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Toggle aggregate enabled state
+   * Toggle aggregate enabled state (BUG-012: immutable update, no excessive logging)
    */
   toggleAggregateEnabled(aggregate: ViewGridAggregate, event?: MouseEvent): void {
     // Stop event propagation to prevent any parent handlers
@@ -1575,19 +1740,11 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       event.stopPropagation();
     }
 
-    console.log('[ViewConfigPanel] toggleAggregateEnabled called:', {
-      aggregateId: aggregate.id,
-      aggregateLabel: aggregate.label,
-      currentEnabled: aggregate.enabled,
-      allAggregates: this.aggregates.map(a => ({ id: a.id, label: a.label, enabled: a.enabled }))
-    });
-
-    // Try to find by ID first, fall back to object reference if ID is missing
+    // Find by ID first, fall back to object reference or label
     let index = -1;
     if (aggregate.id) {
       index = this.aggregates.findIndex(a => a.id === aggregate.id);
     }
-    // Fallback: find by object reference or label
     if (index < 0) {
       index = this.aggregates.indexOf(aggregate);
     }
@@ -1595,28 +1752,16 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       index = this.aggregates.findIndex(a => a.label === aggregate.label && a.expression === aggregate.expression);
     }
 
-    console.log('[ViewConfigPanel] Found index:', index, 'in array of length:', this.aggregates.length);
-
     if (index >= 0) {
-      // Create a new object with toggled enabled state to ensure change detection
-      const currentEnabled = this.aggregates[index].enabled;
-      const newEnabledState = currentEnabled === false ? true : false;
-      console.log('[ViewConfigPanel] Toggling from', currentEnabled, 'to', newEnabledState);
-
       const updatedAggregate: ViewGridAggregate = {
         ...this.aggregates[index],
-        enabled: newEnabledState
+        enabled: this.aggregates[index].enabled === false
       };
       // Replace entire array to trigger change detection
       const newAggregates = [...this.aggregates];
       newAggregates[index] = updatedAggregate;
       this.aggregates = newAggregates;
-
-      console.log('[ViewConfigPanel] After toggle, aggregates:', this.aggregates.map(a => ({ id: a.id, label: a.label, enabled: a.enabled })));
-
       this.cdr.detectChanges();
-    } else {
-      console.error('[ViewConfigPanel] Could not find aggregate in array:', aggregate);
     }
   }
 

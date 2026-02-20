@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { Metadata, EntityInfo } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 
 /**
@@ -111,7 +111,7 @@ import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberj
 })
 export class ViewPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
     public hasView = false;
-    public viewEntity: UserViewEntityExtended | null = null;
+    public viewEntity: MJUserViewEntityExtended | null = null;
     public entityInfo: EntityInfo | null = null;
     public viewMode: EntityViewMode = 'grid';
     public selectionMode: 'single' | 'multiple' = 'single';
@@ -148,7 +148,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
 
             if (viewId) {
                 // Load saved view by ID
-                const viewEntity = await md.GetEntityObject<UserViewEntityExtended>('MJ: User Views');
+                const viewEntity = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
                 const loaded = await viewEntity.Load(viewId);
                 this.viewEntity = viewEntity; // IMPORTANT - only set this.viewEntity AFTER we have it loaded in the above
 
@@ -156,7 +156,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                     throw new Error('View not found');
                 }
 
-                // Get entity info from the view - prefer ViewEntityInfo if available (set by UserViewEntityExtended.Load)
+                // Get entity info from the view - prefer ViewEntityInfo if available (set by MJUserViewEntityExtended.Load)
                 // Fall back to looking up by Entity name (virtual field) or EntityID
                 if (viewEntity.ViewEntityInfo) {
                     this.entityInfo = viewEntity.ViewEntityInfo;

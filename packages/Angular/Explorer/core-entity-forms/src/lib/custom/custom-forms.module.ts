@@ -11,15 +11,15 @@ import { GridModule } from '@progress/kendo-angular-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { EntityFormComponentExtended } from "./Entities/entity-form.component";
+import { MJEntityFormComponentExtended } from "./Entities/entity-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
-import { EntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
-import { TemplatesFormExtendedComponent } from "./Templates/templates-form.component";
+import { MJEntityActionFormComponentExtended } from "./EntityActions/entityaction.form.component";
+import { MJTemplateFormComponentExtended } from "./Templates/templates-form.component";
 import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.component";
 import { TemplateParamsGridComponent } from "./Templates/template-params-grid.component";
 import { TemplateEditorComponent } from "../shared/components/template-editor.component";
-import { AIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
-import { AIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
+import { MJAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
+import { MJAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
 import { NewAgentDialogComponent } from "./AIAgents/new-agent-dialog.component";
 import { NewAgentDialogService } from "./AIAgents/new-agent-dialog.service";
 import { AddActionDialogComponent } from "./AIAgents/add-action-dialog.component";
@@ -41,41 +41,41 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
-import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
+import { MJAIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
-import { ActionFormComponentExtended } from "./Actions/action-form.component";
-import { ActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
+import { MJActionFormComponentExtended } from "./Actions/action-form.component";
+import { MJActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionsModule } from "@memberjunction/ng-actions";
-import { AIAgentRunFormComponentExtended } from "./ai-agent-run/ai-agent-run.component";
+import { MJAIAgentRunFormComponentExtended } from "./ai-agent-run/ai-agent-run.component";
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
 import { AIAgentRunVisualizationComponent } from "./ai-agent-run/ai-agent-run-visualization.component";
 import { AIAgentRunStepDetailComponent } from "./ai-agent-run/ai-agent-run-step-detail.component";
-import { QueryFormExtendedComponent } from "./Queries/query-form.component";
+import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
-import { TestRunFormComponentExtended } from "./Tests/test-run-form.component";
-import { TestFormComponentExtended } from "./Tests/test-form.component";
-import { TestSuiteRunFormComponentExtended } from "./Tests/test-suite-run-form.component";
-import { TestSuiteFormComponentExtended } from "./Tests/test-suite-form.component";
-import { TestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedback-form.component";
-import { TestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
+import { MJTestRunFormComponentExtended } from "./Tests/test-run-form.component";
+import { MJTestFormComponentExtended } from "./Tests/test-form.component";
+import { MJTestSuiteRunFormComponentExtended } from "./Tests/test-suite-run-form.component";
+import { MJTestSuiteFormComponentExtended } from "./Tests/test-suite-form.component";
+import { MJTestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedback-form.component";
+import { MJTestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
 import { EntityLinkPillComponent } from "./Tests/entity-link-pill.component";
-import { ListFormComponentExtended } from "./Lists/list-form.component";
+import { MJListFormComponentExtended } from "./Lists/list-form.component";
 
 @NgModule({
     declarations: [
-        EntityFormComponentExtended,
-        EntityActionExtendedFormComponent,
-        TemplatesFormExtendedComponent,
+        MJEntityFormComponentExtended,
+        MJEntityActionFormComponentExtended,
+        MJTemplateFormComponentExtended,
         TemplateParamDialogComponent,
         TemplateParamsGridComponent,
         TemplateEditorComponent,
-        AIPromptFormComponentExtended,
-        AIAgentFormComponentExtended,
+        MJAIPromptFormComponentExtended,
+        MJAIAgentFormComponentExtended,
         NewAgentDialogComponent,
         AddActionDialogComponent,
         PromptSelectorDialogComponent,
@@ -85,28 +85,28 @@ import { ListFormComponentExtended } from "./Lists/list-form.component";
         CreatePromptDialogComponent,
         CreateSubAgentDialogComponent,
         EntitySelectorDialogComponent,
-        AIPromptRunFormComponentExtended,
+        MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
-        ActionFormComponentExtended,
-        ActionExecutionLogFormComponentExtended,
-        AIAgentRunFormComponentExtended,
+        MJActionFormComponentExtended,
+        MJActionExecutionLogFormComponentExtended,
+        MJAIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
         AIAgentRunVisualizationComponent,
         AIAgentRunStepDetailComponent,
-        QueryFormExtendedComponent,
+        MJQueryFormComponentExtended,
         QueryRunDialogComponent,
         QueryCategoryDialogComponent,
         FlowAgentFormSectionComponent,
-        TestRunFormComponentExtended,
-        TestFormComponentExtended,
-        TestSuiteRunFormComponentExtended,
-        TestSuiteFormComponentExtended,
-        TestRunFeedbackFormComponentExtended,
-        TestRubricFormComponentExtended,
+        MJTestRunFormComponentExtended,
+        MJTestFormComponentExtended,
+        MJTestSuiteRunFormComponentExtended,
+        MJTestSuiteFormComponentExtended,
+        MJTestRunFeedbackFormComponentExtended,
+        MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
-        ListFormComponentExtended,
+        MJListFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -152,30 +152,30 @@ import { ListFormComponentExtended } from "./Lists/list-form.component";
         AgentsModule
     ],
     exports: [
-        EntityFormComponentExtended,
-        EntityActionExtendedFormComponent,
-        TemplatesFormExtendedComponent,
+        MJEntityFormComponentExtended,
+        MJEntityActionFormComponentExtended,
+        MJTemplateFormComponentExtended,
         TemplateEditorComponent,
-        AIPromptFormComponentExtended,
-        AIAgentFormComponentExtended,
-        AIPromptRunFormComponentExtended,
+        MJAIPromptFormComponentExtended,
+        MJAIAgentFormComponentExtended,
+        MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
-        ActionFormComponentExtended,
-        ActionExecutionLogFormComponentExtended,
-        AIAgentRunFormComponentExtended,
+        MJActionFormComponentExtended,
+        MJActionExecutionLogFormComponentExtended,
+        MJAIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
-        QueryFormExtendedComponent,
+        MJQueryFormComponentExtended,
         FlowAgentFormSectionComponent,
-        TestRunFormComponentExtended,
-        TestFormComponentExtended,
-        TestSuiteRunFormComponentExtended,
-        TestSuiteFormComponentExtended,
-        TestRunFeedbackFormComponentExtended,
-        TestRubricFormComponentExtended,
+        MJTestRunFormComponentExtended,
+        MJTestFormComponentExtended,
+        MJTestSuiteRunFormComponentExtended,
+        MJTestSuiteFormComponentExtended,
+        MJTestRunFeedbackFormComponentExtended,
+        MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
-        ListFormComponentExtended,
+        MJListFormComponentExtended,
         ActionsModule
     ],
     providers: [

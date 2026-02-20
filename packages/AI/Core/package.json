@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai",
   "type": "module",
-  "version": "4.4.0",
+  "version": "5.2.0",
   "description": "MemberJunction: AI - core components for abstracting LLMs and other AI model types that are usable anywhere without ANY other MJ dependencies past @memberjunction/global which itself has zero additional dependencies.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,7 +17,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "4.4.0",
+    "@memberjunction/global": "5.2.0",
     "dotenv": "^17.2.4",
     "rxjs": "^7.8.2"
   },

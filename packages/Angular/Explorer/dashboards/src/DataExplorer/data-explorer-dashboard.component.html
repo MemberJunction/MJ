@@ -75,7 +75,10 @@
             (openInTabRequested)="onOpenInTabRequested($event)"
             (configureViewRequested)="onConfigureViewRequested()"
             (createNewRecordRequested)="onCreateNewRecord()"
-            (exportRequested)="onExport()">
+            (exportRequested)="onExport()"
+            (duplicateViewRequested)="onDuplicateView($event)"
+            (quickSaveRequested)="onQuickSaveRequested($event)"
+            (revertRequested)="onRevertView()">
           </mj-view-selector>
 
           <!-- Add to List Button -->
@@ -532,10 +535,12 @@
     [currentGridState]="currentGridState"
     [externalFilterState]="filterDialogState"
     [isSaving]="isSavingView"
+    [DefaultSaveAsNew]="defaultSaveAsNew"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
     (saveDefaults)="onSaveDefaultViewSettings($event)"
     (delete)="onDeleteView()"
+    (duplicate)="onDuplicateFromPanel()"
     (openFilterDialogRequest)="onOpenFilterDialogRequest($event)">
   </mj-view-config-panel>
 
@@ -565,4 +570,34 @@
       (cancel)="onListManagementCancel()">
     </mj-list-management-dialog>
   }
+
+  <!-- Quick Save Dialog (F-001) -->
+  <mj-quick-save-dialog
+    [IsOpen]="showQuickSaveDialog"
+    [ViewEntity]="selectedViewEntity"
+    [EntityName]="selectedEntity?.DisplayNameOrName ?? ''"
+    [Summary]="quickSaveSummary"
+    [IsSaving]="isSavingView"
+    [DefaultSaveAsNew]="defaultSaveAsNew"
+    (Save)="onQuickSave($event)"
+    (Close)="onQuickSaveClose()"
+    (OpenAdvanced)="onQuickSaveOpenAdvanced()">
+  </mj-quick-save-dialog>
+
+  <!-- Duplicate View Dialog (F-005) -->
+  <mj-duplicate-view-dialog
+    [IsOpen]="showDuplicateDialog"
+    [SourceViewName]="duplicateSourceViewName"
+    [Summary]="duplicateSummary"
+    (Duplicate)="onDuplicateConfirmed($event)"
+    (Cancel)="onDuplicateCancel()">
+  </mj-duplicate-view-dialog>
+
+  <!-- Shared View Warning Dialog (view-creation-flow Scenario 5) -->
+  <mj-shared-view-warning-dialog
+    [IsOpen]="showSharedViewWarning"
+    [ViewName]="selectedViewEntity?.Name ?? ''"
+    (Action)="onSharedViewAction($event)"
+    (Cancel)="onSharedViewWarningCancel()">
+  </mj-shared-view-warning-dialog>
 </div>

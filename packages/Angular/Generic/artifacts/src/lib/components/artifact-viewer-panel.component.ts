@@ -7,7 +7,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
-import { ArtifactViewerTab } from './base-artifact-viewer.component';
+import { ArtifactViewerTab, NavigationRequest } from './base-artifact-viewer.component';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
@@ -39,6 +39,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -248,6 +249,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
           // Reload links data
           await this.loadLinksData();
+
+          this.cdr.detectChanges(); // zone.js 0.15: async chain doesn't trigger CD
         } else {
           // Need to reload to get this version (shouldn't normally happen)
           await this.loadArtifact(newVersionNumber);
@@ -396,6 +399,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
@@ -479,6 +484,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   /**
+   * Called when a plugin's async tab data changes (e.g., ComponentArtifactViewer loads
+   * the full spec from the registry after initial render with a stripped spec).
+   * Forces re-evaluation of allTabs so new tab labels render correctly.
+   */
+  onTabsChanged(): void {
+    this.cdr.detectChanges(); // zone.js 0.15: plugin emitted tabsChanged, force CD to re-evaluate allTabs
+  }
+
+  /**
    * Called when the plugin viewer finishes loading.
    * Selects the first available tab now that plugin tabs are available.
    */
@@ -489,6 +503,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     if (tabs.length > 0) {
       this.activeTab = tabs[0].toLowerCase();
     }
+    this.cdr.detectChanges(); // zone.js 0.15: plugin loaded via async callback, force CD
   }
 
   private parseAttributeValue(value: string | null | undefined): string | null {
@@ -571,6 +586,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
     } catch (err) {
       console.error('Error loading collection associations:', err);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
@@ -672,6 +689,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     // Also reload links data to update conversation/collection links
     await this.loadLinksData();
+
+    this.cdr.detectChanges(); // zone.js 0.15: async chain doesn't trigger CD
   }
 
   async onSaveToLibrary(): Promise<void> {
@@ -866,6 +885,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
     } catch (error) {
       console.error('Error loading links data:', error);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async chain doesn't trigger CD
     }
   }
 
@@ -940,6 +961,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.openEntityRecord.emit(event);
+  }
+
+  /**
+   * Handle navigation request from artifact viewer plugin.
+   * Propagates the event up to parent components for app-level navigation.
+   */
+  onNavigationRequest(event: NavigationRequest): void {
+    this.navigationRequest.emit(event);
   }
 
   /**

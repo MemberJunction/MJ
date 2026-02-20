@@ -1,5 +1,36 @@
 # @memberjunction/interactive-component-types
 
+## 5.2.0
+
+### Patch Changes
+
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core@5.2.0
+  - @memberjunction/ai-vectors-memory@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.1.0
+- @memberjunction/core@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- 737b56b: Add SimpleQueryFieldInfo for query field lineage tracking in InteractiveComponents, sync DeleteOptionsInput fields with server schema in GraphQLDataProvider, and flatten tsconfig files in distribution for cleaner package builds
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/core@5.0.0
+  - @memberjunction/ai-vectors-memory@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

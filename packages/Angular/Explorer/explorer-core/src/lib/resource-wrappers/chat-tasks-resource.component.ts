@@ -4,7 +4,7 @@ import { Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
 import { Subject, takeUntil, filter } from 'rxjs';
 /**
@@ -225,7 +225,7 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
    * Get the environment ID from configuration or use default
    */
   get environmentId(): string {
-    return this.Data?.Configuration?.environmentId || EnvironmentEntityExtended.DefaultEnvironmentID;
+    return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
   /**

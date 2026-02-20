@@ -302,6 +302,11 @@ const result = await rq.RunQuery({
 if (result.Success) {
   console.log('Query results:', result.Results);
 }
+
+// Ad-hoc SQL execution (SELECT/WITH only — validated via SQLExpressionValidator, read-only)
+const adhocResult = await rq.RunQuery({
+  SQL: 'SELECT TOP 50 Name, Status FROM __mj.vwUsers WHERE IsActive = 1',
+}, contextUser);
 ```
 
 ### Executing Raw SQL

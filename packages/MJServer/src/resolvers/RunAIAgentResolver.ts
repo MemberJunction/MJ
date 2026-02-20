@@ -3,7 +3,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -207,12 +207,12 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Validate the agent entity
      */
-    private async validateAgent(agentId: string, currentUser: any): Promise<AIAgentEntityExtended> {
+    private async validateAgent(agentId: string, currentUser: any): Promise<MJAIAgentEntityExtended> {
         // Use AIEngine to get cached agent data
         await AIEngine.Instance.Config(false, currentUser);
         
         // Find agent in cached collection
-        const agentEntity = AIEngine.Instance.Agents.find((a: AIAgentEntityExtended) => a.ID === agentId);
+        const agentEntity = AIEngine.Instance.Agents.find((a: MJAIAgentEntityExtended) => a.ID === agentId);
         
         if (!agentEntity) {
             throw new Error(`AI Agent with ID ${agentId} not found`);
@@ -630,7 +630,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Notification includes navigation link back to the conversation
      */
     private async createCompletionNotification(
-        agentRun: AIAgentRunEntityExtended,
+        agentRun: MJAIAgentRunEntityExtended,
         artifactInfo: { artifactId: string; versionId: string; versionNumber: number },
         conversationDetailId: string,
         contextUser: UserInfo,

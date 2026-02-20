@@ -255,15 +255,21 @@ export class NavigationService implements OnDestroy {
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
+    let tabId: string;
     if (forceNew) {
       // Always create a new tab
-      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
-      return tabId;
+      tabId = this.workspaceManager.OpenTabForced(request, appColor);
     } else {
       // Use existing OpenTab logic (may replace temporary tab)
-      const tabId = this.workspaceManager.OpenTab(request, appColor);
-      return tabId;
+      tabId = this.workspaceManager.OpenTab(request, appColor);
     }
+
+    // Apply query params to the newly opened/activated tab if provided
+    if (options?.queryParams) {
+      this.applyQueryParamsToTab(tabId, options.queryParams);
+    }
+
+    return tabId;
   }
 
   /**
@@ -691,10 +697,17 @@ export class NavigationService implements OnDestroy {
       return;
     }
 
-    // Get the current tab to merge with existing queryParams
-    const tab = this.workspaceManager.GetTab(activeTabId);
+    this.applyQueryParamsToTab(activeTabId, queryParams);
+  }
+
+  /**
+   * Apply query params to a specific tab by ID.
+   * Merges with any existing query params on the tab. Use null values to remove params.
+   */
+  private applyQueryParamsToTab(tabId: string, queryParams: Record<string, string | null>): void {
+    const tab = this.workspaceManager.GetTab(tabId);
     if (!tab) {
-      console.warn('NavigationService.UpdateActiveTabQueryParams: Tab not found');
+      console.warn('NavigationService.applyQueryParamsToTab: Tab not found:', tabId);
       return;
     }
 
@@ -721,7 +734,7 @@ export class NavigationService implements OnDestroy {
     }
 
     // Update the tab configuration
-    this.workspaceManager.UpdateTabConfiguration(activeTabId, {
+    this.workspaceManager.UpdateTabConfiguration(tabId, {
       queryParams: Object.keys(mergedQueryParams).length > 0 ? mergedQueryParams : undefined
     });
   }

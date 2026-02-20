@@ -14,7 +14,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJCommunicationProviderEntity: class {},
     MJCommunicationProviderMessageTypeEntity: class {},
     MJCommunicationRunEntity: class {},
-    TemplateEntityExtended: class {},
+    MJTemplateEntityExtended: class {},
 }));
 
 import {
@@ -22,7 +22,7 @@ import {
     MessageRecipient,
     MessageResult,
     BaseCommunicationProvider,
-    CommunicationProviderEntityExtended,
+    MJCommunicationProviderEntityExtended,
     ProcessedMessage,
 } from '../BaseProvider';
 
@@ -218,9 +218,9 @@ describe('BaseCommunicationProvider', () => {
     });
 });
 
-describe('CommunicationProviderEntityExtended', () => {
+describe('MJCommunicationProviderEntityExtended', () => {
     it('should get and set MessageTypes', () => {
-        const entity = new (CommunicationProviderEntityExtended as unknown as { new(): CommunicationProviderEntityExtended })();
+        const entity = new (MJCommunicationProviderEntityExtended as unknown as { new(): MJCommunicationProviderEntityExtended })();
         expect(entity.MessageTypes).toBeUndefined();
 
         const mockTypes = [{ ID: '1', Name: 'Email' }];

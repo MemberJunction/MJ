@@ -1,5 +1,5 @@
 import { AggregateExpression, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
 import { getSystemUser } from './auth/index.js';
@@ -68,7 +68,7 @@ export type DirectiveBuilder = {
 };
 
 export type RunViewGenericParams = {
-  viewInfo: UserViewEntityExtended;
+  viewInfo: MJUserViewEntityExtended;
   provider: DatabaseProviderBase;
   extraFilter: string;
   orderBy: string;

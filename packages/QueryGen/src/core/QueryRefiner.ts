@@ -6,7 +6,7 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo, LogStatus } from '@memberjunction/core';
 import { extractErrorMessage } from '../utils/error-handlers';
 import {
@@ -324,7 +324,7 @@ export class QueryRefiner {
   private findPromptByName(
     aiEngine: AIEngine,
     promptName: string
-  ): AIPromptEntityExtended {
+  ): MJAIPromptEntityExtended {
     const prompt = aiEngine.Prompts.find((p) => p.Name === promptName);
     if (!prompt) {
       throw new Error(`Prompt '${promptName}' not found in AIEngine cache`);
@@ -337,7 +337,7 @@ export class QueryRefiner {
    * Generic method for any prompt type
    */
   private async executePrompt<T>(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     promptData: Record<string, unknown>
   ): Promise<T> {
     const result = await executePromptWithOverrides<T>(

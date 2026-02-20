@@ -1,7 +1,7 @@
 import { Component, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { AIPromptRunEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJAIPromptRunFormComponent } from '../../generated/Entities/MJAIPromptRun/mjaipromptrun.form.component';
@@ -18,14 +18,14 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
     styleUrls: ['./ai-prompt-run-form.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
-    public record!: AIPromptRunEntityExtended;
+export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
+    public record!: MJAIPromptRunEntityExtended;
     
     // Related entities
-    public prompt: AIPromptEntityExtended | null = null;
+    public prompt: MJAIPromptEntityExtended | null = null;
     public model: MJAIModelEntity | null = null;
-    public parentRun: AIPromptRunEntityExtended | null = null;
-    public childRuns: AIPromptRunEntityExtended[] = [];
+    public parentRun: MJAIPromptRunEntityExtended | null = null;
+    public childRuns: MJAIPromptRunEntityExtended[] = [];
     
     // UI state
     public isLoadingRelatedData = false;
@@ -152,7 +152,7 @@ export class AIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent
             
             // Load prompt
             if (this.record.PromptID) {
-                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts');
+                this.prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
                 if (this.prompt) {
                     await this.prompt.Load(this.record.PromptID);
                 }
@@ -168,7 +168,7 @@ export class AIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent
             
             // Load parent run if exists
             if (this.record.ParentID) {
-                this.parentRun = await md.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');
+                this.parentRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
                 if (this.parentRun) {
                     await this.parentRun.Load(this.record.ParentID);
                 }
@@ -187,7 +187,7 @@ export class AIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent
         if (!this.record.ID) return;
         
         const rv = new RunView();
-        const result = await rv.RunView<AIPromptRunEntityExtended>({
+        const result = await rv.RunView<MJAIPromptRunEntityExtended>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ParentID='${this.record.ID}'`,
             OrderBy: 'ExecutionOrder ASC, RunAt DESC',

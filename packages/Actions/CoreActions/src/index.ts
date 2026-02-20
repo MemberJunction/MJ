@@ -43,6 +43,8 @@ export * from './custom/data/aggregate-data.action';
 export * from './custom/data/data-mapper.action';
 export * from './custom/data/explore-database-schema.action';
 export * from './custom/data/execute-research-query.action';
+export * from './custom/data/get-entity-details.action';
+export * from './custom/data/get-entity-list.action';
 
 // Code Execution Actions
 export * from './custom/code-execution/execute-code.action';

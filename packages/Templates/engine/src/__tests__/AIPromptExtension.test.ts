@@ -42,7 +42,7 @@ vi.mock('@memberjunction/ai', () => ({
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
-    AIModelEntityExtended: class {
+    MJAIModelEntityExtended: class {
         Name = '';
         APIName = '';
         DriverClass = '';
@@ -55,7 +55,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJTemplateContentEntity: class {},
-    TemplateEntityExtended: class {},
+    MJTemplateEntityExtended: class {},
 }));
 
 import { AIPromptExtension, AIPromptConfig } from '../extensions/AIPrompt.extension';

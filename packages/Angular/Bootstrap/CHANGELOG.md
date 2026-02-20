@@ -1,5 +1,87 @@
 # @memberjunction/ng-bootstrap
 
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+- Updated dependencies [4618227]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/graphql-dataprovider@5.2.0
+  - @memberjunction/ai-engine-base@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/actions-base@5.2.0
+  - @memberjunction/ng-core-entity-forms@5.2.0
+  - @memberjunction/ng-dashboards@5.2.0
+  - @memberjunction/ng-explorer-core@5.2.0
+  - @memberjunction/ng-explorer-settings@5.2.0
+  - @memberjunction/ng-shared@5.2.0
+  - @memberjunction/ng-dashboard-viewer@5.2.0
+  - @memberjunction/communication-types@5.2.0
+  - @memberjunction/entity-communications-base@5.2.0
+  - @memberjunction/ng-artifacts@5.2.0
+  - @memberjunction/ng-file-storage@5.2.0
+  - @memberjunction/ng-auth-services@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- f426d43: Fix CodeGen to apply excludeSchemas filter consistently across all generators (TypeScript, Angular, GraphQL), not just SQL generation. Also adds cleanup for orphaned Angular entity form directories when entities are renamed or deleted.
+  - @memberjunction/ai-engine-base@5.1.0
+  - @memberjunction/ai-core-plus@5.1.0
+  - @memberjunction/actions-base@5.1.0
+  - @memberjunction/ng-auth-services@5.1.0
+  - @memberjunction/ng-core-entity-forms@5.1.0
+  - @memberjunction/ng-dashboards@5.1.0
+  - @memberjunction/ng-explorer-core@5.1.0
+  - @memberjunction/ng-explorer-settings@5.1.0
+  - @memberjunction/ng-shared@5.1.0
+  - @memberjunction/ng-artifacts@5.1.0
+  - @memberjunction/ng-dashboard-viewer@5.1.0
+  - @memberjunction/ng-file-storage@5.1.0
+  - @memberjunction/communication-types@5.1.0
+  - @memberjunction/entity-communications-base@5.1.0
+  - @memberjunction/graphql-dataprovider@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- 786a390: Remove explicit 3.0 references in several areas
+- Updated dependencies [3cca644]
+- Updated dependencies [786a390]
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/ng-dashboards@5.0.0
+  - @memberjunction/communication-types@5.0.0
+  - @memberjunction/graphql-dataprovider@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ai-engine-base@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/actions-base@5.0.0
+  - @memberjunction/ng-auth-services@5.0.0
+  - @memberjunction/ng-core-entity-forms@5.0.0
+  - @memberjunction/ng-explorer-core@5.0.0
+  - @memberjunction/ng-explorer-settings@5.0.0
+  - @memberjunction/ng-shared@5.0.0
+  - @memberjunction/ng-artifacts@5.0.0
+  - @memberjunction/ng-dashboard-viewer@5.0.0
+  - @memberjunction/ng-file-storage@5.0.0
+  - @memberjunction/entity-communications-base@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

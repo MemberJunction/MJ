@@ -17,6 +17,16 @@ alias sqlq='sqlcmd -S $DB_HOST -U $DB_USER -P $DB_PASSWORD -C -Q'  # sqlq "SELEC
 alias sqldbs='sqlcmd -S $DB_HOST -U $DB_USER -P $DB_PASSWORD -C -Q "SELECT name FROM sys.databases ORDER BY name"'
 alias sqlmj='sqlcmd -S $DB_HOST -U $DB_USER -P $DB_PASSWORD -C -d ${DB_DATABASE:-MJ_Workbench}'
 
+# ─── PostgreSQL shortcuts ───────────────────────────────────────────────────
+export PGPASSWORD="${PG_PASSWORD:-Claude2Pg99}"
+alias pgcli='psql -h ${PG_HOST:-postgres-claude} -p ${PG_PORT:-5432} -U ${PG_USER:-mj_admin} -d ${PG_DATABASE:-MJ_Workbench_PG}'
+alias pgq='psql -h ${PG_HOST:-postgres-claude} -p ${PG_PORT:-5432} -U ${PG_USER:-mj_admin} -d ${PG_DATABASE:-MJ_Workbench_PG} -c'
+alias pgdbs='psql -h ${PG_HOST:-postgres-claude} -p ${PG_PORT:-5432} -U ${PG_USER:-mj_admin} -l'
+alias pgtables='pgq "SELECT tablename FROM pg_tables WHERE schemaname = '"'"'__mj'"'"' ORDER BY tablename;"'
+alias pgviews='pgq "SELECT viewname FROM pg_views WHERE schemaname = '"'"'__mj'"'"' ORDER BY viewname;"'
+alias pgfuncs='pgq "SELECT routine_name, routine_type FROM information_schema.routines WHERE routine_schema = '"'"'__mj'"'"' ORDER BY routine_name;"'
+alias pgcount='pgq "SELECT COUNT(*) AS table_count FROM pg_tables WHERE schemaname = '"'"'__mj'"'"';"'
+
 # ─── MemberJunction shortcuts ────────────────────────────────────────────────
 alias mjb='npm run build'
 alias mjba='npm run build'                # build all from root
@@ -60,10 +70,19 @@ echo "  ────────────────────────
 echo "  cc          → claude --dangerously-skip-permissions"
 echo "  ccp         → cc -p <prompt>"
 echo "  ccr         → cc --resume"
+echo "  ─────────── SQL Server ───────────────────"
 echo "  sql / sqlmj → sqlcmd connected to $DB_HOST"
 echo "  sqldbs      → list all databases"
 echo "  sqlq        → run inline query"
-echo "  db-bootstrap→ create MJ database + run migrations"
+echo "  db-bootstrap→ create SQL Server MJ DB + run migrations"
+echo "  ─────────── PostgreSQL ───────────────────"
+echo "  pgcli       → psql connected to ${PG_DATABASE:-MJ_Workbench_PG}"
+echo "  pgq         → run inline PG query"
+echo "  pgdbs       → list PG databases"
+echo "  pgtables    → list __mj tables in PG"
+echo "  pgcount     → count __mj tables in PG"
+echo "  db-bootstrap-pg → bootstrap PG + run migrations"
+echo "  ─────────── MemberJunction ───────────────"
 echo "  auth-setup  → configure Auth0 credentials"
 echo "  mjapi       → start MJAPI (default host :4000)"
 echo "  mjui        → start Explorer (default host :4200)"

@@ -1,5 +1,42 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.2.0
+
+### Patch Changes
+
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core@5.2.0
+  - @memberjunction/data-context@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/interactive-component-types@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.1.0
+- @memberjunction/core@5.1.0
+- @memberjunction/data-context@5.1.0
+- @memberjunction/interactive-component-types@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/interactive-component-types@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/data-context@5.0.0
+
 ## 4.4.0
 
 ### Patch Changes

@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { LogError, Metadata, RunView } from '@memberjunction/core';
-import { DashboardEntityExtended, MJDashboardUserPreferenceEntity, MJApplicationEntity } from '@memberjunction/core-entities';
+import { MJDashboardEntityExtended, MJDashboardUserPreferenceEntity, MJApplicationEntity } from '@memberjunction/core-entities';
 
 export interface DashboardPreferencesResult {
   saved: boolean;
@@ -19,8 +19,8 @@ export class DashboardPreferencesDialogComponent implements OnInit {
   @Input() public scope: 'Global' | 'App' = 'Global';
   @Output() public result = new EventEmitter<DashboardPreferencesResult>();
 
-  public availableDashboards: DashboardEntityExtended[] = [];
-  public configuredDashboards: DashboardEntityExtended[] = [];
+  public availableDashboards: MJDashboardEntityExtended[] = [];
+  public configuredDashboards: MJDashboardEntityExtended[] = [];
   public applicationName: string = '';
   public loading: boolean = true;
   public saving: boolean = false;
@@ -31,7 +31,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
   private originalConfiguredIds: string[] = [];
   private currentUserPreferences: MJDashboardUserPreferenceEntity[] = [];
-  private allAvailableDashboards: DashboardEntityExtended[] = [];
+  private allAvailableDashboards: MJDashboardEntityExtended[] = [];
 
   async ngOnInit(): Promise<void> {
     try {
@@ -72,7 +72,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
     // Filter dashboards by scope
     const appFilter = this.applicationId ? ` AND ApplicationID='${this.applicationId}'` : ' AND ApplicationID IS NULL';
-    this.allAvailableDashboards = dashList.Results.filter((d: DashboardEntityExtended) => {
+    this.allAvailableDashboards = dashList.Results.filter((d: MJDashboardEntityExtended) => {
       if (this.scope === 'Global') {
         return d.Scope === 'Global' && !d.ApplicationID;
       } else {
@@ -145,7 +145,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
     // Get configured dashboards in the right order
     this.configuredDashboards = this.currentUserPreferences
       .map(pref => this.allAvailableDashboards.find(d => d.ID === pref.DashboardID))
-      .filter((d): d is DashboardEntityExtended => d !== undefined);
+      .filter((d): d is MJDashboardEntityExtended => d !== undefined);
     
     // Get available dashboards (not configured)
     this.availableDashboards = this.allAvailableDashboards
@@ -153,7 +153,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       .sort((a, b) => a.Name.localeCompare(b.Name));
   }
 
-  public onDrop(event: CdkDragDrop<DashboardEntityExtended[]>): void {
+  public onDrop(event: CdkDragDrop<MJDashboardEntityExtended[]>): void {
     try {
       if (event.previousContainer === event.container) {
         // Reordering within the same list
@@ -185,7 +185,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
     }
   }
 
-  public addDashboard(dashboard: DashboardEntityExtended): void {
+  public addDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
       const index = this.availableDashboards.findIndex(d => d.ID === dashboard.ID);
       if (index !== -1) {
@@ -204,7 +204,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
     }
   }
 
-  public removeDashboard(dashboard: DashboardEntityExtended): void {
+  public removeDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
       const index = this.configuredDashboards.findIndex(d => d.ID === dashboard.ID);
       if (index !== -1) {
