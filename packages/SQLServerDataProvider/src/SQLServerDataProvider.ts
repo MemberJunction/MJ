@@ -88,10 +88,12 @@ import {
   MJDuplicateRunEntity,
   MJEntityAIActionEntity,
   MJListEntity,
+  MJQueryEntity,
   MJRecordMergeDeletionLogEntity,
   MJRecordMergeLogEntity,
   MJUserFavoriteEntity,
-  UserViewEntityExtended,
+  QueryEngine,
+  MJUserViewEntityExtended,
   ViewInfo,
 } from '@memberjunction/core-entities';
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
@@ -779,7 +781,15 @@ export class SQLServerDataProvider
    * @returns The found QueryInfo or null if not found
    */
   protected async findQuery(QueryID: string, QueryName: string, CategoryID: string, CategoryPath: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
-      // First, get the query metadata
+      // Use QueryEngine as the source of truth — it auto-refreshes on entity changes,
+      // so we always get fresh data without needing to reload full metadata.
+      const freshEntity = this.findQueryInEngine(QueryID, QueryName, CategoryID, CategoryPath);
+      if (freshEntity) {
+        return this.refreshQueryInfoFromEntity(freshEntity);
+      }
+
+      // If QueryEngine didn't have it, fall back to ProviderBase metadata with optional refresh.
+      // This handles edge cases where QueryEngine hasn't loaded yet or hasn't picked up a brand-new record.
       const queries = this.Queries.filter(q => {
         if (QueryID) {
           return q.ID.trim().toLowerCase() === QueryID.trim().toLowerCase();
@@ -788,13 +798,10 @@ export class SQLServerDataProvider
           if (CategoryID) {
             matches = matches && q.CategoryID.trim().toLowerCase() === CategoryID.trim().toLowerCase();
           } else if (CategoryPath) {
-            // New hierarchical path logic - try path resolution first, fall back to simple name match
             const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
             if (resolvedCategoryId) {
-              // Hierarchical path matched - use the resolved CategoryID
               matches = matches && q.CategoryID === resolvedCategoryId;
             } else {
-              // Fall back to simple category name comparison for backward compatibility
               matches = matches && q.Category.trim().toLowerCase() === CategoryPath.trim().toLowerCase();
             }
           }
@@ -805,12 +812,11 @@ export class SQLServerDataProvider
 
       if (queries.length === 0) {
         if (refreshMetadataIfNotFound) {
-          // If we didn't find the query, refresh metadata and try again
           await this.Refresh();
-          return this.findQuery(QueryID, QueryName, CategoryID, CategoryPath, false); // change the refresh flag to false so we don't loop infinitely
-        } 
+          return this.findQuery(QueryID, QueryName, CategoryID, CategoryPath, false);
+        }
         else {
-          return null; // No query found and not refreshing metadata
+          return null;
         }
       }
       else {
@@ -818,11 +824,73 @@ export class SQLServerDataProvider
       }
   }
 
+  /**
+   * Looks up a query from QueryEngine's auto-refreshed cache by ID, name, and optional category filters.
+   */
+  protected findQueryInEngine(QueryID: string, QueryName: string, CategoryID: string, CategoryPath: string): MJQueryEntity | null {
+      const engineQueries = QueryEngine.Instance?.Queries;
+      if (!engineQueries || engineQueries.length === 0) {
+        return null; // Engine not loaded yet
+      }
+
+      if (QueryID) {
+        const lower = QueryID.trim().toLowerCase();
+        return engineQueries.find(q => q.ID.trim().toLowerCase() === lower) ?? null;
+      }
+
+      if (QueryName) {
+        const lowerName = QueryName.trim().toLowerCase();
+        const matches = engineQueries.filter(q => q.Name.trim().toLowerCase() === lowerName);
+        if (matches.length === 0) return null;
+        if (matches.length === 1) return matches[0];
+
+        // Disambiguate by category
+        if (CategoryID) {
+          const byId = matches.find(q => q.CategoryID?.trim().toLowerCase() === CategoryID.trim().toLowerCase());
+          if (byId) return byId;
+        }
+        if (CategoryPath) {
+          const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
+          if (resolvedCategoryId) {
+            const byPath = matches.find(q => q.CategoryID === resolvedCategoryId);
+            if (byPath) return byPath;
+          }
+        }
+        return matches[0];
+      }
+
+      return null;
+  }
+
+  /**
+   * Creates a fresh QueryInfo from a MJQueryEntity and patches the ProviderBase in-memory cache.
+   * This avoids stale data without requiring a full metadata reload.
+   */
+  protected refreshQueryInfoFromEntity(entity: MJQueryEntity): QueryInfo {
+      const freshInfo = new QueryInfo(entity.GetAll());
+
+      // Patch the ProviderBase cache: replace the stale entry or add the new one
+      const existingIndex = this.Queries.findIndex(q => q.ID === freshInfo.ID);
+      if (existingIndex >= 0) {
+        this.Queries[existingIndex] = freshInfo;
+      } else {
+        this.Queries.push(freshInfo);
+      }
+
+      return freshInfo;
+  }
+
   /**************************************************************************/
   // START ---- IRunQueryProvider
   /**************************************************************************/
   protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
+
+    // Route ad-hoc SQL queries to dedicated handler
+    if (params.SQL) {
+      return this.ExecuteAdhocSQL(params, contextUser);
+    }
+
     try {
       // Find and validate query
       const query = await this.findAndValidateQuery(params, contextUser);
@@ -872,6 +940,60 @@ export class SQLServerDataProvider
         TotalRowCount: 0,
         ExecutionTime: 0,
         ErrorMessage: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Executes an ad-hoc SQL query directly, with security validation.
+   * SQL must be a SELECT or WITH (CTE) statement — mutations are rejected.
+   */
+  protected async ExecuteAdhocSQL(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+    try {
+      // Validate SQL security
+      const validator = SQLExpressionValidator.Instance;
+      const validation = validator.validateFullQuery(params.SQL!);
+      if (!validation.valid) {
+        return {
+          Success: false,
+          QueryID: '',
+          QueryName: 'Ad-Hoc Query',
+          Results: [],
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+          ErrorMessage: validation.error || 'SQL validation failed',
+        };
+      }
+
+      // Execute query and measure performance
+      const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
+
+      // Apply pagination if requested
+      const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+
+      return {
+        Success: true,
+        QueryID: '',
+        QueryName: 'Ad-Hoc Query',
+        Results: paginatedResult,
+        RowCount: paginatedResult.length,
+        TotalRowCount: totalRowCount,
+        ExecutionTime: executionTime,
+        ErrorMessage: '',
+      };
+    } catch (e) {
+      LogError(e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return {
+        Success: false,
+        QueryID: '',
+        QueryName: 'Ad-Hoc Query',
+        Results: [],
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+        ErrorMessage: `Ad-hoc query execution failed: ${errorMessage}`,
       };
     }
   }
@@ -1220,12 +1342,20 @@ export class SQLServerDataProvider
    * Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath).
    */
   protected resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
+    // Try QueryEngine first for fresh, auto-refreshed data
+    const freshEntity = this.findQueryInEngine(
+      params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath
+    );
+    if (freshEntity) {
+      return this.refreshQueryInfoFromEntity(freshEntity);
+    }
+
+    // Fall back to ProviderBase cache if engine isn't loaded
     if (params.QueryID) {
       return this.Queries.find((q) => q.ID === params.QueryID);
     }
 
     if (params.QueryName) {
-      // Match by name and optional category path
       const matchingQueries = this.Queries.filter(
         (q) => q.Name.trim().toLowerCase() === params.QueryName?.trim().toLowerCase()
       );
@@ -1233,7 +1363,6 @@ export class SQLServerDataProvider
       if (matchingQueries.length === 0) return undefined;
       if (matchingQueries.length === 1) return matchingQueries[0];
 
-      // Multiple matches - use CategoryPath or CategoryID to disambiguate
       if (params.CategoryPath) {
         const byPath = matchingQueries.find(
           (q) => q.CategoryPath.toLowerCase() === params.CategoryPath?.toLowerCase()
@@ -1246,7 +1375,6 @@ export class SQLServerDataProvider
         if (byId) return byId;
       }
 
-      // Return first match if no category disambiguation
       return matchingQueries[0];
     }
 
@@ -1350,7 +1478,7 @@ export class SQLServerDataProvider
    * @param viewEntity
    * @param user
    */
-  protected async RenderViewWhereClause(viewEntity: UserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
+  protected async RenderViewWhereClause(viewEntity: MJUserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
     try {
       let sWhere = viewEntity.WhereClause;
       if (sWhere && sWhere.length > 0) {
@@ -2491,7 +2619,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: UserViewEntityExtended): string {
+  protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: MJUserViewEntityExtended): string {
     const fieldList = this.getRunTimeViewFieldArray(params, viewEntity);
     // pass this back as a comma separated list, put square brackets around field names to make sure if they are reserved words or have spaces, that they'll still work.
     if (fieldList.length === 0) return '*';
@@ -2504,7 +2632,7 @@ export class SQLServerDataProvider
         .join(',');
   }
 
-  protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): EntityFieldInfo[] {
+  protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: MJUserViewEntityExtended): EntityFieldInfo[] {
     const fieldList: EntityFieldInfo[] = [];
     try {
       let entityInfo: EntityInfo = null;

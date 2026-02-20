@@ -9,10 +9,10 @@ import { SharedService, BaseResourceComponent, NavigationService } from '@member
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass } from '@memberjunction/global';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
-interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
-  Template: string; // From AIPromptEntityExtended (view field)
+interface PromptWithTemplate extends Omit<MJAIPromptEntityExtended, 'Template'> {
+  Template: string; // From MJAIPromptEntityExtended (view field)
   MJTemplateEntity?: MJTemplateEntity; // Our added field for the actual template entity
   TemplateContents?: MJTemplateContentEntity[];
   CategoryName?: string;
@@ -89,7 +89,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   private loadingMessageInterval: any;
 
   private destroy$ = new Subject<void>();
-  public selectedPromptForTest: AIPromptEntityExtended | null = null;
+  public selectedPromptForTest: MJAIPromptEntityExtended | null = null;
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -599,9 +599,9 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
            this.selectedStatus !== 'all';
   }
 
-  public get filteredPromptsAsEntities(): AIPromptEntityExtended[] {
-    // The prompts are already AIPromptEntityExtended instances with extra properties
-    return this.filteredPrompts as AIPromptEntityExtended[];
+  public get filteredPromptsAsEntities(): MJAIPromptEntityExtended[] {
+    // The prompts are already MJAIPromptEntityExtended instances with extra properties
+    return this.filteredPrompts as MJAIPromptEntityExtended[];
   }
 
   public clearFilters(): void {

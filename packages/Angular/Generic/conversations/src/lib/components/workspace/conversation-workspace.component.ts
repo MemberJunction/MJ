@@ -46,6 +46,7 @@ import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
+import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { PendingAttachment } from '../mention/mention-editor.component';
 
 /**
@@ -128,6 +129,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Output() newConversationStarted = new EventEmitter<void>();
   @Output() actionableCommandExecuted = new EventEmitter<ActionableCommand>();
   @Output() automaticCommandExecuted = new EventEmitter<AutomaticCommand>();
+  @Output() navigationRequested = new EventEmitter<NavigationRequest>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -1019,6 +1021,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       mode: 'view'
     };
     this.actionableCommandExecuted.emit(command);
+  }
+
+  onNavigationRequest(event: NavigationRequest): void {
+    this.navigationRequested.emit(event);
   }
 
   onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {

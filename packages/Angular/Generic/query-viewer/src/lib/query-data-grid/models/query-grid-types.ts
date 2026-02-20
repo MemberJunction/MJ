@@ -333,7 +333,7 @@ export interface QuerySelectionChangedEvent {
 /**
  * Result of resolving the target entity for navigation
  */
-interface TargetEntityInfo {
+export interface TargetEntityInfo {
     targetEntityName?: string;
     targetEntityId?: string;
     targetEntityIcon?: string;
@@ -347,7 +347,7 @@ interface TargetEntityInfo {
  * - If the source field is a foreign key, target is the related entity
  * Also retrieves the target entity's icon for display in column headers.
  */
-function resolveTargetEntity(
+export function resolveTargetEntity(
     sourceEntityName: string | undefined,
     sourceFieldName: string | undefined,
     md: Metadata

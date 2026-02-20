@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { BaseEntity, Metadata, LogError, RunView, UserInfo } from "@memberjunction/core";
 import { DatabaseProviderBase } from "@memberjunction/core";
 import { MJAIAgentTypeEntity, MJAIAgentPromptEntity } from "@memberjunction/core-entities";
-import { AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { 
     AgentLoadResult,
     ParameterResult,
@@ -207,7 +207,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     protected async loadAgent(agentID: string, contextUser: UserInfo): Promise<AgentLoadResult> {
         try {
             const md = this.getMetadata();
-            const agent = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents', contextUser);
+            const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
             
             if (!agent) {
                 return {
@@ -301,7 +301,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
      * Creates a prompt and associates it with an agent
      */
     protected async createAndAssociatePrompt(
-        agent: AIAgentEntityExtended,
+        agent: MJAIAgentEntityExtended,
         promptText: string,
         contextUser: UserInfo
     ): Promise<PromptCreationResult> {
@@ -309,7 +309,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             const md = this.getMetadata();
             
             // Create the prompt
-            const prompt = await md.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts', contextUser);
+            const prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts', contextUser);
             if (!prompt) {
                 return { success: false, error: 'Failed to create AI Prompt entity object' };
             }

@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "Name": "Data",
+      "Description": "Tabular data display from queries or views. Content is a JSON specification that includes the data source type (query or view), source identifiers, optional parameters, and display configuration. Rendered using the existing query-viewer or entity-data-grid components.",
+      "ParentID": null,
+      "ContentType": "application/vnd.mj.data",
+      "DriverClass": "DataArtifactViewerPlugin",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-table"
+    },
+    "primaryKey": {
+      "ID": "66E3DA50-3C6B-4B0B-BAD0-8A9CB9A4B1FA"
+    },
+    "sync": {
+      "lastModified": "2026-02-19T02:31:10.286Z",
+      "checksum": "046585710264398798525d3f03455de0fb75f7f5cfcb2729751e9dc790fb250c"
+    }
+  }
+]

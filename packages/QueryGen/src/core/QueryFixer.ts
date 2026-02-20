@@ -6,7 +6,7 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo, LogStatus } from '@memberjunction/core';
 import { extractErrorMessage } from '../utils/error-handlers';
 import {
@@ -82,7 +82,7 @@ export class QueryFixer {
   private findPromptByName(
     aiEngine: AIEngine,
     promptName: string
-  ): AIPromptEntityExtended {
+  ): MJAIPromptEntityExtended {
     const prompt = aiEngine.Prompts.find((p) => p.Name === promptName);
     if (!prompt) {
       throw new Error(`Prompt '${promptName}' not found in AIEngine cache`);
@@ -95,7 +95,7 @@ export class QueryFixer {
    * Parses JSON response and validates structure
    */
   private async executePrompt(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     promptData: {
       queryName: string;
       originalSQL: string;

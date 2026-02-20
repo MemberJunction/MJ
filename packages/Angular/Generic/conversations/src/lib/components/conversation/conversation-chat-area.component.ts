@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { AgentStateService } from '../../services/agent-state.service';
@@ -15,7 +15,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
-import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
+import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
@@ -86,6 +86,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
   @Output() sidebarToggleClicked = new EventEmitter<void>();
@@ -122,6 +123,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   public memberCount: number = 1;
   public artifactCount: number = 0;
+  public artifactCountDisplay: number = 0;
   public isShared: boolean = false;
   public showExportModal: boolean = false;
   public showAgentPanel: boolean = false;
@@ -165,9 +167,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   // Cached combined artifacts map - updated when toggle changes
   private _combinedArtifactsMap: Map<string, LazyArtifactInfo[]> | null = null;
 
-  // Agent run mapping: ConversationDetailID -> AIAgentRunEntityExtended
+  // Agent run mapping: ConversationDetailID -> MJAIAgentRunEntityExtended
   // Loaded once per conversation and kept in sync as new runs are created
-  public agentRunsByDetailId = new Map<string, AIAgentRunEntityExtended>();
+  public agentRunsByDetailId = new Map<string, MJAIAgentRunEntityExtended>();
 
   /**
    * Ratings by conversation detail ID (parsed from RatingsJSON)
@@ -194,7 +196,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   // Empty collections for hidden message-input components
   public readonly emptyArtifactsMap = new Map<string, LazyArtifactInfo[]>();
-  public readonly emptyAgentRunsMap = new Map<string, AIAgentRunEntityExtended>();
+  public readonly emptyAgentRunsMap = new Map<string, MJAIAgentRunEntityExtended>();
   public readonly emptyInProgressIds: string[] = [];
 
   // Loading state for peripheral data
@@ -205,6 +207,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   // Track initialization state to prevent loading messages before agents are ready
   private isInitialized: boolean = false;
+
+  // Track whether we had active agents on the current conversation's last poll cycle.
+  // Used to detect when polling transitions from active → no active agents (completion via poll).
+  private hadActiveAgents: boolean = false;
 
   // Resize state
   private isResizing: boolean = false;
@@ -230,7 +236,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public maxAttachments: number = 10;
   public maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB default
   public acceptedFileTypes: string = 'image/*';
-  private conversationManagerAgent: AIAgentEntityExtended | null = null;
+  private conversationManagerAgent: MJAIAgentEntityExtended | null = null;
 
   constructor(
     public conversationData: ConversationDataService,
@@ -285,6 +291,27 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         if (message) {
           await this.handleMessageCompletion(message, event.agentRunId);
         }
+      });
+
+    // Subscribe to polling-based agent state to detect completions after page refresh.
+    // After a refresh the server publishes completion events for the OLD sessionId, so the
+    // WebSocket subscription (which uses the NEW sessionId) never receives them.
+    // The polling mechanism is our fallback: when agents transition from active → none
+    // for the current conversation, we reload messages to show the final response.
+    this.agentStateService.activeAgents$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(async (agents) => {
+        if (!this.conversationId) return;
+        const conversationAgents = agents.filter(a => a.run.ConversationID === this.conversationId);
+        const hasActiveAgents = conversationAgents.length > 0;
+        if (this.hadActiveAgents && !hasActiveAgents) {
+          // Agents just completed — reload messages to pick up final response and any
+          // delegated-agent messages that were created during the run.
+          this.invalidateConversationCache(this.conversationId);
+          await this.reloadMessagesForActiveConversation();
+          this.cdr.detectChanges();
+        }
+        this.hadActiveAgents = hasActiveAgents;
       });
   }
 
@@ -404,6 +431,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
 
+    // Reset poll-based completion tracking whenever we switch conversations,
+    // so the first empty poll on the new conversation doesn't trigger a spurious reload.
+    this.hadActiveAgents = false;
+
     if (conversationId) {
       this.currentlyLoadingConversationId = conversationId;
 
@@ -414,9 +445,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         });
       }
 
-      this.isLoadingConversation = true;
-      this.messages = [];
-      this.cdr.detectChanges();
+      // Only show loading spinner if we don't have cached data for this conversation.
+      // When switching between previously visited conversations, the cache provides
+      // instant display without the loading flash.
+      const hasCachedData = this.conversationDataCache.has(conversationId);
+      if (!hasCachedData) {
+        this.isLoadingConversation = true;
+        this.messages = [];
+        this.cdr.detectChanges();
+      }
 
       try {
         await this.loadMessages(conversationId);
@@ -641,9 +678,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
         // Build agent runs map
         if (parsed.agentRuns.length > 0) {
-          // Convert AgentRunJSON to AIAgentRunEntityExtended
+          // Convert AgentRunJSON to MJAIAgentRunEntityExtended
           const agentRunData = parsed.agentRuns[0]; // Should only be one per detail
-          const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
+          const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
 
           // Convert ISO date strings to Date objects
           agentRun.LoadFromData({
@@ -718,6 +755,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       // Update artifact count for header display (unique artifacts, not versions)
       this.artifactCount = this.calculateUniqueArtifactCount();
+      this.updateArtifactCountDisplay();
 
       // Debug: Log summary
       const systemArtifactCount = this.systemArtifactsByDetailId.size;
@@ -785,6 +823,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Scroll to bottom when new message is sent
     this.scrollToBottom = true;
+
+    // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
+    // so progress updates that arrive via PubSub run outside Angular's zone. Without this,
+    // the UI does not update when the messages array is modified from a streaming callback.
+    this.cdr.detectChanges();
   }
 
   /**
@@ -871,7 +914,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * This is called on EVERY progress update with the full, live agent run object
    * Provides real-time updates of status, timestamps, tokens, cost during execution
    */
-  async onAgentRunUpdate(event: {conversationDetailId: string; agentRun?: AIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+  async onAgentRunUpdate(event: {conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
     if (event.agentRun) {
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
@@ -886,6 +929,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // This ensures message components receive the fresh agent run data
     this.messages = [...this.messages];
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Public entry point to reload messages in the active conversation.
+   * Called by the parent resource wrapper when the user clicks the Refresh button,
+   * so that new agent responses are visible without a full page reload.
+   */
+  public async reloadMessages(): Promise<void> {
+    await this.reloadMessagesForActiveConversation();
   }
 
   /**
@@ -925,7 +977,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         for (const message of newMessages) {
           if (message.AgentID && message.ID) {
             // Query to find agent run for this conversation detail
-            const agentRunResult = await rv.RunView<AIAgentRunEntityExtended>({
+            const agentRunResult = await rv.RunView<MJAIAgentRunEntityExtended>({
               EntityName: 'MJ: AI Agent Runs',
               ExtraFilter: `ConversationDetailID='${message.ID}'`,
               ResultType: 'entity_object'
@@ -972,6 +1024,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // When Sage delegates to Marketing Agent, a new message is created
       await this.reloadMessagesForActiveConversation();
 
+      // Invalidate cache since reloadMessages may have loaded new delegated-agent messages
+      // that are not in the cache set by reloadArtifactsForMessage().
+      // Without this, navigating away and back would show stale data.
+      if (message.ConversationID) {
+        this.invalidateConversationCache(message.ConversationID);
+      }
+
       // Update inProgressMessageIds to include new delegated agents
       // This triggers callback registration via the setter in message-input
       this.inProgressMessageIds = [...this.messages
@@ -1002,6 +1061,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
     } catch (error) {
       console.error(`Error handling message completion for ${message.ID}:`, error);
+      this.cdr.detectChanges();
     }
   }
 
@@ -1057,12 +1117,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Called when a new agent run completes to keep the map in sync
    * @param forceRefresh If true, always reload from database even if already in map (used when status changes)
    */
-  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<AIAgentRunEntityExtended> {
+  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<MJAIAgentRunEntityExtended> {
     try {
       // Always refresh if forced, or if not in map yet
       if (forceRefresh || !this.agentRunsByDetailId.has(conversationDetailId)) {
         const md = new Metadata();
-        const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
+        const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
         if (await agentRun.Load(agentRunId)) {
           this.agentRunsByDetailId.set(conversationDetailId, agentRun);
 
@@ -1107,7 +1167,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Use optimized single query to reload all conversation data
       const result = await rq.RunQuery({
         QueryName: 'GetConversationComplete',
-        CategoryPath: '/MJ/Conversations',
+        CategoryPath: 'MJ/Conversations',
         Parameters: { ConversationID: detail.ConversationID }
       }, this.currentUser);
 
@@ -1162,6 +1222,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
           // Update artifact count
           this.artifactCount = this.calculateUniqueArtifactCount();
+          this.updateArtifactCountDisplay();
 
           break; // Found and updated the target message
         }
@@ -1184,18 +1245,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Calculate count of unique artifacts (not versions)
-   * Works with LazyArtifactInfo - uses artifactId from display data
-   * Respects showSystemArtifacts toggle to update count dynamically
+   * Recompute the cached artifactCountDisplay from the effective artifacts map.
+   * Must be called whenever artifactsByDetailId, systemArtifactsByDetailId,
+   * or showSystemArtifacts changes, instead of using a getter that can produce
+   * different values between Angular change-detection passes (NG0100).
    */
-  public get artifactCountDisplay(): number {
+  private updateArtifactCountDisplay(): void {
     const uniqueArtifactIds = new Set<string>();
     for (const artifactList of this.effectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         uniqueArtifactIds.add(info.artifactId);
       }
     }
-    return uniqueArtifactIds.size;
+    this.artifactCountDisplay = uniqueArtifactIds.size;
   }
 
   /**
@@ -1258,6 +1320,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public toggleSystemArtifacts(): void {
     this.showSystemArtifacts = !this.showSystemArtifacts;
     this._combinedArtifactsMap = null; // Clear cache
+    this.updateArtifactCountDisplay();
     this.cdr.detectChanges(); // Force update
   }
 
@@ -1603,6 +1666,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.showCollectionPicker = false;
       this.collectionPickerArtifactId = null;
       this.collectionPickerExcludedIds = [];
+      this.cdr.detectChanges();
     }
   }
 
@@ -1792,6 +1856,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     this.openEntityRecord.emit(event);
   }
 
+  onNavigationRequest(event: NavigationRequest): void {
+    // Pass the event up to the parent component for app-level navigation
+    this.navigationRequest.emit(event);
+  }
+
   viewTestRun(testRunId: string): void {
     // Open the test run record in the entity viewer
     const compositeKey = new CompositeKey();
@@ -1816,8 +1885,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     const dialogRef = this.dialogService.open({
       content: TestFeedbackDialogComponent,
+      title: 'Provide Test Feedback',
       width: 600,
-      height: 680
+      minHeight: 500
     });
 
     const dialogInstance = dialogRef.content.instance as TestFeedbackDialogComponent;
@@ -1889,6 +1959,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     if (artifact) {
       this.artifactToShare = artifact;
       this.isArtifactShareModalOpen = true;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1898,6 +1969,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   onArtifactShareModalClose(): void {
     this.isArtifactShareModalOpen = false;
     this.artifactToShare = null;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1911,6 +1983,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     if (this.selectedArtifactId) {
       await this.loadArtifactPermissions(this.selectedArtifactId);
     }
+    this.cdr.detectChanges();
   }
 
   // Scroll functionality (pattern from skip-chat)

@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from "@memberjunction/core";
-import { DashboardEntityExtended } from "../custom/DashboardEntityExtended";
+import { MJDashboardEntityExtended } from "../custom/MJDashboardEntityExtended";
 import {
     MJDashboardCategoryEntity,
     MJDashboardPartTypeEntity,
@@ -62,7 +62,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
        return super.getInstance<DashboardEngine>();
     }
 
-    private _dashboards: DashboardEntityExtended[] = [];
+    private _dashboards: MJDashboardEntityExtended[] = [];
     private _partTypes: MJDashboardPartTypeEntity[] = [];
     private _dashboardUserPreferences: MJDashboardUserPreferenceEntity[] = [];
     private _dashboardCategories: MJDashboardCategoryEntity[] = [];
@@ -129,7 +129,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
     // Getters for cached data
     // ========================================
 
-    public get Dashboards(): DashboardEntityExtended[] {
+    public get Dashboards(): MJDashboardEntityExtended[] {
         return this._dashboards;
     }
 
@@ -342,7 +342,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
      * @param userId - The ID of the user
      * @returns Array of dashboards the user can read
      */
-    public GetAccessibleDashboards(userId: string): DashboardEntityExtended[] {
+    public GetAccessibleDashboards(userId: string): MJDashboardEntityExtended[] {
         return this._dashboards.filter(dashboard =>
             this.CanUserReadDashboard(dashboard.ID, userId)
         );
@@ -362,7 +362,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
      * @param userId - The ID of the user
      * @returns Array of dashboards shared with the user
      */
-    public GetSharedDashboards(userId: string): DashboardEntityExtended[] {
+    public GetSharedDashboards(userId: string): MJDashboardEntityExtended[] {
         return this._dashboards.filter(dashboard => {
             // Exclude owned dashboards
             if (dashboard.UserID === userId) {

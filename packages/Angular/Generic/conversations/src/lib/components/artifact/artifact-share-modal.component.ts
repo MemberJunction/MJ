@@ -294,6 +294,8 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
             isOwner,
             availablePermissions: this.availablePermissions
         });
+
+        this.cdr.detectChanges(); // zone.js 0.15: async permission checks don't trigger CD
     }
 
     getExcludedUserIds(): string[] {

@@ -5,7 +5,7 @@ import { ChatMessageRole } from '@memberjunction/ai';
 import { PubSubEngine } from 'type-graphql';
 import { UserPayload } from '../types.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Task definition from LLM response
@@ -268,9 +268,9 @@ export class TaskOrchestrator {
     /**
      * Find agent by name
      */
-    private async findAgentByName(agentName: string): Promise<AIAgentEntityExtended | null> {
+    private async findAgentByName(agentName: string): Promise<MJAIAgentEntityExtended | null> {
         const rv = new RunView();
-        const result = await rv.RunView<AIAgentEntityExtended>({
+        const result = await rv.RunView<MJAIAgentEntityExtended>({
             EntityName: 'MJ: AI Agents',
             ExtraFilter: `Name='${agentName.replace(/'/g, "''")}'`,
             ResultType: 'entity_object'
@@ -475,7 +475,7 @@ export class TaskOrchestrator {
 
             // Load the agent entity
             const md = new Metadata();
-            const agentEntity = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents', this.contextUser);
+            const agentEntity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', this.contextUser);
             const loaded = await agentEntity.Load(task.AgentID!);
             if (!loaded) {
                 throw new Error(`Agent with ID ${task.AgentID} not found`);
@@ -695,7 +695,7 @@ export class TaskOrchestrator {
     private async createArtifactFromOutput(
         output: { type: 'message' | 'payload', content: any },
         conversationDetailId: string,
-        agent: AIAgentEntityExtended,
+        agent: MJAIAgentEntityExtended,
         taskName: string
     ): Promise<void> {
         try {

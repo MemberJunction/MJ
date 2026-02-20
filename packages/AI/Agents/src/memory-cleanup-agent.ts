@@ -1,7 +1,7 @@
 import { BaseAgent } from './base-agent';
 import { UserInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity } from '@memberjunction/core-entities';
-import { ExecuteAgentParams, AIAgentEntityExtended, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentParams, MJAIAgentEntityExtended, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**
@@ -293,7 +293,7 @@ export class MemoryCleanupAgent extends BaseAgent {
     /**
      * Get note retention days for an agent (uses agent config or default)
      */
-    private getNoteRetentionDays(agent: AIAgentEntityExtended): number {
+    private getNoteRetentionDays(agent: MJAIAgentEntityExtended): number {
         // Check if agent has NoteRetentionDays property using GetAll() for plain object access
         const agentData = agent.GetAll();
         const retention = agentData['NoteRetentionDays'];
@@ -306,7 +306,7 @@ export class MemoryCleanupAgent extends BaseAgent {
     /**
      * Get example retention days for an agent (uses agent config or default)
      */
-    private getExampleRetentionDays(agent: AIAgentEntityExtended): number {
+    private getExampleRetentionDays(agent: MJAIAgentEntityExtended): number {
         const agentData = agent.GetAll();
         const retention = agentData['ExampleRetentionDays'];
         if (typeof retention === 'number' && retention > 0) {
@@ -318,7 +318,7 @@ export class MemoryCleanupAgent extends BaseAgent {
     /**
      * Check if auto-archive is enabled for an agent
      */
-    private getAutoArchiveEnabled(agent: AIAgentEntityExtended): boolean {
+    private getAutoArchiveEnabled(agent: MJAIAgentEntityExtended): boolean {
         const agentData = agent.GetAll();
         const enabled = agentData['AutoArchiveEnabled'];
         // Default to true if not explicitly set to false

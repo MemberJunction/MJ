@@ -174,7 +174,7 @@ export class NotificationPreferencesComponent implements OnInit {
       const success = await transGroup.Submit();
 
       if (success) {
-        // Cache refresh happens automatically in UserNotificationPreferenceEntityExtended.Save()
+        // Cache refresh happens automatically in MJUserNotificationPreferenceEntityExtended.Save()
 
         // Update original values
         this.viewModels.forEach((vm) => {

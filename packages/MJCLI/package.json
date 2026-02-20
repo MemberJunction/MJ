@@ -75,7 +75,7 @@
     "fast-glob": "^3.3.3",
     "figlet": "^1.10.0",
     "fs-extra": "^11.3.3",
-    "@memberjunction/skyway-core": "^0.5.2",
+    "@memberjunction/skyway-core": "^0.5.3",
     "ora-classic": "^5.4.2",
     "recast": "^0.23.11",
     "simple-git": "^3.30.0",

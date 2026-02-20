@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { AIAgentRunEntityExtended, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunEntityExtended, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
@@ -21,8 +21,8 @@ import { ApplicationManager } from '@memberjunction/ng-base-application';
   templateUrl: './ai-agent-run.component.html',
   styleUrls: ['./ai-agent-run.component.css']
 })
-export class AIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent implements OnInit, OnDestroy {
-  public record!: AIAgentRunEntityExtended;
+export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent implements OnInit, OnDestroy {
+  public record!: MJAIAgentRunEntityExtended;
   
   private destroy$ = new Subject<void>();
   
@@ -35,7 +35,7 @@ export class AIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent i
   analyticsLoaded = false;
   visualizationLoaded = false;
   
-  agent: AIAgentEntityExtended | null = null;
+  agent: MJAIAgentEntityExtended | null = null;
   
   // Cost metrics using shared service
   costMetrics: AgentRunCostMetrics | null = null;
@@ -88,7 +88,7 @@ export class AIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent i
     
     try {
       const md = new Metadata();
-      const agent = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
+      const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       if (agent && await agent.Load(this.record.AgentID)) {
         this.agent = agent;
       }
