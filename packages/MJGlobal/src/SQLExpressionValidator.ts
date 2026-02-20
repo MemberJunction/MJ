@@ -294,10 +294,11 @@ export class SQLExpressionValidator {
     }
 
     // Check statement terminator (prevents multi-statement injection).
-    // For full_query context, a trailing semicolon is harmless (agent-generated SQL often ends with one).
-    // Only reject if semicolons appear mid-statement, indicating multi-statement injection.
+    // For full_query context, strip comments first (a trailing semicolon may be followed by
+    // an inline comment like `ORDER BY x DESC; -- highest first`), then strip the trailing
+    // semicolon. Only reject if semicolons remain mid-statement, indicating injection.
     const textForSemicolonCheck = isFullQuery
-      ? expression.replace(/;\s*$/, '')   // strip single trailing semicolon
+      ? this.stripSQLComments(expression).replace(/;\s*$/, '')   // strip comments then trailing semicolon
       : expression;
     if (textForSemicolonCheck.includes(';')) {
       return {
