@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
@@ -17,7 +17,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
   standalone: false,
   selector: 'mj-collections-full-view',
   template: `
-    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">
+    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)" kendoDialogContainer>
       <!-- Mac Finder-style Header -->
       <div class="collections-header">
         <!-- Breadcrumb navigation -->
@@ -106,7 +106,35 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
               </button>
             }
           </div>
-    
+
+          <!-- Current collection actions (visible when inside a collection) -->
+          @if (currentCollectionId && currentCollection) {
+            <div class="toolbar-separator"></div>
+            <div class="toolbar-actions-group">
+              @if (canShareCurrent()) {
+                <button class="btn-icon"
+                  (click)="shareCurrentCollection()"
+                  [title]="'Share: ' + currentCollection.Name">
+                  <i class="fas fa-share-nodes"></i>
+                </button>
+              }
+              @if (canEditCurrent()) {
+                <button class="btn-icon"
+                  (click)="editCurrentCollection()"
+                  [title]="'Edit: ' + currentCollection.Name">
+                  <i class="fas fa-pen-to-square"></i>
+                </button>
+              }
+              @if (canDeleteCurrent()) {
+                <button class="btn-icon btn-icon-danger"
+                  (click)="deleteCurrentCollection()"
+                  [title]="'Delete: ' + currentCollection.Name">
+                  <i class="fas fa-trash"></i>
+                </button>
+              }
+            </div>
+          }
+
           <!-- New dropdown -->
           @if (canEditCurrent()) {
             <div class="dropdown-container">
@@ -393,8 +421,56 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
         }
       </div>
     </div>
-    
-    <!-- Modals (unchanged) -->
+
+    <!-- Context Menu -->
+    @if (showContextMenu && contextMenuItem) {
+      <div class="context-menu-backdrop" (click)="closeContextMenu()"></div>
+      <div class="context-menu"
+        [style.left.px]="contextMenuPosition.x"
+        [style.top.px]="contextMenuPosition.y">
+        @if (contextMenuItem.type === 'folder' && contextMenuItem.collection) {
+          <button class="context-menu-item" (click)="onContextMenuAction('open')">
+            <i class="fas fa-folder-open"></i>
+            <span>Open</span>
+          </button>
+          <div class="context-menu-divider"></div>
+          @if (canShare(contextMenuItem.collection)) {
+            <button class="context-menu-item" (click)="onContextMenuAction('share')">
+              <i class="fas fa-share-nodes"></i>
+              <span>Share</span>
+            </button>
+          }
+          @if (canEdit(contextMenuItem.collection)) {
+            <button class="context-menu-item" (click)="onContextMenuAction('edit')">
+              <i class="fas fa-pen-to-square"></i>
+              <span>Edit</span>
+            </button>
+          }
+          @if (canDelete(contextMenuItem.collection)) {
+            <div class="context-menu-divider"></div>
+            <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('delete')">
+              <i class="fas fa-trash"></i>
+              <span>Delete</span>
+            </button>
+          }
+        }
+        @if (contextMenuItem.type === 'artifact') {
+          <button class="context-menu-item" (click)="onContextMenuAction('view')">
+            <i class="fas fa-eye"></i>
+            <span>View</span>
+          </button>
+          @if (canEditCurrent()) {
+            <div class="context-menu-divider"></div>
+            <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('remove')">
+              <i class="fas fa-times-circle"></i>
+              <span>Remove from Collection</span>
+            </button>
+          }
+        }
+      </div>
+    }
+
+    <!-- Modals -->
     <mj-collection-form-modal
       [isOpen]="isFormModalOpen"
       [collection]="editingCollection"
@@ -1127,6 +1203,97 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .col-owner {
       width: 150px;
     }
+
+    /* Toolbar separator and action group */
+    .toolbar-separator {
+      width: 1px;
+      height: 24px;
+      background: #D1D5DB;
+      margin: 0 4px;
+    }
+
+    .toolbar-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-icon-danger {
+      color: #DC2626;
+      border-color: #FCA5A5;
+    }
+
+    .btn-icon-danger:hover {
+      background: #FEE2E2;
+      color: #DC2626;
+      border-color: #DC2626;
+    }
+
+    /* Context menu */
+    .context-menu-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1999;
+    }
+
+    .context-menu {
+      position: fixed;
+      min-width: 180px;
+      background: white;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+      padding: 4px;
+      z-index: 2000;
+    }
+
+    .context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: #111827;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 100ms ease;
+    }
+
+    .context-menu-item:hover {
+      background: #F3F4F6;
+    }
+
+    .context-menu-item i {
+      font-size: 14px;
+      width: 16px;
+      text-align: center;
+      color: #6B7280;
+    }
+
+    .context-menu-danger {
+      color: #DC2626;
+    }
+
+    .context-menu-danger i {
+      color: #DC2626;
+    }
+
+    .context-menu-danger:hover {
+      background: #FEE2E2;
+    }
+
+    .context-menu-divider {
+      height: 1px;
+      background: #E5E7EB;
+      margin: 4px 0;
+    }
   `]
 })
 export class CollectionsFullViewComponent implements OnInit, OnDestroy {
@@ -1165,6 +1332,11 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
   public isSelectMode: boolean = false; // Toggle for selection mode
+
+  // Context menu state
+  public showContextMenu: boolean = false;
+  public contextMenuPosition: { x: number; y: number } = { x: 0, y: 0 };
+  public contextMenuItem: CollectionViewItem | null = null;
 
   private destroy$ = new Subject<void>();
   private isNavigatingProgrammatically = false;
@@ -1625,6 +1797,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     await this.loadCurrentCollectionPermission();
     // Rebuild unified list to show new collection
     this.buildUnifiedItemList();
+    this.cdr.detectChanges();
   }
 
   onFormCancelled(): void {
@@ -1646,6 +1819,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   async onArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
     this.isArtifactModalOpen = false;
     await this.loadArtifacts();
+    this.cdr.detectChanges();
   }
 
   onArtifactModalCancelled(): void {
@@ -1779,6 +1953,14 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return this.canDelete(this.currentCollection);
   }
 
+  canShareCurrent(): boolean {
+    // At root level, no share needed
+    if (!this.currentCollectionId || !this.currentCollection) {
+      return false;
+    }
+    return this.canShare(this.currentCollection);
+  }
+
   isShared(collection: MJCollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
     return collection.OwnerID != null && collection.OwnerID !== this.currentUser.ID;
@@ -1797,11 +1979,31 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   async onPermissionsChanged(): Promise<void> {
     // Reload collections and permissions after sharing changes
     await this.loadCollections();
+    this.cdr.detectChanges();
   }
 
   onShareModalCancelled(): void {
     this.isShareModalOpen = false;
     this.sharingCollection = null;
+  }
+
+  // Header toolbar action methods
+  shareCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.shareCollection(this.currentCollection);
+    }
+  }
+
+  editCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.editCollection(this.currentCollection);
+    }
+  }
+
+  deleteCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.deleteCollection(this.currentCollection);
+    }
   }
 
   /**
@@ -1855,6 +2057,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     // Apply sorting
     this.unifiedItems = this.sortItems(items);
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1914,8 +2117,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public toggleSelectMode(): void {
     this.isSelectMode = !this.isSelectMode;
     if (!this.isSelectMode) {
-      // Clear selection when exiting select mode
+      // Clear selection when exiting select mode (clearSelection calls buildUnifiedItemList which calls cdr)
       this.clearSelection();
+    } else {
+      this.cdr.detectChanges();
     }
   }
 
@@ -2015,7 +2220,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Multi-select: Delete selected items (Phase 3)
+   * Multi-select: Delete selected items
    */
   public async deleteSelected(): Promise<void> {
     if (this.selectedItems.size === 0) return;
@@ -2028,8 +2233,42 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     if (!confirmed) return;
 
-    // TODO: Implement batch delete
-    this.clearSelection();
+    const selectedViewItems = this.unifiedItems.filter(item => this.selectedItems.has(item.id));
+    const folderItems = selectedViewItems.filter(item => item.type === 'folder' && item.collection);
+    const artifactItems = selectedViewItems.filter(item => item.type === 'artifact' && item.version);
+
+    try {
+      for (const item of folderItems) {
+        await this.deleteCollectionRecursive(item.collection!.ID);
+      }
+
+      if (artifactItems.length > 0 && this.currentCollectionId) {
+        const rv = new RunView();
+        for (const item of artifactItems) {
+          const result = await rv.RunView<MJCollectionArtifactEntity>({
+            EntityName: 'MJ: Collection Artifacts',
+            ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version!.ID}'`,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          if (result.Success && result.Results) {
+            for (const joinRecord of result.Results) {
+              await joinRecord.Delete();
+            }
+          }
+        }
+      }
+
+      this.clearSelection();
+      await this.loadCollections();
+      if (artifactItems.length > 0) {
+        await this.loadArtifacts();
+      }
+      this.buildUnifiedItemList();
+    } catch (error) {
+      console.error('Error deleting selected items:', error);
+      await this.dialogService.alert('Error', `An error occurred while deleting: ${error}`);
+    }
   }
 
   /**
@@ -2155,18 +2394,82 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle right-click context menu
-   * Opens browser context menu for now - can be extended with custom menu
+   * Handle right-click context menu - shows custom context menu with permission-gated actions
    */
   public onItemContextMenu(item: CollectionViewItem, event: MouseEvent): void {
-    // Select the item if not already selected
-    if (!item.selected) {
-      this.clearSelection();
-      this.toggleItemSelection(item, event);
-    }
+    event.preventDefault();
+    event.stopPropagation();
 
-    // Allow browser's default context menu for now
-    // Future enhancement: implement custom context menu with actions
-    // event.preventDefault();
+    // Close any open dropdowns
+    this.showNewDropdown = false;
+    this.showSortDropdown = false;
+
+    this.contextMenuItem = item;
+    this.contextMenuPosition = this.clampContextMenuPosition(event.clientX, event.clientY);
+    this.showContextMenu = true;
+    this.cdr.detectChanges();
+  }
+
+  /** Clamp menu position to keep it within the viewport */
+  private clampContextMenuPosition(x: number, y: number): { x: number; y: number } {
+    const menuWidth = 200;
+    const menuHeight = 200;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    return {
+      x: Math.min(x, viewportWidth - menuWidth),
+      y: Math.min(y, viewportHeight - menuHeight)
+    };
+  }
+
+  public closeContextMenu(): void {
+    this.showContextMenu = false;
+    this.contextMenuItem = null;
+    this.cdr.detectChanges();
+  }
+
+  /** Handle context menu action dispatch */
+  public onContextMenuAction(action: string): void {
+    const item = this.contextMenuItem;
+    this.closeContextMenu();
+    if (!item) return;
+
+    switch (action) {
+      case 'open':
+        this.openItem(item);
+        break;
+      case 'view':
+        this.openItem(item);
+        break;
+      case 'share':
+        if (item.collection) {
+          this.shareCollection(item.collection);
+        }
+        break;
+      case 'edit':
+        if (item.collection) {
+          this.editCollection(item.collection);
+        }
+        break;
+      case 'delete':
+        if (item.collection) {
+          this.deleteCollection(item.collection);
+        }
+        break;
+      case 'remove':
+        if (item.artifact && item.version) {
+          this.removeArtifact({ artifact: item.artifact, version: item.version });
+        }
+        break;
+    }
+  }
+
+  /** Close context menu on Escape key */
+  @HostListener('document:keydown.escape')
+  public onEscapeKey(): void {
+    if (this.showContextMenu) {
+      this.closeContextMenu();
+    }
   }
 }

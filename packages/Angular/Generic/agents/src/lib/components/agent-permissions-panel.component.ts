@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RoleInfo } from '@memberjunction/core';
 import { MJUserEntity } from '@memberjunction/core-entities';
 import { AgentPermissionsService, PermissionRow } from '../services/agent-permissions.service';
@@ -32,17 +32,17 @@ interface GranteeOption {
 })
 export class AgentPermissionsPanelComponent implements OnInit {
     /** The agent whose permissions are being managed */
-    private _agent: AIAgentEntityExtended | null = null;
+    private _agent: MJAIAgentEntityExtended | null = null;
 
     @Input()
-    set Agent(value: AIAgentEntityExtended | null) {
+    set Agent(value: MJAIAgentEntityExtended | null) {
         const prev = this._agent;
         this._agent = value;
         if (value && value !== prev) {
             this.loadData();
         }
     }
-    get Agent(): AIAgentEntityExtended | null {
+    get Agent(): MJAIAgentEntityExtended | null {
         return this._agent;
     }
 

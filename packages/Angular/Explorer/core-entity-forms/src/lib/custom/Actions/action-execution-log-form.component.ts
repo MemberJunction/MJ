@@ -19,7 +19,7 @@ interface ActionParameter {
     templateUrl: './action-execution-log-form.component.html',
     styleUrls: ['./action-execution-log-form.component.css']
 })
-export class ActionExecutionLogFormComponentExtended extends MJActionExecutionLogFormComponent implements OnInit {
+export class MJActionExecutionLogFormComponentExtended extends MJActionExecutionLogFormComponent implements OnInit {
     public record!: MJActionExecutionLogEntity;
     
     // Related entities

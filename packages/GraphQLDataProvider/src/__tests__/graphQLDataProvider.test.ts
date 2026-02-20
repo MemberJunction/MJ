@@ -97,7 +97,7 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-  UserViewEntityExtended: vi.fn(),
+  MJUserViewEntityExtended: vi.fn(),
   ViewInfo: vi.fn(),
 }));
 

@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
-import { MJListEntity, MJListDetailEntity, ListDetailEntityExtended, MJListCategoryEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCategoryEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import { ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
 
@@ -52,7 +52,7 @@ export interface AddableRecord {
     styleUrls: ['./list-form.component.css', '../../../shared/form-styles.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ListFormComponentExtended extends MJListFormComponent implements OnInit, OnDestroy {
+export class MJListFormComponentExtended extends MJListFormComponent implements OnInit, OnDestroy {
     private sharedService = inject(SharedService);
 
     public override record!: MJListEntity;
@@ -108,8 +108,8 @@ export class ListFormComponentExtended extends MJListFormComponent implements On
     // Add From View dialog
     public showAddFromViewDialog = false;
     public showAddFromViewLoader = false;
-    public userViews: UserViewEntityExtended[] | null = null;
-    public userViewsToAdd: UserViewEntityExtended[] = [];
+    public userViews: MJUserViewEntityExtended[] | null = null;
+    public userViewsToAdd: MJUserViewEntityExtended[] = [];
     public addFromViewProgress = 0;
     public addFromViewTotal = 0;
     public fetchingRecordsToSave = false;
@@ -638,7 +638,7 @@ export class ListFormComponentExtended extends MJListFormComponent implements On
         const tg = await this.metadata.CreateTransactionGroup();
 
         for (const record of recordsToAdd) {
-            const listDetail = await this.metadata.GetEntityObject<ListDetailEntityExtended>('MJ: List Details');
+            const listDetail = await this.metadata.GetEntityObject<MJListDetailEntityExtended>('MJ: List Details');
             listDetail.ListID = this.record.ID;
             listDetail.RecordID = record.ID;
             listDetail.TransactionGroup = tg;
@@ -694,7 +694,7 @@ export class ListFormComponentExtended extends MJListFormComponent implements On
         this.cdr.markForCheck();
 
         const rv = new RunView();
-        const runViewResult = await rv.RunView<UserViewEntityExtended>({
+        const runViewResult = await rv.RunView<MJUserViewEntityExtended>({
             EntityName: 'MJ: User Views',
             ExtraFilter: `UserID = '${this.metadata.CurrentUser.ID}' AND EntityID = '${this.record.EntityID}'`,
             ResultType: 'entity_object'
@@ -710,7 +710,7 @@ export class ListFormComponentExtended extends MJListFormComponent implements On
         this.cdr.markForCheck();
     }
 
-    public toggleViewSelection(view: UserViewEntityExtended): void {
+    public toggleViewSelection(view: MJUserViewEntityExtended): void {
         const index = this.userViewsToAdd.findIndex(v => v.ID === view.ID);
         if (index >= 0) {
             this.userViewsToAdd.splice(index, 1);
@@ -720,7 +720,7 @@ export class ListFormComponentExtended extends MJListFormComponent implements On
         this.cdr.markForCheck();
     }
 
-    public isViewSelected(view: UserViewEntityExtended): boolean {
+    public isViewSelected(view: MJUserViewEntityExtended): boolean {
         return this.userViewsToAdd.some(v => v.ID === view.ID);
     }
 
@@ -771,7 +771,7 @@ export class ListFormComponentExtended extends MJListFormComponent implements On
         const tg = await this.metadata.CreateTransactionGroup();
 
         for (const recordID of recordsToAdd) {
-            const listDetail = await this.metadata.GetEntityObject<ListDetailEntityExtended>('MJ: List Details');
+            const listDetail = await this.metadata.GetEntityObject<MJListDetailEntityExtended>('MJ: List Details');
             listDetail.ListID = this.record.ID;
             listDetail.RecordID = recordID;
             listDetail.TransactionGroup = tg;

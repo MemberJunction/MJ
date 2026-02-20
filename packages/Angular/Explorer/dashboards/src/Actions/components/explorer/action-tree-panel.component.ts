@@ -13,7 +13,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { ActionExplorerStateService } from '../../services/action-explorer-state.service';
-import { ActionEntityExtended } from '@memberjunction/actions-base';
+import { MJActionEntityExtended } from '@memberjunction/actions-base';
 
 export interface CategoryTreeNode {
   category: MJActionCategoryEntity;
@@ -32,7 +32,7 @@ export interface CategoryTreeNode {
 })
 export class ActionTreePanelComponent implements OnInit, OnDestroy {
   @Input() Categories: MJActionCategoryEntity[] = [];
-  @Input() Actions: ActionEntityExtended[] = [];
+  @Input() Actions: MJActionEntityExtended[] = [];
   @Output() CategorySelected = new EventEmitter<string>();
   @Output() NewCategoryClick = new EventEmitter<string | null>(); // parent ID or null for root
   @Output() EditCategoryClick = new EventEmitter<MJActionCategoryEntity>();

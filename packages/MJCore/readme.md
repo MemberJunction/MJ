@@ -631,6 +631,11 @@ const namedResult = await rq.RunQuery({
     Parameters: { Month: 12, Year: 2024 }
 });
 
+// Execute ad-hoc SQL (SELECT/WITH only — validated and run on read-only connection)
+const adhocResult = await rq.RunQuery({
+    SQL: 'SELECT TOP 100 Name, Status FROM __mj.vwUsers WHERE IsActive = 1'
+});
+
 if (result.Success) {
     console.log(`Rows: ${result.RowCount}, Time: ${result.ExecutionTime}ms`);
 } else {

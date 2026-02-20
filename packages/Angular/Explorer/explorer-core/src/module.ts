@@ -26,7 +26,7 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
-import { QueryGridModule } from '@memberjunction/ng-query-grid';
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
@@ -121,7 +121,7 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     BaseFormsModule,
     ListViewModule,
     TreeViewModule,
-    QueryGridModule,
+    QueryViewerModule,
     LayoutModule,
     DropDownsModule,
     MemberJunctionSharedModule,

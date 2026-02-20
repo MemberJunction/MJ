@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
 import { MJConversationEntity, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
@@ -156,7 +156,8 @@ export class ShareModalComponent implements OnInit {
 
   constructor(
     private dialogService: DialogService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -204,6 +205,8 @@ export class ShareModalComponent implements OnInit {
       }
     } catch (error) {
       console.error('Failed to load permissions:', error);
+    } finally {
+      this.cdr.detectChanges();
     }
   }
 
@@ -259,6 +262,7 @@ export class ShareModalComponent implements OnInit {
       this.permissions.push(newPermission);
       this.newUserEmail = '';
       this.toastService.success(`Access granted to ${user.Email}`);
+      this.cdr.detectChanges();
     } catch (error) {
       console.error('Failed to add user:', error);
       this.toastService.error('Failed to add user');

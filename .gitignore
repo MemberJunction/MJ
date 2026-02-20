@@ -3,9 +3,15 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
-# Playwright CLI snapshots
+# Playwright CLI/MCP snapshots, logs, and screenshots
 .playwright-cli/
-.playwright-mcp/
+.playwright-mcp/*.log
+.playwright-mcp/*.png
+.playwright-mcp/*.jpeg
+
+# Experiment build artifacts (keep source, ignore generated output)
+experiments/**/dist/
+experiments/**/.angular/
 
 # Turbo local cache
 .turbo/

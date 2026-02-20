@@ -21,7 +21,7 @@ interface CategoryTreeNode {
     templateUrl: './query-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
 })
-export class QueryFormExtendedComponent extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
+export class MJQueryFormComponentExtended extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public record!: MJQueryEntity;
     public queryParameters: MJQueryParameterEntity[] = [];
     public queryFields: MJQueryFieldEntity[] = [];
@@ -97,19 +97,6 @@ export class QueryFormExtendedComponent extends MJQueryFormComponent implements 
 
         // Set initial SQL value in the editor
         this.updateEditorValue();
-        
-        // Ensure all form controls are properly initialized with data
-        setTimeout(() => {
-            // Force Angular to update all bindings
-            this.cdr.detectChanges();
-            
-            // If in edit mode, trigger another update to ensure Kendo components are initialized
-            if (this.EditMode) {
-                setTimeout(() => {
-                    this.cdr.detectChanges();
-                }, 50);
-            }
-        }, 100);
     }
  
     override EndEditMode(): void {
@@ -444,6 +431,7 @@ export class QueryFormExtendedComponent extends MJQueryFormComponent implements 
 
         // Reload parameters in case they were updated
         await this.loadQueryParameters();
+        this.cdr.detectChanges();
 
         // Show the run dialog
         this.showRunDialog = true;
@@ -635,6 +623,7 @@ export class QueryFormExtendedComponent extends MJQueryFormComponent implements 
                     this.loadQueryFields(),
                     this.loadQueryEntities()
                 ]);
+                this.cdr.detectChanges();
             }
         }
         

@@ -3,9 +3,10 @@ import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, EnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 /**
@@ -42,9 +43,11 @@ import { Subject, takeUntil, filter } from 'rxjs';
                 [isSidebarPinned]="isSidebarPinned"
                 [isMobileView]="isMobileView"
                 (conversationSelected)="onConversationSelected($event)"
+                (conversationDeleted)="onConversationDeleted($event)"
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
-                (unpinSidebarRequested)="unpinSidebar()">
+                (unpinSidebarRequested)="unpinSidebar()"
+                (refreshRequested)="onRefreshRequested()">
               </mj-conversation-list>
             }
           </div>
@@ -79,7 +82,8 @@ import { Subject, takeUntil, filter } from 'rxjs';
               (pendingMessageConsumed)="onPendingMessageConsumed()"
               (pendingMessageRequested)="onPendingMessageRequested($event)"
               (artifactLinkClicked)="onArtifactLinkClicked($event)"
-              (openEntityRecord)="onOpenEntityRecord($event)">
+              (openEntityRecord)="onOpenEntityRecord($event)"
+              (navigationRequest)="onNavigationRequest($event)">
             </mj-conversation-chat-area>
           }
         </div>
@@ -550,7 +554,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Get the environment ID from configuration or use default
    */
   get environmentId(): string {
-    return this.Data?.Configuration?.environmentId || EnvironmentEntityExtended.DefaultEnvironmentID;
+    return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
   /**
@@ -575,6 +579,35 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   // ============================================
   // EVENT HANDLERS FROM CHILD COMPONENTS
   // ============================================
+
+  /**
+   * Handle refresh request from the conversation list.
+   * After the list refreshes, also reload messages in the active chat area so any
+   * new agent responses are visible without a full page reload.
+   */
+  onRefreshRequested(): void {
+    void this.chatArea?.reloadMessages();
+  }
+
+  /**
+   * Handle conversation deletion from the list.
+   * If the deleted conversation was selected, navigate to the first remaining conversation.
+   */
+  onConversationDeleted(deletedId: string): void {
+    if (this.selectedConversationId === deletedId) {
+      const remaining = this.conversationData.conversations.filter(c => c.ID !== deletedId);
+      if (remaining.length > 0) {
+        void this.selectConversation(remaining[0].ID);
+        this.updateUrl();
+      } else {
+        this.selectedConversationId = null;
+        this.selectedConversation = null;
+        this.selectedThreadId = null;
+        this.isNewUnsavedConversation = true;
+        this.updateUrl();
+      }
+    }
+  }
 
   /**
    * Handle conversation selection from the list
@@ -931,6 +964,27 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /**
+   * Handle navigation request from artifact viewer plugins.
+   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   */
+  async onNavigationRequest(event: NavigationRequest): Promise<void> {
+    const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
+    await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
+      queryParams: event.queryParams
+    });
+  }
+
+  /**
+   * Resolve an application name to its ID.
+   */
+  private resolveAppId(appName: string): string | undefined {
+    const md = new Metadata();
+    const apps = md.Applications;
+    const app = apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    return app?.ID;
   }
 
   /**

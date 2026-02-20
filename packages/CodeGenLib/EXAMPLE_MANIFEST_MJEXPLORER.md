@@ -28,8 +28,8 @@ Notice the client-specific packages: Angular components (`ng-artifacts`, `ng-ask
 
 // @memberjunction/actions-base (2 classes)
 import {
-    ActionEntityExtended,
-    EntityActionEntityExtended,
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended,
 } from '@memberjunction/actions-base';
 
 // @memberjunction/ai-core-plus (7 classes)
@@ -53,7 +53,7 @@ import {
 
 // @memberjunction/communication-types (1 classes)
 import {
-    CommunicationProviderEntityExtended,
+    MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
 // @memberjunction/core-entities (275 classes)
@@ -66,7 +66,7 @@ import {
 
 // @memberjunction/entity-communications-base (1 classes)
 import {
-    EntityCommunicationMessageTypeExtended,
+    MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
 // @memberjunction/ng-artifacts (6 classes)
@@ -170,8 +170,8 @@ import {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const CLASS_REGISTRATIONS: any[] = [
-    ActionEntityExtended,
-    EntityActionEntityExtended,
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended,
     AIAgentEntityExtended,
     AIAgentRunEntityExtended,
     // ... all 720 classes listed here ...

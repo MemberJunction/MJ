@@ -75,6 +75,20 @@ Uses [cosmiconfig](https://github.com/davidtheclark/cosmiconfig) to find configu
 - `.mjrc` / `.mjrc.json` / `.mjrc.yaml`
 - `package.json` (in `"mj"` property)
 
+### Database Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | `localhost` | SQL Server hostname or IP |
+| `DB_PORT` | `1433` | SQL Server port |
+| `DB_DATABASE` | | Database name |
+| `CODEGEN_DB_USERNAME` | | SQL Server login |
+| `CODEGEN_DB_PASSWORD` | | SQL Server password |
+| `DB_ENCRYPT` | `true` | Encrypt the connection (required for Azure SQL) |
+| `DB_TRUST_SERVER_CERTIFICATE` | `false` | Trust self-signed certificates (set `true` for local dev) |
+
+These can also be set in `mj.config.cjs` as `dbHost`, `dbPort`, `dbDatabase`, `codeGenLogin`, `codeGenPassword`, `dbEncrypt`, and `dbTrustServerCertificate`.
+
 ## Commands
 
 ### mj install
@@ -89,7 +103,7 @@ Sets up the database schema, applies migrations, and generates initial code.
 
 ### mj migrate
 
-Run Flyway database migrations.
+Run database migrations (powered by [Skyway](https://github.com/MemberJunction/skyway)).
 
 ```bash
 mj migrate
@@ -405,7 +419,7 @@ The CLI includes these oclif plugins:
 | `@memberjunction/sqlserver-dataprovider` | Database connectivity |
 | `@oclif/core` | CLI framework |
 | `cosmiconfig` | Configuration file loading |
-| `node-flyway` | Database migration execution |
+| `@memberjunction/skyway-core` | Database migration execution |
 | `simple-git` | Git operations |
 | `figlet` | ASCII art for banners |
 
