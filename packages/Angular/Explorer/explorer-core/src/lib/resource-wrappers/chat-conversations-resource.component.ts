@@ -6,6 +6,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, EnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 /**
@@ -81,7 +82,8 @@ import { Subject, takeUntil, filter } from 'rxjs';
               (pendingMessageConsumed)="onPendingMessageConsumed()"
               (pendingMessageRequested)="onPendingMessageRequested($event)"
               (artifactLinkClicked)="onArtifactLinkClicked($event)"
-              (openEntityRecord)="onOpenEntityRecord($event)">
+              (openEntityRecord)="onOpenEntityRecord($event)"
+              (navigationRequest)="onNavigationRequest($event)">
             </mj-conversation-chat-area>
           }
         </div>
@@ -962,6 +964,27 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /**
+   * Handle navigation request from artifact viewer plugins.
+   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   */
+  async onNavigationRequest(event: NavigationRequest): Promise<void> {
+    const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
+    await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
+      queryParams: event.queryParams
+    });
+  }
+
+  /**
+   * Resolve an application name to its ID.
+   */
+  private resolveAppId(appName: string): string | undefined {
+    const md = new Metadata();
+    const apps = md.Applications;
+    const app = apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    return app?.ID;
   }
 
   /**

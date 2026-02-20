@@ -389,7 +389,3 @@ ORDER BY
 ## Data Sources Available
 
 - **ALL_ENTITIES**: All entity names, descriptions, schemas, base tables, and base views
-
-## Actions Available
-
-{{ actionDetails }}

@@ -15,7 +15,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
-import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
+import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
@@ -86,6 +86,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
   @Output() sidebarToggleClicked = new EventEmitter<void>();
@@ -1853,6 +1854,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Pass the event up to the parent component (workspace or explorer wrapper)
     this.openEntityRecord.emit(event);
+  }
+
+  onNavigationRequest(event: NavigationRequest): void {
+    // Pass the event up to the parent component for app-level navigation
+    this.navigationRequest.emit(event);
   }
 
   viewTestRun(testRunId: string): void {

@@ -766,7 +766,24 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 }
                 break;
             }
+            case 'OpenNavItem': {
+                // Navigate to a specific nav item within an application
+                const appId = request.appName ? this.resolveAppId(request.appName) : undefined;
+                this.navigationService.OpenNavItemByName(request.navItemName, undefined, appId, {
+                    queryParams: request.queryParams
+                });
+                break;
+            }
         }
+    }
+
+    /**
+     * Resolve an application name to its ID
+     */
+    private resolveAppId(appName: string): string | undefined {
+        const md = new Metadata();
+        const app = md.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+        return app?.ID;
     }
 
     /**

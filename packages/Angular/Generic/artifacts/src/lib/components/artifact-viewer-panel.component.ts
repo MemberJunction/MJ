@@ -7,7 +7,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
-import { ArtifactViewerTab } from './base-artifact-viewer.component';
+import { ArtifactViewerTab, NavigationRequest } from './base-artifact-viewer.component';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
@@ -39,6 +39,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -960,6 +961,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.openEntityRecord.emit(event);
+  }
+
+  /**
+   * Handle navigation request from artifact viewer plugin.
+   * Propagates the event up to parent components for app-level navigation.
+   */
+  onNavigationRequest(event: NavigationRequest): void {
+    this.navigationRequest.emit(event);
   }
 
   /**

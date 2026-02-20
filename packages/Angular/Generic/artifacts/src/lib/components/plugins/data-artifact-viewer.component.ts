@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@ang
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
-import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { SaveQueryResult } from './save-query-dialog.component';
 
 /**
@@ -368,6 +368,7 @@ interface DataArtifactColumn {
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DataArtifactViewerPlugin')
 export class DataArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() override navigationRequest = new EventEmitter<NavigationRequest>();
 
   public spec: DataArtifactSpec | null = null;
   public GridData: Record<string, unknown>[] = [];
@@ -551,15 +552,13 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return !!this.spec?.metadata?.sql && !this.spec?.savedQueryId;
   }
 
-  /** Open the saved query's entity record */
+  /** Navigate to the saved query in the Data Explorer's Queries browser */
   public OnOpenSavedQuery(): void {
     if (!this.spec?.savedQueryId) return;
-    const compositeKey = new CompositeKey([
-      new KeyValuePair('ID', this.spec.savedQueryId)
-    ]);
-    this.openEntityRecord.emit({
-      entityName: 'MJ: Queries',
-      compositeKey
+    this.navigationRequest.emit({
+      appName: 'Data Explorer',
+      navItemName: 'Queries',
+      queryParams: { queryId: this.spec.savedQueryId }
     });
   }
 
