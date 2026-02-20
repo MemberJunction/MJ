@@ -23,6 +23,7 @@ export {
 
 // Individual conversion rules
 export { CreateTableRule } from './CreateTableRule.js';
+export { CatalogViewRule } from './CatalogViewRule.js';
 export { ViewRule } from './ViewRule.js';
 export { ProcedureToFunctionRule } from './ProcedureToFunctionRule.js';
 export { FunctionRule } from './FunctionRule.js';

@@ -4,6 +4,7 @@
  */
 import type { IConversionRule } from './types.js';
 import { CreateTableRule } from './CreateTableRule.js';
+import { CatalogViewRule } from './CatalogViewRule.js';
 import { ViewRule } from './ViewRule.js';
 import { ProcedureToFunctionRule } from './ProcedureToFunctionRule.js';
 import { FunctionRule } from './FunctionRule.js';
@@ -20,16 +21,17 @@ import { ConditionalDDLRule } from './ConditionalDDLRule.js';
  */
 export function getTSQLToPostgresRules(): IConversionRule[] {
   return [
-    new CreateTableRule(),      // Priority 10
-    new ViewRule(),             // Priority 20
+    new CreateTableRule(),         // Priority 10
+    new CatalogViewRule(),         // Priority 15 — catalog views (sys.* → pg_catalog)
+    new ViewRule(),                // Priority 20
     new ProcedureToFunctionRule(), // Priority 30
-    new FunctionRule(),         // Priority 35
-    new TriggerRule(),          // Priority 40
-    new InsertRule(),           // Priority 50
-    new ConditionalDDLRule(),   // Priority 55
-    new AlterTableRule(),       // Priority 60
-    new CreateIndexRule(),      // Priority 70
-    new GrantRule(),            // Priority 80
-    new ExtendedPropertyRule(), // Priority 90
+    new FunctionRule(),            // Priority 35
+    new TriggerRule(),             // Priority 40
+    new InsertRule(),              // Priority 50
+    new ConditionalDDLRule(),      // Priority 55
+    new AlterTableRule(),          // Priority 60
+    new CreateIndexRule(),         // Priority 70
+    new GrantRule(),               // Priority 80
+    new ExtendedPropertyRule(),    // Priority 90
   ];
 }
