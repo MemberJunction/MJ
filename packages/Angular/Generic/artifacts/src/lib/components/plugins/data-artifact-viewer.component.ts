@@ -250,6 +250,7 @@ interface DataArtifactColumn {
       flex: 1;
       overflow: hidden;
       min-height: 200px;
+      height: 500px;
     }
 
     .error-banner {

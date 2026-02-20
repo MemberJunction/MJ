@@ -293,8 +293,13 @@ export class SQLExpressionValidator {
       }
     }
 
-    // Check statement terminator (prevents multi-statement injection)
-    if (expression.includes(';')) {
+    // Check statement terminator (prevents multi-statement injection).
+    // For full_query context, a trailing semicolon is harmless (agent-generated SQL often ends with one).
+    // Only reject if semicolons appear mid-statement, indicating multi-statement injection.
+    const textForSemicolonCheck = isFullQuery
+      ? expression.replace(/;\s*$/, '')   // strip single trailing semicolon
+      : expression;
+    if (textForSemicolonCheck.includes(';')) {
       return {
         valid: false,
         error: 'Semicolons are not allowed in SQL expressions',
