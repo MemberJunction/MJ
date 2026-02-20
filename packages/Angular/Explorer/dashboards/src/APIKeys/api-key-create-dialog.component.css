@@ -9,7 +9,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--mj-bg-overlay);
     z-index: 100;
     animation: fadeIn 0.2s ease;
 }
@@ -27,8 +27,8 @@
     width: 520px;
     height: 100%;
     max-height: 100%;
-    background: var(--card-background, #ffffff);
-    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
+    background: var(--mj-bg-surface);
+    box-shadow: -8px 0 32px var(--mj-bg-overlay);
     z-index: 101;
     display: flex;
     flex-direction: column;
@@ -47,7 +47,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 20px 24px;
-    background: linear-gradient(135deg, #fafafa 0%, #f3f4f6 100%);
+    background: var(--mj-bg-page);
     border-bottom: 1px solid var(--mj-border-default);
     flex-shrink: 0;
 }
@@ -85,7 +85,7 @@
 }
 
 .slideout-close:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: var(--mj-bg-surface-hover);
     color: var(--mj-color-neutral-700);
 }
 
@@ -104,7 +104,7 @@
     display: flex;
     gap: 12px;
     padding: 16px 24px;
-    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    background: var(--mj-bg-page);
     border-top: 1px solid var(--mj-border-default);
     flex-shrink: 0;
 }
@@ -311,7 +311,7 @@
     gap: 8px;
     padding: 12px 16px;
     background: var(--mj-color-error-50);
-    border: 1px solid #fecaca;
+    border: 1px solid var(--mj-status-error-border);
     border-radius: 8px;
     color: var(--mj-color-error-600);
     font-size: 14px;
@@ -472,19 +472,19 @@
     align-items: center;
     gap: 10px;
     padding: 12px 16px;
-    background: #eff6ff;
+    background: var(--mj-status-info-bg);
     border-radius: 8px;
     margin-top: 16px;
     font-size: 13px;
-    color: #1d4ed8;
+    color: var(--mj-status-info-text);
 }
 
 .scope-tip i {
-    color: #3b82f6;
+    color: var(--mj-status-info);
 }
 
 .scope-tip code {
-    background: #dbeafe;
+    background: var(--mj-color-info-100);
     padding: 2px 6px;
     border-radius: 4px;
     font-family: monospace;
@@ -497,7 +497,7 @@
     gap: 12px;
     padding: 16px;
     background: linear-gradient(135deg, var(--mj-color-error-50) 0%, var(--mj-color-error-100) 100%);
-    border: 1px solid #fecaca;
+    border: 1px solid var(--mj-status-error-border);
     border-radius: 10px;
     margin-top: 16px;
     font-size: 13px;
@@ -546,7 +546,7 @@
 
 /* Key Display */
 .key-display {
-    background: #1f2937;
+    background: var(--mj-color-neutral-800);
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 24px;
@@ -558,7 +558,7 @@
     justify-content: center;
     gap: 8px;
     padding: 10px 16px;
-    background: rgba(0, 118, 182, 0.2);
+    background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
     border-radius: 8px;
     margin-bottom: 16px;
     font-size: 13px;
@@ -677,5 +677,5 @@
 :host ::ng-deep .form-input:focus-within,
 :host ::ng-deep .form-textarea:focus-within,
 :host ::ng-deep .k-datepicker:focus-within {
-    box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.1);
+    box-shadow: var(--mj-focus-ring);
 }

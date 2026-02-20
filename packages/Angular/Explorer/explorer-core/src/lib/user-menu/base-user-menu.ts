@@ -409,27 +409,18 @@ export class BaseUserMenu {
     // ========================================
 
     /**
-     * Get the display label for the theme toggle based on current preference
+     * Get the display label for the theme toggle (just "Theme" — the toggle switch conveys state)
      */
     protected GetThemeLabel(): string {
-        const pref = this._context?.themePreference ?? 'system';
-        switch (pref) {
-            case 'light': return 'Theme: Light';
-            case 'dark': return 'Theme: Dark';
-            case 'system': return 'Theme: System';
-        }
+        return 'Theme';
     }
 
     /**
      * Get the icon for the theme toggle based on current preference
      */
     protected GetThemeIcon(): string {
-        const pref = this._context?.themePreference ?? 'system';
-        switch (pref) {
-            case 'light': return 'fa-solid fa-sun';
-            case 'dark': return 'fa-solid fa-moon';
-            case 'system': return 'fa-solid fa-circle-half-stroke';
-        }
+        const pref = this._context?.themePreference ?? 'light';
+        return pref === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
     }
 
     // ========================================

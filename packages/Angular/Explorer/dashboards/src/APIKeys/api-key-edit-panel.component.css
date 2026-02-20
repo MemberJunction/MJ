@@ -9,7 +9,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--mj-bg-overlay);
     z-index: 100;
     animation: fadeIn 0.2s ease;
 }
@@ -27,8 +27,8 @@
     width: 520px;
     height: 100%;
     max-height: 100%;
-    background: var(--card-background, #ffffff);
-    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
+    background: var(--mj-bg-surface);
+    box-shadow: -8px 0 32px var(--mj-bg-overlay);
     z-index: 101;
     display: flex;
     flex-direction: column;
@@ -79,12 +79,12 @@
 }
 
 .key-status.active {
-    background: rgba(16, 185, 129, 0.2);
+    background: var(--mj-status-success-bg);
     color: var(--mj-color-success-600);
 }
 
 .key-status.revoked {
-    background: rgba(220, 38, 38, 0.2);
+    background: var(--mj-status-error-bg);
     color: var(--mj-color-error-600);
 }
 
@@ -234,7 +234,7 @@
 .info-header {
     margin-bottom: 12px;
     padding-bottom: 12px;
-    border-bottom: 1px solid rgba(0, 118, 182, 0.3);
+    border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
 
 .info-row {
@@ -377,7 +377,7 @@
 /* Danger Zone */
 .danger-zone {
     background: var(--mj-color-error-50);
-    border: 1px solid #fecaca;
+    border: 1px solid var(--mj-status-error-border);
     border-radius: 10px;
     padding: 14px 16px;
 }
@@ -789,11 +789,11 @@
 
 .method-badge {
     padding: 2px 6px;
-    background: #dbeafe;
+    background: var(--mj-status-info-bg);
     border-radius: 4px;
     font-size: 10px;
     font-weight: 600;
-    color: #1d4ed8;
+    color: var(--mj-color-info-600);
 }
 
 .col-status {
@@ -861,7 +861,7 @@
 :host ::ng-deep .form-input:focus-within,
 :host ::ng-deep .form-textarea:focus-within,
 :host ::ng-deep .k-datepicker:focus-within {
-    box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.1);
+    box-shadow: var(--mj-focus-ring);
 }
 
 /* Button styling in edit actions */
@@ -911,7 +911,7 @@
     gap: 12px;
     padding: 16px;
     background: linear-gradient(135deg, var(--mj-color-error-50) 0%, var(--mj-color-error-100) 100%);
-    border: 1px solid #fecaca;
+    border: 1px solid var(--mj-status-error-border);
     border-radius: 10px;
     margin-bottom: 16px;
     font-size: 13px;

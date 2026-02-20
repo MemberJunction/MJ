@@ -3,7 +3,7 @@
     flex-direction: column;
     gap: 24px;
     padding: 24px;
-    background: #f8fafc;
+    background: var(--mj-bg-page);
     min-height: 100%;
 }
 
@@ -49,7 +49,7 @@
     background: var(--mj-bg-surface);
     padding: 4px;
     border-radius: 10px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--mj-shadow-sm);
 }
 
 .time-btn {
@@ -72,7 +72,7 @@
 .time-btn.active {
     background: linear-gradient(135deg, var(--mj-color-indigo-500) 0%, var(--mj-color-indigo-600) 100%);
     color: var(--mj-text-inverse);
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-indigo-500) 30%, transparent);
 }
 
 /* KPI Grid */
@@ -89,12 +89,12 @@
     padding: 18px 20px;
     background: var(--mj-bg-surface);
     border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--mj-shadow-sm);
     transition: all 0.2s ease;
 }
 
 .kpi-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--mj-shadow-lg);
     transform: translateY(-2px);
 }
 
@@ -117,22 +117,22 @@
 }
 
 .kpi-icon.requests {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-    color: #2563eb;
+    background: linear-gradient(135deg, var(--mj-color-info-100) 0%, var(--mj-color-info-100) 100%);
+    color: var(--mj-color-info-600);
 }
 
 .kpi-icon.success-rate {
-    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    background: linear-gradient(135deg, var(--mj-color-success-100) 0%, var(--mj-color-success-200) 100%);
     color: var(--mj-color-success-600);
 }
 
 .kpi-icon.errors {
-    background: linear-gradient(135deg, var(--mj-color-error-100) 0%, #fecaca 100%);
+    background: linear-gradient(135deg, var(--mj-color-error-100) 0%, var(--mj-color-error-200) 100%);
     color: var(--mj-color-error-600);
 }
 
 .kpi-icon.response-time {
-    background: linear-gradient(135deg, var(--mj-color-indigo-100) 0%, #c7d2fe 100%);
+    background: linear-gradient(135deg, var(--mj-color-indigo-100) 0%, var(--mj-color-indigo-200) 100%);
     color: var(--mj-color-indigo-600);
 }
 
@@ -142,7 +142,7 @@
 }
 
 .kpi-icon.endpoints {
-    background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+    background: linear-gradient(135deg, var(--mj-color-violet-50) 0%, var(--mj-color-violet-200) 100%);
     color: var(--mj-color-violet-600);
 }
 
@@ -168,7 +168,7 @@
     background: var(--mj-bg-surface);
     border-radius: 12px;
     padding: 20px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--mj-shadow-sm);
 }
 
 .chart-header {
@@ -251,7 +251,7 @@
 }
 
 .bar.requests-bar {
-    background: linear-gradient(180deg, var(--mj-color-indigo-500) 0%, #818cf8 100%);
+    background: linear-gradient(180deg, var(--mj-color-indigo-500) 0%, var(--mj-color-indigo-400) 100%);
 }
 
 .bar.requests-bar:hover {
@@ -313,7 +313,7 @@
 .breakdown-card {
     background: var(--mj-bg-surface);
     border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--mj-shadow-sm);
     overflow: hidden;
 }
 
@@ -382,7 +382,7 @@
     flex-shrink: 0;
 }
 
-.method-get { background: #dbeafe; color: #2563eb; }
+.method-get { background: var(--mj-status-info-bg); color: var(--mj-color-info-600); }
 .method-post { background: var(--mj-color-success-100); color: var(--mj-color-success-600); }
 .method-put { background: var(--mj-color-brand-100); color: var(--mj-brand-primary-hover); }
 .method-delete { background: var(--mj-color-error-100); color: var(--mj-color-error-600); }
@@ -528,7 +528,7 @@
 .logs-section {
     background: var(--mj-bg-surface);
     border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--mj-shadow-sm);
     overflow: hidden;
 }
 
@@ -621,7 +621,7 @@
 }
 
 .col-status.status-success { color: var(--mj-status-success); }
-.col-status.status-info { color: #3b82f6; }
+.col-status.status-info { color: var(--mj-status-info); }
 .col-status.status-warning { color: var(--mj-color-warning-500); }
 .col-status.status-error { color: var(--mj-status-error); }
 
@@ -701,7 +701,7 @@
 
 .window-close-btn:hover {
     color: var(--mj-color-neutral-700);
-    background: rgba(0, 0, 0, 0.05);
+    background: var(--mj-bg-surface-hover);
 }
 
 .drilldown-content {
@@ -717,7 +717,7 @@
 :host ::ng-deep kendo-window {
     border-radius: 12px !important;
     overflow: hidden;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15) !important;
+    box-shadow: var(--mj-shadow-2xl) !important;
 }
 
 :host ::ng-deep kendo-window .k-window-content {

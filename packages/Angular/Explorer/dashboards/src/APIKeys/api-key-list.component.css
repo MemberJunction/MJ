@@ -5,7 +5,7 @@
     background: var(--mj-bg-surface);
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--mj-shadow-md);
 }
 
 /* Header */
@@ -73,7 +73,7 @@
 .search-box input:focus {
     outline: none;
     border-color: var(--mj-brand-primary);
-    box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.1);
+    box-shadow: var(--mj-focus-ring);
 }
 
 .clear-search {

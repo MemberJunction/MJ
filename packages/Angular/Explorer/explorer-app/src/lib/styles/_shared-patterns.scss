@@ -56,6 +56,8 @@
 .session-card,
 .component-card,
 .artifact-modal-card,
+.overview-card,
+.engine-card,
 .collapsible-card {
   background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
@@ -123,6 +125,63 @@ a.model-card:hover,
   display: flex;
   justify-content: flex-end;
   gap: var(--mj-space-2);
+}
+
+/* -------------------------------------------
+   STAT ICONS
+   KPI card icon containers (48×48 pastel squares)
+   ------------------------------------------- */
+
+.stat-icon,
+.card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--mj-radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* -------------------------------------------
+   STAT VALUES
+   Large KPI numbers inside stat cards
+   ------------------------------------------- */
+
+.stat-value,
+.card-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* -------------------------------------------
+   STAT LABELS
+   Uppercase descriptor text under stat values
+   ------------------------------------------- */
+
+.stat-label,
+.card-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* -------------------------------------------
+   STAT CONTENT
+   Container for value + label inside stat cards
+   ------------------------------------------- */
+
+.stat-content,
+.card-content {
+  flex: 1;
+  min-width: 0;
 }
 
 /* -------------------------------------------

@@ -1771,8 +1771,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (result.message === 'toggle-theme') {
       const current = this.themeService.Preference;
-      // Cycle: light → dark → system → light
-      const next: ThemePreference = current === 'light' ? 'dark' : current === 'dark' ? 'system' : 'light';
+      // Binary toggle: light ↔ dark (system preference resolves to opposite)
+      const next: ThemePreference = current === 'dark' ? 'light' : 'dark';
       await this.themeService.SetTheme(next);
       // Explicitly update context after SetTheme completes, then fall through
       // to the standard refresh below (subscription also refreshes, but this
@@ -1795,6 +1795,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Refresh menu elements (some items may have changed state)
     this.refreshMenuElements();
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Whether the currently applied theme is dark (used by the toggle switch in the template)
+   */
+  get IsDarkMode(): boolean {
+    return this.themeService.AppliedTheme === 'dark';
   }
 
   /**
