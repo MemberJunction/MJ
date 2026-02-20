@@ -1,5 +1,25 @@
 # @memberjunction/ai-agents
 
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/ai-engine-base@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/aiengine@5.2.0
+  - @memberjunction/ai-prompts@5.2.0
+  - @memberjunction/ai-reranker@5.2.0
+  - @memberjunction/actions-base@5.2.0
+  - @memberjunction/actions@5.2.0
+  - @memberjunction/ai@5.2.0
+  - @memberjunction/global@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes
