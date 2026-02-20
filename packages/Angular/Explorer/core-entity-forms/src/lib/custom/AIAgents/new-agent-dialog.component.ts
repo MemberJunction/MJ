@@ -4,7 +4,7 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
 import { NotificationService } from '@progress/kendo-angular-notification';
 import { Metadata } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended, AIModelEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 import { NavigationService } from '@memberjunction/ng-shared';
 import { BehaviorSubject } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -28,7 +28,7 @@ export class NewAgentDialogComponent implements OnInit {
   
   form!: FormGroup;
   isLoading$ = new BehaviorSubject<boolean>(false);
-  models$ = new BehaviorSubject<AIModelEntityExtended[]>([]);
+  models$ = new BehaviorSubject<MJAIModelEntityExtended[]>([]);
   agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
   isSubmitting = false;
   
@@ -94,7 +94,7 @@ export class NewAgentDialogComponent implements OnInit {
     
     try {
       const md = new Metadata();
-      const agent = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
+      const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       
       if (!agent) {
         throw new Error('Failed to create agent entity');

@@ -30,7 +30,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJEntityCommunicationMessageTypeEntity: class {},
     MJListDetailEntityType: class {},
     MJListEntityType: class {},
-    TemplateEntityExtended: class {},
+    MJTemplateEntityExtended: class {},
     MJTemplateParamEntity: class {},
 }));
 
@@ -66,7 +66,7 @@ vi.mock('@memberjunction/entity-communications-base', () => {
     }
     return {
         EntityCommunicationsEngineBase: MockBase,
-        EntityCommunicationMessageTypeExtended: class {},
+        MJEntityCommunicationMessageTypeEntityExtended: class {},
         EntityCommunicationParams: class {
             PreviewOnly = false;
             IncludeProcessedMessages = false;

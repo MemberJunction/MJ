@@ -6,7 +6,7 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo, LogStatus } from '@memberjunction/core';
 import { QueryGenConfig } from '../cli/config';
 import { extractErrorMessage } from '../utils/error-handlers';
@@ -76,7 +76,7 @@ export class QueryWriter {
   private findPromptByName(
     aiEngine: AIEngine,
     promptName: string
-  ): AIPromptEntityExtended {
+  ): MJAIPromptEntityExtended {
     const prompt = aiEngine.Prompts.find((p) => p.Name === promptName);
     if (!prompt) {
       throw new Error(`Prompt '${promptName}' not found in AIEngine cache`);
@@ -89,7 +89,7 @@ export class QueryWriter {
    * Parses JSON response and validates structure, retrying with feedback if validation fails
    */
   private async executePrompt(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     promptData: {
       userQuestion: string;
       description: string;

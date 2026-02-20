@@ -11,7 +11,7 @@ graph TD
         A --> C[Scheduled Jobs Cache]
         A --> D[Job Runs Cache]
         A --> E[Polling Interval<br/>Calculator]
-        F[ScheduledJobEntityExtended] --> A
+        F[MJScheduledJobEntityExtended] --> A
     end
 
     subgraph "Data Sources"
@@ -49,7 +49,7 @@ A singleton engine that extends `BaseEngine` to load and cache scheduling metada
 - **Polling Interval**: Adaptive polling interval calculation based on next run times
 - **Lookup Methods**: Find job types by name or driver class, get jobs by type, get runs for a job
 
-### ScheduledJobEntityExtended
+### MJScheduledJobEntityExtended
 
 An extended entity class registered via `@RegisterClass` that adds helper properties and methods to `ScheduledJobEntity`:
 
@@ -104,9 +104,9 @@ const interval = engine.ActivePollingInterval; // ms, or null if no jobs
 ### Using Extended Entity
 
 ```typescript
-import { ScheduledJobEntityExtended } from '@memberjunction/scheduling-engine-base';
+import { MJScheduledJobEntityExtended } from '@memberjunction/scheduling-engine-base';
 
-const job = activeJobs[0] as ScheduledJobEntityExtended;
+const job = activeJobs[0] as MJScheduledJobEntityExtended;
 
 console.log(job.IsLocked);          // Is currently being executed?
 console.log(job.IsLockStale);       // Has the lock expired?

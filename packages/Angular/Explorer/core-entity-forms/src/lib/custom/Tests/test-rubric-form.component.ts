@@ -57,6 +57,6 @@ import { MJTestRubricFormComponent } from '../../generated/Entities/MJTestRubric
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestRubricFormComponentExtended extends MJTestRubricFormComponent {
+export class MJTestRubricFormComponentExtended extends MJTestRubricFormComponent {
   public override record!: MJTestRubricEntity;
 }

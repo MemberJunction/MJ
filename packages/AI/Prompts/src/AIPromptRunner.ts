@@ -2,8 +2,8 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, TemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
-import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
@@ -83,7 +83,7 @@ import * as JSON5 from 'json5';
  * Represents a model-vendor pair candidate for execution
  */
 interface ModelVendorCandidate {
-  model: AIModelEntityExtended;
+  model: MJAIModelEntityExtended;
   vendorId?: string;
   vendorName?: string;
   driverClass: string;
@@ -173,8 +173,8 @@ export class AIPromptRunner {
   protected logError(error: Error | string, options?: {
     category?: string;
     metadata?: Record<string, any>;
-    prompt?: AIPromptEntityExtended;
-    model?: AIModelEntityExtended;
+    prompt?: MJAIPromptEntityExtended;
+    model?: MJAIModelEntityExtended;
     severity?: 'warning' | 'error' | 'critical';
     maxErrorLength?: number;
   }): void {
@@ -573,7 +573,7 @@ export class AIPromptRunner {
    */
   public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
-    const promptRun: AIPromptRunEntityExtended | null = null;
+    const promptRun: MJAIPromptRunEntityExtended | null = null;
 
     // Check for cancellation at the start
     if (params.cancellationToken?.aborted) {
@@ -605,8 +605,8 @@ export class AIPromptRunner {
       let renderedPromptText: string = '';
 
       // For hierarchical prompts, we need to create the parent prompt run first to get its ID
-      let parentPromptRun: AIPromptRunEntityExtended | undefined;
-      let selectedModel: AIModelEntityExtended | undefined;
+      let parentPromptRun: MJAIPromptRunEntityExtended | undefined;
+      let selectedModel: MJAIModelEntityExtended | undefined;
       let childTemplateRenderingResult: { renderedTemplates: Record<string, string> } | undefined;
       let modelSelectionInfo: AIModelSelectionInfo | undefined;
 
@@ -775,12 +775,12 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The execution result
    */
   private async executeSinglePrompt<T = unknown>(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     renderedPromptText: string,
     params: AIPromptParams,
     startTime: Date,
-    existingPromptRun?: AIPromptRunEntityExtended,
-    existingModel?: AIModelEntityExtended,
+    existingPromptRun?: MJAIPromptRunEntityExtended,
+    existingModel?: MJAIModelEntityExtended,
     existingModelSelectionInfo?: AIModelSelectionInfo
   ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before model selection
@@ -913,12 +913,12 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The aggregated execution result
    */
   private async executePromptInParallel<T = unknown>(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     renderedPromptText: string,
     params: AIPromptParams,
     startTime: Date,
-    existingPromptRun?: AIPromptRunEntityExtended,
-    existingModel?: AIModelEntityExtended,
+    existingPromptRun?: MJAIPromptRunEntityExtended,
+    existingModel?: MJAIModelEntityExtended,
     existingModelSelectionInfo?: AIModelSelectionInfo
   ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before starting parallel execution
@@ -1182,10 +1182,10 @@ export class AIPromptRunner {
   /**
    * Loads a template entity by ID
    */
-  private async loadTemplate(templateId: string, _contextUser?: UserInfo): Promise<TemplateEntityExtended | null> {
+  private async loadTemplate(templateId: string, _contextUser?: UserInfo): Promise<MJTemplateEntityExtended | null> {
     try {
       // Use the template engine to find the template
-      const template = this._templateEngine.Templates.find((t: TemplateEntityExtended) => t.ID === templateId);
+      const template = this._templateEngine.Templates.find((t: MJTemplateEntityExtended) => t.ID === templateId);
       return template || null;
     } catch (error) {
       this.logError(error, {
@@ -1359,7 +1359,7 @@ export class AIPromptRunner {
    * @returns Promise<string> - The rendered prompt text with child templates embedded
    */
   private async renderPromptWithChildTemplates(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     params: AIPromptParams,
     childTemplates: Record<string, string>
   ): Promise<string> {
@@ -1431,14 +1431,14 @@ export class AIPromptRunner {
    * then selects the first one with an available API key.
    */
   private async selectModel(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     explicitModelId?: string,
     contextUser?: UserInfo,
     configurationId?: string,
     vendorId?: string,
     params?: AIPromptParams
   ): Promise<{
-    model: AIModelEntityExtended | null;
+    model: MJAIModelEntityExtended | null;
     vendorDriverClass?: string;
     vendorApiName?: string;
     vendorSupportsEffortLevel?: boolean;
@@ -1481,7 +1481,7 @@ export class AIPromptRunner {
 
       // Track all models considered for selection info
       const modelsConsidered: Array<{
-        model: AIModelEntityExtended;
+        model: MJAIModelEntityExtended;
         vendor?: MJAIVendorEntity;
         priority: number;
         available: boolean;
@@ -1629,7 +1629,7 @@ export class AIPromptRunner {
    * @returns Ordered array of model-vendor candidates (highest priority first)
    */
   private buildModelVendorCandidates(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     explicitModelId?: string,
     configurationId?: string,
     preferredVendorId?: string,
@@ -1656,7 +1656,7 @@ export class AIPromptRunner {
    */
   private buildCandidatesForExplicitModel(
     explicitModelId: string,
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     preferredVendorId?: string
   ): ModelVendorCandidate[] {
     const model = AIEngine.Instance.Models.find(m => m.ID === explicitModelId);
@@ -1681,7 +1681,7 @@ export class AIPromptRunner {
    * 2. Then universal (null config) models (by priority DESC)
    */
   private buildCandidatesForSpecificStrategy(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     configurationId?: string,
     verbose?: boolean
   ): ModelVendorCandidate[] {
@@ -1720,7 +1720,7 @@ export class AIPromptRunner {
    * Uses configuration-aware fallback hierarchy with legacy blended priority calculation.
    */
   private buildCandidatesForGeneralSelection(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     configurationId?: string,
     preferredVendorId?: string,
     verbose?: boolean
@@ -1841,7 +1841,7 @@ export class AIPromptRunner {
    * Helper: Create candidate for specific vendor from AIPromptModel.
    */
   private createCandidateForSpecificVendor(
-    model: AIModelEntityExtended,
+    model: MJAIModelEntityExtended,
     promptModel: MJAIPromptModelEntity
   ): ModelVendorCandidate | null {
     const modelVendor = AIEngine.Instance.ModelVendors.find(
@@ -1871,7 +1871,7 @@ export class AIPromptRunner {
    * Helper: Create candidates for all vendors of a model, sorted by vendor priority.
    */
   private createCandidatesForAllVendors(
-    model: AIModelEntityExtended
+    model: MJAIModelEntityExtended
   ): ModelVendorCandidate[] {
     const vendors = AIEngine.Instance.ModelVendors
       .filter(mv =>
@@ -1919,7 +1919,7 @@ export class AIPromptRunner {
    * Returns models from the first config in the chain that has any, or falls back to null-config.
    */
   private getPromptModelsForConfiguration(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     configurationId?: string
   ): MJAIPromptModelEntity[] {
     if (configurationId) {
@@ -1980,7 +1980,7 @@ export class AIPromptRunner {
    */
   private addConfigurationFallbackCandidates(
     candidates: ModelVendorCandidate[],
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     configurationId: string,
     preferredVendorId?: string,
     verbose?: boolean
@@ -2048,7 +2048,7 @@ export class AIPromptRunner {
    */
   private addStrategyBasedCandidates(
     candidates: ModelVendorCandidate[],
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     preferredVendorName?: string
   ): void {
     let modelPool = this.getModelPoolForStrategy(prompt, preferredVendorName);
@@ -2066,9 +2066,9 @@ export class AIPromptRunner {
    * Helper: Get model pool filtered for strategy.
    */
   private getModelPoolForStrategy(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     preferredVendorName?: string
-  ): AIModelEntityExtended[] {
+  ): MJAIModelEntityExtended[] {
     return AIEngine.Instance.Models.filter(
       m => m.IsActive &&
            (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
@@ -2086,9 +2086,9 @@ export class AIPromptRunner {
    * Helper: Sort model pool by selection strategy.
    */
   private sortModelPoolByStrategy(
-    modelPool: AIModelEntityExtended[],
-    prompt: AIPromptEntityExtended
-  ): AIModelEntityExtended[] {
+    modelPool: MJAIModelEntityExtended[],
+    prompt: MJAIPromptEntityExtended
+  ): MJAIModelEntityExtended[] {
     if (prompt.SelectionStrategy === 'ByPower') {
       return this.sortByPowerPreference(modelPool, prompt.PowerPreference);
     } else {
@@ -2104,9 +2104,9 @@ export class AIPromptRunner {
    * Helper: Sort models by power preference.
    */
   private sortByPowerPreference(
-    modelPool: AIModelEntityExtended[],
+    modelPool: MJAIModelEntityExtended[],
     powerPreference?: 'Highest' | 'Lowest' | 'Balanced'
-  ): AIModelEntityExtended[] {
+  ): MJAIModelEntityExtended[] {
     const pool = [...modelPool];
 
     switch (powerPreference) {
@@ -2128,7 +2128,7 @@ export class AIPromptRunner {
    * Helper: Create candidates for a model with AIModelVendor priorities (legacy behavior).
    */
   private createCandidatesForModel(
-    model: AIModelEntityExtended,
+    model: MJAIModelEntityExtended,
     basePriority: number,
     source: ModelVendorCandidate['source'],
     preferredVendorId?: string,
@@ -2204,13 +2204,13 @@ export class AIPromptRunner {
   private createSelectionInfo(data: {
     aiConfiguration?: MJAIConfigurationEntity;
     modelsConsidered: Array<{
-      model: AIModelEntityExtended;
+      model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
       priority: number;
       available: boolean;
       unavailableReason?: string;
     }>;
-    modelSelected: AIModelEntityExtended;
+    modelSelected: MJAIModelEntityExtended;
     vendorSelected?: MJAIVendorEntity;
     selectionReason: string;
     fallbackUsed: boolean;
@@ -2273,7 +2273,7 @@ export class AIPromptRunner {
   ): Promise<{
     selected: ModelVendorCandidate | null;
     consideredModels: Array<{
-      model: AIModelEntityExtended;
+      model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
       priority: number;
       available: boolean;
@@ -2284,7 +2284,7 @@ export class AIPromptRunner {
     // Key format: "driverClass:modelId:vendorId" to properly cache credential hierarchy
     const credentialCache = new Map<string, boolean>();
     const consideredModels: Array<{
-      model: AIModelEntityExtended;
+      model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
       priority: number;
       available: boolean;
@@ -2366,15 +2366,15 @@ export class AIPromptRunner {
    * Creates an AIPromptRun entity for execution tracking
    */
   private async createPromptRun(
-    prompt: AIPromptEntityExtended,
-    model: AIModelEntityExtended,
+    prompt: MJAIPromptEntityExtended,
+    model: MJAIModelEntityExtended,
     params: AIPromptParams,
     systemPromptText: string, 
     startTime: Date,
     vendorId?: string,
     modelSelectionInfo?: any
-  ): Promise<AIPromptRunEntityExtended> {
-    const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
+  ): Promise<MJAIPromptRunEntityExtended> {
+    const promptRun = await this._metadata.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
     try {
       promptRun.NewRecord();
 
@@ -2430,7 +2430,7 @@ export class AIPromptRunner {
       promptRun.TotalFailoverDuration = 0;
       
       // Check if model has pre-selected vendor info from selectModel
-      const modelWithVendor = model as AIModelEntityExtended & { 
+      const modelWithVendor = model as MJAIModelEntityExtended & { 
         _selectedVendorId?: string;
       };
       
@@ -2601,7 +2601,7 @@ export class AIPromptRunner {
    * Renders the prompt template with provided data
    */
   private async renderPromptTemplate(
-    template: TemplateEntityExtended,
+    template: MJTemplateEntityExtended,
     params: AIPromptParams
   ): Promise<TemplateRenderResult> {
     try {
@@ -2655,16 +2655,16 @@ export class AIPromptRunner {
    * - createFailoverErrorResult: Creates standardized error response
    */
   protected async executeModelWithFailover(
-    model: AIModelEntityExtended,
+    model: MJAIModelEntityExtended,
     renderedPrompt: string,
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     params: AIPromptParams,
     vendorId: string | null,
     conversationMessages?: ChatMessage[],
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
     allCandidates?: ModelVendorCandidate[],
-    promptRun?: AIPromptRunEntityExtended,
+    promptRun?: MJAIPromptRunEntityExtended,
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
@@ -2815,11 +2815,11 @@ export class AIPromptRunner {
   /**
    * Builds failover candidates for a prompt based on available models and type restrictions
    */
-  protected async buildFailoverCandidates(prompt: AIPromptEntityExtended): Promise<ModelVendorCandidate[]> {
+  protected async buildFailoverCandidates(prompt: MJAIPromptEntityExtended): Promise<ModelVendorCandidate[]> {
     const aiEngine = AIEngine.Instance;
     
     // Get all models, filtered by type if specified
-    let allModels: AIModelEntityExtended[];
+    let allModels: MJAIModelEntityExtended[];
     if (prompt.AIModelTypeID) {
       // Find the model type from the prompt
       const modelType = aiEngine.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
@@ -2845,7 +2845,7 @@ export class AIPromptRunner {
   /**
    * Creates model-vendor candidates from a list of models
    */
-  protected createCandidatesFromModels(models: AIModelEntityExtended[]): ModelVendorCandidate[] {
+  protected createCandidatesFromModels(models: MJAIModelEntityExtended[]): ModelVendorCandidate[] {
     const candidates: ModelVendorCandidate[] = [];
 
     for (const model of models) {
@@ -2888,9 +2888,9 @@ export class AIPromptRunner {
    * Updates prompt run with successful failover tracking data
    */
   protected updatePromptRunWithFailoverSuccess(
-    promptRun: AIPromptRunEntityExtended,
+    promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[],
-    currentModel: AIModelEntityExtended,
+    currentModel: MJAIModelEntityExtended,
     currentVendorId: string | null
   ): void {
     promptRun.FailoverAttempts = failoverAttempts.length;
@@ -2916,7 +2916,7 @@ export class AIPromptRunner {
    * Updates prompt run with failover failure tracking data
    */
   private updatePromptRunWithFailoverFailure(
-    promptRun: AIPromptRunEntityExtended,
+    promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
     promptRun.FailoverAttempts = failoverAttempts.length;
@@ -2970,9 +2970,9 @@ export class AIPromptRunner {
    * Executes the AI model with the rendered prompt
    */
   private async executeModel(
-    model: AIModelEntityExtended,
+    model: MJAIModelEntityExtended,
     renderedPrompt: string,
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     params: AIPromptParams,
     vendorId: string | null,
     conversationMessages?: ChatMessage[],
@@ -3217,11 +3217,11 @@ export class AIPromptRunner {
    * Executes the model with retry logic for validation failures
    */
   private async executeWithValidationRetries(
-    selectedModel: AIModelEntityExtended,
+    selectedModel: MJAIModelEntityExtended,
     renderedPromptText: string,
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     params: AIPromptParams,
-    promptRun: AIPromptRunEntityExtended,
+    promptRun: MJAIPromptRunEntityExtended,
     allCandidates: ModelVendorCandidate[],
     vendorDriverClass?: string,
     vendorApiName?: string,
@@ -3412,7 +3412,7 @@ export class AIPromptRunner {
    * Uses the prompt's RetryStrategy and can respect suggested delays from provider.
    */
   private calculateRetryDelay(
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     attemptNumber: number,
     suggestedDelaySeconds?: number
   ): number {
@@ -3441,7 +3441,7 @@ export class AIPromptRunner {
     return delay;
   }
 
-  private async applyRetryDelay(prompt: AIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
+  private async applyRetryDelay(prompt: MJAIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
     const delay = this.calculateRetryDelay(prompt, attemptNumber, suggestedDelaySeconds);
     const delaySeconds = (delay / 1000).toFixed(1);
     LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
@@ -3505,10 +3505,10 @@ export class AIPromptRunner {
    */
   private async handleRateLimitRetry(
     errorAnalysis: { errorType: string; suggestedRetryDelaySeconds?: number },
-    currentModel: AIModelEntityExtended,
+    currentModel: MJAIModelEntityExtended,
     currentVendorId: string | undefined,
     failoverAttempts: FailoverAttempt[],
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     attemptNumber: number,
     maxAttempts: number,
     failoverAttempt: FailoverAttempt
@@ -3568,7 +3568,7 @@ export class AIPromptRunner {
     attemptIndex: number,
     allCandidates: ModelVendorCandidate[],
     failoverAttempts: FailoverAttempt[],
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     failoverConfig: { strategy: string; errorScope?: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly'; delaySeconds?: number; maxAttempts: number }
   ): Promise<{
     shouldRetry: boolean;      // Retry same model/vendor (rate limit)
@@ -3651,7 +3651,7 @@ export class AIPromptRunner {
    * Returns the next candidate info or null if no candidates are available.
    */
   private async transitionToNextCandidate(
-    currentModel: AIModelEntityExtended,
+    currentModel: MJAIModelEntityExtended,
     currentVendorId: string | undefined,
     failoverConfig: FailoverConfiguration,
     allCandidates: ModelVendorCandidate[],
@@ -3660,7 +3660,7 @@ export class AIPromptRunner {
     failoverAttempt: FailoverAttempt,
     attemptNumber: number
   ): Promise<{
-    model: AIModelEntityExtended;
+    model: MJAIModelEntityExtended;
     vendorId: string | undefined;
     driverClass: string;
     apiName: string | undefined;
@@ -3864,10 +3864,10 @@ export class AIPromptRunner {
    */
   private async parseAndValidateResultEnhanced(
     modelResult: ChatResult,
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     skipValidation: boolean = false,
     cleanValidationSyntax: boolean = false,
-    currentPromptRun: AIPromptRunEntityExtended,
+    currentPromptRun: MJAIPromptRunEntityExtended,
     params?: AIPromptParams,
   ): Promise<{
     result: unknown;
@@ -4093,11 +4093,11 @@ export class AIPromptRunner {
    */
   private async parseObjectOutput(
     rawOutput: string,
-    prompt: AIPromptEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     skipValidation: boolean,
     cleanValidationSyntax: boolean,
     validationErrors: ValidationErrorInfo[],
-    currentPromptRun: AIPromptRunEntityExtended,
+    currentPromptRun: MJAIPromptRunEntityExtended,
     params?: AIPromptParams
   ): Promise<unknown> {
     let parsedResult: unknown;
@@ -4142,7 +4142,7 @@ export class AIPromptRunner {
     rawOutput: string,
     originalError: Error,
     params: AIPromptParams,
-    currentPromptRun: AIPromptRunEntityExtended
+    currentPromptRun: MJAIPromptRunEntityExtended
   ): Promise<unknown> {
     // Step 0: First, see if the raw output has any { } [ ] characters at all
     // if not, we KNOW it is not JSON and we should not attempt to repair it
@@ -4350,8 +4350,8 @@ export class AIPromptRunner {
    * Updates the AIPromptRun entity with execution results
    */
   private async updatePromptRun(
-    promptRun: AIPromptRunEntityExtended,
-    prompt: AIPromptEntityExtended,
+    promptRun: MJAIPromptRunEntityExtended,
+    prompt: MJAIPromptEntityExtended,
     modelResult: ChatResult,
     parsedResult: { result: unknown; validationResult?: ValidationResult },
     endTime: Date,
@@ -4603,7 +4603,7 @@ export class AIPromptRunner {
    * default values when configuration is not specified. Override this method to
    * implement custom failover configuration logic.
    */
-  protected getFailoverConfiguration(prompt: AIPromptEntityExtended): FailoverConfiguration {
+  protected getFailoverConfiguration(prompt: MJAIPromptEntityExtended): FailoverConfiguration {
     return {
       strategy: prompt.FailoverStrategy || 'None',
       maxAttempts: prompt.FailoverMaxAttempts || 3,
@@ -4729,7 +4729,7 @@ export class AIPromptRunner {
    * Override this method to implement custom candidate selection logic.
    */
   protected selectFailoverCandidates(
-    currentModel: AIModelEntityExtended,
+    currentModel: MJAIModelEntityExtended,
     currentVendorId: string | undefined,
     strategy: FailoverConfiguration['strategy'],
     modelStrategy: FailoverConfiguration['modelStrategy'],

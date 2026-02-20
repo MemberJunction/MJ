@@ -7,7 +7,7 @@ import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback,
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 import { MentionParserService } from './mention-parser.service';
@@ -17,7 +17,7 @@ import { MentionParserService } from './mention-parser.service';
  * to avoid redundant database queries
  */
 export interface ArtifactLookupContext {
-  agentRunsByDetailId: Map<string, AIAgentRunEntityExtended>;
+  agentRunsByDetailId: Map<string, MJAIAgentRunEntityExtended>;
   artifactsByDetailId: Map<string, LazyArtifactInfo[]>;
 }
 
@@ -40,7 +40,7 @@ export interface IntentCheckResult {
 })
 export class ConversationAgentService {
   private _aiClient: GraphQLAIClient | null = null;
-  private _conversationManagerAgent: AIAgentEntityExtended | null = null;
+  private _conversationManagerAgent: MJAIAgentEntityExtended | null = null;
   private _sessionIds: Map<string, string> = new Map(); // conversationId -> sessionId
   private _isProcessing$ = new BehaviorSubject<boolean>(false);
 
@@ -72,7 +72,7 @@ export class ConversationAgentService {
   /**
    * Get or load the Sage Agent (formerly Conversation Manager Agent)
    */
-  public async getConversationManagerAgent(): Promise<AIAgentEntityExtended | null> {
+  public async getConversationManagerAgent(): Promise<MJAIAgentEntityExtended | null> {
     if (this._conversationManagerAgent) {
       return this._conversationManagerAgent;
     }
@@ -84,7 +84,7 @@ export class ConversationAgentService {
       // Find the Sage Agent
       const agents = AIEngineBase.Instance.Agents;
       this._conversationManagerAgent = agents.find(
-        (agent: AIAgentEntityExtended) => agent.Name === 'Sage'
+        (agent: MJAIAgentEntityExtended) => agent.Name === 'Sage'
       ) || null;
 
       if (!this._conversationManagerAgent) {
@@ -747,10 +747,10 @@ ${compactHistory}${artifactContext}
    * @returns Filtered list of agents the user can run
    */
   private async filterAgentsByPermissions(
-    agents: AIAgentEntityExtended[],
+    agents: MJAIAgentEntityExtended[],
     user: any
-  ): Promise<AIAgentEntityExtended[]> {
-    const permittedAgents: AIAgentEntityExtended[] = [];
+  ): Promise<MJAIAgentEntityExtended[]> {
+    const permittedAgents: MJAIAgentEntityExtended[] = [];
 
     for (const agent of agents) {
       try {

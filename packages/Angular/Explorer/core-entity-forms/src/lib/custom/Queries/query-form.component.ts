@@ -21,7 +21,7 @@ interface CategoryTreeNode {
     templateUrl: './query-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
 })
-export class QueryFormExtendedComponent extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
+export class MJQueryFormComponentExtended extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public record!: MJQueryEntity;
     public queryParameters: MJQueryParameterEntity[] = [];
     public queryFields: MJQueryFieldEntity[] = [];

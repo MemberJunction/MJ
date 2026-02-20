@@ -11,7 +11,7 @@ import {
     GeneratedImage,
     GetAIAPIKey
 } from "@memberjunction/ai";
-import { AIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
+import { MJAIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 
 /**
@@ -228,7 +228,7 @@ export class GenerateImageAction extends BaseAction {
     private async prepareImageGenerator(
         contextUser: UserInfo | undefined,
         modelName?: string
-    ): Promise<{ generator: BaseImageGenerator; model: AIModelEntityExtended; apiName: string }> {
+    ): Promise<{ generator: BaseImageGenerator; model: MJAIModelEntityExtended; apiName: string }> {
         // Ensure AIEngine is loaded
         await AIEngineBase.Instance.Config(false, contextUser);
 
@@ -242,7 +242,7 @@ export class GenerateImageAction extends BaseAction {
         }
 
         // Select model - use specified or highest power
-        let model: AIModelEntityExtended;
+        let model: MJAIModelEntityExtended;
         if (modelName) {
             const foundModel = imageGeneratorModels.find(
                 m => m.Name.toLowerCase() === modelName.toLowerCase() ||

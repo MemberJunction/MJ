@@ -56,13 +56,13 @@ vi.mock('@memberjunction/templates-base-types', () => ({
     }
 }));
 
-import { AIPromptEntityExtended } from '../AIPromptExtended';
+import { MJAIPromptEntityExtended } from '../MJAIPromptEntityExtended';
 
-describe('AIPromptEntityExtended', () => {
-    let prompt: AIPromptEntityExtended;
+describe('MJAIPromptEntityExtended', () => {
+    let prompt: MJAIPromptEntityExtended;
 
     beforeEach(() => {
-        prompt = new AIPromptEntityExtended();
+        prompt = new MJAIPromptEntityExtended();
     });
 
     describe('TemplateText virtual property', () => {

@@ -9,7 +9,7 @@ import { SubAgentAdvancedSettingsDialogComponent, SubAgentAdvancedSettingsFormDa
 import { SubAgentSelectorDialogComponent, SubAgentSelectorConfig, SubAgentSelectorResult } from './sub-agent-selector-dialog.component';
 import { CreatePromptDialogComponent, CreatePromptConfig, CreatePromptResult } from './create-prompt-dialog.component';
 import { CreateSubAgentDialogComponent, CreateSubAgentConfig, CreateSubAgentResult } from './create-sub-agent-dialog.component';
-import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Consolidated service for managing AI Agent operations including:
@@ -133,7 +133,7 @@ export class AIAgentManagementService {
   openContextCompressionPromptSelector(config: {
     currentPromptId?: string;
     viewContainerRef?: ViewContainerRef;
-  }): Observable<AIPromptEntityExtended | null> {
+  }): Observable<MJAIPromptEntityExtended | null> {
     return new Observable(observer => {
       this.openPromptSelectorDialog({
         title: 'Select Context Compression Prompt',
@@ -248,8 +248,8 @@ export class AIAgentManagementService {
    * @returns Observable that emits the form data when dialog is closed, or null if cancelled
    */
   openSubAgentAdvancedSettingsDialog(config: {
-    subAgent: AIAgentEntityExtended;
-    allSubAgents: AIAgentEntityExtended[];
+    subAgent: MJAIAgentEntityExtended;
+    allSubAgents: MJAIAgentEntityExtended[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<SubAgentAdvancedSettingsFormData | null> {
     const windowSettings: WindowSettings = {
@@ -385,9 +385,9 @@ export class AIAgentManagementService {
    */
   openCreateAgentDialog(config: {
     parentAgentId?: string;
-    initialData?: Partial<AIAgentEntityExtended>;
+    initialData?: Partial<MJAIAgentEntityExtended>;
     viewContainerRef?: ViewContainerRef;
-  }): Observable<AIAgentEntityExtended | null> {
+  }): Observable<MJAIAgentEntityExtended | null> {
     // TODO: Implement agent creation dialog
     // This will reuse the same form components and advanced settings
     // but in a creation context rather than editing context
@@ -400,7 +400,7 @@ export class AIAgentManagementService {
    * Validates agent configuration and relationships
    * Used by both creation and editing workflows
    */
-  validateAgentConfiguration(agent: AIAgentEntityExtended): { isValid: boolean; errors: string[] } {
+  validateAgentConfiguration(agent: MJAIAgentEntityExtended): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     // ParentID vs ExposeAsAction validation
@@ -435,8 +435,8 @@ export class AIAgentManagementService {
    * in the context of the parent agent's sub-agents section
    */
   openSubAgentManagementDialog(config: {
-    parentAgent: AIAgentEntityExtended;
-    subAgent?: AIAgentEntityExtended; // For editing existing sub-agent relationship
+    parentAgent: MJAIAgentEntityExtended;
+    subAgent?: MJAIAgentEntityExtended; // For editing existing sub-agent relationship
     viewContainerRef?: ViewContainerRef;
   }): Observable<any> {
     // TODO: Implement sub-agent management dialog

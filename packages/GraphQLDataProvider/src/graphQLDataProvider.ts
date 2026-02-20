@@ -16,7 +16,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
-import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
+import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
 import { Observable, Subject, Subscription } from 'rxjs';
@@ -825,9 +825,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     let paramType: string = ''
                     const innerParam: any = {}
                     let entity: string | null = null;
-                    let viewEntity: UserViewEntityExtended | null = null;
+                    let viewEntity: MJUserViewEntityExtended | null = null;
                     if (param.ViewEntity) {
-                        viewEntity = param.ViewEntity as UserViewEntityExtended;
+                        viewEntity = param.ViewEntity as MJUserViewEntityExtended;
                         entity = viewEntity.Get("Entity");
                     }
                     else {
@@ -1129,9 +1129,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    protected async getEntityNameAndUserView(params: RunViewParams, contextUser?: UserInfo): Promise<{entityName: string, v: UserViewEntityExtended}> {
+    protected async getEntityNameAndUserView(params: RunViewParams, contextUser?: UserInfo): Promise<{entityName: string, v: MJUserViewEntityExtended}> {
         let entityName: string;
-        let v: UserViewEntityExtended;
+        let v: MJUserViewEntityExtended;
 
         if (!params.EntityName) {
             if (params.ViewID) {
@@ -1151,7 +1151,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return {entityName, v}
     }
 
-    protected getViewRunTimeFieldList(e: EntityInfo, v: UserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
+    protected getViewRunTimeFieldList(e: EntityInfo, v: MJUserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
         const mapper = new FieldMapper();
         if (params.Fields) {

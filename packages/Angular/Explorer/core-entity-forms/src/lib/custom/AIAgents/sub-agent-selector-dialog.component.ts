@@ -4,10 +4,10 @@ import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 
 export interface SubAgentSelectorResult {
-  selectedAgents: AIAgentEntityExtended[];
+  selectedAgents: MJAIAgentEntityExtended[];
   createNew: boolean;
 }
 
@@ -19,7 +19,7 @@ export interface SubAgentSelectorConfig {
   parentAgentId: string; // To exclude from selection
 }
 
-export interface AgentDisplayItem extends AIAgentEntityExtended {
+export interface AgentDisplayItem extends MJAIAgentEntityExtended {
   selected: boolean;
   typeName?: string;
 }
@@ -272,8 +272,8 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const selectedDisplayItems = allAgents
       .filter(agent => selectedIds.has(agent.ID));
     
-    // Convert AgentDisplayItem to AIAgentEntityExtended by casting (they have the same structure)
-    const selectedAgents: AIAgentEntityExtended[] = selectedDisplayItems.map(item => item as AIAgentEntityExtended);
+    // Convert AgentDisplayItem to MJAIAgentEntityExtended by casting (they have the same structure)
+    const selectedAgents: MJAIAgentEntityExtended[] = selectedDisplayItems.map(item => item as MJAIAgentEntityExtended);
     
     this.result.next({
       selectedAgents,

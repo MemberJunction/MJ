@@ -34,7 +34,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJEntityCommunicationMessageTypeEntity: class {},
     MJListDetailEntityType: class {},
     MJListEntityType: class {},
-    TemplateEntityExtended: class {},
+    MJTemplateEntityExtended: class {},
     MJTemplateParamEntity: class {},
 }));
 
@@ -49,7 +49,7 @@ vi.mock('@memberjunction/communication-types', () => ({
         SubjectTemplate = null;
     },
     MessageRecipient: class {},
-    CommunicationProviderEntityExtended: class {},
+    MJCommunicationProviderEntityExtended: class {},
     CommunicationEngineBase: {
         Instance: {
             Config: vi.fn(),
@@ -88,7 +88,7 @@ vi.mock('@memberjunction/entity-communications-base', () => {
     }
     return {
         EntityCommunicationsEngineBase: MockBase,
-        EntityCommunicationMessageTypeExtended: class { CommunicationFields = []; BaseMessageTypeID = ''; },
+        MJEntityCommunicationMessageTypeEntityExtended: class { CommunicationFields = []; BaseMessageTypeID = ''; },
         EntityCommunicationParams: class {},
         EntityCommunicationResult: class {},
     };

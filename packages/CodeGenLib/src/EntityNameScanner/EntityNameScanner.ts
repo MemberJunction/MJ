@@ -5,8 +5,14 @@
  * Three replacement strategies (ported from tools/migrate-entity-refs.js):
  *
  *   1. **Class names** (regex with word boundaries):
- *      `ActionEntity` → `MJActionEntity`, `ActionSchema` → `MJActionSchema`,
- *      `ActionEntityType` → `MJActionEntityType`
+ *      - Explicit subclass renames (from subclass-rename-map.ts):
+ *        `ActionEntityServerEntity` → `MJActionEntityServer`,
+ *        `UserViewEntity_Server` → `MJUserViewEntityServer`,
+ *        `QueryFormExtendedComponent` → `MJQueryFormComponentExtended`
+ *      - CodeGen artifacts (auto-generated per entity):
+ *        `ActionEntity` → `MJActionEntity`,
+ *        `ActionSchema` → `MJActionSchema`,
+ *        `ActionEntityType` → `MJActionEntityType`
  *
  *   2. **Multi-word entity names** (regex with quote boundaries):
  *      `'Action Categories'` → `'MJ: Action Categories'`
@@ -29,6 +35,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
 import { ENTITY_RENAME_MAP, type EntityRenameEntry } from './entity-rename-map';
+import { SUBCLASS_RENAME_MAP, type SubclassRenameCategory, type SubclassRenameEntry } from './subclass-rename-map';
+export { SUBCLASS_RENAME_MAP, type SubclassRenameCategory, type SubclassRenameEntry };
 
 // ============================================================================
 // Public Types
@@ -125,6 +133,7 @@ const DEFAULT_EXCLUDE_PATTERNS: string[] = [
     '**/*.test.ts',
     '**/generated/**',
     '**/Demos/**',
+    '**/EntityNameScanner/**',
 ];
 
 /**
@@ -192,21 +201,47 @@ export interface MultiWordNameRule {
 }
 
 /**
- * Builds class rename rules from the rename map entries.
- * For each entry with classNameChanged=true, creates regex rules for:
- *   - OldClassNameEntityType → NewClassNameEntityType (zod inferred type)
- *   - OldClassNameSchema     → NewClassNameSchema     (zod schema constant)
- *   - OldClassNameEntity     → NewClassNameEntity     (class name itself)
+ * Builds class rename rules from the rename map entries and optional subclass map.
  *
- * Uses negative lookbehind for / and . to avoid matching inside file paths
- * (e.g., `import { Foo } from './custom/OldClassNameEntity'` should NOT rename the path).
+ * Two sources of rules are combined:
+ *
+ * 1. **Explicit subclass rules** (from `subclassMap`): hand-curated old→new mappings
+ *    that handle both prefix and suffix changes (e.g., `ActionEntityServerEntity` →
+ *    `MJActionEntityServer`). These cover all known extended, server, and Angular
+ *    form subclasses.
+ *
+ * 2. **Auto-generated suffix rules** (from `entries`): for each entry with
+ *    classNameChanged=true, creates regex rules for CodeGen-generated artifacts:
+ *      - `EntityType` (zod inferred type)
+ *      - `Schema`     (zod schema constant)
+ *      - `Entity`     (base class name)
+ *
+ * Uses negative lookbehind for / and . to avoid matching inside file paths.
  */
-export function buildClassRenameRules(entries: EntityRenameEntry[]): RegexRule[] {
+export function buildClassRenameRules(
+    entries: EntityRenameEntry[],
+    subclassMap?: SubclassRenameEntry[]
+): RegexRule[] {
     const rules: RegexRule[] = [];
+
+    // ── Explicit subclass rules ─────────────────────────────────────────
+    if (subclassMap) {
+        for (const entry of subclassMap) {
+            rules.push({
+                old: entry.oldClassName,
+                new: entry.newClassName,
+                pattern: new RegExp(`(?<![/.])\\b${escapeRegExp(entry.oldClassName)}\\b`, 'g'),
+            });
+        }
+    }
+
+    // ── Auto-generated suffix rules (CodeGen artifacts only) ────────────
     for (const entry of entries) {
         if (!entry.classNameChanged) continue;
 
-        // Suffixes in longest-first order to avoid partial matches
+        // Suffixes in longest-first order to avoid partial matches.
+        // Only covers CodeGen-generated artifacts; subclass and Angular form
+        // renames are handled by the explicit subclass map above.
         const suffixes = ['EntityType', 'Schema', 'Entity'];
         for (const suffix of suffixes) {
             const oldName = entry.oldClassName + suffix;
@@ -819,7 +854,9 @@ function getColumnNumber(text: string, pos: number): number {
  * fixes them in place.
  *
  * Three strategies are applied:
- * 1. Class name renames (regex): ActionEntity → MJActionEntity
+ * 1. Class name renames (regex): explicit subclass renames from subclass-rename-map.ts
+ *    (e.g., ActionEntityServerEntity → MJActionEntityServer) plus auto-generated
+ *    CodeGen artifact renames (e.g., ActionEntity → MJActionEntity)
  * 2. Multi-word entity name renames (regex): 'AI Models' → 'MJ: AI Models'
  * 3. Single-word entity name renames (AST): 'Actions' → 'MJ: Actions' (context-verified)
  */
@@ -840,9 +877,9 @@ export async function scanEntityNames(options: EntityNameScanOptions): Promise<E
         };
     }
 
-    // Build rename maps from embedded data
+    // Build rename maps from embedded data + subclass overrides
     const renameEntries = ENTITY_RENAME_MAP;
-    const classRules = buildClassRenameRules(renameEntries);
+    const classRules = buildClassRenameRules(renameEntries, SUBCLASS_RENAME_MAP);
     const multiWordRules = buildMultiWordNameRules(renameEntries);
 
     // The entity name map for AST scanning — SINGLE-WORD ONLY to avoid duplicate

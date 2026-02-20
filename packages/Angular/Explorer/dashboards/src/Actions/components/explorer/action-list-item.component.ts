@@ -6,7 +6,7 @@ import {
   ChangeDetectionStrategy
 } from '@angular/core';
 import { MJActionCategoryEntity } from '@memberjunction/core-entities';
-import { ActionEntityExtended } from '@memberjunction/actions-base';
+import { MJActionEntityExtended } from '@memberjunction/actions-base';
 
 @Component({
   standalone: false,
@@ -16,12 +16,12 @@ import { ActionEntityExtended } from '@memberjunction/actions-base';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ActionListItemComponent {
-  @Input() Action!: ActionEntityExtended;
+  @Input() Action!: MJActionEntityExtended;
   @Input() Categories: Map<string, MJActionCategoryEntity> = new Map();
   @Input() IsCompact = false;
-  @Output() ActionClick = new EventEmitter<ActionEntityExtended>();
-  @Output() EditClick = new EventEmitter<ActionEntityExtended>();
-  @Output() RunClick = new EventEmitter<ActionEntityExtended>();
+  @Output() ActionClick = new EventEmitter<MJActionEntityExtended>();
+  @Output() EditClick = new EventEmitter<MJActionEntityExtended>();
+  @Output() RunClick = new EventEmitter<MJActionEntityExtended>();
   @Output() CategoryClick = new EventEmitter<string>();
 
   public onRowClick(): void {

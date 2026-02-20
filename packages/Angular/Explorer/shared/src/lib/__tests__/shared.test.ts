@@ -49,7 +49,7 @@ vi.mock('@memberjunction/core-entities', () => ({
   ArtifactMetadataEngine: { Instance: { Config: vi.fn() } },
   DashboardEngine: { Instance: { Config: vi.fn() } },
   ViewColumnInfo: class {},
-  DashboardEntityExtended: class {},
+  MJDashboardEntityExtended: class {},
   ResourceData: class {
     ResourceRecordID = '';
   },

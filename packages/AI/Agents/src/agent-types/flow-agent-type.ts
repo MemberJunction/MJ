@@ -16,7 +16,7 @@ import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
-import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -1313,7 +1313,7 @@ export class FlowAgentType extends BaseAgentType {
      * @param {ExecuteAgentParams} params - The execution parameters
      * @param {AgentConfiguration} config - The loaded agent configuration
      * @param {BaseAgentNextStep | null} previousDecision - The previous step decision that may contain flow prompt info
-     * @returns {Promise<AIPromptEntityExtended | null>} Custom prompt for flow steps, or default config.childPrompt
+     * @returns {Promise<MJAIPromptEntityExtended | null>} Custom prompt for flow steps, or default config.childPrompt
      * 
      * @override
      * @since 2.76.0
@@ -1324,7 +1324,7 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         agentTypeState: ATS,
         previousDecision?: BaseAgentNextStep<P> | null
-    ): Promise<AIPromptEntityExtended | null> {
+    ): Promise<MJAIPromptEntityExtended | null> {
         // Check if this is a flow prompt step with a specific prompt ID
         const flowDecision = previousDecision as FlowAgentNextStep<P> | null;
         if (flowDecision?.flowPromptStepId) {

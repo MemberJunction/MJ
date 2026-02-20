@@ -127,7 +127,7 @@ export interface GroupedIncomingRelationship {
     styleUrls: ['./entity-form.component.css', '../../../shared/form-styles.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class EntityFormComponentExtended extends MJEntityFormComponent implements OnInit, OnDestroy {
+export class MJEntityFormComponentExtended extends MJEntityFormComponent implements OnInit, OnDestroy {
     private sharedService = inject(SharedService);
 
     /** The Entity record being displayed */

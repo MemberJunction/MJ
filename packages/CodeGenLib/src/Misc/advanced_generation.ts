@@ -2,7 +2,7 @@ import { AdvancedGenerationFeature, configInfo } from "../Config/config";
 import { FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
-import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 
 export type EntityNameResult = { entityName: string, tableName: string }
@@ -117,7 +117,7 @@ export class AdvancedGeneration {
      * Load a prompt by name from metadata.
      * Prompts include their model configuration via the MJ: AI Prompt Models relationship.
      */
-    private async getPromptEntity(promptName: string, contextUser: UserInfo): Promise<AIPromptEntityExtended> {
+    private async getPromptEntity(promptName: string, contextUser: UserInfo): Promise<MJAIPromptEntityExtended> {
         const prompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === promptName?.trim().toLowerCase());
 
         if (!prompt) {

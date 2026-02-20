@@ -56,7 +56,7 @@ import { MJTestRunFeedbackFormComponent } from '../../generated/Entities/MJTestR
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestRunFeedbackFormComponentExtended extends MJTestRunFeedbackFormComponent {
+export class MJTestRunFeedbackFormComponentExtended extends MJTestRunFeedbackFormComponent {
   public override record!: MJTestRunFeedbackEntity;
 
   openTestRun() {

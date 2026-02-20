@@ -11,7 +11,7 @@ import { RegisterClass } from '@memberjunction/global';
  * @memberjunction/core and an item within that library might be the BaseEntity or BaseEngine class.
  */
 @RegisterClass(BaseEntity, "MJ: Library Items")
-export class LibraryItemEntityExtended extends MJLibraryItemEntity {
+export class MJLibraryItemEntityExtended extends MJLibraryItemEntity {
     URL: string;
     HTMLContent: string;
 
@@ -36,9 +36,9 @@ export class LibraryItemEntityExtended extends MJLibraryItemEntity {
 }
 
 @RegisterClass(BaseEntity, "MJ: Libraries")
-export class LibraryEntityExtended extends MJLibraryEntity {
-    private _items: LibraryItemEntityExtended[] = [];
-    public get Items(): LibraryItemEntityExtended[] {
+export class MJLibraryEntityExtended extends MJLibraryEntity {
+    private _items: MJLibraryItemEntityExtended[] = [];
+    public get Items(): MJLibraryItemEntityExtended[] {
         return this._items;
     }
 }
@@ -53,8 +53,8 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
 
  
     // internal instance properties used for the singleton pattern
-    private _Libraries: LibraryEntityExtended[] = [];
-    private _LibraryItems: LibraryItemEntityExtended[] = [];
+    private _Libraries: MJLibraryEntityExtended[] = [];
+    private _LibraryItems: MJLibraryItemEntityExtended[] = [];
 
     /**
      * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
@@ -82,7 +82,7 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Load the items for each library using the comma delimited list of included items in the Library metadata
         for (const library of this.Libraries) {
-            const items: LibraryItemEntityExtended[] = this.LibraryItems.filter((item: LibraryItemEntityExtended) => item.LibraryID === library.ID);
+            const items: MJLibraryItemEntityExtended[] = this.LibraryItems.filter((item: MJLibraryItemEntityExtended) => item.LibraryID === library.ID);
             for (const item of items) {
 
                 // lib code name is replace all instances of @ . and / or \ in the library name with _
@@ -122,14 +122,14 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
     /** 
      * List of all the Entity Action objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
-    public get Libraries(): LibraryEntityExtended[] {
+    public get Libraries(): MJLibraryEntityExtended[] {
         return this._Libraries;
     }
 
      /** 
      * List of all the Entity Action objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
-     public get LibraryItems(): LibraryItemEntityExtended[] {
+     public get LibraryItems(): MJLibraryItemEntityExtended[] {
         return this._LibraryItems;
     }
 }

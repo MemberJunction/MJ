@@ -31,7 +31,7 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
@@ -135,7 +135,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private loadedRecords: Record<string, unknown>[] = [];
 
   // Currently selected view entity (for view data loading)
-  public selectedViewEntity: UserViewEntityExtended | null = null;
+  public selectedViewEntity: MJUserViewEntityExtended | null = null;
 
   // Debounced filter text (synced with mj-entity-viewer)
   public debouncedFilterText: string = '';
@@ -978,7 +978,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Parse GridState JSON from a UserView entity
    * Returns null if no valid GridState is present
    */
-  private parseViewGridState(view: UserViewEntityExtended): ViewGridState | null {
+  private parseViewGridState(view: MJUserViewEntityExtended): ViewGridState | null {
     if (!view.GridState) {
       return null;
     }
@@ -1124,7 +1124,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       if (event.saveAsNew || !this.selectedViewEntity) {
         // Create new view
-        const newView = await md.GetEntityObject<UserViewEntityExtended>('MJ: User Views');
+        const newView = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
         newView.Name = event.name || 'Custom';
         newView.Description = event.description;
         newView.EntityID = this.selectedEntity.ID;
@@ -1542,7 +1542,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Build a ViewConfigSummary from a view entity for the duplicate dialog
    */
-  private buildDuplicateSummary(view: UserViewEntityExtended | null): ViewConfigSummary | null {
+  private buildDuplicateSummary(view: MJUserViewEntityExtended | null): ViewConfigSummary | null {
     if (!view) return null;
     let columnCount = 0;
     let filterCount = 0;
@@ -1589,7 +1589,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const md = new Metadata();
     const rv = new RunView();
     try {
-      const result = await rv.RunView<UserViewEntityExtended>({
+      const result = await rv.RunView<MJUserViewEntityExtended>({
         EntityName: 'MJ: User Views',
         ExtraFilter: `ID = '${targetId}'`,
         ResultType: 'entity_object'
@@ -1602,7 +1602,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       const sourceView = result.Results[0];
 
-      const newView = await md.GetEntityObject<UserViewEntityExtended>('MJ: User Views');
+      const newView = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
       newView.Name = event.Name;
       newView.Description = sourceView.Description || '';
       newView.EntityID = sourceView.EntityID;

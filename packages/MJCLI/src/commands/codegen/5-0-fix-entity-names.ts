@@ -4,13 +4,18 @@ export default class V50FixEntityNames extends Command {
     static description = `[v5.0 Migration] Scan TypeScript files for entity names AND class names that need updating.
 
 Three strategies are applied:
-  1. Class name renames (regex) — ActionEntity -> MJActionEntity, ActionSchema -> MJActionSchema, etc.
+  1. Class name renames (regex) — ActionEntity -> MJActionEntity, ActionSchema -> MJActionSchema,
+     ActionEntityExtended -> MJActionEntityExtended (extended subclasses),
+     ActionEntityServerEntity -> MJActionEntityServer (server subclass suffix standardization),
+     ActionFormComponentExtended -> MJActionFormComponentExtended (Angular form components).
+     Explicit subclass mappings (57 entries from subclass-rename-map.json) take priority over
+     auto-generated suffix rules, enabling suffix changes (e.g., _Server -> Server, ServerEntity -> Server).
   2. Multi-word entity name renames (regex) — 'AI Models' -> 'MJ: AI Models'
   3. Single-word entity name renames (AST) — 'Actions' -> 'MJ: Actions' in GetEntityObject, OpenEntityRecord,
      navigateToEntity, EntityName: assignments, .Name === comparisons, @RegisterClass decorators.
 
-The rename map (272 entries) is built from entity_subclasses.ts @RegisterClass decorators plus
-an embedded rename map for class name prefixes. Runs in dry-run mode by default; use --fix to apply.`;
+The rename map (272 entity entries + 57 subclass entries) is built from entity_subclasses.ts @RegisterClass
+decorators plus embedded rename maps. Runs in dry-run mode by default; use --fix to apply.`;
 
     static examples = [
         {

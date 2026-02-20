@@ -13,7 +13,7 @@ import { BaseReranker, RerankParams, RerankResult } from '@memberjunction/ai';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Result item from LLM reranking response
@@ -63,7 +63,7 @@ export class LLMReranker extends BaseReranker {
     private _promptID: string;
     private _contextUser: UserInfo;
     private _promptRunner: AIPromptRunner;
-    private _cachedPrompt: AIPromptEntityExtended | null = null;
+    private _cachedPrompt: MJAIPromptEntityExtended | null = null;
 
     /**
      * Create a new LLMReranker instance.
@@ -90,7 +90,7 @@ export class LLMReranker extends BaseReranker {
      * Load the rerank prompt from AIEngine cache.
      * Caches the prompt for subsequent calls.
      */
-    private async loadPrompt(): Promise<AIPromptEntityExtended | null> {
+    private async loadPrompt(): Promise<MJAIPromptEntityExtended | null> {
         if (this._cachedPrompt) {
             return this._cachedPrompt;
         }

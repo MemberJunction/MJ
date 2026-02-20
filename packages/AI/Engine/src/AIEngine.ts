@@ -29,7 +29,7 @@ import { ActionEmbeddingMetadata, ActionMatchResult } from "./types/ActionMatchR
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
-import { AIAgentEntityExtended, AIModelEntityExtended, AIPromptEntityExtended, AIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
 import { EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
 
 
@@ -111,7 +111,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     // Delegate all AIEngineBase public getters
-    public get Agents(): AIAgentEntityExtended[] { return this.Base.Agents; }
+    public get Agents(): MJAIAgentEntityExtended[] { return this.Base.Agents; }
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
     public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
     public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
@@ -138,13 +138,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         return this.Base.HasCredentialBindings(bindingType, targetId);
     }
     public get ModelTypes(): MJAIModelTypeEntity[] { return this.Base.ModelTypes; }
-    public get Prompts(): AIPromptEntityExtended[] { return this.Base.Prompts; }
+    public get Prompts(): MJAIPromptEntityExtended[] { return this.Base.Prompts; }
     public get PromptModels(): MJAIPromptModelEntity[] { return this.Base.PromptModels; }
     public get PromptTypes(): MJAIPromptTypeEntity[] { return this.Base.PromptTypes; }
-    public get PromptCategories(): AIPromptCategoryEntityExtended[] { return this.Base.PromptCategories; }
-    public get Models(): AIModelEntityExtended[] { return this.Base.Models; }
+    public get PromptCategories(): MJAIPromptCategoryEntityExtended[] { return this.Base.PromptCategories; }
+    public get Models(): MJAIModelEntityExtended[] { return this.Base.Models; }
     public get ArtifactTypes(): MJArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
-    public get LanguageModels(): AIModelEntityExtended[] { return this.Base.LanguageModels; }
+    public get LanguageModels(): MJAIModelEntityExtended[] { return this.Base.LanguageModels; }
     public get VectorDatabases(): MJVectorDatabaseEntity[] { return this.Base.VectorDatabases; }
     public get ModelCosts(): MJAIModelCostEntity[] { return this.Base.ModelCosts; }
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
@@ -189,10 +189,10 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     // Delegate AIEngineBase public methods
-    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
         return this.Base.GetHighestPowerModel(vendorName, modelType, contextUser);
     }
-    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
         return this.Base.GetHighestPowerLLM(vendorName, contextUser);
     }
     public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): MJAIModelCostEntity | null {
@@ -200,12 +200,12 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
     public GetSubAgents(
         agentID: string,
-        status?: AIAgentEntityExtended['Status'],
+        status?: MJAIAgentEntityExtended['Status'],
         relationshipStatus?: MJAIAgentRelationshipEntity['Status']
-    ): AIAgentEntityExtended[] {
+    ): MJAIAgentEntityExtended[] {
         return this.Base.GetSubAgents(agentID, status, relationshipStatus);
     }
-    public GetAgentByName(agentName: string): AIAgentEntityExtended {
+    public GetAgentByName(agentName: string): MJAIAgentEntityExtended {
         return this.Base.GetAgentByName(agentName);
     }
     public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
@@ -261,7 +261,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public async CheckResultCache(prompt: string): Promise<MJAIResultCacheEntity | null> {
         return this.Base.CheckResultCache(prompt);
     }
-    public async CacheResult(model: AIModelEntityExtended, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
+    public async CacheResult(model: MJAIModelEntityExtended, prompt: MJAIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
         return this.Base.CacheResult(model, prompt, promptText, resultText);
     }
     public async CanUserViewAgent(agentId: string, user: UserInfo): Promise<boolean> {
@@ -279,7 +279,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public async GetUserAgentPermissions(agentId: string, user: UserInfo): Promise<EffectiveAgentPermissions> {
         return this.Base.GetUserAgentPermissions(agentId, user);
     }
-    public async GetAccessibleAgents(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<AIAgentEntityExtended[]> {
+    public async GetAccessibleAgents(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<MJAIAgentEntityExtended[]> {
         return this.Base.GetAccessibleAgents(user, permission);
     }
     public ClearAgentPermissionsCache(): void {
@@ -708,11 +708,11 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      */
     public async PrepareLLMInstance(
         contextUser: UserInfo,
-        model?: AIModelEntityExtended,
+        model?: MJAIModelEntityExtended,
         apiKey?: string
     ): Promise<{
         modelInstance: BaseLLM,
-        modelToUse: AIModelEntityExtended
+        modelToUse: MJAIModelEntityExtended
     }> {
         await AIEngine.Instance.Config(false, contextUser);
         const modelToUse = model ? model : await this.GetHighestPowerLLM(undefined, contextUser);
@@ -733,7 +733,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * @returns The text response from the LLM
      * @throws Error if user prompt is not provided or if there are issues with model creation
      */
-    public async SimpleLLMCompletion(userPrompt: string, contextUser: UserInfo, systemPrompt?: string, model?: AIModelEntityExtended, apiKey?: string): Promise<string> {
+    public async SimpleLLMCompletion(userPrompt: string, contextUser: UserInfo, systemPrompt?: string, model?: MJAIModelEntityExtended, apiKey?: string): Promise<string> {
         try {
             if (!userPrompt || userPrompt.length === 0) {
                 throw new Error('User prompt not provided.');
@@ -783,7 +783,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         iterations: number = 3,
         temperatureIncrement: number = 0.1,
         baseTemperature: number = 0.7,
-        model?: AIModelEntityExtended,
+        model?: MJAIModelEntityExtended,
         apiKey?: string,
         callbacks?: ParallelChatCompletionsCallbacks
     ): Promise<ChatResult[]> {
@@ -825,7 +825,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Returns an array of the local embedding models, sorted with the highest power models first
      */
-    public get LocalEmbeddingModels(): AIModelEntityExtended[] {
+    public get LocalEmbeddingModels(): MJAIModelEntityExtended[] {
         const embeddingModels = this.Models.filter(m => {
             // Guard against AIModelType being non-string (defensive coding for data issues)
             const modelType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
@@ -839,7 +839,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Returns the highest power local embedding model
      */
-    public get HighestPowerLocalEmbeddingModel(): AIModelEntityExtended | null {
+    public get HighestPowerLocalEmbeddingModel(): MJAIModelEntityExtended | null {
         const models = this.LocalEmbeddingModels;
         return models && models.length > 0 ? models[0] : null;
     }
@@ -847,7 +847,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Returns the lowest power local embedding model
      */
-    public get LowestPowerLocalEmbeddingModel(): AIModelEntityExtended | null {
+    public get LowestPowerLocalEmbeddingModel(): MJAIModelEntityExtended | null {
         const models = this.LocalEmbeddingModels;
         return models && models.length > 0 ? models[models.length - 1] : null;
     }
@@ -855,7 +855,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Helper method that generates an embedding for the given text using the highest power local embedding model.
      */
-    public async EmbedTextLocal(text: string): Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null> {
+    public async EmbedTextLocal(text: string): Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null> {
         const model = this.HighestPowerLocalEmbeddingModel;
         if (!model) {
             LogError('AIEngine: No local embedding model found. Cannot generate embedding.');
@@ -869,7 +869,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Helper method to instantiate a class instance for the given model and calculate an embedding
      * vector from the provided text.
      */
-    public async EmbedText(model: AIModelEntityExtended, text: string, apiKey?: string): Promise<EmbedTextResult | null> {
+    public async EmbedText(model: MJAIModelEntityExtended, text: string, apiKey?: string): Promise<EmbedTextResult | null> {
         const params: EmbedTextParams = {
             text: text,
             model: model.APIName
@@ -1326,7 +1326,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         }
     }
 
-    protected async getDriver(model: AIModelEntityExtended, apiKey: string): Promise<BaseModel> {
+    protected async getDriver(model: MJAIModelEntityExtended, apiKey: string): Promise<BaseModel> {
         const driverClassName = model.DriverClass;
         const driverModuleName = model.DriverImportPath;
         try {

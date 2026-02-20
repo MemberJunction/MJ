@@ -18,9 +18,9 @@ import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
-import { AIAgentRunEntityExtended } from './AIAgentRunExtended';
-import { AIAgentEntityExtended } from './AIAgentExtended';
-import { AIPromptEntityExtended } from './AIPromptExtended';
+import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
+import { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
+import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MediaModality } from './prompt.types';
 
 /**
@@ -309,7 +309,7 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
      * and then continue with the retry.
      */
-    step: AIAgentRunEntityExtended['FinalStep']
+    step: MJAIAgentRunEntityExtended['FinalStep']
     /** Result from the prior step, useful for retry or sub-agent context */
     priorStepResult?: any;
     /** 
@@ -401,7 +401,7 @@ export type ExecuteAgentResult<P = any> = {
      * - Use agentRun.CancellationReason for cancellation reason
      * - Use agentRun.Steps for the execution step history
      */
-    agentRun: AIAgentRunEntityExtended;
+    agentRun: MJAIAgentRunEntityExtended;
     /**
      * The artifact type ID for the returned payload.
      * This identifies what type of artifact the payload represents (e.g., JSON, Markdown, HTML).
@@ -560,7 +560,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  */
 export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unknown> = {
     /** The agent entity to execute, containing all metadata and configuration */
-    agent: AIAgentEntityExtended;
+    agent: MJAIAgentEntityExtended;
     /** Array of chat messages representing the conversation history */
     conversationMessages: ChatMessage[];
     /** Optional user context for permission checking and personalization */
@@ -622,7 +622,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
-    parentRun?: AIAgentRunEntityExtended;
+    parentRun?: MJAIAgentRunEntityExtended;
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /** Optional payload to pass to the agent execution, type depends on agent implementation. Payload is the ongoing dynamic state of the agent run. */
@@ -1046,7 +1046,7 @@ export type AgentContextData = {
     parentAgentName?: string | null;
     /** Number of sub-agents available to this agent */
     subAgentCount: number;
-    /** JSON stringified array of AIAgentEntityExtended objects representing sub-agents */
+    /** JSON stringified array of MJAIAgentEntityExtended objects representing sub-agents */
     subAgentDetails: string;
     /** Number of actions available to this agent */
     actionCount: number;
@@ -1065,9 +1065,9 @@ export type AgentConfiguration = {
     /** The loaded agent type entity */
     agentType?: MJAIAgentTypeEntity;
     /** The loaded system prompt entity */
-    systemPrompt?: AIPromptEntityExtended;
+    systemPrompt?: MJAIPromptEntityExtended;
     /** The loaded child prompt entity */
-    childPrompt?: AIPromptEntityExtended;
+    childPrompt?: MJAIPromptEntityExtended;
 }
 
 /**

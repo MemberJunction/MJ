@@ -20,7 +20,7 @@ vi.mock('../generated/entity_subclasses', () => ({
     MJTemplateParamEntity: class MockTemplateParamEntity {},
 }));
 
-import { TemplateEntityExtended } from '../custom/TemplateEntityExtended';
+import { MJTemplateEntityExtended } from '../custom/MJTemplateEntityExtended';
 
 // Helper to create a mock content object with the required properties
 function createContent(type: string, priority: number): { Type: string; Priority: number } {
@@ -36,11 +36,11 @@ function createParam(
     return { Name: name, IsRequired: isRequired, TemplateContentID: templateContentID };
 }
 
-describe('TemplateEntityExtended', () => {
-    let template: TemplateEntityExtended;
+describe('MJTemplateEntityExtended', () => {
+    let template: MJTemplateEntityExtended;
 
     beforeEach(() => {
-        template = new TemplateEntityExtended();
+        template = new MJTemplateEntityExtended();
         template.Content = [];
         template.Params = [];
     });
@@ -50,7 +50,7 @@ describe('TemplateEntityExtended', () => {
     // ---------------------------------------------------------------
     describe('Content getter/setter', () => {
         it('should default to an empty array', () => {
-            const fresh = new TemplateEntityExtended();
+            const fresh = new MJTemplateEntityExtended();
             expect(fresh.Content).toEqual([]);
         });
 
@@ -64,7 +64,7 @@ describe('TemplateEntityExtended', () => {
 
     describe('Params getter/setter', () => {
         it('should default to an empty array', () => {
-            const fresh = new TemplateEntityExtended();
+            const fresh = new MJTemplateEntityExtended();
             expect(fresh.Params).toEqual([]);
         });
 

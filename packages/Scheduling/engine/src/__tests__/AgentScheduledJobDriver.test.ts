@@ -27,7 +27,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
-    AIAgentEntityExtended: class {
+    MJAIAgentEntityExtended: class {
         Name = 'Test Agent';
         Load = vi.fn().mockResolvedValue(true);
     }

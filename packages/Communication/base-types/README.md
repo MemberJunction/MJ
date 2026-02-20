@@ -58,7 +58,7 @@ const engine = CommunicationEngineBase.Instance;
 await engine.Config(false, contextUser);
 
 // Access loaded metadata
-const providers = engine.Providers;           // CommunicationProviderEntityExtended[]
+const providers = engine.Providers;           // MJCommunicationProviderEntityExtended[]
 const messageTypes = engine.BaseMessageTypes; // CommunicationBaseMessageTypeEntity[]
 ```
 

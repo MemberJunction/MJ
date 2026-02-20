@@ -135,7 +135,7 @@ vi.mock('@memberjunction/actions-base', () => {
 
     return {
         ActionEngineBase: MockActionEngineBase,
-        ActionEntityExtended: class {
+        MJActionEntityExtended: class {
             Params: Array<Record<string, unknown>> = [];
             Name = '';
             ID = '';

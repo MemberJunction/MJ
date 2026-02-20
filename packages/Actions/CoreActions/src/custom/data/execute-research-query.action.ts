@@ -7,7 +7,7 @@ import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Action that executes read-only SQL SELECT queries for research purposes with
@@ -436,7 +436,7 @@ export class ExecuteResearchQueryAction extends BaseAction {
     /**
      * Get prompt by name and category from AIEngine
      */
-    private getPromptByNameAndCategory(name: string, category: string): AIPromptEntityExtended | undefined {
+    private getPromptByNameAndCategory(name: string, category: string): MJAIPromptEntityExtended | undefined {
         return AIEngine.Instance.Prompts.find(p =>
             p.Name.trim().toLowerCase() === name.trim().toLowerCase() &&
             p.Category?.trim().toLowerCase() === category?.trim().toLowerCase()

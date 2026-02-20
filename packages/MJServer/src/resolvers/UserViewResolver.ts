@@ -3,7 +3,7 @@ import { EntitySaveOptions, Metadata } from '@memberjunction/core';
 import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@memberjunction/server';
 import { MJUserView_, MJUserViewResolverBase } from '../generated/generated.js';
 import { UserResolver } from './UserResolver.js';
-import { MJUserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GetReadOnlyProvider } from '../util.js';
 
 @Resolver(MJUserView_)
@@ -54,7 +54,7 @@ export class UserViewResolver extends MJUserViewResolverBase {
     // filter state which in turn will be used to update the where clause in the entity sub-class.
     const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const u = this.GetUserFromPayload(userPayload);
-    const viewEntity = <UserViewEntityExtended>await p.GetEntityObject('MJ: User Views', u);
+    const viewEntity = <MJUserViewEntityExtended>await p.GetEntityObject('MJ: User Views', u);
     await viewEntity.Load(ID);
     viewEntity.UpdateWhereClause();
 

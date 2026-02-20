@@ -5,7 +5,7 @@ import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 export interface SubAgentAdvancedSettingsFormData {
   executionOrder: number;
@@ -28,8 +28,8 @@ export interface SubAgentAdvancedSettingsFormData {
 export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
-  subAgent!: AIAgentEntityExtended;
-  allSubAgents: AIAgentEntityExtended[] = []; // For execution order validation
+  subAgent!: MJAIAgentEntityExtended;
+  allSubAgents: MJAIAgentEntityExtended[] = []; // For execution order validation
   
   // Reactive state management
   private destroy$ = new Subject<void>();

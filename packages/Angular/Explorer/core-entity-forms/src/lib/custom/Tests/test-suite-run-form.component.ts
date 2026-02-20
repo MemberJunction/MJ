@@ -32,7 +32,7 @@ const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
   styleUrls: ['./test-suite-run-form.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestSuiteRunFormComponentExtended extends MJTestSuiteRunFormComponent implements OnInit, OnDestroy {
+export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormComponent implements OnInit, OnDestroy {
   public override record!: MJTestSuiteRunEntity;
 
   private destroy$ = new Subject<void>();

@@ -1,6 +1,6 @@
 import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
 import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { ActionEntityExtended } from "./ActionEntity-Extended";
+import { MJActionEntityExtended } from "./MJActionEntityExtended";
 
 
 export class ActionLibrary {
@@ -198,7 +198,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return super.getInstance<ActionEngineBase>("ActionEngineBase");
    }
 
-    private _Actions: ActionEntityExtended[];
+    private _Actions: MJActionEntityExtended[];
     private _ActionCategories: MJActionCategoryEntity[];
     private _Filters: MJActionFilterEntity[];
     private _Params: MJActionParamEntity[];
@@ -272,7 +272,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       }
    }
 
-    public get Actions(): ActionEntityExtended[] {
+    public get Actions(): MJActionEntityExtended[] {
       return this._Actions;
     }
     public get ActionCategories(): MJActionCategoryEntity[] {
@@ -294,13 +294,13 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     /**
      * Returns a list of all core actions.
      */
-    public get CoreActions(): ActionEntityExtended[] {
+    public get CoreActions(): MJActionEntityExtended[] {
       return this._Actions.filter((a) => this.IsCoreAction(a));
     }
     /**
      * Returns a list of all non-core actions.
      */
-    public get NonCoreActions(): ActionEntityExtended[] {
+    public get NonCoreActions(): MJActionEntityExtended[] {
       return this._Actions.filter((a) => !this.IsCoreAction(a));
     }
 
@@ -341,7 +341,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     * @param action - The action entity to check.
     * @returns True if the action is a core action, false otherwise.
     */
-   public IsCoreAction(action: ActionEntityExtended): boolean {
+   public IsCoreAction(action: MJActionEntityExtended): boolean {
       if (!action) {
          return false;
       }
@@ -365,7 +365,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     * @param actionName 
     * @returns 
     */
-   public GetActionByName(actionName: string): ActionEntityExtended | undefined {
+   public GetActionByName(actionName: string): MJActionEntityExtended | undefined {
       if (!actionName || actionName.trim().length === 0) {
          throw new Error("Action name cannot be null or empty.");
       }

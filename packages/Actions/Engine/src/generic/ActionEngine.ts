@@ -2,7 +2,7 @@ import { LogError, Metadata } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
-import { ActionEngineBase, ActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionEngineBase, MJActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
  
 
@@ -56,7 +56,7 @@ export class ActionEngineServer extends ActionEngineBase {
    }
    
 
-   protected GetActionParamsForAction(action: ActionEntityExtended): ActionParam[] {
+   protected GetActionParamsForAction(action: MJActionEntityExtended): ActionParam[] {
       const params: ActionParam[] = action.Params.map((param: MJActionParamEntity) => {
          let value: any = null;
          switch (param.ValueType) {

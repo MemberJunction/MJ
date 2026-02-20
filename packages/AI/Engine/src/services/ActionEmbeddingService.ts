@@ -2,7 +2,7 @@ import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-mem
 import { MJActionEntity } from '@memberjunction/core-entities';
 import { ActionMatchResult, ActionEmbeddingMetadata } from '../types/ActionMatchResult';
 import { EmbedTextResult } from '@memberjunction/ai';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { LogError } from '@memberjunction/core';
 
 /**
@@ -41,7 +41,7 @@ export class ActionEmbeddingService {
      */
     public static async GenerateActionEmbeddings(
         actions: MJActionEntity[],
-        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null>
+        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null>
     ): Promise<VectorEntry<ActionEmbeddingMetadata>[]> {
         const entries: VectorEntry<ActionEmbeddingMetadata>[] = [];
 
@@ -94,7 +94,7 @@ export class ActionEmbeddingService {
     public static async FindSimilarActions(
         vectorService: SimpleVectorService<ActionEmbeddingMetadata>,
         taskDescription: string,
-        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null>,
+        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null>,
         topK: number = 5,
         minSimilarity: number = 0.5
     ): Promise<ActionMatchResult[]> {

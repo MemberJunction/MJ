@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { MJConversationDetailEntity, EnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJConversationDetailEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -44,7 +44,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() acceptedFileTypes: string = 'image/*'; // Accepted MIME types pattern
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
-  @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
+  @Input() agentRunsByDetailId?: Map<string, MJAIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
   @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
 
   // Initial message to send automatically - using getter/setter for precise control
@@ -126,7 +126,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
   public isUploadingAttachments: boolean = false; // True when uploading attachments to server
   public uploadingMessage: string = 'Uploading attachments...'; // Message shown during upload
-  public converationManagerAgent: AIAgentEntityExtended | null = null;
+  public converationManagerAgent: MJAIAgentEntityExtended | null = null;
 
   // Track completion timestamps to prevent race conditions with late progress updates
   private completionTimestamps = new Map<string, number>();
@@ -1141,7 +1141,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     try {
       // Get default environment ID (MJ standard environment used across all installations)
-      const environmentId = EnvironmentEntityExtended.DefaultEnvironmentID;
+      const environmentId = MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
       // Get session ID for PubSub subscriptions
       const sessionId = GraphQLDataProvider.Instance.sessionId || '';

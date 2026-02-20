@@ -32,7 +32,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/ai', () => ({ BaseReranker: class {} }));
-vi.mock('@memberjunction/ai-core-plus', () => ({ AIModelEntityExtended: class {} }));
+vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIModelEntityExtended: class {} }));
 vi.mock('@memberjunction/core-entities', () => ({
     MJAIAgentNoteEntity: class { ID = ''; Note = ''; Type = ''; Get(_f: string) { return ''; } },
     MJAIAgentRunStepEntity: class {}

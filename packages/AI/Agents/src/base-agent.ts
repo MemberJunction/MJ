@@ -12,7 +12,7 @@
  */
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
@@ -47,7 +47,7 @@ import {
     SecondaryScopeConfig,
     SecondaryScopeValue
 } from '@memberjunction/ai-core-plus';
-import { ActionEntityExtended, ActionResult, ActionParam } from '@memberjunction/actions-base';
+import { MJActionEntityExtended, ActionResult, ActionParam } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
@@ -215,12 +215,12 @@ export class BaseAgent {
      * Current agent run entity.
      * @private
      */
-    private _agentRun: AIAgentRunEntityExtended | null = null;
+    private _agentRun: MJAIAgentRunEntityExtended | null = null;
 
     /**
      * Access the current run for the agent
      */
-    public get AgentRun(): AIAgentRunEntityExtended | null {
+    public get AgentRun(): MJAIAgentRunEntityExtended | null {
         return this._agentRun;
     }
 
@@ -327,7 +327,7 @@ export class BaseAgent {
      * @private
      * @since 3.1.0
      */
-    private interceptLargeBinaryContent(actionParams: ActionParam[], actionEntity?: ActionEntityExtended): ActionParam[] {
+    private interceptLargeBinaryContent(actionParams: ActionParam[], actionEntity?: MJActionEntityExtended): ActionParam[] {
         if (!actionParams || actionParams.length === 0) {
             return actionParams;
         }
@@ -638,7 +638,7 @@ export class BaseAgent {
      * @private
      * @since 2.123.0
      */
-    private _effectiveActions: ActionEntityExtended[] = [];
+    private _effectiveActions: MJActionEntityExtended[] = [];
 
     /**
      * Execution limits for dynamically added actions.
@@ -704,7 +704,7 @@ export class BaseAgent {
     protected logError(error: Error | string, options?: {
         category?: string;
         metadata?: Record<string, any>;
-        agent?: AIAgentEntityExtended;
+        agent?: MJAIAgentEntityExtended;
         agentType?: MJAIAgentTypeEntity;
         severity?: 'warning' | 'error' | 'critical';
     }): void {
@@ -890,7 +890,7 @@ export class BaseAgent {
      * all required metadata is present and handles errors gracefully.
      * 
      * @param {ExecuteAgentParams} params - Parameters for agent execution
-     * @param {AIAgentEntityExtended} params.agent - The agent entity to execute
+     * @param {MJAIAgentEntityExtended} params.agent - The agent entity to execute
      * @param {ChatMessage[]} params.conversationMessages - Conversation history
      * @param {UserInfo} [params.contextUser] - Optional user context
      * @param {any} [params.context] - Optional context object passed to sub-agents and actions
@@ -1271,7 +1271,7 @@ export class BaseAgent {
      */
     protected async InjectContextMemory(
         input: string,
-        agent: AIAgentEntityExtended,
+        agent: MJAIAgentEntityExtended,
         userId?: string,
         companyId?: string,
         contextUser?: UserInfo,
@@ -1447,11 +1447,11 @@ export class BaseAgent {
     /**
      * Validates that the agent is active and ready for execution.
      * 
-     * @param {AIAgentEntityExtended} agent - The agent to validate
+     * @param {MJAIAgentEntityExtended} agent - The agent to validate
      * @returns {ExecuteAgentResult | null} Error result if validation fails, null if valid
      * @protected
      */
-    protected async validateAgent(agent: AIAgentEntityExtended): Promise<ExecuteAgentResult | null> {
+    protected async validateAgent(agent: MJAIAgentEntityExtended): Promise<ExecuteAgentResult | null> {
         if (agent.Status !== 'Active') {
             // Set error on the agent run
             if (this._agentRun) {
@@ -1585,11 +1585,11 @@ export class BaseAgent {
     /**
      * Loads all required configuration for agent execution.
      * 
-     * @param {AIAgentEntityExtended} agent - The agent to load configuration for
+     * @param {MJAIAgentEntityExtended} agent - The agent to load configuration for
      * @returns {Promise<AgentConfiguration>} Configuration object with loaded entities
      * @protected
      */
-    protected async loadAgentConfiguration(agent: AIAgentEntityExtended): Promise<AgentConfiguration> {
+    protected async loadAgentConfiguration(agent: MJAIAgentEntityExtended): Promise<AgentConfiguration> {
         const engine = AIEngine.Instance;
 
         // first check to see if we have a custom driver class if we do, we do NOT validate the rest of
@@ -1662,8 +1662,8 @@ export class BaseAgent {
      * Prepares prompt parameters for hierarchical execution.
      * 
      * @param {MJAIAgentTypeEntity} agentType - The agent type
-     * @param {AIPromptEntityExtended} systemPrompt - The system prompt
-     * @param {AIPromptEntityExtended} childPrompt - The child prompt
+     * @param {MJAIPromptEntityExtended} systemPrompt - The system prompt
+     * @param {MJAIPromptEntityExtended} childPrompt - The child prompt
      * @param {ExecuteAgentParams} params - Original execution parameters
      * @returns {Promise<AIPromptParams>} Configured prompt parameters
      * @protected
@@ -1674,8 +1674,8 @@ export class BaseAgent {
         params: ExecuteAgentParams
     ): Promise<AIPromptParams> {
         const agentType: MJAIAgentTypeEntity = config.agentType;
-        const systemPrompt: AIPromptEntityExtended = config.systemPrompt;
-        const childPrompt: AIPromptEntityExtended = config.childPrompt;
+        const systemPrompt: MJAIPromptEntityExtended = config.systemPrompt;
+        const childPrompt: MJAIPromptEntityExtended = config.childPrompt;
 
         // Gather context data (including runtime action changes)
         const promptTemplateData = await this.gatherPromptTemplateData(
@@ -1860,8 +1860,8 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
@@ -1908,8 +1908,8 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // check to make sure the current agent can execute the specified sub-agent
         const name = nextStep.subAgent?.name;
@@ -1972,8 +1972,8 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // Use effective actions which includes runtime action changes (populated in gatherPromptTemplateData)
         // Fall back to database-configured actions if _effectiveActions is empty
@@ -2097,7 +2097,7 @@ export class BaseAgent {
      * @protected
      * @since 2.123.0
      */
-    protected getEffectiveActionsForValidation(agentId: string): ActionEntityExtended[] {
+    protected getEffectiveActionsForValidation(agentId: string): MJActionEntityExtended[] {
         if (this._effectiveActions.length > 0) {
             return this._effectiveActions;
         }
@@ -2122,8 +2122,8 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // First check minimum execution requirements
         const minViolations = await this.checkMinimumExecutionRequirements(params.agent, agentRun);
@@ -2263,8 +2263,8 @@ export class BaseAgent {
         currentPayload: P,
         mode: string,
         errorMessages: string[],
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         const validationFeedback = `Final payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
 
@@ -2367,8 +2367,8 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -2386,8 +2386,8 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
         return nextStep;
@@ -2406,8 +2406,8 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // Check if the agent has ChatHandlingOption configured
         const chatHandlingOption = params.agent.ChatHandlingOption;
@@ -2468,8 +2468,8 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // Skip guardrail checks for terminal steps
         if (nextStep.step === 'Success' || nextStep.step === 'Failed' || nextStep.step === 'Chat') {
@@ -2529,7 +2529,7 @@ export class BaseAgent {
      */
     protected async hasExceededAgentRunGuardrails(
         params: ExecuteAgentParams,
-        agentRun: AIAgentRunEntityExtended
+        agentRun: MJAIAgentRunEntityExtended
     ): Promise<{
         exceeded: boolean;
         type?: 'cost' | 'tokens' | 'iterations' | 'time';
@@ -3389,7 +3389,7 @@ The context is now within limits. Please retry your request with the recovered c
         agentType: MJAIAgentTypeEntity,
         promptResult: AIPromptRunResult,
         currentPayload: P,
-        currentStep: AIAgentRunStepEntityExtended
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
@@ -3473,7 +3473,7 @@ The context is now within limits. Please retry your request with the recovered c
      * structured to provide the LLM with comprehensive context about the agent's
      * capabilities and hierarchical relationships.
      *
-     * @param {AIAgentEntityExtended} agent - The agent to gather context for
+     * @param {MJAIAgentEntityExtended} agent - The agent to gather context for
      * @param {UserInfo} [_contextUser] - Optional user context (reserved for future use)
      * @param {any} [extraData] - Optional extra data to include in the context, if provided and keys conflict within the agent context data, the extraData will override the agent context data.
      * @param {ActionChange[]} [actionChanges] - Optional runtime action modifications
@@ -3485,7 +3485,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async gatherPromptTemplateData(
-        agent: AIAgentEntityExtended,
+        agent: MJAIAgentEntityExtended,
         _contextUser?: UserInfo,
         extraData?: any,
         actionChanges?: ActionChange[]
@@ -3506,7 +3506,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Load available actions from database configuration
             const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID && aa.Status === 'Active');
-            let actions: ActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
+            let actions: MJActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
 
             // Apply runtime action changes if provided
             if (actionChanges?.length) {
@@ -3583,7 +3583,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected buildAgentTypePromptParams(
         agentType: MJAIAgentTypeEntity | undefined,
-        agent: AIAgentEntityExtended,
+        agent: MJAIAgentEntityExtended,
         runtimeOverrides?: Record<string, unknown>
     ): Record<string, unknown> {
         // 1. Extract defaults from schema
@@ -3728,7 +3728,7 @@ The context is now within limits. Please retry your request with the recovered c
      * 
      * @throws {Error} If the action fails to execute
      */
-    public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: ActionEntityExtended, 
+    public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended, 
         contextUser?: UserInfo): Promise<ActionResult> {
         
         try {
@@ -3792,7 +3792,7 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @param {ExecuteAgentParams} params - Execution parameters with conversation history
      * @param {AgentSubAgentRequest} subAgentRequest - Sub-agent request details
-     * @param {AIAgentEntityExtended} subAgent - The sub-agent entity
+     * @param {MJAIAgentEntityExtended} subAgent - The sub-agent entity
      * @param {ChatMessage | undefined} contextMessage - Optional context from SubAgentContextPaths
      * @returns {ChatMessage[]} Prepared message array for sub-agent execution
      *
@@ -3801,7 +3801,7 @@ The context is now within limits. Please retry your request with the recovered c
     protected prepareSubAgentMessages(
         params: ExecuteAgentParams,
         subAgentRequest: AgentSubAgentRequest,
-        subAgent: AIAgentEntityExtended,
+        subAgent: MJAIAgentEntityExtended,
         contextMessage?: ChatMessage
     ): ChatMessage[] {
         const engine = AIEngine.Instance;
@@ -3906,8 +3906,8 @@ The context is now within limits. Please retry your request with the recovered c
     protected async ExecuteSubAgent<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         subAgentRequest: AgentSubAgentRequest<SC>,
-        subAgent: AIAgentEntityExtended,
-        stepEntity: AIAgentRunStepEntityExtended,
+        subAgent: MJAIAgentEntityExtended,
+        stepEntity: MJAIAgentRunStepEntityExtended,
         payload?: SR,
         contextMessage?: ChatMessage,
         stepCount: number = 0
@@ -4005,11 +4005,11 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Formats sub-agent details for inclusion in prompt context.
      * 
-     * @param {AIAgentEntityExtended[]} subAgents - Array of sub-agent entities
+     * @param {MJAIAgentEntityExtended[]} subAgents - Array of sub-agent entities
      * @returns {string} JSON formatted string with sub-agent details
      * @private
      */
-    private formatSubAgentDetails(subAgents: AIAgentEntityExtended[]): string {
+    private formatSubAgentDetails(subAgents: MJAIAgentEntityExtended[]): string {
         return JSON.stringify(subAgents.map(sa => {
             const result = {
                 Name: sa.Name,
@@ -4033,7 +4033,7 @@ The context is now within limits. Please retry your request with the recovered c
      * prompt.
      * @param agent 
      */
-    protected getAgentPromptParameters(agent: AIAgentEntityExtended): Array<MJTemplateParamEntity> {
+    protected getAgentPromptParameters(agent: MJAIAgentEntityExtended): Array<MJTemplateParamEntity> {
         const engine = AIEngine.Instance;
         const agentPrompt = engine.AgentPrompts
             .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
@@ -4048,7 +4048,7 @@ The context is now within limits. Please retry your request with the recovered c
         return prompt.TemplateParams;
     }
 
-    protected getAgentPromptParametersJSON(agent: AIAgentEntityExtended): string {
+    protected getAgentPromptParametersJSON(agent: MJAIAgentEntityExtended): string {
         const params = this.getAgentPromptParameters(agent);
         return JSON.stringify(params.map(param => ({
             Name: param.Name,
@@ -4062,11 +4062,11 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Formats action details for inclusion in prompt context.
      * 
-     * @param {ActionEntityExtended[]} actions - Array of action entities
+     * @param {MJActionEntityExtended[]} actions - Array of action entities
      * @returns {string} JSON formatted string with comprehensive action details
      * @private
      */
-    private formatActionDetails(actions: ActionEntityExtended[]): string {
+    private formatActionDetails(actions: MJActionEntityExtended[]): string {
         return JSON.stringify(actions.map(action => ({
             Name: action.Name,
             Description: action.Description,
@@ -4193,11 +4193,11 @@ The context is now within limits. Please retry your request with the recovered c
      * @since 2.123.0
      */
     protected applyActionChanges(
-        baseActions: ActionEntityExtended[],
+        baseActions: MJActionEntityExtended[],
         actionChanges: ActionChange[],
         agentId: string,
         isRoot: boolean
-    ): { actions: ActionEntityExtended[]; dynamicLimits: Record<string, number> } {
+    ): { actions: MJActionEntityExtended[]; dynamicLimits: Record<string, number> } {
         let actions = [...baseActions];
         const dynamicLimits: Record<string, number> = {};
 
@@ -4309,7 +4309,7 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
-     * Initializes the agent run tracking by creating AIAgentRunEntityExtended and setting up context.
+     * Initializes the agent run tracking by creating MJAIAgentRunEntityExtended and setting up context.
      * 
      * @private
      * @param {ExecuteAgentParams} params - The execution parameters
@@ -4349,7 +4349,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         
         // Create MJAIAgentRunEntity
-        this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
+        this._agentRun = await this._metadata.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
@@ -4495,10 +4495,10 @@ The context is now within limits. Please retry your request with the recovered c
      * Validates the agent with tracking.
      * 
      * @private
-     * @param {AIAgentEntityExtended} agent - The agent to validate
+     * @param {MJAIAgentEntityExtended} agent - The agent to validate
      * @returns {Promise<ExecuteAgentResult | null>} - Failure result if validation fails, null if successful
      */
-    private async validateAgentWithTracking(agent: AIAgentEntityExtended, contextUser: UserInfo): Promise<ExecuteAgentResult | null> {
+    private async validateAgentWithTracking(agent: MJAIAgentEntityExtended, contextUser: UserInfo): Promise<ExecuteAgentResult | null> {
         try {
             // Original validation logic
             const validationResult = await this.validateAgent(agent);
@@ -4531,10 +4531,10 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @private
      * @param params - Step creation parameters
-     * @returns {Promise<AIAgentRunStepEntityExtended>} - The created step entity
+     * @returns {Promise<MJAIAgentRunStepEntityExtended>} - The created step entity
      */
     private async createStepEntity(params: {
-        stepType: AIAgentRunStepEntityExtended["StepType"];
+        stepType: MJAIAgentRunStepEntityExtended["StepType"];
         stepName: string;
         contextUser: UserInfo;
         targetId?: string;
@@ -4543,8 +4543,8 @@ The context is now within limits. Please retry your request with the recovered c
         payloadAtStart?: any;
         payloadAtEnd?: any;
         parentId?: string;
-    }): Promise<AIAgentRunStepEntityExtended> {
-        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
+    }): Promise<MJAIAgentRunStepEntityExtended> {
+        const stepEntity = await this._metadata.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
 
         stepEntity.AgentRunID = this._agentRun!.ID;
         // Step number is based on current count of steps + 1
@@ -4595,7 +4595,7 @@ The context is now within limits. Please retry your request with the recovered c
      * Finalizes a step entity with completion status.
      * 
      * @private
-     * @param {AIAgentRunStepEntityExtended} stepEntity - The step entity to finalize
+     * @param {MJAIAgentRunStepEntityExtended} stepEntity - The step entity to finalize
      * @param {boolean} success - Whether the step was successful
      * @param {string} [errorMessage] - Optional error message
      * @param {any} [outputData] - Optional output data to capture for this step
@@ -4644,7 +4644,7 @@ The context is now within limits. Please retry your request with the recovered c
         };
     }
 
-    private async finalizeStepEntity(stepEntity: AIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
+    private async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         try {
             stepEntity.Status = success ? 'Completed' : 'Failed';
             stepEntity.CompletedAt = new Date();
@@ -5205,7 +5205,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
-            // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntityExtended)
+            // or the payload as those are stored already(prompt result via TargetLogID -> MJAIPromptRunEntityExtended)
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
@@ -5349,7 +5349,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private computeUpstreamDownstreamPaths<SC = any>(        
         params: ExecuteAgentParams, 
-        subAgentEntity: AIAgentEntityExtended, 
+        subAgentEntity: MJAIAgentEntityExtended, 
         subAgentRequest: AgentSubAgentRequest<SC>
     ): { downstreamPaths: string[], upstreamPaths: string[] } {
         let downstreamPaths: string[] = ['*'];
@@ -5391,7 +5391,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async computeChildSubAgentPayload<SC = any, SR = any>(
         params: ExecuteAgentParams, 
-        subAgentEntity: AIAgentEntityExtended,
+        subAgentEntity: MJAIAgentEntityExtended,
         downstreamPaths: string[],        
         subAgentRequest: AgentSubAgentRequest<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>
@@ -5649,7 +5649,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Prepare output data
             const outputData = {
                 subAgentResult: {
-                    // we have a link to the AIAgentRunEntityExtended via the TargetLogID above
+                    // we have a link to the MJAIAgentRunEntityExtended via the TargetLogID above
                     // but we throw in just a few things here for convenience/summary that are
                     // light - we don't want to store the payload again for example
                     // that is stored in PayloadAtEnd on the step and also in PayloadAtEnd in the sub-agent's run
@@ -5845,7 +5845,7 @@ The context is now within limits. Please retry your request with the recovered c
     private async executeRelatedSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision: BaseAgentNextStep<SR, SC>,
-        subAgentEntity: AIAgentEntityExtended,
+        subAgentEntity: MJAIAgentEntityExtended,
         relationship: MJAIAgentRelationshipEntity,
         parentStepId?: string,
         subAgentPayloadOverride?: SR,
@@ -6481,7 +6481,7 @@ The context is now within limits. Please retry your request with the recovered c
             const baseStepNumber = (this._agentRun!.Steps?.length || 0) + 1;
 
             // Execute all actions in parallel
-            let lastStep: AIAgentRunStepEntityExtended | undefined = undefined;
+            let lastStep: MJAIAgentRunStepEntityExtended | undefined = undefined;
             const actionPromises = actions.map(async (aa) => {
                 // Find action entity from the effective actions (which includes runtime changes)
                 const actionEntity = effectiveActions.find(a => a.Name === aa.name);
@@ -6885,7 +6885,7 @@ The context is now within limits. Please retry your request with the recovered c
         collection: any[],
         payload: any,
         params: ExecuteAgentParams
-    ): Promise<AIAgentRunStepEntityExtended> {
+    ): Promise<MJAIAgentRunStepEntityExtended> {
         const stepEntity = await this.createStepEntity({
             stepType: 'ForEach',
             stepName: `ForEach: ${forEach.collectionPath} (${collection.length} items)`,
@@ -7144,7 +7144,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async completeForEachLoop(
         forEach: ForEachOperation,
-        loopStepEntity: AIAgentRunStepEntityExtended,
+        loopStepEntity: MJAIAgentRunStepEntityExtended,
         loopResults: { results: BaseAgentNextStep[], errors: any[], finalPayload: any },
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams
@@ -7279,7 +7279,7 @@ The context is now within limits. Please retry your request with the recovered c
         whileOp: WhileOperation,
         payload: any,
         params: ExecuteAgentParams
-    ): Promise<AIAgentRunStepEntityExtended> {
+    ): Promise<MJAIAgentRunStepEntityExtended> {
         const stepEntity = await this.createStepEntity({
             stepType: 'While',
             stepName: `While: ${whileOp.condition}`,
@@ -7411,7 +7411,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async completeWhileLoop(
         whileOp: WhileOperation,
-        loopStepEntity: AIAgentRunStepEntityExtended,
+        loopStepEntity: MJAIAgentRunStepEntityExtended,
         loopResults: { results: BaseAgentNextStep[], errors: any[], finalPayload: any, iterations: number },
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams
@@ -7675,7 +7675,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @param agentRun - The current agent run
      * @returns Array of violation messages (empty if all requirements are met)
      */
-    protected async checkMinimumExecutionRequirements(agent: AIAgentEntityExtended, agentRun: AIAgentRunEntityExtended): Promise<string[]> {
+    protected async checkMinimumExecutionRequirements(agent: MJAIAgentEntityExtended, agentRun: MJAIAgentRunEntityExtended): Promise<string[]> {
         const violations: string[] = [];
 
         // Check action minimum requirements from database-configured actions only.
@@ -7864,16 +7864,16 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected async createCompactionStep(
-        prompt: AIPromptEntityExtended,
+        prompt: MJAIPromptEntityExtended,
         message: AgentChatMessage,
         params: ExecuteAgentParams
-    ): Promise<AIAgentRunStepEntityExtended> {
+    ): Promise<MJAIAgentRunStepEntityExtended> {
         if (!this._agentRun) {
             throw new Error('Cannot create compaction step: agent run not initialized');
         }
 
         const md = new Metadata();
-        const step = await md.GetEntityObject<AIAgentRunStepEntityExtended>(
+        const step = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>(
             'MJ: AI Agent Run Steps',
             params.contextUser
         );
@@ -7908,7 +7908,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected async updateCompactionStep(
-        step: AIAgentRunStepEntityExtended,
+        step: MJAIAgentRunStepEntityExtended,
         result: AIPromptRunResult<{ summary: string }>,
         message: AgentChatMessage,
         params: ExecuteAgentParams
@@ -8364,7 +8364,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @param agent - The agent entity
      * @returns Parsed SecondaryScopeConfig or null
      */
-    private parseSecondaryScopeConfig(agent: AIAgentEntityExtended): SecondaryScopeConfig | null {
+    private parseSecondaryScopeConfig(agent: MJAIAgentEntityExtended): SecondaryScopeConfig | null {
         const configJson = agent.ScopeConfig;
         if (!configJson) {
             return null;

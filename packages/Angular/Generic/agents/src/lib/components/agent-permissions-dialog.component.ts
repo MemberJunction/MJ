@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * A centered modal dialog that wraps the AgentPermissionsPanel.
@@ -163,7 +163,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
     ]
 })
 export class AgentPermissionsDialogComponent {
-    @Input() Agent: AIAgentEntityExtended | null = null;
+    @Input() Agent: MJAIAgentEntityExtended | null = null;
     @Output() Closed = new EventEmitter<void>();
     @Output() PermissionsChanged = new EventEmitter<void>();
 

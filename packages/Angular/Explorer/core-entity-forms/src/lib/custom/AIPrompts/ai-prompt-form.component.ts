@@ -10,7 +10,7 @@ import { MJAIPromptFormComponent } from '../../generated/Entities/MJAIPrompt/mja
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { AIPromptManagementService } from './ai-prompt-management.service';
-import { AIModelEntityExtended, AIPromptCategoryEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended, MJAIPromptCategoryEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompts')
 @Component({
@@ -19,12 +19,12 @@ import { AIModelEntityExtended, AIPromptCategoryEntityExtended, AIPromptEntityEx
     templateUrl: './ai-prompt-form.component.html',
     styleUrls: ['./ai-prompt-form.component.css']
 })
-export class AIPromptFormComponentExtended extends MJAIPromptFormComponent implements OnInit {
+export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent implements OnInit {
     private testHarnessService = inject(AITestHarnessDialogService);
     private viewContainerRef = inject(ViewContainerRef);
     private promptManagementService = inject(AIPromptManagementService);
 
-    public record!: AIPromptEntityExtended;
+    public record!: MJAIPromptEntityExtended;
     public template: MJTemplateEntity | null = null;
     public templateContent: MJTemplateContentEntity | null = null;
     public templateParams: MJTemplateParamEntity[] = [];
@@ -35,7 +35,7 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
     
     // Model management
     public promptModels: MJAIPromptModelEntity[] = [];
-    public availableModels: AIModelEntityExtended[] = [];
+    public availableModels: MJAIModelEntityExtended[] = [];
     public availableVendors: MJAIVendorEntity[] = [];
     public isLoadingModels = false;
     
@@ -58,7 +58,7 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
     public draggedIndex: number = -1;
     
     // Execution History
-    public executionHistory: AIPromptRunEntityExtended[] = [];
+    public executionHistory: MJAIPromptRunEntityExtended[] = [];
     public isLoadingHistory = false;
     public historySortField: 'runAt' | 'executionTime' | 'cost' | 'tokens' = 'runAt';
     public historySortDirection: 'asc' | 'desc' = 'desc';
@@ -1312,7 +1312,7 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
     /**
      * Builds the tree structure for result selector
      */
-    private buildResultSelectorTree(categories: AIPromptCategoryEntityExtended[], prompts: AIPromptEntityExtended[]): any[] {
+    private buildResultSelectorTree(categories: MJAIPromptCategoryEntityExtended[], prompts: MJAIPromptEntityExtended[]): any[] {
         const tree: any[] = [];
 
         // Add "Clear Selection" option at the top
@@ -1565,7 +1565,7 @@ export class AIPromptFormComponentExtended extends MJAIPromptFormComponent imple
         this.isLoadingHistory = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<AIPromptRunEntityExtended>({
+            const result = await rv.RunView<MJAIPromptRunEntityExtended>({
                 EntityName: 'MJ: AI Prompt Runs',
                 ExtraFilter: `PromptID='${this.record.ID}'`,
                 OrderBy: 'RunAt DESC' 

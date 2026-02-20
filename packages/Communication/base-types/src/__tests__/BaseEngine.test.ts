@@ -42,7 +42,7 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('../BaseProvider', () => ({
-    CommunicationProviderEntityExtended: class {
+    MJCommunicationProviderEntityExtended: class {
         ID = 'provider-1';
         MessageTypes: unknown[] = [];
     },

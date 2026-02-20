@@ -3,7 +3,7 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 import {
-  ComponentEntityExtended,
+  MJComponentEntityExtended,
   MJArtifactVersionEntity,
   ResourceData,
   UserInfoEngine

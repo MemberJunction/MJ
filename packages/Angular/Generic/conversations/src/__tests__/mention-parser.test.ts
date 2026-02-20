@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock Angular and MJ deps
 vi.mock('@angular/core', () => ({ Injectable: () => () => {} }));
 vi.mock('@memberjunction/ai-core-plus', () => ({
-  AIAgentEntityExtended: class {},
+  MJAIAgentEntityExtended: class {},
   ConversationUtility: {
     ToPlainText: vi.fn((text: string) => text.replace(/@\{[^}]+\}/g, '@MockName'))
   }
@@ -14,7 +14,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { MentionParserService } from '../lib/services/mention-parser.service';
 
-// Create mock agents matching AIAgentEntityExtended shape
+// Create mock agents matching MJAIAgentEntityExtended shape
 function createMockAgent(id: string, name: string): { ID: string; Name: string } {
   return { ID: id, Name: name };
 }

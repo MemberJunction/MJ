@@ -15,7 +15,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    ScheduledActionEntityExtended: class ScheduledActionEntityExtended {
+    MJScheduledActionEntityExtended: class MJScheduledActionEntityExtended {
         ID: string = '';
         Name: string = '';
         ActionID: string = '';
@@ -31,7 +31,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 vi.mock('@memberjunction/actions-base', () => ({
-    ActionEntityExtended: class ActionEntityExtended {
+    MJActionEntityExtended: class MJActionEntityExtended {
         ID: string = '';
         Name: string = '';
     },
@@ -96,7 +96,7 @@ describe('ScheduledActionEngine', () => {
                 next: () => ({ toDate: () => pastDate }),
             } as unknown as ReturnType<typeof cronParser.parseExpression>);
 
-            const result = ScheduledActionEngine.IsActionDue(mockScheduledAction as unknown as InstanceType<typeof import('@memberjunction/core-entities').ScheduledActionEntityExtended>, mockDate);
+            const result = ScheduledActionEngine.IsActionDue(mockScheduledAction as unknown as InstanceType<typeof import('@memberjunction/core-entities').MJScheduledActionEntityExtended>, mockDate);
             expect(result).toBe(true);
         });
 
@@ -115,7 +115,7 @@ describe('ScheduledActionEngine', () => {
                 next: () => ({ toDate: () => futureDate }),
             } as unknown as ReturnType<typeof cronParser.parseExpression>);
 
-            const result = ScheduledActionEngine.IsActionDue(mockScheduledAction as unknown as InstanceType<typeof import('@memberjunction/core-entities').ScheduledActionEntityExtended>, mockDate);
+            const result = ScheduledActionEngine.IsActionDue(mockScheduledAction as unknown as InstanceType<typeof import('@memberjunction/core-entities').MJScheduledActionEntityExtended>, mockDate);
             expect(result).toBe(false);
         });
 
@@ -132,7 +132,7 @@ describe('ScheduledActionEngine', () => {
                 throw new Error('Invalid cron expression');
             });
 
-            const result = ScheduledActionEngine.IsActionDue(mockScheduledAction as unknown as InstanceType<typeof import('@memberjunction/core-entities').ScheduledActionEntityExtended>, new Date());
+            const result = ScheduledActionEngine.IsActionDue(mockScheduledAction as unknown as InstanceType<typeof import('@memberjunction/core-entities').MJScheduledActionEntityExtended>, new Date());
             expect(result).toBe(false);
         });
     });

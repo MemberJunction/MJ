@@ -1,5 +1,5 @@
 import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider, IRunViewProvider } from "@memberjunction/core";
-import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, UserViewEntityExtended } from "@memberjunction/core-entities";
+import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, MJUserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
 /**
@@ -76,7 +76,7 @@ export class DataContextItem {
      * ViewEntity - the object instantiated that contains the metadata for the UserView being used - only populated if the type is 'view', also this is NOT to be sent to/from the API server, it is a placeholder that can be used 
      *              within a given tier like in the MJAPI server or in the UI.
      */
-    ViewEntity?: UserViewEntityExtended;
+    ViewEntity?: MJUserViewEntityExtended;
 
     /**
      * SingleRecord - the object instantiated that contains the data for the single record being used - only populated if the type is 'single_record' - also this is NOT to be sent to/from the API server, it is a placeholder that can be used in a given tier
@@ -149,7 +149,7 @@ export class DataContextItem {
      * Create a new DataContextItem from a MJUserViewEntity class instance
      * @param viewEntity 
      */
-    public static FromViewEntity(viewEntity: UserViewEntityExtended) {
+    public static FromViewEntity(viewEntity: MJUserViewEntityExtended) {
         const instance = DataContext.CreateDataContextItem();
         // update our data from the viewEntity definition
         instance.Type= 'view';
@@ -286,7 +286,7 @@ export class DataContextItem {
                 this.ViewID = dataContextItem.ViewID;
                 this.EntityID = dataContextItem.EntityID; // attempt to get this from the database, often will be null though
                 if (this.ViewID) {
-                    const v = await provider.GetEntityObject<UserViewEntityExtended>('MJ: User Views', contextUser);
+                    const v = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
                     await v.Load(this.ViewID);
                     this.RecordName = v.Name;
                     this.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.

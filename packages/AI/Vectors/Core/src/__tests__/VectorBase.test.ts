@@ -56,7 +56,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
-  AIModelEntityExtended: vi.fn(),
+  MJAIModelEntityExtended: vi.fn(),
 }));
 
 import { VectorBase } from '../models/VectorBase';

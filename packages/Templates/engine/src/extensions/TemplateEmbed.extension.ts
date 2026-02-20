@@ -1,7 +1,7 @@
 import { LogError, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase";
-import { MJTemplateContentEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 import { TemplateEngineServer } from '../TemplateEngine';
 
 // TODO: Add type defs based on nunjucks classes used for extensions
@@ -227,7 +227,7 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
      * 2. Current template's content type
      * 3. Highest priority content available in target template
      */
-    private resolveContentType(explicitType: string | undefined, currentType: string | undefined, targetTemplate: TemplateEntityExtended): string {
+    private resolveContentType(explicitType: string | undefined, currentType: string | undefined, targetTemplate: MJTemplateEntityExtended): string {
         // 1. Use explicit type if provided
         if (explicitType) {
             return explicitType;
@@ -254,7 +254,7 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
     /**
      * Gets the template content for the specified type with fallback logic.
      */
-    private getTemplateContent(template: TemplateEntityExtended, contentType: string): MJTemplateContentEntity | null {
+    private getTemplateContent(template: MJTemplateEntityExtended, contentType: string): MJTemplateContentEntity | null {
         // Try to get content of the specified type
         const contentByType = template.GetContentByType(contentType);
         if (contentByType && contentByType.length > 0) {

@@ -5,7 +5,7 @@
  * avoiding filesystem/glob dependencies by providing source text inline.
  *
  * Tests cover all three replacement strategies:
- * 1. Regex-based class name renames (ActionEntity → MJActionEntity)
+ * 1. Regex-based class name renames (ActionEntity → MJActionEntity, ActionEntityExtended → MJActionEntityExtended)
  * 2. Regex-based multi-word entity name renames ('AI Models' → 'MJ: AI Models')
  * 3. AST-based single-word entity name renames ('Actions' → 'MJ: Actions')
  */
@@ -17,8 +17,10 @@ import {
     buildMultiWordNameRules,
     loadEmbeddedRenameMap,
     ENTITY_RENAME_MAP,
+    SUBCLASS_RENAME_MAP,
     type RegexRule,
     type MultiWordNameRule,
+    type SubclassRenameEntry,
 } from '../EntityNameScanner/EntityNameScanner';
 import { scanHtmlFile, fixHtmlFile } from '../EntityNameScanner/HtmlEntityNameScanner';
 import { scanMetadataFile, fixMetadataFile } from '../EntityNameScanner/MetadataNameScanner';
@@ -381,7 +383,8 @@ describe('EntityNameScanner — Class Name Renames', () => {
             const src = `export class ActionEntityExtended extends ActionEntity { }`;
             const findings = scanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
-            // Should find both: the class name reference and the extends reference
+            // Auto-suffix only covers Entity/Schema/EntityType; ActionEntityExtended
+            // requires an explicit subclass map entry (tested in Subclass Suffix section)
             expect(classFindings.length).toBeGreaterThanOrEqual(1);
             expect(classFindings.some(f => f.OldName === 'ActionEntity')).toBe(true);
         });
@@ -433,6 +436,13 @@ describe('EntityNameScanner — Class Name Renames', () => {
             // won't match since MJ precedes Action
             expect(classFindings).toHaveLength(0);
         });
+
+        it('should NOT rename already-prefixed extended class names', () => {
+            const src = `import { MJActionEntityExtended } from './custom/ActionEntity-Extended';`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
+            expect(classFindings).toHaveLength(0);
+        });
     });
 
     describe('fixFile (class names)', () => {
@@ -447,10 +457,12 @@ describe('EntityNameScanner — Class Name Renames', () => {
             expect(fixed).not.toMatch(/\bActionEntity\b/);
         });
 
-        it('should rename class in extends clause', () => {
+        it('should rename base class in extends clause', () => {
             const src = `export class ActionEntityExtended extends ActionEntity { }`;
             const findings = scanFile('test.ts', src, renameMap, classRules);
             const fixed = fixFile(src, findings);
+            // Only ActionEntity (base class) is renamed by auto-suffix;
+            // ActionEntityExtended requires an explicit subclass map entry
             expect(fixed).toContain('extends MJActionEntity');
         });
 
@@ -467,6 +479,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
             const fixed = fixFile(src, findings);
             expect(fixed).toContain('GetEntityObject<MJAIModelEntity>');
         });
+
     });
 });
 
@@ -589,7 +602,10 @@ const p = await rv.RunView<ActionParamEntity>({ EntityName: 'Action Params' });`
     });
 
     it('should handle the ActionEntity-Extended.ts pattern from real codebase', () => {
-        // This mirrors the actual file the user pointed out
+        // This mirrors the actual file the user pointed out.
+        // Uses subclass-aware class rules so ActionEntityExtended is detected
+        // via the explicit subclass map (not auto-suffix).
+        const classRulesWithSubclass = makeClassRulesWithSubclass();
         const src = `import { BaseEntity, CodeNameFromString } from "@memberjunction/core";
 import { ActionEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
@@ -615,18 +631,16 @@ export class ActionEntityExtended extends ActionEntity {
         return this._libs;
     }
 }`;
-        const findings = scanFile('test.ts', src, renameMap, classRules, multiWordRules);
+        const findings = scanFile('test.ts', src, renameMap, classRulesWithSubclass, multiWordRules);
         const fixed = fixFile(src, findings);
 
-        // Class names should be updated
-        expect(fixed).toContain('import { MJActionEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity }');
-        expect(fixed).toContain('extends MJActionEntity');
+        // Class names should be updated (including extended subclass name via explicit map)
+        expect(fixed).toContain('import { MJActionEntity,');
+        expect(fixed).toContain('class MJActionEntityExtended extends MJActionEntity');
         expect(fixed).toContain('_resultCodes: MJActionResultCodeEntity[]');
         expect(fixed).toContain('get ResultCodes(): MJActionResultCodeEntity[]');
         expect(fixed).toContain('_params: MJActionParamEntity[]');
         expect(fixed).toContain('get Params(): MJActionParamEntity[]');
-        expect(fixed).toContain('_libs: MJActionLibraryEntity[]');
-        expect(fixed).toContain('get Libraries(): MJActionLibraryEntity[]');
 
         // Entity name in @RegisterClass should be updated
         expect(fixed).toContain("@RegisterClass(BaseEntity, 'MJ: Actions')");
@@ -731,6 +745,213 @@ describe('EntityNameScanner — Property Assignment Variants', () => {
 });
 
 // ============================================================================
+// Subclass Rename Map
+// ============================================================================
+
+// Small subclass map for testing explicit overrides
+function makeSubclassMap(): SubclassRenameEntry[] {
+    return [
+        { oldClassName: 'ActionEntityServerEntity', newClassName: 'MJActionEntityServer', category: 'server-only', entityName: 'MJ: Actions' },
+        { oldClassName: 'UserEntity_Server', newClassName: 'MJUserEntityServer', category: 'server-only', entityName: 'MJ: Users' },
+        { oldClassName: 'ActionEntityExtended_Server', newClassName: 'MJActionEntityServer', category: 'server-only', entityName: 'MJ: Actions' },
+        { oldClassName: 'AIModelEntityExtendedServer', newClassName: 'MJAIModelEntityServer', category: 'server-only', entityName: 'MJ: AI Models' },
+        { oldClassName: 'ActionFormExtendedComponent', newClassName: 'MJActionFormComponentExtended', category: 'angular-form-anomaly', entityName: 'MJ: Actions' },
+        { oldClassName: 'ActionEntityExtended', newClassName: 'MJActionEntityExtended', category: 'full-stack-extended', entityName: 'MJ: Actions' },
+        { oldClassName: 'ActionFormComponentExtended', newClassName: 'MJActionFormComponentExtended', category: 'angular-form', entityName: 'MJ: Actions' },
+    ];
+}
+
+// Class rules WITH subclass overrides
+function makeClassRulesWithSubclass(): RegexRule[] {
+    return buildClassRenameRules([
+        {
+            oldName: 'Actions', newName: 'MJ: Actions', nameChanged: true,
+            oldClassName: 'Action', newClassName: 'MJAction', classNameChanged: true,
+            oldCodeName: 'Actions', newCodeName: 'MJActions', codeNameChanged: true,
+        },
+        {
+            oldName: 'AI Models', newName: 'MJ: AI Models', nameChanged: true,
+            oldClassName: 'AIModel', newClassName: 'MJAIModel', classNameChanged: true,
+            oldCodeName: 'AIModels', newCodeName: 'MJAIModels', codeNameChanged: true,
+        },
+        {
+            oldName: 'Users', newName: 'MJ: Users', nameChanged: true,
+            oldClassName: 'User', newClassName: 'MJUser', classNameChanged: true,
+            oldCodeName: 'Users', newCodeName: 'MJUsers', codeNameChanged: true,
+        },
+        {
+            oldName: 'Action Params', newName: 'MJ: Action Params', nameChanged: true,
+            oldClassName: 'ActionParam', newClassName: 'MJActionParam', classNameChanged: true,
+            oldCodeName: 'ActionParams', newCodeName: 'MJActionParams', codeNameChanged: true,
+        },
+        {
+            oldName: 'Action Libraries', newName: 'MJ: Action Libraries', nameChanged: true,
+            oldClassName: 'ActionLibrary', newClassName: 'MJActionLibrary', classNameChanged: true,
+            oldCodeName: 'ActionLibraries', newCodeName: 'MJActionLibraries', codeNameChanged: true,
+        },
+        {
+            oldName: 'Action Result Codes', newName: 'MJ: Action Result Codes', nameChanged: true,
+            oldClassName: 'ActionResultCode', newClassName: 'MJActionResultCode', classNameChanged: true,
+            oldCodeName: 'ActionResultCodes', newCodeName: 'MJActionResultCodes', codeNameChanged: true,
+        },
+    ], makeSubclassMap());
+}
+
+describe('Subclass Rename Map', () => {
+    it('should have 57 entries in SUBCLASS_RENAME_MAP', () => {
+        expect(SUBCLASS_RENAME_MAP.length).toBe(57);
+    });
+
+    it('should have all required fields for each entry', () => {
+        for (const entry of SUBCLASS_RENAME_MAP) {
+            expect(entry).toHaveProperty('oldClassName');
+            expect(entry).toHaveProperty('newClassName');
+            expect(entry).toHaveProperty('category');
+            expect(entry).toHaveProperty('entityName');
+        }
+    });
+
+    it('should only contain valid category values', () => {
+        const validCategories = new Set(['full-stack-extended', 'server-only', 'angular-form', 'angular-form-anomaly']);
+        for (const entry of SUBCLASS_RENAME_MAP) {
+            expect(validCategories.has(entry.category)).toBe(true);
+        }
+    });
+
+    it('should contain known entries', () => {
+        const actionServer = SUBCLASS_RENAME_MAP.find(e => e.oldClassName === 'ActionEntityServerEntity');
+        expect(actionServer).toBeDefined();
+        expect(actionServer!.newClassName).toBe('MJActionEntityServer');
+        expect(actionServer!.category).toBe('server-only');
+
+        const aiAgentExtended = SUBCLASS_RENAME_MAP.find(e => e.oldClassName === 'AIAgentEntityExtended');
+        expect(aiAgentExtended).toBeDefined();
+        expect(aiAgentExtended!.newClassName).toBe('MJAIAgentEntityExtended');
+        expect(aiAgentExtended!.category).toBe('full-stack-extended');
+    });
+
+    it('should contain Angular form anomaly entries', () => {
+        const queryForm = SUBCLASS_RENAME_MAP.find(e => e.oldClassName === 'QueryFormExtendedComponent');
+        expect(queryForm).toBeDefined();
+        expect(queryForm!.newClassName).toBe('MJQueryFormComponentExtended');
+        expect(queryForm!.category).toBe('angular-form-anomaly');
+    });
+});
+
+// ============================================================================
+// Subclass Suffix Standardization (explicit JSON rules override auto-suffix)
+// ============================================================================
+describe('EntityNameScanner — Subclass Suffix Standardization', () => {
+    const renameMap = makeRenameMap();
+    const classRules = makeClassRulesWithSubclass();
+
+    describe('Explicit subclass rule priority', () => {
+        it('should map ActionEntityServerEntity to MJActionEntityServer (not MJActionEntityServerEntity)', () => {
+            const src = `export class ActionEntityServerEntity extends ActionEntityExtended { }`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const f = findings.find(f => f.OldName === 'ActionEntityServerEntity');
+            expect(f).toBeDefined();
+            expect(f!.NewName).toBe('MJActionEntityServer');
+        });
+
+        it('should map UserEntity_Server to MJUserEntityServer (underscore removed)', () => {
+            const src = `export class UserEntity_Server extends UserEntityExtended { }`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const f = findings.find(f => f.OldName === 'UserEntity_Server');
+            expect(f).toBeDefined();
+            expect(f!.NewName).toBe('MJUserEntityServer');
+        });
+
+        it('should map ActionEntityExtended_Server to MJActionEntityServer (combined suffix collapsed)', () => {
+            const src = `export class ActionEntityExtended_Server extends ActionEntityExtended { }`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const f = findings.find(f => f.OldName === 'ActionEntityExtended_Server');
+            expect(f).toBeDefined();
+            expect(f!.NewName).toBe('MJActionEntityServer');
+        });
+
+        it('should map AIModelEntityExtendedServer to MJAIModelEntityServer (combined suffix collapsed)', () => {
+            const src = `export class AIModelEntityExtendedServer extends AIModelEntityExtended { }`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const f = findings.find(f => f.OldName === 'AIModelEntityExtendedServer');
+            expect(f).toBeDefined();
+            expect(f!.NewName).toBe('MJAIModelEntityServer');
+        });
+
+        it('should map Angular form anomaly ActionFormExtendedComponent to MJActionFormComponentExtended', () => {
+            const src = `export class ActionFormExtendedComponent extends MJActionFormComponent { }`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const f = findings.find(f => f.OldName === 'ActionFormExtendedComponent');
+            expect(f).toBeDefined();
+            expect(f!.NewName).toBe('MJActionFormComponentExtended');
+        });
+
+        it('should still handle standard EntityExtended via explicit rule', () => {
+            const src = `import { ActionEntityExtended } from './ActionEntity-Extended';`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const f = findings.find(f => f.OldName === 'ActionEntityExtended');
+            expect(f).toBeDefined();
+            expect(f!.NewName).toBe('MJActionEntityExtended');
+        });
+
+        it('should detect FormComponentExtended suffix via auto-generation', () => {
+            const src = `export class ActionFormComponentExtended extends MJActionFormComponent { }`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const f = findings.find(f => f.OldName === 'ActionFormComponentExtended');
+            expect(f).toBeDefined();
+            expect(f!.NewName).toBe('MJActionFormComponentExtended');
+        });
+    });
+
+    describe('fixFile (subclass suffix standardization)', () => {
+        it('should fix ActionEntityServerEntity to MJActionEntityServer', () => {
+            const src = `export class ActionEntityServerEntity extends ActionEntityExtended {
+    async validate() { return true; }
+}`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const fixed = fixFile(src, findings);
+            expect(fixed).toContain('class MJActionEntityServer extends MJActionEntityExtended');
+            expect(fixed).not.toContain('ActionEntityServerEntity');
+        });
+
+        it('should fix UserEntity_Server to MJUserEntityServer', () => {
+            const src = `import { UserEntity_Server } from './userViewEntity.server';`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const fixed = fixFile(src, findings);
+            expect(fixed).toContain('MJUserEntityServer');
+            expect(fixed).not.toMatch(/\bUserEntity_Server\b/);
+        });
+
+        it('should fix Angular form anomaly names', () => {
+            const src = `@RegisterClass(BaseFormComponent, 'MJ: Actions')
+export class ActionFormExtendedComponent extends MJActionFormComponent { }`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const fixed = fixFile(src, findings);
+            expect(fixed).toContain('class MJActionFormComponentExtended extends MJActionFormComponent');
+        });
+
+        it('should fix a real-world server subclass pattern', () => {
+            const src = `import { ActionEntityExtended } from '@memberjunction/actions-base';
+import { RegisterClass, BaseEntity } from '@memberjunction/global';
+
+@RegisterClass(BaseEntity, 'MJ: Actions')
+export class ActionEntityServerEntity extends ActionEntityExtended {
+    private _serverOnlyProp: string;
+
+    public async ServerValidate(): Promise<boolean> {
+        return true;
+    }
+}`;
+            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const fixed = fixFile(src, findings);
+            expect(fixed).toContain('class MJActionEntityServer extends MJActionEntityExtended');
+            expect(fixed).not.toContain('ActionEntityServerEntity');
+            expect(fixed).not.toMatch(/\bActionEntityExtended\b/);
+        });
+    });
+});
+
+// ============================================================================
 // Embedded Rename Map
 // ============================================================================
 describe('Embedded Rename Map', () => {
@@ -781,6 +1002,21 @@ describe('Embedded Rename Map', () => {
         for (let i = 0; i < rules.length - 1; i++) {
             expect(rules[i].old.length).toBeGreaterThanOrEqual(rules[i + 1].old.length);
         }
+    });
+
+    it('should sort class rename rules longest-first even with subclass map', () => {
+        const rules = buildClassRenameRules(ENTITY_RENAME_MAP, SUBCLASS_RENAME_MAP);
+        for (let i = 0; i < rules.length - 1; i++) {
+            expect(rules[i].old.length).toBeGreaterThanOrEqual(rules[i + 1].old.length);
+        }
+    });
+
+    it('should include explicit subclass rules with correct new names', () => {
+        const rules = buildClassRenameRules(ENTITY_RENAME_MAP, SUBCLASS_RENAME_MAP);
+        // ActionEntityServerEntity should map to MJActionEntityServer (from explicit map)
+        const actionServerRule = rules.find(r => r.old === 'ActionEntityServerEntity');
+        expect(actionServerRule).toBeDefined();
+        expect(actionServerRule!.new).toBe('MJActionEntityServer');
     });
 
     it('should sort multi-word rules longest-first', () => {

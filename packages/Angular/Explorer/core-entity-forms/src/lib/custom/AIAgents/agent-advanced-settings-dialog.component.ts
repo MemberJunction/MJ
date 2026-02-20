@@ -3,7 +3,7 @@
 // import { DialogRef } from '@progress/kendo-angular-dialog';
 // import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 // import { RunView, Metadata } from '@memberjunction/core';
-// import { AIAgentEntityExtended, MJAIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+// import { MJAIAgentEntityExtended, MJAIAgentTypeEntity, MJAIPromptEntityExtended } from '@memberjunction/core-entities';
 // import { MJNotificationService } from '@memberjunction/ng-notifications';
 // import { Router } from '@angular/router';
 // import { AIAgentManagementService } from './ai-agent-management.service';
@@ -45,7 +45,7 @@
 // export class AgentAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
   
 //   // Input properties set by service
-//   agent!: AIAgentEntityExtended;
+//   agent!: MJAIAgentEntityExtended;
   
 //   // Reactive state management
 //   private destroy$ = new Subject<void>();
@@ -60,7 +60,7 @@
 //   agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
   
 //   // Selected compression prompt
-//   selectedCompressionPrompt: AIPromptEntityExtended | null = null;
+//   selectedCompressionPrompt: MJAIPromptEntityExtended | null = null;
   
 //   // Available options
 //   statusOptions = [
@@ -188,7 +188,7 @@
 //     if (this.agent.ContextCompressionPromptID) {
 //       try {
 //         const rv = new RunView();
-//         const result = await rv.RunView<AIPromptEntityExtended>({
+//         const result = await rv.RunView<MJAIPromptEntityExtended>({
 //           EntityName: 'MJ: AI Prompts',
 //           ExtraFilter: `ID = '${this.agent.ContextCompressionPromptID}'`,
 //           ResultType: 'entity_object',

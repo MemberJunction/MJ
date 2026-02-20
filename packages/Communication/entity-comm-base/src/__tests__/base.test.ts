@@ -50,21 +50,21 @@ vi.mock('@memberjunction/communication-types', () => ({
 }));
 
 import {
-    EntityCommunicationMessageTypeExtended,
+    MJEntityCommunicationMessageTypeEntityExtended,
     EntityCommunicationParams,
     EntityCommunicationResult,
     EntityCommunicationResultItem,
     EntityCommunicationsEngineBase,
 } from '../base';
 
-describe('EntityCommunicationMessageTypeExtended', () => {
+describe('MJEntityCommunicationMessageTypeEntityExtended', () => {
     it('should have CommunicationFields default to empty array', () => {
-        const ext = new (EntityCommunicationMessageTypeExtended as unknown as { new(): EntityCommunicationMessageTypeExtended })();
+        const ext = new (MJEntityCommunicationMessageTypeEntityExtended as unknown as { new(): MJEntityCommunicationMessageTypeEntityExtended })();
         expect(ext.CommunicationFields).toEqual([]);
     });
 
     it('should allow setting CommunicationFields', () => {
-        const ext = new (EntityCommunicationMessageTypeExtended as unknown as { new(): EntityCommunicationMessageTypeExtended })();
+        const ext = new (MJEntityCommunicationMessageTypeEntityExtended as unknown as { new(): MJEntityCommunicationMessageTypeEntityExtended })();
         const fields = [{ FieldName: 'Email' }];
         ext.CommunicationFields = fields as never;
         expect(ext.CommunicationFields).toBe(fields);

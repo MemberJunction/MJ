@@ -20,7 +20,7 @@ import { TemplateEditorConfig } from '../../shared/components/template-editor.co
     templateUrl: './templates-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './templates-form.component.css']
 })
-export class TemplatesFormExtendedComponent extends MJTemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
+export class MJTemplateFormComponentExtended extends MJTemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public record!: MJTemplateEntity;
     public templateContents: MJTemplateContentEntity[] = [];
     public selectedContentIndex: number = 0;

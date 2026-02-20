@@ -7,7 +7,7 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { MJActionCategoryEntity, MJActionExecutionLogEntity } from '@memberjunction/core-entities';
-import { ActionEntityExtended } from '@memberjunction/actions-base';
+import { MJActionEntityExtended } from '@memberjunction/actions-base';
 import { RunView } from '@memberjunction/core';
 
 export interface ActionExecutionStats {
@@ -26,11 +26,11 @@ export interface ActionExecutionStats {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ActionCardComponent {
-  @Input() Action!: ActionEntityExtended;
+  @Input() Action!: MJActionEntityExtended;
   @Input() Categories: Map<string, MJActionCategoryEntity> = new Map();
-  @Output() ActionClick = new EventEmitter<ActionEntityExtended>();
-  @Output() EditClick = new EventEmitter<ActionEntityExtended>();
-  @Output() RunClick = new EventEmitter<ActionEntityExtended>();
+  @Output() ActionClick = new EventEmitter<MJActionEntityExtended>();
+  @Output() EditClick = new EventEmitter<MJActionEntityExtended>();
+  @Output() RunClick = new EventEmitter<MJActionEntityExtended>();
   @Output() CategoryClick = new EventEmitter<string>();
 
   public IsExpanded = false;

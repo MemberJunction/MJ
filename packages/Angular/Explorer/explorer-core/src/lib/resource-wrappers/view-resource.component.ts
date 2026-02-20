@@ -1,6 +1,6 @@
 import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
+import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
@@ -143,7 +143,7 @@ export class UserViewResource extends BaseResourceComponent {
     public isLoading: boolean = false;
     public errorMessage: string | null = null;
     public entityInfo: EntityInfo | null = null;
-    public viewEntity: UserViewEntityExtended | null = null;
+    public viewEntity: MJUserViewEntityExtended | null = null;
     public gridState: ViewGridState | null = null;
 
     // Export state
@@ -231,7 +231,7 @@ export class UserViewResource extends BaseResourceComponent {
             throw new Error(`View with ID ${viewId} not found`);
         }
 
-        this.viewEntity = view as UserViewEntityExtended;
+        this.viewEntity = view as MJUserViewEntityExtended;
 
         // Check permissions
         if (!this.viewEntity.UserCanView) {

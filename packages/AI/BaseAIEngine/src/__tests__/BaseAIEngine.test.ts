@@ -76,13 +76,13 @@ vi.mock('@memberjunction/core-entities', () => {
 });
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
-    AIPromptEntityExtended: class { ID = ''; Name = ''; CategoryID = '' },
-    AIPromptCategoryEntityExtended: class { ID = ''; Name = ''; Prompts: unknown[] = [] },
-    AIModelEntityExtended: class {
+    MJAIPromptEntityExtended: class { ID = ''; Name = ''; CategoryID = '' },
+    MJAIPromptCategoryEntityExtended: class { ID = ''; Name = ''; Prompts: unknown[] = [] },
+    MJAIModelEntityExtended: class {
         ID = ''; Name = ''; AIModelType = ''; Vendor = ''; PowerRank = 0;
         IsActive = true; ModelVendors: unknown[] = [];
     },
-    AIAgentEntityExtended: class {
+    MJAIAgentEntityExtended: class {
         ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null;
         OwnerUserID = ''; Actions: unknown[] = []; Notes: unknown[] = [];
     },

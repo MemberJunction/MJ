@@ -146,7 +146,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
-  AIModelEntityExtended: vi.fn(),
+  MJAIModelEntityExtended: vi.fn(),
 }));
 
 import { DuplicateRecordDetector } from '../duplicateRecordDetector';

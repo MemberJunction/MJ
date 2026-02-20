@@ -4,7 +4,7 @@ import { ResolverBase } from './ResolverBase.js';
 import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { KeyValuePairOutputType } from './KeyInputOutputTypes.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
@@ -652,7 +652,7 @@ export class RunViewResolver extends ResolverBase {
       if (rawData === null) 
         return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
@@ -683,7 +683,7 @@ export class RunViewResolver extends ResolverBase {
       if (rawData === null) 
         return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
@@ -837,7 +837,7 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {

@@ -3,7 +3,7 @@ import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJTemplateContentEntity,
-  MJTemplateContentTypeEntity, MJTemplateEntity, TemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
+  MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
@@ -64,7 +64,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     LogStatus(`Vectorizing entity ${entity.Name} using Entity Document ${entityDocument.Name}`);
 
-    const template: TemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: TemplateEntityExtended) => t.ID === entityDocument.TemplateID);
+    const template: MJTemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: MJTemplateEntityExtended) => t.ID === entityDocument.TemplateID);
     if(!template){
       throw new Error(`Template not found with ID ${entityDocument.TemplateID}`);
     }
@@ -403,7 +403,7 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   protected async CreateTemplateForEntityDocument(entityDocument: MJEntityDocumentEntity): Promise<MJTemplateEntity> {
-    const templateEntity: TemplateEntityExtended = await super.Metadata.GetEntityObject<TemplateEntityExtended>('MJ: Templates');
+    const templateEntity: MJTemplateEntityExtended = await super.Metadata.GetEntityObject<MJTemplateEntityExtended>('MJ: Templates');
     templateEntity.NewRecord();
     templateEntity.Name = `Template for EntityDocument ${entityDocument.EntityID}`;
     templateEntity.Description = `The template used by EntityDocument ${entityDocument.ID}`
@@ -494,7 +494,7 @@ export class EntityVectorSyncer extends VectorBase {
     return runViewResult.Results;
   }
 
-  protected async GetTemplateData(entity: EntityInfo, record: unknown, template: TemplateEntityExtended, relatedData: TemplateParamData[]): Promise<{ [key: string]: any }> {
+  protected async GetTemplateData(entity: EntityInfo, record: unknown, template: MJTemplateEntityExtended, relatedData: TemplateParamData[]): Promise<{ [key: string]: any }> {
     const templateData: { [key: string]: unknown } = {};
     for(const param of template.Params){
       if(templateData[param.Name]){
@@ -529,7 +529,7 @@ export class EntityVectorSyncer extends VectorBase {
     return templateData;
   }
 
-  protected async GetRelatedTemplateDataForBatch(entity: EntityInfo, records: unknown[], template: TemplateEntityExtended): Promise<TemplateParamData[]> {
+  protected async GetRelatedTemplateDataForBatch(entity: EntityInfo, records: unknown[], template: MJTemplateEntityExtended): Promise<TemplateParamData[]> {
     const relatedData: TemplateParamData[] = [];
 
     for(const templateParam of template.Params){
@@ -626,7 +626,7 @@ export class EntityVectorSyncer extends VectorBase {
    * different meanings. It is okay for scenarios where there are > 1 template in use for a message to have different parameter names, but if they have the SAME parameter names
    * they must not have different settings.
    */
-  protected ValidateTemplateContextParamAlignment(template: TemplateEntityExtended): boolean {
+  protected ValidateTemplateContextParamAlignment(template: MJTemplateEntityExtended): boolean {
     // the params are defined in each template they will be in the Params property of the template
     const seenParams: {[key: string]: MJTemplateParamEntity } = {};
     for (const templateParam of template.Params) {

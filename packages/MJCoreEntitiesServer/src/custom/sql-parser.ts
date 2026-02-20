@@ -178,7 +178,7 @@ export class SQLParser {
     }
 
     // ─────────────────────────────────────────────────────
-    // AST Walking (moved from QueryEntityExtended)
+    // AST Walking (moved from MJQueryEntityServer)
     // ─────────────────────────────────────────────────────
 
     /**
@@ -372,7 +372,7 @@ export class SQLParser {
     }
 
     // ─────────────────────────────────────────────────────
-    // Nunjucks Preprocessing (moved from QueryEntityExtended)
+    // Nunjucks Preprocessing (moved from MJQueryEntityServer)
     // ─────────────────────────────────────────────────────
 
     /**

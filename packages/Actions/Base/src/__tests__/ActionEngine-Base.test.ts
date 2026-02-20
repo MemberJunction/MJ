@@ -81,8 +81,8 @@ import {
     EntityActionEngineBase,
     EntityActionInvocationParams,
     EntityActionResult,
-    ActionEntityExtended,
-    EntityActionEntityExtended
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended
 } from '../index';
 
 describe('ActionParam', () => {
@@ -298,7 +298,7 @@ describe('ActionEngineBase', () => {
 
     describe('IsCoreAction', () => {
         it('should return false for null action', () => {
-            expect(engine.IsCoreAction(null as unknown as ActionEntityExtended)).toBe(false);
+            expect(engine.IsCoreAction(null as unknown as MJActionEntityExtended)).toBe(false);
         });
     });
 

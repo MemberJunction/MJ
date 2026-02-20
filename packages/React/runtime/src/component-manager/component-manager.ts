@@ -5,7 +5,7 @@
 
 import { ComponentSpec, ComponentLibraryDependency } from '@memberjunction/interactive-component-types';
 import { UserInfo, Metadata, LogError } from '@memberjunction/core';
-import { ComponentMetadataEngine, MJComponentLibraryEntity, ComponentEntityExtended } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, MJComponentLibraryEntity, MJComponentEntityExtended } from '@memberjunction/core-entities';
 
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
@@ -497,7 +497,7 @@ export class ComponentManager {
       
       // Find component in local ComponentMetadataEngine
       const localComponent = this.componentEngine.Components?.find(
-        (c: ComponentEntityExtended) => {
+        (c: MJComponentEntityExtended) => {
           // Match by name (case-insensitive for better compatibility)
           const nameMatch = c.Name?.toLowerCase() === spec.name?.toLowerCase();
           

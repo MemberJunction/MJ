@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
-import { MJTemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
+import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -63,7 +63,7 @@ export class RunTemplateResolver extends ResolverBase {
             
             const p = GetReadWriteProvider(providers);
             // Load the template entity
-            const templateEntity = await p.GetEntityObject<TemplateEntityExtended>('MJ: Templates', currentUser);
+            const templateEntity = await p.GetEntityObject<MJTemplateEntityExtended>('MJ: Templates', currentUser);
             await templateEntity.Load(templateId);
             
             if (!templateEntity.IsSaved) {

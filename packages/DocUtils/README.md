@@ -18,8 +18,8 @@ This package is particularly useful for:
 graph TB
     subgraph DocUtils["DocUtils Package"]
         DE["DocumentationEngine<br/>(Singleton)"]
-        LEE["LibraryEntityExtended"]
-        LIEE["LibraryItemEntityExtended"]
+        LEE["MJLibraryEntityExtended"]
+        LIEE["MJLibraryItemEntityExtended"]
     end
 
     subgraph MJCore["@memberjunction/core"]
@@ -73,9 +73,9 @@ sequenceDiagram
 
     App->>DE: Config(forceRefresh, contextUser)
     DE->>DB: Load Libraries (entity metadata)
-    DB-->>DE: LibraryEntityExtended[]
+    DB-->>DE: MJLibraryEntityExtended[]
     DE->>DB: Load Library Items (entity metadata)
-    DB-->>DE: LibraryItemEntityExtended[]
+    DB-->>DE: MJLibraryItemEntityExtended[]
 
     Note over DE: AdditionalLoading phase
 
@@ -106,8 +106,8 @@ classDiagram
 
     class DocumentationEngine {
         +Instance$ DocumentationEngine
-        +Libraries LibraryEntityExtended[]
-        +LibraryItems LibraryItemEntityExtended[]
+        +Libraries MJLibraryEntityExtended[]
+        +LibraryItems MJLibraryItemEntityExtended[]
         +Config(forceRefresh, contextUser, provider)
         #AdditionalLoading(contextUser)
         #GetContent(url, rootSelector) string
@@ -131,8 +131,8 @@ classDiagram
         +SampleCode string?
     }
 
-    class LibraryEntityExtended {
-        +Items LibraryItemEntityExtended[]
+    class MJLibraryEntityExtended {
+        +Items MJLibraryItemEntityExtended[]
     }
 
     class LibraryItemEntity {
@@ -143,7 +143,7 @@ classDiagram
         +Library string
     }
 
-    class LibraryItemEntityExtended {
+    class MJLibraryItemEntityExtended {
         +URL string
         +HTMLContent string
         +TypeURLSegment string
@@ -152,15 +152,15 @@ classDiagram
     BaseEngine <|-- DocumentationEngine
     BaseEntity <|-- LibraryEntity
     BaseEntity <|-- LibraryItemEntity
-    LibraryEntity <|-- LibraryEntityExtended
-    LibraryItemEntity <|-- LibraryItemEntityExtended
-    DocumentationEngine o-- LibraryEntityExtended
-    DocumentationEngine o-- LibraryItemEntityExtended
-    LibraryEntityExtended o-- LibraryItemEntityExtended
+    LibraryEntity <|-- MJLibraryEntityExtended
+    LibraryItemEntity <|-- MJLibraryItemEntityExtended
+    DocumentationEngine o-- MJLibraryEntityExtended
+    DocumentationEngine o-- MJLibraryItemEntityExtended
+    MJLibraryEntityExtended o-- MJLibraryItemEntityExtended
 
     style DocumentationEngine fill:#2d6a9f,stroke:#1a4971,color:#fff
-    style LibraryEntityExtended fill:#2d8659,stroke:#1a5c3a,color:#fff
-    style LibraryItemEntityExtended fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style MJLibraryEntityExtended fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style MJLibraryItemEntityExtended fill:#2d8659,stroke:#1a5c3a,color:#fff
     style BaseEngine fill:#7c5295,stroke:#563a6b,color:#fff
     style BaseEntity fill:#7c5295,stroke:#563a6b,color:#fff
     style LibraryEntity fill:#7c5295,stroke:#563a6b,color:#fff
@@ -282,11 +282,11 @@ The primary class providing access to MJ library documentation. Extends `BaseEng
 | Member | Type | Description |
 |--------|------|-------------|
 | `Instance` (static) | `DocumentationEngine` | Returns the singleton instance |
-| `Libraries` | `LibraryEntityExtended[]` | All loaded libraries with their items |
-| `LibraryItems` | `LibraryItemEntityExtended[]` | Flat list of all library items across all libraries |
+| `Libraries` | `MJLibraryEntityExtended[]` | All loaded libraries with their items |
+| `LibraryItems` | `MJLibraryItemEntityExtended[]` | Flat list of all library items across all libraries |
 | `Config(forceRefresh?, contextUser?, provider?)` | `Promise<void>` | Initializes the engine: loads metadata, fetches and parses documentation |
 
-### LibraryEntityExtended
+### MJLibraryEntityExtended
 
 Extended entity class for libraries. Registered via `@RegisterClass(BaseEntity, "Libraries")`.
 
@@ -298,9 +298,9 @@ Extended entity class for libraries. Registered via `@RegisterClass(BaseEntity, 
 | `Status` | `'Active' \| 'Disabled' \| 'Pending'` | Library availability status |
 | `TypeDefinitions` | `string \| null` | Type/function definitions for reference by humans and AI |
 | `SampleCode` | `string \| null` | Usage examples for the library |
-| `Items` | `LibraryItemEntityExtended[]` | All items belonging to this library |
+| `Items` | `MJLibraryItemEntityExtended[]` | All items belonging to this library |
 
-### LibraryItemEntityExtended
+### MJLibraryItemEntityExtended
 
 Extended entity class for individual library items (classes, interfaces, functions, etc.). Registered via `@RegisterClass(BaseEntity, "Library Items")`.
 
@@ -359,7 +359,7 @@ graph LR
 
 This package integrates with the broader MemberJunction ecosystem through several mechanisms:
 
-- **Entity System**: Uses `@RegisterClass` to register `LibraryEntityExtended` and `LibraryItemEntityExtended` as entity subclasses, ensuring the MJ class factory returns the extended types when loading Libraries and Library Items.
+- **Entity System**: Uses `@RegisterClass` to register `MJLibraryEntityExtended` and `MJLibraryItemEntityExtended` as entity subclasses, ensuring the MJ class factory returns the extended types when loading Libraries and Library Items.
 - **BaseEngine Pattern**: Extends `BaseEngine` with the `Config()` / `AdditionalLoading()` lifecycle, allowing consistent initialization and caching across all MJ engine classes.
 - **User Context**: Supports `contextUser` for proper data isolation and security when running on the server side.
 - **Metadata Provider**: Accepts an optional `IMetadataProvider` for environments with custom metadata access patterns.
@@ -380,7 +380,7 @@ npm start
 | File | Description |
 |------|-------------|
 | `src/index.ts` | Public API surface -- re-exports from `Engine.ts` |
-| `src/Engine.ts` | Core implementation: `DocumentationEngine`, `LibraryEntityExtended`, `LibraryItemEntityExtended` |
+| `src/Engine.ts` | Core implementation: `DocumentationEngine`, `MJLibraryEntityExtended`, `MJLibraryItemEntityExtended` |
 
 ## Notes
 

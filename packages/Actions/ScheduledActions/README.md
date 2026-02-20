@@ -102,7 +102,7 @@ Each scheduled action record links to an underlying MJ Action and defines when i
 | `Month` | `string \| null` | Month for Yearly schedules |
 | `CustomCronExpression` | `string \| null` | User-provided cron expression for Custom type |
 
-The `ScheduledActionEntityExtended` class (from `@memberjunction/core-entities`) overrides `Save()` to auto-generate the `CronExpression` from `Type`, `DayOfWeek`, `DayOfMonth`, and `Month` whenever the type is not `Custom`. It also adds a `Params` property that the engine populates during `Config()`.
+The `MJScheduledActionEntityExtended` class (from `@memberjunction/core-entities`) overrides `Save()` to auto-generate the `CronExpression` from `Type`, `DayOfWeek`, `DayOfMonth`, and `Month` whenever the type is not `Custom`. It also adds a `Params` property that the engine populates during `Config()`.
 
 ### Scheduled Action Params
 
@@ -199,7 +199,7 @@ const engine = ScheduledActionEngine.Instance;
 await engine.Config(true, contextUser);
 
 // Inspect loaded data
-const actions = engine.ScheduledActions;      // ScheduledActionEntityExtended[]
+const actions = engine.ScheduledActions;      // MJScheduledActionEntityExtended[]
 const params = engine.ScheduledActionParams;  // ScheduledActionParamEntity[]
 ```
 
@@ -227,7 +227,7 @@ Singleton engine extending `BaseEngine<ScheduledActionEngine>`. Access via `Sche
 | Property | Type | Description |
 |----------|------|-------------|
 | `Instance` | `ScheduledActionEngine` | Static singleton accessor |
-| `ScheduledActions` | `ScheduledActionEntityExtended[]` | All loaded scheduled actions (with `Params` populated) |
+| `ScheduledActions` | `MJScheduledActionEntityExtended[]` | All loaded scheduled actions (with `Params` populated) |
 | `ScheduledActionParams` | `ScheduledActionParamEntity[]` | All loaded scheduled action parameter mappings |
 
 #### Methods
@@ -237,13 +237,13 @@ Singleton engine extending `BaseEngine<ScheduledActionEngine>`. Access via `Sche
 | `Config` | `(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) => Promise<boolean>` | Load or refresh scheduled action metadata from the database. Automatically associates params with their parent actions via `AdditionalLoading`. |
 | `ExecuteScheduledActions` | `(contextUser: UserInfo) => Promise<ActionResult[]>` | Evaluate all scheduled actions against the current time and execute those that are due. Returns results for each executed action. |
 | `ExecuteScheduledAction` | `(actionName: string, contextUser: UserInfo) => Promise<ActionResult>` | Execute a specific scheduled action by name. Throws if not found. Skips cron evaluation if `CronExpression` is null. |
-| `IsActionDue` | `static (scheduledAction: ScheduledActionEntityExtended, evalTime: Date) => boolean` | Determine whether a scheduled action's cron expression indicates it is due at the given evaluation time. |
+| `IsActionDue` | `static (scheduledAction: MJScheduledActionEntityExtended, evalTime: Date) => boolean` | Determine whether a scheduled action's cron expression indicates it is due at the given evaluation time. |
 
 #### Protected Methods
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `MapScheduledActionParamsToActionParams` | `(scheduledAction: ScheduledActionEntityExtended) => Promise<ActionParam[]>` | Resolve all param mappings for a scheduled action, handling both Static and SQL Statement value types. |
+| `MapScheduledActionParamsToActionParams` | `(scheduledAction: MJScheduledActionEntityExtended) => Promise<ActionParam[]>` | Resolve all param mappings for a scheduled action, handling both Static and SQL Statement value types. |
 | `ExecuteSQL` | `(sql: string) => Promise<unknown>` | Execute a SQL query via `SQLServerDataProvider` and return the result. Logs errors and returns null on failure. |
 | `AdditionalLoading` | `(contextUser?: UserInfo) => Promise<void>` | Post-load hook that associates `ScheduledActionParams` with their parent `ScheduledActions` via the `Params` property. |
 
@@ -254,8 +254,8 @@ Singleton engine extending `BaseEngine<ScheduledActionEngine>`. Access via `Sche
 | Package | Purpose |
 |---------|---------|
 | [`@memberjunction/core`](../../MJCore/) | `BaseEngine`, `Metadata`, `UserInfo`, `LogError`, `IMetadataProvider` |
-| [`@memberjunction/core-entities`](../../MJCoreEntities/) | `ScheduledActionEntityExtended`, `ScheduledActionParamEntity` entity classes |
-| [`@memberjunction/actions-base`](../Base/) | `ActionEntityExtended`, `ActionParam`, `ActionResult`, `RunActionParams` types |
+| [`@memberjunction/core-entities`](../../MJCoreEntities/) | `MJScheduledActionEntityExtended`, `ScheduledActionParamEntity` entity classes |
+| [`@memberjunction/actions-base`](../Base/) | `MJActionEntityExtended`, `ActionParam`, `ActionResult`, `RunActionParams` types |
 | [`@memberjunction/actions`](../Engine/) | `ActionEngineServer` -- executes actions through the full pipeline |
 | [`@memberjunction/core-actions`](../CoreActions/) | Core action implementations (ensures built-in actions are registered) |
 | [`@memberjunction/core-entities-server`](../../MJCoreEntitiesServer/) | Server-side entity extensions |

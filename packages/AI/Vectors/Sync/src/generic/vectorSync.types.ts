@@ -1,7 +1,7 @@
 import { BaseEmbeddings, EmbedTextsResult } from "@memberjunction/ai";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { BaseEntity, UserInfo } from "@memberjunction/core";
-import { MJEntityDocumentEntity, MJTemplateContentEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJEntityDocumentEntity, MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 
 export type VectorizeEntityParams = {
     entityID: string;
@@ -67,7 +67,7 @@ export type AnnotateWorkerContext = {
     executionId: number;
     entity: BaseEntity;
     entityDocument: Record<string, unknown>;
-    template: TemplateEntityExtended;
+    template: MJTemplateEntityExtended;
     templateContent: MJTemplateContentEntity;
     embeddingDriverClass: string;
     embeddingAPIKey: string;

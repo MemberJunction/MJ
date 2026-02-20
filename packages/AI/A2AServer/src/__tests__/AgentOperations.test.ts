@@ -56,8 +56,8 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
-  AIAgentEntityExtended: class {},
-  AIAgentRunEntityExtended: class {},
+  MJAIAgentEntityExtended: class {},
+  MJAIAgentRunEntityExtended: class {},
 }));
 
 vi.mock('@memberjunction/ai-agents', () => {

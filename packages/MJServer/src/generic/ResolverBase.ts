@@ -17,7 +17,7 @@ import {
   RunViewResult,
   UserInfo,
 } from '@memberjunction/core';
-import { MJAuditLogEntity, MJErrorLogEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
@@ -274,7 +274,7 @@ export class ResolverBase {
       }
 
       const rv = provider as any as IRunViewProvider;
-      const result = await rv.RunView<UserViewEntityExtended>({
+      const result = await rv.RunView<MJUserViewEntityExtended>({
         EntityName: 'MJ: User Views',
         ExtraFilter: "Name='" + viewInput.ViewName + "'",
       }, userPayload.userRecord);
@@ -319,7 +319,7 @@ export class ResolverBase {
       }
 
       const contextUser = this.GetUserFromPayload(userPayload);
-      const viewInfo = await provider.GetEntityObject<UserViewEntityExtended>('MJ: User Views', contextUser);
+      const viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
       await viewInfo.Load(viewInput.ViewID);
       return this.RunViewGenericInternal(
         provider,
@@ -358,12 +358,12 @@ export class ResolverBase {
       const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
-      const viewInfo: UserViewEntityExtended = {
+      const viewInfo: MJUserViewEntityExtended = {
         ID: '',
         Entity: viewInput.EntityName,
         EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,
-      } as UserViewEntityExtended; // only providing a few bits of data here, but it's enough to get the view to run
+      } as MJUserViewEntityExtended; // only providing a few bits of data here, but it's enough to get the view to run
 
       return this.RunViewGenericInternal(
         provider,
@@ -401,12 +401,12 @@ export class ResolverBase {
     let params: RunViewGenericParams[] = [];
     for (const viewInput of viewInputs) {
       try {
-        let viewInfo: UserViewEntityExtended | null = null;
+        let viewInfo: MJUserViewEntityExtended | null = null;
 
         if (viewInput.ViewName) {
           viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'MJ: User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
         } else if (viewInput.ViewID) {
-          viewInfo = await provider.GetEntityObject<UserViewEntityExtended>('MJ: User Views', contextUser);
+          viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
           await viewInfo.Load(viewInput.ViewID);
         } else if (viewInput.EntityName) {
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
@@ -420,7 +420,7 @@ export class ResolverBase {
             Entity: viewInput.EntityName,
             EntityID: entity.ID,
             EntityBaseView: entity.BaseView,
-          } as UserViewEntityExtended;
+          } as MJUserViewEntityExtended;
         } else {
           throw new Error('Unable to determine input type');
         }
@@ -603,7 +603,7 @@ export class ResolverBase {
    */
   protected async RunViewGenericInternal(
     provider: DatabaseProviderBase,
-    viewInfo: UserViewEntityExtended,
+    viewInfo: MJUserViewEntityExtended,
     extraFilter: string,
     orderBy: string,
     userSearchString: string,
