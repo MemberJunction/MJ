@@ -4,7 +4,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { Message, ProcessedMessage, CommunicationEngineBase } from '@memberjunction/communication-types';
 
 @RegisterClass(BaseEntity, 'MJ: Entity Communication Message Types')
-export class EntityCommunicationMessageTypeExtended extends MJEntityCommunicationMessageTypeEntity {
+export class MJEntityCommunicationMessageTypeEntityExtended extends MJEntityCommunicationMessageTypeEntity {
     public CommunicationFields: MJEntityCommunicationFieldEntity[] = [];
 }
 
@@ -43,11 +43,11 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
     }
 
     private _Metadata: {
-        EntityCommunicationMessageTypes: EntityCommunicationMessageTypeExtended[],
+        EntityCommunicationMessageTypes: MJEntityCommunicationMessageTypeEntityExtended[],
         EntityCommunicationFields: MJEntityCommunicationFieldEntity[]
     } = {EntityCommunicationMessageTypes: [], EntityCommunicationFields: []};
 
-    public get EntityCommunicationMessageTypes(): EntityCommunicationMessageTypeExtended[] {
+    public get EntityCommunicationMessageTypes(): MJEntityCommunicationMessageTypeEntityExtended[] {
         return this._Metadata.EntityCommunicationMessageTypes;
     }
     public get EntityCommunicationFields(): MJEntityCommunicationFieldEntity[] {
@@ -62,7 +62,7 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
 
         // post-process the fields to be linked to the message types they're part of 
         this._Metadata.EntityCommunicationFields = CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields || [];
-        this._Metadata.EntityCommunicationMessageTypes = <EntityCommunicationMessageTypeExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes || [];
+        this._Metadata.EntityCommunicationMessageTypes = <MJEntityCommunicationMessageTypeEntityExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes || [];
         this.EntityCommunicationMessageTypes.forEach(m => {
             m.CommunicationFields = this.EntityCommunicationFields.filter(f => f.EntityCommunicationMessageTypeID === m.ID);
         });
@@ -73,7 +73,7 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
      * @param entityID 
      * @returns 
      */
-    public GetEntityCommunicationMessageTypes(entityID: string): EntityCommunicationMessageTypeExtended[] {
+    public GetEntityCommunicationMessageTypes(entityID: string): MJEntityCommunicationMessageTypeEntityExtended[] {
         this.TryThrowIfNotLoaded();
         return this.EntityCommunicationMessageTypes.filter(m => m.EntityID === entityID);
     }

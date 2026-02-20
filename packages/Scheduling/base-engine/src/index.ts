@@ -4,4 +4,4 @@
  */
 
 export * from './SchedulingEngineBase';
-export * from './ScheduledJobEntityExtended';
+export * from './MJScheduledJobEntityExtended';

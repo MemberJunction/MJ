@@ -1,6 +1,6 @@
 import { Injectable, EventEmitter } from '@angular/core';
 import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
-import { ComponentEntityExtended } from '@memberjunction/core-entities';
+import { MJComponentEntityExtended } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BehaviorSubject, Subject } from 'rxjs';
@@ -25,7 +25,7 @@ export interface FileLoadedComponent {
 /**
  * Union type for both database and file-loaded components
  */
-export type DisplayComponent = (ComponentEntityExtended & { isFileLoaded?: false }) | FileLoadedComponent;
+export type DisplayComponent = (MJComponentEntityExtended & { isFileLoaded?: false }) | FileLoadedComponent;
 
 /**
  * Category for filtering
@@ -64,10 +64,10 @@ export interface CodeSection {
 export class ComponentStudioStateService {
 
   // --- Component Data ---
-  private _dbComponents: ComponentEntityExtended[] = [];
+  private _dbComponents: MJComponentEntityExtended[] = [];
   private _fileLoadedComponents: FileLoadedComponent[] = [];
 
-  get DbComponents(): ComponentEntityExtended[] { return this._dbComponents; }
+  get DbComponents(): MJComponentEntityExtended[] { return this._dbComponents; }
   get FileLoadedComponents(): FileLoadedComponent[] { return this._fileLoadedComponents; }
 
   /** Combined list of all components (file-loaded first, then DB) */
@@ -201,7 +201,7 @@ export class ComponentStudioStateService {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ComponentEntityExtended>({
+      const result = await rv.RunView<MJComponentEntityExtended>({
         EntityName: 'MJ: Components',
         ExtraFilter: 'HasRequiredCustomProps = 0',
         OrderBy: 'Name',
@@ -469,7 +469,7 @@ export class ComponentStudioStateService {
     if (component.isFileLoaded) {
       return component.specification.namespace;
     }
-    return (component as ComponentEntityExtended).Namespace || undefined;
+    return (component as MJComponentEntityExtended).Namespace || undefined;
   }
 
   GetComponentFilename(component: DisplayComponent): string | undefined {
@@ -586,7 +586,7 @@ export class ComponentStudioStateService {
         if (this.IsFileLoadedComponent(this._selectedComponent)) {
           this._selectedComponent.specification = parsed;
         } else {
-          (this._selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(parsed);
+          (this._selectedComponent as MJComponentEntityExtended).Specification = JSON.stringify(parsed);
         }
 
         this._componentSpec = parsed;
@@ -637,7 +637,7 @@ export class ComponentStudioStateService {
       if (this.IsFileLoadedComponent(this._selectedComponent)) {
         this._selectedComponent.specification = spec;
       } else {
-        (this._selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(spec);
+        (this._selectedComponent as MJComponentEntityExtended).Specification = JSON.stringify(spec);
       }
 
       this._componentSpec = spec;
@@ -693,7 +693,7 @@ export class ComponentStudioStateService {
     if (this.IsFileLoadedComponent(this._selectedComponent)) {
       this._selectedComponent.specification = newSpec;
     } else {
-      (this._selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(newSpec);
+      (this._selectedComponent as MJComponentEntityExtended).Specification = JSON.stringify(newSpec);
     }
 
     this._componentSpec = newSpec;

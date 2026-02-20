@@ -143,7 +143,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
      * Handle job changes (create, update, delete)
      * Reloads job metadata and restarts polling if needed
      *
-     * This method is called automatically by ScheduledJobEntityExtended.Save() and Delete()
+     * This method is called automatically by MJScheduledJobEntityExtended.Save() and Delete()
      *
      * @param contextUser - User context for reloading metadata
      */

@@ -59,7 +59,7 @@ interface ParsedJSON {
   styleUrls: ['./test-form.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestFormComponentExtended extends MJTestFormComponent implements OnInit, OnDestroy {
+export class MJTestFormComponentExtended extends MJTestFormComponent implements OnInit, OnDestroy {
   public override record!: MJTestEntity;
 
   private destroy$ = new Subject<void>();

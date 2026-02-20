@@ -104,7 +104,7 @@ vi.mock('../custom/ResourcePermissions/ResourcePermissionEngine', () => ({
 // ============================================================================
 
 import {
-    UserViewEntityExtended,
+    MJUserViewEntityExtended,
     ViewFilterInfo,
     ViewFilterLogicInfo,
     ViewSortInfo,
@@ -112,7 +112,7 @@ import {
     ViewColumnInfo,
     ViewGridState,
     DEFAULT_AGGREGATE_DISPLAY,
-} from '../custom/UserViewEntity';
+} from '../custom/MJUserViewEntityExtended';
 
 import type {
     ViewDisplayState,
@@ -121,11 +121,11 @@ import type {
 } from '../custom/UserViewEntity';
 
 // ============================================================================
-// Helper: create a UserViewEntityExtended with optional initial property values
+// Helper: create a MJUserViewEntityExtended with optional initial property values
 // ============================================================================
 
-function createView(overrides: Record<string, unknown> = {}): UserViewEntityExtended {
-    const view = new UserViewEntityExtended();
+function createView(overrides: Record<string, unknown> = {}): MJUserViewEntityExtended {
+    const view = new MJUserViewEntityExtended();
     // Apply overrides directly to the instance
     for (const [key, value] of Object.entries(overrides)) {
         (view as Record<string, unknown>)[key] = value;
@@ -392,11 +392,11 @@ describe('DEFAULT_AGGREGATE_DISPLAY', () => {
 });
 
 // ============================================================================
-// UserViewEntityExtended
+// MJUserViewEntityExtended
 // ============================================================================
 
-describe('UserViewEntityExtended', () => {
-    let view: UserViewEntityExtended;
+describe('MJUserViewEntityExtended', () => {
+    let view: MJUserViewEntityExtended;
 
     beforeEach(() => {
         view = createView();
@@ -848,7 +848,7 @@ describe('UserViewEntityExtended', () => {
     // ----------------------------------------------------------------
     describe('GenerateWhereClause', () => {
         // Use a test subclass to access the protected method
-        class TestableView extends UserViewEntityExtended {
+        class TestableView extends MJUserViewEntityExtended {
             public TestGenerateWhereClause(filterState: string, entityInfo: Record<string, unknown>): string {
                 return this.GenerateWhereClause(filterState, entityInfo as unknown as never);
             }

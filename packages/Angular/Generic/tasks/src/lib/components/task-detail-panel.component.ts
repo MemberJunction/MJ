@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges } from '@angu
 
 import { MJTaskEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Task detail panel showing task information, agent details, and agent run
@@ -268,7 +268,7 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
   @Output() closePanel = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
-  public agent: AIAgentEntityExtended | null = null;
+  public agent: MJAIAgentEntityExtended | null = null;
 
   ngOnInit(): void {
     this.loadAgentInfo();
@@ -286,7 +286,7 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
 
     // Get agent from AIEngineBase
     const agents = AIEngineBase.Instance.Agents;
-    this.agent = agents.find((a: AIAgentEntityExtended) => a.ID === this.task.AgentID) || null;
+    this.agent = agents.find((a: MJAIAgentEntityExtended) => a.ID === this.task.AgentID) || null;
   }
 
   public formatDateTime(date: Date | null): string {

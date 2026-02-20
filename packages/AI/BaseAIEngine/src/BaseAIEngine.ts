@@ -26,7 +26,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIModelModalityEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
-import { AIPromptEntityExtended, AIPromptCategoryEntityExtended, AIModelEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
 
 /**
@@ -72,20 +72,20 @@ const DEFAULT_MAX_DIMENSION = 4096;
 // this class handles execution of AI Actions
 @RegisterForStartup()
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
-    private _models: AIModelEntityExtended[] = [];
+    private _models: MJAIModelEntityExtended[] = [];
     private _modelTypes: MJAIModelTypeEntity[] = [];
     private _vectorDatabases: MJVectorDatabaseEntity[] = [];
-    private _prompts: AIPromptEntityExtended[] = [];
+    private _prompts: MJAIPromptEntityExtended[] = [];
     private _promptModels: MJAIPromptModelEntity[] = [];
     private _promptTypes: MJAIPromptTypeEntity[] = [];
-    private _promptCategories: AIPromptCategoryEntityExtended[] = [];
+    private _promptCategories: MJAIPromptCategoryEntityExtended[] = [];
     private _agentActions: MJAIAgentActionEntity[] = [];
     private _agentPrompts: MJAIAgentPromptEntity[] = [];
     private _agentNoteTypes: MJAIAgentNoteTypeEntity[] = [];
     private _agentNotes: MJAIAgentNoteEntity[] = [];
     private _agentExamples: MJAIAgentExampleEntity[] = [];
     private _agentDataSources: MJAIAgentDataSourceEntity[] = [];
-    private _agents: AIAgentEntityExtended[] = [];
+    private _agents: MJAIAgentEntityExtended[] = [];
     private _agentRelationships: MJAIAgentRelationshipEntity[] = [];
     private _agentTypes: MJAIAgentTypeEntity[] = [];
     private _artifactTypes: MJArtifactTypeEntity[] = [];
@@ -296,9 +296,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         //here we're using the underlying data (i.e _promptCategories and _prompts)
         //rather than the getter methods because the engine's Loaded property is still false
         for(const PromptCategory of this._promptCategories){
-            this._prompts.filter((prompt: AIPromptEntityExtended) => {
+            this._prompts.filter((prompt: MJAIPromptEntityExtended) => {
                 return prompt.CategoryID === PromptCategory.ID;
-            }).forEach((prompt: AIPromptEntityExtended) => {
+            }).forEach((prompt: MJAIPromptEntityExtended) => {
                 PromptCategory.Prompts.push(prompt);
             });
         }
@@ -333,7 +333,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param contextUser required on the server side
      * @returns 
      */
-    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
         try {
             await AIEngineBase.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
             const models = AIEngineBase.Instance.Models.filter(m => {
@@ -362,7 +362,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param contextUser 
      * @returns 
      */
-    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
         return await this.GetHighestPowerModel(vendorName, 'LLM', contextUser);
     }
 
@@ -397,7 +397,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
  
 
-    public get Agents(): AIAgentEntityExtended[] {
+    public get Agents(): MJAIAgentEntityExtended[] {
         return this._agents;
     }
 
@@ -412,14 +412,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param agentID - The ID of the parent agent to get sub-agents for
      * @param status - Optional status to filter sub-agents by (e.g., 'Active', 'Inactive'). If not provided, all sub-agents are returned.
      * @param relationshipStatus - Optional status to filter agent relationships by. Defaults to 'Active' if not provided.
-     * @returns AIAgentEntityExtended[] - Array of sub-agent entities matching the criteria (deduplicated by ID).
+     * @returns MJAIAgentEntityExtended[] - Array of sub-agent entities matching the criteria (deduplicated by ID).
      * @memberof
      */
     public GetSubAgents(
         agentID: string,
-        status?: AIAgentEntityExtended['Status'],
+        status?: MJAIAgentEntityExtended['Status'],
         relationshipStatus?: MJAIAgentRelationshipEntity['Status']
-    ): AIAgentEntityExtended[] {
+    ): MJAIAgentEntityExtended[] {
         // Get child agents (ParentID relationship)
         const childAgents = this._agents.filter(a =>
             a.ParentID === agentID &&
@@ -440,7 +440,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         // Combine and deduplicate by ID
         const uniqueAgentIDs = new Set<string>();
-        const allSubAgents: AIAgentEntityExtended[] = [];
+        const allSubAgents: MJAIAgentEntityExtended[] = [];
 
         for (const agent of [...childAgents, ...relatedAgents]) {
             if (!uniqueAgentIDs.has(agent.ID)) {
@@ -456,7 +456,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentTypes;
     }
 
-    public GetAgentByName(agentName: string): AIAgentEntityExtended {
+    public GetAgentByName(agentName: string): MJAIAgentEntityExtended {
         return this._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
     }
 
@@ -599,7 +599,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._modelTypes;
     }
 
-    public get Prompts(): AIPromptEntityExtended[] {
+    public get Prompts(): MJAIPromptEntityExtended[] {
         return this._prompts;
     }
 
@@ -611,11 +611,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._promptTypes;
     }
 
-    public get PromptCategories(): AIPromptCategoryEntityExtended[] {
+    public get PromptCategories(): MJAIPromptCategoryEntityExtended[] {
         return this._promptCategories;
     }
 
-    public get Models(): AIModelEntityExtended[] {
+    public get Models(): MJAIModelEntityExtended[] {
         return this._models;
     }
 
@@ -626,7 +626,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     /**
      * Convenience method to return only the Language Models. Loads the metadata if not already loaded.
      */
-    public get LanguageModels(): AIModelEntityExtended[] {  
+    public get LanguageModels(): MJAIModelEntityExtended[] {  
         return this._models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm');
     }
 
@@ -1214,7 +1214,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     /**
      * Utility method that will cache the result of a prompt in the AI Result Cache entity
      */
-    public async CacheResult(model: AIModelEntityExtended, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
+    public async CacheResult(model: MJAIModelEntityExtended, prompt: MJAIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
         const md = new Metadata();
         const cacheItem = await md.GetEntityObject<MJAIResultCacheEntity>('MJ: AI Result Cache', this.ContextUser);
         cacheItem.AIModelID = model.ID;
@@ -1286,8 +1286,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param permission - The minimum permission level required ('view', 'run', 'edit', or 'delete')
      * @returns Array of agents the user can access
      */
-    public async GetAccessibleAgents(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<AIAgentEntityExtended[]> {
-        return await AIAgentPermissionHelper.GetAccessibleAgents(user, permission) as AIAgentEntityExtended[];
+    public async GetAccessibleAgents(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<MJAIAgentEntityExtended[]> {
+        return await AIAgentPermissionHelper.GetAccessibleAgents(user, permission) as MJAIAgentEntityExtended[];
     }
 
     /**
