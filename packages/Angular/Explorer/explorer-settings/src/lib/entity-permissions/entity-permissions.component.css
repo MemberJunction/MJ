@@ -1,43 +1,27 @@
-/* ==============================================
-   Entity Permissions Component - Material Design 3
-   ============================================== */
+/* =============================================================================
+   Entity Permissions Component - Component-Specific Styles
+   Shared patterns are in ../shared/styles/_admin-patterns.css
+   ============================================================================= */
 
-/* ==============================================
-   CSS Custom Properties (Design Tokens)
-   ============================================== */
-:host {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-}
-
-/* ==============================================
-   Container Layout
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Container
+   ----------------------------------------------------------------------------- */
 .entity-permissions-container {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
   position: relative;
-  /*max-width: 1920px; Removed by matt 2-19-26 */
   margin: 0 auto;
   width: 100%;
   background: var(--mj-bg-page);
 }
 
-/* ==============================================
-   Sticky Header
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Sticky Header Override - Has explicit padding values
+   ----------------------------------------------------------------------------- */
 .sticky-header {
-  flex-shrink: 0;
-  background: var(--mj-bg-page);
   padding: 1rem;
-  border-bottom: 1px solid var(--mj-border-default);
-  box-shadow: var(--mj-shadow-sm);
-  z-index: 10;
 }
 
 @media (min-width: 640px) {
@@ -58,18 +42,9 @@
   }
 }
 
-/* ==============================================
-   Scrollable Content
-   ============================================== */
-.scrollable-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  padding: 1rem;
-  background: var(--mj-bg-surface-sunken);
-}
-
+/* -----------------------------------------------------------------------------
+   Scrollable Content Override - Different breakpoints
+   ----------------------------------------------------------------------------- */
 @media (min-width: 640px) {
   .scrollable-content {
     padding: 1.25rem;
@@ -88,107 +63,25 @@
   }
 }
 
-/* ==============================================
-   Button System - MD3 Style
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Button Override - min-width and text-decoration
+   ----------------------------------------------------------------------------- */
 .mj-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border: none;
-  border-radius: var(--mj-radius-full);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
   min-width: 44px;
-  min-height: 44px;
   text-decoration: none;
 }
 
-.mj-btn:focus-visible {
-  outline: 2px solid var(--mj-brand-primary);
-  outline-offset: 2px;
-}
-
-.mj-btn:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-/* Primary Button - Dark, lightens on hover */
-.mj-btn-primary,
-.mj-btn.mj-btn-primary {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  box-shadow: var(--mj-shadow-sm);
-}
-
-.mj-btn-primary:hover:not(:disabled),
-.mj-btn.mj-btn-primary:hover:not(:disabled) {
-  background: var(--mj-brand-primary-light);
-  box-shadow: var(--mj-shadow-md);
-}
-
-.mj-btn-primary:active:not(:disabled),
-.mj-btn.mj-btn-primary:active:not(:disabled) {
-  background: var(--mj-color-brand-400);
-  transform: scale(0.98);
-}
-
-/* Secondary Button - Light, darkens on hover */
-.mj-btn-secondary {
-  background: var(--mj-bg-page);
-  color: var(--mj-brand-primary);
-  border: 1px solid var(--mj-color-neutral-400);
-}
-
-.mj-btn-secondary:hover:not(:disabled) {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  border-color: var(--mj-brand-primary);
-}
-
-.mj-btn-secondary:active:not(:disabled) {
-  background: var(--mj-color-brand-700);
-  border-color: var(--mj-color-brand-700);
-}
-
-/* Ghost Button - Transparent, fills on hover */
+/* Ghost Button Override - Different padding */
 .mj-btn-ghost {
-  background: transparent;
-  color: var(--mj-text-secondary);
   padding: 0.75rem 1rem;
 }
 
-.mj-btn-ghost:hover:not(:disabled) {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-}
-
-.mj-btn-ghost:active:not(:disabled) {
-  background: var(--mj-color-brand-700);
-}
-
-/* Icon-only Button */
-.mj-btn-icon-only {
-  padding: 0.625rem;
-  min-width: 44px;
-  min-height: 44px;
-}
-
-/* Small Button */
+/* Small Button Override - Different min-width */
 .mj-btn-sm {
-  padding: 0.5rem 0.875rem;
-  min-height: 36px;
   min-width: 36px;
-  font-size: 0.8125rem;
 }
 
-/* Icon-only on Mobile Button */
+/* Icon-mobile Override */
 .mj-btn-icon-mobile {
   padding: 0.75rem 1.5rem;
 }
@@ -210,16 +103,16 @@
   }
 }
 
-/* ==============================================
-   Action Buttons
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Action Buttons Override - Different layout (space-between with margin)
+   ----------------------------------------------------------------------------- */
 .action-buttons {
-  display: flex;
-  gap: 0.75rem;
   justify-content: space-between;
   margin-bottom: 1rem;
   flex-wrap: wrap;
   align-items: center;
+  padding: 0;
+  background: transparent;
 }
 
 @media (min-width: 768px) {
@@ -228,9 +121,9 @@
   }
 }
 
-/* ==============================================
-   Mobile Navigation Rail - MD3 Style
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Mobile Navigation Rail
+   ----------------------------------------------------------------------------- */
 @media (max-width: 639px) {
   .sticky-header {
     display: flex;
@@ -340,17 +233,11 @@
   .mj-filter-select {
     display: none;
   }
-
-  /* Show filter button on mobile */
-  .filter-button {
-    display: inline-flex !important;
-    flex-shrink: 0;
-  }
 }
 
-/* ==============================================
+/* -----------------------------------------------------------------------------
    View Toggle
-   ============================================== */
+   ----------------------------------------------------------------------------- */
 .mj-view-toggle {
   display: flex;
   background: var(--mj-bg-surface-sunken);
@@ -380,15 +267,14 @@
   box-shadow: var(--mj-shadow-sm);
 }
 
-/* ==============================================
-   Stats Grid - Static Display Cards
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Stats Grid Override - Different layout (margin-based, hidden on mobile)
+   ----------------------------------------------------------------------------- */
 .mj-grid-4 {
-  display: grid;
-  gap: 0.75rem;
   margin-bottom: 1rem;
   width: 100%;
-  grid-template-columns: repeat(2, 1fr);
+  padding: 0;
+  background: transparent;
 }
 
 @media (max-width: 639px) {
@@ -405,121 +291,50 @@
 
 @media (min-width: 768px) {
   .mj-grid-4 {
-    grid-template-columns: repeat(4, 1fr);
     gap: 1.25rem;
     margin-bottom: 1.25rem;
   }
 }
 
-/* Stat Card - Static (Non-interactive) */
+/* Stat Card Override - min-width and no box-shadow */
 .mj-card {
-  background: var(--mj-bg-surface-card);
-  border-radius: var(--mj-radius-lg);
-  padding: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
   min-width: 0;
-  border: 1px solid var(--mj-border-default);
-  cursor: default;
-  pointer-events: none;
+  box-shadow: none;
 }
 
-@media (min-width: 768px) {
-  .mj-card {
-    padding: 1rem 1.25rem;
-  }
-}
-
-/* Stat Icon Containers */
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--mj-radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
-@media (min-width: 768px) {
-  .stat-icon {
-    width: 52px;
-    height: 52px;
-    font-size: 1.375rem;
-  }
-}
-
-/* Total stat - Primary Blue */
-.stat-icon-total {
-  background: var(--mj-color-accent-300);
-  color: var(--mj-brand-primary);
-}
-
-/* Public stat - Tertiary Green */
-.stat-icon-public {
-  background: var(--mj-color-success-100);
-  color: var(--mj-status-success);
-}
-
-/* Restricted stat - Error Red */
-.stat-icon-restricted {
-  background: var(--mj-color-error-100);
-  color: var(--mj-status-error);
-}
-
-/* Permissions stat - Secondary Orange */
-.stat-icon-permissions {
-  background: var(--mj-color-warning-50);
-  color: var(--mj-color-warning-700);
-}
-
-/* Stat Content */
-.stat-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-content .stat-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--mj-text-primary);
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
+/* Stat Value Override at 768px - different size */
 @media (min-width: 768px) {
   .stat-content .stat-value {
     font-size: 1.875rem;
   }
 }
 
-.stat-content .stat-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--mj-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 0.25rem;
+/* Stat Icon Override - Component-specific colors */
+.stat-icon-public {
+  background: var(--mj-color-success-100);
+  color: var(--mj-status-success);
 }
 
-@media (min-width: 768px) {
-  .stat-content .stat-label {
-    font-size: 0.8125rem;
-  }
+.stat-icon-restricted {
+  background: var(--mj-color-error-100);
+  color: var(--mj-status-error);
 }
 
-/* ==============================================
-   Filters Section
-   ============================================== */
+.stat-icon-permissions {
+  background: var(--mj-color-warning-50);
+  color: var(--mj-color-warning-700);
+}
+
+/* -----------------------------------------------------------------------------
+   Filters Section Override - Different layout (no margin, full width)
+   ----------------------------------------------------------------------------- */
 .filters-section {
-  background: var(--mj-bg-surface-card);
   border-radius: var(--mj-radius-xl);
   padding: 1rem;
   margin-bottom: 0;
-  border: 1px solid var(--mj-border-default);
   width: 100%;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 @media (min-width: 768px) {
@@ -532,14 +347,6 @@
   .filters-section {
     padding: 1.25rem 1.5rem;
   }
-}
-
-/* Filters Row */
-.filters-row {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
 }
 
 @media (max-width: 639px) {
@@ -556,64 +363,7 @@
   }
 }
 
-/* ==============================================
-   Search Input - MD3 Style
-   ============================================== */
-.mj-search {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
-}
-
-@media (max-width: 639px) {
-  .mj-search {
-    min-width: 100%;
-  }
-}
-
-.mj-search .mj-search-icon {
-  position: absolute;
-  left: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--mj-text-secondary);
-  font-size: 1rem;
-  pointer-events: none;
-  transition: color 0.2s ease;
-}
-
-.mj-search .mj-search-input {
-  width: 100%;
-  padding: 0.875rem 1rem 0.875rem 2.75rem;
-  border: 2px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-full);
-  font-size: 1rem;
-  background: var(--mj-bg-page);
-  color: var(--mj-text-primary);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 44px;
-}
-
-.mj-search .mj-search-input::placeholder {
-  color: var(--mj-text-secondary);
-}
-
-.mj-search .mj-search-input:hover {
-  border-color: var(--mj-brand-primary);
-  background: var(--mj-bg-surface);
-}
-
-.mj-search .mj-search-input:focus {
-  outline: none;
-  border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
-  background: var(--mj-bg-page);
-}
-
-.mj-search:focus-within .mj-search-icon {
-  color: var(--mj-brand-primary);
-}
-
+/* Search Input Override at 1024px - different padding */
 @media (min-width: 1024px) {
   .mj-search .mj-search-input {
     padding: 1rem 1.25rem 1rem 3rem;
@@ -625,29 +375,8 @@
   }
 }
 
-/* ==============================================
-   Filter Group - MD3 Style
-   ============================================== */
-.mj-filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-
-.mj-filter-label {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--mj-text-primary);
-  line-height: 1.2;
-}
-
+/* Filter Button Overrides */
 .mj-filter-buttons {
-  display: flex;
-  background: var(--mj-bg-surface-sunken);
-  border-radius: var(--mj-radius-full);
-  padding: 4px;
-  gap: 2px;
   flex-wrap: wrap;
 }
 
@@ -686,6 +415,12 @@
   }
 }
 
+/* Filter Label Override */
+.mj-filter-label {
+  font-size: 0.8125rem;
+  line-height: 1.2;
+}
+
 /* Filter Select Dropdown */
 .mj-filter-select {
   padding: 0.5rem 1rem;
@@ -720,49 +455,12 @@
   }
 }
 
-/* ==============================================
-   Mobile Search Container (Desktop Default)
-   ============================================== */
+/* Mobile Search Container (Desktop Default) */
 .mobile-search-container {
   display: contents;
 }
 
-/* ==============================================
-   Filter Button (Mobile Only)
-   ============================================== */
-.filter-button {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border: 2px solid var(--mj-border-default);
-  background: var(--mj-bg-page);
-  color: var(--mj-text-primary);
-  border-radius: var(--mj-radius-full);
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 44px;
-  min-width: 44px;
-}
-
-.filter-button:hover {
-  border-color: var(--mj-brand-primary);
-  background: var(--mj-bg-surface);
-}
-
-.filter-button:active {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  border-color: var(--mj-brand-primary);
-}
-
-.filter-button i {
-  font-size: 1rem;
-}
-
+/* Filter Button Badge Override */
 .filter-button .filter-badge {
   position: absolute;
   top: -4px;
@@ -780,226 +478,20 @@
   padding: 0 4px;
 }
 
-/* ==============================================
-   Filter Modal (Mobile)
-   ============================================== */
-.filter-modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 0;
-}
-
-.filter-modal {
-  background: var(--mj-bg-page);
-  border-radius: var(--mj-radius-2xl) var(--mj-radius-2xl) 0 0;
-  box-shadow: var(--mj-shadow-2xl);
-  width: 100%;
-  max-height: 80vh;
-  overflow: hidden;
-  animation: slideUpFromBottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
-}
-
-.filter-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--mj-border-default);
-  flex-shrink: 0;
-}
-
-.filter-modal-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-  margin: 0;
-}
-
-.filter-modal-title i {
-  color: var(--mj-brand-primary);
-  font-size: 1.375rem;
-}
-
-.filter-modal-close {
-  padding: 0.625rem;
-  border: none;
-  background: transparent;
-  color: var(--mj-text-secondary);
-  font-size: 1.25rem;
-  cursor: pointer;
-  border-radius: var(--mj-radius-full);
-  transition: all 0.2s ease;
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.filter-modal-close:hover {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-}
-
-.filter-modal-body {
-  padding: 1.5rem;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  flex: 1;
-}
-
-.filter-modal-footer {
-  display: flex;
-  gap: 0.75rem;
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface-sunken);
-  flex-shrink: 0;
-}
-
-.filter-modal-footer button {
-  flex: 1;
-  margin: 0;
-}
-
-/* Filter Options Container (Inside Modal) */
-.filter-options-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.filter-group-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0;
-}
-
-.filter-group-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.filter-option {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  background: var(--mj-bg-surface-sunken);
-  border: 2px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-lg);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 56px;
-}
-
-.filter-option:hover {
-  border-color: var(--mj-brand-primary);
-  background: var(--mj-bg-surface-sunken);
-}
-
-.filter-option.selected {
-  background: var(--mj-color-accent-300);
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-brand-primary);
-}
-
-.filter-option input[type="checkbox"],
-.filter-option input[type="radio"] {
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-  accent-color: var(--mj-brand-primary);
-  flex-shrink: 0;
-}
-
-.filter-option-label {
-  flex: 1;
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--mj-text-primary);
-}
-
-.filter-option.selected .filter-option-label {
-  color: var(--mj-brand-primary);
-  font-weight: 600;
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUpFromBottom {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-/* ==============================================
-   Loading Container
-   ============================================== */
+/* Loading Container Override - different layout */
 .loading-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
   min-height: 200px;
   padding: 3rem 1.5rem;
+  flex-direction: row;
 }
 
-/* ==============================================
-   Content Area
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Content Area Override - Different background and shadow
+   ----------------------------------------------------------------------------- */
 .content-area {
-  flex: 1 1 auto;
-  overflow: visible;
-  position: relative;
   background: var(--mj-bg-surface);
-  border-radius: var(--mj-radius-xl);
   box-shadow: var(--mj-shadow-md);
   padding: 1.25rem;
-  border: 1px solid var(--mj-border-default);
-}
-
-@media (min-width: 768px) {
-  .content-area {
-    padding: 1.5rem;
-  }
 }
 
 @media (min-width: 1024px) {
@@ -1008,9 +500,9 @@
   }
 }
 
-/* ==============================================
+/* -----------------------------------------------------------------------------
    Entities List
-   ============================================== */
+   ----------------------------------------------------------------------------- */
 .entities-list {
   display: flex;
   flex-direction: column;
@@ -1024,9 +516,9 @@
   }
 }
 
-/* ==============================================
+/* -----------------------------------------------------------------------------
    Entity Card - Interactive
-   ============================================== */
+   ----------------------------------------------------------------------------- */
 .entity-card {
   background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
@@ -1086,7 +578,7 @@
   }
 }
 
-/* Entity Icon Container - Primary */
+/* Entity Icon Container */
 .entity-icon-wrapper {
   width: 48px;
   height: 48px;
@@ -1159,9 +651,9 @@
   }
 }
 
-/* ==============================================
-   Access Badges - MD3 Style
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Access Badges
+   ----------------------------------------------------------------------------- */
 .access-badge {
   display: inline-flex;
   align-items: center;
@@ -1182,21 +674,18 @@
   }
 }
 
-/* Public Access - Tertiary Green */
 .access-badge.access-public {
   background: var(--mj-status-success-bg);
   color: var(--mj-status-success-text);
   border: 1px solid var(--mj-status-success-border);
 }
 
-/* Restricted Access - Error Red */
 .access-badge.access-restricted {
   background: var(--mj-status-error-bg);
   color: var(--mj-status-error-text);
   border: 1px solid var(--mj-status-error-border);
 }
 
-/* Custom Access - Secondary Orange */
 .access-badge.access-custom {
   background: var(--mj-status-warning-bg);
   color: var(--mj-status-warning-text);
@@ -1221,40 +710,18 @@
   }
 }
 
-/* Expand Button */
+/* Expand Button Override - inline-flex, different transition */
 .expand-btn {
-  padding: 0.625rem;
-  border: none;
-  background: transparent;
-  color: var(--mj-text-secondary);
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 44px;
-  min-height: 44px;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--mj-radius-full);
-}
-
-.expand-btn:hover {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-}
-
-.expand-btn:focus-visible {
-  outline: 2px solid var(--mj-brand-primary);
-  outline-offset: 2px;
 }
 
 .expand-btn i {
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ==============================================
+/* -----------------------------------------------------------------------------
    Entity Content - Expanded Area
-   ============================================== */
+   ----------------------------------------------------------------------------- */
 .entity-content {
   padding: 1.25rem;
   background: var(--mj-bg-surface);
@@ -1274,13 +741,9 @@
   }
 }
 
-/* ==============================================
+/* -----------------------------------------------------------------------------
    Mobile Actions Bar
-   ============================================== */
-.mobile-actions-bar {
-  display: none;
-}
-
+   ----------------------------------------------------------------------------- */
 @media (max-width: 639px) {
   .mobile-actions-bar {
     display: flex;
@@ -1308,9 +771,9 @@
   }
 }
 
-/* ==============================================
+/* -----------------------------------------------------------------------------
    Permissions Grid (Table)
-   ============================================== */
+   ----------------------------------------------------------------------------- */
 .permissions-grid {
   width: 100%;
   background: var(--mj-bg-surface-sunken);
@@ -1409,7 +872,7 @@
   justify-content: center;
 }
 
-/* Success text - Tertiary Green */
+/* Success text */
 .text-success {
   color: var(--mj-status-success);
 }
@@ -1429,9 +892,9 @@
   text-align: center;
 }
 
-/* ==============================================
+/* -----------------------------------------------------------------------------
    Entities Grid (Grid View)
-   ============================================== */
+   ----------------------------------------------------------------------------- */
 .entities-grid {
   display: grid;
   gap: 0.75rem;
@@ -1473,17 +936,14 @@
   border-color: var(--mj-brand-primary);
 }
 
-/* Public - Green border */
 .entity-grid-card.access-public {
   border-left: 4px solid var(--mj-status-success);
 }
 
-/* Restricted - Red border */
 .entity-grid-card.access-restricted {
   border-left: 4px solid var(--mj-status-error);
 }
 
-/* Custom - Orange border */
 .entity-grid-card.access-custom {
   border-left: 4px solid var(--mj-color-warning-500);
 }
@@ -1564,12 +1024,10 @@
   color: var(--mj-text-secondary);
 }
 
-/* ==============================================
-   Empty State
-   ============================================== */
+/* -----------------------------------------------------------------------------
+   Empty State Override - flex layout with gap
+   ----------------------------------------------------------------------------- */
 .empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1588,25 +1046,8 @@
   margin-bottom: 0.5rem;
 }
 
-.empty-state .empty-text {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-  margin: 0;
-}
-
-.empty-state .empty-subtext {
-  font-size: 1rem;
-  color: var(--mj-text-secondary);
-  margin: 0;
-}
-
-/* ==============================================
-   Error Container
-   ============================================== */
+/* Error Container Override - flex layout with min-height */
 .error-container {
-  text-align: center;
-  padding: 4rem 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1620,48 +1061,11 @@
   }
 }
 
-.error-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
 .error-container .error-icon {
-  font-size: 3.5rem;
-  color: var(--mj-status-error);
   margin-bottom: 0.5rem;
 }
 
-.error-container .error-message {
-  font-size: 1.0625rem;
-  color: var(--mj-text-primary);
-  margin: 0 0 1.5rem 0;
-}
-
-/* ==============================================
-   Animations
-   ============================================== */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
+/* slideDown Override - uses max-height instead of translateY */
 @keyframes slideDown {
   from {
     opacity: 0;
@@ -1673,9 +1077,9 @@
   }
 }
 
-/* ==============================================
+/* -----------------------------------------------------------------------------
    Very Small Mobile (< 375px)
-   ============================================== */
+   ----------------------------------------------------------------------------- */
 @media (max-width: 374px) {
   .filters-section {
     padding: 0.5rem;
@@ -1720,18 +1124,5 @@
 
   .filter-modal-footer {
     padding: 1rem 1.25rem;
-  }
-}
-
-/* ==============================================
-   Reduced Motion Support
-   ============================================== */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
   }
 }

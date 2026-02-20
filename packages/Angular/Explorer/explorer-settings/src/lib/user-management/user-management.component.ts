@@ -24,7 +24,7 @@ interface FilterOptions {
   standalone: false,
   selector: 'mj-user-management',
   templateUrl: './user-management.component.html',
-  styleUrls: ['./user-management.component.css']
+  styleUrls: ['../shared/styles/_admin-patterns.css', './user-management.component.css']
 })
 @RegisterClass(BaseDashboard, 'UserManagement')
 export class UserManagementComponent extends BaseDashboard implements OnDestroy {
