@@ -703,15 +703,14 @@ async function registerAllTools(
     systemUser: UserInfo
 ): Promise<void> {
     // Helper to register a tool with filter check and authorization
+    // Track tools registered on THIS server instance to prevent SDK duplicate registration errors
     const registeredOnServer = new Set<string>();
     const addToolWithFilter = (config: ToolConfig): void => {
-        registeredToolNames.push(config.name);
-
         if (!shouldIncludeTool(config.name, activeFilterOptions)) {
             return;
         }
 
-        // Guard against duplicate tool registration (e.g., overlapping agent patterns)
+        // Guard against duplicate registration on the same McpServer instance
         if (registeredOnServer.has(config.name)) {
             console.warn(`[MCP] Skipping duplicate tool registration: ${config.name}`);
             return;
@@ -841,9 +840,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
         // Store filter options for use by tool registration
         activeFilterOptions = filterOptions;
-
-        // Clear any previously registered tool names
-        registeredToolNames.length = 0;
 
         if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
@@ -1360,6 +1356,8 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 if (newSessionId) {
                     streamableTransports.set(newSessionId, transport);
                     console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
+                } else {
+                    console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
                 }
 
             } catch (error) {
@@ -1570,6 +1568,8 @@ async function loadActionTools(
         }
 
         // Process each action tool configuration for specific action tools
+        // Track registered tool names to prevent duplicates from overlapping patterns
+        const registeredActionToolNames = new Set<string>();
         for (const tool of actionTools) {
             if (tool.execute) {
                 const actionPattern = tool.actionName || '*';
@@ -1577,6 +1577,13 @@ async function loadActionTools(
 
                 // Add specific execution tools for each matching action
                 for (const action of actions) {
+                    const safeName = (action.Name || 'Unknown').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                    const toolName = `Execute_${safeName}_Action`;
+                    if (registeredActionToolNames.has(toolName)) {
+                        console.warn(`[MCP] Skipping duplicate action tool registration: ${toolName} (action: ${action.Name}, ID: ${action.ID})`);
+                        continue;
+                    }
+                    registeredActionToolNames.add(toolName);
                     addActionExecuteTool(addToolWithFilter, action, sessionContext);
                 }
             }
@@ -1861,16 +1868,22 @@ async function loadAgentTools(
         }
 
         // Process each agent tool configuration for specific agent tools
-        // Track registered agent IDs to prevent duplicate tools from overlapping patterns
-        const registeredAgentIds = new Set<string>();
+        // Track registered tool names to prevent duplicates from overlapping patterns
+        // or agents with the same name producing identical tool names
+        const registeredAgentToolNames = new Set<string>();
         for (const tool of agentTools) {
             const agentPattern = tool.agentName || "*";
             const agents = await discoverAgents(agentPattern, systemUser);
 
             // Add tools for each matching agent (skip if already registered by a prior config entry)
             for (const agent of agents) {
-                if (tool.execute && !registeredAgentIds.has(agent.ID)) {
-                    registeredAgentIds.add(agent.ID);
+                if (tool.execute) {
+                    const toolName = `Execute_${(agent.Name || 'Unknown').replace(/\s+/g, '_')}_Agent`;
+                    if (registeredAgentToolNames.has(toolName)) {
+                        console.warn(`[MCP] Skipping duplicate agent tool registration: ${toolName} (agent: ${agent.Name}, ID: ${agent.ID})`);
+                        continue;
+                    }
+                    registeredAgentToolNames.add(toolName);
                     addAgentExecuteTool(addToolWithFilter, agent, sessionContext);
                 }
             }
