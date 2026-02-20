@@ -1,6 +1,7 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { RunQuery } from '@memberjunction/core';
+import { Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 
 /**
@@ -47,6 +48,21 @@ interface DataArtifactColumn {
   field: string;
   headerName?: string;
   width?: number;
+
+  /** MJ entity name this column originates from (e.g., "Members") */
+  sourceEntity?: string;
+
+  /** Field name in that entity (e.g., "ID", "FirstName") */
+  sourceFieldName?: string;
+
+  /** True for calculated expressions (CASE, ROUND, CONCAT, etc.) */
+  isComputed?: boolean;
+
+  /** True for aggregate functions (SUM, COUNT, AVG, etc.) */
+  isSummary?: boolean;
+
+  /** SQL data type: int, nvarchar, uniqueidentifier, datetime, decimal, bit, money, etc. */
+  sqlBaseType?: string;
 }
 
 /**
@@ -101,11 +117,13 @@ interface DataArtifactColumn {
                 <span class="fallback-note">(Showing cached data)</span>
               </div>
               <mj-query-data-grid
+                [ColumnConfigs]="GridColumnConfigs"
                 [Data]="GridData"
                 [ShowToolbar]="false"
                 [ShowRefresh]="false"
                 [PersistState]="false"
                 [SelectionMode]="'none'"
+                (EntityLinkClick)="OnEntityLinkClick($event)"
                 Height="100%">
               </mj-query-data-grid>
             } @else if (HasError) {
@@ -115,11 +133,13 @@ interface DataArtifactColumn {
               </div>
             } @else {
               <mj-query-data-grid
+                [ColumnConfigs]="GridColumnConfigs"
                 [Data]="GridData"
                 [ShowToolbar]="false"
                 [ShowRefresh]="false"
                 [PersistState]="false"
                 [SelectionMode]="'none'"
+                (EntityLinkClick)="OnEntityLinkClick($event)"
                 Height="100%">
               </mj-query-data-grid>
             }
@@ -297,8 +317,11 @@ interface DataArtifactColumn {
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DataArtifactViewerPlugin')
 export class DataArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
   public spec: DataArtifactSpec | null = null;
   public GridData: Record<string, unknown>[] = [];
+  public GridColumnConfigs: QueryGridColumnConfig[] | null = null;
   public IsLoading = false;
   public IsLive = false;
   public HasError = false;
@@ -345,6 +368,9 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         return;
       }
 
+      // Build enriched column configs from agent metadata (if available)
+      this.GridColumnConfigs = this.BuildColumnConfigs();
+
       // If SQL is available, execute it live
       if (this.spec.metadata?.sql) {
         await this.LoadLiveData();
@@ -365,6 +391,20 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     if (this.spec?.metadata?.sql) {
       await this.LoadLiveData();
     }
+  }
+
+  /**
+   * Handle entity link click from the grid and bubble up as openEntityRecord.
+   * Converts the grid's recordId string into a CompositeKey for the artifact viewer pipeline.
+   */
+  public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', event.recordId)
+    ]);
+    this.openEntityRecord.emit({
+      entityName: event.entityName,
+      compositeKey
+    });
   }
 
   /**
@@ -394,6 +434,54 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       this.IsLoading = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Build QueryGridColumnConfig[] from enriched artifact column metadata.
+   * Returns null if columns have no entity metadata (grid falls back to auto-inference).
+   */
+  private BuildColumnConfigs(): QueryGridColumnConfig[] | null {
+    if (!this.spec?.columns?.length) return null;
+
+    // Only build if at least one column has entity metadata or type info
+    const hasMetadata = this.spec.columns.some(c => c.sourceEntity || c.sqlBaseType);
+    if (!hasMetadata) return null;
+
+    const md = new Metadata();
+    return this.spec.columns.map((col, index) => {
+      const target = resolveTargetEntity(col.sourceEntity, col.sourceFieldName, md);
+      const isEntityLink = !!(target.targetEntityName && (target.isPrimaryKey || target.isForeignKey));
+      const baseType = (col.sqlBaseType || 'nvarchar').toLowerCase();
+
+      let align: 'left' | 'center' | 'right' = 'left';
+      if (['int', 'bigint', 'decimal', 'numeric', 'float', 'money', 'smallmoney', 'real'].includes(baseType)) {
+        align = 'right';
+      } else if (baseType === 'bit') {
+        align = 'center';
+      }
+
+      return {
+        field: col.field,
+        title: col.headerName || col.field,
+        visible: true,
+        sortable: true,
+        resizable: true,
+        reorderable: true,
+        sqlBaseType: col.sqlBaseType || 'nvarchar',
+        sqlFullType: col.sqlBaseType || 'nvarchar',
+        align,
+        order: index,
+        sourceEntityName: col.sourceEntity,
+        sourceFieldName: col.sourceFieldName,
+        isEntityLink,
+        targetEntityName: target.targetEntityName,
+        targetEntityId: target.targetEntityId,
+        targetEntityIcon: target.targetEntityIcon,
+        isPrimaryKey: target.isPrimaryKey,
+        isForeignKey: target.isForeignKey,
+        pinned: null,
+      } as QueryGridColumnConfig;
+    });
   }
 
   /**

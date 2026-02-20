@@ -178,8 +178,29 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
       "title": "Descriptive Title of What This Query Shows",
       "plan": "## Approach\n\n```mermaid\nerDiagram\n    EntityA ||--o{ EntityB : \"relates to\"\n```\n\n```mermaid\nflowchart TD\n    A[Source] -->|filter| B[Filtered]\n    B -->|group| C[Aggregated]\n```\n\nQueried EntityB joined to EntityA, filtered to last 30 days, grouped by name...",
       "columns": [
-        { "field": "ColumnName1", "headerName": "Display Name 1" },
-        { "field": "ColumnName2", "headerName": "Display Name 2" }
+        {
+          "field": "AgentID",
+          "headerName": "Agent ID",
+          "sourceEntity": "AI Agents",
+          "sourceFieldName": "ID",
+          "sqlBaseType": "uniqueidentifier"
+        },
+        {
+          "field": "AgentName",
+          "headerName": "Agent",
+          "sourceEntity": "AI Agents",
+          "sourceFieldName": "Name",
+          "sqlBaseType": "nvarchar"
+        },
+        {
+          "field": "TotalRuns",
+          "headerName": "Total Runs",
+          "sourceEntity": "MJ: AI Agent Runs",
+          "sourceFieldName": "ID",
+          "isComputed": true,
+          "isSummary": true,
+          "sqlBaseType": "int"
+        }
       ],
       "rows": [
         { "ColumnName1": "value1", "ColumnName2": 42 },
@@ -202,13 +223,36 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
 - `source`: Always `"query"`
 - `title`: Clear, business-friendly description of the query results
 - `plan`: **ALWAYS include this field.** Use the plan template from Step 2 (Overview → Query Logic flowchart → Data Sources → Relationships ERD → Filters & Conditions). Even for simple queries, include the plan. It renders in a dedicated "Plan" tab.
-- `columns`: Array of ALL columns — `field` is the SQL alias, `headerName` is a human-readable label
+- `columns`: Array of ALL columns with enriched metadata (see Column Metadata below)
 - `rows`: The actual result data, using the same field names as in `columns`. **Limit to TOP 100 rows** — do not include the full result set if it exceeds 100 rows.
 - `metadata.sql`: The exact SQL query you ran
 - `metadata.rowCount`: Number of rows returned
 - `metadata.executionTimeMs`: Execution time from the Execute Research Query result
 
 The `replaceElements` object should have these keys: `source`, `title`, `plan`, `columns`, `rows`, `metadata`.
+
+#### Column Metadata
+
+Each column object in the `columns` array **MUST** include enriched metadata. This enables the grid to render clickable entity links for ID columns, right-align numbers, and format dates.
+
+**Required fields for every column:**
+- `field`: The SQL alias (matches keys in `rows`)
+- `headerName`: Human-readable display label
+- `sqlBaseType`: SQL data type — `int`, `nvarchar`, `uniqueidentifier`, `datetime`, `decimal`, `bit`, `money`, `float`, `bigint`
+
+**Entity linking fields** (include when the column maps to an entity field):
+- `sourceEntity`: The **exact MJ entity name** this column comes from (e.g., `"Members"`, `"MJ: AI Agent Runs"`, `"Event Registrations"`). Must match entity names from ALL_ENTITIES exactly.
+- `sourceFieldName`: The original field name in that entity before aliasing (e.g., `"ID"`, `"Name"`, `"Status"`). For JOINed columns, use the entity the field actually belongs to.
+
+**Computation flags** (include when applicable):
+- `isComputed`: `true` for any expression — `CASE WHEN`, `CONCAT`, `ROUND()`, `DATEDIFF()`, string concatenation (`+`), etc.
+- `isSummary`: `true` for aggregate functions — `SUM()`, `COUNT()`, `AVG()`, `MIN()`, `MAX()`. A column can be both `isComputed` and `isSummary` (e.g., `ROUND(SUM(cost), 2)`).
+
+**How entity linking works:**
+- If `sourceFieldName` is a **primary key** (e.g., `"ID"`), the grid renders it as a clickable link to that entity's record
+- If `sourceFieldName` is a **foreign key** (e.g., `"MemberID"`, `"EventID"`), the grid renders it as a clickable link to the related entity
+- Columns without `sourceEntity`/`sourceFieldName` display as plain text
+- Always provide `sourceEntity` + `sourceFieldName` for ID columns and foreign key columns — this is what makes the grid interactive
 
 ## SQL Guidelines
 
