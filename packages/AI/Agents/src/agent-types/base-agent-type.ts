@@ -13,7 +13,7 @@
 
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
-import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -182,7 +182,7 @@ export abstract class BaseAgentType {
      * @param {ExecuteAgentParams} params - The full execution parameters for additional context
      * @param {AgentConfiguration} config - The loaded agent configuration with default prompts
      * @param {BaseAgentNextStep | null} previousDecision - The previous step decision that may contain context
-     * @returns {Promise<AIPromptEntityExtended | null>} A prompt entity to use (either custom or config.childPrompt)
+     * @returns {Promise<MJAIPromptEntityExtended | null>} A prompt entity to use (either custom or config.childPrompt)
      * 
      * @abstract
      * @since 2.76.0
@@ -193,7 +193,7 @@ export abstract class BaseAgentType {
         payload: P,
         agentTypeState: ATS,
         previousDecision?: BaseAgentNextStep<P> | null
-    ): Promise<AIPromptEntityExtended | null>;
+    ): Promise<MJAIPromptEntityExtended | null>;
 
     /**
      * Helper method that retrieves an instance of the agent type based on the provided agent type entity.

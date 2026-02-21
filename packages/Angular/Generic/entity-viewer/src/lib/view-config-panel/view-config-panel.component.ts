@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
 import {
-  UserViewEntityExtended,
+  MJUserViewEntityExtended,
   ViewColumnInfo,
   ViewGridState,
   ViewGridColumnSetting,
@@ -96,7 +96,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   /**
    * The current view entity (null for default view)
    */
-  @Input() viewEntity: UserViewEntityExtended | null = null;
+  @Input() viewEntity: MJUserViewEntityExtended | null = null;
 
   /**
    * Whether the panel is open

@@ -92,10 +92,10 @@ vi.mock('@memberjunction/global', () => ({
 
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai-core-plus', () => ({
-    AIAgentEntityExtended: class AIAgentEntityExtended {},
-    AIModelEntityExtended: class AIModelEntityExtended {},
-    AIPromptEntityExtended: class AIPromptEntityExtended {},
-    AIPromptCategoryEntityExtended: class AIPromptCategoryEntityExtended {},
+    MJAIAgentEntityExtended: class MJAIAgentEntityExtended {},
+    MJAIModelEntityExtended: class MJAIModelEntityExtended {},
+    MJAIPromptEntityExtended: class MJAIPromptEntityExtended {},
+    MJAIPromptCategoryEntityExtended: class MJAIPromptCategoryEntityExtended {},
 }));
 
 const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {

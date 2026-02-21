@@ -2,7 +2,7 @@ import { LogError, Metadata, RunViewParams } from "@memberjunction/core";
 import { EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { Message } from "@memberjunction/communication-types";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
-import { MJCommunicationProviderMessageTypeEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJCommunicationProviderMessageTypeEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 
 export class EntityCommunicationsEngineClient extends EntityCommunicationsEngineBase {
     /**
@@ -106,7 +106,7 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
         };
     }
 
-    protected getTemplateValues(template: TemplateEntityExtended) {
+    protected getTemplateValues(template: MJTemplateEntityExtended) {
         if (!template){
             return undefined;
         }

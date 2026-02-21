@@ -30,7 +30,7 @@ vi.mock('@memberjunction/core-entities', () => ({
         Type = '';
         Priority = 0;
     },
-    TemplateEntityExtended: class {
+    MJTemplateEntityExtended: class {
         ID = '';
         Name = '';
         Content: Array<Record<string, unknown>> = [];

@@ -962,7 +962,7 @@ export class TestingInstrumentationService {
     const rv = new RunView();
 
     // Load test runs with additional fields for evaluation
-    type TestRunExtended = {
+    type MJTestRunExtended = {
       ID: string;
       TestID: string;
       Test: string;
@@ -997,7 +997,7 @@ export class TestingInstrumentationService {
       }
     ]);
 
-    const testRuns = (testRunsResult.Results || []) as TestRunExtended[];
+    const testRuns = (testRunsResult.Results || []) as MJTestRunExtended[];
     const feedbacks = (feedbackResult.Results || []) as TestRunFeedbackSimple[];
 
     // Create feedback lookup map

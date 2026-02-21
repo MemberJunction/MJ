@@ -3332,7 +3332,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 
    /**
     * Creates a new application using direct SQL INSERT to ensure it's captured in SQL logging.
-    * The Path field is auto-generated from Name using the same slug logic as ApplicationEntityServerEntity.
+    * The Path field is auto-generated from Name using the same slug logic as MJApplicationEntityServer.
     *
     * @param pool SQL connection pool
     * @param appID Pre-generated UUID for the application
@@ -4158,7 +4158,7 @@ WHERE
    }
 
    /**
-    * Applies entity importance analysis to ApplicationEntity records.
+    * Applies entity importance analysis to MJApplicationEntity records.
     * Only called for NEW entities to set DefaultForNewUser.
     */
    protected async applyEntityImportance(

@@ -5,7 +5,7 @@ import { LogError, RunView } from "@memberjunction/core";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface SummaryCitation {
     text: string;           // Exact quote from content
@@ -294,7 +294,7 @@ export class SummarizeContentAction extends BaseAction {
     /**
      * Get prompt by name and category from AIEngine
      */
-    private getPromptByNameAndCategory(name: string, category: string): AIPromptEntityExtended | undefined {
+    private getPromptByNameAndCategory(name: string, category: string): MJAIPromptEntityExtended | undefined {
         return AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === name.trim().toLowerCase() && 
                                                    p.Category?.trim().toLowerCase() === category?.trim().toLowerCase());
     }

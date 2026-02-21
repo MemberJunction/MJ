@@ -20,7 +20,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
-import { AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Container component for displaying a list of messages
@@ -39,7 +39,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
-  @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
+  @Input() public agentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();

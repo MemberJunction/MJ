@@ -34,7 +34,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     DataJSON = '';
   },
   MJDataContextItemEntityType: class {},
-  UserViewEntityExtended: class {
+  MJUserViewEntityExtended: class {
     ID = '';
     Name = '';
     ViewEntityInfo = { ID: '', Name: '', Fields: [], SchemaName: '', BaseView: '' };

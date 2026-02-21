@@ -1,5 +1,49 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- 4618227: Fix Angular 21/zone.js 0.15 change detection regressions, improve conversation caching performance, and resolve blank tabs in artifacts and entity viewer
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+- Updated dependencies [4618227]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/graphql-dataprovider@5.2.0
+  - @memberjunction/ai-engine-base@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/ng-dashboards@5.2.0
+  - @memberjunction/ng-explorer-settings@5.2.0
+  - @memberjunction/ng-shared@5.2.0
+  - @memberjunction/ng-ai-test-harness@5.2.0
+  - @memberjunction/ng-conversations@5.2.0
+  - @memberjunction/ng-dashboard-viewer@5.2.0
+  - @memberjunction/ng-entity-viewer@5.2.0
+  - @memberjunction/communication-types@5.2.0
+  - @memberjunction/entity-communications-client@5.2.0
+  - @memberjunction/templates-base-types@5.2.0
+  - @memberjunction/ng-query-viewer@5.2.0
+  - @memberjunction/ng-artifacts@5.2.0
+  - @memberjunction/ng-base-application@5.2.0
+  - @memberjunction/ng-entity-form-dialog@5.2.0
+  - @memberjunction/ng-entity-permissions@5.2.0
+  - @memberjunction/ng-list-detail-grid@5.2.0
+  - @memberjunction/ng-base-forms@5.2.0
+  - @memberjunction/ng-file-storage@5.2.0
+  - @memberjunction/ng-notifications@5.2.0
+  - @memberjunction/ng-record-changes@5.2.0
+  - @memberjunction/ng-record-selector@5.2.0
+  - @memberjunction/ng-resource-permissions@5.2.0
+  - @memberjunction/ng-shared-generic@5.2.0
+  - @memberjunction/ng-user-avatar@5.2.0
+  - @memberjunction/ng-auth-services@5.2.0
+  - @memberjunction/ng-container-directives@5.2.0
+  - @memberjunction/ng-generic-dialog@5.2.0
+  - @memberjunction/global@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes

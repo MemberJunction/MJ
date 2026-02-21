@@ -5,7 +5,7 @@
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { UserInfo } from '@memberjunction/core';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { QueryGenConfig } from '../cli/config';
 
@@ -23,7 +23,7 @@ import { QueryGenConfig } from '../cli/config';
  * @returns Promise resolving to the prompt result
  */
 export async function executePromptWithOverrides<T>(
-  prompt: AIPromptEntityExtended,
+  prompt: MJAIPromptEntityExtended,
   data: Record<string, unknown>,
   contextUser: UserInfo,
   config: QueryGenConfig
