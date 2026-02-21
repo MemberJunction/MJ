@@ -4,18 +4,18 @@ import path from 'path';
 import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
 import { MJActionEntity, MJActionLibraryEntity } from '@memberjunction/core-entities';
-import { MJActionEntityServer } from '@memberjunction/core-entities-server';
+import { ActionEntityServerEntity } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
 import { mkdirSync } from 'fs';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { MJActionEntityExtended } from '@memberjunction/actions-base';
+import { ActionEntityExtended } from '@memberjunction/actions-base';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
 export class ActionSubClassGeneratorBase {
 
-    protected getAllActionLibrariesAndUsedItems(actions: MJActionEntityExtended[]) {
+    protected getAllActionLibrariesAndUsedItems(actions: ActionEntityExtended[]) {
         // get all of the libraries from the combination of distinct libraries from all of the actions we have here
         const allActionLibraries: {Library: string, LibraryID: string, ItemsUsedArray: string[]}[] = [];
         actions.forEach(action => {
@@ -46,7 +46,7 @@ export class ActionSubClassGeneratorBase {
         });
         return allActionLibraries;
     }
-    public async generateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
+    public async generateActions(actions: ActionEntityExtended[], directory: string): Promise<boolean> {
         try {
             const actionFilePath = path.join(directory, 'action_subclasses.ts');
 
