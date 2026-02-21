@@ -1,3 +1,12 @@
+/*****************************************************************
+ - Prior to 5.3.0 this script was run as a "before-all" script in CodeGen
+ - As of 5.3.0 and beyond this script is NEVER run automatically as we do
+   not need this anymore due to flyway baseline migrations - in addtion this script
+   can be destructive in that it doesn't restore all aspects of prior migrations/baselines such as
+   sp_addextendedproperty calls for things like vwEntities. 
+ - In a future MJ release we will DELETE this file
+******************************************************************/
+
 DROP PROCEDURE IF EXISTS __mj.spRecompileAllViews
 GO
 CREATE PROCEDURE __mj.spRecompileAllViews
