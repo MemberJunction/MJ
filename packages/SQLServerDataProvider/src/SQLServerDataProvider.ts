@@ -42,7 +42,6 @@ import {
   EntityPermissionType,
   EntitySaveOptions,
   LogError,
-  RunReportParams,
   DatasetItemFilterType,
   DatasetResultType,
   DatasetStatusEntityUpdateDateType,
@@ -50,7 +49,6 @@ import {
   EntityRecordNameInput,
   EntityRecordNameResult,
   IRunReportProvider,
-  RunReportResult,
   StripStopWords,
   RecordDependency,
   RecordMergeRequest,
@@ -699,42 +697,7 @@ export class SQLServerDataProvider
   // END ---- SQL Logging Methods
   /**************************************************************************/
 
-  /**************************************************************************/
-  // START ---- IRunReportProvider
-  /**************************************************************************/
-  public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
-    const ReportID = params.ReportID;
-    // run the sql and return the data
-    const sqlReport = `SELECT ReportSQL FROM [${this.MJCoreSchemaName}].vwReports WHERE ID =${ReportID}`;
-    const reportInfo = await this.ExecuteSQL(sqlReport, undefined, undefined, contextUser);
-    if (reportInfo && reportInfo.length > 0) {
-      const start = new Date().getTime();
-      const sql = reportInfo[0].ReportSQL;
-      const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
-      const end = new Date().getTime();
-      if (result)
-        return {
-          Success: true,
-          ReportID,
-          Results: result,
-          RowCount: result.length,
-          ExecutionTime: end - start,
-          ErrorMessage: '',
-        };
-      else
-        return {
-          Success: false,
-          ReportID,
-          Results: [],
-          RowCount: 0,
-          ExecutionTime: end - start,
-          ErrorMessage: 'Error running report SQL',
-        };
-    } else return { Success: false, ReportID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Report not found' };
-  }
-  /**************************************************************************/
-  // END ---- IRunReportProvider
-  /**************************************************************************/
+  // RunReport is inherited from DatabaseProviderBase
 
   /**
    * Resolves a hierarchical category path (e.g., "/MJ/AI/Agents/") to a CategoryID.

@@ -29,8 +29,6 @@ import {
     PotentialDuplicateResponse,
     RecordMergeRequest,
     RecordMergeResult,
-    RunReportParams,
-    RunReportResult,
     DatasetResultType,
     DatasetItemResultType,
     DatasetStatusResultType,
@@ -495,14 +493,7 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         };
     }
 
-    // ─── IRunReportProvider ──────────────────────────────────────────
-
-    async RunReport(
-        _params: RunReportParams,
-        _contextUser?: UserInfo
-    ): Promise<RunReportResult> {
-        return { Success: false, Results: [], ReportID: '', RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Not yet implemented for PostgreSQL' };
-    }
+    // RunReport is inherited from DatabaseProviderBase
 
     // ─── Dataset Methods ─────────────────────────────────────────────
 

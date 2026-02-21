@@ -6,7 +6,8 @@ import { EntitySaveOptions, EntityDeleteOptions } from "./interfaces";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { LogError } from "./logging";
-import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult } from "./interfaces";
+import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunReportResult } from "./interfaces";
+import { RunReportParams } from "./runReport";
 import { SQLExpressionValidator } from "@memberjunction/global";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -1242,6 +1243,54 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**************************************************************************/
     // END ---- Save/Delete Orchestration
+    /**************************************************************************/
+
+    /**************************************************************************/
+    // START ---- RunReport (Phase 5)
+    /**************************************************************************/
+
+    /**
+     * Runs a report by looking up its SQL definition from vwReports and executing it.
+     * Both SQL Server and PostgreSQL share this logic — the only dialect difference
+     * is identifier quoting, handled by QuoteIdentifier/QuoteSchemaAndView.
+     *
+     * @param params Report parameters including ReportID
+     * @param contextUser Optional context user for permission/audit purposes
+     */
+    public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
+        const reportID = params.ReportID;
+        const safeReportID = reportID.replace(/'/g, "''");
+        const sqlReport = `SELECT ${this.QuoteIdentifier('ReportSQL')} FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwReports')} WHERE ${this.QuoteIdentifier('ID')} = '${safeReportID}'`;
+        const reportInfo = await this.ExecuteSQL<Record<string, unknown>>(sqlReport, undefined, undefined, contextUser);
+        if (reportInfo && reportInfo.length > 0) {
+            const start = Date.now();
+            const sql = String(reportInfo[0].ReportSQL);
+            const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+            const end = Date.now();
+            if (result)
+                return {
+                    Success: true,
+                    ReportID: reportID,
+                    Results: result,
+                    RowCount: result.length,
+                    ExecutionTime: end - start,
+                    ErrorMessage: '',
+                };
+            else
+                return {
+                    Success: false,
+                    ReportID: reportID,
+                    Results: [],
+                    RowCount: 0,
+                    ExecutionTime: end - start,
+                    ErrorMessage: 'Error running report SQL',
+                };
+        }
+        return { Success: false, ReportID: reportID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Report not found' };
+    }
+
+    /**************************************************************************/
+    // END ---- RunReport (Phase 5)
     /**************************************************************************/
 }
 
