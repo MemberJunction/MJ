@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
+import { CompositeKey } from '@memberjunction/core';
 
 // Mock pg module
 vi.mock('pg', () => {
@@ -108,12 +109,18 @@ describe('PostgreSQLDataProvider', () => {
 
     describe('stub methods', () => {
         it('GetRecordChanges should return empty array', async () => {
-            const result = await provider.GetRecordChanges('Entity', {} as never);
+            // Mock ExecuteSQL to return empty results
+            vi.spyOn(provider, 'ExecuteSQL').mockResolvedValueOnce([]);
+            const ck = new CompositeKey([{ FieldName: 'ID', Value: 'test-id' }]);
+            const result = await provider.GetRecordChanges('Entity', ck);
             expect(result).toEqual([]);
         });
 
         it('GetRecordFavoriteStatus should return false', async () => {
-            const result = await provider.GetRecordFavoriteStatus('user1', 'Entity', {} as never);
+            // Mock ExecuteSQL to return empty results (no favorite found)
+            vi.spyOn(provider, 'ExecuteSQL').mockResolvedValueOnce([]);
+            const ck = new CompositeKey([{ FieldName: 'ID', Value: 'test-id' }]);
+            const result = await provider.GetRecordFavoriteStatus('user1', 'Entity', ck);
             expect(result).toBe(false);
         });
 
@@ -132,8 +139,10 @@ describe('PostgreSQLDataProvider', () => {
             expect(result.Success).toBe(false);
         });
 
-        it('FindISAChildEntity should return null', async () => {
-            const result = await provider.FindISAChildEntity({} as never, 'pk1');
+        it('FindISAChildEntity should return null for entity with no children', async () => {
+            // Provide an EntityInfo-like object with empty ChildEntities
+            const mockEntityInfo = { ChildEntities: [] } as never;
+            const result = await provider.FindISAChildEntity(mockEntityInfo, 'pk1');
             expect(result).toBeNull();
         });
 

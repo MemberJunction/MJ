@@ -13,6 +13,7 @@ import {
     EntityPermissionType,
     ProviderType,
     CompositeKey,
+    EntityDependency,
     EntityRecordNameInput,
     EntityRecordNameResult,
     RecordChange,
@@ -75,6 +76,87 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
     override get PlatformKey(): DatabasePlatform {
         return 'postgresql';
     }
+
+    /**************************************************************************/
+    // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
+    /**************************************************************************/
+
+    protected override QuoteIdentifier(name: string): string {
+        return pgDialect.QuoteIdentifier(name);
+    }
+
+    protected override QuoteSchemaAndView(schemaName: string, objectName: string): string {
+        return pgDialect.QuoteSchema(schemaName, objectName);
+    }
+
+    protected override BuildChildDiscoverySQL(childEntities: EntityInfo[], recordPKValue: string): string {
+        const safePKValue = recordPKValue.replace(/'/g, "''");
+        const unionParts = childEntities
+            .filter(child => child.PrimaryKeys.length > 0)
+            .map(child => {
+                const schema = child.SchemaName || '__mj';
+                const table = child.BaseTable;
+                const pkName = child.PrimaryKeys[0].Name;
+                const safeName = child.Name.replace(/'/g, "''");
+                const safeSchema = pgDialect.QuoteSchema(schema, table);
+                const safePK = pgDialect.QuoteIdentifier(pkName);
+                return "SELECT '" + safeName + '\' AS "EntityName" FROM ' + safeSchema + ' WHERE ' + safePK + " = '" + safePKValue + "'";
+            });
+        if (unionParts.length === 0) return '';
+        return unionParts.join(' UNION ALL ');
+    }
+
+    protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+        let sSQL = '';
+        for (const dep of entityDependencies) {
+            const entityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.EntityName?.trim().toLowerCase());
+            const relatedEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.RelatedEntityName?.trim().toLowerCase());
+            if (!entityInfo || !relatedEntityInfo) continue;
+
+            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const pkParts: string[] = [];
+            for (const pk of entityInfo.PrimaryKeys) {
+                pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
+            }
+            const primaryKeySelectString = pkParts.join(" || '" + CompositeKey.DefaultFieldDelimiter + "' || ");
+
+            if (sSQL.length > 0) sSQL += ' UNION ALL ';
+            sSQL += 'SELECT '
+                + "'" + dep.EntityName + '\' AS "EntityName", '
+                + "'" + dep.RelatedEntityName + '\' AS "RelatedEntityName", '
+                + primaryKeySelectString + ' AS "PrimaryKeyValue", '
+                + "'" + dep.FieldName + '\' AS "FieldName" '
+                + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, relatedEntityInfo.BaseView) + ' '
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+        }
+        return sSQL;
+    }
+
+    protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+        let sSQL = '';
+        this.Entities.forEach(entity => {
+            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const pkParts: string[] = [];
+            for (const pk of entity.PrimaryKeys) {
+                pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
+            }
+            const primaryKeySelectString = pkParts.join(" || '" + CompositeKey.DefaultFieldDelimiter + "' || ");
+
+            entity.Fields.filter(f => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach(f => {
+                if (sSQL.length > 0) sSQL += ' UNION ALL ';
+                sSQL += 'SELECT '
+                    + "'" + entityName + '\' AS "EntityName", '
+                    + "'" + entity.Name + '\' AS "RelatedEntityName", '
+                    + primaryKeySelectString + ' AS "PrimaryKeyValue", '
+                    + "'" + f.Name + '\' AS "FieldName" '
+                    + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, entity.BaseView) + ' '
+                    + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + ' = ' + quotes + entity.ID + quotes
+                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+            });
+        });
+        return sSQL;
+    }
+
 
     get Dialect(): PostgreSQLDialect {
         return pgDialect;
@@ -225,6 +307,14 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         const whereSQL = this.buildWhereClause(params, entityInfo, contextUser);
         const orderBySQL = this.resolveOrderBy(params, entityInfo);
         const selectSQL = this.buildSelectSQL(entityInfo, fields, whereSQL, orderBySQL, params.MaxRows, params.StartRow);
+
+        // DEBUG: log the RunView SQL for diagnosis
+        if (entityInfo.Name.includes('Authorization Roles') || entityInfo.Name.includes('Query Permissions') || entityInfo.Name.includes('User Roles')) {
+            console.log(`\n[DEBUG RunView] Entity: ${entityInfo.Name}`);
+            console.log(`[DEBUG RunView] Fields: ${fields.join(', ')}`);
+            console.log(`[DEBUG RunView] WHERE: ${whereSQL}`);
+            console.log(`[DEBUG RunView] SQL: ${selectSQL}\n`);
+        }
 
         try {
             const rows = await this.ExecuteSQL<T>(selectSQL, undefined, { description: `RunView: ${entityInfo.Name}` }, contextUser);
@@ -429,41 +519,6 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         return true;
     }
 
-    async GetRecordChanges(
-        _entityName: string,
-        _compositeKey: CompositeKey,
-        _contextUser?: UserInfo
-    ): Promise<RecordChange[]> {
-        return [];
-    }
-
-    async GetRecordFavoriteStatus(
-        _userId: string,
-        _entityName: string,
-        _CompositeKey: CompositeKey,
-        _contextUser?: UserInfo
-    ): Promise<boolean> {
-        return false;
-    }
-
-    async SetRecordFavoriteStatus(
-        _userId: string,
-        _entityName: string,
-        _CompositeKey: CompositeKey,
-        _isFavorite: boolean,
-        _contextUser: UserInfo
-    ): Promise<void> {
-        // Favorites - initial stub
-    }
-
-    async GetRecordDependencies(
-        _entityName: string,
-        _CompositeKey: CompositeKey,
-        _contextUser?: UserInfo
-    ): Promise<RecordDependency[]> {
-        return [];
-    }
-
     async GetRecordDuplicates(
         _params: PotentialDuplicateRequest,
         _contextUser?: UserInfo
@@ -487,22 +542,6 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
             Request: _request,
             RecordMergeLogID: '',
         };
-    }
-
-    async FindISAChildEntity(
-        _entityInfo: EntityInfo,
-        _recordPKValue: string,
-        _contextUser?: UserInfo
-    ): Promise<{ ChildEntityName: string } | null> {
-        return null;
-    }
-
-    async FindISAChildEntities(
-        _entityInfo: EntityInfo,
-        _recordPKValue: string,
-        _contextUser?: UserInfo
-    ): Promise<{ ChildEntityName: string }[]> {
-        return [];
     }
 
     // ─── IRunReportProvider ──────────────────────────────────────────
@@ -1087,6 +1126,11 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
      * left untouched.
      */
     private quoteIdentifiersInSQL(sql: string, entityInfo: EntityInfo): string {
+        // Convert SQL Server [bracket] notation to PostgreSQL "double-quote" notation.
+        // Core MJ code (entityInfo.ts) generates relationship filters like [ColumnName]
+        // and [schema].[viewName] which need to become "ColumnName" and "schema"."viewName".
+        sql = sql.replace(/\[(\w[\w\s]*)\]/g, '"$1"');
+
         // Build a set of field names for this entity
         const fieldNames = new Set(entityInfo.Fields.map(f => f.Name));
 
@@ -1176,7 +1220,12 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
 
         for (let i = 0; i < fields.length; i++) {
             const field = fields[i];
-            const value = entity.Get(field.Name);
+            let value = entity.Get(field.Name);
+            // If the value looks like a database function (e.g., gen_random_uuid(), NEWID()),
+            // pass NULL so the stored procedure lets the database use its column default
+            if (typeof value === 'string' && value.includes('()')) {
+                value = null;
+            }
             paramValues.push(PGQueryParameterProcessor.ProcessParameterValue(value));
             // Use named parameter notation (p_fieldname => $N) to avoid
             // parameter ordering mismatches with the stored functions

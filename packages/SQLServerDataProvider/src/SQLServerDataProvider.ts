@@ -69,6 +69,7 @@ import {
   Metadata,
   DatasetItemResultType,
   DatabaseProviderBase,
+  FieldChange,
   QueryInfo,
   QueryCategoryInfo,
   QueryCache,
@@ -117,16 +118,6 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
 import { MJGlobal, SQLExpressionValidator } from '@memberjunction/global';
-
-/**
- * Represents a single field change in the DiffObjects comparison result
- */
-export type FieldChange = {
-  field: string;
-  oldValue: any;
-  newValue: any;
-};
-
 /**
  * Core SQL execution function - handles the actual database query execution
  * This is outside the class to allow both static and instance methods to use it
@@ -250,6 +241,18 @@ export class SQLServerDataProvider
   extends DatabaseProviderBase
   implements IEntityDataProvider, IMetadataProvider, IRunReportProvider
 {
+  /**************************************************************************/
+  // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
+  /**************************************************************************/
+
+  protected override QuoteIdentifier(name: string): string {
+    return `[${name}]`;
+  }
+
+  protected override QuoteSchemaAndView(schemaName: string, objectName: string): string {
+    return `[${schemaName}].[${objectName}]`;
+  }
+
   private _pool: sql.ConnectionPool;
   
   // Instance transaction properties
@@ -2712,67 +2715,6 @@ export class SQLServerDataProvider
     return ProviderType.Database;
   }
 
-  public async GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean> {
-    const id = await this.GetRecordFavoriteID(userId, entityName, CompositeKey, contextUser);
-    return id !== null;
-  }
-
-  public async GetRecordFavoriteID(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string | null> {
-    try {
-      const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID='${userId}' AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`;
-      const result = await this.ExecuteSQL(sSQL, null, undefined, contextUser);
-      if (result && result.length > 0) return result[0].ID;
-      else return null;
-    } catch (e) {
-      LogError(e);
-      throw e;
-    }
-  }
-
-  public async SetRecordFavoriteStatus(
-    userId: string,
-    entityName: string,
-    CompositeKey: CompositeKey,
-    isFavorite: boolean,
-    contextUser: UserInfo,
-  ): Promise<void> {
-    try {
-      const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
-      if ((currentFavoriteId === null && isFavorite === false) || (currentFavoriteId !== null && isFavorite === true)) return; // no change
-
-      // if we're here that means we need to invert the status, which either means creating a record or deleting a record
-      const e = this.Entities.find((e) => e.Name === entityName);
-      const ufEntity = <MJUserFavoriteEntity>await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
-      if (currentFavoriteId !== null) {
-        // delete the record since we are setting isFavorite to FALSE
-        await ufEntity.Load(currentFavoriteId);
-        if (await ufEntity.Delete()) return;
-        else throw new Error(`Error deleting user favorite`);
-      } else {
-        // create the record since we are setting isFavorite to TRUE
-        ufEntity.NewRecord();
-        ufEntity.Set('EntityID', e.ID);
-        ufEntity.Set('RecordID', CompositeKey.Values()); // this is a comma separated list of primary key values, which is fine as the primary key is a string
-        ufEntity.Set('UserID', userId);
-        if (await ufEntity.Save()) return;
-        else throw new Error(`Error saving user favorite`);
-      }
-    } catch (e) {
-      LogError(e);
-      throw e;
-    }
-  }
-
-  public async GetRecordChanges(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordChange[]> {
-    try {
-      const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${compositeKey.ToConcatenatedString()}' ORDER BY ChangedAt DESC`;
-      return this.ExecuteSQL(sSQL, undefined, undefined, contextUser);
-    } catch (e) {
-      LogError(e);
-      throw e;
-    }
-  }
-
   /**
    * This function will generate SQL statements for all of the possible soft links that are not traditional foreign keys but exist in entities
    * where there is a column that has the EntityIDFieldName set to a column name (not null). We need to get a list of all such soft link fields across ALL entities
@@ -2780,7 +2722,7 @@ export class SQLServerDataProvider
    * @param entityName
    * @param compositeKey
    */
-  protected GetSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+  protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
     let sSQL = '';
@@ -2814,7 +2756,7 @@ export class SQLServerDataProvider
     return sSQL;
   }
 
-  protected GetHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+  protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
     let sSQL = '';
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
@@ -2834,75 +2776,6 @@ export class SQLServerDataProvider
                         [${entityDependency.FieldName}] = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`;
     }
     return sSQL;
-  }
-
-  /**
-   * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
-   * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
-   * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
-   * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
-   * @param entityName the name of the entity to check
-   * @param KeyValuePairs the primary key(s) to check - only send multiple if you have an entity with a composite primary key
-   */
-  public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordDependency[]> {
-    try {
-      const recordDependencies: RecordDependency[] = [];
-
-      // first, get the entity dependencies for this entity
-      const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
-      if (entityDependencies.length === 0) {
-        // no dependencies, exit early
-        return recordDependencies;
-      }
-
-      // now, we have to construct a query that will return the dependencies for this record, both hard and soft links
-      const sSQL: string = this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + this.GetSoftLinkDependencySQL(entityName, compositeKey);
-
-      // now, execute the query
-      const result = await this.ExecuteSQL(sSQL, null, undefined, contextUser);
-      if (!result || result.length === 0) {
-        return recordDependencies;
-      }
-
-      // now we go through the results and create the RecordDependency objects
-      for (const r of result) {
-        const entityInfo: EntityInfo | undefined = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
-        if (!entityInfo) {
-          throw new Error(`Entity ${r.EntityName} not found in metadata`);
-        }
-
-        // future, if we support foreign keys that are composite keys, we'll need to enable this code
-        // const pkeyValues: KeyValuePair[] = [];
-        // entityInfo.PrimaryKeys.forEach((pk) => {
-        //     pkeyValues.push({FieldName: pk.Name, Value: r[pk.Name]}) // add all of the primary keys, which often is as simple as just "ID", but this is generic way to do it
-        // })
-
-        const compositeKey: CompositeKey = new CompositeKey();
-        // the row r will have a PrimaryKeyValue field that is a string that is a concatenation of the primary key field names and values
-        // we need to parse that out so that we can then pass it to the CompositeKey object
-        const pkeys = {};
-        const keyValues = r.PrimaryKeyValue.split(CompositeKey.DefaultFieldDelimiter);
-        keyValues.forEach((kv) => {
-          const parts = kv.split(CompositeKey.DefaultValueDelimiter);
-          pkeys[parts[0]] = parts[1];
-        });
-        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, pkeys);
-
-        const recordDependency: RecordDependency = {
-          EntityName: r.EntityName,
-          RelatedEntityName: r.RelatedEntityName,
-          FieldName: r.FieldName,
-          PrimaryKey: compositeKey,
-        };
-
-        recordDependencies.push(recordDependency);
-      }
-      return recordDependencies;
-    } catch (e) {
-      // log and throw
-      LogError(e);
-      throw e;
-    }
   }
 
   protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
@@ -3534,14 +3407,6 @@ export class SQLServerDataProvider
     }
   }
 
-  protected MapTransactionResultToNewValues(transactionResult: Record<string, any>): { FieldName: string; Value: any }[] {
-    return Object.keys(transactionResult).map((k) => {
-      return {
-        FieldName: k,
-        Value: transactionResult[k],
-      };
-    }); // transform the result into a list of field/value pairs
-  }
 
   /**
    * Returns the stored procedure name to use for the given entity based on if it is a new record or an existing record.
@@ -3862,7 +3727,7 @@ export class SQLServerDataProvider
     user: UserInfo,
     wrapRecordIdInQuotes: boolean,
   ) {
-    const fullRecordJSON: string = JSON.stringify(this.escapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
+    const fullRecordJSON: string = JSON.stringify(this.EscapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
     const changes: any = this.DiffObjects(oldData, newData, entityInfo, "'");
     const changesKeys = changes ? Object.keys(changes) : [];
     if (changesKeys.length > 0 || oldData === null /*new record*/ || newData === null /*deleted record*/) {
@@ -3893,212 +3758,6 @@ export class SQLServerDataProvider
     if (sSQL) {
       const result = await this.ExecuteSQL(sSQL, undefined, undefined, user);
       return result;
-    }
-  }
-
-  /**
-   * This method will create a human-readable string that describes the changes object that was created using the DiffObjects() method
-   * @param changesObject JavaScript object that has properties for each changed field that in turn have field, oldValue and newValue as sub-properties
-   * @param maxValueLength If not specified, default value of 200 characters applies where any values after the maxValueLength is cut off. The actual values are stored in the ChangesJSON and FullRecordJSON in the RecordChange table, this is only for the human-display
-   * @param cutOffText If specified, and if maxValueLength applies to any of the values being included in the description, this cutOffText param will be appended to the end of the cut off string to indicate to the human reader that the value is partial.
-   * @returns
-   */
-  public CreateUserDescriptionOfChanges(changesObject: any, maxValueLength: number = 200, cutOffText: string = '...'): string {
-    let sRet = '';
-    const keys = Object.keys(changesObject);
-    for (let i = 0; i < keys.length; i++) {
-      const change = changesObject[keys[i]];
-      if (sRet.length > 0) {
-        sRet += '\n';
-      }
-      if (change.oldValue && change.newValue)
-        // both old and new values set, show change
-        sRet += `${change.field} changed from ${this.trimString(change.oldValue, maxValueLength, cutOffText)} to ${this.trimString(change.newValue, maxValueLength, cutOffText)}`;
-      else if (change.newValue)
-        // old value was blank, new value isn't
-        sRet += `${change.field} set to ${this.trimString(change.newValue, maxValueLength, cutOffText)}`;
-      else if (change.oldValue)
-        // new value is blank, old value wasn't
-        sRet += `${change.field} cleared from ${this.trimString(change.oldValue, maxValueLength, cutOffText)}`;
-    }
-    return sRet.replace(/'/g, "''");
-  }
-
-  protected trimString(value: any, maxLength: number, trailingChars: string) {
-    if (value && typeof value === 'string' && value.length > maxLength) {
-      value = value.substring(0, maxLength) + trailingChars;
-    }
-    return value;
-  }
-
-  /**
-   * Recursively escapes quotes in all string properties of an object or array.
-   * This method traverses through nested objects and arrays, escaping the specified
-   * quote character in all string values to prevent SQL injection and syntax errors.
-   * 
-   * @param obj - The object, array, or primitive value to process
-   * @param quoteToEscape - The quote character to escape (typically single quote "'")
-   * @returns A new object/array with all string values having quotes properly escaped.
-   *          Non-string values are preserved as-is.
-   * 
-   * @example
-   * // Escaping single quotes in a nested object
-   * const input = {
-   *   name: "John's Company",
-   *   details: {
-   *     description: "It's the best",
-   *     tags: ["Won't fail", "Can't stop"]
-   *   }
-   * };
-   * const escaped = this.escapeQuotesInProperties(input, "'");
-   * // Result: {
-   * //   name: "John''s Company",
-   * //   details: {
-   * //     description: "It''s the best",
-   * //     tags: ["Won''t fail", "Can''t stop"]
-   * //   }
-   * // }
-   * 
-   * @remarks
-   * This method is essential for preparing data to be embedded in SQL strings.
-   * It handles:
-   * - Nested objects of any depth
-   * - Arrays (including arrays of objects)
-   * - Mixed-type objects with strings, numbers, booleans, null values
-   * - Circular references are NOT handled and will cause stack overflow
-   */
-  protected escapeQuotesInProperties(obj: any, quoteToEscape: string): any {
-    // Handle null/undefined
-    if (obj === null || obj === undefined) {
-      return obj;
-    }
-    
-    // Handle arrays recursively
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.escapeQuotesInProperties(item, quoteToEscape));
-    }
-    
-    // Handle Date objects - convert to ISO string before they lose their value
-    if (obj instanceof Date) {
-      return obj.toISOString();
-    }
-
-    // Handle objects recursively
-    if (typeof obj === 'object') {
-      const sRet: any = {};
-      for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-          const element = obj[key];
-          if (typeof element === 'string') {
-            const reg = new RegExp(quoteToEscape, 'g');
-            sRet[key] = element.replace(reg, quoteToEscape + quoteToEscape);
-          } else if (typeof element === 'object') {
-            // Recursively escape nested objects and arrays
-            sRet[key] = this.escapeQuotesInProperties(element, quoteToEscape);
-          } else {
-            // Keep primitive values as-is (numbers, booleans, etc.)
-            sRet[key] = element;
-          }
-        }
-      }
-      return sRet;
-    }
-    
-    // For non-object types (shouldn't normally happen), return as-is
-    return obj;
-  }
-
-  /**
-   * Creates a changes object by comparing two javascript objects, identifying fields that have different values.
-   * Each property in the returned object represents a changed field, with the field name as the key.
-   * 
-   * @param oldData - The original data object to compare from
-   * @param newData - The new data object to compare to
-   * @param entityInfo - Entity metadata used to validate fields and determine comparison logic
-   * @param quoteToEscape - The quote character to escape in string values (typically "'")
-   * @returns A Record mapping field names to FieldChange objects containing the field name, old value, and new value.
-   *          Returns null if either oldData or newData is null/undefined.
-   *          Only includes fields that have actually changed and are not read-only.
-   * 
-   * @remarks
-   * - Read-only fields are never considered changed
-   * - null and undefined are treated as equivalent
-   * - Date fields are compared by timestamp
-   * - String and object values have quotes properly escaped for SQL
-   * - Objects/arrays are recursively escaped using escapeQuotesInProperties
-   * 
-   * @example
-   * ```typescript
-   * const changes = provider.DiffObjects(
-   *   { name: "John's Co", revenue: 1000 },
-   *   { name: "John's Co", revenue: 2000 },
-   *   entityInfo,
-   *   "'"
-   * );
-   * // Returns: { revenue: { field: "revenue", oldValue: 1000, newValue: 2000 } }
-   * ```
-   */
-  public DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): Record<string, FieldChange> | null {
-    if (!oldData || !newData) return null;
-    else {
-      const changes: Record<string, FieldChange> = {};
-      for (const key in newData) {
-        const f = entityInfo.Fields.find((f) => f.Name.toLowerCase() === key.toLowerCase());
-        if (!f) {
-          continue; // skip if field not found in entity info, sometimes objects have extra properties that are not part of the entity
-        }
-        
-        let bDiff: boolean = false;
-        if (f.ReadOnly)
-          bDiff = false; // read only fields are never different, they can change in the database, but we don't consider them to be a change for record changes purposes.
-        else if ((oldData[key] == undefined || oldData[key] == null) && (newData[key] == undefined || newData[key] == null))
-          bDiff = false; // this branch of logic ensures that undefined and null are treated the same
-        else {
-          switch (f.TSType) {
-            case EntityFieldTSType.String:
-              bDiff = oldData[key] !== newData[key];
-              break;
-            case EntityFieldTSType.Date:
-              bDiff = new Date(oldData[key]).getTime() !== new Date(newData[key]).getTime();
-              break;
-            case EntityFieldTSType.Number:
-            case EntityFieldTSType.Boolean:
-              bDiff = oldData[key] !== newData[key];
-              break;
-          }
-        }
-        if (bDiff) {
-          // make sure we escape things properly
-          let o = oldData[key];
-          let n = newData[key];
-          
-          if (typeof o === 'string') {
-            // Escape strings directly
-            const r = new RegExp(quoteToEscape, 'g');
-            o = o.replace(r, quoteToEscape + quoteToEscape);
-          } else if (typeof o === 'object' && o !== null) {
-            // For objects/arrays, recursively escape all string properties
-            o = this.escapeQuotesInProperties(o, quoteToEscape);
-          }
-          
-          if (typeof n === 'string') {
-            // Escape strings directly
-            const r = new RegExp(quoteToEscape, 'g');
-            n = n.replace(r, quoteToEscape + quoteToEscape);
-          } else if (typeof n === 'object' && n !== null) {
-            // For objects/arrays, recursively escape all string properties
-            n = this.escapeQuotesInProperties(n, quoteToEscape);
-          }
-
-          changes[key] = {
-            field: key,
-            oldValue: o,
-            newValue: n,
-          };
-        }
-      }
-
-      return changes;
     }
   }
 
@@ -5496,70 +5155,13 @@ export class SQLServerDataProvider
     }
   }
 
-  /**
-   * Discovers which IS-A child entity, if any, has a record with the given primary key.
-   * Executes a single UNION ALL query across all child entity tables for maximum efficiency.
-   * Each branch of the UNION is a PK lookup on a clustered index — effectively instant.
-   *
-   * @param entityInfo The parent entity whose children to search
-   * @param recordPKValue The primary key value to find in child tables
-   * @param contextUser Optional context user for audit/permission purposes
-   * @returns The child entity name if found, or null if no child record exists
-   */
-  public async FindISAChildEntity(
-    entityInfo: EntityInfo,
-    recordPKValue: string,
-    contextUser?: UserInfo
-  ): Promise<{ ChildEntityName: string } | null> {
-    const childEntities = entityInfo.ChildEntities;
-    if (childEntities.length === 0) return null;
-
-    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
-    if (!unionSQL) return null;
-
-    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
-    if (results && results.length > 0 && results[0].EntityName) {
-      return { ChildEntityName: results[0].EntityName };
-    }
-    return null;
-  }
-
-  /**
-   * Discovers ALL IS-A child entities that have records with the given primary key.
-   * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
-   * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
-   *
-   * @param entityInfo The parent entity whose children to search
-   * @param recordPKValue The primary key value to find in child tables
-   * @param contextUser Optional context user for audit/permission purposes
-   * @returns Array of child entity names found (empty if none)
-   */
-  public async FindISAChildEntities(
-    entityInfo: EntityInfo,
-    recordPKValue: string,
-    contextUser?: UserInfo
-  ): Promise<{ ChildEntityName: string }[]> {
-    const childEntities = entityInfo.ChildEntities;
-    if (childEntities.length === 0) return [];
-
-    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
-    if (!unionSQL) return [];
-
-    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
-    if (results && results.length > 0) {
-      return results
-        .filter((r: Record<string, string>) => r.EntityName)
-        .map((r: Record<string, string>) => ({ ChildEntityName: r.EntityName }));
-    }
-    return [];
-  }
 
   /**
    * Builds a UNION ALL query that checks each child entity's base table for a record
    * with the given primary key. Returns the first match (disjoint subtypes guarantee
    * at most one result) unless used with overlapping subtypes.
    */
-  private buildChildDiscoverySQL(
+  protected override BuildChildDiscoverySQL(
     childEntities: EntityInfo[],
     recordPKValue: string
   ): string {
@@ -5620,10 +5222,10 @@ export class SQLServerDataProvider
     for (const childInfo of parentInfo.ChildEntities) {
       // Skip the active branch (the child that initiated the parent save).
       // When activeChildEntityName is undefined (direct save on parent), propagate to ALL children.
-      if (activeChildEntityName && this.isEntityOrAncestorOf(childInfo, activeChildEntityName)) continue;
+      if (activeChildEntityName && this.IsEntityOrAncestorOf(childInfo, activeChildEntityName)) continue;
 
       // Recursively enumerate this child's entire sub-tree from metadata
-      const subTree = this.getFullSubTree(childInfo);
+      const subTree = this.GetFullSubTree(childInfo);
 
       for (const entityInTree of subTree) {
         if (!entityInTree.TrackRecordChanges) continue;
@@ -5649,31 +5251,6 @@ export class SQLServerDataProvider
         isMutation: true
       });
     }
-  }
-
-  /**
-   * Checks whether a given entity matches the target name, or is an ancestor
-   * of the target (i.e., the target is somewhere in its descendant sub-tree).
-   * Used to identify and skip the active branch during sibling propagation.
-   */
-  private isEntityOrAncestorOf(entityInfo: EntityInfo, targetName: string): boolean {
-    if (entityInfo.Name === targetName) return true;
-    for (const child of entityInfo.ChildEntities) {
-      if (this.isEntityOrAncestorOf(child, targetName)) return true;
-    }
-    return false;
-  }
-
-  /**
-   * Recursively enumerates an entity's entire sub-tree from metadata.
-   * No DB queries — uses EntityInfo.ChildEntities which is populated from metadata.
-   */
-  private getFullSubTree(entityInfo: EntityInfo): EntityInfo[] {
-    const result: EntityInfo[] = [entityInfo];
-    for (const child of entityInfo.ChildEntities) {
-      result.push(...this.getFullSubTree(child));
-    }
-    return result;
   }
 
   /**
