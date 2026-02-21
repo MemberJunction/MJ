@@ -3720,46 +3720,51 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       ag: AdvancedGeneration,
       currentUser: UserInfo
    ): Promise<void> {
-      // Filter fields for this entity (client-side filtering)
-      const fields = allFields.filter((f: any) => f.EntityID === entity.ID);
+      try {
+         // Filter fields for this entity (client-side filtering)
+         const fields = allFields.filter((f: any) => f.EntityID === entity.ID);
 
-      // Determine if this is a new entity (for DefaultForNewUser decision)
-      const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
+         // Determine if this is a new entity (for DefaultForNewUser decision)
+         const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
 
-      // Smart Field Identification
-      // Only run if at least one field allows auto-update for any of the smart field properties
-      if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI)) {
-         const fieldAnalysis = await ag.identifyFields({
-            Name: entity.Name,
-            Description: entity.Description,
-            Fields: fields
-         }, currentUser);
+         // Smart Field Identification
+         // Only run if at least one field allows auto-update for any of the smart field properties
+         if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI)) {
+            const fieldAnalysis = await ag.identifyFields({
+               Name: entity.Name,
+               Description: entity.Description,
+               Fields: fields
+            }, currentUser);
 
-         if (fieldAnalysis) {
-            await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
+            if (fieldAnalysis) {
+               await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
+            }
+         }
+
+         // Form Layout Generation
+         // Only run if at least one field allows auto-update
+         const needsCategoryGeneration = fields.some((f: any) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''));
+         if (needsCategoryGeneration) {
+            // Build IS-A parent chain context if this entity has a parent
+            const parentChainContext = this.buildParentChainContext(entity, fields);
+
+            const layoutAnalysis = await ag.generateFormLayout({
+               Name: entity.Name,
+               Description: entity.Description,
+               SchemaName: entity.SchemaName,
+               Settings: entity.Settings,
+               Fields: fields,
+               ...parentChainContext
+            }, currentUser, isNewEntity);
+
+            if (layoutAnalysis) {
+               await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis, isNewEntity);
+               logStatus(`         Applied form layout for ${entity.Name}`);
+            }
          }
       }
-
-      // Form Layout Generation
-      // Only run if at least one field allows auto-update
-      const needsCategoryGeneration = fields.some((f: any) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''));
-      if (needsCategoryGeneration) {
-         // Build IS-A parent chain context if this entity has a parent
-         const parentChainContext = this.buildParentChainContext(entity, fields);
-
-         const layoutAnalysis = await ag.generateFormLayout({
-            Name: entity.Name,
-            Description: entity.Description,
-            SchemaName: entity.SchemaName,
-            Settings: entity.Settings,
-            Fields: fields,
-            ...parentChainContext
-         }, currentUser, isNewEntity);
-
-         if (layoutAnalysis) {
-            await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis, isNewEntity);
-            logStatus(`         Applied form layout for ${entity.Name}`);
-         }
+      catch (ex) {
+         logError('Error Processing Entity Advanced Generation', ex)
       }
    }
 
@@ -4068,7 +4073,12 @@ WHERE
       }
 
       if (sqlStatements.length > 0) {
-         await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set categories for ${sqlStatements.length} fields`, false);
+         try {
+            await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set categories for ${sqlStatements.length} fields`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Field Categories', ex)
+         }
       }
    }
 
@@ -4094,8 +4104,13 @@ WHERE
                SET Icon = '${escapedIcon}', __mj_UpdatedAt = GETUTCDATE()
                WHERE ID = '${entityId}'
             `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
-            logStatus(`  Set entity icon: ${entityIcon}`);
+            try {
+               await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
+               logStatus(`  Set entity icon: ${entityIcon}`);
+            }
+            catch (ex) {
+               logError('Error Applying Entity Icon', ex);
+            }
          }
       }
    }
@@ -4117,17 +4132,27 @@ WHERE
       const existingNew = await pool.request().query(checkNewSQL);
 
       if (existingNew.recordset.length > 0) {
-         await this.LogSQLAndExecute(pool, `
-            UPDATE [${mj_core_schema()}].EntitySetting
-            SET Value = '${infoJSON}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
-         `, `Update FieldCategoryInfo setting for entity`, false);
+         try {
+            await this.LogSQLAndExecute(pool, `
+               UPDATE [${mj_core_schema()}].EntitySetting
+               SET Value = '${infoJSON}', __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
+            `, `Update FieldCategoryInfo setting for entity`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Category Info Settings: Part 1', ex)
+         }
       } else {
          const newId = uuidv4();
-         await this.LogSQLAndExecute(pool, `
-            INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-            VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
-         `, `Insert FieldCategoryInfo setting for entity`, false);
+         try {
+            await this.LogSQLAndExecute(pool, `
+               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
+            `, `Insert FieldCategoryInfo setting for entity`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Category Info Settings: Part 2', ex)
+         }
       }
 
       // Also upsert legacy FieldCategoryIcons for backwards compatibility
@@ -4143,17 +4168,27 @@ WHERE
       const existingLegacy = await pool.request().query(checkLegacySQL);
 
       if (existingLegacy.recordset.length > 0) {
-         await this.LogSQLAndExecute(pool, `
-            UPDATE [${mj_core_schema()}].EntitySetting
-            SET Value = '${iconsJSON}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
-         `, `Update FieldCategoryIcons setting (legacy)`, false);
+         try {
+            await this.LogSQLAndExecute(pool, `
+               UPDATE [${mj_core_schema()}].EntitySetting
+               SET Value = '${iconsJSON}', __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
+            `, `Update FieldCategoryIcons setting (legacy)`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Category Info Settings: Part 3', ex)
+         }
       } else {
          const newId = uuidv4();
-         await this.LogSQLAndExecute(pool, `
-            INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-            VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
-         `, `Insert FieldCategoryIcons setting (legacy)`, false);
+         try {
+            await this.LogSQLAndExecute(pool, `
+               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
+            `, `Insert FieldCategoryIcons setting (legacy)`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Category Info Settings: Part 4', ex)
+         }
       }
    }
 
@@ -4172,11 +4207,17 @@ WHERE
          SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = GETUTCDATE()
          WHERE EntityID = '${entityId}'
       `;
-      await this.LogSQLAndExecute(pool, updateSQL,
-         `Set DefaultForNewUser=${defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
 
-      logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
-      logStatus(`    Reasoning: ${importance.reasoning}`);
+      try {
+         await this.LogSQLAndExecute(pool, updateSQL,
+            `Set DefaultForNewUser=${defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
+
+         logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
+         logStatus(`    Reasoning: ${importance.reasoning}`);
+      }
+      catch (ex) {
+         logError('Error Applying Entity Importance', ex)
+      }
    }
 
    /**
