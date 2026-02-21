@@ -3715,7 +3715,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     */
    protected async processEntityAdvancedGeneration(
       pool: sql.ConnectionPool,
-      entity: any,
+      entity: EntityInfo,
       allFields: any[],
       ag: AdvancedGeneration,
       currentUser: UserInfo
@@ -3758,7 +3758,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
             }, currentUser, isNewEntity);
 
             if (layoutAnalysis) {
-               await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis, isNewEntity);
+               await this.applyFormLayout(pool, entity, fields, layoutAnalysis, isNewEntity);
                logStatus(`         Applied form layout for ${entity.Name}`);
             }
          }
