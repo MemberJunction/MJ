@@ -282,7 +282,7 @@ const sqlOutputConfigSchema = z.object({
    * The path of the folder to use when logging is enabled.
    * If provided, a file will be created with the format "CodeGen_Run_yyyy-mm-dd_hh-mm-ss.sql"
    */
-  folderPath: z.string().default('../../migrations/v3/'),
+  folderPath: z.string().default('../../migrations/v5/'),
   /**
    * Optional, the file name that will be written WITHIN the folderPath specified.
    */
@@ -595,7 +595,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   },
   SQLOutput: {
     enabled: true,
-    folderPath: './migrations/v3/',
+    folderPath: './migrations/v5/',
     appendToFile: true,
     convertCoreSchemaToFlywayMigrationFile: true,
     omitRecurringScriptsFromLog: true,
