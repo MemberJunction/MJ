@@ -21,6 +21,8 @@ import {
     BaseEntity,
     EntitySaveOptions,
     EntityDeleteOptions,
+    SaveSQLResult,
+    DeleteSQLResult,
     LogError,
     LogStatus,
     PotentialDuplicateRequest,
@@ -468,55 +470,41 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         return rows[0];
     }
 
-    async Save(
-        entity: BaseEntity,
-        user: UserInfo,
-        _options: EntitySaveOptions
-    ): Promise<Record<string, unknown>> {
+    /**
+     * Generates PostgreSQL function-call SQL for Save (Create/Update).
+     * Returns parameterized SQL with $1, $2, ... placeholders.
+     */
+    protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, _user: UserInfo): Promise<SaveSQLResult> {
         const entityInfo = entity.EntityInfo;
-        const isNew = entity.IsSaved === false;
         const fnName = this.getCRUDFunctionName(isNew ? 'create' : 'update', entityInfo);
-
         const { paramValues, paramPlaceholders } = this.buildCRUDParams(entity, isNew, entityInfo);
-        const sql = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
-
-        const rows = await this.ExecuteSQL<Record<string, unknown>>(
-            sql,
-            paramValues,
-            { description: `Save ${isNew ? '(create)' : '(update)'}: ${entityInfo.Name}`, isMutation: true },
-            user
-        );
-
-        if (rows.length === 0) {
-            throw new Error(`Save failed for ${entityInfo.Name}: no record returned from ${fnName}`);
-        }
-        return rows[0];
+        const fullSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
+        return {
+            fullSQL,
+            simpleSQL: fullSQL,
+            parameters: paramValues,
+        };
     }
 
-    async Delete(
-        entity: BaseEntity,
-        _options: EntityDeleteOptions,
-        user: UserInfo
-    ): Promise<boolean> {
+    /**
+     * Generates PostgreSQL function-call SQL for Delete.
+     * Returns parameterized SQL with $1, $2, ... placeholders.
+     */
+    protected override GenerateDeleteSQL(entity: BaseEntity, _user: UserInfo): DeleteSQLResult {
         const entityInfo = entity.EntityInfo;
         const fnName = this.getCRUDFunctionName('delete', entityInfo);
         const pkFields = entityInfo.PrimaryKeys;
-
         if (pkFields.length === 0) {
             throw new Error(`Cannot delete ${entityInfo.Name}: no primary key defined`);
         }
-
         const paramValues = pkFields.map((f: EntityFieldInfo) => entity.Get(f.Name));
         const paramPlaceholders = paramValues.map((_v: unknown, i: number) => `$${i + 1}`).join(', ');
-        const sql = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
-
-        await this.ExecuteSQL<Record<string, unknown>>(
-            sql,
-            paramValues,
-            { description: `Delete: ${entityInfo.Name}`, isMutation: true },
-            user
-        );
-        return true;
+        const fullSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
+        return {
+            fullSQL,
+            simpleSQL: fullSQL,
+            parameters: paramValues,
+        };
     }
 
     async GetRecordDuplicates(

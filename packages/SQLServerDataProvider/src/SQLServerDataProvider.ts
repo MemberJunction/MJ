@@ -70,6 +70,8 @@ import {
   DatasetItemResultType,
   DatabaseProviderBase,
   FieldChange,
+  SaveSQLResult,
+  DeleteSQLResult,
   QueryInfo,
   QueryCategoryInfo,
   QueryCache,
@@ -3210,203 +3212,6 @@ export class SQLServerDataProvider
     }
   }
 
-  public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
-    const entityResult = new BaseEntityResult();
-    try {
-      entity.RegisterTransactionPreprocessing();
-
-      const bNewRecord = !entity.IsSaved;
-      if (!options) options = new EntitySaveOptions();
-      const bReplay = !!options.ReplayOnly;
-      if (!bReplay && !bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
-        // existing record and not allowed to update
-        throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } else if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
-        // new record and not allowed to create
-        throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } else {
-        // getting here means we are good to save, now check to see if we're dirty and need to save
-        // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
-        if (entity.Dirty || options.IgnoreDirtyState || options.ReplayOnly) {
-          entityResult.StartedAt = new Date();
-          entityResult.Type = bNewRecord ? 'create' : 'update';
-
-          entityResult.OriginalValues = entity.Fields.map((f) => {
-            const tempStatus = f.ActiveStatusAssertions;
-            f.ActiveStatusAssertions = false; // turn off warnings for this operation
-            const ret = { 
-              FieldName: f.Name, 
-              Value: f.Value 
-            };
-            f.ActiveStatusAssertions = tempStatus; // restore the status assertions
-            return ret;
-          }); // save the original values before we start the process
-          entity.ResultHistory.push(entityResult); // push the new result as we have started a process
-
-          // The assumption is that Validate() has already been called by the BaseEntity object that is invoking this provider.
-          // However, we have an extra responsibility in this situation which is to fire off the EntityActions for the Validate invocation type and
-          // make sure they clear. If they don't clear we throw an exception with the message provided.
-          if (!bReplay) {
-            const validationResult = await this.HandleEntityActions(entity, 'validate', false, user);
-            if (validationResult && validationResult.length > 0) {
-              // one or more actions executed, see the reults and if any failed, concat their messages and return as exception being thrown
-              const message = validationResult
-                .filter((v) => !v.Success)
-                .map((v) => v.Message)
-                .join('\n\n');
-              if (message) {
-                entityResult.Success = false;
-                entityResult.EndedAt = new Date();
-                entityResult.Message = message;
-                return false;
-              }
-            }
-          } else {
-            // we are in replay mode we so do NOT need to do the validation stuff, skipping it...
-          }
-
-          const spName = this.GetCreateUpdateSPName(entity, bNewRecord);
-          if (options.SkipEntityActions !== true /*options set, but not set to skip entity actions*/) {
-            await this.HandleEntityActions(entity, 'save', true, user);
-          }
-
-          if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/) {
-            // process any Entity AI actions that are set to trigger BEFORE the save, these are generally a really bad idea to do before save
-            // but they are supported (for now)
-            await this.HandleEntityAIActions(entity, 'save', true, user);
-          }
-
-          // Generate the SQL for the save operation
-          // This is async because it may need to encrypt field values
-          const sqlDetails = await this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
-          const sSQL = sqlDetails.fullSQL;
-
-          if (entity.TransactionGroup && !bReplay /*we never participate in a transaction if we're in replay mode*/) {
-            // we have a transaction group, need to play nice and be part of it
-            entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
-            // we are part of a transaction group, so just add our query to the list
-            // and when the transaction is committed, we will send all the queries at once
-            this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
-            entity.TransactionGroup.AddTransaction(
-              new TransactionItem(
-                entity,
-                entityResult.Type === 'create' ? 'Create' : 'Update',
-                sSQL,
-                null,
-                { 
-                  dataSource: this._pool,
-                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
-                  entityName: entity.EntityInfo.Name
-                },
-                (transactionResult: Record<string, any>, success: boolean) => {
-                  // we get here whenever the transaction group does gets around to committing
-                  // our query.
-                  this._bAllowRefresh = true; // allow refreshes again
-                  entityResult.EndedAt = new Date();
-                  if (success && transactionResult) {
-                    // process any Entity AI actions that are set to trigger AFTER the save
-                    // these are fired off but are NOT part of the transaction group, so if they fail,
-                    // the transaction group will still commit, but the AI action will not be executed
-                    if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/) {
-                      this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-                    }
-
-                    // Same approach to Entity Actions as Entity AI Actions
-                    if (options.SkipEntityActions !== true) {
-                      this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-                    }
-
-                    entityResult.Success = true;
-                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
-                  } else {
-                    // the transaction failed, nothing to update, but we need to call Reject so the
-                    // promise resolves with a rejection so our outer caller knows
-                    entityResult.Success = false;
-                    entityResult.Message = 'Transaction Failed';
-                  }
-                },
-              ),
-            );
-
-            return true; // we're part of a transaction group, so we're done here
-          } else {
-            // no transaction group, just execute this immediately...
-            this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
-
-            let result;
-            if (bReplay) {
-              result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
-            } else {
-              try {
-                // Execute SQL with optional simple SQL fallback for loggers
-                // IS-A: use entity's ProviderTransaction when available for shared transaction
-                const rawResult = await this.ExecuteSQL(sSQL, null, {
-                  isMutation: true,
-                  description: `Save ${entity.EntityInfo.Name}`,
-                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
-                  connectionSource: entity.ProviderTransaction as sql.Transaction ?? undefined
-                }, user);
-                // Process rows with user context for decryption
-                result = await this.ProcessEntityRows(rawResult, entity.EntityInfo, user);
-              } catch (e) {
-                throw e; // rethrow
-              }
-            }
-
-            this._bAllowRefresh = true; // allow refreshes now
-
-            entityResult.EndedAt = new Date();
-            if (result && result.length > 0) {
-              // Entity AI Actions - fired off async, NO await on purpose
-              if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/)
-                this.HandleEntityAIActions(entity, 'save', false, user); // fire off any AFTER SAVE AI actions, but don't wait for them
-
-              // Entity Actions - fired off async, NO await on purpose
-              if (options.SkipEntityActions !== true) this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-
-              entityResult.Success = true;
-
-              // IS-A overlapping subtypes: propagate Record Change entries to sibling branches.
-              // Runs after this entity's save succeeds. Skips the active child branch (if this
-              // is a parent save in a chain) so siblings don't get duplicate entries.
-              if (sqlDetails.overlappingChangeData
-                  && entity.EntityInfo.AllowMultipleSubtypes
-                  && entity.EntityInfo.TrackRecordChanges) {
-                await this.PropagateRecordChangesToSiblings(
-                  entity.EntityInfo,
-                  sqlDetails.overlappingChangeData,
-                  entity.PrimaryKey.Values(),
-                  user?.ID ?? '',
-                  options.ISAActiveChildEntityName,
-                  entity.ProviderTransaction as sql.Transaction ?? undefined
-                );
-              }
-
-              return result[0];
-            } else {
-              if (bNewRecord) {
-                throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ` + sSQL);
-              }
-              else {
-                // if we get here that means that SQL did NOT find a matching row to update in the DB, so we need to throw an error
-                throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ` + sSQL);
-              }
-            }
-          }
-        } else {
-          return entity; // nothing to save, just return the entity
-        }
-      }
-    } catch (e) {
-      this._bAllowRefresh = true; // allow refreshes again if we get a failure here
-      entityResult.EndedAt = new Date();
-      entityResult.Message = e.message;
-      LogError(e);
-
-      throw e; // rethrow the error
-    }
-  }
-
 
   /**
    * Returns the stored procedure name to use for the given entity based on if it is a new record or an existing record.
@@ -3913,146 +3718,151 @@ export class SQLServerDataProvider
     return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
   }
 
-  public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
-    const result = new BaseEntityResult();
-    try {
-      entity.RegisterTransactionPreprocessing();
+  /**************************************************************************/
+  // START ---- DatabaseProviderBase Override Hooks (Phase 2)
+  /**************************************************************************/
 
-      if (!options) options = new EntityDeleteOptions();
+  protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
+    const spName = this.GetCreateUpdateSPName(entity, isNew);
+    const sqlDetails = await this.GetSaveSQLWithDetails(entity, isNew, spName, user);
+    const result: SaveSQLResult = {
+      fullSQL: sqlDetails.fullSQL,
+      simpleSQL: sqlDetails.simpleSQL,
+    };
+    if (sqlDetails.overlappingChangeData) {
+      result.extraData = { overlappingChangeData: sqlDetails.overlappingChangeData };
+    }
+    return result;
+  }
 
-      const bReplay = options.ReplayOnly;
+  protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult {
+    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user);
+    return {
+      fullSQL: sqlDetails.fullSQL,
+      simpleSQL: sqlDetails.simpleSQL,
+    };
+  }
 
-      if (!entity.IsSaved && !bReplay)
-        // existing record and not allowed to update
-        throw new Error(`Delete() isn't callable for records that haven't yet been saved - ${entity.EntityInfo.Name}`);
-      if (!entity.EntityInfo.AllowDeleteAPI && !bReplay)
-        // not allowed to delete
-        throw new Error(`Delete() isn't callable for ${entity.EntityInfo.Name} as AllowDeleteAPI is false`);
+  protected override async OnValidateBeforeSave(entity: BaseEntity, user: UserInfo): Promise<string | null> {
+    const validationResult = await this.HandleEntityActions(entity, 'validate', false, user);
+    if (validationResult && validationResult.length > 0) {
+      const message = validationResult
+        .filter((v) => !v.Success)
+        .map((v) => v.Message)
+        .join('\n\n');
+      if (message) return message;
+    }
+    return null;
+  }
 
-      result.StartedAt = new Date();
-      result.Type = 'delete';
-      result.OriginalValues = entity.Fields.map((f) => {
-        return { FieldName: f.Name, Value: f.Value };
-      }); // save the original values before we start the process
-      entity.ResultHistory.push(result); // push the new result as we have started a process
+  protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<void> {
+    if (options.SkipEntityActions !== true)
+      await this.HandleEntityActions(entity, 'save', true, user);
+    if (options.SkipEntityAIActions !== true)
+      await this.HandleEntityAIActions(entity, 'save', true, user);
+  }
 
-      // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
-      // if we get here we can delete, so build the SQL and then handle appropriately either as part of TransGroup or directly...
+  protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): void {
+    if (options.SkipEntityAIActions !== true)
+      this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+    if (options.SkipEntityActions !== true)
+      this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+  }
 
-      const sqlDetails = this.GetDeleteSQLWithDetails(entity, user);
-      const sSQL = sqlDetails.fullSQL;
+  protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {
+    if (false === options?.SkipEntityActions)
+      await this.HandleEntityActions(entity, 'delete', true, user);
+    if (false === options?.SkipEntityAIActions)
+      await this.HandleEntityAIActions(entity, 'delete', true, user);
+  }
 
-      // Handle Entity and Entity AI Actions here w/ before and after handling
-      if (false === options?.SkipEntityActions) await this.HandleEntityActions(entity, 'delete', true, user);
-      if (false === options?.SkipEntityAIActions) await this.HandleEntityAIActions(entity, 'delete', true, user);
+  protected override OnAfterDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): void {
+    if (false === options?.SkipEntityActions)
+      this.HandleEntityActions(entity, 'delete', false, user);
+    if (false === options?.SkipEntityAIActions)
+      this.HandleEntityAIActions(entity, 'delete', false, user);
+  }
 
-      if (entity.TransactionGroup && !bReplay) {
-        // we have a transaction group, need to play nice and be part of it
-        entity.RaiseReadyForTransaction();
-        // we are part of a transaction group, so just add our query to the list
-        // and when the transaction is committed, we will send all the queries at once
-        entity.TransactionGroup.AddTransaction(
-          new TransactionItem(
-            entity, 
-            'Delete', 
-            sSQL, 
-            null, 
-            { 
-              dataSource: this._pool,
-              simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
-              entityName: entity.EntityInfo.Name
-            }, 
-            (transactionResult: Record<string, any>, success: boolean) => {
-            // we get here whenever the transaction group does gets around to committing
-            // our query.
-            result.EndedAt = new Date();
-            if (success && result) {
-              // Entity AI Actions and Actions - fired off async, NO await on purpose
-              if (false === options?.SkipEntityActions) {
-                this.HandleEntityActions(entity, 'delete', false, user);
-              }
-              if (false === options?.SkipEntityAIActions) {
-                this.HandleEntityAIActions(entity, 'delete', false, user);
-              }
+  protected override async PostProcessRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, user: UserInfo): Promise<Record<string, unknown>[]> {
+    return this.ProcessEntityRows(rows, entityInfo, user);
+  }
 
-              // Make sure the return value matches up as that is how we know the SP was succesfully internally
-              for (const key of entity.PrimaryKeys) {
-                if (key.Value !== transactionResult[key.Name]) {
-                  result.Success = false;
-                  result.Message = 'Transaction failed to commit';
-                }
-              }
-              result.NewValues = this.MapTransactionResultToNewValues(transactionResult);
-              result.Success = true;
-            } else {
-              // the transaction failed, nothing to update, but we need to call Reject so the
-              // promise resolves with a rejection so our outer caller knows
-              result.Success = false;
-              result.Message = 'Transaction failed to commit';
-            }
-          }),
-        );
-
-        return true; // we're part of a transaction group, so we're done here
-      } else {
-        let d;
-        if (bReplay) {
-          d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
-        } else {
-          // IS-A: use entity's ProviderTransaction when available for shared transaction
-          d = await this.ExecuteSQL(sSQL, null, {
-            isMutation: true,
-            description: `Delete ${entity.EntityInfo.Name}`,
-            simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
-            connectionSource: entity.ProviderTransaction as sql.Transaction ?? undefined
-          }, user);
-        }
-
-        if (d && d.length > 0) {
-          // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
-          // Note: When CASCADE operations exist, multiple result sets are returned (d is array of arrays).
-          // When no CASCADE operations exist, a single result set is returned (d is array of objects).
-          // We need to handle both cases by checking if the first element is an array.
-          const isMultipleResultSets = Array.isArray(d[0]);
-          const deletedRecord = isMultipleResultSets
-            ? d[d.length - 1][0]  // Multiple result sets: get last result set, first row
-            : d[0];               // Single result set: get first row directly
-
-          for (const key of entity.PrimaryKeys) {
-            if (key.Value !== deletedRecord[key.Name]) {
-              // we can get here if the sp returns NULL for a given key. The reason that would be the case is if the record
-              // was not found in the DB. This was the existing logic prior to the SP modifications in 2.68.0, just documenting
-              // it here for clarity.
-              result.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
-              result.EndedAt = new Date();
-              result.Success = false;
-
-              return false;
-            }
-          }
-
-          // Entity AI Actions and Actions - fired off async, NO await on purpose
-          this.HandleEntityActions(entity, 'delete', false, user);
-          this.HandleEntityAIActions(entity, 'delete', false, user);
-
-          result.EndedAt = new Date();
-          return true;
-        } else {
-          result.Message = 'No result returned from SQL';
-          result.EndedAt = new Date();
-          return false;
-        }
-      }
-    } catch (e) {
-      LogError(e);
-      result.Message = e.message;
-      result.Success = false;
-      result.EndedAt = new Date();
-
-      return false;
+  protected override async OnSaveCompleted(
+    entity: BaseEntity,
+    saveSQLResult: SaveSQLResult,
+    user: UserInfo,
+    options: EntitySaveOptions,
+  ): Promise<void> {
+    const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
+      | { changesJSON: string; changesDescription: string }
+      | undefined;
+    if (
+      overlappingChangeData &&
+      entity.EntityInfo.AllowMultipleSubtypes &&
+      entity.EntityInfo.TrackRecordChanges
+    ) {
+      await this.PropagateRecordChangesToSiblings(
+        entity.EntityInfo,
+        overlappingChangeData,
+        entity.PrimaryKey.Values(),
+        user?.ID ?? '',
+        options.ISAActiveChildEntityName,
+        (entity.ProviderTransaction as sql.Transaction) ?? undefined,
+      );
     }
   }
+
+  protected override OnSuspendRefresh(): void {
+    this._bAllowRefresh = false;
+  }
+
+  protected override OnResumeRefresh(): void {
+    this._bAllowRefresh = true;
+  }
+
+  protected override GetTransactionExtraData(_entity: BaseEntity): Record<string, unknown> {
+    return { dataSource: this._pool };
+  }
+
+  protected override BuildSaveExecuteOptions(entity: BaseEntity, sqlDetails: SaveSQLResult): ExecuteSQLOptions {
+    const opts = super.BuildSaveExecuteOptions(entity, sqlDetails);
+    (opts as ExecuteSQLOptions).connectionSource =
+      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
+    return opts;
+  }
+
+  protected override BuildDeleteExecuteOptions(entity: BaseEntity, sqlDetails: DeleteSQLResult): ExecuteSQLOptions {
+    const opts = super.BuildDeleteExecuteOptions(entity, sqlDetails);
+    (opts as ExecuteSQLOptions).connectionSource =
+      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
+    return opts;
+  }
+
+  protected override ValidateDeleteResult(
+    entity: BaseEntity,
+    rawResult: Record<string, unknown>[],
+    entityResult: BaseEntityResult,
+  ): boolean {
+    if (!rawResult || rawResult.length === 0) return false;
+    // SQL Server CASCADE deletes can return multiple result sets (array of arrays)
+    const isMultipleResultSets = Array.isArray(rawResult[0]);
+    const deletedRecord = isMultipleResultSets
+      ? (rawResult[rawResult.length - 1] as unknown as Record<string, unknown>[])[0]
+      : rawResult[0];
+    for (const key of entity.PrimaryKeys) {
+      if (key.Value !== deletedRecord[key.Name]) {
+        entityResult.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
+        return false;
+      }
+    }
+    return true;
+  }
+
   /**************************************************************************/
+  // END ---- DatabaseProviderBase Override Hooks (Phase 2)
+  /**************************************************************************/
+
+    /**************************************************************************/
   // END ---- IEntityDataProvider
   /**************************************************************************/
 

@@ -1,7 +1,9 @@
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldTSType, EntityInfo, RecordChange, RecordDependency } from "./entityInfo";
-import { BaseEntity } from "./baseEntity";
+import { BaseEntity, BaseEntityResult } from "./baseEntity";
+import { EntitySaveOptions, EntityDeleteOptions } from "./interfaces";
+import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { LogError } from "./logging";
 
@@ -17,6 +19,30 @@ export type FieldChange = {
     oldValue: unknown;
     newValue: unknown;
 };
+
+/**
+ * Result of save SQL generation. Subclasses populate this from their dialect-specific
+ * SQL generators (stored procedure calls, function calls, etc.).
+ */
+export interface SaveSQLResult {
+    /** The complete SQL to execute (may include record-change tracking, temp tables, etc.) */
+    fullSQL: string;
+    /** Simpler SQL without record-change wrapping, used for logging/migration replay */
+    simpleSQL?: string;
+    /** Parameterized query values (e.g. [$1,$2] for PG). Null/undefined for inline SQL. */
+    parameters?: unknown[] | null;
+    /** Provider-specific extra data (e.g. overlapping-change data for ISA propagation) */
+    extraData?: Record<string, unknown>;
+}
+
+/**
+ * Result of delete SQL generation.
+ */
+export interface DeleteSQLResult {
+    fullSQL: string;
+    simpleSQL?: string;
+    parameters?: unknown[] | null;
+}
 
 /**
  * This class is a generic server-side provider class to abstract database operations
@@ -115,6 +141,22 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param compositeKey The primary key of the record
      */
     protected abstract BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string;
+
+    /**
+     * Generates the SQL (and optional parameters) for a Save (Create or Update) operation.
+     * Each provider produces its own dialect: SQL Server generates T-SQL EXEC statements,
+     * PostgreSQL generates SELECT FROM function(...) calls, etc.
+     *
+     * @param entity The entity being saved
+     * @param isNew  True for INSERT / Create, false for UPDATE
+     * @param user   The acting user (needed for encryption, audit columns, etc.)
+     */
+    protected abstract GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult>;
+
+    /**
+     * Generates the SQL (and optional parameters) for a Delete operation.
+     */
+    protected abstract GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult;
 
     /**************************************************************************/
     // END ---- SQL Dialect Abstractions
@@ -540,6 +582,399 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**************************************************************************/
     // END ---- Record Dependencies
+    /**************************************************************************/
+
+    /**************************************************************************/
+    // START ---- Save/Delete Virtual Hooks
+    // Subclasses override these to inject provider-specific behavior
+    // (entity actions, AI actions, encryption, ISA propagation, etc.)
+    // Default implementations are no-ops so lightweight providers work out of the box.
+    /**************************************************************************/
+
+    /**
+     * Called during Save before any SQL is executed to run validation-type entity actions.
+     * Return a non-empty string to abort the save with that message; return null to proceed.
+     * SQL Server overrides this to delegate to HandleEntityActions('validate', ...).
+     */
+    protected async OnValidateBeforeSave(_entity: BaseEntity, _user: UserInfo): Promise<string | null> {
+        return null;
+    }
+
+    /**
+     * Called before the save SQL is executed.
+     * SQL Server overrides this to fire before-save entity actions and AI actions.
+     */
+    protected async OnBeforeSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions): Promise<void> {
+        /* no-op by default */
+    }
+
+    /**
+     * Called after a successful save (both direct and transaction-callback paths).
+     * Intentionally synchronous (fire-and-forget) — SQL Server overrides to dispatch
+     * after-save entity actions and AI actions without awaiting.
+     */
+    protected OnAfterSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions): void {
+        /* no-op by default */
+    }
+
+    /**
+     * Called before the delete SQL is executed.
+     * SQL Server overrides to fire before-delete entity actions and AI actions.
+     */
+    protected async OnBeforeDeleteExecute(_entity: BaseEntity, _user: UserInfo, _options: EntityDeleteOptions): Promise<void> {
+        /* no-op by default */
+    }
+
+    /**
+     * Called after a successful delete.
+     * Intentionally synchronous — see OnAfterSaveExecute.
+     */
+    protected OnAfterDeleteExecute(_entity: BaseEntity, _user: UserInfo, _options: EntityDeleteOptions): void {
+        /* no-op by default */
+    }
+
+    /**
+     * Post-processes rows returned by a save/load SQL operation.
+     * SQL Server overrides to handle datetimeoffset conversion and field decryption.
+     * Default: returns rows unchanged.
+     */
+    protected async PostProcessRows(rows: Record<string, unknown>[], _entityInfo: EntityInfo, _user: UserInfo): Promise<Record<string, unknown>[]> {
+        return rows;
+    }
+
+    /**
+     * Called after a direct (non-transaction) save succeeds, before returning.
+     * SQL Server overrides to propagate record-change entries to IS-A sibling branches.
+     */
+    protected async OnSaveCompleted(_entity: BaseEntity, _saveSQLResult: SaveSQLResult, _user: UserInfo, _options: EntitySaveOptions): Promise<void> {
+        /* no-op by default */
+    }
+
+    /**
+     * Called before starting a save/delete SQL operation to pause background metadata refresh.
+     * SQL Server overrides to set _bAllowRefresh = false.
+     */
+    protected OnSuspendRefresh(): void { /* no-op */ }
+
+    /**
+     * Called after a save/delete SQL operation completes (success or failure) to resume refresh.
+     */
+    protected OnResumeRefresh(): void { /* no-op */ }
+
+    /**
+     * Returns provider-specific extra data to attach to a TransactionItem.
+     * SQL Server overrides to include { dataSource: this._pool }.
+     */
+    protected GetTransactionExtraData(_entity: BaseEntity): Record<string, unknown> {
+        return {};
+    }
+
+    /**
+     * Builds the ExecuteSQLOptions for a Save operation.
+     * SQL Server overrides to add connectionSource for IS-A shared transactions.
+     */
+    protected BuildSaveExecuteOptions(entity: BaseEntity, sqlDetails: SaveSQLResult): ExecuteSQLOptions {
+        const opts: ExecuteSQLOptions = {
+            isMutation: true,
+            description: `Save ${entity.EntityInfo.Name}`,
+        };
+        if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+            opts.simpleSQLFallback = sqlDetails.simpleSQL;
+        }
+        return opts;
+    }
+
+    /**
+     * Builds the ExecuteSQLOptions for a Delete operation.
+     */
+    protected BuildDeleteExecuteOptions(entity: BaseEntity, sqlDetails: DeleteSQLResult): ExecuteSQLOptions {
+        const opts: ExecuteSQLOptions = {
+            isMutation: true,
+            description: `Delete ${entity.EntityInfo.Name}`,
+        };
+        if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+            opts.simpleSQLFallback = sqlDetails.simpleSQL;
+        }
+        return opts;
+    }
+
+    /**
+     * Validates the result of a delete SQL execution by checking that the returned
+     * primary keys match the entity being deleted.
+     * SQL Server overrides to handle the multi-result-set case (CASCADE deletes).
+     */
+    protected ValidateDeleteResult(entity: BaseEntity, rawResult: Record<string, unknown>[], entityResult: BaseEntityResult): boolean {
+        if (!rawResult || rawResult.length === 0) return false;
+        const deletedRecord = rawResult[0];
+        for (const key of entity.PrimaryKeys) {
+            if (key.Value !== deletedRecord[key.Name]) {
+                entityResult.Message = `Delete failed: record with primary key ${key.Name}=${key.Value} not found`;
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**************************************************************************/
+    // END ---- Save/Delete Virtual Hooks
+    /**************************************************************************/
+
+    /**************************************************************************/
+    // START ---- Save/Delete Orchestration
+    // DB-agnostic orchestration that calls abstract SQL generation + virtual hooks.
+    // Both SQL Server and PostgreSQL inherit this; they only override hooks/SQL gen.
+    /**************************************************************************/
+
+    /**
+     * Saves an entity record — the full orchestration flow shared by all DB providers.
+     *
+     * 1. Permission & dirty-state checks
+     * 2. Validation via OnValidateBeforeSave hook
+     * 3. Before-save actions via OnBeforeSaveExecute hook
+     * 4. SQL generation via GenerateSaveSQL (abstract, provider-specific)
+     * 5. Execute via TransactionGroup or directly
+     * 6. After-save actions via OnAfterSaveExecute hook
+     * 7. Post-save cleanup via OnSaveCompleted hook (ISA propagation, etc.)
+     */
+    public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
+        const entityResult = new BaseEntityResult();
+        try {
+            entity.RegisterTransactionPreprocessing();
+
+            const bNewRecord = !entity.IsSaved;
+            if (!options) options = new EntitySaveOptions();
+            const bReplay = !!options.ReplayOnly;
+
+            if (!bReplay && !bNewRecord && !entity.EntityInfo.AllowUpdateAPI)
+                throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
+            if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI)
+                throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
+
+            if (entity.Dirty || options.IgnoreDirtyState || options.ReplayOnly) {
+                entityResult.StartedAt = new Date();
+                entityResult.Type = bNewRecord ? 'create' : 'update';
+
+                entityResult.OriginalValues = entity.Fields.map((f) => {
+                    const tempStatus = f.ActiveStatusAssertions;
+                    f.ActiveStatusAssertions = false;
+                    const ret = { FieldName: f.Name, Value: f.Value };
+                    f.ActiveStatusAssertions = tempStatus;
+                    return ret;
+                });
+                entity.ResultHistory.push(entityResult);
+
+                // Step 2: Validation hook
+                if (!bReplay) {
+                    const validationMessage = await this.OnValidateBeforeSave(entity, user);
+                    if (validationMessage) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Message = validationMessage;
+                        return false;
+                    }
+                }
+
+                // Step 3: Before-save hook (entity actions, AI actions)
+                if (!bReplay) {
+                    await this.OnBeforeSaveExecute(entity, user, options);
+                }
+
+                // Step 4: Generate provider-specific SQL
+                const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user);
+
+                if (entity.TransactionGroup && !bReplay) {
+                    // ---- Transaction Group path ----
+                    entity.RaiseReadyForTransaction();
+                    this.OnSuspendRefresh();
+
+                    const extraData = this.GetTransactionExtraData(entity);
+                    if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+                        extraData.simpleSQLFallback = sqlDetails.simpleSQL;
+                    }
+                    extraData.entityName = entity.EntityInfo.Name;
+
+                    entity.TransactionGroup.AddTransaction(
+                        new TransactionItem(
+                            entity,
+                            entityResult.Type === 'create' ? 'Create' : 'Update',
+                            sqlDetails.fullSQL,
+                            sqlDetails.parameters ?? null,
+                            extraData,
+                            (transactionResult: Record<string, unknown>, success: boolean) => {
+                                this.OnResumeRefresh();
+                                entityResult.EndedAt = new Date();
+                                if (success && transactionResult) {
+                                    this.OnAfterSaveExecute(entity, user, options);
+                                    entityResult.Success = true;
+                                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
+                                } else {
+                                    entityResult.Success = false;
+                                    entityResult.Message = 'Transaction Failed';
+                                }
+                            },
+                        ),
+                    );
+                    return true;
+                } else {
+                    // ---- Direct execution path ----
+                    this.OnSuspendRefresh();
+
+                    let result: Record<string, unknown>[];
+                    if (bReplay) {
+                        result = [entity.GetAll()];
+                    } else {
+                        const execOptions = this.BuildSaveExecuteOptions(entity, sqlDetails);
+                        const rawResult = await this.ExecuteSQL<Record<string, unknown>>(
+                            sqlDetails.fullSQL,
+                            sqlDetails.parameters ?? undefined,
+                            execOptions,
+                            user,
+                        );
+                        result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
+                    }
+
+                    this.OnResumeRefresh();
+                    entityResult.EndedAt = new Date();
+
+                    if (result && result.length > 0) {
+                        this.OnAfterSaveExecute(entity, user, options);
+                        entityResult.Success = true;
+                        await this.OnSaveCompleted(entity, sqlDetails, user, options);
+                        return result[0];
+                    } else {
+                        if (bNewRecord)
+                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.fullSQL}`);
+                        else
+                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.fullSQL}`);
+                    }
+                }
+            } else {
+                return entity; // nothing to save
+            }
+        } catch (e) {
+            this.OnResumeRefresh();
+            entityResult.EndedAt = new Date();
+            entityResult.Message = (e as Error).message;
+            LogError(e);
+            throw e;
+        }
+    }
+
+    /**
+     * Deletes an entity record — the full orchestration flow shared by all DB providers.
+     *
+     * 1. Permission checks & replay handling
+     * 2. SQL generation via GenerateDeleteSQL (abstract, provider-specific)
+     * 3. Before-delete actions via OnBeforeDeleteExecute hook
+     * 4. Execute via TransactionGroup or directly
+     * 5. Validate delete result (PK match check)
+     * 6. After-delete actions via OnAfterDeleteExecute hook
+     */
+    public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
+        const entityResult = new BaseEntityResult();
+        try {
+            entity.RegisterTransactionPreprocessing();
+            if (!options) options = new EntityDeleteOptions();
+            const bReplay = options.ReplayOnly;
+
+            if (!entity.IsSaved && !bReplay)
+                throw new Error(`Delete() isn't callable for records that haven't yet been saved - ${entity.EntityInfo.Name}`);
+            if (!entity.EntityInfo.AllowDeleteAPI && !bReplay)
+                throw new Error(`Delete() isn't callable for ${entity.EntityInfo.Name} as AllowDeleteAPI is false`);
+
+            entityResult.StartedAt = new Date();
+            entityResult.Type = 'delete';
+            entityResult.OriginalValues = entity.Fields.map((f) => ({
+                FieldName: f.Name,
+                Value: f.Value,
+            }));
+            entity.ResultHistory.push(entityResult);
+
+            // Generate provider-specific delete SQL
+            const sqlDetails = this.GenerateDeleteSQL(entity, user);
+
+            // Before-delete hooks
+            await this.OnBeforeDeleteExecute(entity, user, options);
+
+            if (entity.TransactionGroup && !bReplay) {
+                // ---- Transaction Group path ----
+                entity.RaiseReadyForTransaction();
+
+                const extraData = this.GetTransactionExtraData(entity);
+                if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+                    extraData.simpleSQLFallback = sqlDetails.simpleSQL;
+                }
+                extraData.entityName = entity.EntityInfo.Name;
+
+                entity.TransactionGroup.AddTransaction(
+                    new TransactionItem(
+                        entity,
+                        'Delete',
+                        sqlDetails.fullSQL,
+                        sqlDetails.parameters ?? null,
+                        extraData,
+                        (transactionResult: Record<string, unknown>, success: boolean) => {
+                            entityResult.EndedAt = new Date();
+                            if (success && transactionResult) {
+                                this.OnAfterDeleteExecute(entity, user, options);
+                                for (const key of entity.PrimaryKeys) {
+                                    if (key.Value !== transactionResult[key.Name]) {
+                                        entityResult.Success = false;
+                                        entityResult.Message = 'Transaction failed to commit';
+                                    }
+                                }
+                                entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
+                                entityResult.Success = true;
+                            } else {
+                                entityResult.Success = false;
+                                entityResult.Message = 'Transaction failed to commit';
+                            }
+                        },
+                    ),
+                );
+                return true;
+            } else {
+                // ---- Direct execution path ----
+                let d: Record<string, unknown>[];
+                if (bReplay) {
+                    d = [entity.GetAll()];
+                } else {
+                    const execOptions = this.BuildDeleteExecuteOptions(entity, sqlDetails);
+                    d = await this.ExecuteSQL<Record<string, unknown>>(
+                        sqlDetails.fullSQL,
+                        sqlDetails.parameters ?? undefined,
+                        execOptions,
+                        user,
+                    );
+                }
+
+                if (d && d.length > 0) {
+                    if (!this.ValidateDeleteResult(entity, d, entityResult)) {
+                        entityResult.EndedAt = new Date();
+                        entityResult.Success = false;
+                        return false;
+                    }
+
+                    this.OnAfterDeleteExecute(entity, user, options);
+                    entityResult.EndedAt = new Date();
+                    return true;
+                } else {
+                    entityResult.Message = 'No result returned from SQL';
+                    entityResult.EndedAt = new Date();
+                    return false;
+                }
+            }
+        } catch (e) {
+            LogError(e);
+            entityResult.Message = (e as Error).message;
+            entityResult.Success = false;
+            entityResult.EndedAt = new Date();
+            return false;
+        }
+    }
+
+    /**************************************************************************/
+    // END ---- Save/Delete Orchestration
     /**************************************************************************/
 }
 
