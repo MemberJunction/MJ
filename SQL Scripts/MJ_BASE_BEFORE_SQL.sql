@@ -481,24 +481,7 @@ ON
 
 GO
   
-
-DROP VIEW IF EXISTS [__mj].vwCompanies
-GO
-CREATE VIEW [__mj].vwCompanies
-AS
-SELECT * FROM __mj.Company
-
-
-
-GO
  
-
-DROP VIEW IF EXISTS [__mj].vwIntegrations
-GO
-CREATE VIEW [__mj].vwIntegrations AS
-SELECT * FROM __mj.Integration
-GO
-
 DROP VIEW IF EXISTS [__mj].vwIntegrationURLFormats 
 GO
 CREATE VIEW [__mj].vwIntegrationURLFormats
