@@ -4061,7 +4061,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 
             if (setClauses.length > 0) {
                // only generate an UPDATE if we have 1+ set clause
-               sqlStatements.push(`--UPDATE Entity Field Category Info ${entity}.${field.Name} \nUPDATE [${mj_core_schema()}].EntityField
+               sqlStatements.push(`\n-- UPDATE Entity Field Category Info ${entity.Name}.${field.Name} \nUPDATE [${mj_core_schema()}].EntityField
 SET 
    ${setClauses.join(',\n   ')}
 WHERE 
