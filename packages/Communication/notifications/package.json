@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/notifications",
   "type": "module",
-  "version": "5.0.0",
+  "version": "5.2.0",
   "description": "MemberJunction: Unified Notification System with Multi-Channel Delivery",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,13 +20,13 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "5.0.0",
-    "@memberjunction/core": "5.0.0",
-    "@memberjunction/core-entities": "5.0.0",
-    "@memberjunction/templates": "5.0.0",
-    "@memberjunction/communication-engine": "5.0.0",
-    "@memberjunction/communication-types": "5.0.0",
-    "@memberjunction/sqlserver-dataprovider": "5.0.0"
+    "@memberjunction/global": "5.2.0",
+    "@memberjunction/core": "5.2.0",
+    "@memberjunction/core-entities": "5.2.0",
+    "@memberjunction/templates": "5.2.0",
+    "@memberjunction/communication-engine": "5.2.0",
+    "@memberjunction/communication-types": "5.2.0",
+    "@memberjunction/sqlserver-dataprovider": "5.2.0"
   },
   "repository": {
     "type": "git",

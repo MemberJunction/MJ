@@ -650,7 +650,7 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
 
 /**
  * Stores parameter definitions for parameterized queries that use Nunjucks templates. Each parameter represents a dynamic value 
- * that can be passed when executing the query. Parameters are automatically extracted from the query template by the QueryEntityServer 
+ * that can be passed when executing the query. Parameters are automatically extracted from the query template by the MJQueryEntityServer 
  * using LLM analysis, or can be manually defined. The combination of parameter metadata and validation filters creates a 
  * self-documenting, type-safe query execution system.
  */

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-fireworks",
   "type": "module",
-  "version": "5.0.0",
+  "version": "5.2.0",
   "description": "MemberJunction Wrapper for Fireworks.ai AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,8 +22,8 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/ai": "5.0.0",
-    "@memberjunction/global": "5.0.0",
+    "@memberjunction/ai": "5.2.0",
+    "@memberjunction/global": "5.2.0",
     "openai": "6.18.0"
   },
   "repository": {

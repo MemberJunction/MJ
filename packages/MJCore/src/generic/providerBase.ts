@@ -1740,6 +1740,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             e.EntitySettings = settings.filter(s => s.EntityID === e.ID);
             result.push(new EntityInfo(e));
         }
+
+        // Check for schema name collision: if both 'MJ' and 'MJCustom' schemas exist,
+        // the class name prefix for 'MJ' is 'MJCustom' which would collide with the
+        // 'MJCustom' schema's natural prefix. This is an extremely unlikely scenario but
+        // would cause silent class name collisions that are very hard to debug.
+        const distinctSchemas = new Set(result.map(e => e.SchemaName?.toLowerCase()));
+        if (distinctSchemas.has('mj') && distinctSchemas.has('mjcustom')) {
+            LogError(`SCHEMA COLLISION DETECTED: Your database contains both 'MJ' and 'MJCustom' schemas. ` +
+                `The 'MJ' schema uses 'MJCustom' as its class name prefix (to avoid colliding with the core '__mj' schema's 'MJ' prefix), ` +
+                `which collides with the 'MJCustom' schema's natural prefix. ` +
+                `Please rename one of these schemas to avoid class name collisions in generated TypeScript code, GraphQL types, and resolvers.`);
+        }
+
         return result;
     }
 

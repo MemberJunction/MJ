@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/unit-testing",
   "type": "module",
-  "version": "5.0.0",
+  "version": "5.2.0",
   "description": "MemberJunction: Unit testing utilities and mock infrastructure for Vitest",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +21,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/global": "5.0.0"
+    "@memberjunction/global": "5.2.0"
   },
   "repository": {
     "type": "git",

@@ -16,7 +16,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
-import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
+import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
 import { Observable, Subject, Subscription } from 'rxjs';
@@ -356,15 +356,52 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
-        if (params.QueryID) {
+        if (params.SQL) {
+            return this.RunAdhocQuery(params.SQL, params.MaxRows);
+        }
+        else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else if (params.QueryName) {
             return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else {
-            throw new Error("No QueryID or QueryName provided to RunQuery");
+            throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
         }
+    }
+
+    /**
+     * Executes an ad-hoc SQL query via the ExecuteAdhocQuery GraphQL resolver.
+     * The server validates the SQL (SELECT/WITH only) and executes on a read-only connection.
+     */
+    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number): Promise<RunQueryResult> {
+        const query = gql`
+            query ExecuteAdhocQuery($input: AdhocQueryInput!) {
+                ExecuteAdhocQuery(input: $input) {
+                    ${this.QueryReturnFieldList}
+                }
+            }
+        `;
+
+        const input: { SQL: string; TimeoutSeconds?: number } = { SQL: sql };
+        if (timeoutSeconds !== undefined) {
+            input.TimeoutSeconds = timeoutSeconds;
+        }
+
+        const result = await this.ExecuteGQL(query, { input });
+        if (result?.ExecuteAdhocQuery) {
+            return this.TransformQueryPayload(result.ExecuteAdhocQuery);
+        }
+        return {
+            QueryID: '',
+            QueryName: 'Ad-Hoc Query',
+            Success: false,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 0,
+            ErrorMessage: 'Ad-hoc query execution failed — no response from server'
+        };
     }
 
     protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
@@ -789,9 +826,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     let paramType: string = ''
                     const innerParam: any = {}
                     let entity: string | null = null;
-                    let viewEntity: UserViewEntityExtended | null = null;
+                    let viewEntity: MJUserViewEntityExtended | null = null;
                     if (param.ViewEntity) {
-                        viewEntity = param.ViewEntity as UserViewEntityExtended;
+                        viewEntity = param.ViewEntity as MJUserViewEntityExtended;
                         entity = viewEntity.Get("Entity");
                     }
                     else {
@@ -1095,9 +1132,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    protected async getEntityNameAndUserView(params: RunViewParams, contextUser?: UserInfo): Promise<{entityName: string, v: UserViewEntityExtended}> {
+    protected async getEntityNameAndUserView(params: RunViewParams, contextUser?: UserInfo): Promise<{entityName: string, v: MJUserViewEntityExtended}> {
         let entityName: string;
-        let v: UserViewEntityExtended;
+        let v: MJUserViewEntityExtended;
 
         if (!params.EntityName) {
             if (params.ViewID) {
@@ -1117,7 +1154,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return {entityName, v}
     }
 
-    protected getViewRunTimeFieldList(e: EntityInfo, v: UserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
+    protected getViewRunTimeFieldList(e: EntityInfo, v: MJUserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
         const mapper = new FieldMapper();
         if (params.Fields) {

@@ -21,7 +21,7 @@ import {
 import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
  
 
 /**
@@ -1955,14 +1955,14 @@ export class ComponentRunner {
       ExecutePrompt: async (params: SimpleExecutePromptParams): Promise<SimpleExecutePromptResult> => {
         try {
           // Get the appropriate model based on power level or preferences
-          let model: AIModelEntityExtended | undefined;
+          let model: MJAIModelEntityExtended | undefined;
           
           if (params.preferredModels && params.preferredModels.length > 0) {
             // Try to find one of the preferred models
             await aiEngine.Config(false, params.contextUser);
             const models = aiEngine.Models;
             for (const preferredModel of params.preferredModels) {
-              model = models.find((m: AIModelEntityExtended) => 
+              model = models.find((m: MJAIModelEntityExtended) => 
                 m.Name === preferredModel && 
                 m.IsActive === true
               );
@@ -1975,21 +1975,21 @@ export class ComponentRunner {
             if (params.modelPower === 'lowest') {
               // Get lowest power model by sorting in reverse
               await aiEngine.Config(false, params.contextUser);
-              const llmModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+              const llmModels = aiEngine.Models.filter((m: MJAIModelEntityExtended) => 
                 m.AIModelType === 'LLM' && 
                 m.IsActive === true
               );
-              model = llmModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
+              model = llmModels.sort((a: MJAIModelEntityExtended, b: MJAIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
             } else if (params.modelPower === 'highest') {
               model = await aiEngine.GetHighestPowerLLM(undefined, params.contextUser);
             } else {
               // Default to medium - get a model in the middle range
               await aiEngine.Config(false, params.contextUser);
-              const llmModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+              const llmModels = aiEngine.Models.filter((m: MJAIModelEntityExtended) => 
                 m.AIModelType === 'LLM' && 
                 m.IsActive === true
               );
-              const sortedModels = llmModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0));
+              const sortedModels = llmModels.sort((a: MJAIModelEntityExtended, b: MJAIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0));
               const midIndex = Math.floor(sortedModels.length / 2);
               model = sortedModels[midIndex] || sortedModels[0];
             }
@@ -2050,20 +2050,20 @@ export class ComponentRunner {
           await aiEngine.Config(false, params.contextUser);
           
           // Get embedding models and filter by size preference
-          const embeddingModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+          const embeddingModels = aiEngine.Models.filter((m: MJAIModelEntityExtended) => 
             m.AIModelType === 'Embeddings' && 
             m.IsActive === true
           );
           
           // Select model based on size preference
-          let model: AIModelEntityExtended;
+          let model: MJAIModelEntityExtended;
           if (params.modelSize === 'small') {
             // Prefer local/smaller models for 'small'
-            model = embeddingModels.find((m: AIModelEntityExtended) => m.Vendor === 'LocalEmbeddings') ||
-                    embeddingModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
+            model = embeddingModels.find((m: MJAIModelEntityExtended) => m.Vendor === 'LocalEmbeddings') ||
+                    embeddingModels.sort((a: MJAIModelEntityExtended, b: MJAIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
           } else {
             // Use more powerful models for 'medium'
-            model = embeddingModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0))[0];
+            model = embeddingModels.sort((a: MJAIModelEntityExtended, b: MJAIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0))[0];
           }
           
           if (!model) {

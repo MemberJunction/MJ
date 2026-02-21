@@ -85,8 +85,8 @@ vi.mock('@memberjunction/actions-base', () => ({
         protected HandleSingleViewResult() {}
         protected RunViewProviderToUse = undefined;
     },
-    ActionEntityExtended: class { ID = ''; Name = ''; DriverClass = ''; Params = []; },
-    EntityActionEntityExtended: class { ID = ''; ActionID = ''; Filters = []; Params = []; },
+    MJActionEntityExtended: class { ID = ''; Name = ''; DriverClass = ''; Params = []; },
+    MJEntityActionEntityExtended: class { ID = ''; ActionID = ''; Filters = []; Params = []; },
     ActionParam: class { Name = ''; Value: unknown = null; Type = 'Input'; },
     ActionResult: class {},
     ActionResultSimple: class { Success = false; ResultCode = ''; Message = ''; },

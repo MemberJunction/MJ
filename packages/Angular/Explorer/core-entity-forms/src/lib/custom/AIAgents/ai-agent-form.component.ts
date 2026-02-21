@@ -1,6 +1,6 @@
 import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
-import { AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
+import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
@@ -29,7 +29,7 @@ export type SubAgentFilterType = 'all' | 'child' | 'related';
  * Interface for unified sub-agent display
  */
 export interface UnifiedSubAgent {
-    agent: AIAgentEntityExtended;
+    agent: MJAIAgentEntityExtended;
     type: 'child' | 'related';
     relationship?: MJAIAgentRelationshipEntity;  // Only for related sub-agents
 }
@@ -71,9 +71,9 @@ export interface UnifiedSubAgent {
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
 })
-export class AIAgentFormComponentExtended extends MJAIAgentFormComponent implements OnDestroy {
+export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
-    public record!: AIAgentEntityExtended;
+    public record!: MJAIAgentEntityExtended;
     
     /** Subject for managing component lifecycle and cleaning up subscriptions */
     private destroy$ = new Subject<void>();
@@ -184,7 +184,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
 
     // === Related Entity Data for Display ===
     /** Array of sub-agent entities for card display (DEPRECATED - use allSubAgents) */
-    public subAgents: AIAgentEntityExtended[] = [];
+    public subAgents: MJAIAgentEntityExtended[] = [];
 
     /** Unified sub-agent data (both child and related) */
     private allSubAgents: UnifiedSubAgent[] = [];
@@ -205,7 +205,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     }
     
     /** Array of agent prompt entities for card display */
-    public agentPrompts: AIPromptEntityExtended[] = [];
+    public agentPrompts: MJAIPromptEntityExtended[] = [];
     
     /** Array of agent action entities for card display */
     public agentActions: MJActionEntity[] = [];
@@ -218,21 +218,21 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     public agentNotes: MJAIAgentNoteEntity[] = [];
     
     /** Array of recent execution records for history display */
-    public recentExecutions: AIAgentRunEntityExtended[] = [];
+    public recentExecutions: MJAIAgentRunEntityExtended[] = [];
     public totalExecutionHistoryCount: number = 0;
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
 
     /** Search functionality for execution history */
     public executionSearchText: string = '';
-    public filteredExecutions: AIAgentRunEntityExtended[] = [];
+    public filteredExecutions: MJAIAgentRunEntityExtended[] = [];
 
     /** Pagination state for execution history */
     public executionHistoryPageSize: number = 20;
     public executionHistoryCurrentPage: number = 1;
     public isLoadingPage: boolean = false;
     /** Cache all loaded execution records for pagination */
-    private allLoadedExecutions: AIAgentRunEntityExtended[] = [];
+    private allLoadedExecutions: MJAIAgentRunEntityExtended[] = [];
     
     // === Loading States ===
     /** Main loading state for initial data load */
@@ -518,9 +518,9 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     // === Original State for Cancel/Revert ===
     /** Snapshots of original data for reverting UI changes */
     private originalSnapshots: {
-        agentPrompts: AIPromptEntityExtended[];
+        agentPrompts: MJAIPromptEntityExtended[];
         agentActions: MJActionEntity[];
-        subAgents: AIAgentEntityExtended[];
+        subAgents: MJAIAgentEntityExtended[];
         promptCount: number;
         actionCount: number;
         subAgentCount: number;
@@ -710,7 +710,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
 
                 this.agentNotes = results[1].Results as MJAIAgentNoteEntity[] || [];
 
-                this.recentExecutions = results[2].Results as AIAgentRunEntityExtended[] || [];
+                this.recentExecutions = results[2].Results as MJAIAgentRunEntityExtended[] || [];
                 this.totalExecutionHistoryCount = results[2].TotalRowCount;
 
                 // Initialize cache with first page of results
@@ -817,7 +817,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
             } else {
                 // Need to load from database
                 const rv = new RunView();
-                const result = await rv.RunView<AIAgentRunEntityExtended>({
+                const result = await rv.RunView<MJAIAgentRunEntityExtended>({
                     EntityName: 'MJ: AI Agent Runs',
                     Fields: [
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
@@ -963,7 +963,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     /** Load saved preferences for header state and section expand/collapse */
     private loadUserPreferences(): void {
         try {
-            const raw = UserInfoEngine.Instance.GetSetting(AIAgentFormComponentExtended.PREFS_KEY);
+            const raw = UserInfoEngine.Instance.GetSetting(MJAIAgentFormComponentExtended.PREFS_KEY);
             if (raw) {
                 const prefs = JSON.parse(raw);
                 this.HeaderCollapsed = prefs.headerCollapsed ?? false;
@@ -983,7 +983,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
             sectionStates: this.SectionStates
         };
         UserInfoEngine.Instance.SetSettingDebounced(
-            AIAgentFormComponentExtended.PREFS_KEY,
+            MJAIAgentFormComponentExtended.PREFS_KEY,
             JSON.stringify(prefs)
         );
     }
@@ -1206,7 +1206,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
      * Gets the icon for a sub-agent
      * Prioritizes LogoURL, falls back to IconClass, then default robot icon
      */
-    public getSubAgentIcon(subAgent: AIAgentEntityExtended): string {
+    public getSubAgentIcon(subAgent: MJAIAgentEntityExtended): string {
         if (subAgent?.LogoURL) {
             // LogoURL is used in img tag, not here
             return '';
@@ -1225,7 +1225,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     /**
      * Checks if a sub-agent has a logo URL
      */
-    public hasSubAgentLogoURL(subAgent: AIAgentEntityExtended): boolean {
+    public hasSubAgentLogoURL(subAgent: MJAIAgentEntityExtended): boolean {
         return !!subAgent?.LogoURL;
     }
 
@@ -1380,7 +1380,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
                         this.hasUnsavedChanges = true;
                         
                         // Update UI to show the new prompts (cast to extended type for display)
-                        this.agentPrompts.push(...(newPrompts as AIPromptEntityExtended[]));
+                        this.agentPrompts.push(...(newPrompts as MJAIPromptEntityExtended[]));
                         
                         // Mark for check instead of forcing immediate detection
                         this.cdr.markForCheck();
@@ -1760,7 +1760,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
 
         try {
             const rv = new RunView();
-            const result = await rv.RunView<AIAgentRunEntityExtended>({
+            const result = await rv.RunView<MJAIAgentRunEntityExtended>({
                 EntityName: 'MJ: AI Agent Runs',
                 Fields: [
                     "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
@@ -1794,7 +1794,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     /**
      * Gets a preview of the execution result for collapsed view
      */
-    public getExecutionResultPreview(execution: AIAgentRunEntityExtended, trimLongMessages: boolean): string {
+    public getExecutionResultPreview(execution: MJAIAgentRunEntityExtended, trimLongMessages: boolean): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -1829,7 +1829,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     /**
      * Gets the full execution result message for expanded view
      */
-    public getExecutionResultMessage(execution: AIAgentRunEntityExtended): string {
+    public getExecutionResultMessage(execution: MJAIAgentRunEntityExtended): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -2002,7 +2002,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     /**
      * Removes a prompt from the agent (deferred until save)
      */
-    public async removePrompt(prompt: AIPromptEntityExtended, event: Event) {
+    public async removePrompt(prompt: MJAIPromptEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2133,7 +2133,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
                         // Add to pending changes (defer until save)
                         const md = new Metadata();
                         for (const agent of newAgents) {
-                            const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
+                            const subAgentToUpdate = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
                             await subAgentToUpdate.Load(agent.ID);
                             subAgentToUpdate.ParentID = this.record.ID;
                             // Database constraint requires ExposeAsAction = false for sub-agents
@@ -2186,7 +2186,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     /**
      * Removes a sub-agent from this agent (deferred until save)
      */
-    public async removeSubAgent(subAgent: AIAgentEntityExtended, event: Event) {
+    public async removeSubAgent(subAgent: MJAIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2218,7 +2218,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
                     } else {
                         // Add to pending removals (will restore to root agent)
                         const md = new Metadata();
-                        const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('MJ: AI Agents');
+                        const subAgentToUpdate = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
                         await subAgentToUpdate.Load(subAgent.ID);
                         subAgentToUpdate.ParentID = null; // Will become a root agent
                         
@@ -2491,7 +2491,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     /**
      * Opens the advanced settings dialog for a prompt
      */
-    public async openPromptAdvancedSettings(prompt: AIPromptEntityExtended, event: Event) {
+    public async openPromptAdvancedSettings(prompt: MJAIPromptEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         try {
@@ -2576,7 +2576,7 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
     /**
      * Opens the advanced settings dialog for a sub-agent
      */
-    public async openSubAgentAdvancedSettings(subAgentEntity: AIAgentEntityExtended, event: Event) {
+    public async openSubAgentAdvancedSettings(subAgentEntity: MJAIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         try {
@@ -2800,8 +2800,8 @@ export class AIAgentFormComponentExtended extends MJAIAgentFormComponent impleme
             );
             
             for (const subAgentRecord of subAgentRecords) {
-                // Cast to AIAgentEntityExtended to access ParentID property
-                const subAgent = subAgentRecord.entityObject as AIAgentEntityExtended;
+                // Cast to MJAIAgentEntityExtended to access ParentID property
+                const subAgent = subAgentRecord.entityObject as MJAIAgentEntityExtended;
                 // Set the proper ParentID now that parent is saved
                 subAgent.ParentID = this.record.ID;
                 // Clear the temporary reference

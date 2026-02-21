@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
 import {
@@ -85,7 +85,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   private _viewMode: EntityViewMode | null = null;
   private _filterText: string | null = null;
   private _sortState: SortState | null = null;
-  private _viewEntity: UserViewEntityExtended | null = null;
+  private _viewEntity: MJUserViewEntityExtended | null = null;
   private _timelineConfig: TimelineState | null = null;
   private _initialized = false;
 
@@ -246,10 +246,10 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * The view's filter is additive - UserSearchString is applied ON TOP of the view's WhereClause
    */
   @Input()
-  get viewEntity(): UserViewEntityExtended | null {
+  get viewEntity(): MJUserViewEntityExtended | null {
     return this._viewEntity;
   }
-  set viewEntity(value: UserViewEntityExtended | null) {
+  set viewEntity(value: MJUserViewEntityExtended | null) {
     this._viewEntity = value;
 
     if (this._initialized && this._entity && !this._records) {
@@ -439,7 +439,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   /** Cached grid params to avoid recreating object on every change detection */
   private _cachedGridParams: RunViewParams | null = null;
   private _lastGridParamsEntity: string | null = null;
-  private _lastGridParamsViewEntity: UserViewEntityExtended | null = null;
+  private _lastGridParamsViewEntity: MJUserViewEntityExtended | null = null;
 
   /** Pagination state */
   public pagination: PaginationState = {
@@ -543,8 +543,8 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    *           3) EntityID lookup
    * Returns null if entity cannot be determined.
    */
-  private getEntityInfoFromViewEntity(viewEntity: UserViewEntityExtended): EntityInfo | null {
-    // First try: ViewEntityInfo is the preferred source (set by UserViewEntityExtended.Load)
+  private getEntityInfoFromViewEntity(viewEntity: MJUserViewEntityExtended): EntityInfo | null {
+    // First try: ViewEntityInfo is the preferred source (set by MJUserViewEntityExtended.Load)
     if (viewEntity.ViewEntityInfo) {
       return viewEntity.ViewEntityInfo;
     }

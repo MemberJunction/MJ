@@ -1,1 +1,6 @@
-<mj-query-grid  #theQuery [Params]="{QueryID: queryId}" ></mj-query-grid>
+<mj-query-viewer
+  [QueryId]="CleanQueryId"
+  [AutoRun]="true"
+  (QueryStart)="OnQueryStart()"
+  (QueryComplete)="OnQueryComplete($any($event))">
+</mj-query-viewer>

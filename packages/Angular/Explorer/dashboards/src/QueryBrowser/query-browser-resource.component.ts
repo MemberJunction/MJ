@@ -1,11 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, filter } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, QueryInfo, QueryCategoryInfo, CompositeKey } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
@@ -38,6 +38,11 @@ interface CategoryNode {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class QueryBrowserResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+    private static readonly SETTINGS_KEY = 'QueryBrowser/panelWidth';
+    private static readonly DEFAULT_PANEL_WIDTH = 320;
+    private static readonly MIN_PANEL_WIDTH = 200;
+    private static readonly MAX_PANEL_WIDTH = 600;
+
     public isLoading = true;
     public categories: QueryCategoryInfo[] = [];
     public categoryTree: CategoryNode[] = [];
@@ -45,6 +50,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public filteredQueries: QueryInfo[] = [];
     public selectedQuery: QueryInfo | null = null;
     public searchText = '';
+    public PanelWidth = QueryBrowserResourceComponent.DEFAULT_PANEL_WIDTH;
+    public IsResizing = false;
 
     private metadata = new Metadata();
     private destroy$ = new Subject<void>();
@@ -52,15 +59,22 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private skipUrlUpdate = true; // Skip URL updates during initialization
     private lastNavigatedUrl = ''; // Track URL to avoid reacting to our own navigation
 
+    // Bound event handlers for resize (need references for removeEventListener)
+    private boundOnResizeMove = this.onResizeMove.bind(this);
+    private boundOnResizeEnd = this.onResizeEnd.bind(this);
+
     constructor(
         private cdr: ChangeDetectorRef,
         private navigationService: NavigationService,
-        private router: Router
+        private router: Router,
+        private elementRef: ElementRef,
+        private zone: NgZone
     ) {
         super();
     }
 
     ngOnInit(): void {
+        this.loadSavedPanelWidth();
         this.loadData();
 
         // Subscribe to router NavigationEnd events for back/forward button support
@@ -80,6 +94,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
+        // Ensure any pending debounced settings are flushed
+        UserInfoEngine.Instance.FlushPendingSettings();
+        // Remove resize listeners if active
+        document.removeEventListener('mousemove', this.boundOnResizeMove);
+        document.removeEventListener('mouseup', this.boundOnResizeEnd);
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -94,12 +113,17 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // Data Loading
     // ========================================
 
-    private async loadData(): Promise<void> {
+    private async loadData(forceRefresh = false): Promise<void> {
         try {
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            // Load from metadata (already cached)
+            // Force re-fetch from server when explicitly refreshing
+            if (forceRefresh) {
+                await this.metadata.Refresh();
+            }
+
+            // Load from metadata
             this.categories = this.metadata.QueryCategories || [];
             this.queries = (this.metadata.Queries || []).filter(q =>
                 q.Status === 'Approved' && q.UserCanRun(this.metadata.CurrentUser)
@@ -334,7 +358,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public refresh(): void {
         this.selectedQuery = null;
-        this.loadData();
+        this.loadData(true);
     }
 
     public trackByCategory(index: number, node: CategoryNode): string {
@@ -480,5 +504,69 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             }
         }
         return false;
+    }
+
+    // ========================================
+    // Panel Resize
+    // ========================================
+
+    /**
+     * Load saved panel width from user settings
+     */
+    private loadSavedPanelWidth(): void {
+        const saved = UserInfoEngine.Instance.GetSetting(QueryBrowserResourceComponent.SETTINGS_KEY);
+        if (saved) {
+            const width = parseInt(saved, 10);
+            if (!isNaN(width) && width >= QueryBrowserResourceComponent.MIN_PANEL_WIDTH && width <= QueryBrowserResourceComponent.MAX_PANEL_WIDTH) {
+                this.PanelWidth = width;
+            }
+        }
+    }
+
+    /**
+     * Start resizing the left panel via drag handle
+     */
+    public onResizeStart(event: MouseEvent): void {
+        event.preventDefault();
+        this.IsResizing = true;
+        this.cdr.markForCheck();
+
+        // Run outside Angular zone for performance during mousemove
+        this.zone.runOutsideAngular(() => {
+            document.addEventListener('mousemove', this.boundOnResizeMove);
+            document.addEventListener('mouseup', this.boundOnResizeEnd);
+        });
+    }
+
+    private onResizeMove(event: MouseEvent): void {
+        if (!this.IsResizing) return;
+
+        const containerRect = this.elementRef.nativeElement.querySelector('.query-browser-container')?.getBoundingClientRect();
+        if (!containerRect) return;
+
+        const newWidth = event.clientX - containerRect.left;
+        const clamped = Math.max(
+            QueryBrowserResourceComponent.MIN_PANEL_WIDTH,
+            Math.min(QueryBrowserResourceComponent.MAX_PANEL_WIDTH, newWidth)
+        );
+
+        this.PanelWidth = clamped;
+        this.zone.run(() => this.cdr.markForCheck());
+    }
+
+    private onResizeEnd(): void {
+        if (!this.IsResizing) return;
+        this.IsResizing = false;
+
+        document.removeEventListener('mousemove', this.boundOnResizeMove);
+        document.removeEventListener('mouseup', this.boundOnResizeEnd);
+
+        // Persist width with debouncing
+        UserInfoEngine.Instance.SetSettingDebounced(
+            QueryBrowserResourceComponent.SETTINGS_KEY,
+            this.PanelWidth.toString()
+        );
+
+        this.zone.run(() => this.cdr.markForCheck());
     }
 }

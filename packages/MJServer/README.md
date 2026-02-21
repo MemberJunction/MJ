@@ -418,7 +418,8 @@ The server includes resolvers for the following domains:
 | `RunAIPromptResolver` | Execute AI prompts, simple prompts, text embeddings |
 | `RunAIAgentResolver` | Execute AI agents with session and streaming support |
 | `ActionResolver` | Execute MJ Actions |
-| `QueryResolver` | Execute and create queries |
+| `QueryResolver` | Execute and create saved queries |
+| `AdhocQueryResolver` | Execute ad-hoc SQL queries (SELECT/WITH only, read-only connection) |
 | `ReportResolver` | Run and manage reports |
 | `DatasetResolver` | Dataset operations |
 | `UserViewResolver` | User view management |

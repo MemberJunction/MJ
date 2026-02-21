@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/communication-types",
   "type": "module",
-  "version": "5.0.0",
+  "version": "5.2.0",
   "description": "MemberJunction: Communication Framework Library Generic Types",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,10 +20,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "5.0.0",
-    "@memberjunction/core": "5.0.0",
-    "@memberjunction/templates-base-types": "5.0.0",
-    "@memberjunction/core-entities": "5.0.0",
+    "@memberjunction/global": "5.2.0",
+    "@memberjunction/core": "5.2.0",
+    "@memberjunction/templates-base-types": "5.2.0",
+    "@memberjunction/core-entities": "5.2.0",
     "rxjs": "^7.8.2"
   },
   "repository": {

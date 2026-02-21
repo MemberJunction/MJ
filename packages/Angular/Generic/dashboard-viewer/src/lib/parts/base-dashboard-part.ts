@@ -8,7 +8,8 @@ import {
     OpenEntityRecordNavRequest,
     OpenDashboardNavRequest,
     OpenQueryNavRequest,
-    OpenApplicationNavRequest
+    OpenApplicationNavRequest,
+    OpenNavItemNavRequest
 } from '../models/dashboard-types';
 
 /**
@@ -312,6 +313,27 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
             sourcePanelId: this.Panel?.id ?? '',
             applicationId,
             resourceName,
+            openInNewTab
+        };
+        this.emitNavigationRequest(request);
+    }
+
+    /**
+     * Request navigation to a specific nav item within an application.
+     * Supports setting URL query parameters after navigation.
+     */
+    public RequestOpenNavItem(
+        navItemName: string,
+        appName?: string,
+        queryParams?: Record<string, string>,
+        openInNewTab = false
+    ): void {
+        const request: OpenNavItemNavRequest = {
+            type: 'OpenNavItem',
+            sourcePanelId: this.Panel?.id ?? '',
+            appName,
+            navItemName,
+            queryParams,
             openInNewTab
         };
         this.emitNavigationRequest(request);

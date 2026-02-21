@@ -195,6 +195,18 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
   }
 
+  /**
+   * Called when MJReactComponent finishes loading the full component spec from the registry.
+   * The full spec may contain Functional, Technical, and Data tabs not in the stripped spec.
+   * Emit tabsChanged so the parent panel re-evaluates allTabs and renders the new tab labels.
+   */
+  onReactComponentInitialized(): void {
+    if (this.reactComponent?.resolvedComponentSpec &&
+        this.reactComponent.resolvedComponentSpec !== this.component) {
+      this.tabsChanged.emit();
+    }
+  }
+
   onComponentEvent(event: unknown): void {
     console.log('Component event:', event);
 

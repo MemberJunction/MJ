@@ -1,6 +1,27 @@
-import { Component, Input, Type } from '@angular/core';
+import { Component, EventEmitter, Input, Type } from '@angular/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
+
+/**
+ * General-purpose navigation request emitted by artifact viewer plugins.
+ * Allows plugins to request app-level navigation (e.g., switch to a specific
+ * application, open a nav item, and set query parameters) without depending
+ * on NavigationService directly.
+ *
+ * The event bubbles through ArtifactTypePluginViewer → ArtifactViewerPanel →
+ * consumer (conversations, dashboards, etc.) → ultimately the Explorer wrapper
+ * where NavigationService lives.
+ */
+export interface NavigationRequest {
+  /** Target application name (e.g., 'Data Explorer'). If omitted, stays in current app. */
+  appName?: string;
+
+  /** Target navigation item label within the app (e.g., 'Queries') */
+  navItemName: string;
+
+  /** Query parameters to pass to the navigation target (e.g., { queryId: 'xxx' }) */
+  queryParams?: Record<string, string>;
+}
 
 /**
  * Represents an additional tab that a plugin can provide to the artifact viewer.
@@ -162,6 +183,23 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
   protected getDescription(): string {
     return this.artifactVersion?.Description || '';
   }
+
+  /**
+   * Optional: Emitted when the plugin's additional tabs change after async loading.
+   * Plugins that load data asynchronously (e.g., from a component registry) should
+   * emit this when loading completes and new tabs become available. The parent panel
+   * listens for this to re-run change detection and render the updated tab list.
+   */
+  public tabsChanged?: EventEmitter<void>;
+
+  /**
+   * Optional: Emitted when the plugin wants to navigate to a different app/nav item.
+   * Plugins that need app-level navigation (e.g., "Open Query" navigating to the
+   * Data Explorer's Queries nav item) should instantiate this emitter and emit a
+   * NavigationRequest. The event bubbles up through the artifact viewer chain to the
+   * host application where NavigationService handles the actual navigation.
+   */
+  public navigationRequest?: EventEmitter<NavigationRequest>;
 
   /**
    * Get additional tabs that this plugin wants to provide to the artifact viewer.
