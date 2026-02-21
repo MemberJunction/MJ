@@ -404,10 +404,15 @@ const configInfoSchema = z.object({
     { schema: '%', table: 'flyway_schema_history' }
   ]),
   customSQLScripts: customSQLScriptSchema.array().default([
-    {
-      scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
+    // AS OF 5.3.0 we are NOT including this as it wipes out standard views and procs
+    // for ZERO reason, we have a solid baseline configuration now. We are 
+    // renaming MJ_BASE_BEFORE_SQL.sql and will maintain this but the
+    // new aproach is using Baseline scripts. Assumption == nobody outside MJ modifies
+    // anything DDL-wise INSIDE __mj schema.
+    // {
+    //   scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
+    //   when: 'before-all',
+    // },
   ]),
   advancedGeneration: advancedGenerationSchema.nullish(),
   integrityChecks: integrityCheckConfigSchema.default({
