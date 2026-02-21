@@ -6,6 +6,8 @@ import { EntitySaveOptions, EntityDeleteOptions } from "./interfaces";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { LogError } from "./logging";
+import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult } from "./interfaces";
+import { SQLExpressionValidator } from "@memberjunction/global";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
 export { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
@@ -720,6 +722,271 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     /**************************************************************************/
 
     /**************************************************************************/
+    // START ---- RunView/RunQuery Shared Helpers (Phase 4)
+    /**************************************************************************/
+
+    /**
+     * Validates a user-provided SQL clause (WHERE, ORDER BY, etc.) to prevent SQL injection.
+     * Checks for forbidden keywords (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, CAST, etc.)
+     * and dangerous patterns (comments, semicolons, xp_ prefix).
+     * String literals are stripped before validation to avoid false positives.
+     *
+     * @param clause The SQL clause to validate
+     * @returns true if the clause is safe, false if it contains forbidden patterns
+     */
+    protected ValidateUserProvidedSQLClause(clause: string): boolean {
+        // Remove string literals to avoid false positives
+        const stringLiteralPattern = /(['"]) (?:(?=(\\?))\2[\s\S])*?\1/g;
+        const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
+        const lowerClause = clauseWithoutStrings.toLowerCase();
+
+        const forbiddenPatterns: RegExp[] = [
+            /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
+            /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
+            /--/, /\/\*/, /\*\//, /\bunion\b/, /\bcast\b/, /\bxp_/, /;/,
+        ];
+
+        for (const pattern of forbiddenPatterns) {
+            if (pattern.test(lowerClause)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Checks that the given user has read permissions on the specified entity.
+     * Throws if the user lacks CanRead permission.
+     *
+     * @param entityName The entity to check permissions for
+     * @param contextUser The user whose permissions to check
+     * @throws Error if contextUser is null, entity is not found, or user lacks read permission
+     */
+    protected CheckUserReadPermissions(entityName: string, contextUser: UserInfo): void {
+        const entityInfo = this.Entities.find((e) => e.Name === entityName);
+        if (!contextUser) throw new Error('contextUser is null');
+        if (entityInfo) {
+            const userPermissions = entityInfo.GetUserPermisions(contextUser);
+            if (!userPermissions.CanRead)
+                throw new Error(
+                    'User ' + contextUser.Email + ' does not have read permissions on ' + entityInfo.Name,
+                );
+        } else {
+            throw new Error('Entity not found in metadata');
+        }
+    }
+
+    /**
+     * Builds and validates an aggregate SQL query from the provided aggregate expressions.
+     * Uses SQLExpressionValidator from @memberjunction/global for injection prevention.
+     * Uses QuoteIdentifier/QuoteSchemaAndView for dialect-neutral SQL generation.
+     *
+     * @param aggregates Array of aggregate expressions to validate and build
+     * @param entityInfo Entity metadata for field reference validation
+     * @param schemaName Schema name for the entity
+     * @param baseView Base view name for the entity
+     * @param whereSQL WHERE clause to apply (without the WHERE keyword)
+     * @returns Object with aggregateSQL string and any validation errors
+     */
+    protected BuildAggregateSQL(
+        aggregates: { expression: string; alias?: string }[],
+        entityInfo: EntityInfo,
+        schemaName: string,
+        baseView: string,
+        whereSQL: string,
+    ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
+        if (!aggregates || aggregates.length === 0) {
+            return { aggregateSQL: null, validationErrors: [] };
+        }
+
+        const validator = SQLExpressionValidator.Instance;
+        const validationErrors: AggregateResult[] = [];
+        const validExpressions: string[] = [];
+        const fieldNames = entityInfo.Fields.map((f) => f.Name);
+
+        for (let i = 0; i < aggregates.length; i++) {
+            const agg = aggregates[i];
+            const alias = agg.alias || agg.expression;
+            const result = validator.validate(agg.expression, {
+                context: 'aggregate',
+                entityFields: fieldNames,
+            });
+
+            if (!result.valid) {
+                validationErrors.push({
+                    expression: agg.expression,
+                    alias: alias,
+                    value: null,
+                    error: result.error || 'Validation failed',
+                });
+            } else {
+                validExpressions.push(agg.expression + ' AS ' + this.QuoteIdentifier('Agg_' + i));
+            }
+        }
+
+        if (validExpressions.length === 0) {
+            return { aggregateSQL: null, validationErrors };
+        }
+
+        let aggregateSQL = 'SELECT ' + validExpressions.join(', ') + ' FROM ' + this.QuoteSchemaAndView(schemaName, baseView);
+        if (whereSQL && whereSQL.length > 0) {
+            aggregateSQL += ' WHERE ' + whereSQL;
+        }
+        return { aggregateSQL, validationErrors };
+    }
+
+    /**
+     * Executes an aggregate query and maps results back to the original expressions.
+     *
+     * @param aggregateSQL The SQL query to execute (from BuildAggregateSQL)
+     * @param aggregates Original aggregate expression definitions
+     * @param validationErrors Any validation errors from BuildAggregateSQL
+     * @param contextUser User context for query execution
+     * @returns Array of AggregateResult objects with execution time
+     */
+    protected async ExecuteAggregateQuery(
+        aggregateSQL: string | null,
+        aggregates: { expression: string; alias?: string }[],
+        validationErrors: AggregateResult[],
+        contextUser?: UserInfo,
+    ): Promise<{ results: AggregateResult[]; executionTime: number }> {
+        const startTime = Date.now();
+
+        if (!aggregateSQL) {
+            return { results: validationErrors, executionTime: 0 };
+        }
+
+        try {
+            const queryResult = await this.ExecuteSQL<Record<string, unknown>>(aggregateSQL, undefined, undefined, contextUser);
+            const executionTime = Date.now() - startTime;
+
+            if (!queryResult || queryResult.length === 0) {
+                const nullResults = aggregates
+                    .filter((_, i) => !validationErrors.some((e) => e.expression === aggregates[i].expression))
+                    .map((agg) => ({
+                        expression: agg.expression,
+                        alias: agg.alias || agg.expression,
+                        value: null,
+                        error: undefined,
+                    }));
+                return { results: [...validationErrors, ...nullResults], executionTime };
+            }
+
+            const row = queryResult[0];
+            const results: AggregateResult[] = [];
+            let validExprIndex = 0;
+
+            for (let i = 0; i < aggregates.length; i++) {
+                const agg = aggregates[i];
+                const alias = agg.alias || agg.expression;
+                const validationError = validationErrors.find((e) => e.expression === agg.expression);
+                if (validationError) {
+                    results.push(validationError);
+                } else {
+                    const value = row['Agg_' + validExprIndex];
+                    results.push({
+                        expression: agg.expression,
+                        alias: alias,
+                        value: (value ?? null) as number | string | Date | boolean | null,
+                        error: undefined,
+                    });
+                    validExprIndex++;
+                }
+            }
+            return { results, executionTime };
+        } catch (error) {
+            const executionTime = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorResults = aggregates.map((agg) => ({
+                expression: agg.expression,
+                alias: agg.alias || agg.expression,
+                value: null,
+                error: errorMessage,
+            }));
+            return { results: errorResults, executionTime };
+        }
+    }
+
+    /**
+     * Builds the SQL to retrieve the "name" field value for a specific entity record.
+     * Uses QuoteIdentifier/QuoteSchemaAndView for dialect-neutral SQL generation.
+     *
+     * @param entityName The entity name
+     * @param compositeKey The record's primary key
+     * @returns The SQL query string, or null if the entity has no name field
+     */
+    protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey): string | null {
+        const e = this.Entities.find((e) => e.Name === entityName);
+        if (!e) throw new Error('Entity ' + entityName + ' not found');
+
+        const f = e.NameField;
+        if (!f) {
+            LogError('Entity ' + entityName + ' does not have a NameField, returning null');
+            return null;
+        }
+
+        let where = '';
+        for (const pkv of compositeKey.KeyValuePairs) {
+            const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
+            const quotes = pk && pk.NeedsQuotes ? "'" : '';
+            if (where.length > 0) where += ' AND ';
+            where += this.QuoteIdentifier(pkv.FieldName) + '=' + quotes + pkv.Value + quotes;
+        }
+        return 'SELECT ' + this.QuoteIdentifier(f.Name) + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + where;
+    }
+
+    /**
+     * Retrieves the display name for a single entity record.
+     * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation.
+     */
+    protected async InternalGetEntityRecordName(
+        entityName: string,
+        compositeKey: CompositeKey,
+        contextUser?: UserInfo,
+    ): Promise<string> {
+        try {
+            const sql = this.BuildEntityRecordNameSQL(entityName, compositeKey);
+            if (sql) {
+                const data = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+                if (data && data.length === 1) {
+                    const fields = Object.keys(data[0]);
+                    return String(data[0][fields[0]] ?? '');
+                } else {
+                    LogError('Entity ' + entityName + ' record ' + compositeKey.ToString() + ' not found');
+                    return '';
+                }
+            }
+            return '';
+        } catch (e) {
+            LogError(e);
+            return '';
+        }
+    }
+
+    /**
+     * Retrieves display names for multiple entity records.
+     */
+    protected async InternalGetEntityRecordNames(
+        info: EntityRecordNameInput[],
+        contextUser?: UserInfo,
+    ): Promise<EntityRecordNameResult[]> {
+        const results: EntityRecordNameResult[] = [];
+        for (const item of info) {
+            const name = await this.InternalGetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
+            results.push({
+                EntityName: item.EntityName,
+                CompositeKey: item.CompositeKey,
+                RecordName: name,
+                Success: name ? true : false,
+                Status: name ? 'Success' : 'Error',
+            });
+        }
+        return results;
+    }
+
+    /**************************************************************************/
+    // END ---- RunView/RunQuery Shared Helpers (Phase 4)
+    /**************************************************************************/
+
+        /**************************************************************************/
     // START ---- Save/Delete Orchestration
     // DB-agnostic orchestration that calls abstract SQL generation + virtual hooks.
     // Both SQL Server and PostgreSQL inherit this; they only override hooks/SQL gen.

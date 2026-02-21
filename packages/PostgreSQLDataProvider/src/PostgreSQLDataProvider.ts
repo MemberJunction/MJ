@@ -408,44 +408,7 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
 
     // ─── Entity Record Names ─────────────────────────────────────────
 
-    protected async InternalGetEntityRecordName(
-        entityName: string,
-        compositeKey: CompositeKey,
-        contextUser?: UserInfo
-    ): Promise<string> {
-        const entityInfo = this.Entities.find(e => e.Name === entityName);
-        if (!entityInfo) return '';
-        const nameField = entityInfo.NameField;
-        if (!nameField) return compositeKey.ToString();
-
-        const whereClause = this.buildPKWhereClause(entityInfo, compositeKey);
-        const sql = `SELECT ${pgDialect.QuoteIdentifier(nameField.Name)} FROM ${this.viewName(entityInfo)} WHERE ${whereClause}`;
-        const rows = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
-        if (rows.length > 0 && rows[0][nameField.Name] != null) {
-            return String(rows[0][nameField.Name]);
-        }
-        return compositeKey.ToString();
-    }
-
-    protected async InternalGetEntityRecordNames(
-        info: EntityRecordNameInput[],
-        contextUser?: UserInfo
-    ): Promise<EntityRecordNameResult[]> {
-        const results: EntityRecordNameResult[] = [];
-        for (const item of info) {
-            const name = await this.InternalGetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
-            const result = new EntityRecordNameResult();
-            result.EntityName = item.EntityName;
-            result.CompositeKey = item.CompositeKey;
-            result.Success = true;
-            result.Status = 'OK';
-            result.RecordName = name;
-            results.push(result);
-        }
-        return results;
-    }
-
-    // ─── User ────────────────────────────────────────────────────────
+            // ─── User ────────────────────────────────────────────────────────
 
     protected async GetCurrentUser(): Promise<UserInfo> {
         return this.CurrentUser;

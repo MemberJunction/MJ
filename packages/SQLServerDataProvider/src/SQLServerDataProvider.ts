@@ -1484,7 +1484,7 @@ export class SQLServerDataProvider
         // a developer calling the function can provide an additional Extra Filter which is any valid SQL exprssion that can be added to the WHERE clause
         if (extraFilter && extraFilter.length > 0) {
           // extra filter is simple- we just AND it to the where clause if it exists, or we add it as a where clause if there was no prior WHERE
-          if (!this.validateUserProvidedSQLClause(extraFilter))
+          if (!this.ValidateUserProvidedSQLClause(extraFilter))
             throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
 
           if (bHasWhere) {
@@ -1497,7 +1497,7 @@ export class SQLServerDataProvider
 
         // check for a user provided search string and generate SQL as needed if provided
         if (userSearchString && userSearchString.length > 0) {
-          if (!this.validateUserProvidedSQLClause(userSearchString))
+          if (!this.ValidateUserProvidedSQLClause(userSearchString))
             throw new Error(`Invalid User Search SQL clause: ${userSearchString}, contains one more for forbidden keywords`);
 
           const sUserSearchSQL: string = this.createViewUserSearchSQL(entityInfo, userSearchString);
@@ -1521,7 +1521,7 @@ export class SQLServerDataProvider
           else sExcludeSQL += `UserViewRunID=${excludeUserViewRunID})`; // exclude just the run that was provided
 
           if (overrideExcludeFilter && overrideExcludeFilter.length > 0) {
-            if (!this.validateUserProvidedSQLClause(overrideExcludeFilter))
+            if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
               throw new Error(`Invalid OverrideExcludeFilter: ${overrideExcludeFilter}, contains one more for forbidden keywords`);
 
             // add in the OVERRIDE filter with an OR statement, this results in those rows that match the Exclude filter to be included
@@ -1572,7 +1572,7 @@ export class SQLServerDataProvider
           // add the order by to its SELECT query that pulls from the list of records that were returned
           // there is no point in ordering the rows as they are saved into an audit list anyway so no order-by above
           // just here for final step before we execute it.
-          if (!this.validateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+          if (!this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
 
           viewSQL += ` ORDER BY ${orderBy}`;
         }
@@ -1590,7 +1590,7 @@ export class SQLServerDataProvider
         let aggregateSQL: string | null = null;
         let aggregateValidationErrors: AggregateResult[] = [];
         if (params.Aggregates && params.Aggregates.length > 0) {
-          const aggregateBuild = this.buildAggregateSQL(
+          const aggregateBuild = this.BuildAggregateSQL(
             params.Aggregates,
             entityInfo,
             entityInfo.SchemaName,
@@ -2008,7 +2008,7 @@ export class SQLServerDataProvider
     // Extra filter (resolved to string by ProviderBase.PreRunView)
     const extraFilterStr = (params.ExtraFilter as string) || '';
     if (extraFilterStr.length > 0) {
-      if (!this.validateUserProvidedSQLClause(extraFilterStr)) {
+      if (!this.ValidateUserProvidedSQLClause(extraFilterStr)) {
         throw new Error(`Invalid Extra Filter: ${extraFilterStr}`);
       }
       whereSQL = `(${extraFilterStr})`;
@@ -2017,7 +2017,7 @@ export class SQLServerDataProvider
 
     // User search string
     if (params.UserSearchString && params.UserSearchString.length > 0) {
-      if (!this.validateUserProvidedSQLClause(params.UserSearchString)) {
+      if (!this.ValidateUserProvidedSQLClause(params.UserSearchString)) {
         throw new Error(`Invalid User Search SQL clause: ${params.UserSearchString}`);
       }
       const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString);
@@ -2189,7 +2189,7 @@ export class SQLServerDataProvider
       // Add ORDER BY if specified (resolved to string by ProviderBase.PreRunView)
       const orderByStr = (params.OrderBy as string) || '';
       if (orderByStr.length > 0) {
-        if (!this.validateUserProvidedSQLClause(orderByStr)) {
+        if (!this.ValidateUserProvidedSQLClause(orderByStr)) {
           throw new Error(`Invalid OrderBy clause: ${orderByStr}`);
         }
         sql += ` ORDER BY ${orderByStr}`;
@@ -2314,191 +2314,6 @@ export class SQLServerDataProvider
     }
   }
 
-  protected validateUserProvidedSQLClause(clause: string): boolean {
-    // First, remove all string literals from the clause to avoid false positives
-    // This regex matches both single and double quoted strings, handling escaped quotes
-    const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
-    
-    // Replace all string literals with empty strings for validation purposes
-    const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
-    
-    // convert the clause to lower case to make the keyword search case-insensitive
-    const lowerClause = clauseWithoutStrings.toLowerCase();
-
-    // Define forbidden keywords and characters as whole words using regular expressions
-    const forbiddenPatterns: RegExp[] = [
-      /\binsert\b/,
-      /\bupdate\b/,
-      /\bdelete\b/,
-      /\bexec\b/,
-      /\bexecute\b/,
-      /\bdrop\b/,
-      /--/,
-      /\/\*/,
-      /\*\//,
-      /\bunion\b/,
-      /\bcast\b/,
-      /\bxp_/,
-      /;/,
-    ];
-
-    // Check for forbidden patterns
-    for (const pattern of forbiddenPatterns) {
-      if (pattern.test(lowerClause)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * Validates and builds an aggregate SQL query from the provided aggregate expressions.
-   * Uses the SQLExpressionValidator to ensure expressions are safe from SQL injection.
-   *
-   * @param aggregates - Array of aggregate expressions to validate and build
-   * @param entityInfo - Entity metadata for field reference validation
-   * @param schemaName - Schema name for the table
-   * @param baseView - Base view name for the table
-   * @param whereSQL - WHERE clause to apply (without the WHERE keyword)
-   * @returns Object with aggregateSQL string and any validation errors
-   */
-  protected buildAggregateSQL(
-    aggregates: { expression: string; alias?: string }[],
-    entityInfo: EntityInfo,
-    schemaName: string,
-    baseView: string,
-    whereSQL: string
-  ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
-    if (!aggregates || aggregates.length === 0) {
-      return { aggregateSQL: null, validationErrors: [] };
-    }
-
-    const validator = SQLExpressionValidator.Instance;
-    const validationErrors: AggregateResult[] = [];
-    const validExpressions: string[] = [];
-    const fieldNames = entityInfo.Fields.map(f => f.Name);
-
-    for (let i = 0; i < aggregates.length; i++) {
-      const agg = aggregates[i];
-      const alias = agg.alias || agg.expression;
-
-      // Validate the expression using SQLExpressionValidator
-      const result = validator.validate(agg.expression, {
-        context: 'aggregate',
-        entityFields: fieldNames
-      });
-
-      if (!result.valid) {
-        // Record the error but continue processing other expressions
-        validationErrors.push({
-          expression: agg.expression,
-          alias: alias,
-          value: null,
-          error: result.error || 'Validation failed'
-        });
-      } else {
-        // Expression is valid, add to the query with an alias
-        // Use a numbered alias for the SQL to make result mapping easier
-        validExpressions.push(`${agg.expression} AS [Agg_${i}]`);
-      }
-    }
-
-    if (validExpressions.length === 0) {
-      return { aggregateSQL: null, validationErrors };
-    }
-
-    // Build the aggregate SQL query
-    let aggregateSQL = `SELECT ${validExpressions.join(', ')} FROM [${schemaName}].${baseView}`;
-    if (whereSQL && whereSQL.length > 0) {
-      aggregateSQL += ` WHERE ${whereSQL}`;
-    }
-
-    return { aggregateSQL, validationErrors };
-  }
-
-  /**
-   * Executes the aggregate query and maps results back to the original expressions.
-   *
-   * @param aggregateSQL - The aggregate SQL query to execute
-   * @param aggregates - Original aggregate expressions (for result mapping)
-   * @param validationErrors - Any validation errors from buildAggregateSQL
-   * @param contextUser - User context for query execution
-   * @returns Array of AggregateResult objects
-   */
-  protected async executeAggregateQuery(
-    aggregateSQL: string | null,
-    aggregates: { expression: string; alias?: string }[],
-    validationErrors: AggregateResult[],
-    contextUser?: UserInfo
-  ): Promise<{ results: AggregateResult[]; executionTime: number }> {
-    const startTime = Date.now();
-
-    if (!aggregateSQL) {
-      // No valid expressions to execute, return only validation errors
-      return { results: validationErrors, executionTime: 0 };
-    }
-
-    try {
-      const queryResult = await this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser);
-      const executionTime = Date.now() - startTime;
-
-      if (!queryResult || queryResult.length === 0) {
-        // Query returned no results, which shouldn't happen for aggregates
-        // Return validation errors plus null values for valid expressions
-        const nullResults = aggregates
-          .filter((_, i) => !validationErrors.some(e => e.expression === aggregates[i].expression))
-          .map(agg => ({
-            expression: agg.expression,
-            alias: agg.alias || agg.expression,
-            value: null,
-            error: undefined
-          }));
-        return { results: [...validationErrors, ...nullResults], executionTime };
-      }
-
-      // Map query results back to original expressions
-      const row = queryResult[0];
-      const results: AggregateResult[] = [];
-      let validExprIndex = 0;
-
-      for (let i = 0; i < aggregates.length; i++) {
-        const agg = aggregates[i];
-        const alias = agg.alias || agg.expression;
-
-        // Check if this expression had a validation error
-        const validationError = validationErrors.find(e => e.expression === agg.expression);
-        if (validationError) {
-          results.push(validationError);
-        } else {
-          // Get the value from the result using the numbered alias
-          const value = row[`Agg_${validExprIndex}`];
-          results.push({
-            expression: agg.expression,
-            alias: alias,
-            value: value ?? null,
-            error: undefined
-          });
-          validExprIndex++;
-        }
-      }
-
-      return { results, executionTime };
-    } catch (error) {
-      const executionTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      // Return all expressions with the error
-      const errorResults = aggregates.map(agg => ({
-        expression: agg.expression,
-        alias: agg.alias || agg.expression,
-        value: null,
-        error: errorMessage
-      }));
-
-      return { results: errorResults, executionTime };
-    }
-  }
 
   protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: UserViewEntityExtended): string {
     const fieldList = this.getRunTimeViewFieldArray(params, viewEntity);
@@ -2695,18 +2510,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected CheckUserReadPermissions(entityName: string, contextUser: UserInfo) {
-    const entityInfo = this.Entities.find((e) => e.Name === entityName);
-    if (!contextUser) throw new Error(`contextUser is null`);
-
-    // first check permissions, the logged in user must have read permissions on the entity to run the view
-    if (entityInfo) {
-      const userPermissions = entityInfo.GetUserPermisions(contextUser);
-      if (!userPermissions.CanRead) throw new Error(`User ${contextUser.Email} does not have read permissions on ${entityInfo.Name}`);
-    } else throw new Error(`Entity not found in metadata`);
-  }
-
-  /**************************************************************************/
+    /**************************************************************************/
   // END ---- IRunViewProvider
   /**************************************************************************/
 
@@ -5288,63 +5092,7 @@ IF ${varName} IS NOT NULL
     return this._fileSystemProvider;
   }
 
-  protected async InternalGetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
-    const promises = info.map(async (item) => {
-      const r = await this.InternalGetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
-      return {
-        EntityName: item.EntityName,
-        CompositeKey: item.CompositeKey,
-        RecordName: r,
-        Success: r ? true : false,
-        Status: r ? 'Success' : 'Error',
-      };
-    });
-    return Promise.all(promises);
-  }
-
-  protected async InternalGetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
-    try {
-      const sql = this.GetEntityRecordNameSQL(entityName, CompositeKey);
-      if (sql) {
-        const data = await this.ExecuteSQL(sql, null, undefined, contextUser);
-        if (data && data.length === 1) {
-          const fields = Object.keys(data[0]);
-          return data[0][fields[0]]; // return first field
-        } else {
-          LogError(`Entity ${entityName} record ${CompositeKey.ToString()} not found, returning null`);
-          return null;
-        }
-      }
-    } catch (e) {
-      LogError(e);
-      return null;
-    }
-  }
-
-  protected GetEntityRecordNameSQL(entityName: string, CompositeKey: CompositeKey): string {
-    const e = this.Entities.find((e) => e.Name === entityName);
-    if (!e) throw new Error(`Entity ${entityName} not found`);
-    else {
-      const f = e.NameField;
-      if (!f) {
-        LogError(`Entity ${entityName} does not have an IsNameField or a field with the column name of Name, returning null, use recordId`);
-        return null;
-      } else {
-        // got our field, create a SQL Query
-        const sql: string = `SELECT [${f.Name}] FROM [${e.SchemaName}].[${e.BaseView}] WHERE `;
-        let where: string = '';
-        for (const pkv of CompositeKey.KeyValuePairs) {
-          const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
-          const quotes = pk.NeedsQuotes ? "'" : '';
-          if (where.length > 0) where += ' AND ';
-          where += `[${pkv.FieldName}]=${quotes}${pkv.Value}${quotes}`;
-        }
-        return sql + where;
-      }
-    }
-  }
-
-  public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
+        public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
     return new SQLServerTransactionGroup();
   }
 
