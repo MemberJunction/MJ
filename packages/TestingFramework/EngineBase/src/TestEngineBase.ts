@@ -5,6 +5,7 @@
 
 import {
     BaseEngine,
+    BaseEntity,
     IMetadataProvider,
     UserInfo
 } from '@memberjunction/core';
@@ -39,6 +40,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
     private _testSuites: MJTestSuiteEntity[] = [];
     private _testSuiteTests: MJTestSuiteTestEntity[] = [];
     private _testRubrics: MJTestRubricEntity[] = [];
+    private _testOutputTypes: BaseEntity[] = [];
 
     /**
      * Singleton instance accessor
@@ -83,6 +85,13 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
     }
 
     /**
+     * All loaded test run output types
+     */
+    public get TestOutputTypes(): BaseEntity[] {
+        return this._testOutputTypes;
+    }
+
+    /**
      * Configure and load metadata
      *
      * @param forceRefresh - Force reload even if already loaded
@@ -114,6 +123,11 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
             {
                 PropertyName: '_testSuiteTests',
                 EntityName: 'MJ: Test Suite Tests',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_testOutputTypes',
+                EntityName: 'MJ: Test Run Output Types',
                 CacheLocal: true
             }
         ];

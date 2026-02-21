@@ -16,11 +16,9 @@ export class ProductFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'productDetails', sectionName: 'Product Details', isExpanded: true },
-            { sectionKey: 'pricingInventory', sectionName: 'Pricing & Inventory', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'meetings', sectionName: 'Meetings', isExpanded: false },
-            { sectionKey: 'publications', sectionName: 'Publications', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'competitionEntries', sectionName: 'Competition Entries', isExpanded: false },
+            { sectionKey: 'productAwards', sectionName: 'Product Awards', isExpanded: false }
         ]);
     }
 }

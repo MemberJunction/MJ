@@ -16,7 +16,7 @@ import { LogError, LogStatus } from '@memberjunction/core';
 import { TestEngine } from '@memberjunction/testing-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
-import { TestRunVariables } from '@memberjunction/testing-engine-base';
+import { TestRunVariables, TestLogMessage } from '@memberjunction/testing-engine-base';
 
 // ===== GraphQL Types =====
 
@@ -131,6 +131,11 @@ export class RunTestResolver extends ResolverBase {
                 this.createProgressCallback(pubSub, userPayload, testId) :
                 undefined;
 
+            // Create log callback to stream driver/engine logs to the UI in real-time
+            const logCallback = pubSub ?
+                this.createLogCallback(pubSub, userPayload, testId) :
+                undefined;
+
             // Parse variables from JSON string if provided
             let parsedVariables: TestRunVariables | undefined;
             if (variables) {
@@ -147,7 +152,8 @@ export class RunTestResolver extends ResolverBase {
                 environment,
                 tags,
                 variables: parsedVariables,
-                progressCallback
+                progressCallback,
+                logCallback
             };
 
             const result = await engine.RunTest(testId, options, user);
@@ -251,6 +257,11 @@ export class RunTestResolver extends ResolverBase {
                 this.createProgressCallback(pubSub, userPayload, suiteId) :
                 undefined;
 
+            // Create log callback to stream driver/engine logs to the UI in real-time
+            const logCallback = pubSub ?
+                this.createLogCallback(pubSub, userPayload, suiteId) :
+                undefined;
+
             // Parse selectedTestIds from JSON string if provided
             let parsedSelectedTestIds: string[] | undefined;
             if (selectedTestIds) {
@@ -280,7 +291,8 @@ export class RunTestResolver extends ResolverBase {
                 selectedTestIds: parsedSelectedTestIds,
                 sequenceStart,
                 sequenceEnd,
-                progressCallback
+                progressCallback,
+                logCallback
             };
 
             const result = await engine.RunSuite(suiteId, options, user);
@@ -358,6 +370,32 @@ export class RunTestResolver extends ResolverBase {
                     oracleEvaluation: progress.metadata?.oracleType
                 },
                 timestamp: new Date()
+            };
+
+            this.publishProgress(pubSub, progressMsg, userPayload);
+        };
+    }
+
+    /**
+     * Create log callback that streams driver/engine log messages to the UI
+     * as progress updates, so they appear in the execution log in real-time.
+     */
+    private createLogCallback(
+        pubSub: PubSubEngine,
+        userPayload: UserPayload,
+        testId: string
+    ) {
+        return (message: TestLogMessage) => {
+            const progressMsg: TestExecutionStreamMessage = {
+                sessionId: userPayload.sessionId || '',
+                testRunId: testId,
+                type: 'progress',
+                progress: {
+                    currentStep: 'driver_log',
+                    percentage: -1, // Signal that percentage should not be updated
+                    message: message.message,
+                },
+                timestamp: message.timestamp
             };
 
             this.publishProgress(pubSub, progressMsg, userPayload);
