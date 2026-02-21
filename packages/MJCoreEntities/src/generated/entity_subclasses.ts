@@ -12039,11 +12039,13 @@ export const MJEntitySchema = z.object({
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
         * * Display Name: Class Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().`),
     BaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
@@ -53775,6 +53777,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
+    * * Description: Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.
     */
     get CodeName(): string | null {
         return this.Get('CodeName');
@@ -53784,6 +53787,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Field Name: ClassName
     * * Display Name: Class Name
     * * SQL Data Type: nvarchar(MAX)
+    * * Description: Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().
     */
     get ClassName(): string | null {
         return this.Get('ClassName');
