@@ -172,6 +172,17 @@ export class BaseUserMenu {
 
             // === SYSTEM GROUP ===
             {
+                id: 'toggle-theme',
+                label: this.GetThemeLabel(),
+                icon: this.GetThemeIcon(),
+                group: 'system',
+                order: 5,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: 'Switch between light and dark mode'
+            },
+            {
                 id: 'reset-layout',
                 label: 'Reset Layout',
                 icon: 'fa-solid fa-rotate-left',
@@ -353,6 +364,17 @@ export class BaseUserMenu {
     }
 
     /**
+     * Handle "Toggle Theme" click
+     */
+    protected async Handle_toggle_theme(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: false, // Keep menu open to see updated state
+            message: 'toggle-theme' // Special signal for shell to handle
+        };
+    }
+
+    /**
      * Handle "Reset Layout" click
      */
     protected async Handle_reset_layout(): Promise<UserMenuActionResult> {
@@ -380,6 +402,25 @@ export class BaseUserMenu {
         await this._context.authService.logout();
 
         return { success: true, closeMenu: true };
+    }
+
+    // ========================================
+    // THEME HELPERS
+    // ========================================
+
+    /**
+     * Get the display label for the theme toggle (just "Theme" — the toggle switch conveys state)
+     */
+    protected GetThemeLabel(): string {
+        return 'Theme';
+    }
+
+    /**
+     * Get the icon for the theme toggle based on current preference
+     */
+    protected GetThemeIcon(): string {
+        const pref = this._context?.themePreference ?? 'light';
+        return pref === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
     }
 
     // ========================================

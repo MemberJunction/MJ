@@ -65,13 +65,13 @@ mj-tab-container ::ng-deep .lm_stack {
 
 .shell-header {
   height: 60px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
   display: flex;
   align-items: center;
   padding: 0 16px;
   gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--mj-shadow-sm);
   flex-shrink: 0;
 }
 
@@ -102,7 +102,7 @@ mj-tab-container ::ng-deep .lm_stack {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #616161;
+  color: var(--mj-text-secondary);
   font-size: 18px;
   transition: all 0.15s ease;
   position: relative;
@@ -159,13 +159,13 @@ mj-tab-container ::ng-deep .lm_stack {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #757575;
+  color: var(--mj-text-muted);
   font-size: 18px;
   transition: background 0.15s;
 }
 
 .icon-btn:hover {
-  background: #f5f5f5;
+  background: var(--mj-bg-surface-hover);
 }
 
 /* Notification button with badge */
@@ -220,8 +220,8 @@ mj-tab-container ::ng-deep .lm_stack {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 2px solid #e0e0e0;
-  background: #f5f5f5;
+  border: 2px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -233,7 +233,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .user-menu .avatar-btn .icon-fallback i {
-  color: #757575;
+  color: var(--mj-text-muted);
   font-size: 16px;
 }
 
@@ -253,7 +253,7 @@ mj-tab-container ::ng-deep .lm_stack {
 /* User Menu Header */
 .user-menu-header {
   padding: 12px 16px;
-  background: #fafafa;
+  background: var(--mj-bg-surface-sunken);
 }
 
 .user-menu-header .user-info {
@@ -265,12 +265,12 @@ mj-tab-container ::ng-deep .lm_stack {
 .user-menu-header .user-name {
   font-weight: 600;
   font-size: 14px;
-  color: #424242;
+  color: var(--mj-text-primary);
 }
 
 .user-menu-header .user-email {
   font-size: 12px;
-  color: #757575;
+  color: var(--mj-text-muted);
 }
 
 /* User Context Menu */
@@ -279,10 +279,10 @@ mj-tab-container ::ng-deep .lm_stack {
   top: 100%;
   right: 0;
   margin-top: 8px;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--mj-shadow-lg);
   min-width: 180px;
   z-index: 10000;
   overflow: hidden;
@@ -295,19 +295,19 @@ mj-tab-container ::ng-deep .lm_stack {
   padding: 12px 16px;
   cursor: pointer;
   font-size: 14px;
-  color: #424242;
+  color: var(--mj-text-primary);
   transition: background 0.15s;
 }
 
 .user-menu-item i {
   width: 18px;
   text-align: center;
-  color: #757575;
+  color: var(--mj-text-muted);
   font-size: 14px;
 }
 
 .user-menu-item:hover {
-  background: #f5f5f5;
+  background: var(--mj-bg-surface-hover);
 }
 
 .user-menu-item.danger {
@@ -319,12 +319,12 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .user-menu-item.danger:hover {
-  background: #ffebee;
+  background: color-mix(in srgb, #c62828 10%, var(--mj-bg-surface-elevated));
 }
 
 .user-menu-divider {
   height: 1px;
-  background: #e0e0e0;
+  background: var(--mj-border-default);
   margin: 4px 0;
 }
 
@@ -338,11 +338,59 @@ mj-tab-container ::ng-deep .lm_stack {
   background: transparent;
 }
 
+/* Theme Toggle Switch */
+.theme-toggle-item {
+  cursor: pointer;
+}
+
+.theme-toggle-track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--mj-bg-surface-active);
+  margin-left: auto;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.theme-toggle-track.dark {
+  background: #5b6abf;
+}
+
+.theme-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--mj-bg-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.theme-toggle-track.dark .theme-toggle-thumb {
+  transform: translateX(18px);
+}
+
+.theme-toggle-icon {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+}
+
+.theme-toggle-track.dark .theme-toggle-icon {
+  color: #c4b5fd;
+}
+
 /* Menu shortcut hint */
 .user-menu-item .menu-shortcut {
   margin-left: auto;
   font-size: 11px;
-  color: #9e9e9e;
+  color: var(--mj-text-disabled);
   font-family: monospace;
 }
 
@@ -382,7 +430,7 @@ mj-tab-container ::ng-deep .lm_stack {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: #fafafa;
+  background: var(--mj-bg-page);
 }
 
 /* Hamburger button - hidden on desktop */
@@ -396,12 +444,12 @@ mj-tab-container ::ng-deep .lm_stack {
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  color: #616161;
+  color: var(--mj-text-secondary);
   font-size: 20px;
   transition: background 0.15s;
 }
 .hamburger-btn:hover {
-  background: #f5f5f5;
+  background: var(--mj-bg-surface-hover);
 }
 
 /* Mobile Navigation Overlay */
@@ -425,8 +473,8 @@ mj-tab-container ::ng-deep .lm_stack {
   bottom: 0;
   width: 280px;
   max-width: 85vw;
-  background: white;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-xl);
   z-index: 9999;
   flex-direction: column;
   transform: translateX(-100%);
@@ -441,13 +489,13 @@ mj-tab-container ::ng-deep .lm_stack {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #fafafa;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-sunken);
 }
 .mobile-nav-header span {
   font-weight: 600;
   font-size: 16px;
-  color: #424242;
+  color: var(--mj-text-primary);
 }
 .mobile-nav-header .close-btn {
   width: 36px;
@@ -459,12 +507,12 @@ mj-tab-container ::ng-deep .lm_stack {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #757575;
+  color: var(--mj-text-muted);
   font-size: 18px;
   transition: background 0.15s;
 }
 .mobile-nav-header .close-btn:hover {
-  background: #e0e0e0;
+  background: var(--mj-bg-surface-active);
 }
 
 .mobile-nav-content {
@@ -477,13 +525,13 @@ mj-tab-container ::ng-deep .lm_stack {
   padding: 8px 20px;
   font-size: 12px;
   font-weight: 600;
-  color: #9e9e9e;
+  color: var(--mj-text-disabled);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .mobile-nav-footer {
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--mj-border-default);
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -499,7 +547,7 @@ mj-tab-container ::ng-deep .lm_stack {
   background: none;
   cursor: pointer;
   border-radius: 8px;
-  color: #616161;
+  color: var(--mj-text-secondary);
   font-size: 14px;
   font-weight: 500;
   transition: background 0.15s;
@@ -507,7 +555,7 @@ mj-tab-container ::ng-deep .lm_stack {
   text-align: left;
 }
 .mobile-nav-action:hover {
-  background: #f5f5f5;
+  background: var(--mj-bg-surface-hover);
 }
 .mobile-nav-action i {
   font-size: 16px;
@@ -551,15 +599,15 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-titlebar {
-  background: #ffffff;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
   padding: 12px 16px;
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-title {
   font-size: 18px;
   font-weight: 600;
-  color: #212121;
+  color: var(--mj-text-primary);
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-titlebar-actions {
@@ -573,13 +621,13 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-titlebar-action:hover {
-  background: #f5f5f5;
+  background: var(--mj-bg-surface-hover);
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-content {
   padding: 0;
   overflow: auto;
-  background: #fafafa;
+  background: var(--mj-bg-page);
 }
 
 /* Hide minimize/maximize buttons - only show close */
@@ -621,9 +669,9 @@ mj-tab-container ::ng-deep .lm_stack {
   right: 16px;
   width: 480px;
   max-width: calc(100vw - 32px);
-  background: white;
+  background: var(--mj-bg-surface-elevated);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--mj-shadow-xl);
   z-index: 10000;
   opacity: 0;
   transform: translateY(-10px);
@@ -656,7 +704,7 @@ mj-tab-container ::ng-deep .lm_stack {
   height: 40px;
   padding: 8px 12px;
   font-size: 14px;
-  border: 1px solid #d4d4d4;
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
   outline: none;
   display: block !important;
