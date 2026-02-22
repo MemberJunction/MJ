@@ -1,5 +1,7 @@
 import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
+import { DatabasePlatform } from "./platformSQL";
+import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } from "./platformVariants";
 
 /**
  * A list of all users who have or had access to the system.
@@ -242,12 +244,17 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
      * SQL WHERE clause template that filters records based on user context variables
      */
     FilterText: string = null
-    
+    /**
+     * JSON column containing platform-specific SQL variants for the FilterText.
+     * Stores alternative filter SQL for platforms other than the default.
+     */
+    PlatformVariants: string | null = null
+
     /**
      * Timestamp when the filter was created
      */
     __mj_CreatedAt: Date = null
-    
+
     /**
      * Timestamp when the filter was last updated
      */
@@ -256,6 +263,28 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
     constructor (initData: any) {
         super();
         this.copyInitData(initData);
+    }
+
+    private _parsedVariants: PlatformVariantsJSON | null | undefined = undefined;
+    /**
+     * Lazily parses and caches the PlatformVariants JSON.
+     */
+    private get ParsedVariants(): PlatformVariantsJSON | null {
+        if (this._parsedVariants === undefined) {
+            this._parsedVariants = ParsePlatformVariants(this.PlatformVariants);
+        }
+        return this._parsedVariants;
+    }
+
+    /**
+     * Resolves the FilterText for a given database platform.
+     * Checks PlatformVariants first; falls back to the base FilterText property.
+     * @param platform - The target database platform
+     * @returns The appropriate filter text for the platform
+     */
+    public GetPlatformFilterText(platform: DatabasePlatform): string {
+        const variant = ResolvePlatformVariant(this.ParsedVariants, 'FilterText', platform);
+        return variant ?? this.FilterText;
     }
 
     /**

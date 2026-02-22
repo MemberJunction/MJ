@@ -42,7 +42,6 @@ import {
   EntityPermissionType,
   EntitySaveOptions,
   LogError,
-  RunReportParams,
   DatasetItemFilterType,
   DatasetResultType,
   DatasetStatusEntityUpdateDateType,
@@ -50,25 +49,21 @@ import {
   EntityRecordNameInput,
   EntityRecordNameResult,
   IRunReportProvider,
-  RunReportResult,
   StripStopWords,
   RecordDependency,
-  RecordMergeRequest,
-  RecordMergeResult,
-  RecordMergeDetailResult,
   EntityDependency,
   RunQueryResult,
   RunQueryParams,
-  PotentialDuplicateRequest,
-  PotentialDuplicateResponse,
   LogStatus,
   CompositeKey,
   EntityDeleteOptions,
-  EntityMergeOptions,
   BaseEntityResult,
   Metadata,
   DatasetItemResultType,
   DatabaseProviderBase,
+  FieldChange,
+  SaveSQLResult,
+  DeleteSQLResult,
   QueryInfo,
   QueryCategoryInfo,
   QueryCache,
@@ -84,14 +79,8 @@ import { QueryParameterProcessor } from './queryParameterProcessor';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import {
-  MJAuditLogEntity,
-  MJDuplicateRunEntity,
   MJEntityAIActionEntity,
-  MJListEntity,
   MJQueryEntity,
-  MJRecordMergeDeletionLogEntity,
-  MJRecordMergeLogEntity,
-  MJUserFavoriteEntity,
   QueryEngine,
   MJUserViewEntityExtended,
   ViewInfo,
@@ -119,16 +108,6 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
 import { MJGlobal, SQLExpressionValidator } from '@memberjunction/global';
-
-/**
- * Represents a single field change in the DiffObjects comparison result
- */
-export type FieldChange = {
-  field: string;
-  oldValue: any;
-  newValue: any;
-};
-
 /**
  * Core SQL execution function - handles the actual database query execution
  * This is outside the class to allow both static and instance methods to use it
@@ -252,6 +231,18 @@ export class SQLServerDataProvider
   extends DatabaseProviderBase
   implements IEntityDataProvider, IMetadataProvider, IRunReportProvider
 {
+  /**************************************************************************/
+  // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
+  /**************************************************************************/
+
+  protected override QuoteIdentifier(name: string): string {
+    return `[${name}]`;
+  }
+
+  protected override QuoteSchemaAndView(schemaName: string, objectName: string): string {
+    return `[${schemaName}].[${objectName}]`;
+  }
+
   private _pool: sql.ConnectionPool;
   
   // Instance transaction properties
@@ -696,42 +687,7 @@ export class SQLServerDataProvider
   // END ---- SQL Logging Methods
   /**************************************************************************/
 
-  /**************************************************************************/
-  // START ---- IRunReportProvider
-  /**************************************************************************/
-  public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
-    const ReportID = params.ReportID;
-    // run the sql and return the data
-    const sqlReport = `SELECT ReportSQL FROM [${this.MJCoreSchemaName}].vwReports WHERE ID =${ReportID}`;
-    const reportInfo = await this.ExecuteSQL(sqlReport, undefined, undefined, contextUser);
-    if (reportInfo && reportInfo.length > 0) {
-      const start = new Date().getTime();
-      const sql = reportInfo[0].ReportSQL;
-      const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
-      const end = new Date().getTime();
-      if (result)
-        return {
-          Success: true,
-          ReportID,
-          Results: result,
-          RowCount: result.length,
-          ExecutionTime: end - start,
-          ErrorMessage: '',
-        };
-      else
-        return {
-          Success: false,
-          ReportID,
-          Results: [],
-          RowCount: 0,
-          ExecutionTime: end - start,
-          ErrorMessage: 'Error running report SQL',
-        };
-    } else return { Success: false, ReportID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Report not found' };
-  }
-  /**************************************************************************/
-  // END ---- IRunReportProvider
-  /**************************************************************************/
+  // RunReport is inherited from DatabaseProviderBase
 
   /**
    * Resolves a hierarchical category path (e.g., "/MJ/AI/Agents/") to a CategoryID.
@@ -1565,7 +1521,8 @@ export class SQLServerDataProvider
         this.CheckUserReadPermissions(entityInfo.Name, user);
 
         // get other variaables from params
-        const extraFilter: string = params.ExtraFilter;
+        // ExtraFilter is guaranteed to be a resolved string by ProviderBase.PreRunView
+        const extraFilter: string = (params.ExtraFilter as string) || '';
         const userSearchString: string = params.UserSearchString;
         const excludeUserViewRunID: string = params.ExcludeUserViewRunID;
         const overrideExcludeFilter: string = params.OverrideExcludeFilter;
@@ -1606,7 +1563,7 @@ export class SQLServerDataProvider
         // a developer calling the function can provide an additional Extra Filter which is any valid SQL exprssion that can be added to the WHERE clause
         if (extraFilter && extraFilter.length > 0) {
           // extra filter is simple- we just AND it to the where clause if it exists, or we add it as a where clause if there was no prior WHERE
-          if (!this.validateUserProvidedSQLClause(extraFilter))
+          if (!this.ValidateUserProvidedSQLClause(extraFilter))
             throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
 
           if (bHasWhere) {
@@ -1619,7 +1576,7 @@ export class SQLServerDataProvider
 
         // check for a user provided search string and generate SQL as needed if provided
         if (userSearchString && userSearchString.length > 0) {
-          if (!this.validateUserProvidedSQLClause(userSearchString))
+          if (!this.ValidateUserProvidedSQLClause(userSearchString))
             throw new Error(`Invalid User Search SQL clause: ${userSearchString}, contains one more for forbidden keywords`);
 
           const sUserSearchSQL: string = this.createViewUserSearchSQL(entityInfo, userSearchString);
@@ -1643,7 +1600,7 @@ export class SQLServerDataProvider
           else sExcludeSQL += `UserViewRunID=${excludeUserViewRunID})`; // exclude just the run that was provided
 
           if (overrideExcludeFilter && overrideExcludeFilter.length > 0) {
-            if (!this.validateUserProvidedSQLClause(overrideExcludeFilter))
+            if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
               throw new Error(`Invalid OverrideExcludeFilter: ${overrideExcludeFilter}, contains one more for forbidden keywords`);
 
             // add in the OVERRIDE filter with an OR statement, this results in those rows that match the Exclude filter to be included
@@ -1681,7 +1638,8 @@ export class SQLServerDataProvider
         // first check params.OrderBy, that takes first priority
         // if that's not provided, then we check the view definition for its SortState
         // if that's not provided we do NOT sort
-        const orderBy: string = params.OrderBy ? params.OrderBy : viewEntity ? viewEntity.OrderByClause : '';
+        // OrderBy is guaranteed to be a resolved string by ProviderBase.PreRunView
+        const orderBy: string = params.OrderBy ? (params.OrderBy as string) : viewEntity ? viewEntity.OrderByClause : '';
 
         // if we're saving the view results, we need to wrap the entire SQL statement
         if (viewEntity?.ID && viewEntity?.ID.length > 0 && saveViewResults && user) {
@@ -1693,7 +1651,7 @@ export class SQLServerDataProvider
           // add the order by to its SELECT query that pulls from the list of records that were returned
           // there is no point in ordering the rows as they are saved into an audit list anyway so no order-by above
           // just here for final step before we execute it.
-          if (!this.validateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+          if (!this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
 
           viewSQL += ` ORDER BY ${orderBy}`;
         }
@@ -1711,7 +1669,7 @@ export class SQLServerDataProvider
         let aggregateSQL: string | null = null;
         let aggregateValidationErrors: AggregateResult[] = [];
         if (params.Aggregates && params.Aggregates.length > 0) {
-          const aggregateBuild = this.buildAggregateSQL(
+          const aggregateBuild = this.BuildAggregateSQL(
             params.Aggregates,
             entityInfo,
             entityInfo.SchemaName,
@@ -2126,18 +2084,19 @@ export class SQLServerDataProvider
     let whereSQL = '';
     let bHasWhere = false;
 
-    // Extra filter
-    if (params.ExtraFilter && params.ExtraFilter.length > 0) {
-      if (!this.validateUserProvidedSQLClause(params.ExtraFilter)) {
-        throw new Error(`Invalid Extra Filter: ${params.ExtraFilter}`);
+    // Extra filter (resolved to string by ProviderBase.PreRunView)
+    const extraFilterStr = (params.ExtraFilter as string) || '';
+    if (extraFilterStr.length > 0) {
+      if (!this.ValidateUserProvidedSQLClause(extraFilterStr)) {
+        throw new Error(`Invalid Extra Filter: ${extraFilterStr}`);
       }
-      whereSQL = `(${params.ExtraFilter})`;
+      whereSQL = `(${extraFilterStr})`;
       bHasWhere = true;
     }
 
     // User search string
     if (params.UserSearchString && params.UserSearchString.length > 0) {
-      if (!this.validateUserProvidedSQLClause(params.UserSearchString)) {
+      if (!this.ValidateUserProvidedSQLClause(params.UserSearchString)) {
         throw new Error(`Invalid User Search SQL clause: ${params.UserSearchString}`);
       }
       const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString);
@@ -2306,12 +2265,13 @@ export class SQLServerDataProvider
       // Build the query
       let sql = `SELECT ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView} WHERE ${combinedWhere}`;
 
-      // Add ORDER BY if specified
-      if (params.OrderBy && params.OrderBy.length > 0) {
-        if (!this.validateUserProvidedSQLClause(params.OrderBy)) {
-          throw new Error(`Invalid OrderBy clause: ${params.OrderBy}`);
+      // Add ORDER BY if specified (resolved to string by ProviderBase.PreRunView)
+      const orderByStr = (params.OrderBy as string) || '';
+      if (orderByStr.length > 0) {
+        if (!this.ValidateUserProvidedSQLClause(orderByStr)) {
+          throw new Error(`Invalid OrderBy clause: ${orderByStr}`);
         }
-        sql += ` ORDER BY ${params.OrderBy}`;
+        sql += ` ORDER BY ${orderByStr}`;
       }
 
       const results = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
@@ -2433,191 +2393,6 @@ export class SQLServerDataProvider
     }
   }
 
-  protected validateUserProvidedSQLClause(clause: string): boolean {
-    // First, remove all string literals from the clause to avoid false positives
-    // This regex matches both single and double quoted strings, handling escaped quotes
-    const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
-    
-    // Replace all string literals with empty strings for validation purposes
-    const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
-    
-    // convert the clause to lower case to make the keyword search case-insensitive
-    const lowerClause = clauseWithoutStrings.toLowerCase();
-
-    // Define forbidden keywords and characters as whole words using regular expressions
-    const forbiddenPatterns: RegExp[] = [
-      /\binsert\b/,
-      /\bupdate\b/,
-      /\bdelete\b/,
-      /\bexec\b/,
-      /\bexecute\b/,
-      /\bdrop\b/,
-      /--/,
-      /\/\*/,
-      /\*\//,
-      /\bunion\b/,
-      /\bcast\b/,
-      /\bxp_/,
-      /;/,
-    ];
-
-    // Check for forbidden patterns
-    for (const pattern of forbiddenPatterns) {
-      if (pattern.test(lowerClause)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * Validates and builds an aggregate SQL query from the provided aggregate expressions.
-   * Uses the SQLExpressionValidator to ensure expressions are safe from SQL injection.
-   *
-   * @param aggregates - Array of aggregate expressions to validate and build
-   * @param entityInfo - Entity metadata for field reference validation
-   * @param schemaName - Schema name for the table
-   * @param baseView - Base view name for the table
-   * @param whereSQL - WHERE clause to apply (without the WHERE keyword)
-   * @returns Object with aggregateSQL string and any validation errors
-   */
-  protected buildAggregateSQL(
-    aggregates: { expression: string; alias?: string }[],
-    entityInfo: EntityInfo,
-    schemaName: string,
-    baseView: string,
-    whereSQL: string
-  ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
-    if (!aggregates || aggregates.length === 0) {
-      return { aggregateSQL: null, validationErrors: [] };
-    }
-
-    const validator = SQLExpressionValidator.Instance;
-    const validationErrors: AggregateResult[] = [];
-    const validExpressions: string[] = [];
-    const fieldNames = entityInfo.Fields.map(f => f.Name);
-
-    for (let i = 0; i < aggregates.length; i++) {
-      const agg = aggregates[i];
-      const alias = agg.alias || agg.expression;
-
-      // Validate the expression using SQLExpressionValidator
-      const result = validator.validate(agg.expression, {
-        context: 'aggregate',
-        entityFields: fieldNames
-      });
-
-      if (!result.valid) {
-        // Record the error but continue processing other expressions
-        validationErrors.push({
-          expression: agg.expression,
-          alias: alias,
-          value: null,
-          error: result.error || 'Validation failed'
-        });
-      } else {
-        // Expression is valid, add to the query with an alias
-        // Use a numbered alias for the SQL to make result mapping easier
-        validExpressions.push(`${agg.expression} AS [Agg_${i}]`);
-      }
-    }
-
-    if (validExpressions.length === 0) {
-      return { aggregateSQL: null, validationErrors };
-    }
-
-    // Build the aggregate SQL query
-    let aggregateSQL = `SELECT ${validExpressions.join(', ')} FROM [${schemaName}].${baseView}`;
-    if (whereSQL && whereSQL.length > 0) {
-      aggregateSQL += ` WHERE ${whereSQL}`;
-    }
-
-    return { aggregateSQL, validationErrors };
-  }
-
-  /**
-   * Executes the aggregate query and maps results back to the original expressions.
-   *
-   * @param aggregateSQL - The aggregate SQL query to execute
-   * @param aggregates - Original aggregate expressions (for result mapping)
-   * @param validationErrors - Any validation errors from buildAggregateSQL
-   * @param contextUser - User context for query execution
-   * @returns Array of AggregateResult objects
-   */
-  protected async executeAggregateQuery(
-    aggregateSQL: string | null,
-    aggregates: { expression: string; alias?: string }[],
-    validationErrors: AggregateResult[],
-    contextUser?: UserInfo
-  ): Promise<{ results: AggregateResult[]; executionTime: number }> {
-    const startTime = Date.now();
-
-    if (!aggregateSQL) {
-      // No valid expressions to execute, return only validation errors
-      return { results: validationErrors, executionTime: 0 };
-    }
-
-    try {
-      const queryResult = await this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser);
-      const executionTime = Date.now() - startTime;
-
-      if (!queryResult || queryResult.length === 0) {
-        // Query returned no results, which shouldn't happen for aggregates
-        // Return validation errors plus null values for valid expressions
-        const nullResults = aggregates
-          .filter((_, i) => !validationErrors.some(e => e.expression === aggregates[i].expression))
-          .map(agg => ({
-            expression: agg.expression,
-            alias: agg.alias || agg.expression,
-            value: null,
-            error: undefined
-          }));
-        return { results: [...validationErrors, ...nullResults], executionTime };
-      }
-
-      // Map query results back to original expressions
-      const row = queryResult[0];
-      const results: AggregateResult[] = [];
-      let validExprIndex = 0;
-
-      for (let i = 0; i < aggregates.length; i++) {
-        const agg = aggregates[i];
-        const alias = agg.alias || agg.expression;
-
-        // Check if this expression had a validation error
-        const validationError = validationErrors.find(e => e.expression === agg.expression);
-        if (validationError) {
-          results.push(validationError);
-        } else {
-          // Get the value from the result using the numbered alias
-          const value = row[`Agg_${validExprIndex}`];
-          results.push({
-            expression: agg.expression,
-            alias: alias,
-            value: value ?? null,
-            error: undefined
-          });
-          validExprIndex++;
-        }
-      }
-
-      return { results, executionTime };
-    } catch (error) {
-      const executionTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      // Return all expressions with the error
-      const errorResults = aggregates.map(agg => ({
-        expression: agg.expression,
-        alias: agg.alias || agg.expression,
-        value: null,
-        error: errorMessage
-      }));
-
-      return { results: errorResults, executionTime };
-    }
-  }
 
   protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: MJUserViewEntityExtended): string {
     const fieldList = this.getRunTimeViewFieldArray(params, viewEntity);
@@ -2766,66 +2541,9 @@ export class SQLServerDataProvider
     return sUserSearchSQL;
   }
 
-  public async CreateAuditLogRecord(
-    user: UserInfo,
-    authorizationName: string | null,
-    auditLogTypeName: string,
-    status: string,
-    details: string | null,
-    entityId: string,
-    recordId: any | null,
-    auditLogDescription: string | null,
-    saveOptions: EntitySaveOptions
-  ): Promise<MJAuditLogEntity> {
-    try {
-      const authorization = authorizationName
-        ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase())
-        : null;
-      const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
+  // CreateAuditLogRecord is inherited from DatabaseProviderBase
 
-      if (!user) throw new Error(`User is a required parameter`);
-      if (!auditLogType) {
-        throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
-      }
-
-      const auditLog = await this.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
-      auditLog.NewRecord();
-      auditLog.UserID = user.ID;
-      auditLog.AuditLogTypeID = auditLogType.ID;
-      if (status?.trim().toLowerCase() === 'success') auditLog.Status = 'Success';
-      else auditLog.Status = 'Failed';
-
-      auditLog.EntityID = entityId;
-      auditLog.RecordID = recordId;
-
-      if (authorization) auditLog.AuthorizationID = authorization.ID;
-
-      if (details) auditLog.Details = details;
-
-      if (auditLogDescription) auditLog.Description = auditLogDescription;
-
-      if (await auditLog.Save(saveOptions)) {
-        return auditLog;
-      }
-      else throw new Error(`Error saving audit log record`);
-    } catch (err) {
-      LogError(err);
-      return null;
-    }
-  }
-
-  protected CheckUserReadPermissions(entityName: string, contextUser: UserInfo) {
-    const entityInfo = this.Entities.find((e) => e.Name === entityName);
-    if (!contextUser) throw new Error(`contextUser is null`);
-
-    // first check permissions, the logged in user must have read permissions on the entity to run the view
-    if (entityInfo) {
-      const userPermissions = entityInfo.GetUserPermisions(contextUser);
-      if (!userPermissions.CanRead) throw new Error(`User ${contextUser.Email} does not have read permissions on ${entityInfo.Name}`);
-    } else throw new Error(`Entity not found in metadata`);
-  }
-
-  /**************************************************************************/
+    /**************************************************************************/
   // END ---- IRunViewProvider
   /**************************************************************************/
 
@@ -2836,67 +2554,6 @@ export class SQLServerDataProvider
     return ProviderType.Database;
   }
 
-  public async GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean> {
-    const id = await this.GetRecordFavoriteID(userId, entityName, CompositeKey, contextUser);
-    return id !== null;
-  }
-
-  public async GetRecordFavoriteID(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string | null> {
-    try {
-      const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID='${userId}' AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`;
-      const result = await this.ExecuteSQL(sSQL, null, undefined, contextUser);
-      if (result && result.length > 0) return result[0].ID;
-      else return null;
-    } catch (e) {
-      LogError(e);
-      throw e;
-    }
-  }
-
-  public async SetRecordFavoriteStatus(
-    userId: string,
-    entityName: string,
-    CompositeKey: CompositeKey,
-    isFavorite: boolean,
-    contextUser: UserInfo,
-  ): Promise<void> {
-    try {
-      const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
-      if ((currentFavoriteId === null && isFavorite === false) || (currentFavoriteId !== null && isFavorite === true)) return; // no change
-
-      // if we're here that means we need to invert the status, which either means creating a record or deleting a record
-      const e = this.Entities.find((e) => e.Name === entityName);
-      const ufEntity = <MJUserFavoriteEntity>await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
-      if (currentFavoriteId !== null) {
-        // delete the record since we are setting isFavorite to FALSE
-        await ufEntity.Load(currentFavoriteId);
-        if (await ufEntity.Delete()) return;
-        else throw new Error(`Error deleting user favorite`);
-      } else {
-        // create the record since we are setting isFavorite to TRUE
-        ufEntity.NewRecord();
-        ufEntity.Set('EntityID', e.ID);
-        ufEntity.Set('RecordID', CompositeKey.Values()); // this is a comma separated list of primary key values, which is fine as the primary key is a string
-        ufEntity.Set('UserID', userId);
-        if (await ufEntity.Save()) return;
-        else throw new Error(`Error saving user favorite`);
-      }
-    } catch (e) {
-      LogError(e);
-      throw e;
-    }
-  }
-
-  public async GetRecordChanges(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordChange[]> {
-    try {
-      const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${compositeKey.ToConcatenatedString()}' ORDER BY ChangedAt DESC`;
-      return this.ExecuteSQL(sSQL, undefined, undefined, contextUser);
-    } catch (e) {
-      LogError(e);
-      throw e;
-    }
-  }
-
   /**
    * This function will generate SQL statements for all of the possible soft links that are not traditional foreign keys but exist in entities
    * where there is a column that has the EntityIDFieldName set to a column name (not null). We need to get a list of all such soft link fields across ALL entities
@@ -2904,7 +2561,7 @@ export class SQLServerDataProvider
    * @param entityName
    * @param compositeKey
    */
-  protected GetSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+  protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
     let sSQL = '';
@@ -2938,7 +2595,7 @@ export class SQLServerDataProvider
     return sSQL;
   }
 
-  protected GetHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+  protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
     let sSQL = '';
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
@@ -2960,75 +2617,6 @@ export class SQLServerDataProvider
     return sSQL;
   }
 
-  /**
-   * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
-   * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
-   * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
-   * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
-   * @param entityName the name of the entity to check
-   * @param KeyValuePairs the primary key(s) to check - only send multiple if you have an entity with a composite primary key
-   */
-  public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordDependency[]> {
-    try {
-      const recordDependencies: RecordDependency[] = [];
-
-      // first, get the entity dependencies for this entity
-      const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
-      if (entityDependencies.length === 0) {
-        // no dependencies, exit early
-        return recordDependencies;
-      }
-
-      // now, we have to construct a query that will return the dependencies for this record, both hard and soft links
-      const sSQL: string = this.GetHardLinkDependencySQL(entityDependencies, compositeKey) + '\n' + this.GetSoftLinkDependencySQL(entityName, compositeKey);
-
-      // now, execute the query
-      const result = await this.ExecuteSQL(sSQL, null, undefined, contextUser);
-      if (!result || result.length === 0) {
-        return recordDependencies;
-      }
-
-      // now we go through the results and create the RecordDependency objects
-      for (const r of result) {
-        const entityInfo: EntityInfo | undefined = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
-        if (!entityInfo) {
-          throw new Error(`Entity ${r.EntityName} not found in metadata`);
-        }
-
-        // future, if we support foreign keys that are composite keys, we'll need to enable this code
-        // const pkeyValues: KeyValuePair[] = [];
-        // entityInfo.PrimaryKeys.forEach((pk) => {
-        //     pkeyValues.push({FieldName: pk.Name, Value: r[pk.Name]}) // add all of the primary keys, which often is as simple as just "ID", but this is generic way to do it
-        // })
-
-        const compositeKey: CompositeKey = new CompositeKey();
-        // the row r will have a PrimaryKeyValue field that is a string that is a concatenation of the primary key field names and values
-        // we need to parse that out so that we can then pass it to the CompositeKey object
-        const pkeys = {};
-        const keyValues = r.PrimaryKeyValue.split(CompositeKey.DefaultFieldDelimiter);
-        keyValues.forEach((kv) => {
-          const parts = kv.split(CompositeKey.DefaultValueDelimiter);
-          pkeys[parts[0]] = parts[1];
-        });
-        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, pkeys);
-
-        const recordDependency: RecordDependency = {
-          EntityName: r.EntityName,
-          RelatedEntityName: r.RelatedEntityName,
-          FieldName: r.FieldName,
-          PrimaryKey: compositeKey,
-        };
-
-        recordDependencies.push(recordDependency);
-      }
-      return recordDependencies;
-    } catch (e) {
-      // log and throw
-      LogError(e);
-      throw e;
-    }
-  }
-
   protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
     const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
     const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
@@ -3047,191 +2635,8 @@ export class SQLServerDataProvider
     }
   }
 
-  public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
-    if (!contextUser) {
-      throw new Error('User context is required to get record duplicates.');
-    }
-
-    const listEntity: MJListEntity = await this.GetEntityObject<MJListEntity>('MJ: Lists');
-    listEntity.ContextCurrentUser = contextUser;
-    const success = await listEntity.Load(params.ListID);
-    if (!success) {
-      throw new Error(`List with ID ${params.ListID} not found.`);
-    }
-
-    const duplicateRun: MJDuplicateRunEntity = await this.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
-    duplicateRun.NewRecord();
-    duplicateRun.EntityID = params.EntityID;
-    duplicateRun.StartedByUserID = contextUser.ID;
-    duplicateRun.StartedAt = new Date();
-    duplicateRun.ProcessingStatus = 'In Progress';
-    duplicateRun.ApprovalStatus = 'Pending';
-    duplicateRun.SourceListID = listEntity.ID;
-    duplicateRun.ContextCurrentUser = contextUser;
-
-    const saveResult = await duplicateRun.Save();
-    if (!saveResult) {
-      throw new Error(`Failed to save Duplicate Run Entity`);
-    }
-
-    const response: PotentialDuplicateResponse = {
-      Status: 'Inprogress',
-      PotentialDuplicateResult: [],
-    };
-
-    return response;
-  }
-
-  public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
-    const e = this.Entities.find((e) => e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
-    if (!e || !e.AllowRecordMerge)
-      throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
-
-    const result: RecordMergeResult = {
-      Success: false,
-      RecordMergeLogID: null,
-      RecordStatus: [],
-      Request: request,
-      OverallStatus: null,
-    };
-    const mergeRecordLog: MJRecordMergeLogEntity = await this.StartMergeLogging(request, result, contextUser);
-    try {
-      /*
-                we will follow this process...
-                * 1. Begin Transaction
-                * 2. The surviving record is loaded and fields are updated from the field map, if provided, and the record is saved. If a FieldMap not provided within the request object, this step is skipped.
-                * 3. For each of the records that will be merged INTO the surviving record, we call the GetEntityDependencies() method and get a list of all other records in the database are linked to the record to be deleted. We then go through each of those dependencies and update the link to point to the SurvivingRecordID and save the record.
-                * 4. The record to be deleted is then deleted.
-                * 5. Commit or Rollback Transaction
-             */
-
-      // Step 1 - begin transaction
-      await this.BeginTransaction();
-
-      // Step 2 - update the surviving record, but only do this if we were provided a field map
-      if (request.FieldMap && request.FieldMap.length > 0) {
-        const survivor: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser);
-        await survivor.InnerLoad(request.SurvivingRecordCompositeKey);
-        for (const fieldMap of request.FieldMap) {
-          survivor.Set(fieldMap.FieldName, fieldMap.Value);
-        }
-        if (!(await survivor.Save())) {
-          result.OverallStatus = 'Error saving survivor record with values from provided field map.';
-          throw new Error(result.OverallStatus);
-        }
-      }
-
-      // Step 3 - update the dependencies for each of the records we will delete
-      for (const pksToDelete of request.RecordsToMerge) {
-        const newRecStatus: RecordMergeDetailResult = {
-          CompositeKey: pksToDelete,
-          Success: false,
-          RecordMergeDeletionLogID: null,
-          Message: null,
-        };
-        result.RecordStatus.push(newRecStatus);
-        const dependencies = await this.GetRecordDependencies(request.EntityName, pksToDelete);
-        // now, loop through the dependencies and update the link to point to the surviving record
-        for (const dependency of dependencies) {
-          const reInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName.trim().toLowerCase());
-          const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
-          await relatedEntity.InnerLoad(dependency.PrimaryKey);
-          relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.GetValueByIndex(0)); // only support single field foreign keys for now
-          /*
-                    if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.KeyValuePair is a single value, not an array
-
-                    for (let pkv of dependency.KeyValuePairs) {
-                        relatedEntity.Set(dependency.FieldName, pkv.Value);
-                    }
-                     */
-          if (!(await relatedEntity.Save())) {
-            newRecStatus.Success = false;
-            newRecStatus.Message = `Error updating dependency record ${dependency.PrimaryKey.ToString} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
-            throw new Error(newRecStatus.Message);
-          }
-        }
-        // if we get here, that means that all of the dependencies were updated successfully, so we can now delete the records to be merged
-        const recordToDelete: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser);
-        await recordToDelete.InnerLoad(pksToDelete);
-        if (!(await recordToDelete.Delete())) {
-          newRecStatus.Message = `Error deleting record ${pksToDelete.ToString()} for entity ${request.EntityName}`;
-          throw new Error(newRecStatus.Message);
-        } else newRecStatus.Success = true;
-      }
-
-      result.Success = true;
-      await this.CompleteMergeLogging(mergeRecordLog, result, contextUser);
-
-      // Step 5 - commit transaction
-      await this.CommitTransaction();
-
-      result.Success = true;
-
-      return result;
-    } catch (e) {
-      LogError(e);
-
-      await this.RollbackTransaction();
-      // attempt to persist the status to the DB, although that might fail
-      await this.CompleteMergeLogging(mergeRecordLog, result, contextUser);
-      throw e;
-    }
-  }
-
-  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<MJRecordMergeLogEntity> {
-    try {
-      // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
-      const recordMergeLog = <MJRecordMergeLogEntity>await this.GetEntityObject('MJ: Record Merge Logs', contextUser);
-      const entity = this.Entities.find((e) => e.Name === request.EntityName);
-      if (!entity) throw new Error(`Entity ${result.Request.EntityName} not found in metadata`);
-      if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
-
-      recordMergeLog.NewRecord();
-      recordMergeLog.EntityID = entity.ID;
-      recordMergeLog.SurvivingRecordID = request.SurvivingRecordCompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
-      recordMergeLog.InitiatedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
-      recordMergeLog.ApprovalStatus = 'Approved';
-      recordMergeLog.ApprovedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
-      recordMergeLog.ProcessingStatus = 'Started';
-      recordMergeLog.ProcessingStartedAt = new Date();
-      if (await recordMergeLog.Save()) {
-        result.RecordMergeLogID = recordMergeLog.ID;
-        return recordMergeLog;
-      } else throw new Error(`Error saving record merge log`);
-    } catch (e) {
-      LogError(e);
-      throw e;
-    }
-  }
-
-  protected async CompleteMergeLogging(recordMergeLog: MJRecordMergeLogEntity, result: RecordMergeResult, contextUser?: UserInfo) {
-    try {
-      // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
-      if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
-
-      recordMergeLog.ProcessingStatus = result.Success ? 'Complete' : 'Error';
-      recordMergeLog.ProcessingEndedAt = new Date();
-      if (!result.Success)
-        // only create the log record if the merge failed, otherwise it is wasted space
-        recordMergeLog.ProcessingLog = result.OverallStatus;
-      if (await recordMergeLog.Save()) {
-        // top level saved, now let's create the deletion detail records for each of the records that were merged
-        for (const d of result.RecordStatus) {
-          const recordMergeDeletionLog = <MJRecordMergeDeletionLogEntity>await this.GetEntityObject('MJ: Record Merge Deletion Logs', contextUser);
-          recordMergeDeletionLog.NewRecord();
-          recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
-          recordMergeDeletionLog.DeletedRecordID = d.CompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
-          recordMergeDeletionLog.Status = d.Success ? 'Complete' : 'Error';
-          recordMergeDeletionLog.ProcessingLog = d.Success ? null : d.Message; // only save the message if it failed
-          if (!(await recordMergeDeletionLog.Save())) throw new Error(`Error saving record merge deletion log`);
-        }
-      } else throw new Error(`Error saving record merge log`);
-    } catch (e) {
-      // do nothing here because we often will get here since some conditions lead to no DB updates possible...
-      LogError(e);
-      // don't bubble up the error here as we're sometimes already in an exception block in caller
-    }
-  }
+  // GetRecordDuplicates, MergeRecords, StartMergeLogging, CompleteMergeLogging
+  // are inherited from DatabaseProviderBase
 
   /**
    * Generates the SQL Statement that will Save a record to the database.
@@ -3358,7 +2763,7 @@ export class SQLServerDataProvider
    * @returns Array of AI action entities
    * @internal
    */
-  protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): MJEntityAIActionEntity[] {
+  protected override GetEntityAIActions(entityInfo: EntityInfo, before: boolean): MJEntityAIActionEntity[] {
     return AIEngine.Instance.EntityAIActions.filter(
       (a) => a.EntityID === entityInfo.ID && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'),
     );
@@ -3374,7 +2779,7 @@ export class SQLServerDataProvider
    * @returns Array of action results
    * @internal
    */
-  protected async HandleEntityActions(entity: BaseEntity, baseType: 'save' | 'delete' | 'validate', before: boolean, user: UserInfo): Promise<ActionResult[]> {
+  protected override async HandleEntityActions(entity: BaseEntity, baseType: 'save' | 'delete' | 'validate', before: boolean, user: UserInfo): Promise<ActionResult[]> {
     // use the EntityActionEngine for this
     try {
       const engine = EntityActionEngineServer.Instance;
@@ -3416,7 +2821,7 @@ export class SQLServerDataProvider
    * @param before
    * @param user
    */
-  protected async HandleEntityAIActions(entity: BaseEntity, baseType: 'save' | 'delete', before: boolean, user: UserInfo) {
+  protected override async HandleEntityAIActions(entity: BaseEntity, baseType: 'save' | 'delete', before: boolean, user: UserInfo) {
     try {
       // TEMP while we don't support delete
       if (baseType === 'delete') return;
@@ -3461,228 +2866,8 @@ export class SQLServerDataProvider
     }
   }
 
-  public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
-    const entityResult = new BaseEntityResult();
-    try {
-      entity.RegisterTransactionPreprocessing();
 
-      const bNewRecord = !entity.IsSaved;
-      if (!options) options = new EntitySaveOptions();
-      const bReplay = !!options.ReplayOnly;
-      if (!bReplay && !bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
-        // existing record and not allowed to update
-        throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } else if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
-        // new record and not allowed to create
-        throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } else {
-        // getting here means we are good to save, now check to see if we're dirty and need to save
-        // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
-        if (entity.Dirty || options.IgnoreDirtyState || options.ReplayOnly) {
-          entityResult.StartedAt = new Date();
-          entityResult.Type = bNewRecord ? 'create' : 'update';
-
-          entityResult.OriginalValues = entity.Fields.map((f) => {
-            const tempStatus = f.ActiveStatusAssertions;
-            f.ActiveStatusAssertions = false; // turn off warnings for this operation
-            const ret = { 
-              FieldName: f.Name, 
-              Value: f.Value 
-            };
-            f.ActiveStatusAssertions = tempStatus; // restore the status assertions
-            return ret;
-          }); // save the original values before we start the process
-          entity.ResultHistory.push(entityResult); // push the new result as we have started a process
-
-          // The assumption is that Validate() has already been called by the BaseEntity object that is invoking this provider.
-          // However, we have an extra responsibility in this situation which is to fire off the EntityActions for the Validate invocation type and
-          // make sure they clear. If they don't clear we throw an exception with the message provided.
-          if (!bReplay) {
-            const validationResult = await this.HandleEntityActions(entity, 'validate', false, user);
-            if (validationResult && validationResult.length > 0) {
-              // one or more actions executed, see the reults and if any failed, concat their messages and return as exception being thrown
-              const message = validationResult
-                .filter((v) => !v.Success)
-                .map((v) => v.Message)
-                .join('\n\n');
-              if (message) {
-                entityResult.Success = false;
-                entityResult.EndedAt = new Date();
-                entityResult.Message = message;
-                return false;
-              }
-            }
-          } else {
-            // we are in replay mode we so do NOT need to do the validation stuff, skipping it...
-          }
-
-          const spName = this.GetCreateUpdateSPName(entity, bNewRecord);
-          if (options.SkipEntityActions !== true /*options set, but not set to skip entity actions*/) {
-            await this.HandleEntityActions(entity, 'save', true, user);
-          }
-
-          if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/) {
-            // process any Entity AI actions that are set to trigger BEFORE the save, these are generally a really bad idea to do before save
-            // but they are supported (for now)
-            await this.HandleEntityAIActions(entity, 'save', true, user);
-          }
-
-          // Generate the SQL for the save operation
-          // This is async because it may need to encrypt field values
-          const sqlDetails = await this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
-          const sSQL = sqlDetails.fullSQL;
-
-          if (entity.TransactionGroup && !bReplay /*we never participate in a transaction if we're in replay mode*/) {
-            // we have a transaction group, need to play nice and be part of it
-            entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
-            // we are part of a transaction group, so just add our query to the list
-            // and when the transaction is committed, we will send all the queries at once
-            this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
-            entity.TransactionGroup.AddTransaction(
-              new TransactionItem(
-                entity,
-                entityResult.Type === 'create' ? 'Create' : 'Update',
-                sSQL,
-                null,
-                { 
-                  dataSource: this._pool,
-                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
-                  entityName: entity.EntityInfo.Name
-                },
-                (transactionResult: Record<string, any>, success: boolean) => {
-                  // we get here whenever the transaction group does gets around to committing
-                  // our query.
-                  this._bAllowRefresh = true; // allow refreshes again
-                  entityResult.EndedAt = new Date();
-                  if (success && transactionResult) {
-                    // process any Entity AI actions that are set to trigger AFTER the save
-                    // these are fired off but are NOT part of the transaction group, so if they fail,
-                    // the transaction group will still commit, but the AI action will not be executed
-                    if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/) {
-                      this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-                    }
-
-                    // Same approach to Entity Actions as Entity AI Actions
-                    if (options.SkipEntityActions !== true) {
-                      this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-                    }
-
-                    entityResult.Success = true;
-                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
-                  } else {
-                    // the transaction failed, nothing to update, but we need to call Reject so the
-                    // promise resolves with a rejection so our outer caller knows
-                    entityResult.Success = false;
-                    entityResult.Message = 'Transaction Failed';
-                  }
-                },
-              ),
-            );
-
-            return true; // we're part of a transaction group, so we're done here
-          } else {
-            // no transaction group, just execute this immediately...
-            this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
-
-            let result;
-            if (bReplay) {
-              result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
-            } else {
-              try {
-                // Execute SQL with optional simple SQL fallback for loggers
-                // IS-A: use entity's ProviderTransaction when available for shared transaction
-                const rawResult = await this.ExecuteSQL(sSQL, null, {
-                  isMutation: true,
-                  description: `Save ${entity.EntityInfo.Name}`,
-                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
-                  connectionSource: entity.ProviderTransaction as sql.Transaction ?? undefined
-                }, user);
-                // Process rows with user context for decryption
-                result = await this.ProcessEntityRows(rawResult, entity.EntityInfo, user);
-              } catch (e) {
-                throw e; // rethrow
-              }
-            }
-
-            this._bAllowRefresh = true; // allow refreshes now
-
-            entityResult.EndedAt = new Date();
-            if (result && result.length > 0) {
-              // Entity AI Actions - fired off async, NO await on purpose
-              if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/)
-                this.HandleEntityAIActions(entity, 'save', false, user); // fire off any AFTER SAVE AI actions, but don't wait for them
-
-              // Entity Actions - fired off async, NO await on purpose
-              if (options.SkipEntityActions !== true) this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-
-              entityResult.Success = true;
-
-              // IS-A overlapping subtypes: propagate Record Change entries to sibling branches.
-              // Runs after this entity's save succeeds. Skips the active child branch (if this
-              // is a parent save in a chain) so siblings don't get duplicate entries.
-              if (sqlDetails.overlappingChangeData
-                  && entity.EntityInfo.AllowMultipleSubtypes
-                  && entity.EntityInfo.TrackRecordChanges) {
-                await this.PropagateRecordChangesToSiblings(
-                  entity.EntityInfo,
-                  sqlDetails.overlappingChangeData,
-                  entity.PrimaryKey.Values(),
-                  user?.ID ?? '',
-                  options.ISAActiveChildEntityName,
-                  entity.ProviderTransaction as sql.Transaction ?? undefined
-                );
-              }
-
-              return result[0];
-            } else {
-              if (bNewRecord) {
-                throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ` + sSQL);
-              }
-              else {
-                // if we get here that means that SQL did NOT find a matching row to update in the DB, so we need to throw an error
-                throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ` + sSQL);
-              }
-            }
-          }
-        } else {
-          return entity; // nothing to save, just return the entity
-        }
-      }
-    } catch (e) {
-      this._bAllowRefresh = true; // allow refreshes again if we get a failure here
-      entityResult.EndedAt = new Date();
-      entityResult.Message = e.message;
-      LogError(e);
-
-      throw e; // rethrow the error
-    }
-  }
-
-  protected MapTransactionResultToNewValues(transactionResult: Record<string, any>): { FieldName: string; Value: any }[] {
-    return Object.keys(transactionResult).map((k) => {
-      return {
-        FieldName: k,
-        Value: transactionResult[k],
-      };
-    }); // transform the result into a list of field/value pairs
-  }
-
-  /**
-   * Returns the stored procedure name to use for the given entity based on if it is a new record or an existing record.
-   * @param entity
-   * @param bNewRecord
-   * @returns
-   */
-  public GetCreateUpdateSPName(entity: BaseEntity, bNewRecord: boolean): string {
-    const spName = bNewRecord
-      ? entity.EntityInfo.spCreate?.length > 0
-        ? entity.EntityInfo.spCreate
-        : 'spCreate' + entity.EntityInfo.BaseTableCodeName
-      : entity.EntityInfo.spUpdate?.length > 0
-        ? entity.EntityInfo.spUpdate
-        : 'spUpdate' + entity.EntityInfo.BaseTableCodeName;
-    return spName;
-  }
+  // GetCreateUpdateSPName is inherited from DatabaseProviderBase
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
     let sRet: string = '',
@@ -3986,7 +3171,7 @@ export class SQLServerDataProvider
     user: UserInfo,
     wrapRecordIdInQuotes: boolean,
   ) {
-    const fullRecordJSON: string = JSON.stringify(this.escapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
+    const fullRecordJSON: string = JSON.stringify(this.EscapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
     const changes: any = this.DiffObjects(oldData, newData, entityInfo, "'");
     const changesKeys = changes ? Object.keys(changes) : [];
     if (changesKeys.length > 0 || oldData === null /*new record*/ || newData === null /*deleted record*/) {
@@ -4004,227 +3189,25 @@ export class SQLServerDataProvider
       return sSQL;
     } else return null;
   }
-  protected async LogRecordChange(
-    newData: any,
-    oldData: any,
+  /**
+   * Implements the abstract BuildRecordChangeSQL from DatabaseProviderBase.
+   * Delegates to GetLogRecordChangeSQL for T-SQL generation.
+   */
+  protected override BuildRecordChangeSQL(
+    newData: Record<string, unknown> | null,
+    oldData: Record<string, unknown> | null,
     entityName: string,
-    recordID: any,
+    recordID: string,
     entityInfo: EntityInfo,
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
-  ) {
-    const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
-    if (sSQL) {
-      const result = await this.ExecuteSQL(sSQL, undefined, undefined, user);
-      return result;
-    }
+  ): { sql: string; parameters?: unknown[] } | null {
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
+    if (sql) return { sql };
+    return null;
   }
 
-  /**
-   * This method will create a human-readable string that describes the changes object that was created using the DiffObjects() method
-   * @param changesObject JavaScript object that has properties for each changed field that in turn have field, oldValue and newValue as sub-properties
-   * @param maxValueLength If not specified, default value of 200 characters applies where any values after the maxValueLength is cut off. The actual values are stored in the ChangesJSON and FullRecordJSON in the RecordChange table, this is only for the human-display
-   * @param cutOffText If specified, and if maxValueLength applies to any of the values being included in the description, this cutOffText param will be appended to the end of the cut off string to indicate to the human reader that the value is partial.
-   * @returns
-   */
-  public CreateUserDescriptionOfChanges(changesObject: any, maxValueLength: number = 200, cutOffText: string = '...'): string {
-    let sRet = '';
-    const keys = Object.keys(changesObject);
-    for (let i = 0; i < keys.length; i++) {
-      const change = changesObject[keys[i]];
-      if (sRet.length > 0) {
-        sRet += '\n';
-      }
-      if (change.oldValue && change.newValue)
-        // both old and new values set, show change
-        sRet += `${change.field} changed from ${this.trimString(change.oldValue, maxValueLength, cutOffText)} to ${this.trimString(change.newValue, maxValueLength, cutOffText)}`;
-      else if (change.newValue)
-        // old value was blank, new value isn't
-        sRet += `${change.field} set to ${this.trimString(change.newValue, maxValueLength, cutOffText)}`;
-      else if (change.oldValue)
-        // new value is blank, old value wasn't
-        sRet += `${change.field} cleared from ${this.trimString(change.oldValue, maxValueLength, cutOffText)}`;
-    }
-    return sRet.replace(/'/g, "''");
-  }
-
-  protected trimString(value: any, maxLength: number, trailingChars: string) {
-    if (value && typeof value === 'string' && value.length > maxLength) {
-      value = value.substring(0, maxLength) + trailingChars;
-    }
-    return value;
-  }
-
-  /**
-   * Recursively escapes quotes in all string properties of an object or array.
-   * This method traverses through nested objects and arrays, escaping the specified
-   * quote character in all string values to prevent SQL injection and syntax errors.
-   * 
-   * @param obj - The object, array, or primitive value to process
-   * @param quoteToEscape - The quote character to escape (typically single quote "'")
-   * @returns A new object/array with all string values having quotes properly escaped.
-   *          Non-string values are preserved as-is.
-   * 
-   * @example
-   * // Escaping single quotes in a nested object
-   * const input = {
-   *   name: "John's Company",
-   *   details: {
-   *     description: "It's the best",
-   *     tags: ["Won't fail", "Can't stop"]
-   *   }
-   * };
-   * const escaped = this.escapeQuotesInProperties(input, "'");
-   * // Result: {
-   * //   name: "John''s Company",
-   * //   details: {
-   * //     description: "It''s the best",
-   * //     tags: ["Won''t fail", "Can''t stop"]
-   * //   }
-   * // }
-   * 
-   * @remarks
-   * This method is essential for preparing data to be embedded in SQL strings.
-   * It handles:
-   * - Nested objects of any depth
-   * - Arrays (including arrays of objects)
-   * - Mixed-type objects with strings, numbers, booleans, null values
-   * - Circular references are NOT handled and will cause stack overflow
-   */
-  protected escapeQuotesInProperties(obj: any, quoteToEscape: string): any {
-    // Handle null/undefined
-    if (obj === null || obj === undefined) {
-      return obj;
-    }
-    
-    // Handle arrays recursively
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.escapeQuotesInProperties(item, quoteToEscape));
-    }
-    
-    // Handle Date objects - convert to ISO string before they lose their value
-    if (obj instanceof Date) {
-      return obj.toISOString();
-    }
-
-    // Handle objects recursively
-    if (typeof obj === 'object') {
-      const sRet: any = {};
-      for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-          const element = obj[key];
-          if (typeof element === 'string') {
-            const reg = new RegExp(quoteToEscape, 'g');
-            sRet[key] = element.replace(reg, quoteToEscape + quoteToEscape);
-          } else if (typeof element === 'object') {
-            // Recursively escape nested objects and arrays
-            sRet[key] = this.escapeQuotesInProperties(element, quoteToEscape);
-          } else {
-            // Keep primitive values as-is (numbers, booleans, etc.)
-            sRet[key] = element;
-          }
-        }
-      }
-      return sRet;
-    }
-    
-    // For non-object types (shouldn't normally happen), return as-is
-    return obj;
-  }
-
-  /**
-   * Creates a changes object by comparing two javascript objects, identifying fields that have different values.
-   * Each property in the returned object represents a changed field, with the field name as the key.
-   * 
-   * @param oldData - The original data object to compare from
-   * @param newData - The new data object to compare to
-   * @param entityInfo - Entity metadata used to validate fields and determine comparison logic
-   * @param quoteToEscape - The quote character to escape in string values (typically "'")
-   * @returns A Record mapping field names to FieldChange objects containing the field name, old value, and new value.
-   *          Returns null if either oldData or newData is null/undefined.
-   *          Only includes fields that have actually changed and are not read-only.
-   * 
-   * @remarks
-   * - Read-only fields are never considered changed
-   * - null and undefined are treated as equivalent
-   * - Date fields are compared by timestamp
-   * - String and object values have quotes properly escaped for SQL
-   * - Objects/arrays are recursively escaped using escapeQuotesInProperties
-   * 
-   * @example
-   * ```typescript
-   * const changes = provider.DiffObjects(
-   *   { name: "John's Co", revenue: 1000 },
-   *   { name: "John's Co", revenue: 2000 },
-   *   entityInfo,
-   *   "'"
-   * );
-   * // Returns: { revenue: { field: "revenue", oldValue: 1000, newValue: 2000 } }
-   * ```
-   */
-  public DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): Record<string, FieldChange> | null {
-    if (!oldData || !newData) return null;
-    else {
-      const changes: Record<string, FieldChange> = {};
-      for (const key in newData) {
-        const f = entityInfo.Fields.find((f) => f.Name.toLowerCase() === key.toLowerCase());
-        if (!f) {
-          continue; // skip if field not found in entity info, sometimes objects have extra properties that are not part of the entity
-        }
-        
-        let bDiff: boolean = false;
-        if (f.ReadOnly)
-          bDiff = false; // read only fields are never different, they can change in the database, but we don't consider them to be a change for record changes purposes.
-        else if ((oldData[key] == undefined || oldData[key] == null) && (newData[key] == undefined || newData[key] == null))
-          bDiff = false; // this branch of logic ensures that undefined and null are treated the same
-        else {
-          switch (f.TSType) {
-            case EntityFieldTSType.String:
-              bDiff = oldData[key] !== newData[key];
-              break;
-            case EntityFieldTSType.Date:
-              bDiff = new Date(oldData[key]).getTime() !== new Date(newData[key]).getTime();
-              break;
-            case EntityFieldTSType.Number:
-            case EntityFieldTSType.Boolean:
-              bDiff = oldData[key] !== newData[key];
-              break;
-          }
-        }
-        if (bDiff) {
-          // make sure we escape things properly
-          let o = oldData[key];
-          let n = newData[key];
-          
-          if (typeof o === 'string') {
-            // Escape strings directly
-            const r = new RegExp(quoteToEscape, 'g');
-            o = o.replace(r, quoteToEscape + quoteToEscape);
-          } else if (typeof o === 'object' && o !== null) {
-            // For objects/arrays, recursively escape all string properties
-            o = this.escapeQuotesInProperties(o, quoteToEscape);
-          }
-          
-          if (typeof n === 'string') {
-            // Escape strings directly
-            const r = new RegExp(quoteToEscape, 'g');
-            n = n.replace(r, quoteToEscape + quoteToEscape);
-          } else if (typeof n === 'object' && n !== null) {
-            // For objects/arrays, recursively escape all string properties
-            n = this.escapeQuotesInProperties(n, quoteToEscape);
-          }
-
-          changes[key] = {
-            field: key,
-            oldValue: o,
-            newValue: n,
-          };
-        }
-      }
-
-      return changes;
-    }
-  }
+  // LogRecordChange is inherited from DatabaseProviderBase (calls BuildRecordChangeSQL)
 
   public async Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo): Promise<{}> {
     const where = CompositeKey.KeyValuePairs.map((val) => {
@@ -4378,146 +3361,152 @@ export class SQLServerDataProvider
     return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
   }
 
-  public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
-    const result = new BaseEntityResult();
-    try {
-      entity.RegisterTransactionPreprocessing();
+  /**************************************************************************/
+  // START ---- DatabaseProviderBase Override Hooks (Phase 2)
+  /**************************************************************************/
 
-      if (!options) options = new EntityDeleteOptions();
+  protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
+    const spName = this.GetCreateUpdateSPName(entity, isNew);
+    const sqlDetails = await this.GetSaveSQLWithDetails(entity, isNew, spName, user);
+    const result: SaveSQLResult = {
+      fullSQL: sqlDetails.fullSQL,
+      simpleSQL: sqlDetails.simpleSQL,
+    };
+    if (sqlDetails.overlappingChangeData) {
+      result.extraData = { overlappingChangeData: sqlDetails.overlappingChangeData };
+    }
+    return result;
+  }
 
-      const bReplay = options.ReplayOnly;
+  protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult {
+    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user);
+    return {
+      fullSQL: sqlDetails.fullSQL,
+      simpleSQL: sqlDetails.simpleSQL,
+    };
+  }
 
-      if (!entity.IsSaved && !bReplay)
-        // existing record and not allowed to update
-        throw new Error(`Delete() isn't callable for records that haven't yet been saved - ${entity.EntityInfo.Name}`);
-      if (!entity.EntityInfo.AllowDeleteAPI && !bReplay)
-        // not allowed to delete
-        throw new Error(`Delete() isn't callable for ${entity.EntityInfo.Name} as AllowDeleteAPI is false`);
+  protected override async OnValidateBeforeSave(entity: BaseEntity, user: UserInfo): Promise<string | null> {
+    const validationResult = await this.HandleEntityActions(entity, 'validate', false, user);
+    if (validationResult && validationResult.length > 0) {
+      const message = validationResult
+        .filter((v) => !v.Success)
+        .map((v) => v.Message)
+        .join('\n\n');
+      if (message) return message;
+    }
+    return null;
+  }
 
-      result.StartedAt = new Date();
-      result.Type = 'delete';
-      result.OriginalValues = entity.Fields.map((f) => {
-        return { FieldName: f.Name, Value: f.Value };
-      }); // save the original values before we start the process
-      entity.ResultHistory.push(result); // push the new result as we have started a process
+  protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<void> {
+    if (options.SkipEntityActions !== true)
+      await this.HandleEntityActions(entity, 'save', true, user);
+    if (options.SkipEntityAIActions !== true)
+      await this.HandleEntityAIActions(entity, 'save', true, user);
+  }
 
-      // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
-      // if we get here we can delete, so build the SQL and then handle appropriately either as part of TransGroup or directly...
+  protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): void {
+    if (options.SkipEntityAIActions !== true)
+      this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+    if (options.SkipEntityActions !== true)
+      this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+  }
 
-      const sqlDetails = this.GetDeleteSQLWithDetails(entity, user);
-      const sSQL = sqlDetails.fullSQL;
+  protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {
+    if (false === options?.SkipEntityActions)
+      await this.HandleEntityActions(entity, 'delete', true, user);
+    if (false === options?.SkipEntityAIActions)
+      await this.HandleEntityAIActions(entity, 'delete', true, user);
+  }
 
-      // Handle Entity and Entity AI Actions here w/ before and after handling
-      if (false === options?.SkipEntityActions) await this.HandleEntityActions(entity, 'delete', true, user);
-      if (false === options?.SkipEntityAIActions) await this.HandleEntityAIActions(entity, 'delete', true, user);
+  protected override OnAfterDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): void {
+    if (false === options?.SkipEntityActions)
+      this.HandleEntityActions(entity, 'delete', false, user);
+    if (false === options?.SkipEntityAIActions)
+      this.HandleEntityAIActions(entity, 'delete', false, user);
+  }
 
-      if (entity.TransactionGroup && !bReplay) {
-        // we have a transaction group, need to play nice and be part of it
-        entity.RaiseReadyForTransaction();
-        // we are part of a transaction group, so just add our query to the list
-        // and when the transaction is committed, we will send all the queries at once
-        entity.TransactionGroup.AddTransaction(
-          new TransactionItem(
-            entity, 
-            'Delete', 
-            sSQL, 
-            null, 
-            { 
-              dataSource: this._pool,
-              simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
-              entityName: entity.EntityInfo.Name
-            }, 
-            (transactionResult: Record<string, any>, success: boolean) => {
-            // we get here whenever the transaction group does gets around to committing
-            // our query.
-            result.EndedAt = new Date();
-            if (success && result) {
-              // Entity AI Actions and Actions - fired off async, NO await on purpose
-              if (false === options?.SkipEntityActions) {
-                this.HandleEntityActions(entity, 'delete', false, user);
-              }
-              if (false === options?.SkipEntityAIActions) {
-                this.HandleEntityAIActions(entity, 'delete', false, user);
-              }
+  protected override async PostProcessRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, user: UserInfo): Promise<Record<string, unknown>[]> {
+    return this.ProcessEntityRows(rows, entityInfo, user);
+  }
 
-              // Make sure the return value matches up as that is how we know the SP was succesfully internally
-              for (const key of entity.PrimaryKeys) {
-                if (key.Value !== transactionResult[key.Name]) {
-                  result.Success = false;
-                  result.Message = 'Transaction failed to commit';
-                }
-              }
-              result.NewValues = this.MapTransactionResultToNewValues(transactionResult);
-              result.Success = true;
-            } else {
-              // the transaction failed, nothing to update, but we need to call Reject so the
-              // promise resolves with a rejection so our outer caller knows
-              result.Success = false;
-              result.Message = 'Transaction failed to commit';
-            }
-          }),
-        );
-
-        return true; // we're part of a transaction group, so we're done here
-      } else {
-        let d;
-        if (bReplay) {
-          d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
-        } else {
-          // IS-A: use entity's ProviderTransaction when available for shared transaction
-          d = await this.ExecuteSQL(sSQL, null, {
-            isMutation: true,
-            description: `Delete ${entity.EntityInfo.Name}`,
-            simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
-            connectionSource: entity.ProviderTransaction as sql.Transaction ?? undefined
-          }, user);
-        }
-
-        if (d && d.length > 0) {
-          // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
-          // Note: When CASCADE operations exist, multiple result sets are returned (d is array of arrays).
-          // When no CASCADE operations exist, a single result set is returned (d is array of objects).
-          // We need to handle both cases by checking if the first element is an array.
-          const isMultipleResultSets = Array.isArray(d[0]);
-          const deletedRecord = isMultipleResultSets
-            ? d[d.length - 1][0]  // Multiple result sets: get last result set, first row
-            : d[0];               // Single result set: get first row directly
-
-          for (const key of entity.PrimaryKeys) {
-            if (key.Value !== deletedRecord[key.Name]) {
-              // we can get here if the sp returns NULL for a given key. The reason that would be the case is if the record
-              // was not found in the DB. This was the existing logic prior to the SP modifications in 2.68.0, just documenting
-              // it here for clarity.
-              result.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
-              result.EndedAt = new Date();
-              result.Success = false;
-
-              return false;
-            }
-          }
-
-          // Entity AI Actions and Actions - fired off async, NO await on purpose
-          this.HandleEntityActions(entity, 'delete', false, user);
-          this.HandleEntityAIActions(entity, 'delete', false, user);
-
-          result.EndedAt = new Date();
-          return true;
-        } else {
-          result.Message = 'No result returned from SQL';
-          result.EndedAt = new Date();
-          return false;
-        }
-      }
-    } catch (e) {
-      LogError(e);
-      result.Message = e.message;
-      result.Success = false;
-      result.EndedAt = new Date();
-
-      return false;
+  protected override async OnSaveCompleted(
+    entity: BaseEntity,
+    saveSQLResult: SaveSQLResult,
+    user: UserInfo,
+    options: EntitySaveOptions,
+  ): Promise<void> {
+    const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
+      | { changesJSON: string; changesDescription: string }
+      | undefined;
+    if (
+      overlappingChangeData &&
+      entity.EntityInfo.AllowMultipleSubtypes &&
+      entity.EntityInfo.TrackRecordChanges
+    ) {
+      const transaction = (entity.ProviderTransaction as sql.Transaction) ?? undefined;
+      await this.PropagateRecordChangesToSiblings(
+        entity.EntityInfo,
+        overlappingChangeData,
+        entity.PrimaryKey.Values(),
+        user?.ID ?? '',
+        options.ISAActiveChildEntityName,
+        transaction ? { connectionSource: transaction } : undefined,
+      );
     }
   }
+
+  protected override OnSuspendRefresh(): void {
+    this._bAllowRefresh = false;
+  }
+
+  protected override OnResumeRefresh(): void {
+    this._bAllowRefresh = true;
+  }
+
+  protected override GetTransactionExtraData(_entity: BaseEntity): Record<string, unknown> {
+    return { dataSource: this._pool };
+  }
+
+  protected override BuildSaveExecuteOptions(entity: BaseEntity, sqlDetails: SaveSQLResult): ExecuteSQLOptions {
+    const opts = super.BuildSaveExecuteOptions(entity, sqlDetails);
+    (opts as ExecuteSQLOptions).connectionSource =
+      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
+    return opts;
+  }
+
+  protected override BuildDeleteExecuteOptions(entity: BaseEntity, sqlDetails: DeleteSQLResult): ExecuteSQLOptions {
+    const opts = super.BuildDeleteExecuteOptions(entity, sqlDetails);
+    (opts as ExecuteSQLOptions).connectionSource =
+      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
+    return opts;
+  }
+
+  protected override ValidateDeleteResult(
+    entity: BaseEntity,
+    rawResult: Record<string, unknown>[],
+    entityResult: BaseEntityResult,
+  ): boolean {
+    if (!rawResult || rawResult.length === 0) return false;
+    // SQL Server CASCADE deletes can return multiple result sets (array of arrays)
+    const isMultipleResultSets = Array.isArray(rawResult[0]);
+    const deletedRecord = isMultipleResultSets
+      ? (rawResult[rawResult.length - 1] as unknown as Record<string, unknown>[])[0]
+      : rawResult[0];
+    for (const key of entity.PrimaryKeys) {
+      if (key.Value !== deletedRecord[key.Name]) {
+        entityResult.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
+        return false;
+      }
+    }
+    return true;
+  }
+
   /**************************************************************************/
+  // END ---- DatabaseProviderBase Override Hooks (Phase 2)
+  /**************************************************************************/
+
+    /**************************************************************************/
   // END ---- IEntityDataProvider
   /**************************************************************************/
 
@@ -5620,70 +4609,13 @@ export class SQLServerDataProvider
     }
   }
 
-  /**
-   * Discovers which IS-A child entity, if any, has a record with the given primary key.
-   * Executes a single UNION ALL query across all child entity tables for maximum efficiency.
-   * Each branch of the UNION is a PK lookup on a clustered index — effectively instant.
-   *
-   * @param entityInfo The parent entity whose children to search
-   * @param recordPKValue The primary key value to find in child tables
-   * @param contextUser Optional context user for audit/permission purposes
-   * @returns The child entity name if found, or null if no child record exists
-   */
-  public async FindISAChildEntity(
-    entityInfo: EntityInfo,
-    recordPKValue: string,
-    contextUser?: UserInfo
-  ): Promise<{ ChildEntityName: string } | null> {
-    const childEntities = entityInfo.ChildEntities;
-    if (childEntities.length === 0) return null;
-
-    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
-    if (!unionSQL) return null;
-
-    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
-    if (results && results.length > 0 && results[0].EntityName) {
-      return { ChildEntityName: results[0].EntityName };
-    }
-    return null;
-  }
-
-  /**
-   * Discovers ALL IS-A child entities that have records with the given primary key.
-   * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
-   * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
-   *
-   * @param entityInfo The parent entity whose children to search
-   * @param recordPKValue The primary key value to find in child tables
-   * @param contextUser Optional context user for audit/permission purposes
-   * @returns Array of child entity names found (empty if none)
-   */
-  public async FindISAChildEntities(
-    entityInfo: EntityInfo,
-    recordPKValue: string,
-    contextUser?: UserInfo
-  ): Promise<{ ChildEntityName: string }[]> {
-    const childEntities = entityInfo.ChildEntities;
-    if (childEntities.length === 0) return [];
-
-    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
-    if (!unionSQL) return [];
-
-    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
-    if (results && results.length > 0) {
-      return results
-        .filter((r: Record<string, string>) => r.EntityName)
-        .map((r: Record<string, string>) => ({ ChildEntityName: r.EntityName }));
-    }
-    return [];
-  }
 
   /**
    * Builds a UNION ALL query that checks each child entity's base table for a record
    * with the given primary key. Returns the first match (disjoint subtypes guarantee
    * at most one result) unless used with overlapping subtypes.
    */
-  private buildChildDiscoverySQL(
+  protected override BuildChildDiscoverySQL(
     childEntities: EntityInfo[],
     recordPKValue: string
   ): string {
@@ -5725,87 +4657,14 @@ export class SQLServerDataProvider
    *        Undefined when saving the parent directly — all children get propagated to.
    * @param transaction The active IS-A transaction, or undefined for standalone saves
    */
-  private async PropagateRecordChangesToSiblings(
-    parentInfo: EntityInfo,
-    changeData: { changesJSON: string; changesDescription: string },
-    pkValue: string,
-    userId: string,
-    activeChildEntityName: string | undefined,
-    transaction: sql.Transaction | undefined
-  ): Promise<void> {
-    const sqlParts: string[] = [];
-    let varIndex = 0;
-
-    const safePKValue = pkValue.replace(/'/g, "''");
-    const safeUserId = userId.replace(/'/g, "''");
-    const safeChangesJSON = changeData.changesJSON.replace(/'/g, "''");
-    const safeChangesDesc = changeData.changesDescription.replace(/'/g, "''");
-
-    for (const childInfo of parentInfo.ChildEntities) {
-      // Skip the active branch (the child that initiated the parent save).
-      // When activeChildEntityName is undefined (direct save on parent), propagate to ALL children.
-      if (activeChildEntityName && this.isEntityOrAncestorOf(childInfo, activeChildEntityName)) continue;
-
-      // Recursively enumerate this child's entire sub-tree from metadata
-      const subTree = this.getFullSubTree(childInfo);
-
-      for (const entityInTree of subTree) {
-        if (!entityInTree.TrackRecordChanges) continue;
-
-        const varName = `@_rc_prop_${varIndex++}`;
-        sqlParts.push(this.buildSiblingRecordChangeSQL(
-          varName,
-          entityInTree,
-          safeChangesJSON,
-          safeChangesDesc,
-          safePKValue,
-          safeUserId
-        ));
-      }
-    }
-
-    // Execute as single batch
-    if (sqlParts.length > 0) {
-      const batch = sqlParts.join('\n');
-      await this.ExecuteSQL(batch, undefined, {
-        connectionSource: transaction,
-        description: 'IS-A overlapping subtype Record Change propagation',
-        isMutation: true
-      });
-    }
-  }
+  // PropagateRecordChangesToSiblings orchestration is inherited from DatabaseProviderBase
 
   /**
-   * Checks whether a given entity matches the target name, or is an ancestor
-   * of the target (i.e., the target is somewhere in its descendant sub-tree).
-   * Used to identify and skip the active branch during sibling propagation.
-   */
-  private isEntityOrAncestorOf(entityInfo: EntityInfo, targetName: string): boolean {
-    if (entityInfo.Name === targetName) return true;
-    for (const child of entityInfo.ChildEntities) {
-      if (this.isEntityOrAncestorOf(child, targetName)) return true;
-    }
-    return false;
-  }
-
-  /**
-   * Recursively enumerates an entity's entire sub-tree from metadata.
-   * No DB queries — uses EntityInfo.ChildEntities which is populated from metadata.
-   */
-  private getFullSubTree(entityInfo: EntityInfo): EntityInfo[] {
-    const result: EntityInfo[] = [entityInfo];
-    for (const child of entityInfo.ChildEntities) {
-      result.push(...this.getFullSubTree(child));
-    }
-    return result;
-  }
-
-  /**
-   * Generates a single block of SQL for one sibling entity in the Record Change
+   * Generates a single block of T-SQL for one sibling entity in the Record Change
    * propagation batch. Uses SELECT...FOR JSON to get the full record, then
-   * conditionally inserts a Record Change entry if the record exists.
+   * conditionally inserts a Record Change entry via spCreateRecordChange_Internal.
    */
-  private buildSiblingRecordChangeSQL(
+  protected override BuildSiblingRecordChangeSQL(
     varName: string,
     entityInfo: EntityInfo,
     safeChangesJSON: string,
@@ -5818,8 +4677,6 @@ export class SQLServerDataProvider
     const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
     const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
-    // Build RecordID in CompositeKey format: "FieldCodeName|Value" (or "F1|V1||F2|V2" for composite PKs)
-    // Must match the format used by the main save flow (concatPKIDString in GetSaveSQLWithDetails)
     const recordID = entityInfo.PrimaryKeys
       .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
       .join(CompositeKey.DefaultFieldDelimiter);
@@ -6025,63 +4882,7 @@ IF ${varName} IS NOT NULL
     return this._fileSystemProvider;
   }
 
-  protected async InternalGetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
-    const promises = info.map(async (item) => {
-      const r = await this.InternalGetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
-      return {
-        EntityName: item.EntityName,
-        CompositeKey: item.CompositeKey,
-        RecordName: r,
-        Success: r ? true : false,
-        Status: r ? 'Success' : 'Error',
-      };
-    });
-    return Promise.all(promises);
-  }
-
-  protected async InternalGetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
-    try {
-      const sql = this.GetEntityRecordNameSQL(entityName, CompositeKey);
-      if (sql) {
-        const data = await this.ExecuteSQL(sql, null, undefined, contextUser);
-        if (data && data.length === 1) {
-          const fields = Object.keys(data[0]);
-          return data[0][fields[0]]; // return first field
-        } else {
-          LogError(`Entity ${entityName} record ${CompositeKey.ToString()} not found, returning null`);
-          return null;
-        }
-      }
-    } catch (e) {
-      LogError(e);
-      return null;
-    }
-  }
-
-  protected GetEntityRecordNameSQL(entityName: string, CompositeKey: CompositeKey): string {
-    const e = this.Entities.find((e) => e.Name === entityName);
-    if (!e) throw new Error(`Entity ${entityName} not found`);
-    else {
-      const f = e.NameField;
-      if (!f) {
-        LogError(`Entity ${entityName} does not have an IsNameField or a field with the column name of Name, returning null, use recordId`);
-        return null;
-      } else {
-        // got our field, create a SQL Query
-        const sql: string = `SELECT [${f.Name}] FROM [${e.SchemaName}].[${e.BaseView}] WHERE `;
-        let where: string = '';
-        for (const pkv of CompositeKey.KeyValuePairs) {
-          const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
-          const quotes = pk.NeedsQuotes ? "'" : '';
-          if (where.length > 0) where += ' AND ';
-          where += `[${pkv.FieldName}]=${quotes}${pkv.Value}${quotes}`;
-        }
-        return sql + where;
-      }
-    }
-  }
-
-  public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
+        public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
     return new SQLServerTransactionGroup();
   }
 

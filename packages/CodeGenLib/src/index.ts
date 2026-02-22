@@ -43,6 +43,7 @@ export * from './Config/config'
 export * from './Config/db-connection'
 
 // Database exports
+export * from './Database/codeGenDatabaseProvider'
 export * from './Database/dbSchema'
 export * from './Database/manage-metadata'
 export * from './Database/sql_codegen'
