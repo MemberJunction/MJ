@@ -3044,12 +3044,12 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       }
 
       try {
-         const Config = ManageMetadataBase.getSoftPKFKConfig();
-         if (!Config) {
+         const config = ManageMetadataBase.getSoftPKFKConfig();
+         if (!config) {
             logStatus(`         [Soft PK Check] Config file found but could not be loaded`);
             return false;
          }
-         const Tables = this.extractTablesFromConfig(Config);
+         const Tables = this.extractTablesFromConfig(config);
          const TableConfig = Tables.find(
             (t) =>
                t.SchemaName.toLowerCase() === schemaName?.toLowerCase() &&
