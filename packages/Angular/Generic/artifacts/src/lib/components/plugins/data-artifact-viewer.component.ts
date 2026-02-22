@@ -119,6 +119,8 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public ErrorMessage = '';
   public ShowSaveDialog = false;
   public ShowUpdateDropdown = false;
+  public IsSaving = false;
+  public SavingMessage = '';
 
   /** Query sync state — drives the toolbar UI for saved query actions */
   public QuerySyncState: QuerySyncState = 'no-query-latest';
@@ -171,9 +173,18 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return this.CurrentVersionNumber === this.LatestVersionNumber;
   }
 
-  /** The version number at which the query was last saved */
+  /**
+   * The effective version number at which the query was last saved/updated.
+   * When viewing an older version, this looks ahead through newer versions
+   * to find the most recent savedAtVersionNumber for the same query,
+   * giving the user accurate context (e.g., "Query updated at v3" instead
+   * of the stale "Saved at v1" from this version's snapshot).
+   */
+  public EffectiveSavedAtVersion: number | null = null;
+
+  /** Alias used by the template */
   public get SavedAtVersion(): number | null {
-    return this.spec?.savedAtVersionNumber ?? null;
+    return this.EffectiveSavedAtVersion;
   }
 
   /** Display name for the saved query */
@@ -342,6 +353,16 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     await ArtifactMetadataEngine.Instance.Config(false);
 
     this.LatestVersionNumber = this.resolveLatestVersionNumber();
+
+    // If cache is stale (doesn't know about the version we're viewing),
+    // force-refresh and re-resolve. This happens when new versions are
+    // created during a conversation after the cache was first loaded.
+    if (this.LatestVersionNumber < this.CurrentVersionNumber) {
+      await ArtifactMetadataEngine.Instance.Config(true);
+      this.LatestVersionNumber = this.resolveLatestVersionNumber();
+    }
+
+    this.EffectiveSavedAtVersion = this.resolveEffectiveSavedAtVersion();
     await this.resolveSavedQuerySql();
     this.QuerySyncState = this.computeQuerySyncState();
   }
@@ -363,6 +384,41 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     // Cache miss — current version is our best guess
     return this.CurrentVersionNumber;
+  }
+
+  /**
+   * Scan all versions of this artifact to find the most recent savedAtVersionNumber
+   * for the same savedQueryId. When viewing an older version, this tells the user
+   * where the query was *actually* last updated, not just what this version's
+   * snapshot recorded at the time.
+   */
+  private resolveEffectiveSavedAtVersion(): number | null {
+    const queryId = this.spec?.savedQueryId;
+    if (!queryId) return null;
+
+    // Start with this version's own value
+    let effective = this.spec?.savedAtVersionNumber ?? null;
+
+    if (!this.artifactVersion?.ArtifactID) return effective;
+
+    // GetVersionsForArtifact returns DESC sorted — scan all versions
+    const versions = ArtifactMetadataEngine.Instance.GetVersionsForArtifact(this.artifactVersion.ArtifactID);
+    for (const v of versions) {
+      try {
+        if (!v.Content) continue;
+        const content = typeof v.Content === 'string' ? JSON.parse(v.Content) : v.Content;
+        if (content.savedQueryId === queryId && content.savedAtVersionNumber != null) {
+          const vSavedAt = content.savedAtVersionNumber as number;
+          if (effective == null || vSavedAt > effective) {
+            effective = vSavedAt;
+          }
+        }
+      } catch {
+        // Skip versions with unparseable content
+      }
+    }
+
+    return effective;
   }
 
   /**
@@ -404,7 +460,11 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     const querySql = this.normalizeSql(this.savedQuerySql);
     const sqlMatches = specSql != null && querySql != null && specSql === querySql;
 
-    if (sqlMatches) {
+    // Only truly synced if SQL matches AND this is the version it was saved at.
+    // Even with identical SQL, a newer version should show the dropdown so the
+    // user can update the version association (re-save at current version).
+    const savedAtCurrent = this.EffectiveSavedAtVersion === this.CurrentVersionNumber;
+    if (sqlMatches && savedAtCurrent) {
       return 'synced';
     }
 
@@ -413,7 +473,8 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       return 'outdated-latest';
     }
 
-    const savedAt = this.spec?.savedAtVersionNumber;
+    // Use effective saved-at (looks ahead through newer versions)
+    const savedAt = this.EffectiveSavedAtVersion;
     if (savedAt != null && this.CurrentVersionNumber < savedAt) {
       return 'query-ahead'; // query was updated at a newer version
     }
@@ -463,6 +524,10 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     this.ShowUpdateDropdown = false;
     if (!this.spec?.savedQueryId || !this.spec.metadata?.sql) return;
 
+    this.IsSaving = true;
+    this.SavingMessage = `Updating "${this.SavedQueryDisplayName}"...`;
+    this.cdr.detectChanges();
+
     try {
       const md = new Metadata();
       const query = await md.GetEntityObject<import('@memberjunction/core-entities').MJQueryEntity>('MJ: Queries');
@@ -481,14 +546,19 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         this.spec.savedAtVersionNumber = this.CurrentVersionNumber;
         await this.PersistArtifactContent();
 
-        // Refresh QueryEngine cache so future lookups see the updated SQL
+        // Refresh caches so future lookups see the updated data
         await QueryEngine.Instance.Config(true);
+        await ArtifactMetadataEngine.Instance.Config(true);
+
         this.savedQuerySql = this.spec.metadata.sql;
+        this.EffectiveSavedAtVersion = this.CurrentVersionNumber;
         this.QuerySyncState = 'synced';
-        this.cdr.detectChanges();
       }
     } catch (error) {
       console.error('Failed to update saved query:', error);
+    } finally {
+      this.IsSaving = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -504,18 +574,30 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   /** Handle successful save from the dialog (both initial save and "save as new") */
   public async OnQuerySaved(event: SaveQueryResult): Promise<void> {
     this.ShowSaveDialog = false;
-
-    // Update spec with saved query info and version tracking
-    this.spec!.savedQueryId = event.queryId;
-    this.spec!.savedQueryName = event.queryName;
-    this.spec!.savedAtVersionNumber = this.CurrentVersionNumber;
-
-    // Persist and refresh state
-    await this.PersistArtifactContent();
-    await QueryEngine.Instance.Config(true);
-    this.savedQuerySql = this.spec!.metadata?.sql ?? null;
-    this.QuerySyncState = 'synced';
+    this.IsSaving = true;
+    this.SavingMessage = 'Saving query...';
     this.cdr.detectChanges();
+
+    try {
+      // Update spec with saved query info and version tracking
+      this.spec!.savedQueryId = event.queryId;
+      this.spec!.savedQueryName = event.queryName;
+      this.spec!.savedAtVersionNumber = this.CurrentVersionNumber;
+
+      // Persist and refresh caches
+      await this.PersistArtifactContent();
+      await QueryEngine.Instance.Config(true);
+      await ArtifactMetadataEngine.Instance.Config(true);
+
+      this.savedQuerySql = this.spec!.metadata?.sql ?? null;
+      this.EffectiveSavedAtVersion = this.CurrentVersionNumber;
+      this.QuerySyncState = 'synced';
+    } catch (error) {
+      console.error('Failed to save query:', error);
+    } finally {
+      this.IsSaving = false;
+      this.cdr.detectChanges();
+    }
   }
 
   /** Persist updated spec back to the artifact version entity */

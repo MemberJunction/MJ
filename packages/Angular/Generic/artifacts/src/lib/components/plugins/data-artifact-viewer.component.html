@@ -113,6 +113,12 @@
 
       <!-- Grid -->
       <div class="grid-container">
+        <!-- Saving overlay -->
+        @if (IsSaving) {
+          <div class="saving-overlay">
+            <mj-loading [text]="SavingMessage"></mj-loading>
+          </div>
+        }
         @if (IsLoading) {
           <mj-loading text="Loading data..."></mj-loading>
         } @else if (HasError && HasData) {
