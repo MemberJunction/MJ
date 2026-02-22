@@ -129,14 +129,12 @@ describe('PostgreSQLDataProvider', () => {
             expect(result).toEqual([]);
         });
 
-        it('GetRecordDuplicates should return error status', async () => {
-            const result = await provider.GetRecordDuplicates({} as never);
-            expect(result.Status).toBe('Error');
+        it('GetRecordDuplicates should throw without contextUser', async () => {
+            await expect(provider.GetRecordDuplicates({} as never)).rejects.toThrow('User context is required');
         });
 
-        it('MergeRecords should return failure', async () => {
-            const result = await provider.MergeRecords({} as never);
-            expect(result.Success).toBe(false);
+        it('MergeRecords should throw for invalid entity', async () => {
+            await expect(provider.MergeRecords({ EntityName: 'nonexistent' } as never)).rejects.toThrow('does not allow record merging');
         });
 
         it('FindISAChildEntity should return null for entity with no children', async () => {

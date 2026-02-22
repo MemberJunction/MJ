@@ -51,18 +51,12 @@ import {
   IRunReportProvider,
   StripStopWords,
   RecordDependency,
-  RecordMergeRequest,
-  RecordMergeResult,
-  RecordMergeDetailResult,
   EntityDependency,
   RunQueryResult,
   RunQueryParams,
-  PotentialDuplicateRequest,
-  PotentialDuplicateResponse,
   LogStatus,
   CompositeKey,
   EntityDeleteOptions,
-  EntityMergeOptions,
   BaseEntityResult,
   Metadata,
   DatasetItemResultType,
@@ -85,14 +79,8 @@ import { QueryParameterProcessor } from './queryParameterProcessor';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import {
-  MJAuditLogEntity,
-  MJDuplicateRunEntity,
   MJEntityAIActionEntity,
-  MJListEntity,
   MJQueryEntity,
-  MJRecordMergeDeletionLogEntity,
-  MJRecordMergeLogEntity,
-  MJUserFavoriteEntity,
   QueryEngine,
   MJUserViewEntityExtended,
   ViewInfo,
@@ -2553,53 +2541,7 @@ export class SQLServerDataProvider
     return sUserSearchSQL;
   }
 
-  public async CreateAuditLogRecord(
-    user: UserInfo,
-    authorizationName: string | null,
-    auditLogTypeName: string,
-    status: string,
-    details: string | null,
-    entityId: string,
-    recordId: any | null,
-    auditLogDescription: string | null,
-    saveOptions: EntitySaveOptions
-  ): Promise<MJAuditLogEntity> {
-    try {
-      const authorization = authorizationName
-        ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase())
-        : null;
-      const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
-
-      if (!user) throw new Error(`User is a required parameter`);
-      if (!auditLogType) {
-        throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
-      }
-
-      const auditLog = await this.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
-      auditLog.NewRecord();
-      auditLog.UserID = user.ID;
-      auditLog.AuditLogTypeID = auditLogType.ID;
-      if (status?.trim().toLowerCase() === 'success') auditLog.Status = 'Success';
-      else auditLog.Status = 'Failed';
-
-      auditLog.EntityID = entityId;
-      auditLog.RecordID = recordId;
-
-      if (authorization) auditLog.AuthorizationID = authorization.ID;
-
-      if (details) auditLog.Details = details;
-
-      if (auditLogDescription) auditLog.Description = auditLogDescription;
-
-      if (await auditLog.Save(saveOptions)) {
-        return auditLog;
-      }
-      else throw new Error(`Error saving audit log record`);
-    } catch (err) {
-      LogError(err);
-      return null;
-    }
-  }
+  // CreateAuditLogRecord is inherited from DatabaseProviderBase
 
     /**************************************************************************/
   // END ---- IRunViewProvider
@@ -2693,191 +2635,8 @@ export class SQLServerDataProvider
     }
   }
 
-  public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
-    if (!contextUser) {
-      throw new Error('User context is required to get record duplicates.');
-    }
-
-    const listEntity: MJListEntity = await this.GetEntityObject<MJListEntity>('MJ: Lists');
-    listEntity.ContextCurrentUser = contextUser;
-    const success = await listEntity.Load(params.ListID);
-    if (!success) {
-      throw new Error(`List with ID ${params.ListID} not found.`);
-    }
-
-    const duplicateRun: MJDuplicateRunEntity = await this.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
-    duplicateRun.NewRecord();
-    duplicateRun.EntityID = params.EntityID;
-    duplicateRun.StartedByUserID = contextUser.ID;
-    duplicateRun.StartedAt = new Date();
-    duplicateRun.ProcessingStatus = 'In Progress';
-    duplicateRun.ApprovalStatus = 'Pending';
-    duplicateRun.SourceListID = listEntity.ID;
-    duplicateRun.ContextCurrentUser = contextUser;
-
-    const saveResult = await duplicateRun.Save();
-    if (!saveResult) {
-      throw new Error(`Failed to save Duplicate Run Entity`);
-    }
-
-    const response: PotentialDuplicateResponse = {
-      Status: 'Inprogress',
-      PotentialDuplicateResult: [],
-    };
-
-    return response;
-  }
-
-  public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
-    const e = this.Entities.find((e) => e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
-    if (!e || !e.AllowRecordMerge)
-      throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
-
-    const result: RecordMergeResult = {
-      Success: false,
-      RecordMergeLogID: null,
-      RecordStatus: [],
-      Request: request,
-      OverallStatus: null,
-    };
-    const mergeRecordLog: MJRecordMergeLogEntity = await this.StartMergeLogging(request, result, contextUser);
-    try {
-      /*
-                we will follow this process...
-                * 1. Begin Transaction
-                * 2. The surviving record is loaded and fields are updated from the field map, if provided, and the record is saved. If a FieldMap not provided within the request object, this step is skipped.
-                * 3. For each of the records that will be merged INTO the surviving record, we call the GetEntityDependencies() method and get a list of all other records in the database are linked to the record to be deleted. We then go through each of those dependencies and update the link to point to the SurvivingRecordID and save the record.
-                * 4. The record to be deleted is then deleted.
-                * 5. Commit or Rollback Transaction
-             */
-
-      // Step 1 - begin transaction
-      await this.BeginTransaction();
-
-      // Step 2 - update the surviving record, but only do this if we were provided a field map
-      if (request.FieldMap && request.FieldMap.length > 0) {
-        const survivor: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser);
-        await survivor.InnerLoad(request.SurvivingRecordCompositeKey);
-        for (const fieldMap of request.FieldMap) {
-          survivor.Set(fieldMap.FieldName, fieldMap.Value);
-        }
-        if (!(await survivor.Save())) {
-          result.OverallStatus = 'Error saving survivor record with values from provided field map.';
-          throw new Error(result.OverallStatus);
-        }
-      }
-
-      // Step 3 - update the dependencies for each of the records we will delete
-      for (const pksToDelete of request.RecordsToMerge) {
-        const newRecStatus: RecordMergeDetailResult = {
-          CompositeKey: pksToDelete,
-          Success: false,
-          RecordMergeDeletionLogID: null,
-          Message: null,
-        };
-        result.RecordStatus.push(newRecStatus);
-        const dependencies = await this.GetRecordDependencies(request.EntityName, pksToDelete);
-        // now, loop through the dependencies and update the link to point to the surviving record
-        for (const dependency of dependencies) {
-          const reInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName.trim().toLowerCase());
-          const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
-          await relatedEntity.InnerLoad(dependency.PrimaryKey);
-          relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.GetValueByIndex(0)); // only support single field foreign keys for now
-          /*
-                    if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.KeyValuePair is a single value, not an array
-
-                    for (let pkv of dependency.KeyValuePairs) {
-                        relatedEntity.Set(dependency.FieldName, pkv.Value);
-                    }
-                     */
-          if (!(await relatedEntity.Save())) {
-            newRecStatus.Success = false;
-            newRecStatus.Message = `Error updating dependency record ${dependency.PrimaryKey.ToString} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
-            throw new Error(newRecStatus.Message);
-          }
-        }
-        // if we get here, that means that all of the dependencies were updated successfully, so we can now delete the records to be merged
-        const recordToDelete: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser);
-        await recordToDelete.InnerLoad(pksToDelete);
-        if (!(await recordToDelete.Delete())) {
-          newRecStatus.Message = `Error deleting record ${pksToDelete.ToString()} for entity ${request.EntityName}`;
-          throw new Error(newRecStatus.Message);
-        } else newRecStatus.Success = true;
-      }
-
-      result.Success = true;
-      await this.CompleteMergeLogging(mergeRecordLog, result, contextUser);
-
-      // Step 5 - commit transaction
-      await this.CommitTransaction();
-
-      result.Success = true;
-
-      return result;
-    } catch (e) {
-      LogError(e);
-
-      await this.RollbackTransaction();
-      // attempt to persist the status to the DB, although that might fail
-      await this.CompleteMergeLogging(mergeRecordLog, result, contextUser);
-      throw e;
-    }
-  }
-
-  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<MJRecordMergeLogEntity> {
-    try {
-      // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
-      const recordMergeLog = <MJRecordMergeLogEntity>await this.GetEntityObject('MJ: Record Merge Logs', contextUser);
-      const entity = this.Entities.find((e) => e.Name === request.EntityName);
-      if (!entity) throw new Error(`Entity ${result.Request.EntityName} not found in metadata`);
-      if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
-
-      recordMergeLog.NewRecord();
-      recordMergeLog.EntityID = entity.ID;
-      recordMergeLog.SurvivingRecordID = request.SurvivingRecordCompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
-      recordMergeLog.InitiatedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
-      recordMergeLog.ApprovalStatus = 'Approved';
-      recordMergeLog.ApprovedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
-      recordMergeLog.ProcessingStatus = 'Started';
-      recordMergeLog.ProcessingStartedAt = new Date();
-      if (await recordMergeLog.Save()) {
-        result.RecordMergeLogID = recordMergeLog.ID;
-        return recordMergeLog;
-      } else throw new Error(`Error saving record merge log`);
-    } catch (e) {
-      LogError(e);
-      throw e;
-    }
-  }
-
-  protected async CompleteMergeLogging(recordMergeLog: MJRecordMergeLogEntity, result: RecordMergeResult, contextUser?: UserInfo) {
-    try {
-      // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
-      if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
-
-      recordMergeLog.ProcessingStatus = result.Success ? 'Complete' : 'Error';
-      recordMergeLog.ProcessingEndedAt = new Date();
-      if (!result.Success)
-        // only create the log record if the merge failed, otherwise it is wasted space
-        recordMergeLog.ProcessingLog = result.OverallStatus;
-      if (await recordMergeLog.Save()) {
-        // top level saved, now let's create the deletion detail records for each of the records that were merged
-        for (const d of result.RecordStatus) {
-          const recordMergeDeletionLog = <MJRecordMergeDeletionLogEntity>await this.GetEntityObject('MJ: Record Merge Deletion Logs', contextUser);
-          recordMergeDeletionLog.NewRecord();
-          recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
-          recordMergeDeletionLog.DeletedRecordID = d.CompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
-          recordMergeDeletionLog.Status = d.Success ? 'Complete' : 'Error';
-          recordMergeDeletionLog.ProcessingLog = d.Success ? null : d.Message; // only save the message if it failed
-          if (!(await recordMergeDeletionLog.Save())) throw new Error(`Error saving record merge deletion log`);
-        }
-      } else throw new Error(`Error saving record merge log`);
-    } catch (e) {
-      // do nothing here because we often will get here since some conditions lead to no DB updates possible...
-      LogError(e);
-      // don't bubble up the error here as we're sometimes already in an exception block in caller
-    }
-  }
+  // GetRecordDuplicates, MergeRecords, StartMergeLogging, CompleteMergeLogging
+  // are inherited from DatabaseProviderBase
 
   /**
    * Generates the SQL Statement that will Save a record to the database.
@@ -3004,7 +2763,7 @@ export class SQLServerDataProvider
    * @returns Array of AI action entities
    * @internal
    */
-  protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): MJEntityAIActionEntity[] {
+  protected override GetEntityAIActions(entityInfo: EntityInfo, before: boolean): MJEntityAIActionEntity[] {
     return AIEngine.Instance.EntityAIActions.filter(
       (a) => a.EntityID === entityInfo.ID && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'),
     );
@@ -3020,7 +2779,7 @@ export class SQLServerDataProvider
    * @returns Array of action results
    * @internal
    */
-  protected async HandleEntityActions(entity: BaseEntity, baseType: 'save' | 'delete' | 'validate', before: boolean, user: UserInfo): Promise<ActionResult[]> {
+  protected override async HandleEntityActions(entity: BaseEntity, baseType: 'save' | 'delete' | 'validate', before: boolean, user: UserInfo): Promise<ActionResult[]> {
     // use the EntityActionEngine for this
     try {
       const engine = EntityActionEngineServer.Instance;
@@ -3062,7 +2821,7 @@ export class SQLServerDataProvider
    * @param before
    * @param user
    */
-  protected async HandleEntityAIActions(entity: BaseEntity, baseType: 'save' | 'delete', before: boolean, user: UserInfo) {
+  protected override async HandleEntityAIActions(entity: BaseEntity, baseType: 'save' | 'delete', before: boolean, user: UserInfo) {
     try {
       // TEMP while we don't support delete
       if (baseType === 'delete') return;
@@ -3108,22 +2867,7 @@ export class SQLServerDataProvider
   }
 
 
-  /**
-   * Returns the stored procedure name to use for the given entity based on if it is a new record or an existing record.
-   * @param entity
-   * @param bNewRecord
-   * @returns
-   */
-  public GetCreateUpdateSPName(entity: BaseEntity, bNewRecord: boolean): string {
-    const spName = bNewRecord
-      ? entity.EntityInfo.spCreate?.length > 0
-        ? entity.EntityInfo.spCreate
-        : 'spCreate' + entity.EntityInfo.BaseTableCodeName
-      : entity.EntityInfo.spUpdate?.length > 0
-        ? entity.EntityInfo.spUpdate
-        : 'spUpdate' + entity.EntityInfo.BaseTableCodeName;
-    return spName;
-  }
+  // GetCreateUpdateSPName is inherited from DatabaseProviderBase
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
     let sRet: string = '',
@@ -3445,21 +3189,25 @@ export class SQLServerDataProvider
       return sSQL;
     } else return null;
   }
-  protected async LogRecordChange(
-    newData: any,
-    oldData: any,
+  /**
+   * Implements the abstract BuildRecordChangeSQL from DatabaseProviderBase.
+   * Delegates to GetLogRecordChangeSQL for T-SQL generation.
+   */
+  protected override BuildRecordChangeSQL(
+    newData: Record<string, unknown> | null,
+    oldData: Record<string, unknown> | null,
     entityName: string,
-    recordID: any,
+    recordID: string,
     entityInfo: EntityInfo,
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
-  ) {
-    const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
-    if (sSQL) {
-      const result = await this.ExecuteSQL(sSQL, undefined, undefined, user);
-      return result;
-    }
+  ): { sql: string; parameters?: unknown[] } | null {
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
+    if (sql) return { sql };
+    return null;
   }
+
+  // LogRecordChange is inherited from DatabaseProviderBase (calls BuildRecordChangeSQL)
 
   public async Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo): Promise<{}> {
     const where = CompositeKey.KeyValuePairs.map((val) => {
@@ -3696,13 +3444,14 @@ export class SQLServerDataProvider
       entity.EntityInfo.AllowMultipleSubtypes &&
       entity.EntityInfo.TrackRecordChanges
     ) {
+      const transaction = (entity.ProviderTransaction as sql.Transaction) ?? undefined;
       await this.PropagateRecordChangesToSiblings(
         entity.EntityInfo,
         overlappingChangeData,
         entity.PrimaryKey.Values(),
         user?.ID ?? '',
         options.ISAActiveChildEntityName,
-        (entity.ProviderTransaction as sql.Transaction) ?? undefined,
+        transaction ? { connectionSource: transaction } : undefined,
       );
     }
   }
@@ -4908,62 +4657,14 @@ export class SQLServerDataProvider
    *        Undefined when saving the parent directly — all children get propagated to.
    * @param transaction The active IS-A transaction, or undefined for standalone saves
    */
-  private async PropagateRecordChangesToSiblings(
-    parentInfo: EntityInfo,
-    changeData: { changesJSON: string; changesDescription: string },
-    pkValue: string,
-    userId: string,
-    activeChildEntityName: string | undefined,
-    transaction: sql.Transaction | undefined
-  ): Promise<void> {
-    const sqlParts: string[] = [];
-    let varIndex = 0;
-
-    const safePKValue = pkValue.replace(/'/g, "''");
-    const safeUserId = userId.replace(/'/g, "''");
-    const safeChangesJSON = changeData.changesJSON.replace(/'/g, "''");
-    const safeChangesDesc = changeData.changesDescription.replace(/'/g, "''");
-
-    for (const childInfo of parentInfo.ChildEntities) {
-      // Skip the active branch (the child that initiated the parent save).
-      // When activeChildEntityName is undefined (direct save on parent), propagate to ALL children.
-      if (activeChildEntityName && this.IsEntityOrAncestorOf(childInfo, activeChildEntityName)) continue;
-
-      // Recursively enumerate this child's entire sub-tree from metadata
-      const subTree = this.GetFullSubTree(childInfo);
-
-      for (const entityInTree of subTree) {
-        if (!entityInTree.TrackRecordChanges) continue;
-
-        const varName = `@_rc_prop_${varIndex++}`;
-        sqlParts.push(this.buildSiblingRecordChangeSQL(
-          varName,
-          entityInTree,
-          safeChangesJSON,
-          safeChangesDesc,
-          safePKValue,
-          safeUserId
-        ));
-      }
-    }
-
-    // Execute as single batch
-    if (sqlParts.length > 0) {
-      const batch = sqlParts.join('\n');
-      await this.ExecuteSQL(batch, undefined, {
-        connectionSource: transaction,
-        description: 'IS-A overlapping subtype Record Change propagation',
-        isMutation: true
-      });
-    }
-  }
+  // PropagateRecordChangesToSiblings orchestration is inherited from DatabaseProviderBase
 
   /**
-   * Generates a single block of SQL for one sibling entity in the Record Change
+   * Generates a single block of T-SQL for one sibling entity in the Record Change
    * propagation batch. Uses SELECT...FOR JSON to get the full record, then
-   * conditionally inserts a Record Change entry if the record exists.
+   * conditionally inserts a Record Change entry via spCreateRecordChange_Internal.
    */
-  private buildSiblingRecordChangeSQL(
+  protected override BuildSiblingRecordChangeSQL(
     varName: string,
     entityInfo: EntityInfo,
     safeChangesJSON: string,
@@ -4976,8 +4677,6 @@ export class SQLServerDataProvider
     const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
     const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
-    // Build RecordID in CompositeKey format: "FieldCodeName|Value" (or "F1|V1||F2|V2" for composite PKs)
-    // Must match the format used by the main save flow (concatPKIDString in GetSaveSQLWithDetails)
     const recordID = entityInfo.PrimaryKeys
       .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
       .join(CompositeKey.DefaultFieldDelimiter);

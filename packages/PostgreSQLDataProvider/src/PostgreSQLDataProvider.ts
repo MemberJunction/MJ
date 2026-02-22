@@ -14,21 +14,11 @@ import {
     ProviderType,
     CompositeKey,
     EntityDependency,
-    EntityRecordNameInput,
-    EntityRecordNameResult,
-    RecordChange,
-    RecordDependency,
     BaseEntity,
-    EntitySaveOptions,
-    EntityDeleteOptions,
     SaveSQLResult,
     DeleteSQLResult,
     LogError,
     LogStatus,
-    PotentialDuplicateRequest,
-    PotentialDuplicateResponse,
-    RecordMergeRequest,
-    RecordMergeResult,
     DatasetResultType,
     DatasetItemResultType,
     DatasetStatusResultType,
@@ -37,7 +27,6 @@ import {
     RunViewWithCacheCheckParams,
     RunViewWithCacheCheckResult,
     RunViewsWithCacheCheckResponse,
-    EntityMergeOptions,
     IEntityDataProvider,
     IRunReportProvider,
     TransactionGroupBase,
@@ -308,14 +297,6 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         const orderBySQL = this.resolveOrderBy(params, entityInfo);
         const selectSQL = this.buildSelectSQL(entityInfo, fields, whereSQL, orderBySQL, params.MaxRows, params.StartRow);
 
-        // DEBUG: log the RunView SQL for diagnosis
-        if (entityInfo.Name.includes('Authorization Roles') || entityInfo.Name.includes('Query Permissions') || entityInfo.Name.includes('User Roles')) {
-            console.log(`\n[DEBUG RunView] Entity: ${entityInfo.Name}`);
-            console.log(`[DEBUG RunView] Fields: ${fields.join(', ')}`);
-            console.log(`[DEBUG RunView] WHERE: ${whereSQL}`);
-            console.log(`[DEBUG RunView] SQL: ${selectSQL}\n`);
-        }
-
         try {
             const rows = await this.ExecuteSQL<T>(selectSQL, undefined, { description: `RunView: ${entityInfo.Name}` }, contextUser);
 
@@ -509,30 +490,8 @@ SELECT * FROM delete_result`;
         return { fullSQL: simpleSQL, simpleSQL, parameters: paramValues };
     }
 
-    async GetRecordDuplicates(
-        _params: PotentialDuplicateRequest,
-        _contextUser?: UserInfo
-    ): Promise<PotentialDuplicateResponse> {
-        const response = new PotentialDuplicateResponse();
-        response.Status = 'Error';
-        response.ErrorMessage = 'Not yet implemented for PostgreSQL';
-        response.PotentialDuplicateResult = [];
-        return response;
-    }
-
-    async MergeRecords(
-        _request: RecordMergeRequest,
-        _contextUser?: UserInfo,
-        _options?: EntityMergeOptions
-    ): Promise<RecordMergeResult> {
-        return {
-            Success: false,
-            OverallStatus: 'Error',
-            RecordStatus: [],
-            Request: _request,
-            RecordMergeLogID: '',
-        };
-    }
+    // GetRecordDuplicates, MergeRecords, StartMergeLogging, CompleteMergeLogging
+    // are inherited from DatabaseProviderBase
 
     // RunReport is inherited from DatabaseProviderBase
 
@@ -789,7 +748,7 @@ SELECT * FROM delete_result`;
                 }
 
                 try {
-                    this.checkUserReadPermissions(entityInfo.Name, user);
+                    this.CheckUserReadPermissions(entityInfo.Name, user);
                     const whereSQL = this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
                     itemsNeedingCacheCheck.push({ index: i, item, entityInfo, whereSQL });
                 } catch (e) {
@@ -1031,16 +990,6 @@ SELECT * FROM delete_result`;
         return parts.join(' AND ');
     }
 
-    private checkUserReadPermissions(entityName: string, contextUser: UserInfo): void {
-        const entityInfo = this.Entities.find((e) => e.Name === entityName);
-        if (!contextUser) throw new Error('contextUser is null');
-        if (entityInfo) {
-            const userPermissions = entityInfo.GetUserPermisions(contextUser);
-            if (!userPermissions.CanRead) throw new Error(`User ${contextUser.Email} does not have read permissions on ${entityInfo.Name}`);
-        } else {
-            throw new Error('Entity not found in metadata');
-        }
-    }
 
     // ─── SQL Building Helpers ────────────────────────────────────────
 
@@ -1301,11 +1250,91 @@ SELECT * FROM delete_result`;
         });
     }
 
-    private toSnakeCase(name: string): string {
-        return name
-            .replace(/([A-Z])/g, '_$1')
-            .toLowerCase()
-            .replace(/^_/, '')
-            .replace(/ /g, '_');
+    // ─── Record Change SQL Builders (abstract method implementations) ───
+
+    /**
+     * Builds PostgreSQL INSERT INTO "RecordChange" SQL for record change logging.
+     * Uses parameterized queries with $N placeholders.
+     */
+    protected override BuildRecordChangeSQL(
+        newData: Record<string, unknown> | null,
+        oldData: Record<string, unknown> | null,
+        entityName: string,
+        recordID: string,
+        entityInfo: EntityInfo,
+        type: 'Create' | 'Update' | 'Delete',
+        user: UserInfo,
+    ): { sql: string; parameters?: unknown[] } | null {
+        const dataForJSON = newData ?? oldData;
+        if (!dataForJSON) return null;
+        const fullRecordJSON: string = JSON.stringify(this.EscapeQuotesInProperties(dataForJSON, "'"));
+
+        // DiffObjects requires non-null inputs; for creates/deletes one side is null
+        const changes = (oldData && newData)
+            ? this.DiffObjects(oldData, newData, entityInfo, "'")
+            : null;
+        const changesKeys = changes ? Object.keys(changes) : [];
+
+        if (changesKeys.length === 0 && oldData !== null && newData !== null) return null;
+
+        const changesJSON = changes !== null ? JSON.stringify(changes) : '';
+        const changesDescription = oldData && newData
+            ? this.CreateUserDescriptionOfChanges(changes!)
+            : !oldData ? 'Record Created' : 'Record Deleted';
+
+        const sql = `INSERT INTO ${this._schemaName}."RecordChange"
+            ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
+            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::text, $6::text, $7::text, 'Complete')
+            RETURNING "ID"`;
+
+        const parameters: unknown[] = [
+            entityInfo.ID,
+            recordID,
+            user.ID,
+            type,
+            changesJSON,
+            changesDescription,
+            fullRecordJSON,
+        ];
+
+        return { sql, parameters };
     }
+
+    /**
+     * Builds PostgreSQL SQL for a single sibling entity in the Record Change propagation batch.
+     * Uses row_to_json to get the full record JSON, then conditionally inserts a Record Change entry.
+     */
+    protected override BuildSiblingRecordChangeSQL(
+        _varName: string,
+        entityInfo: EntityInfo,
+        safeChangesJSON: string,
+        safeChangesDesc: string,
+        safePKValue: string,
+        safeUserId: string,
+    ): string {
+        const schema = entityInfo.SchemaName || '__mj';
+        const view = entityInfo.BaseView;
+        const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+        const safeEntityName = entityInfo.Name.replace(/'/g, "''");
+
+        const recordID = entityInfo.PrimaryKeys
+            .map(pk => `${pk.CodeName}|${safePKValue}`)
+            .join('||');
+
+        return `
+INSERT INTO ${this._schemaName}."RecordChange"
+    ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
+SELECT
+    '${entityInfo.ID}'::uuid,
+    '${recordID}',
+    '${safeUserId}'::uuid,
+    'Update',
+    '${safeChangesJSON}',
+    '${safeChangesDesc}',
+    row_to_json(r)::text,
+    'Complete'
+FROM ${pgDialect.QuoteSchema(schema, view)} r
+WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
+    }
+
 }
