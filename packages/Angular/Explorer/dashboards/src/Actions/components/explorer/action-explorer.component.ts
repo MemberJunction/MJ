@@ -11,7 +11,7 @@ import { Subject } from 'rxjs';
 import { takeUntil, filter, debounceTime, distinctUntilChanged, combineLatestWith } from 'rxjs/operators';
 import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity, MJActionParamEntity, ResourceData } from '@memberjunction/core-entities';
-import { ActionEngineBase, ActionEntityExtended } from '@memberjunction/actions-base';
+import { ActionEngineBase, MJActionEntityExtended } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import {
@@ -34,8 +34,8 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   @ViewChild(ActionTreePanelComponent) TreePanel!: ActionTreePanelComponent;
 
   public IsLoading = true;
-  public Actions: ActionEntityExtended[] = [];
-  public FilteredActions: ActionEntityExtended[] = [];
+  public Actions: MJActionEntityExtended[] = [];
+  public FilteredActions: MJActionEntityExtended[] = [];
   public Categories: MJActionCategoryEntity[] = [];
   public CategoriesMap = new Map<string, MJActionCategoryEntity>();
 
@@ -229,7 +229,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     return descendants;
   }
 
-  private sortActions(actions: ActionEntityExtended[], config: SortConfig): ActionEntityExtended[] {
+  private sortActions(actions: MJActionEntityExtended[], config: SortConfig): MJActionEntityExtended[] {
     const sorted = [...actions];
     const direction = config.direction === 'asc' ? 1 : -1;
 
@@ -308,16 +308,16 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.openNewActionPanel();
   }
 
-  public onActionClick(action: ActionEntityExtended): void {
+  public onActionClick(action: MJActionEntityExtended): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
     this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 
-  public onActionEdit(action: ActionEntityExtended): void {
+  public onActionEdit(action: MJActionEntityExtended): void {
     this.onActionClick(action);
   }
 
-  public async onActionRun(action: ActionEntityExtended): Promise<void> {
+  public async onActionRun(action: MJActionEntityExtended): Promise<void> {
     if (action.Status !== 'Active') {
       return; // Can't run inactive actions
     }
@@ -333,7 +333,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       });
 
       this.SelectedActionParams = result.Success ? result.Results || [] : [];
-      // ActionEntityExtended extends MJActionEntity, so this cast is safe
+      // MJActionEntityExtended extends MJActionEntity, so this cast is safe
       this.SelectedActionForRun = action as unknown as MJActionEntity;
       this.IsRunDialogOpen = true;
       this.cdr.markForCheck();

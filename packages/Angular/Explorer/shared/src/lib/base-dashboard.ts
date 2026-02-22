@@ -1,10 +1,10 @@
 import { Directive, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
-import { DashboardEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { MJDashboardEntityExtended, ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from './base-resource-component';
 
 export interface DashboardConfig {
-  dashboard: DashboardEntityExtended;
+  dashboard: MJDashboardEntityExtended;
   userState?: any;
 }
 

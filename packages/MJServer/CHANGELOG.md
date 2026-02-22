@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/server
 
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core-entities-server@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/graphql-dataprovider@5.2.0
+  - @memberjunction/sqlserver-dataprovider@5.2.0
+  - @memberjunction/data-context@5.2.0
+  - @memberjunction/doc-utils@5.2.0
+  - @memberjunction/ai-agent-manager-actions@5.2.0
+  - @memberjunction/ai-agent-manager@5.2.0
+  - @memberjunction/ai-agents@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/aiengine@5.2.0
+  - @memberjunction/ai-prompts@5.2.0
+  - @memberjunction/actions-base@5.2.0
+  - @memberjunction/core-actions@5.2.0
+  - @memberjunction/communication-types@5.2.0
+  - @memberjunction/entity-communications-base@5.2.0
+  - @memberjunction/entity-communications-server@5.2.0
+  - @memberjunction/scheduling-engine-base@5.2.0
+  - @memberjunction/scheduling-base-types@5.2.0
+  - @memberjunction/scheduling-engine@5.2.0
+  - @memberjunction/templates@5.2.0
+  - @memberjunction/ai-mcp-client@5.2.0
+  - @memberjunction/api-keys@5.2.0
+  - @memberjunction/actions-apollo@5.2.0
+  - @memberjunction/actions-bizapps-accounting@5.2.0
+  - @memberjunction/actions-bizapps-crm@5.2.0
+  - @memberjunction/actions-bizapps-formbuilders@5.2.0
+  - @memberjunction/actions-bizapps-lms@5.2.0
+  - @memberjunction/actions-bizapps-social@5.2.0
+  - @memberjunction/actions@5.2.0
+  - @memberjunction/notifications@5.2.0
+  - @memberjunction/communication-ms-graph@5.2.0
+  - @memberjunction/communication-sendgrid@5.2.0
+  - @memberjunction/encryption@5.2.0
+  - @memberjunction/external-change-detection@5.2.0
+  - @memberjunction/queue@5.2.0
+  - @memberjunction/storage@5.2.0
+  - @memberjunction/scheduling-actions@5.2.0
+  - @memberjunction/testing-engine@5.2.0
+  - @memberjunction/testing-engine-base@5.2.0
+  - @memberjunction/version-history@5.2.0
+  - @memberjunction/ai-vectors-pinecone@5.2.0
+  - @memberjunction/component-registry-client-sdk@5.2.0
+  - @memberjunction/interactive-component-types@5.2.0
+  - @memberjunction/data-context-server@5.2.0
+  - @memberjunction/skip-types@5.2.0
+  - @memberjunction/ai-provider-bundle@5.2.0
+  - @memberjunction/ai@5.2.0
+  - @memberjunction/config@5.2.0
+  - @memberjunction/global@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes

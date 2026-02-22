@@ -1,3 +1,12 @@
+/*****************************************************************
+ - Prior to 5.3.0 this script was run as a "before-all" script in CodeGen
+ - As of 5.3.0 and beyond this script is NEVER run automatically as we do
+   not need this anymore due to flyway baseline migrations - in addtion this script
+   can be destructive in that it doesn't restore all aspects of prior migrations/baselines such as
+   sp_addextendedproperty calls for things like vwEntities. 
+ - In a future MJ release we will DELETE this file
+******************************************************************/
+
 DROP PROCEDURE IF EXISTS __mj.spRecompileAllViews
 GO
 CREATE PROCEDURE __mj.spRecompileAllViews
@@ -224,49 +233,99 @@ INNER JOIN sys.schemas sch2
     ON tab2.schema_id = sch2.schema_id
 GO
 
+
+
+
+
+
+IF OBJECT_ID('[__mj].GetClassNameSchemaPrefix', 'FN') IS NOT NULL
+    DROP FUNCTION [__mj].GetClassNameSchemaPrefix;
+GO
+
+CREATE FUNCTION [__mj].GetClassNameSchemaPrefix(@schemaName NVARCHAR(255))
+RETURNS NVARCHAR(255)
+AS
+BEGIN
+    DECLARE @trimmed NVARCHAR(255) = LTRIM(RTRIM(@schemaName));
+
+    -- Core MJ schema: __mj -> 'MJ'
+    IF LOWER(@trimmed) = '__mj'
+        RETURN 'MJ';
+
+    -- Guard: a schema literally named 'MJ' (case-insensitive) would collide with __mj's prefix
+    IF LOWER(@trimmed) = 'mj'
+        RETURN 'MJCustom';
+
+    -- Default: strip to alphanumeric (same as StripToAlphanumeric, which removes
+    -- all non-[A-Za-z0-9] characters). Then guard against leading digit.
+    DECLARE @cleaned NVARCHAR(255) = [__mj].StripToAlphanumeric(@trimmed);
+
+    -- If empty after cleaning, return empty (schema with no prefix needed - shouldn't happen)
+    IF LEN(@cleaned) = 0 OR @cleaned IS NULL
+        RETURN '';
+
+    -- If starts with a digit, prepend underscore
+    IF @cleaned LIKE '[0-9]%'
+        RETURN '_' + @cleaned;
+
+    RETURN @cleaned;
+END;
+GO
+
+
+
+
+
+
+
+
 DROP VIEW IF EXISTS [__mj].vwEntities
 GO
-CREATE VIEW [__mj].vwEntities
+CREATE VIEW [__mj].[vwEntities]
 AS
 SELECT
-	e.*,
-	/* CodeName: Derived from entity Name with clean prefix handling.
-	   When a schema has EntityNamePrefix configured, we strip the prefix from the Name,
-	   prepend the alphanumeric-only version of the prefix, then remove spaces.
-	   This produces clean names like "MJAIModels" instead of "MJ_AIModels". */
-	__mj.GetProgrammaticName(
-		ISNULL(__mj.StripToAlphanumeric(si.EntityNamePrefix), '') +
-		REPLACE(
-			IIF(si.EntityNamePrefix IS NOT NULL,
-				REPLACE(e.Name, si.EntityNamePrefix, ''),
-				e.Name
-			),
-			' ',
-			''
-		)
-	) AS CodeName,
-	/* ClassName: Incorporates schema EntityNamePrefix for cross-schema collision prevention.
-	   When a schema has EntityNamePrefix configured, the cleaned prefix is prepended to
-	   BaseTable + NameSuffix. For schemas without a prefix, behavior is unchanged. */
-	__mj.GetProgrammaticName(
-		ISNULL(__mj.StripToAlphanumeric(si.EntityNamePrefix), '') +
-		e.BaseTable +
-		ISNULL(e.NameSuffix, '')
-	) AS ClassName,
-	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS BaseTableCodeName,
-	par.Name ParentEntity,
-	par.BaseTable ParentBaseTable,
-	par.BaseView ParentBaseView
+    e.*,
+    /* CodeName: Schema-prefixed programmatic name derived from entity Name.
+       Uses GetClassNameSchemaPrefix(SchemaName) for the prefix, then strips the
+       EntityNamePrefix from the Name (if present) and removes spaces.
+       Example: schema '__mj', name 'MJ: AI Models' -> 'MJAIModels'
+       Example: schema 'sales', name 'Invoice' -> 'salesInvoice' */
+    [__mj].GetProgrammaticName(
+        [__mj].GetClassNameSchemaPrefix(e.SchemaName) +
+        REPLACE(
+            IIF(si.EntityNamePrefix IS NOT NULL,
+                REPLACE(e.Name, si.EntityNamePrefix, ''),
+                e.Name
+            ),
+            ' ',
+            ''
+        )
+    ) AS CodeName,
+    /* ClassName: Schema-prefixed programmatic class name for TypeScript entity classes,
+       Zod schemas, and Angular form components. Uses GetClassNameSchemaPrefix(SchemaName)
+       which is guaranteed unique (SQL Server enforces schema name uniqueness).
+       Example: schema '__mj', table 'AIModel' -> 'MJAIModel' -> class MJAIModelEntity
+       Example: schema 'sales', table 'Invoice' -> 'salesInvoice' -> class salesInvoiceEntity
+       This prevents cross-schema collisions and aligns with GraphQL type naming. */
+    [__mj].GetProgrammaticName(
+        [__mj].GetClassNameSchemaPrefix(e.SchemaName) +
+        e.BaseTable +
+        ISNULL(e.NameSuffix, '')
+    ) AS ClassName,
+    [__mj].GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS BaseTableCodeName,
+    par.Name ParentEntity,
+    par.BaseTable ParentBaseTable,
+    par.BaseView ParentBaseView
 FROM
-	[__mj].Entity e
+    [__mj].Entity e
 LEFT OUTER JOIN
-	[__mj].Entity par
+    [__mj].Entity par
 ON
-	e.ParentID = par.ID
+    e.ParentID = par.ID
 LEFT OUTER JOIN
-	[__mj].SchemaInfo si
+    [__mj].SchemaInfo si
 ON
-	e.SchemaName = si.SchemaName
+    e.SchemaName = si.SchemaName
 GO
 
 DROP VIEW IF EXISTS [__mj].vwEntityFields
@@ -431,24 +490,7 @@ ON
 
 GO
   
-
-DROP VIEW IF EXISTS [__mj].vwCompanies
-GO
-CREATE VIEW [__mj].vwCompanies
-AS
-SELECT * FROM __mj.Company
-
-
-
-GO
  
-
-DROP VIEW IF EXISTS [__mj].vwIntegrations
-GO
-CREATE VIEW [__mj].vwIntegrations AS
-SELECT * FROM __mj.Integration
-GO
-
 DROP VIEW IF EXISTS [__mj].vwIntegrationURLFormats 
 GO
 CREATE VIEW [__mj].vwIntegrationURLFormats

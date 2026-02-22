@@ -49,8 +49,8 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
-  AIPromptEntityExtended: vi.fn(),
-  AIAgentEntityExtended: vi.fn(),
+  MJAIPromptEntityExtended: vi.fn(),
+  MJAIAgentEntityExtended: vi.fn(),
 }));
 
 import { BaseAgentManagementAction } from '../actions/base-agent-management.action';

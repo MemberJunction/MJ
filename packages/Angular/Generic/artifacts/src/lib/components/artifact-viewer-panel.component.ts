@@ -7,7 +7,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
-import { ArtifactViewerTab } from './base-artifact-viewer.component';
+import { ArtifactViewerTab, NavigationRequest } from './base-artifact-viewer.component';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
@@ -39,6 +39,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -488,6 +489,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    * Forces re-evaluation of allTabs so new tab labels render correctly.
    */
   onTabsChanged(): void {
+    // If Display tab just became available (e.g., after plugin async load),
+    // switch to it — it should be the default when present.
+    const tabs = this.allTabs;
+    if (tabs.length > 0 && tabs[0].toLowerCase() === 'display' && this.activeTab !== 'display') {
+      this.activeTab = 'display';
+    }
     this.cdr.detectChanges(); // zone.js 0.15: plugin emitted tabsChanged, force CD to re-evaluate allTabs
   }
 
@@ -960,6 +967,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.openEntityRecord.emit(event);
+  }
+
+  /**
+   * Handle navigation request from artifact viewer plugin.
+   * Propagates the event up to parent components for app-level navigation.
+   */
+  onNavigationRequest(event: NavigationRequest): void {
+    this.navigationRequest.emit(event);
   }
 
   /**

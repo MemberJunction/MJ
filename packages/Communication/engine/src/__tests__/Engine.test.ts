@@ -92,7 +92,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJCommunicationProviderEntity: class { ID = ''; Name = ''; SupportsDrafts = false; },
     MJEntityCommunicationFieldEntity: class {},
     MJEntityCommunicationMessageTypeEntity: class {},
-    TemplateEntityExtended: class {},
+    MJTemplateEntityExtended: class {},
 }));
 
 // Mock the templates dependency

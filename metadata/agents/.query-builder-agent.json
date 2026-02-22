@@ -11,6 +11,15 @@
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-hammer",
+      "DriverClass": "QueryBuilderAgent",
+      "PayloadSelfWritePaths": [
+        "source",
+        "title",
+        "plan",
+        "columns.*",
+        "rows.*",
+        "metadata.*"
+      ],
       "FinalPayloadValidation": "@file:validation/query-builder-payload-validation.json",
       "FinalPayloadValidationMode": "Retry",
       "FinalPayloadValidationMaxRetries": 3
@@ -180,7 +189,12 @@
               "*"
             ],
             "PayloadUpstreamPaths": [
-              "*"
+              "source",
+              "title",
+              "plan",
+              "columns.*",
+              "rows.*",
+              "metadata.*"
             ],
             "FinalPayloadValidation": "@file:validation/query-builder-payload-validation.json",
             "FinalPayloadValidationMode": "Retry",
@@ -266,8 +280,8 @@
             "ID": "17E1C958-909C-41B2-8B52-138AED224108"
           },
           "sync": {
-            "lastModified": "2026-02-19T02:31:20.747Z",
-            "checksum": "846d1e3e9b02152dffcc489d7c15bb26aa636aeb25e84d645251cdc68cf65268"
+            "lastModified": "2026-02-22T03:36:08.968Z",
+            "checksum": "ea937e6e3ae485d3324d6f42f3d0cc81b96b2ad4bacfd03da3c1bce9cf6a3000"
           }
         }
       ]
@@ -276,8 +290,8 @@
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
     },
     "sync": {
-      "lastModified": "2026-02-19T02:31:20.385Z",
-      "checksum": "03b22577674b7cbc00833e374673b5893cf7432998999b9c0b8a3a0cb3b9120d"
+      "lastModified": "2026-02-22T03:51:32.910Z",
+      "checksum": "5cb4b3a6971ab2964ecf404136e6625942811e4fefb4b1499afa9a97bc5464fa"
     }
   }
 ]

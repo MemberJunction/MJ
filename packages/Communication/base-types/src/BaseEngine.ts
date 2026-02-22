@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
 import { MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
-import { CommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
+import { MJCommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
  
 
 /**
@@ -17,7 +17,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    
    private _Metadata: {
       BaseMessageTypes: MJCommunicationBaseMessageTypeEntity[],
-      Providers: CommunicationProviderEntityExtended[],
+      Providers: MJCommunicationProviderEntityExtended[],
       ProviderMessageTypes: MJCommunicationProviderMessageTypeEntity[],
       EntityCommunicationMessageTypes: MJEntityCommunicationMessageTypeEntity[],
       EntityCommunicationFields: MJEntityCommunicationFieldEntity[]
@@ -58,7 +58,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] {
       return this._Metadata.BaseMessageTypes;
    }
-   public get Providers(): CommunicationProviderEntityExtended[] {
+   public get Providers(): MJCommunicationProviderEntityExtended[] {
       return this._Metadata.Providers;
    }
    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] {

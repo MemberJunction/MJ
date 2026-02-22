@@ -4,7 +4,7 @@ import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJTemplateEntity, MJAIPromptTypeEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
-import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
 import { AIPromptManagementService } from '../AIPrompts/ai-prompt-management.service';
@@ -21,7 +21,7 @@ export interface CreatePromptConfig {
 
 export interface CreatePromptResult {
   /** Created prompt entity (not saved to database) */
-  prompt: AIPromptEntityExtended;
+  prompt: MJAIPromptEntityExtended;
   /** Created template entity (not saved to database) */
   template?: MJTemplateEntity;
   /** Template content entities (not saved to database) */
@@ -57,7 +57,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
   availablePromptTypes$ = new BehaviorSubject<MJAIPromptTypeEntity[]>([]);
   
   // Entities (not saved to database)
-  promptEntity: AIPromptEntityExtended | null = null;
+  promptEntity: MJAIPromptEntityExtended | null = null;
   templateEntity: MJTemplateEntity | null = null;
   templateContents: MJTemplateContentEntity[] = [];
   
@@ -135,7 +135,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
       // Create the prompt entity
       const md = new Metadata();
-      this.promptEntity = await md.GetEntityObject<AIPromptEntityExtended>('MJ: AI Prompts');
+      this.promptEntity = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
       this.promptEntity.NewRecord();
       
       // Set default values

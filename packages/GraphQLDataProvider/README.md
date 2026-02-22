@@ -186,14 +186,20 @@ async function getSalesReport(reportId: string) {
   return result.Success ? result.Results : [];
 }
 
-// Execute a query
+// Execute a saved query
 async function runCustomQuery(queryId: string, parameters: any) {
   const params = {
     QueryID: queryId,
     Parameters: parameters
   };
-  
+
   const result = await dataProvider.RunQuery(params);
+  return result;
+}
+
+// Execute an ad-hoc SQL query (SELECT/WITH only, validated server-side)
+async function runAdhocQuery(sql: string) {
+  const result = await dataProvider.RunQuery({ SQL: sql });
   return result;
 }
 ```

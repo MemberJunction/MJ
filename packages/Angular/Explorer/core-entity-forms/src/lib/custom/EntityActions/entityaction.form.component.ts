@@ -13,7 +13,7 @@ import { TabEvent } from '@memberjunction/ng-tabstrip';
     templateUrl: './entityaction.form.component.html',
     styleUrls: ['../../../shared/form-styles.css']
 })
-export class EntityActionExtendedFormComponent extends MJEntityActionFormComponent {
+export class MJEntityActionFormComponentExtended extends MJEntityActionFormComponent {
     public record!: MJEntityActionEntity;
     private sharedService = inject(SharedService);
     private currentTab: string | null = null;

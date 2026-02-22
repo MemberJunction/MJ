@@ -7,6 +7,9 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -16,6 +19,7 @@ import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
 import { DataArtifactViewerComponent } from './components/plugins/data-artifact-viewer.component';
+import { SaveQueryPanelComponent } from './components/plugins/save-query-dialog.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 
 // Import artifact type plugin viewer component
@@ -49,6 +53,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
+    SaveQueryPanelComponent,
 
     // Custom tab components (used by plugins via dynamic component tabs)
     DataRequirementsViewerComponent
@@ -59,7 +64,10 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MarkdownModule,
     CodeEditorModule,
     MJReactModule,
-    MJNotificationsModule
+    MJNotificationsModule,
+    QueryViewerModule,
+    SharedGenericModule,
+    NgTreesModule
   ],
   exports: [
     // Export artifact type plugin viewer

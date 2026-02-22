@@ -15,7 +15,7 @@ vi.mock('@memberjunction/core-entities', () => ({
   MJTemplateCategoryEntity: class {},
   MJTemplateContentEntity: class { TemplateID = ''; },
   MJTemplateContentTypeEntity: class {},
-  TemplateEntityExtended: class {
+  MJTemplateEntityExtended: class {
     ID = '';
     Name = '';
     Content: unknown[] = [];
