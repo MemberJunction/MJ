@@ -435,37 +435,78 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
      * Generates PostgreSQL function-call SQL for Save (Create/Update).
      * Returns parameterized SQL with $1, $2, ... placeholders.
      */
-    protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, _user: UserInfo): Promise<SaveSQLResult> {
+    protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
         const entityInfo = entity.EntityInfo;
         const fnName = this.getCRUDFunctionName(isNew ? 'create' : 'update', entityInfo);
         const { paramValues, paramPlaceholders } = this.buildCRUDParams(entity, isNew, entityInfo);
-        const fullSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
-        return {
-            fullSQL,
-            simpleSQL: fullSQL,
-            parameters: paramValues,
-        };
+        const simpleSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
+
+        if (this.shouldTrackRecordChanges(entityInfo)) {
+            const rc = this.computeSaveRecordChangeParams(entity, isNew, user, paramValues.length);
+            if (rc) {
+                const s = rc.startIdx;
+                const recordIDExpr = this.buildRecordIDFromCTE(entityInfo, 'save_result');
+                const fullSQL = `WITH save_result AS (
+    ${simpleSQL}
+),
+record_change AS (
+    INSERT INTO ${this._schemaName}."RecordChange"
+        ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
+    SELECT $${s}::uuid, ${recordIDExpr}, $${s+1}::uuid, $${s+2}::varchar, $${s+3}::text, $${s+4}::text, $${s+5}::text, 'Complete'
+    FROM save_result
+    RETURNING "ID"
+)
+SELECT * FROM save_result`;
+                paramValues.push(...rc.params);
+                return { fullSQL, simpleSQL, parameters: paramValues };
+            }
+        }
+
+        return { fullSQL: simpleSQL, simpleSQL, parameters: paramValues };
     }
 
     /**
      * Generates PostgreSQL function-call SQL for Delete.
      * Returns parameterized SQL with $1, $2, ... placeholders.
      */
-    protected override GenerateDeleteSQL(entity: BaseEntity, _user: UserInfo): DeleteSQLResult {
+    protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult {
         const entityInfo = entity.EntityInfo;
         const fnName = this.getCRUDFunctionName('delete', entityInfo);
         const pkFields = entityInfo.PrimaryKeys;
         if (pkFields.length === 0) {
             throw new Error(`Cannot delete ${entityInfo.Name}: no primary key defined`);
         }
-        const paramValues = pkFields.map((f: EntityFieldInfo) => entity.Get(f.Name));
+        const paramValues: unknown[] = pkFields.map((f: EntityFieldInfo) => entity.Get(f.Name));
         const paramPlaceholders = paramValues.map((_v: unknown, i: number) => `$${i + 1}`).join(', ');
-        const fullSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
-        return {
-            fullSQL,
-            simpleSQL: fullSQL,
-            parameters: paramValues,
-        };
+        const simpleSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
+
+        if (this.shouldTrackRecordChanges(entityInfo)) {
+            const oldData = entity.GetAll(false);
+            const fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(oldData, "'"));
+            const recordID = this.buildRecordIDFromEntity(entity);
+            const s = paramValues.length + 1;
+            paramValues.push(
+                entityInfo.ID,
+                recordID,
+                user.ID,
+                fullRecordJSON,
+            );
+            const fullSQL = `WITH delete_result AS (
+    ${simpleSQL}
+),
+record_change AS (
+    INSERT INTO ${this._schemaName}."RecordChange"
+        ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
+    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', '', 'Record Deleted', $${s+3}::text, 'Complete'
+    FROM delete_result
+    WHERE EXISTS (SELECT 1 FROM delete_result)
+    RETURNING "ID"
+)
+SELECT * FROM delete_result`;
+            return { fullSQL, simpleSQL, parameters: paramValues };
+        }
+
+        return { fullSQL: simpleSQL, simpleSQL, parameters: paramValues };
     }
 
     async GetRecordDuplicates(
@@ -1135,6 +1176,77 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
     }
 
     // ─── CRUD Function Helpers ───────────────────────────────────────
+
+
+    // --- Record Change Tracking ---
+
+    /**
+     * Checks if record change tracking should be applied for the given entity.
+     * Excludes the Record Changes entity itself to prevent recursion.
+     */
+    private shouldTrackRecordChanges(entityInfo: EntityInfo): boolean {
+        if (!entityInfo.TrackRecordChanges) return false;
+        const lower = entityInfo.Name.trim().toLowerCase();
+        return lower !== 'record changes' && lower !== 'mj: record changes';
+    }
+
+    /**
+     * Computes the diff between old and new entity values for record change logging.
+     * Returns null if there are no changes to log.
+     */
+    private computeSaveRecordChangeParams(
+        entity: BaseEntity,
+        isNew: boolean,
+        user: UserInfo,
+        paramOffset: number
+    ): { params: unknown[]; startIdx: number } | null {
+        const newData = entity.GetAll(false);
+        const oldData = !isNew ? entity.GetAll(true) : null;
+        const changes = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
+        const changesKeys = changes ? Object.keys(changes) : [];
+
+        if (changesKeys.length === 0 && !isNew) return null;
+
+        const changesJSON = changes ? JSON.stringify(changes) : '';
+        const changesDescription = oldData && newData
+            ? this.CreateUserDescriptionOfChanges(changes!)
+            : 'Record Created';
+        const fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(newData, "'"));
+
+        const startIdx = paramOffset + 1;
+        const params: unknown[] = [
+            entity.EntityInfo.ID,
+            user.ID,
+            isNew ? 'Create' : 'Update',
+            changesJSON,
+            changesDescription,
+            fullRecordJSON,
+        ];
+        return { params, startIdx };
+    }
+
+    /**
+     * Builds a SQL expression that constructs the RecordID string from primary key columns
+     * in a CTE result. Format: "FieldName|Value" for single PK, "F1|V1||F2|V2" for composite.
+     */
+    private buildRecordIDFromCTE(entityInfo: EntityInfo, cteAlias: string): string {
+        const pkFields = entityInfo.PrimaryKeys;
+        const parts = pkFields.map(pk =>
+            `'${pk.CodeName}' || '|' || ${cteAlias}.${pgDialect.QuoteIdentifier(pk.Name)}::text`
+        );
+        if (parts.length === 1) return parts[0];
+        return parts.join(` || '||' || `);
+    }
+
+    /**
+     * Builds a RecordID string from the entity's current primary key values.
+     * Used for delete operations where PK values are known.
+     */
+    private buildRecordIDFromEntity(entity: BaseEntity): string {
+        return entity.PrimaryKeys.map(pk =>
+            `${pk.CodeName}|${pk.Value}`
+        ).join('||');
+    }
 
     private getCRUDFunctionName(type: 'create' | 'update' | 'delete', entityInfo: EntityInfo): string {
         // Check if entity has custom SP name from metadata first
