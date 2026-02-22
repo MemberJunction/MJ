@@ -1,0 +1,198 @@
+<div class="data-artifact-viewer" [ngClass]="cssClass">
+  @if (spec) {
+    @if (HasData || IsLoading) {
+      <!-- Toolbar -->
+      <div class="data-toolbar">
+        <div class="data-title">
+          <i class="fas fa-table"></i>
+          <span>{{ spec.title || 'Data Results' }}</span>
+          @if (IsLive) {
+            <span class="live-badge">Live</span>
+          }
+          @if (DisplayRowCount != null) {
+            <span class="row-count">{{ DisplayRowCount }} rows</span>
+          }
+          @if (DisplayExecutionTime != null) {
+            <span class="exec-time">{{ DisplayExecutionTime }}ms</span>
+          }
+        </div>
+        <div class="data-actions">
+          @if (IsLive) {
+            <button class="btn-icon" title="Refresh data" (click)="OnRefresh()" [disabled]="IsLoading">
+              <i class="fas fa-sync-alt" [class.fa-spin]="IsLoading"></i> Refresh
+            </button>
+          }
+
+          @switch (QuerySyncState) {
+            <!-- S1: No saved query, latest version → Save Query -->
+            @case ('no-query-latest') {
+              <button class="btn-icon btn-save" title="Save as reusable query"
+                (click)="OnShowSaveDialog()">
+                <i class="fas fa-save"></i> Save Query
+              </button>
+            }
+
+            <!-- S2: SQL matches → green badge + Open -->
+            @case ('synced') {
+              <span class="query-badge query-badge-synced">
+                <i class="fas fa-check"></i> Saved at v{{ SavedAtVersion }}
+              </span>
+              <button class="btn-icon btn-open" title="Open saved query record"
+                (click)="OnOpenSavedQuery()">
+                <i class="fas fa-external-link-alt"></i> Open Query
+              </button>
+            }
+
+            <!-- S3: SQL differs, latest version → amber badge + dropdown -->
+            @case ('outdated-latest') {
+              <span class="query-badge query-badge-outdated">
+                <i class="fas fa-circle-exclamation"></i> Saved at v{{ SavedAtVersion }}
+              </span>
+              <div class="dropdown-wrapper">
+                <button class="btn-icon btn-warning" title="Update or save query"
+                  (click)="OnToggleUpdateDropdown()">
+                  <i class="fas fa-save"></i> Update Query <i class="fas fa-caret-down"></i>
+                </button>
+                @if (ShowUpdateDropdown) {
+                  <div class="query-dropdown" (click)="$event.stopPropagation()">
+                    <div class="query-dropdown-item" (click)="OnUpdateExistingQuery()">
+                      <i class="fas fa-arrow-up-from-bracket" style="color:#d97706"></i>
+                      <div>
+                        <div class="dropdown-label">Update "{{ SavedQueryDisplayName }}"</div>
+                        <div class="dropdown-desc">Replace saved query SQL with this version's SQL</div>
+                      </div>
+                    </div>
+                    <div class="query-dropdown-item" (click)="OnSaveAsNewQuery()">
+                      <i class="fas fa-plus" style="color:#16a34a"></i>
+                      <div>
+                        <div class="dropdown-label">Save as New Query</div>
+                        <div class="dropdown-desc">Create a new query, keep the original unchanged</div>
+                      </div>
+                    </div>
+                    <div class="query-dropdown-item" (click)="OnOpenSavedQuery(); OnCloseDropdown()">
+                      <i class="fas fa-external-link-alt" style="color:#6c757d"></i>
+                      <div>
+                        <div class="dropdown-label">Open Saved Query</div>
+                        <div class="dropdown-desc">View "{{ SavedQueryDisplayName }}" (saved at v{{ SavedAtVersion }})</div>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- S4: Older version, query was updated ahead -->
+            @case ('query-ahead') {
+              <span class="query-badge query-badge-muted">
+                <i class="fas fa-clock-rotate-left"></i> Query updated at v{{ SavedAtVersion }}
+              </span>
+              <button class="btn-icon btn-muted" title="Open saved query record"
+                (click)="OnOpenSavedQuery()">
+                <i class="fas fa-external-link-alt"></i> Open Query
+              </button>
+            }
+
+            <!-- S5: Middle version, saved at older, not latest -->
+            @case ('query-behind') {
+              <span class="query-badge query-badge-muted">
+                <i class="fas fa-clock-rotate-left"></i> Saved at v{{ SavedAtVersion }}
+              </span>
+              <button class="btn-icon btn-muted" title="Open saved query record"
+                (click)="OnOpenSavedQuery()">
+                <i class="fas fa-external-link-alt"></i> Open Query
+              </button>
+            }
+
+            <!-- S6: No saved query, older version → no actions -->
+            @case ('no-query-older') {
+              <!-- No query actions available on older versions -->
+            }
+          }
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div class="grid-container">
+        @if (IsLoading) {
+          <mj-loading text="Loading data..."></mj-loading>
+        } @else if (HasError && HasData) {
+          <div class="error-banner">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>{{ ErrorMessage }}</span>
+            <span class="fallback-note">(Showing cached data)</span>
+          </div>
+          <mj-query-data-grid
+            [ColumnConfigs]="GridColumnConfigs"
+            [Data]="GridData"
+            [ShowToolbar]="false"
+            [ShowRefresh]="false"
+            [PersistState]="false"
+            [SelectionMode]="'none'"
+            (EntityLinkClick)="OnEntityLinkClick($event)"
+            Height="100%">
+          </mj-query-data-grid>
+        } @else if (HasError) {
+          <div class="error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>{{ ErrorMessage }}</p>
+          </div>
+        } @else {
+          <mj-query-data-grid
+            [ColumnConfigs]="GridColumnConfigs"
+            [Data]="GridData"
+            [ShowToolbar]="false"
+            [ShowRefresh]="false"
+            [PersistState]="false"
+            [SelectionMode]="'none'"
+            (EntityLinkClick)="OnEntityLinkClick($event)"
+            Height="100%">
+          </mj-query-data-grid>
+        }
+      </div>
+    } @else if (spec.plan) {
+      <!-- Plan-only view (no results yet) -->
+      <div class="data-toolbar">
+        <div class="data-title">
+          <i class="fas fa-diagram-project"></i>
+          <span>{{ spec.title || 'Query Plan' }}</span>
+        </div>
+      </div>
+      <div class="plan-content">
+        <mj-markdown
+          [data]="spec.plan"
+          [enableMermaid]="true"
+          [enableHighlight]="true"
+          [enableCollapsibleHeadings]="false"
+          [enableSmartypants]="true">
+        </mj-markdown>
+      </div>
+    } @else {
+      <!-- No data and no plan -->
+      <div class="empty-state">
+        <i class="fas fa-inbox"></i>
+        <p>No data to display</p>
+      </div>
+    }
+  } @else if (HasError) {
+    <div class="error-state">
+      <i class="fas fa-exclamation-triangle"></i>
+      <p>{{ ErrorMessage }}</p>
+    </div>
+  } @else {
+    <div class="empty-state">
+      <i class="fas fa-inbox"></i>
+      <p>No data to display</p>
+    </div>
+  }
+
+  <!-- Save Query Panel (slide-in) -->
+  @if (ShowSaveDialog) {
+    <mj-save-query-panel
+      [QueryName]="spec?.title || 'Untitled Query'"
+      [QueryDescription]="''"
+      [SQL]="spec?.metadata?.sql || ''"
+      (Saved)="OnQuerySaved($event)"
+      (Cancelled)="ShowSaveDialog = false">
+    </mj-save-query-panel>
+  }
+</div>
