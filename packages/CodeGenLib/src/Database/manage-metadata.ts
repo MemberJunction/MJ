@@ -3046,10 +3046,14 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       try {
          const config = ManageMetadataBase.getSoftPKFKConfig();
          if (!config) {
-           logStatus(`         [Soft PK Check] Config file found but no tables array`);
-           return false;
+            logStatus(`         [Soft PK Check] Config file found but could not be parsed`);
+            return false;
          }
          const tables = this.extractTablesFromConfig(config);
+         if (tables.length === 0) {
+            logStatus(`         [Soft PK Check] Config file found but no tables defined`);
+            return false;
+         }
          const tableConfig = tables.find(
             (t) =>
                t.SchemaName.toLowerCase() === schemaName?.toLowerCase() &&
