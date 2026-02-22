@@ -13,9 +13,22 @@ import sql from 'mssql';
  */
 export class EntitySubClassGeneratorBase {
   /**
-   * 
-   * @param pool 
-   * @param entities 
+   * Escapes sequences in description text that would break generated code.
+   * Handles JSDoc comment terminators, nested comment openers, backticks,
+   * and template literal interpolation sequences.
+   */
+  protected static SanitizeDescription(text: string): string {
+    return text
+      .replace(/\*\//g, '*\\/')
+      .replace(/\/\*/g, '/\\*')
+      .replace(/`/g, '\\`')
+      .replace(/\$\{/g, '\\${');
+  }
+
+  /**
+   *
+   * @param pool
+   * @param entities
    * @param directory 
    * @param skipDBUpdate - when set to true, no updates are written back to the database - which happens after code generation when newly generated code from AI has been generated, but in the case where this flag is true, we don't ever write back to the DB because the assumption is we are only emitting code to the file that was already in the DB.
    * @returns 
@@ -72,7 +85,7 @@ export const loadModule = () => {
           // Sort by Sequence to ensure consistent ordering in comments
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
-            (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
+            (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
@@ -105,7 +118,7 @@ export const loadModule = () => {
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + e.Description : ''}${isaSourceComment}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}
     */
     get ${e.CodeName}(): ${typeString} {
         return this.Get('${e.Name}');
@@ -223,7 +236,7 @@ export const loadModule = () => {
  * ${entity.Name} - strongly typed entity sub-class
  * * Schema: ${entity.SchemaName}
  * * Base Table: ${entity.BaseTable}
- * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * * @description ' + entity.Description : ''}
+ * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * * @description ' + EntitySubClassGeneratorBase.SanitizeDescription(entity.Description) : ''}
  * * Primary Key${entity.PrimaryKeys.length > 1 ? 's' : ''}: ${entity.PrimaryKeys.map((f) => f.Name).join(', ')}
  * @extends {BaseEntity}
  * @class${disabledFlag}
@@ -348,17 +361,17 @@ ${fields}
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 
         return `    /**
-    * ${f.functionDescription}
+    * ${EntitySubClassGeneratorBase.SanitizeDescription(f.functionDescription)}
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-${formattedText}`  
+${formattedText}`
       }).join('\n\n')
 
       const ret = `    /**
     * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${f.functionDescription}`).join('\n')}
+${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${EntitySubClassGeneratorBase.SanitizeDescription(f.functionDescription)}`).join('\n')}
     * @public
     * @method
     * @override
@@ -440,13 +453,13 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
       // Sort by Sequence to ensure consistent ordering in comments
       const sortedValues = sortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
       let values = sortedValues.map(
-        (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
+        (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
       ).join('');
       valueList = `\n    * * Value List Type: ${entityField.ValueListType}\n    * * Possible Values ` + values;
     }
 
     result += `        * * Field Name: ${entityField.Name}${entityField.DisplayName && entityField.DisplayName.length > 0 ? '\n        * * Display Name: ' + entityField.DisplayName : ''}\n`;
-    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + entityField.Description : ''}`;
+    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(entityField.Description) : ''}`;
     return result;
   }
 }
