@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
-import { MJListDetailEntity, ListDetailEntityExtended, MJListEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
@@ -68,8 +68,8 @@ export class SingleListDetailComponent implements OnInit {
   // Add from view dialog (existing)
   public showAddFromViewDialog: boolean = false;
   public showAddFromViewLoader: boolean = false;
-  public userViews: UserViewEntityExtended[] | null = null;
-  public userViewsToAdd: UserViewEntityExtended[] = [];
+  public userViews: MJUserViewEntityExtended[] | null = null;
+  public userViewsToAdd: MJUserViewEntityExtended[] = [];
   public addFromViewProgress: number = 0;
   public addFromViewTotal: number = 0;
   public fetchingRecordsToSave: boolean = false;
@@ -400,7 +400,7 @@ export class SingleListDetailComponent implements OnInit {
 
     for (let i = 0; i < recordsToAdd.length; i++) {
       const record = recordsToAdd[i];
-      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("MJ: List Details", md.CurrentUser);
+      const listDetail = await md.GetEntityObject<MJListDetailEntityExtended>("MJ: List Details", md.CurrentUser);
       listDetail.ListID = this.listRecord.ID;
       listDetail.RecordID = record.ID;
       listDetail.TransactionGroup = tg;
@@ -464,7 +464,7 @@ export class SingleListDetailComponent implements OnInit {
     const rv = new RunView();
     const md = new Metadata();
 
-    const runViewResult = await rv.RunView<UserViewEntityExtended>({
+    const runViewResult = await rv.RunView<MJUserViewEntityExtended>({
       EntityName: "MJ: User Views",
       ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.listRecord.EntityID}'`,
       ResultType: 'entity_object'
@@ -479,7 +479,7 @@ export class SingleListDetailComponent implements OnInit {
     this.showAddFromViewLoader = false;
   }
 
-  toggleViewSelection(view: UserViewEntityExtended): void {
+  toggleViewSelection(view: MJUserViewEntityExtended): void {
     const index = this.userViewsToAdd.findIndex(v => v.ID === view.ID);
     if (index >= 0) {
       this.userViewsToAdd.splice(index, 1);
@@ -488,7 +488,7 @@ export class SingleListDetailComponent implements OnInit {
     }
   }
 
-  isViewSelected(view: UserViewEntityExtended): boolean {
+  isViewSelected(view: MJUserViewEntityExtended): boolean {
     return this.userViewsToAdd.some(v => v.ID === view.ID);
   }
 
@@ -539,7 +539,7 @@ export class SingleListDetailComponent implements OnInit {
 
     for (let i = 0; i < recordsToAdd.length; i++) {
       const recordID = recordsToAdd[i];
-      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("MJ: List Details", md.CurrentUser);
+      const listDetail = await md.GetEntityObject<MJListDetailEntityExtended>("MJ: List Details", md.CurrentUser);
       listDetail.ListID = this.listRecord.ID;
       listDetail.RecordID = recordID;
       listDetail.TransactionGroup = tg;

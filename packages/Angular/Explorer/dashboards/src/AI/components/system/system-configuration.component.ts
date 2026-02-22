@@ -4,7 +4,7 @@ import { MJAIConfigurationEntity, MJAIConfigurationParamEntity, ResourceData } f
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface SystemConfigFilter {
   searchTerm: string;
@@ -15,8 +15,8 @@ interface SystemConfigFilter {
 interface ConfigurationWithParams extends MJAIConfigurationEntity {
   params?: MJAIConfigurationParamEntity[];
   isExpanded?: boolean;
-  compressionPrompt?: AIPromptEntityExtended | null;
-  summarizationPrompt?: AIPromptEntityExtended | null;
+  compressionPrompt?: MJAIPromptEntityExtended | null;
+  summarizationPrompt?: MJAIPromptEntityExtended | null;
 }
 /**
  * AI Configuration Resource - displays AI system configuration management
@@ -39,7 +39,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
   public configurations: ConfigurationWithParams[] = [];
   public filteredConfigurations: ConfigurationWithParams[] = [];
   public allParams: MJAIConfigurationParamEntity[] = [];
-  public allPrompts: AIPromptEntityExtended[] = [];
+  public allPrompts: MJAIPromptEntityExtended[] = [];
 
   public currentFilters: SystemConfigFilter = {
     searchTerm: '',

@@ -1,5 +1,5 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
-import { MJTemplateContentEntity, TemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import { MJTemplateContentEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
@@ -11,14 +11,14 @@ import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templa
 export class TemplateEntityLoader extends nunjucks.Loader {
     public async = true; // tell nunjucks this is an async loader
 
-    private templates: { [templateId: string]: TemplateEntityExtended } = {};
+    private templates: { [templateId: string]: MJTemplateEntityExtended } = {};
 
     /**
      * Add a new template to the loader
      * @param templateId 
      * @param template 
      */
-    public AddTemplate(templateId: string, template: TemplateEntityExtended) {
+    public AddTemplate(templateId: string, template: MJTemplateEntityExtended) {
         this.templates[templateId] = template;
     }
 
@@ -134,7 +134,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      */
     private _templateCache: Map<string, any> = new Map<string, any>();
 
-    public AddTemplate(templateEntity: TemplateEntityExtended) {
+    public AddTemplate(templateEntity: MJTemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
     }
  
@@ -145,7 +145,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * @param templateContent the template content item (within the template)  
      * @param data 
      */
-    public async RenderTemplate(templateEntity: TemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -292,7 +292,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * - Handles all parameter types: Scalar, Array, Object, Record, Entity
      * - Content-specific parameter defaults override global parameter defaults
      */
-    protected mergeDefaultValues(templateEntity: TemplateEntityExtended, contentId: string, data: any): any {
+    protected mergeDefaultValues(templateEntity: MJTemplateEntityExtended, contentId: string, data: any): any {
         // Create a shallow copy of the input data
         const mergedData = { ...data };
         

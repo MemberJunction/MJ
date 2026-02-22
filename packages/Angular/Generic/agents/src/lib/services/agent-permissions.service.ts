@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { MJAIAgentPermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Enriched permission row for display in the permissions panel.
@@ -68,7 +68,7 @@ export class AgentPermissionsService {
      * Save a new or existing permission record.
      */
     public async SavePermission(
-        agent: AIAgentEntityExtended,
+        agent: MJAIAgentEntityExtended,
         grantType: 'user' | 'role',
         granteeId: string,
         canView: boolean,

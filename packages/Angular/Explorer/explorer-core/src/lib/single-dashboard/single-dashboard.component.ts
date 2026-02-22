@@ -1,7 +1,7 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
 import { ResourceData } from '@memberjunction/core-entities';
-import { DashboardEntityExtended, MJResourceTypeEntity } from '@memberjunction/core-entities';
+import { MJDashboardEntityExtended, MJResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { SharedService, RecentAccessService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
@@ -20,12 +20,12 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>
 
   @Input() public ResourceData!: ResourceData;
-  @Output() public dashboardSaved: EventEmitter<DashboardEntityExtended> = new EventEmitter<DashboardEntityExtended>();
+  @Output() public dashboardSaved: EventEmitter<MJDashboardEntityExtended> = new EventEmitter<MJDashboardEntityExtended>();
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
 
   public items: DashboardItem[] = [];
-  public dashboardEntity!: DashboardEntityExtended;
+  public dashboardEntity!: MJDashboardEntityExtended;
   public config: DashboardConfigDetails = new DashboardConfigDetails();
   public isItemDialogOpened: boolean = false;
   public isEditDialogOpened: boolean = false;
@@ -84,7 +84,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     if (this.ResourceData) {
       const md = new Metadata();
       let uiConfig: any = {items:[]};
-      this.dashboardEntity = await md.GetEntityObject<DashboardEntityExtended>('MJ: Dashboards');
+      this.dashboardEntity = await md.GetEntityObject<MJDashboardEntityExtended>('MJ: Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {
         await this.dashboardEntity.Load(this.ResourceData.ResourceRecordID);
         // Log access to dashboard (fire-and-forget, don't await)
@@ -249,7 +249,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
       return false;
   }
 
-  public dashboardSaveComplete(entity: DashboardEntityExtended): void {
+  public dashboardSaveComplete(entity: MJDashboardEntityExtended): void {
     this.dashboardSaved.emit(entity);
   }
 

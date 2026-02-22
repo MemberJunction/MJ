@@ -489,6 +489,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    * Forces re-evaluation of allTabs so new tab labels render correctly.
    */
   onTabsChanged(): void {
+    // If Display tab just became available (e.g., after plugin async load),
+    // switch to it — it should be the default when present.
+    const tabs = this.allTabs;
+    if (tabs.length > 0 && tabs[0].toLowerCase() === 'display' && this.activeTab !== 'display') {
+      this.activeTab = 'display';
+    }
     this.cdr.detectChanges(); // zone.js 0.15: plugin emitted tabsChanged, force CD to re-evaluate allTabs
   }
 

@@ -12,8 +12,8 @@
 import { MJAIPromptRunEntity, MJAIConfigurationEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
-import { AIPromptEntityExtended } from './AIPromptExtended';
-import { AIModelEntityExtended } from './AIModelExtended';
+import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
+import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 
 /**
  * Modality types for multi-modal outputs
@@ -294,7 +294,7 @@ export class AIModelSelectionInfo {
   /** All models that were considered for selection */
   modelsConsidered: Array<{
     /** The model entity */
-    model: AIModelEntityExtended;
+    model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
     /** Priority of this model/vendor combination */
@@ -305,7 +305,7 @@ export class AIModelSelectionInfo {
     unavailableReason?: string;
   }>;
   /** The model entity that was selected */
-  modelSelected: AIModelEntityExtended;
+  modelSelected: MJAIModelEntityExtended;
   /** The vendor entity that was selected, if applicable */
   vendorSelected?: MJAIVendorEntity;
   /** Reason for the selection */
@@ -333,7 +333,7 @@ export class AIPromptParams {
    * The AI prompt to execute.
    * Note: Get prompts from AIEngine.Instance.Prompts after calling AIEngine.Config()
    */
-  prompt: AIPromptEntityExtended;
+  prompt: MJAIPromptEntityExtended;
 
   /**
    * Data context for template rendering and prompt execution
@@ -467,7 +467,7 @@ export class AIPromptParams {
    * selection configuration instead of the parent prompt's configuration.
    * If not specified, the main prompt's model selection will be used.
    */
-  modelSelectionPrompt?: AIPromptEntityExtended;
+  modelSelectionPrompt?: MJAIPromptEntityExtended;
 
   /**
    * Optional runtime override for prompt execution.

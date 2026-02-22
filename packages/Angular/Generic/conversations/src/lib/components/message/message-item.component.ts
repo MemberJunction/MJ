@@ -15,7 +15,7 @@ import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJA
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
@@ -59,7 +59,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifact?: MJArtifactEntity;
   @Input() public artifactVersion?: MJArtifactVersionEntity;
-  @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
+  @Input() public agentRun: MJAIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation

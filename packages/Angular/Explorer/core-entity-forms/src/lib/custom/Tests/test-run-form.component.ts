@@ -33,7 +33,7 @@ interface CheckResult {
   styleUrls: ['./test-run-form.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestRunFormComponentExtended extends MJTestRunFormComponent implements OnInit, OnDestroy {
+export class MJTestRunFormComponentExtended extends MJTestRunFormComponent implements OnInit, OnDestroy {
   public override record!: MJTestRunEntity;
 
   private destroy$ = new Subject<void>();

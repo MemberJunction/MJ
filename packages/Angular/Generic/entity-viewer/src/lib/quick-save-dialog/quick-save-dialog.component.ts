@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { ViewConfigSummary, QuickSaveEvent } from '../types';
 
 /**
@@ -42,7 +42,7 @@ export class QuickSaveDialogComponent implements OnChanges {
   /**
    * The existing view entity (null = creating new)
    */
-  @Input() ViewEntity: UserViewEntityExtended | null = null;
+  @Input() ViewEntity: MJUserViewEntityExtended | null = null;
 
   /**
    * Display name of the entity being viewed

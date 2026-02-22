@@ -10,7 +10,7 @@ graph TD
         ENGINE["EntityCommunicationsEngineBase\n(Abstract Singleton)"]
         PARAMS["EntityCommunicationParams"]
         RESULT["EntityCommunicationResult"]
-        EXT["EntityCommunicationMessageTypeExtended"]
+        EXT["MJEntityCommunicationMessageTypeEntityExtended"]
     end
 
     subgraph client["entity-comm-client"]
@@ -125,7 +125,7 @@ interface EntityCommunicationResultItem {
 }
 ```
 
-### EntityCommunicationMessageTypeExtended
+### MJEntityCommunicationMessageTypeEntityExtended
 
 Extends the base `EntityCommunicationMessageTypeEntity` with communication field mappings, linking base message types to entity-specific fields for recipient resolution.
 

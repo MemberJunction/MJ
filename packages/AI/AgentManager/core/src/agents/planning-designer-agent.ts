@@ -1,6 +1,6 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -25,8 +25,8 @@ export class PlanningDesignerAgent extends BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
-        agentRun: AIAgentRunEntityExtended,
-        currentStep: AIAgentRunStepEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // 1. Call base validation first (checks MinExecutionsPerRun, FinalPayloadValidation)
         const baseValidation = await super.validateSuccessNextStep(params, nextStep, currentPayload, agentRun, currentStep);
@@ -54,8 +54,8 @@ export class PlanningDesignerAgent extends BaseAgent {
      * Checks if Planning Designer called required research actions/agents
      */
     protected async checkResearchRequirements(
-        agent: AIAgentEntityExtended,
-        agentRun: AIAgentRunEntityExtended,
+        agent: MJAIAgentEntityExtended,
+        agentRun: MJAIAgentRunEntityExtended,
         currentPayload: any
     ): Promise<string[]> {
         const violations: string[] = [];

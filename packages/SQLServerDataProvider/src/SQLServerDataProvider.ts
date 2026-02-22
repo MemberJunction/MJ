@@ -93,7 +93,7 @@ import {
   MJRecordMergeLogEntity,
   MJUserFavoriteEntity,
   QueryEngine,
-  UserViewEntityExtended,
+  MJUserViewEntityExtended,
   ViewInfo,
 } from '@memberjunction/core-entities';
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
@@ -1478,7 +1478,7 @@ export class SQLServerDataProvider
    * @param viewEntity
    * @param user
    */
-  protected async RenderViewWhereClause(viewEntity: UserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
+  protected async RenderViewWhereClause(viewEntity: MJUserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
     try {
       let sWhere = viewEntity.WhereClause;
       if (sWhere && sWhere.length > 0) {
@@ -2619,7 +2619,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: UserViewEntityExtended): string {
+  protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: MJUserViewEntityExtended): string {
     const fieldList = this.getRunTimeViewFieldArray(params, viewEntity);
     // pass this back as a comma separated list, put square brackets around field names to make sure if they are reserved words or have spaces, that they'll still work.
     if (fieldList.length === 0) return '*';
@@ -2632,7 +2632,7 @@ export class SQLServerDataProvider
         .join(',');
   }
 
-  protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): EntityFieldInfo[] {
+  protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: MJUserViewEntityExtended): EntityFieldInfo[] {
     const fieldList: EntityFieldInfo[] = [];
     try {
       let entityInfo: EntityInfo = null;
