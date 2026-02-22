@@ -18,11 +18,12 @@ export class EntitySubClassGeneratorBase {
    * and template literal interpolation sequences.
    */
   protected static SanitizeDescription(text: string): string {
-    return text
-      .replace(/\*\//g, '*\\/')
-      .replace(/\/\*/g, '/\\*')
-      .replace(/`/g, '\\`')
-      .replace(/\$\{/g, '\\${');
+    if (text && text.length > 0){
+      return text.replace(/\*\//g, '*\\/').replace(/\/\*/g, '/\\*').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+    }
+    else {
+      return '';
+    }
   }
 
   /**
