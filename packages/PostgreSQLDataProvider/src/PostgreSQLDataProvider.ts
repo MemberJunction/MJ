@@ -1237,11 +1237,7 @@ SELECT * FROM delete_result`;
         for (let i = 0; i < fields.length; i++) {
             const field = fields[i];
             let value = entity.Get(field.Name);
-            // If the value looks like a database function (e.g., gen_random_uuid(), NEWID()),
-            // pass NULL so the stored procedure lets the database use its column default
-            if (typeof value === 'string' && value.includes('()')) {
-                value = null;
-            }
+            value = this.resolveFieldValue(value, field, isNew);
             paramValues.push(PGQueryParameterProcessor.ProcessParameterValue(value));
             // Use named parameter notation (p_fieldname => $N) to avoid
             // parameter ordering mismatches with the stored functions
@@ -1250,6 +1246,33 @@ SELECT * FROM delete_result`;
         }
 
         return { paramValues, paramPlaceholders: placeholders.join(', ') };
+    }
+
+    /**
+     * Resolves a field value that may contain a database function string.
+     * - For UUID generation functions (gen_random_uuid, NEWID, etc.): generates a UUID via GenerateNewID()
+     * - For other known DB default functions (GETUTCDATE, NOW, etc.): returns null so the DB uses its default
+     * - For all other values: returns as-is
+     */
+    private resolveFieldValue(value: unknown, field: EntityFieldInfo, isNew: boolean): unknown {
+        if (typeof value !== 'string') {
+            return value;
+        }
+
+        if (DatabaseProviderBase.IsUUIDGenerationFunction(value)) {
+            // Replace UUID generation function strings with an actual generated UUID.
+            // This handles the case where a field's default value is a DB function like
+            // gen_random_uuid() or NEWID() — we generate the UUID in TypeScript instead.
+            return this.GenerateNewID();
+        }
+
+        if (DatabaseProviderBase.IsNonUUIDDatabaseFunction(value)) {
+            // For non-UUID database functions (GETUTCDATE, NOW, etc.), send null
+            // so the stored function/procedure lets the database use its column default
+            return null;
+        }
+
+        return value;
     }
 
     private getWritableFields(entityInfo: EntityInfo, isNew: boolean): EntityFieldInfo[] {
