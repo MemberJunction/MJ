@@ -3032,39 +3032,40 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
    /**
     * Checks if a table has a soft primary key defined in the additionalSchemaInfo JSON file (configured in mj.config.cjs)
     */
-    protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
-    if (!configInfo.additionalSchemaInfo) {
-       return false;
-    }
-
-    const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
-    if (!fs.existsSync(configPath)) {
-       logStatus(`         [Soft PK Check] Config file not found at: ${configPath}`);
-       return false;
-    }
-
-    try {
-       const config = ManageMetadataBase.getSoftPKFKConfig();
-       if (!config) {
-         logStatus(`         [Soft PK Check] Config file found but no tables array`);
+   protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
+      // Check if additionalSchemaInfo is configured
+      if (!configInfo.additionalSchemaInfo) {
          return false;
-       }
-       const tables = this.extractTablesFromConfig(config);
-       const tableConfig = tables.find(
-          (t) =>
-             t.SchemaName.toLowerCase() === schemaName?.toLowerCase() &&
-             t.TableName.toLowerCase() === tableName?.toLowerCase()
-       );
-       const found = Boolean(tableConfig?.PrimaryKey && tableConfig.PrimaryKey.length > 0);
-       if (!found) {
-          logStatus(`         [Soft PK Check] No config found for ${schemaName}.${tableName} (config has ${tables.length} tables)`);
-       }
-       return found;
-    } catch (e) {
-       logStatus(`         [Soft PK Check] Error reading config: ${e}`);
-       return false;
-    }
+      }
 
+      const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
+      if (!fs.existsSync(configPath)) {
+         logStatus(`         [Soft PK Check] Config file not found at: ${configPath}`);
+         return false;
+      }
+
+      try {
+         const config = ManageMetadataBase.getSoftPKFKConfig();
+         if (!config) {
+           logStatus(`         [Soft PK Check] Config file found but no tables array`);
+           return false;
+         }
+         const tables = this.extractTablesFromConfig(config);
+         const tableConfig = tables.find(
+            (t) =>
+               t.SchemaName.toLowerCase() === schemaName?.toLowerCase() &&
+               t.TableName.toLowerCase() === tableName?.toLowerCase()
+         );
+         const found = Boolean(tableConfig?.PrimaryKey && tableConfig.PrimaryKey.length > 0);
+         if (!found) {
+            logStatus(`         [Soft PK Check] No config found for ${schemaName}.${tableName} (config has ${tables.length} tables)`);
+         }
+         return found;
+      } catch (e) {
+         logStatus(`         [Soft PK Check] Error reading config: ${e}`);
+         return false;
+      }
+   }
    protected async createNewEntityName(newEntity: any, currentUser: UserInfo): Promise<string> {
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityNames')) {
