@@ -93,7 +93,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Authorization Roles','RoleName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Authorization Roles','RoleID')"
                 [NewRecordValues]="NewRecordValues('MJ: Authorization Roles')"
                 [AllowLoad]="IsSectionExpanded('authorizationRoles')"
                 [ShowToolbar]="false"
@@ -143,7 +143,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','RoleName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','RoleID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
                 [AllowLoad]="IsSectionExpanded('entityPermissions')"
                 [ShowToolbar]="false"
@@ -168,7 +168,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Permissions','RoleName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Permissions','RoleID')"
                 [NewRecordValues]="NewRecordValues('MJ: Query Permissions')"
                 [AllowLoad]="IsSectionExpanded('queryPermissions')"
                 [ShowToolbar]="false"
@@ -193,7 +193,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Roles','RoleName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Roles','RoleID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Roles')"
                 [AllowLoad]="IsSectionExpanded('userRoles')"
                 [ShowToolbar]="false"

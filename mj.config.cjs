@@ -34,12 +34,8 @@ module.exports = {
   ],
 
 
-  // Custom SQL scripts specific to this monorepo
+  // Custom SQL scripts specific to this monorepo - NO LONGER INCLUDING MJ_BASE_BEFORE_SQL.sql as of 5.3.0!
   customSQLScripts: [
-    {
-      scriptFile: './SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
   ],
 
   // Soft PK/FK configuration for tables without database constraints

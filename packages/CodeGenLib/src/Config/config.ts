@@ -282,7 +282,7 @@ const sqlOutputConfigSchema = z.object({
    * The path of the folder to use when logging is enabled.
    * If provided, a file will be created with the format "CodeGen_Run_yyyy-mm-dd_hh-mm-ss.sql"
    */
-  folderPath: z.string().default('../../migrations/v3/'),
+  folderPath: z.string().default('../../migrations/v5/'),
   /**
    * Optional, the file name that will be written WITHIN the folderPath specified.
    */
@@ -404,10 +404,15 @@ const configInfoSchema = z.object({
     { schema: '%', table: 'flyway_schema_history' }
   ]),
   customSQLScripts: customSQLScriptSchema.array().default([
-    {
-      scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
+    // AS OF 5.3.0 we are NOT including this as it wipes out standard views and procs
+    // for ZERO reason, we have a solid baseline configuration now. We are 
+    // renaming MJ_BASE_BEFORE_SQL.sql and will maintain this but the
+    // new aproach is using Baseline scripts. Assumption == nobody outside MJ modifies
+    // anything DDL-wise INSIDE __mj schema.
+    // {
+    //   scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
+    //   when: 'before-all',
+    // },
   ]),
   advancedGeneration: advancedGenerationSchema.nullish(),
   integrityChecks: integrityCheckConfigSchema.default({
@@ -595,7 +600,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   },
   SQLOutput: {
     enabled: true,
-    folderPath: './migrations/v3/',
+    folderPath: './migrations/v5/',
     appendToFile: true,
     convertCoreSchemaToFlywayMigrationFile: true,
     omitRecurringScriptsFromLog: true,

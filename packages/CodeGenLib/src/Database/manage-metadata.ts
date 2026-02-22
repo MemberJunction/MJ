@@ -1049,14 +1049,15 @@ export class ManageMetadataBase {
       // Load VE EntityField rows from DB (we need the ID and auto-update flags)
       const schema = mj_core_schema();
       const fieldsSQL = `
-         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName
+         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, GeneratedFormSection, DisplayName, ExtendedType, CodeType
          FROM [${schema}].EntityField
          WHERE EntityID = '${entity.ID}'
       `;
       const fieldsResult = await pool.request().query(fieldsSQL);
       const dbFields = fieldsResult.recordset as Array<{
-         ID: string; Name: string; Category: string | null;
-         AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean;
+         ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; 
+         AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, 
+         ExtendedType: string, CodeType: string
       }>;
 
       if (dbFields.length === 0) return false;
@@ -1075,7 +1076,7 @@ export class ManageMetadataBase {
       if (fieldCategories.length === 0) return false;
 
       const existingCategories = this.buildExistingCategorySet(dbFields);
-      await this.applyFieldCategories(pool, entity.ID, dbFields, fieldCategories, existingCategories);
+      await this.applyFieldCategories(pool, entity, dbFields, fieldCategories, existingCategories);
 
       // Apply entity icon if provided
       if (result.entityIcon) {
@@ -2198,13 +2199,34 @@ export class ManageMetadataBase {
     * @returns {string} - The SQL statement to retrieve pending entity fields.
     */
    protected getPendingEntityFieldsSELECTSQL(): string {
-      const sSQL = `WITH MaxSequences AS (
+      const schema = mj_core_schema();
+      const sSQL = `
+-- Materialize system DMV views into temp tables so SQL Server gets real statistics
+-- instead of expanding nested view-on-view joins with bad cardinality estimates
+-- Drop first in case a prior run on this connection left them behind
+IF OBJECT_ID('tempdb..#__mj__CodeGen__vwForeignKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwForeignKeys;
+IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTablePrimaryKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTablePrimaryKeys;
+IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTableUniqueKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
+
+SELECT [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
+INTO #__mj__CodeGen__vwForeignKeys
+FROM [${schema}].vwForeignKeys;
+
+SELECT TableName, ColumnName, SchemaName
+INTO #__mj__CodeGen__vwTablePrimaryKeys
+FROM [${schema}].vwTablePrimaryKeys;
+
+SELECT TableName, ColumnName, SchemaName
+INTO #__mj__CodeGen__vwTableUniqueKeys
+FROM [${schema}].vwTableUniqueKeys;
+
+WITH MaxSequences AS (
    -- Calculate the maximum existing sequence for each entity to avoid collisions
    SELECT
       EntityID,
       ISNULL(MAX(Sequence), 0) AS MaxSequence
    FROM
-      [${mj_core_schema()}].EntityField
+      [${schema}].EntityField
    GROUP BY
       EntityID
 ),
@@ -2247,61 +2269,50 @@ NumberedRows AS (
          END,
       ROW_NUMBER() OVER (PARTITION BY sf.EntityID, sf.FieldName ORDER BY (SELECT NULL)) AS rn
    FROM
-      [${mj_core_schema()}].vwSQLColumnsAndEntityFields sf
+      [${schema}].vwSQLColumnsAndEntityFields sf
    LEFT OUTER JOIN
       MaxSequences ms
    ON
       sf.EntityID = ms.EntityID
    LEFT OUTER JOIN
-      [${mj_core_schema()}].Entity e
+      [${schema}].Entity e
    ON
       sf.EntityID = e.ID
    LEFT OUTER JOIN
-      [${mj_core_schema()}].vwForeignKeys fk
+      #__mj__CodeGen__vwForeignKeys fk
    ON
       sf.FieldName = fk.[column] AND
       e.BaseTable = fk.[table] AND
       e.SchemaName = fk.[schema_name]
    LEFT OUTER JOIN
-      [${mj_core_schema()}].Entity re -- Related Entity
+      [${schema}].Entity re -- Related Entity
    ON
       re.BaseTable = fk.referenced_table AND
       re.SchemaName = fk.[referenced_schema]
    LEFT OUTER JOIN
-      [${mj_core_schema()}].vwTablePrimaryKeys pk
+      #__mj__CodeGen__vwTablePrimaryKeys pk
    ON
       e.BaseTable = pk.TableName AND
       sf.FieldName = pk.ColumnName AND
       e.SchemaName = pk.SchemaName
    LEFT OUTER JOIN
-      [${mj_core_schema()}].vwTableUniqueKeys uk
+      #__mj__CodeGen__vwTableUniqueKeys uk
    ON
       e.BaseTable = uk.TableName AND
       sf.FieldName = uk.ColumnName AND
       e.SchemaName = uk.SchemaName
    WHERE
       EntityFieldID IS NULL -- only where we have NOT YET CREATED EntityField records\n${this.createExcludeTablesAndSchemasFilter('sf.')}
-   ),
-   FilteredRows AS ( -- filter rows to only include rn=1 OR where we have rows where the to/from fkey is the same so long as the field name <> the same
-      SELECT *
-      FROM NumberedRows
-      WHERE rn = 1
-      UNION ALL
-      SELECT nr.*
-      FROM NumberedRows nr
-      WHERE rn <> 1
-      AND NOT EXISTS (
-            SELECT 1
-            FROM NumberedRows nr1
-            WHERE nr1.rn = 1
-            AND nr1.EntityID = nr.EntityID
-            AND nr1.FieldName = nr.FieldName
-      )
    )
    SELECT *
-   FROM FilteredRows
+   FROM NumberedRows
+   WHERE rn = 1
    ORDER BY EntityID, Sequence;
-   `
+
+DROP TABLE #__mj__CodeGen__vwForeignKeys;
+DROP TABLE #__mj__CodeGen__vwTablePrimaryKeys;
+DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
+`
       return sSQL;
    }
 
@@ -2438,38 +2449,40 @@ NumberedRows AS (
          const sSQL = this.getPendingEntityFieldsSELECTSQL();
          const newEntityFieldsResult = await pool.request().query(sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
-         const transaction = new sql.Transaction(pool);
-         await transaction.begin();
-         try {
-            // wrap in a transaction so we get all of it or none of it
-            for (let i = 0; i < newEntityFields.length; ++i) {
-               const n = newEntityFields[i];
-               if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
-                  // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
-                  // that would have been created violate rules - such as not having an ID column, etc.
-                  const newEntityFieldUUID = this.createNewUUID();
-                  const sSQLInsert = this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n);
-                  try {
-                     await this.LogSQLAndExecute(pool, sSQLInsert, `SQL text to insert new entity field`);
-                     // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction
-                  }
-                  catch (e) {
-                     // this is here so we can catch the error for debug. We want the transaction to die
-                     logError(`Error inserting new entity field. SQL: \n${sSQLInsert}`);
-                     throw e;
+         if (newEntityFields.length > 0) {
+            const transaction = new sql.Transaction(pool);
+            await transaction.begin();
+            try {
+               // wrap in a transaction so we get all of it or none of it
+               for (let i = 0; i < newEntityFields.length; ++i) {
+                  const n = newEntityFields[i];
+                  if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
+                     // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
+                     // that would have been created violate rules - such as not having an ID column, etc.
+                     const newEntityFieldUUID = this.createNewUUID();
+                     const sSQLInsert = this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n);
+                     try {
+                        await this.LogSQLAndExecute(pool, sSQLInsert, `SQL text to insert new entity field`);
+                        // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction
+                     }
+                     catch (e) {
+                        // this is here so we can catch the error for debug. We want the transaction to die
+                        logError(`Error inserting new entity field. SQL: \n${sSQLInsert}`);
+                        throw e;
+                     }
                   }
                }
+               await transaction.commit();
+            } catch (e) {
+               await transaction.rollback();
+               throw e;
             }
-            await transaction.commit();
-         } catch (e) {
-            await transaction.rollback();
-            throw e;
-         }
 
-         // if we get here now send a distinct list of the entities that had new fields to the modified entity list
-         // column in the resultset is called EntityName, we dont have to dedupe them here because the method below
-         // will do that for us
-         ManageMetadataBase.addNewEntitiesToModifiedList(newEntityFields.map((f: { EntityName: any; }) => f.EntityName));
+            // if we get here now send a distinct list of the entities that had new fields to the modified entity list
+            // column in the resultset is called EntityName, we dont have to dedupe them here because the method below
+            // will do that for us
+            ManageMetadataBase.addNewEntitiesToModifiedList(newEntityFields.map((f: { EntityName: any; }) => f.EntityName));
+         }
 
          return true;
       }
@@ -2520,7 +2533,7 @@ NumberedRows AS (
    /**
     * Adds a list of entity names to the modified entity list if they're not already in there
     */
-   protected static addNewEntitiesToModifiedList(entityNames: string[]) {
+   public static addNewEntitiesToModifiedList(entityNames: string[]) {
       const distinctEntityNames = [...new Set(entityNames)];
       const newlyModifiedEntityNames = distinctEntityNames.filter((e: string) => !ManageMetadataBase._modifiedEntityList.includes(e));
       // now make sure that each of these entity names is in the modified entity list
@@ -3593,7 +3606,10 @@ NumberedRows AS (
                ef.EntityIDFieldName,
                ef.RelatedEntity,
                ef.IsVirtual,
-               ef.AllowUpdateAPI
+               ef.AllowUpdateAPI,
+               ef.IsNameField,
+               ef.DefaultInView,
+               ef.IncludeInUserSearchAPI
             FROM
                [${mj_core_schema()}].vwEntityFields ef
             WHERE
@@ -3699,51 +3715,56 @@ NumberedRows AS (
     */
    protected async processEntityAdvancedGeneration(
       pool: sql.ConnectionPool,
-      entity: any,
+      entity: EntityInfo,
       allFields: any[],
       ag: AdvancedGeneration,
       currentUser: UserInfo
    ): Promise<void> {
-      // Filter fields for this entity (client-side filtering)
-      const fields = allFields.filter((f: any) => f.EntityID === entity.ID);
+      try {
+         // Filter fields for this entity (client-side filtering)
+         const fields = allFields.filter((f: any) => f.EntityID === entity.ID);
 
-      // Determine if this is a new entity (for DefaultForNewUser decision)
-      const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
+         // Determine if this is a new entity (for DefaultForNewUser decision)
+         const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
 
-      // Smart Field Identification
-      // Only run if at least one field allows auto-update for any of the smart field properties
-      if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI)) {
-         const fieldAnalysis = await ag.identifyFields({
-            Name: entity.Name,
-            Description: entity.Description,
-            Fields: fields
-         }, currentUser);
+         // Smart Field Identification
+         // Only run if at least one field allows auto-update for any of the smart field properties
+         if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI)) {
+            const fieldAnalysis = await ag.identifyFields({
+               Name: entity.Name,
+               Description: entity.Description,
+               Fields: fields
+            }, currentUser);
 
-         if (fieldAnalysis) {
-            await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
+            if (fieldAnalysis) {
+               await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
+            }
+         }
+
+         // Form Layout Generation
+         // Only run if at least one field allows auto-update
+         const needsCategoryGeneration = fields.some((f: any) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''));
+         if (needsCategoryGeneration) {
+            // Build IS-A parent chain context if this entity has a parent
+            const parentChainContext = this.buildParentChainContext(entity, fields);
+
+            const layoutAnalysis = await ag.generateFormLayout({
+               Name: entity.Name,
+               Description: entity.Description,
+               SchemaName: entity.SchemaName,
+               Settings: entity.Settings,
+               Fields: fields,
+               ...parentChainContext
+            }, currentUser, isNewEntity);
+
+            if (layoutAnalysis) {
+               await this.applyFormLayout(pool, entity, fields, layoutAnalysis, isNewEntity);
+               logStatus(`         Applied form layout for ${entity.Name}`);
+            }
          }
       }
-
-      // Form Layout Generation
-      // Only run if at least one field allows auto-update
-      const needsCategoryGeneration = fields.some((f: any) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''));
-      if (needsCategoryGeneration) {
-         // Build IS-A parent chain context if this entity has a parent
-         const parentChainContext = this.buildParentChainContext(entity, fields);
-
-         const layoutAnalysis = await ag.generateFormLayout({
-            Name: entity.Name,
-            Description: entity.Description,
-            SchemaName: entity.SchemaName,
-            Settings: entity.Settings,
-            Fields: fields,
-            ...parentChainContext
-         }, currentUser, isNewEntity);
-
-         if (layoutAnalysis) {
-            await this.applyFormLayout(pool, entity.ID, fields, layoutAnalysis, isNewEntity);
-            logStatus(`         Applied form layout for ${entity.Name}`);
-         }
+      catch (ex) {
+         logError('Error Processing Entity Advanced Generation', ex)
       }
    }
 
@@ -3836,7 +3857,7 @@ NumberedRows AS (
       // Find the name field (exactly one)
       const nameField = fields.find(f => f.Name === result.nameField);
 
-      if (nameField && nameField.AutoUpdateIsNameField && nameField.ID) {
+      if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField /*don't waste SQL to set the value if IsNameField already set */) {
          sqlStatements.push(`
             UPDATE [${mj_core_schema()}].EntityField
             SET IsNameField = 1
@@ -3862,12 +3883,15 @@ NumberedRows AS (
 
       // Build update statements for all default in view fields
       for (const field of defaultInViewFields) {
-         sqlStatements.push(`
-            UPDATE [${mj_core_schema()}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '${field.ID}'
-            AND AutoUpdateDefaultInView = 1
-         `);
+         if (!field.DefaultInView) {
+            // only set these when DefaultInView not already on, otherwise wasteful
+            sqlStatements.push(`
+               UPDATE [${mj_core_schema()}].EntityField
+               SET DefaultInView = 1
+               WHERE ID = '${field.ID}'
+               AND AutoUpdateDefaultInView = 1
+            `);
+         }
       }
 
       // Find all searchable fields (one or more) - for IncludeInUserSearchAPI
@@ -3886,19 +3910,27 @@ NumberedRows AS (
 
          // Build update statements for all searchable fields
          for (const field of searchableFields) {
-            sqlStatements.push(`
-               UPDATE [${mj_core_schema()}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '${field.ID}'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            `);
+            if (!field.IncludeInUserSearchAPI) {
+               // only set this if IncludeInUserSearchAPI isn't already set
+               sqlStatements.push(`
+                  UPDATE [${mj_core_schema()}].EntityField
+                  SET IncludeInUserSearchAPI = 1
+                  WHERE ID = '${field.ID}'
+                  AND AutoUpdateIncludeInUserSearchAPI = 1
+               `);
+            }
          }
       }
 
       // Execute all updates in one batch
       if (sqlStatements.length > 0) {
          const combinedSQL = sqlStatements.join('\n');
-         await this.LogSQLAndExecute(pool, combinedSQL, `Set field properties for entity`, false);
+         try {
+            await this.LogSQLAndExecute(pool, combinedSQL, `Set field properties for entity`, false);
+         }
+         catch (ex) {
+            logError('Error executing combined smart field SQL: ', ex)
+         }
       }
    }
 
@@ -3913,17 +3945,17 @@ NumberedRows AS (
     */
    protected async applyFormLayout(
       pool: sql.ConnectionPool,
-      entityId: string,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean }>,
+      entity: EntityInfo,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string }>,
       result: FormLayoutResult,
       isNewEntity: boolean = false
    ): Promise<void> {
       const existingCategories = this.buildExistingCategorySet(fields);
 
-      await this.applyFieldCategories(pool, entityId, fields, result.fieldCategories, existingCategories);
+      await this.applyFieldCategories(pool, entity, fields, result.fieldCategories, existingCategories);
 
       if (result.entityIcon) {
-         await this.applyEntityIcon(pool, entityId, result.entityIcon);
+         await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
       }
 
       // Resolve categoryInfo from new or legacy format
@@ -3934,11 +3966,11 @@ NumberedRows AS (
             ) as Record<string, FieldCategoryInfo> : null);
 
       if (categoryInfoToStore) {
-         await this.applyCategoryInfoSettings(pool, entityId, categoryInfoToStore);
+         await this.applyCategoryInfoSettings(pool, entity.ID, categoryInfoToStore);
       }
 
       if (isNewEntity && result.entityImportance) {
-         await this.applyEntityImportance(pool, entityId, result.entityImportance);
+         await this.applyEntityImportance(pool, entity.ID, result.entityImportance);
       }
    }
 
@@ -3968,8 +4000,8 @@ NumberedRows AS (
     */
    protected async applyFieldCategories(
       pool: sql.ConnectionPool,
-      entityId: string,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean }>,
+      entity: EntityInfo,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string}>,
       fieldCategories: Array<{
          fieldName: string;
          category: string;
@@ -4001,36 +4033,52 @@ NumberedRows AS (
                category = field.Category!;
             }
 
-            const setClauses: string[] = [
-               `Category = '${category.replace(/'/g, "''")}'`,
-               `GeneratedFormSection = 'Category'`
-            ];
+            const setClauses: string[] = []
+            
+            if (field.Category !== category) {
+               setClauses.push(
+                  `Category = '${category.replace(/'/g, "''")}'`
+               );
+            }
 
-            if (fieldCategory.displayName && field.AutoUpdateDisplayName) {
+            if (field.GeneratedFormSection !== 'Category') {
+               setClauses.push(`GeneratedFormSection = 'Category'`)
+            }
+           
+            if (fieldCategory.displayName && field.AutoUpdateDisplayName && field.DisplayName !== fieldCategory.displayName) {
                setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
             }
 
-            if (fieldCategory.extendedType !== undefined) {
+            if (fieldCategory.extendedType !== undefined && field.ExtendedType !== fieldCategory.extendedType) {
                const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${String(fieldCategory.extendedType).replace(/'/g, "''")}'`;
                setClauses.push(`ExtendedType = ${extendedType}`);
             }
 
-            if (fieldCategory.codeType !== undefined) {
+            if (fieldCategory.codeType !== undefined && field.CodeType !== fieldCategory.codeType) {
                const codeType = fieldCategory.codeType === null ? 'NULL' : `'${String(fieldCategory.codeType).replace(/'/g, "''")}'`;
                setClauses.push(`CodeType = ${codeType}`);
             }
 
-            sqlStatements.push(`UPDATE [${mj_core_schema()}].EntityField
-   SET ${setClauses.join(',\n       ')}
-   WHERE ID = '${field.ID}'
-   AND AutoUpdateCategory = 1`);
+            if (setClauses.length > 0) {
+               // only generate an UPDATE if we have 1+ set clause
+               sqlStatements.push(`\n-- UPDATE Entity Field Category Info ${entity.Name}.${field.Name} \nUPDATE [${mj_core_schema()}].EntityField
+SET 
+   ${setClauses.join(',\n   ')}
+WHERE 
+   ID = '${field.ID}' AND AutoUpdateCategory = 1`);
+            }
          } else if (!field) {
             logError(`Form layout returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
          }
       }
 
       if (sqlStatements.length > 0) {
-         await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set categories for ${sqlStatements.length} fields`, false);
+         try {
+            await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set categories for ${sqlStatements.length} fields`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Field Categories', ex)
+         }
       }
    }
 
@@ -4056,8 +4104,13 @@ NumberedRows AS (
                SET Icon = '${escapedIcon}', __mj_UpdatedAt = GETUTCDATE()
                WHERE ID = '${entityId}'
             `;
-            await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
-            logStatus(`  Set entity icon: ${entityIcon}`);
+            try {
+               await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
+               logStatus(`  Set entity icon: ${entityIcon}`);
+            }
+            catch (ex) {
+               logError('Error Applying Entity Icon', ex);
+            }
          }
       }
    }
@@ -4079,17 +4132,27 @@ NumberedRows AS (
       const existingNew = await pool.request().query(checkNewSQL);
 
       if (existingNew.recordset.length > 0) {
-         await this.LogSQLAndExecute(pool, `
-            UPDATE [${mj_core_schema()}].EntitySetting
-            SET Value = '${infoJSON}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
-         `, `Update FieldCategoryInfo setting for entity`, false);
+         try {
+            await this.LogSQLAndExecute(pool, `
+               UPDATE [${mj_core_schema()}].EntitySetting
+               SET Value = '${infoJSON}', __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
+            `, `Update FieldCategoryInfo setting for entity`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Category Info Settings: Part 1', ex)
+         }
       } else {
          const newId = uuidv4();
-         await this.LogSQLAndExecute(pool, `
-            INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-            VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
-         `, `Insert FieldCategoryInfo setting for entity`, false);
+         try {
+            await this.LogSQLAndExecute(pool, `
+               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', GETUTCDATE(), GETUTCDATE())
+            `, `Insert FieldCategoryInfo setting for entity`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Category Info Settings: Part 2', ex)
+         }
       }
 
       // Also upsert legacy FieldCategoryIcons for backwards compatibility
@@ -4105,17 +4168,27 @@ NumberedRows AS (
       const existingLegacy = await pool.request().query(checkLegacySQL);
 
       if (existingLegacy.recordset.length > 0) {
-         await this.LogSQLAndExecute(pool, `
-            UPDATE [${mj_core_schema()}].EntitySetting
-            SET Value = '${iconsJSON}', __mj_UpdatedAt = GETUTCDATE()
-            WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
-         `, `Update FieldCategoryIcons setting (legacy)`, false);
+         try {
+            await this.LogSQLAndExecute(pool, `
+               UPDATE [${mj_core_schema()}].EntitySetting
+               SET Value = '${iconsJSON}', __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
+            `, `Update FieldCategoryIcons setting (legacy)`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Category Info Settings: Part 3', ex)
+         }
       } else {
          const newId = uuidv4();
-         await this.LogSQLAndExecute(pool, `
-            INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-            VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
-         `, `Insert FieldCategoryIcons setting (legacy)`, false);
+         try {
+            await this.LogSQLAndExecute(pool, `
+               INSERT INTO [${mj_core_schema()}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', GETUTCDATE(), GETUTCDATE())
+            `, `Insert FieldCategoryIcons setting (legacy)`, false);
+         }
+         catch (ex) {
+            logError('Error Applying Category Info Settings: Part 4', ex)
+         }
       }
    }
 
@@ -4134,11 +4207,17 @@ NumberedRows AS (
          SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = GETUTCDATE()
          WHERE EntityID = '${entityId}'
       `;
-      await this.LogSQLAndExecute(pool, updateSQL,
-         `Set DefaultForNewUser=${defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
 
-      logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
-      logStatus(`    Reasoning: ${importance.reasoning}`);
+      try {
+         await this.LogSQLAndExecute(pool, updateSQL,
+            `Set DefaultForNewUser=${defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
+
+         logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
+         logStatus(`    Reasoning: ${importance.reasoning}`);
+      }
+      catch (ex) {
+         logError('Error Applying Entity Importance', ex)
+      }
    }
 
    /**
