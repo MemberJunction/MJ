@@ -607,6 +607,9 @@ export class SaveQueryPanelComponent {
       if (saved) {
         MJNotificationService.Instance.CreateSimpleNotification(`Category "${name}" created`, 'success', 2500);
 
+        // Refresh core metadata so Metadata.QueryCategories is up to date
+        await md.Refresh();
+
         // Refresh tree to pick up the new category
         await this.categoryTree.Refresh();
 

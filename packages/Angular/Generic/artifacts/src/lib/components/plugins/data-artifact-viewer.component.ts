@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { SaveQueryResult } from './save-query-dialog.component';
@@ -49,6 +50,9 @@ interface DataArtifactSpec {
 
   /** Name of saved query (for display) */
   savedQueryName?: string;
+
+  /** Version number this query was saved/updated from */
+  savedAtVersionNumber?: number;
 }
 
 interface DataArtifactColumn {
@@ -73,6 +77,18 @@ interface DataArtifactColumn {
 }
 
 /**
+ * Describes the relationship between the current artifact version's SQL
+ * and the saved query record. Drives the toolbar UI.
+ */
+type QuerySyncState =
+  | 'no-query-latest'    // No saved query, viewing latest version → show "Save Query"
+  | 'no-query-older'     // No saved query, viewing older version → no actions
+  | 'synced'             // SQL matches saved query → green badge + "Open Query"
+  | 'outdated-latest'    // SQL differs, viewing latest → amber badge + dropdown
+  | 'query-ahead'        // Viewing older version, query was updated at a newer version
+  | 'query-behind';      // Viewing middle version, saved at older, not latest → muted
+
+/**
  * Viewer component for Data artifacts.
  *
  * Displays tabular data using AG Grid via mj-query-data-grid. Supports two modes:
@@ -85,290 +101,14 @@ interface DataArtifactColumn {
 @Component({
   standalone: false,
   selector: 'mj-data-artifact-viewer',
-  template: `
-    <div class="data-artifact-viewer" [ngClass]="cssClass">
-      @if (spec) {
-        @if (HasData || IsLoading) {
-          <!-- Toolbar -->
-          <div class="data-toolbar">
-            <div class="data-title">
-              <i class="fas fa-table"></i>
-              <span>{{ spec.title || 'Data Results' }}</span>
-              @if (IsLive) {
-                <span class="live-badge">Live</span>
-              }
-              @if (DisplayRowCount != null) {
-                <span class="row-count">{{ DisplayRowCount }} rows</span>
-              }
-              @if (DisplayExecutionTime != null) {
-                <span class="exec-time">{{ DisplayExecutionTime }}ms</span>
-              }
-            </div>
-            <div class="data-actions">
-              @if (IsLive) {
-                <button class="btn-icon" title="Refresh data" (click)="OnRefresh()" [disabled]="IsLoading">
-                  <i class="fas fa-sync-alt" [class.fa-spin]="IsLoading"></i> Refresh
-                </button>
-              }
-              @if (CanSaveQuery) {
-                <button class="btn-icon btn-save" title="Save as reusable query"
-                  (click)="ShowSaveDialog = true">
-                  <i class="fas fa-save"></i> Save Query
-                </button>
-              }
-              @if (spec.savedQueryId) {
-                <button class="btn-icon btn-open" title="Open saved query record"
-                  (click)="OnOpenSavedQuery()">
-                  <i class="fas fa-external-link-alt"></i> Open Query
-                </button>
-              }
-            </div>
-          </div>
-
-          <!-- Grid -->
-          <div class="grid-container">
-            @if (IsLoading) {
-              <mj-loading text="Loading data..."></mj-loading>
-            } @else if (HasError && HasData) {
-              <div class="error-banner">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>{{ ErrorMessage }}</span>
-                <span class="fallback-note">(Showing cached data)</span>
-              </div>
-              <mj-query-data-grid
-                [ColumnConfigs]="GridColumnConfigs"
-                [Data]="GridData"
-                [ShowToolbar]="false"
-                [ShowRefresh]="false"
-                [PersistState]="false"
-                [SelectionMode]="'none'"
-                (EntityLinkClick)="OnEntityLinkClick($event)"
-                Height="100%">
-              </mj-query-data-grid>
-            } @else if (HasError) {
-              <div class="error-state">
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>{{ ErrorMessage }}</p>
-              </div>
-            } @else {
-              <mj-query-data-grid
-                [ColumnConfigs]="GridColumnConfigs"
-                [Data]="GridData"
-                [ShowToolbar]="false"
-                [ShowRefresh]="false"
-                [PersistState]="false"
-                [SelectionMode]="'none'"
-                (EntityLinkClick)="OnEntityLinkClick($event)"
-                Height="100%">
-              </mj-query-data-grid>
-            }
-          </div>
-        } @else if (spec.plan) {
-          <!-- Plan-only view (no results yet) -->
-          <div class="data-toolbar">
-            <div class="data-title">
-              <i class="fas fa-diagram-project"></i>
-              <span>{{ spec.title || 'Query Plan' }}</span>
-            </div>
-          </div>
-          <div class="plan-content">
-            <mj-markdown
-              [data]="spec.plan"
-              [enableMermaid]="true"
-              [enableHighlight]="true"
-              [enableCollapsibleHeadings]="false"
-              [enableSmartypants]="true">
-            </mj-markdown>
-          </div>
-        } @else {
-          <!-- No data and no plan -->
-          <div class="empty-state">
-            <i class="fas fa-inbox"></i>
-            <p>No data to display</p>
-          </div>
-        }
-      } @else if (HasError) {
-        <div class="error-state">
-          <i class="fas fa-exclamation-triangle"></i>
-          <p>{{ ErrorMessage }}</p>
-        </div>
-      } @else {
-        <div class="empty-state">
-          <i class="fas fa-inbox"></i>
-          <p>No data to display</p>
-        </div>
-      }
-
-      <!-- Save Query Panel (slide-in) -->
-      @if (ShowSaveDialog) {
-        <mj-save-query-panel
-          [QueryName]="spec?.title || 'Untitled Query'"
-          [QueryDescription]="''"
-          [SQL]="spec?.metadata?.sql || ''"
-          (Saved)="OnQuerySaved($event)"
-          (Cancelled)="ShowSaveDialog = false">
-        </mj-save-query-panel>
-      }
-    </div>
-  `,
-  styles: [`
-    .data-artifact-viewer {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    .data-toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 12px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #dee2e6;
-    }
-
-    .data-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 600;
-      font-size: 13px;
-      color: #333;
-    }
-
-    .data-title i {
-      color: #6c757d;
-    }
-
-    .row-count {
-      padding: 2px 8px;
-      background: #e9ecef;
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 500;
-      color: #495057;
-    }
-
-    .exec-time {
-      padding: 2px 8px;
-      background: #d4edda;
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 500;
-      color: #155724;
-    }
-
-    .live-badge {
-      padding: 2px 8px;
-      background: #cce5ff;
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 600;
-      color: #004085;
-    }
-
-    .data-actions {
-      display: flex;
-      gap: 6px;
-    }
-
-    .btn-icon {
-      padding: 4px 10px;
-      background: white;
-      border: 1px solid #ced4da;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      color: #495057;
-    }
-
-    .btn-icon:hover {
-      background: #e9ecef;
-      border-color: #adb5bd;
-    }
-
-    .btn-icon:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .btn-icon.btn-save {
-      color: #16a34a;
-      border-color: #86efac;
-    }
-
-    .btn-icon.btn-save:hover {
-      background: #f0fdf4;
-      border-color: #16a34a;
-    }
-
-    .btn-icon.btn-open {
-      color: #2563eb;
-      border-color: #93c5fd;
-    }
-
-    .btn-icon.btn-open:hover {
-      background: #eff6ff;
-      border-color: #2563eb;
-    }
-
-    .grid-container {
-      flex: 1;
-      overflow: hidden;
-      min-height: 200px;
-      height: 500px;
-    }
-
-    .error-banner {
-      padding: 8px 12px;
-      background: #fff3cd;
-      border-bottom: 1px solid #ffc107;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: #856404;
-    }
-
-    .fallback-note {
-      font-style: italic;
-      color: #6c757d;
-    }
-
-    .empty-state, .error-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 200px;
-      color: #6c757d;
-      text-align: center;
-      gap: 12px;
-    }
-
-    .empty-state i, .error-state i {
-      font-size: 32px;
-    }
-
-    .error-state {
-      color: #dc3545;
-    }
-
-    .plan-content {
-      flex: 1;
-      overflow: auto;
-      padding: 16px;
-    }
-  `]
+  templateUrl: './data-artifact-viewer.component.html',
+  styleUrls: ['./data-artifact-viewer.component.css']
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DataArtifactViewerPlugin')
 export class DataArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() override navigationRequest = new EventEmitter<NavigationRequest>();
+  public override tabsChanged = new EventEmitter<void>();
 
   public spec: DataArtifactSpec | null = null;
   public GridData: Record<string, unknown>[] = [];
@@ -378,17 +118,29 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public HasError = false;
   public ErrorMessage = '';
   public ShowSaveDialog = false;
+  public ShowUpdateDropdown = false;
+  public IsSaving = false;
+  public SavingMessage = '';
+
+  /** Query sync state — drives the toolbar UI for saved query actions */
+  public QuerySyncState: QuerySyncState = 'no-query-latest';
+
+  /** Latest version number for this artifact (from cache) */
+  public LatestVersionNumber = 0;
 
   /** Metadata from live execution (overrides spec.metadata when live) */
   private liveRowCount: number | null = null;
   private liveExecutionTime: number | null = null;
+
+  /** SQL from the saved query record (for comparison) */
+  private savedQuerySql: string | null = null;
 
   constructor(private cdr: ChangeDetectorRef) {
     super();
   }
 
   public override get hasDisplayContent(): boolean {
-    return this.spec != null && (this.HasData || this.IsLoading || !!this.spec.plan);
+    return this.spec != null && (this.HasData || this.IsLoading);
   }
 
   public override get parentShouldShowRawContent(): boolean {
@@ -411,6 +163,35 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return this.liveExecutionTime ?? this.spec?.metadata?.executionTimeMs ?? null;
   }
 
+  /** Current artifact version number */
+  public get CurrentVersionNumber(): number {
+    return this.artifactVersion?.VersionNumber || 1;
+  }
+
+  /** Whether this is the latest version of the artifact */
+  public get IsLatestVersion(): boolean {
+    return this.CurrentVersionNumber === this.LatestVersionNumber;
+  }
+
+  /**
+   * The effective version number at which the query was last saved/updated.
+   * When viewing an older version, this looks ahead through newer versions
+   * to find the most recent savedAtVersionNumber for the same query,
+   * giving the user accurate context (e.g., "Query updated at v3" instead
+   * of the stale "Saved at v1" from this version's snapshot).
+   */
+  public EffectiveSavedAtVersion: number | null = null;
+
+  /** Alias used by the template */
+  public get SavedAtVersion(): number | null {
+    return this.EffectiveSavedAtVersion;
+  }
+
+  /** Display name for the saved query */
+  public get SavedQueryDisplayName(): string {
+    return this.spec?.savedQueryName || 'Saved Query';
+  }
+
   async ngOnInit(): Promise<void> {
     try {
       this.spec = this.parseJsonContent<DataArtifactSpec>();
@@ -423,13 +204,27 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       // Build enriched column configs from agent metadata (if available)
       this.GridColumnConfigs = this.BuildColumnConfigs();
 
+      // Set loading early (synchronously) so hasDisplayContent is true immediately.
+      // This ensures the Display tab is available when onPluginLoaded fires,
+      // showing a loading indicator instead of briefly flashing the Plan tab.
+      if (this.spec.metadata?.sql || this.HasInlineData) {
+        this.IsLoading = true;
+      }
+
+      // Load cached metadata and resolve query sync state
+      await this.InitQuerySyncState();
+
       // If SQL is available, execute it live
       if (this.spec.metadata?.sql) {
         await this.LoadLiveData();
       } else if (this.HasInlineData) {
         // Fall back to embedded rows
         this.GridData = this.spec.rows!;
+        this.IsLoading = false;
       }
+
+      // Signal parent that tabs/display content may have changed after async load
+      this.tabsChanged.emit();
     } catch (error) {
       this.HasError = true;
       this.ErrorMessage = error instanceof Error ? error.message : 'Failed to load data';
@@ -547,10 +342,153 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
   }
 
-  /** Whether this query can be saved (has SQL but hasn't been saved yet) */
-  public get CanSaveQuery(): boolean {
-    return !!this.spec?.metadata?.sql && !this.spec?.savedQueryId;
+  // ─── Query Sync State ────────────────────────────────────────────
+
+  /**
+   * Initialize query sync state by loading cached metadata.
+   * Resolves the latest version number and compares saved query SQL.
+   */
+  private async InitQuerySyncState(): Promise<void> {
+    // Ensure artifact cache is loaded (not registered for startup)
+    await ArtifactMetadataEngine.Instance.Config(false);
+
+    this.LatestVersionNumber = this.resolveLatestVersionNumber();
+
+    // If cache is stale (doesn't know about the version we're viewing),
+    // force-refresh and re-resolve. This happens when new versions are
+    // created during a conversation after the cache was first loaded.
+    if (this.LatestVersionNumber < this.CurrentVersionNumber) {
+      await ArtifactMetadataEngine.Instance.Config(true);
+      this.LatestVersionNumber = this.resolveLatestVersionNumber();
+    }
+
+    this.EffectiveSavedAtVersion = this.resolveEffectiveSavedAtVersion();
+    await this.resolveSavedQuerySql();
+    this.QuerySyncState = this.computeQuerySyncState();
   }
+
+  /**
+   * Determine the latest version number for this artifact from cache.
+   * Falls back to current version if cache miss.
+   */
+  private resolveLatestVersionNumber(): number {
+    if (!this.artifactVersion?.ArtifactID) {
+      return this.CurrentVersionNumber;
+    }
+
+    const versions = ArtifactMetadataEngine.Instance.GetVersionsForArtifact(this.artifactVersion.ArtifactID);
+    if (versions.length > 0) {
+      // GetVersionsForArtifact returns DESC sorted
+      return versions[0].VersionNumber || 1;
+    }
+
+    // Cache miss — current version is our best guess
+    return this.CurrentVersionNumber;
+  }
+
+  /**
+   * Scan all versions of this artifact to find the most recent savedAtVersionNumber
+   * for the same savedQueryId. When viewing an older version, this tells the user
+   * where the query was *actually* last updated, not just what this version's
+   * snapshot recorded at the time.
+   */
+  private resolveEffectiveSavedAtVersion(): number | null {
+    const queryId = this.spec?.savedQueryId;
+    if (!queryId) return null;
+
+    // Start with this version's own value
+    let effective = this.spec?.savedAtVersionNumber ?? null;
+
+    if (!this.artifactVersion?.ArtifactID) return effective;
+
+    // GetVersionsForArtifact returns DESC sorted — scan all versions
+    const versions = ArtifactMetadataEngine.Instance.GetVersionsForArtifact(this.artifactVersion.ArtifactID);
+    for (const v of versions) {
+      try {
+        if (!v.Content) continue;
+        const content = typeof v.Content === 'string' ? JSON.parse(v.Content) : v.Content;
+        if (content.savedQueryId === queryId && content.savedAtVersionNumber != null) {
+          const vSavedAt = content.savedAtVersionNumber as number;
+          if (effective == null || vSavedAt > effective) {
+            effective = vSavedAt;
+          }
+        }
+      } catch {
+        // Skip versions with unparseable content
+      }
+    }
+
+    return effective;
+  }
+
+  /**
+   * Look up the saved query's SQL from QueryEngine cache for comparison.
+   * Only fetches if savedQueryId is present.
+   */
+  private async resolveSavedQuerySql(): Promise<void> {
+    if (!this.spec?.savedQueryId) {
+      this.savedQuerySql = null;
+      return;
+    }
+
+    // QueryEngine is registered for startup, should already be loaded
+    let query = QueryEngine.Instance.FindQueryByID(this.spec.savedQueryId);
+
+    if (!query) {
+      // Cache miss — force refresh and retry
+      await QueryEngine.Instance.Config(true);
+      query = QueryEngine.Instance.FindQueryByID(this.spec.savedQueryId);
+    }
+
+    this.savedQuerySql = query?.SQL ?? null;
+  }
+
+  /**
+   * Compute the query sync state from current spec, version, and saved query SQL.
+   * Implements the decision tree from the UX design.
+   */
+  private computeQuerySyncState(): QuerySyncState {
+    const hasSavedQuery = !!this.spec?.savedQueryId;
+    const isLatest = this.IsLatestVersion;
+
+    if (!hasSavedQuery) {
+      return isLatest ? 'no-query-latest' : 'no-query-older';
+    }
+
+    // Compare SQL (normalize whitespace for reliable comparison)
+    const specSql = this.normalizeSql(this.spec?.metadata?.sql);
+    const querySql = this.normalizeSql(this.savedQuerySql);
+    const sqlMatches = specSql != null && querySql != null && specSql === querySql;
+
+    // Only truly synced if SQL matches AND this is the version it was saved at.
+    // Even with identical SQL, a newer version should show the dropdown so the
+    // user can update the version association (re-save at current version).
+    const savedAtCurrent = this.EffectiveSavedAtVersion === this.CurrentVersionNumber;
+    if (sqlMatches && savedAtCurrent) {
+      return 'synced';
+    }
+
+    // SQL differs — determine position relative to saved version
+    if (isLatest) {
+      return 'outdated-latest';
+    }
+
+    // Use effective saved-at (looks ahead through newer versions)
+    const savedAt = this.EffectiveSavedAtVersion;
+    if (savedAt != null && this.CurrentVersionNumber < savedAt) {
+      return 'query-ahead'; // query was updated at a newer version
+    }
+
+    return 'query-behind'; // ahead of saved but not latest
+  }
+
+  /** Normalize SQL for comparison: trim and collapse whitespace */
+  private normalizeSql(sql: string | null | undefined): string | null {
+    if (sql == null) return null;
+    return sql.trim().replace(/\s+/g, ' ');
+  }
+
+  // ─── Actions ────────────────────────────────────────────────────
 
   /** Navigate to the saved query in the Data Explorer's Queries browser */
   public OnOpenSavedQuery(): void {
@@ -562,25 +500,116 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     });
   }
 
-  /** Handle successful save from the dialog */
+  /** Show the save panel for creating a brand-new query */
+  public OnShowSaveDialog(): void {
+    this.ShowSaveDialog = true;
+    this.ShowUpdateDropdown = false;
+  }
+
+  /** Toggle the update query dropdown */
+  public OnToggleUpdateDropdown(): void {
+    this.ShowUpdateDropdown = !this.ShowUpdateDropdown;
+  }
+
+  /** Close the dropdown (e.g., on outside click) */
+  public OnCloseDropdown(): void {
+    this.ShowUpdateDropdown = false;
+  }
+
+  /**
+   * Update the existing saved query's SQL to match this version.
+   * Only available from the latest version (Scenario 3).
+   */
+  public async OnUpdateExistingQuery(): Promise<void> {
+    this.ShowUpdateDropdown = false;
+    if (!this.spec?.savedQueryId || !this.spec.metadata?.sql) return;
+
+    this.IsSaving = true;
+    this.SavingMessage = `Updating "${this.SavedQueryDisplayName}"...`;
+    this.cdr.detectChanges();
+
+    try {
+      const md = new Metadata();
+      const query = await md.GetEntityObject<import('@memberjunction/core-entities').MJQueryEntity>('MJ: Queries');
+      const loaded = await query.Load(this.spec.savedQueryId);
+
+      if (!loaded) {
+        console.error('Failed to load saved query for update');
+        return;
+      }
+
+      query.SQL = this.spec.metadata.sql;
+      const saved = await query.Save();
+
+      if (saved) {
+        // Update spec with new version tracking
+        this.spec.savedAtVersionNumber = this.CurrentVersionNumber;
+        await this.PersistArtifactContent();
+
+        // Refresh caches so future lookups see the updated data
+        await QueryEngine.Instance.Config(true);
+        await ArtifactMetadataEngine.Instance.Config(true);
+        await md.Refresh();
+
+        this.savedQuerySql = this.spec.metadata.sql;
+        this.EffectiveSavedAtVersion = this.CurrentVersionNumber;
+        this.QuerySyncState = 'synced';
+      }
+    } catch (error) {
+      console.error('Failed to update saved query:', error);
+    } finally {
+      this.IsSaving = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Save as a new query (from the dropdown).
+   * Opens the save dialog which creates a fresh query record.
+   */
+  public OnSaveAsNewQuery(): void {
+    this.ShowUpdateDropdown = false;
+    this.ShowSaveDialog = true;
+  }
+
+  /** Handle successful save from the dialog (both initial save and "save as new") */
   public async OnQuerySaved(event: SaveQueryResult): Promise<void> {
     this.ShowSaveDialog = false;
-
-    // Mutate spec to record the saved query
-    this.spec!.savedQueryId = event.queryId;
-    this.spec!.savedQueryName = event.queryName;
-
-    // Persist updated content to artifact version
-    await this.UpdateArtifactContent();
+    this.IsSaving = true;
+    this.SavingMessage = 'Saving query...';
     this.cdr.detectChanges();
+
+    try {
+      // Update spec with saved query info and version tracking
+      this.spec!.savedQueryId = event.queryId;
+      this.spec!.savedQueryName = event.queryName;
+      this.spec!.savedAtVersionNumber = this.CurrentVersionNumber;
+
+      // Persist and refresh caches
+      await this.PersistArtifactContent();
+      await QueryEngine.Instance.Config(true);
+      await ArtifactMetadataEngine.Instance.Config(true);
+      await new Metadata().Refresh();
+
+      this.savedQuerySql = this.spec!.metadata?.sql ?? null;
+      this.EffectiveSavedAtVersion = this.CurrentVersionNumber;
+      this.QuerySyncState = 'synced';
+    } catch (error) {
+      console.error('Failed to save query:', error);
+    } finally {
+      this.IsSaving = false;
+      this.cdr.detectChanges();
+    }
   }
 
   /** Persist updated spec back to the artifact version entity */
-  private async UpdateArtifactContent(): Promise<void> {
+  private async PersistArtifactContent(): Promise<void> {
     if (!this.artifactVersion || !this.spec) return;
     this.artifactVersion.Content = JSON.stringify(this.spec);
     await this.artifactVersion.Save();
   }
+
+  // ─── Tabs ───────────────────────────────────────────────────────
 
   /**
    * Provide Plan tab (markdown) and SQL tab (code) when available
