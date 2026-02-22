@@ -15,7 +15,7 @@
  *  Cleanup — DROP SCHEMA CASCADE in afterAll to leave the database clean.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
 import { SQLFileSplitter } from '../SQLFileSplitter.js';
@@ -68,7 +68,7 @@ interface PhaseResult {
 // ---------------------------------------------------------------------------
 
 const BASELINE_PATH = path.resolve(
-  '/workspace/MJ/migrations/v5/B202602151200__v5.0__Baseline.sql',
+  __dirname, '../../../../../migrations/v5/B202602151200__v5.0__Baseline.sql',
 );
 
 const PG_CONFIG = {
@@ -286,6 +286,8 @@ function preparePhaseItems(
 // ---------------------------------------------------------------------------
 
 describe('Integration: small-scale conversion', () => {
+  const baselineExists = existsSync(BASELINE_PATH);
+
   let pgClient: Client;
   let rules: IConversionRule[];
   let context: ConversionContext;
@@ -298,6 +300,7 @@ describe('Integration: small-scale conversion', () => {
   // Setup
   // -----------------------------------------------------------------------
   beforeAll(async () => {
+    if (!baselineExists) return;
     // 1. Read and split the baseline
     const rawSQL = readFileSync(BASELINE_PATH, 'utf-8');
     const preprocessed = replaceFlyway(rawSQL, '__mj');
@@ -410,7 +413,7 @@ describe('Integration: small-scale conversion', () => {
   // -----------------------------------------------------------------------
   // Main integration test
   // -----------------------------------------------------------------------
-  it('should successfully convert and execute at least 90% of 100 diverse statements', async () => {
+  it.skipIf(!baselineExists)('should successfully convert and execute at least 90% of 100 diverse statements', async () => {
     const selected = selectDiverseStatements(classifiedBatches, TYPE_QUOTAS);
     expect(selected.length).toBeGreaterThan(0);
 
@@ -559,7 +562,7 @@ describe('Integration: small-scale conversion', () => {
   // -----------------------------------------------------------------------
   // Sanity: verify batch classification distribution
   // -----------------------------------------------------------------------
-  it('should find a reasonable distribution of statement types in the baseline', () => {
+  it.skipIf(!baselineExists)('should find a reasonable distribution of statement types in the baseline', () => {
     const typeCounts = new Map<string, number>();
     for (const cb of classifiedBatches) {
       typeCounts.set(cb.Type, (typeCounts.get(cb.Type) ?? 0) + 1);
