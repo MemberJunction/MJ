@@ -431,7 +431,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const safeEntityName = entityName.replace(/'/g, "''");
             const safeRecordID = compositeKey.ToConcatenatedString().replace(/'/g, "''");
             const schema = this.MJCoreSchemaName;
-            const sSQL = `SELECT * FROM ${this.QuoteSchemaAndView(schema, 'vwRecordChanges')} WHERE Entity='${safeEntityName}' AND RecordID='${safeRecordID}' ORDER BY ChangedAt DESC`;
+            const sSQL = `SELECT * FROM ${this.QuoteSchemaAndView(schema, 'vwRecordChanges')} WHERE ${this.QuoteIdentifier('Entity')}='${safeEntityName}' AND ${this.QuoteIdentifier('RecordID')}='${safeRecordID}' ORDER BY ${this.QuoteIdentifier('ChangedAt')} DESC`;
             return this.ExecuteSQL<RecordChange>(sSQL, undefined, undefined, contextUser);
         } catch (e) {
             LogError(e);
@@ -464,7 +464,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const safeUserId = userId.replace(/'/g, "''");
             const safeEntityName = entityName.replace(/'/g, "''");
             const safeRecordID = compositeKey.Values().replace(/'/g, "''");
-            const sSQL = `SELECT ID FROM ${this.QuoteSchemaAndView(schema, 'vwUserFavorites')} WHERE UserID='${safeUserId}' AND Entity='${safeEntityName}' AND RecordID='${safeRecordID}'`;
+            const sSQL = `SELECT ${this.QuoteIdentifier('ID')} FROM ${this.QuoteSchemaAndView(schema, 'vwUserFavorites')} WHERE ${this.QuoteIdentifier('UserID')}='${safeUserId}' AND ${this.QuoteIdentifier('Entity')}='${safeEntityName}' AND ${this.QuoteIdentifier('RecordID')}='${safeRecordID}'`;
             const result = await this.ExecuteSQL<Record<string, unknown>>(sSQL, undefined, undefined, contextUser);
             if (result && result.length > 0) return result[0].ID as string;
             return null;

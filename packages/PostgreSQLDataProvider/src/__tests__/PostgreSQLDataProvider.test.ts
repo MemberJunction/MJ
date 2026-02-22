@@ -93,8 +93,10 @@ describe('PostgreSQLDataProvider', () => {
     });
 
     describe('CreateTransactionGroup', () => {
-        it('should throw not implemented', async () => {
-            await expect(provider.CreateTransactionGroup()).rejects.toThrow('not yet implemented');
+        it('should return a PostgreSQLTransactionGroup instance', async () => {
+            const group = await provider.CreateTransactionGroup();
+            expect(group).toBeDefined();
+            expect(group.Status).toBe('Pending');
         });
     });
 

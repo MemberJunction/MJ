@@ -39,6 +39,7 @@ import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 import { PostgreSQLProviderConfigData } from './types.js';
+import { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
 
 const pgDialect = new PostgreSQLDialect();
 
@@ -222,6 +223,10 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         await this._connectionManager.Close();
     }
 
+    protected override GetTransactionExtraData(_entity: BaseEntity): Record<string, unknown> {
+        return { dataSource: this._connectionManager.Pool };
+    }
+
     // ─── SQL Execution ───────────────────────────────────────────────
 
     async ExecuteSQL<T>(
@@ -277,7 +282,7 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
     }
 
     async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        throw new Error('TransactionGroup not yet implemented for PostgreSQL provider.');
+        return new PostgreSQLTransactionGroup();
     }
 
     // ─── RunView Implementation ──────────────────────────────────────
@@ -410,6 +415,14 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
             throw new Error(`Record not found: ${entityInfo.Name} [${compositeKey.ToString()}]`);
         }
         return rows[0];
+    }
+
+    /**
+     * Public wrapper for GenerateSaveSQL used by PostgreSQLTransactionGroup
+     * when transaction variables require regenerating the SQL instruction.
+     */
+    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
+        return this.GenerateSaveSQL(entity, isNew, user);
     }
 
     /**

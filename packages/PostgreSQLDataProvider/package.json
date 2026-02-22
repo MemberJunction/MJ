@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/postgresql-dataprovider",
   "type": "module",
-  "version": "5.0.0",
+  "version": "5.2.0",
   "description": "MemberJunction: PostgreSQL Data Provider",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,10 +14,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@memberjunction/codegen-lib": "5.0.0",
-    "@memberjunction/core": "5.0.0",
-    "@memberjunction/global": "5.0.0",
-    "@memberjunction/sql-dialect": "5.0.0",
+    "@memberjunction/codegen-lib": "5.2.0",
+    "@memberjunction/core": "5.2.0",
+    "@memberjunction/global": "5.2.0",
+    "@memberjunction/sql-dialect": "5.2.0",
     "pg": "^8.13.3"
   },
   "devDependencies": {
