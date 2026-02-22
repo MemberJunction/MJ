@@ -3047,8 +3047,8 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       try {
          const config = ManageMetadataBase.getSoftPKFKConfig();
          if (!config) {
-           logStatus(`         [Soft PK Check] Config file found but no tables array`);
-           return false;
+            logStatus(`         [Soft PK Check] Config file found but no tables array`);
+            return false;
          }
          const tables = this.extractTablesFromConfig(config);
          const tableConfig = tables.find(
