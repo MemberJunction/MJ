@@ -13,27 +13,23 @@
 
 ## Architecture Overview
 
-```
-Frontends (thin rendering + prompt handling)
-┌─────────────┐  ┌───────────────┐  ┌───────────────┐
-│  mj install  │  │  VSCode Ext   │  │  Docker /     │
-│  mj doctor   │  │  (future)     │  │  CI (future)  │
-└──────┬───────┘  └──────┬────────┘  └──────┬────────┘
-       │                 │                   │
-       └────────────┬────┘───────────────────┘
-                    │
-       ┌────────────▼────────────┐
-       │  @memberjunction/       │
-       │  installer              │  ← Headless, event-driven engine
-       │  (InstallerEngine)      │     Never writes to stdout
-       └─────────┬───────────────┘
-                 │
-    ┌────────────┼────────────────────┐
-    │            │                    │
-┌───▼────┐ ┌────▼─────┐  ┌───────────▼──────┐
-│ Phases │ │ Adapters  │  │ Models / Events  │
-│ (9)    │ │ (4)       │  │ / Errors         │
-└────────┘ └───────────┘  └──────────────────┘
+```mermaid
+graph TD
+    subgraph Frontends["Frontends (thin rendering + prompt handling)"]
+        CLI["mj install\nmj doctor"]
+        VSCode["VSCode Ext\n(future)"]
+        Docker["Docker / CI\n(future)"]
+    end
+
+    CLI --> Engine
+    VSCode --> Engine
+    Docker --> Engine
+
+    Engine["@memberjunction/installer\n(InstallerEngine)\n\nHeadless, event-driven engine\nNever writes to stdout"]
+
+    Engine --> Phases["Phases (9)"]
+    Engine --> Adapters["Adapters (4)"]
+    Engine --> Models["Models / Events\n/ Errors"]
 ```
 
 ### Design Principles

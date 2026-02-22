@@ -1,8 +1,39 @@
 /**
- * @memberjunction/installer — Public API
+ * `@memberjunction/installer` — Public API surface.
  *
- * Headless, event-driven installer engine for MemberJunction.
- * Used by the CLI (`mj install`, `mj doctor`), VSCode extension, and Docker/CI.
+ * Headless, event-driven installer engine for MemberJunction. This barrel
+ * module re-exports every public type needed by consumer packages:
+ *
+ * | Category   | Key exports                                                      |
+ * |------------|------------------------------------------------------------------|
+ * | Engine     | {@link InstallerEngine}                                          |
+ * | Events     | {@link InstallerEventEmitter}, event payload types                |
+ * | Errors     | {@link InstallerError}, {@link PhaseId}                          |
+ * | Models     | {@link InstallPlan}, {@link InstallState}, {@link Diagnostics}   |
+ * | Adapters   | {@link GitHubReleaseProvider}, {@link FileSystemAdapter}, etc.   |
+ * | Phases     | All 9 phase classes with their context/result types              |
+ *
+ * **Primary consumers**:
+ * - `@memberjunction/cli` — the `mj install` and `mj doctor` commands.
+ * - VSCode MemberJunction extension (planned).
+ * - Docker/CI automation scripts.
+ *
+ * @example
+ * ```typescript
+ * import { InstallerEngine } from '@memberjunction/installer';
+ *
+ * const engine = new InstallerEngine();
+ * engine.On('phase:start', (e) => console.log(`Starting ${e.Phase}...`));
+ * engine.On('error', (e) => console.error(e.Error.message));
+ *
+ * const plan = await engine.CreatePlan({ Dir: '/app', Tag: 'latest' });
+ * const result = await engine.Run(plan, { Yes: true });
+ * console.log(result.Success ? 'Install complete!' : 'Install failed.');
+ * ```
+ *
+ * @module @memberjunction/installer
+ * @see InstallerEngine — the main entry point for programmatic installs.
+ * @see InstallerEventEmitter — the typed event system for progress reporting.
  */
 
 // Engine

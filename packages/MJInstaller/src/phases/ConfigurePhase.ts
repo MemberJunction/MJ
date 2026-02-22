@@ -1,8 +1,23 @@
 /**
- * Phase E — Configure
+ * Phase E — Configuration
  *
- * Gathers user configuration via prompt events (or reads from --config),
- * then generates .env, mj.config.cjs, and Explorer environment files.
+ * Gathers user configuration via prompt events (or reads from `--config` /
+ * `--yes` defaults), then generates the three configuration file families:
+ *
+ * 1. **`.env`** — Database credentials, API keys, port settings, auth config.
+ *    Written to both the repo root and `packages/MJAPI/.env`.
+ * 2. **`mj.config.cjs`** — CodeGen configuration (host, port, database, schema,
+ *    optional new user setup).
+ * 3. **Explorer environment files** — `environment.ts` and `environment.development.ts`
+ *    in `packages/MJExplorer/src/environments/`.
+ *
+ * **Preserve-vs-create strategy**: If a configuration file already exists, it
+ * is preserved (not overwritten). This allows users to re-run the installer
+ * without losing hand-edited configuration. Only missing files are created.
+ *
+ * @module phases/ConfigurePhase
+ * @see InstallConfig — the full configuration interface.
+ * @see InstallConfigDefaults — default values for auto-mode.
  */
 
 import path from 'node:path';
@@ -11,26 +26,59 @@ import type { InstallConfig, PartialInstallConfig } from '../models/InstallConfi
 import { InstallerError } from '../errors/InstallerError.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 
+/**
+ * Input context for the configure phase.
+ *
+ * @see ConfigurePhase.Run
+ */
 export interface ConfigureContext {
-  /** Target directory for the installation */
+  /** Absolute path to the target install directory. */
   Dir: string;
-  /** Partial config — missing fields will be prompted for */
+  /** Partial config — missing fields will be prompted for interactively. */
   Config: PartialInstallConfig;
-  /** Non-interactive mode */
+  /** Non-interactive mode — use defaults for missing fields. */
   Yes: boolean;
+  /** Event emitter for progress, prompt, and log events. */
   Emitter: InstallerEventEmitter;
 }
 
+/**
+ * Result of the configure phase.
+ *
+ * @see ConfigurePhase.Run
+ */
 export interface ConfigureResult {
-  /** Fully resolved configuration */
+  /** Fully resolved configuration (all fields populated). */
   Config: InstallConfig;
-  /** List of files written */
+  /** Absolute paths of files that were created (not preserved). */
   FilesWritten: string[];
 }
 
+/**
+ * Phase E — Gathers configuration and generates `.env`, `mj.config.cjs`,
+ * and Explorer environment files.
+ *
+ * @example
+ * ```typescript
+ * const configure = new ConfigurePhase();
+ * const result = await configure.Run({
+ *   Dir: '/path/to/install',
+ *   Config: { DatabaseHost: 'localhost' },
+ *   Yes: false,
+ *   Emitter: emitter,
+ * });
+ * console.log(`Created: ${result.FilesWritten.join(', ')}`);
+ * ```
+ */
 export class ConfigurePhase {
   private fileSystem = new FileSystemAdapter();
 
+  /**
+   * Execute the configure phase: resolve config, generate files.
+   *
+   * @param context - Configure input with directory, partial config, mode, and emitter.
+   * @returns The fully resolved config and list of files written.
+   */
   async Run(context: ConfigureContext): Promise<ConfigureResult> {
     const { Emitter: emitter } = context;
     const filesWritten: string[] = [];

@@ -2,7 +2,20 @@
  * Phase G — Dependencies (Install + Build)
  *
  * Runs `npm install` at the repo root to install all workspace dependencies,
- * then `npm run build` to compile all packages.
+ * then `npm run build` to compile all ~170 packages in the monorepo.
+ *
+ * Key behaviors:
+ * - **ERESOLVE retry**: If `npm install` fails with peer dependency conflicts,
+ *   automatically retries with `--legacy-peer-deps`.
+ * - **Partial build tolerance**: Build failures in codegen-managed packages
+ *   (entity forms, bootstrap) are treated as partial success since CodeGen
+ *   will regenerate their source and rebuild in a later phase.
+ * - **Audit warnings**: npm vulnerability reports are logged as informational
+ *   warnings — users are explicitly told NOT to run `npm audit fix --force`.
+ *
+ * @module phases/DependencyPhase
+ * @see CodeGenPhase — handles rebuilding codegen-managed packages after code generation.
+ * @see PlatformCompatPhase — patches scripts before this phase runs.
  */
 
 import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
@@ -10,10 +23,12 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner, type ProcessResult } from '../adapters/ProcessRunner.js';
 
 /**
- * Packages that contain generated code managed by CodeGen. Build failures in
- * ONLY these packages are treated as partial success — CodeGen will regenerate
- * the stale code and rebuild in a later phase. If any package outside this list
- * fails, the build is a hard error.
+ * Packages that contain generated code managed by CodeGen.
+ *
+ * Build failures in **only** these packages are treated as partial success.
+ * CodeGen will regenerate their stale source code and rebuild them in the
+ * codegen phase. If any package outside this list fails, the build is a
+ * hard error.
  */
 const CODEGEN_MANAGED_PACKAGES = [
   'ng-core-entity-forms',
@@ -22,26 +37,60 @@ const CODEGEN_MANAGED_PACKAGES = [
   'ng-bootstrap',
 ];
 
+/**
+ * Input context for the dependency phase.
+ *
+ * @see DependencyPhase.Run
+ */
 export interface DependencyContext {
-  /** Target directory (repo root) */
+  /** Absolute path to the repo root (where `npm install` and `npm run build` are executed). */
   Dir: string;
+  /** Event emitter for progress, warn, and log events. */
   Emitter: InstallerEventEmitter;
 }
 
+/**
+ * Result of the dependency phase.
+ *
+ * @see DependencyPhase.Run
+ */
 export interface DependencyResult {
-  /** Whether npm install completed successfully */
+  /** Whether `npm install` completed successfully. */
   InstallSuccess: boolean;
-  /** Whether npm run build completed successfully (false if only partial) */
+  /** Whether `npm run build` completed fully (`false` if partial). */
   BuildSuccess: boolean;
-  /** Whether the build was partial — some codegen-managed packages failed but everything else succeeded */
+  /**
+   * Whether the build was partial — codegen-managed packages failed
+   * but all other packages succeeded. CodeGen will fix these.
+   */
   BuildPartial: boolean;
-  /** Collected warnings (e.g., npm audit advisories) */
+  /** Non-fatal warnings collected during install and build (e.g., npm audit advisories). */
   Warnings: string[];
 }
 
+/**
+ * Phase G — Installs npm dependencies and builds all workspace packages.
+ *
+ * @example
+ * ```typescript
+ * const deps = new DependencyPhase();
+ * const result = await deps.Run({ Dir: '/path/to/install', Emitter: emitter });
+ * if (result.BuildPartial) {
+ *   console.log('Partial build — CodeGen will fix remaining packages');
+ * }
+ * ```
+ */
 export class DependencyPhase {
   private processRunner = new ProcessRunner();
 
+  /**
+   * Execute the dependency phase: `npm install` then `npm run build`.
+   *
+   * @param context - Dependency input with directory and emitter.
+   * @returns Install/build status and collected warnings.
+   * @throws {InstallerError} With code `NPM_INSTALL_FAILED` or `NPM_INSTALL_TIMEOUT` on install failure.
+   * @throws {InstallerError} With code `BUILD_FAILED` or `BUILD_TIMEOUT` on non-codegen build failure.
+   */
   async Run(context: DependencyContext): Promise<DependencyResult> {
     const { Emitter: emitter } = context;
     const warnings: string[] = [];

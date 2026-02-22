@@ -1,8 +1,25 @@
 /**
- * Phase A — Preflight
+ * Phase A — Preflight Checks
  *
- * Catches predictable failures before downloading or modifying anything.
- * Checks: Node version, npm, disk space, ports, SQL connectivity, OS, write perms.
+ * The first phase in the install pipeline. Catches predictable failures
+ * **before** downloading or modifying anything, so the user gets immediate
+ * feedback if their environment isn't ready.
+ *
+ * Checks performed:
+ * - **Node.js version** — hard minimum ({@link MIN_NODE_VERSION}) and recommended version.
+ * - **npm** — verifies npm is on PATH.
+ * - **Disk space** — at least 2 GB free at the target directory.
+ * - **Port availability** — checks API and Explorer ports aren't already in use.
+ * - **SQL Server connectivity** — raw TCP check to the configured host:port (skippable).
+ * - **OS detection** — informational, used by {@link PlatformCompatPhase}.
+ * - **Write permissions** — verifies the target directory is writable.
+ *
+ * Also provides {@link PreflightPhase.RunDiagnostics} for `mj doctor`, which
+ * runs the same checks plus additional config file and codegen artifact checks.
+ *
+ * @module phases/PreflightPhase
+ * @see InstallerEngine — orchestrates this as the first phase in the pipeline.
+ * @see Diagnostics — the result model that aggregates check results.
  */
 
 import os from 'node:os';
@@ -15,31 +32,76 @@ import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
 import { Diagnostics, type DiagnosticCheck, type EnvironmentInfo } from '../models/Diagnostics.js';
 
-/** Hard minimum Node version. Change this constant when MJ raises the floor. */
+/** Hard minimum Node.js major version. Update this when MJ raises the floor. */
 const MIN_NODE_VERSION = 22;
-/** Recommended Node version (emits info diagnostic if not met). */
+/** Recommended Node.js major version (emits info diagnostic if not met). */
 const RECOMMENDED_NODE_VERSION = 24;
-/** Minimum free disk space in bytes (2 GB). */
+/** Minimum free disk space in bytes (2 GB) for a full MJ workspace. */
 const MIN_DISK_SPACE_BYTES = 2 * 1024 * 1024 * 1024;
 
+/**
+ * Input context for the preflight phase.
+ *
+ * @see PreflightPhase.Run
+ */
 export interface PreflightContext {
+  /** Absolute path to the target install directory. */
   TargetDir: string;
+  /** Partial config with database host/port for SQL connectivity check. */
   Config: PartialInstallConfig;
+  /** If `true`, skip the SQL Server connectivity check (e.g., `--skip-db`). */
   SkipDB: boolean;
+  /** Event emitter for progress and diagnostic events. */
   Emitter: InstallerEventEmitter;
 }
 
+/**
+ * Result of the preflight phase.
+ *
+ * @see PreflightPhase.Run
+ */
 export interface PreflightResult {
+  /** Whether all hard-failure checks passed. If `false`, the install should not proceed. */
   Passed: boolean;
+  /** Aggregated diagnostic checks (pass, fail, warn, info). */
   Diagnostics: Diagnostics;
+  /** Detected operating system, used by {@link PlatformCompatPhase} for script patching. */
   DetectedOS: 'windows' | 'macos' | 'linux' | 'other';
 }
 
+/**
+ * Phase A — Preflight checks that validate the install environment.
+ *
+ * Runs all prerequisite checks and collects results into a {@link Diagnostics}
+ * object. Hard failures (Node version, npm, disk space, SQL, write perms) prevent
+ * the install from proceeding. Warnings (port conflicts, Node recommendation)
+ * are informational.
+ *
+ * @example
+ * ```typescript
+ * const preflight = new PreflightPhase();
+ * const result = await preflight.Run({
+ *   TargetDir: '/path/to/install',
+ *   Config: { DatabaseHost: 'localhost', DatabasePort: 1433 },
+ *   SkipDB: false,
+ *   Emitter: emitter,
+ * });
+ * if (!result.Passed) {
+ *   console.error('Preflight failed:', result.Diagnostics.Failures);
+ * }
+ * ```
+ */
 export class PreflightPhase {
   private processRunner = new ProcessRunner();
   private fileSystem = new FileSystemAdapter();
   private sqlAdapter = new SqlServerAdapter();
 
+  /**
+   * Run all preflight checks and return the results.
+   *
+   * @param context - Preflight input with target directory, config, and emitter.
+   * @returns Result with pass/fail status, diagnostics, and detected OS.
+   */
   async Run(context: PreflightContext): Promise<PreflightResult> {
     const { Emitter: emitter } = context;
     const hardFailures: string[] = [];
@@ -112,7 +174,19 @@ export class PreflightPhase {
   }
 
   /**
-   * Run diagnostics only (for mj doctor). Same checks but no hard failures.
+   * Run the full diagnostic suite for `mj doctor`.
+   *
+   * Performs all preflight checks plus additional doctor-only checks:
+   * - Config file presence (`.env`, `mj.config.cjs`)
+   * - CodeGen artifact existence (`mj_generatedentities`)
+   *
+   * Unlike {@link Run}, this method does not fail on hard errors — all
+   * results are returned as diagnostics for the health report.
+   *
+   * @param targetDir - Target install directory to diagnose.
+   * @param config - Partial config with database host/port for connectivity check.
+   * @param emitter - Event emitter for diagnostic events.
+   * @returns Aggregated diagnostics from all checks.
    */
   async RunDiagnostics(targetDir: string, config: PartialInstallConfig, emitter: InstallerEventEmitter): Promise<Diagnostics> {
     const result = await this.Run({

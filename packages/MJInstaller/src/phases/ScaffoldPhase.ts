@@ -1,8 +1,24 @@
 /**
  * Phase B — Version Selection + Scaffold
  *
- * Lists available releases, lets the user pick one (or uses -t tag),
- * downloads the ZIP, and extracts it into the target directory.
+ * Lists available MemberJunction releases from GitHub, lets the user pick
+ * one interactively (or resolves a specific tag via `-t`), downloads the
+ * release ZIP archive, and extracts it into the target directory.
+ *
+ * Key behaviors:
+ * - **Interactive mode**: Emits a `prompt` event with up to 20 versions for
+ *   the user to choose from (most recent first).
+ * - **Non-interactive mode** (`--yes`): Auto-selects the latest stable release.
+ * - **Specific tag** (`-t v5.1.0`): Resolves the exact release, falling back
+ *   to tag lookup if no formal GitHub Release exists.
+ * - **Directory safety**: Warns if the target directory is non-empty (ignoring
+ *   installer-owned files like `.mj-install-state.json`).
+ * - **Temp file cleanup**: Downloads to a temp directory, then cleans up the
+ *   ZIP after extraction.
+ *
+ * @module phases/ScaffoldPhase
+ * @see GitHubReleaseProvider — fetches releases and downloads ZIP archives.
+ * @see FileSystemAdapter — handles ZIP extraction and temp directory management.
  */
 
 import path from 'node:path';
@@ -12,27 +28,67 @@ import { GitHubReleaseProvider } from '../adapters/GitHubReleaseProvider.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import type { VersionInfo } from '../models/VersionInfo.js';
 
+/**
+ * Input context for the scaffold phase.
+ *
+ * @see ScaffoldPhase.Run
+ */
 export interface ScaffoldContext {
-  /** Release tag to install. If undefined, version selection is interactive. */
+  /**
+   * Release tag to install (e.g., `"v5.1.0"`).
+   * If `undefined`, version selection is interactive (or auto-selects latest in `--yes` mode).
+   */
   Tag?: string;
-  /** Target directory for extraction */
+  /** Absolute path to the target directory for extraction. */
   Dir: string;
-  /** Non-interactive mode */
+  /** Non-interactive mode — auto-selects latest version and skips confirmation prompts. */
   Yes: boolean;
+  /** Event emitter for progress, prompt, and log events. */
   Emitter: InstallerEventEmitter;
 }
 
+/**
+ * Result of the scaffold phase.
+ *
+ * @see ScaffoldPhase.Run
+ */
 export interface ScaffoldResult {
-  /** The version that was selected/installed */
+  /** The version that was selected and installed. */
   Version: VersionInfo;
-  /** Path to the extracted release */
+  /** Absolute path to the directory where the release was extracted. */
   ExtractedDir: string;
 }
 
+/**
+ * Phase B — Downloads and extracts a MemberJunction release.
+ *
+ * @example
+ * ```typescript
+ * const scaffold = new ScaffoldPhase();
+ * const result = await scaffold.Run({
+ *   Tag: 'v5.1.0',
+ *   Dir: '/path/to/install',
+ *   Yes: false,
+ *   Emitter: emitter,
+ * });
+ * console.log(`Installed ${result.Version.Tag} to ${result.ExtractedDir}`);
+ * ```
+ */
 export class ScaffoldPhase {
   private github = new GitHubReleaseProvider();
   private fileSystem = new FileSystemAdapter();
 
+  /**
+   * Execute the scaffold phase: resolve version, download ZIP, and extract.
+   *
+   * @param context - Scaffold input with tag, directory, mode, and emitter.
+   * @returns The selected version and extraction path.
+   * @throws {InstallerError} With code `TAG_NOT_FOUND` if the specified tag doesn't exist.
+   * @throws {InstallerError} With code `NO_RELEASES` if no releases are found on GitHub.
+   * @throws {InstallerError} With code `DOWNLOAD_FAILED` if the ZIP download fails.
+   * @throws {InstallerError} With code `EXTRACT_FAILED` if ZIP extraction fails.
+   * @throws {InstallerError} With code `USER_CANCELLED` if the user declines the non-empty directory prompt.
+   */
   async Run(context: ScaffoldContext): Promise<ScaffoldResult> {
     const { Emitter: emitter } = context;
 

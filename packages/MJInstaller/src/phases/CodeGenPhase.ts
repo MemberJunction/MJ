@@ -1,12 +1,35 @@
 /**
  * Phase H — CodeGen + Validation
  *
- * Runs `mj codegen`, validates that required artifacts are generated,
- * retries once if the critical artifact (mj_generatedentities) is missing.
+ * Runs `mj codegen` to generate TypeScript entity classes, action classes,
+ * SQL objects, and Angular form components from database schema and metadata.
+ * Validates that required artifacts are produced and applies post-codegen
+ * fixups to ensure class registration manifests and known-issue patches
+ * are current.
  *
- * Artifact verification is two-tier:
- *  - mj_generatedentities in node_modules — critical (blocks install if missing)
- *  - packages/GeneratedEntities — secondary (warns if missing, does not block)
+ * **Artifact verification** is two-tier:
+ * - `mj_generatedentities` in `node_modules/` — **critical** (blocks install if missing).
+ * - `packages/GeneratedEntities` — **secondary** (warns if missing, does not block).
+ *
+ * **Retry strategy**: If codegen fails on the first attempt (common when AFTER
+ * commands leave stale `dist/` from a partial build), the phase runs a full
+ * `npm run build` to restore consistency, then retries codegen once. Timeouts
+ * are not retried (they indicate deeper connectivity or performance issues).
+ *
+ * **Post-codegen pipeline** (4 steps after successful codegen):
+ * 1. Force-rebuild codegen output packages (`.d.ts` exports must reflect new classes).
+ * 2. Regenerate class registration manifest `.ts` files via `npm run mj:manifest`.
+ * 3. Force-rebuild manifest packages (compile freshly generated `.ts` to `.js`).
+ * 4. Apply known-issue source patches and rebuild affected packages.
+ *
+ * **Fast mode** (`--fast`): Quick-checks manifest files for stale entity names
+ * and compares source/dist timestamps. If everything looks current, Steps 1-3
+ * are skipped entirely (saving ~2-3 minutes). Step 4 always runs.
+ *
+ * @module phases/CodeGenPhase
+ * @see DependencyPhase — must complete before codegen (packages must be built).
+ * @see MigratePhase — must complete before codegen (schema must be current).
+ * @see SmokeTestPhase — runs after codegen to verify the generated code works.
  */
 
 import path from 'node:path';
@@ -15,20 +38,35 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 
+/**
+ * Input context for the codegen phase.
+ *
+ * @see CodeGenPhase.Run
+ */
 export interface CodeGenContext {
-  /** Target directory (repo root) */
+  /** Absolute path to the repo root (where `npx mj codegen` is executed). */
   Dir: string;
+  /** Event emitter for progress, warn, and log events. */
   Emitter: InstallerEventEmitter;
-  /** Fast mode: skip post-codegen rebuild steps if manifests look correct */
+  /**
+   * Fast mode: skip post-codegen Steps 1-3 (force-rebuild + manifest regen +
+   * manifest rebuild) if manifest files already look correct. Step 4
+   * (known-issue patches) always runs regardless of this flag.
+   */
   Fast?: boolean;
 }
 
+/**
+ * Result of the codegen phase.
+ *
+ * @see CodeGenPhase.Run
+ */
 export interface CodeGenResult {
-  /** Whether codegen completed successfully */
+  /** Whether codegen completed successfully (exited 0 and critical artifacts exist). */
   Success: boolean;
-  /** Whether all required artifacts were verified */
+  /** Whether **all** artifacts were verified (both critical and secondary). */
   ArtifactsVerified: boolean;
-  /** Whether a retry was needed */
+  /** Whether a full rebuild + retry was needed to produce artifacts. */
   RetryUsed: boolean;
 }
 
@@ -64,10 +102,39 @@ export interface KnownIssueDiagnostic {
   RelativePath: string;
 }
 
+/**
+ * Phase H — Runs MJ CodeGen, verifies artifacts, and applies post-codegen fixups.
+ *
+ * This is the most complex phase in the install pipeline. After code generation
+ * succeeds, it runs a 4-step post-codegen pipeline to ensure class registration
+ * manifests are current and known source-level issues are patched.
+ *
+ * @example
+ * ```typescript
+ * const codeGen = new CodeGenPhase();
+ * const result = await codeGen.Run({
+ *   Dir: '/path/to/install',
+ *   Emitter: emitter,
+ *   Fast: false,
+ * });
+ * if (result.RetryUsed) {
+ *   console.log('CodeGen needed a rebuild + retry');
+ * }
+ * ```
+ */
 export class CodeGenPhase {
   private processRunner = new ProcessRunner();
   private fileSystem = new FileSystemAdapter();
 
+  /**
+   * Execute the codegen phase: run `mj codegen`, verify artifacts, retry if needed,
+   * then run the post-codegen pipeline (manifest regen + known-issue patches).
+   *
+   * @param context - Codegen input with directory, emitter, and fast-mode flag.
+   * @returns Codegen result with success status, artifact verification, and retry flag.
+   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if codegen exceeds 10 minutes.
+   * @throws {InstallerError} With code `CODEGEN_FAILED` if codegen fails after rebuild + retry.
+   */
   async Run(context: CodeGenContext): Promise<CodeGenResult> {
     const { Emitter: emitter } = context;
 
@@ -169,6 +236,18 @@ export class CodeGenPhase {
   // CodeGen execution
   // ---------------------------------------------------------------------------
 
+  /**
+   * Execute `npx mj codegen` and return structured results.
+   *
+   * Detects AFTER command failures in the codegen output — these indicate that
+   * post-generation build steps failed, leaving `dist/` directories with stale
+   * compiled `.js` that references generated `.ts` files which were never compiled.
+   *
+   * @param dir - Repo root directory.
+   * @param emitter - Event emitter for progress reporting.
+   * @returns Structured result with success flag, AFTER-command failure detection, and error summary.
+   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if the process exceeds 10 minutes.
+   */
   private async runCodeGen(
     dir: string,
     emitter: InstallerEventEmitter
@@ -218,6 +297,16 @@ export class CodeGenPhase {
     return { Success: true, AfterCommandsFailed: afterFailed, ErrorSummary: '' };
   }
 
+  /**
+   * Save CodeGen AFTER command output to a log file for diagnostics.
+   *
+   * Non-critical — failures to write the log are silently ignored.
+   *
+   * @param dir - Repo root directory.
+   * @param stdout - Full stdout from the codegen process.
+   * @param stderr - Full stderr from the codegen process.
+   * @param emitter - Event emitter for verbose logging.
+   */
   private saveAfterLog(dir: string, stdout: string, stderr: string, emitter: InstallerEventEmitter): void {
     if (!stdout.includes('AFTER') && !stderr.includes('AFTER')) return;
 
@@ -240,6 +329,17 @@ export class CodeGenPhase {
   // Artifact verification
   // ---------------------------------------------------------------------------
 
+  /**
+   * Verify that codegen produced the expected artifacts.
+   *
+   * Two-tier check:
+   * - **Critical**: `node_modules/mj_generatedentities` must exist (MJAPI can't start without it).
+   * - **Secondary**: `packages/GeneratedEntities` is expected but absence is only a warning.
+   *
+   * @param dir - Repo root directory.
+   * @param emitter - Event emitter for diagnostic logging.
+   * @returns Object indicating whether critical and all artifacts passed verification.
+   */
   private async verifyArtifacts(
     dir: string,
     emitter: InstallerEventEmitter
@@ -293,6 +393,17 @@ export class CodeGenPhase {
     'ng-bootstrap',
   ];
 
+  /**
+   * Full workspace rebuild to restore consistency before retrying codegen.
+   *
+   * Runs `npm run build` at the repo root. Tolerates build failures in
+   * codegen-managed packages (they contain stale generated code that the
+   * retry will regenerate). Non-codegen build failures are hard errors.
+   *
+   * @param dir - Repo root directory.
+   * @param emitter - Event emitter for progress and warning reporting.
+   * @throws {InstallerError} With code `CODEGEN_FAILED` on timeout or non-codegen build failures.
+   */
   private async rebuildPackages(dir: string, emitter: InstallerEventEmitter): Promise<void> {
     emitter.Emit('step:progress', {
       Type: 'step:progress',
@@ -495,8 +606,8 @@ export class CodeGenPhase {
       DistRelPath: 'packages/MJCoreEntities/dist/generated/entity_subclasses.d.ts',
     },
     {
-      SourceRelPath: 'packages/CoreActions/src/generated/action_subclasses.ts',
-      DistRelPath: 'packages/CoreActions/dist/generated/action_subclasses.d.ts',
+      SourceRelPath: 'packages/Actions/CoreActions/src/generated/action_subclasses.ts',
+      DistRelPath: 'packages/Actions/CoreActions/dist/generated/action_subclasses.d.ts',
     },
   ];
 
@@ -721,6 +832,17 @@ export class CodeGenPhase {
     });
   }
 
+  /**
+   * Regenerate class registration manifest `.ts` files by running `npm run mj:manifest`.
+   *
+   * The manifest generator scans source for `@RegisterClass` decorators, verifies
+   * them against `.d.ts` exports (from Step 1), and emits updated manifest files
+   * with static import paths that prevent tree-shaking.
+   *
+   * @param dir - Repo root directory.
+   * @param emitter - Event emitter for progress and warning reporting.
+   * @returns `true` if manifest regeneration succeeded, `false` if it failed or timed out.
+   */
   private async regenerateManifests(dir: string, emitter: InstallerEventEmitter): Promise<boolean> {
     const result = await this.processRunner.Run('npm', ['run', 'mj:manifest'], {
       Cwd: dir,
@@ -1178,6 +1300,13 @@ export class CodeGenPhase {
     return [...new Set(packages)];
   }
 
+  /**
+   * Extract the last N lines from a string (for truncated error output).
+   *
+   * @param text - The full text to extract from.
+   * @param n - Number of trailing lines to keep.
+   * @returns The last `n` lines joined with newlines.
+   */
   private lastNLines(text: string, n: number): string {
     const lines = text.split('\n');
     return lines.slice(-n).join('\n');

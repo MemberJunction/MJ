@@ -1,8 +1,24 @@
 /**
  * Phase C — Database Provisioning
  *
- * Generates idempotent SQL scripts for database setup (logins, users, roles),
- * prompts the user to execute them, then validates connectivity.
+ * Generates idempotent SQL scripts for database setup and prompts the user
+ * to execute them manually in SSMS or Azure Data Studio. Then validates
+ * that SQL Server is reachable at the configured host:port.
+ *
+ * Two scripts are generated:
+ * 1. **`mj-db-setup.sql`** — Creates the database (if not exists), `__mj` schema,
+ *    SQL logins, database users, and role grants. All statements are idempotent
+ *    (safe to run multiple times).
+ * 2. **`mj-db-validate.sql`** — Verifies the schema, users, and roles exist.
+ *    Run this to confirm the setup script was executed correctly.
+ *
+ * The phase does **not** execute SQL directly — it generates scripts and asks
+ * the user to run them. This design avoids requiring a SQL driver dependency
+ * in the installer and gives users full visibility into what's being executed.
+ *
+ * @module phases/DatabaseProvisionPhase
+ * @see SqlServerAdapter — used for TCP connectivity validation.
+ * @see ConfigurePhase — provides the database credentials used in script generation.
  */
 
 import path from 'node:path';
@@ -12,27 +28,61 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
 
+/**
+ * Input context for the database provisioning phase.
+ *
+ * @see DatabaseProvisionPhase.Run
+ */
 export interface DatabaseProvisionContext {
-  /** Target directory */
+  /** Absolute path to the target install directory. */
   Dir: string;
-  /** Current install config (should have DB credentials from Configure phase) */
+  /** Current install config with database credentials from the configure phase. */
   Config: PartialInstallConfig;
-  /** Non-interactive mode */
+  /** Non-interactive mode — skips the "run this script" prompt. */
   Yes: boolean;
+  /** Event emitter for progress, prompt, and log events. */
   Emitter: InstallerEventEmitter;
 }
 
+/**
+ * Result of the database provisioning phase.
+ *
+ * @see DatabaseProvisionPhase.Run
+ */
 export interface DatabaseProvisionResult {
-  /** SQL script files generated */
+  /** Absolute paths of the SQL script files that were generated. */
   ScriptsGenerated: string[];
-  /** Whether validation passed after user ran the scripts */
+  /** Whether the post-script TCP connectivity validation passed. */
   ValidationPassed: boolean;
 }
 
+/**
+ * Phase C — Generates SQL provisioning scripts and validates database connectivity.
+ *
+ * @example
+ * ```typescript
+ * const dbPhase = new DatabaseProvisionPhase();
+ * const result = await dbPhase.Run({
+ *   Dir: '/path/to/install',
+ *   Config: { DatabaseHost: 'localhost', DatabasePort: 1433, DatabaseName: 'MJ' },
+ *   Yes: false,
+ *   Emitter: emitter,
+ * });
+ * console.log(`Scripts: ${result.ScriptsGenerated.join(', ')}`);
+ * ```
+ */
 export class DatabaseProvisionPhase {
   private fileSystem = new FileSystemAdapter();
   private sqlAdapter = new SqlServerAdapter();
 
+  /**
+   * Execute the database provisioning phase: generate scripts, prompt user,
+   * and validate connectivity.
+   *
+   * @param context - Database provision input with directory, config, mode, and emitter.
+   * @returns Script paths and validation result.
+   * @throws {InstallerError} With code `DB_UNREACHABLE` if SQL Server connectivity fails after script execution.
+   */
   async Run(context: DatabaseProvisionContext): Promise<DatabaseProvisionResult> {
     const { Config: config, Emitter: emitter } = context;
 

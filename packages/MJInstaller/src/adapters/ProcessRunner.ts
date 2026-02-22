@@ -1,33 +1,122 @@
 /**
  * Adapter for spawning child processes and capturing output.
- * Used by phases that run external tools (npm, mj codegen, etc.)
+ *
+ * Used by installer phases that run external tools (`npm`, `npx mj codegen`,
+ * `npx turbo build`, etc.). Handles cross-platform differences:
+ *
+ * - **Windows**: Spawns with `shell: true` so that `.cmd` shims (npm, npx)
+ *   are resolved correctly. Uses `taskkill /F /T` for process tree cleanup.
+ * - **Unix**: Spawns without shell. Uses process group kill (`kill -SIGTERM -pid`)
+ *   with a 5-second SIGKILL fallback.
+ *
+ * @module adapters/ProcessRunner
+ * @see DependencyPhase — uses Run for `npm install` and `npm run build`.
+ * @see CodeGenPhase — uses Run for `npx mj codegen` and `npx turbo build`.
+ * @see SmokeTestPhase — uses Run for service startup and killByPort for cleanup.
+ *
+ * @example
+ * ```typescript
+ * const runner = new ProcessRunner();
+ * const result = await runner.Run('npm', ['install'], {
+ *   Cwd: '/path/to/repo',
+ *   TimeoutMs: 600_000,
+ *   OnStdout: (line) => console.log(line),
+ * });
+ * if (result.ExitCode !== 0) console.error(result.Stderr);
+ * ```
  */
 
 import { spawn, execSync } from 'node:child_process';
 
+/**
+ * Result of a child process execution.
+ *
+ * @see ProcessRunner.Run — returns this after the process exits or times out.
+ */
 export interface ProcessResult {
+  /** Process exit code (`0` = success). Set to `1` on spawn errors. */
   ExitCode: number;
+  /** Accumulated stdout output from the process. */
   Stdout: string;
+  /** Accumulated stderr output from the process. */
   Stderr: string;
+  /** Whether the process was killed due to exceeding {@link ProcessOptions.TimeoutMs}. */
   TimedOut: boolean;
 }
 
+/**
+ * Options for configuring child process execution.
+ *
+ * @see ProcessRunner.Run
+ */
 export interface ProcessOptions {
-  /** Working directory */
+  /** Working directory for the child process (defaults to `process.cwd()`). */
   Cwd?: string;
-  /** Environment variables (merged with process.env) */
+  /** Additional environment variables (merged with `process.env`). */
   Env?: Record<string, string>;
-  /** Timeout in milliseconds */
+  /** Maximum execution time in milliseconds. Process tree is killed on timeout. */
   TimeoutMs?: number;
-  /** Called with each line of stdout */
+  /**
+   * Streaming callback invoked with each line of stdout.
+   * Used by phases to emit `step:progress` events for real-time output.
+   */
   OnStdout?: (line: string) => void;
-  /** Called with each line of stderr */
+  /**
+   * Streaming callback invoked with each line of stderr.
+   * Used by phases to emit verbose log events for diagnostic output.
+   */
   OnStderr?: (line: string) => void;
 }
 
+/**
+ * Cross-platform child process runner with streaming output, timeout support,
+ * and process tree cleanup.
+ *
+ * Key behaviors:
+ * - On Windows, spawns with `shell: true` to resolve `.cmd` shims.
+ * - Supports configurable timeouts with full process tree kill on expiry.
+ * - Streams stdout/stderr line-by-line via callbacks for real-time progress.
+ * - Provides {@link killByPort} for port-based process cleanup (used by smoke test).
+ *
+ * @example
+ * ```typescript
+ * const runner = new ProcessRunner();
+ *
+ * // Simple command
+ * const version = await runner.RunSimple('node', ['--version']);
+ *
+ * // Long-running command with streaming and timeout
+ * const result = await runner.Run('npm', ['run', 'build'], {
+ *   Cwd: '/path/to/repo',
+ *   TimeoutMs: 1_800_000,
+ *   OnStdout: (line) => emitter.Emit('step:progress', { ... }),
+ * });
+ * ```
+ */
 export class ProcessRunner {
   /**
-   * Run a command and return the full result.
+   * Spawn a child process and return the full result after it exits.
+   *
+   * The process is spawned with `shell: true` on Windows (for `.cmd` shim
+   * resolution) and `shell: false` on Unix. Stdout and stderr are accumulated
+   * in memory and optionally streamed line-by-line via callbacks.
+   *
+   * If {@link ProcessOptions.TimeoutMs} is set and the process exceeds it,
+   * the entire process tree is killed and `{ TimedOut: true }` is returned.
+   *
+   * @param command - The command to execute (e.g., `'npm'`, `'npx'`).
+   * @param args - Command arguments (e.g., `['install', '--legacy-peer-deps']`).
+   * @param options - Execution options (cwd, env, timeout, streaming callbacks).
+   * @returns The process result with exit code, output, and timeout status.
+   *
+   * @example
+   * ```typescript
+   * const result = await runner.Run('npx', ['mj', 'codegen'], {
+   *   Cwd: dir,
+   *   TimeoutMs: 600_000,
+   *   OnStdout: (line) => console.log(line),
+   * });
+   * ```
    */
   async Run(command: string, args: string[], options?: ProcessOptions): Promise<ProcessResult> {
     return new Promise<ProcessResult>((resolve) => {
@@ -103,7 +192,23 @@ export class ProcessRunner {
   }
 
   /**
-   * Run a command and return just the trimmed stdout. Throws on non-zero exit.
+   * Run a command and return just the trimmed stdout.
+   *
+   * Convenience wrapper around {@link Run} for simple commands where you only
+   * need the output text. Throws an `Error` if the process exits with a
+   * non-zero code.
+   *
+   * @param command - The command to execute.
+   * @param args - Command arguments.
+   * @param cwd - Optional working directory.
+   * @returns Trimmed stdout output.
+   * @throws Error if the process exits with a non-zero exit code.
+   *
+   * @example
+   * ```typescript
+   * const npmVersion = await runner.RunSimple('npm', ['--version']);
+   * // "10.9.0"
+   * ```
    */
   async RunSimple(command: string, args: string[], cwd?: string): Promise<string> {
     const result = await this.Run(command, args, { Cwd: cwd });
@@ -114,7 +219,12 @@ export class ProcessRunner {
   }
 
   /**
-   * Check if a command exists on the PATH.
+   * Check whether a command exists on the system PATH.
+   *
+   * Uses `where` on Windows or `which` on Unix to locate the executable.
+   *
+   * @param command - The command name to look up (e.g., `'npm'`, `'git'`).
+   * @returns `true` if the command is found, `false` otherwise.
    */
   async CommandExists(command: string): Promise<boolean> {
     try {
@@ -128,10 +238,15 @@ export class ProcessRunner {
   }
 
   /**
-   * Kill a process and all its children.
-   * On Windows, `child.kill()` with `shell: true` only kills the cmd.exe shell,
-   * leaving turbo/node grandchild processes running as orphans.
-   * This uses `taskkill /T` (Windows) or process group kill (Unix) instead.
+   * Kill a process and its entire process tree.
+   *
+   * On Windows, `child.kill()` with `shell: true` only terminates the
+   * top-level `cmd.exe` shell, leaving turbo/node grandchild processes
+   * running as orphans. This method uses `taskkill /F /T /PID` on Windows
+   * and process group signals (`SIGTERM` then `SIGKILL`) on Unix to ensure
+   * the full process tree is terminated.
+   *
+   * @param pid - Process ID of the root process to kill. No-op if `undefined`.
    */
   killTree(pid: number | undefined): void {
     if (!pid) return;
@@ -151,7 +266,17 @@ export class ProcessRunner {
 
   /**
    * Kill all processes listening on a given TCP port.
-   * Used by SmokeTestPhase to clean up service processes after health checks.
+   *
+   * Used by {@link SmokeTestPhase} to clean up MJAPI and Explorer service
+   * processes after smoke test health checks complete. Without port-based
+   * cleanup, turbo/node grandchild processes survive parent shell termination
+   * and block future starts with `EADDRINUSE`.
+   *
+   * - **Windows**: Uses `netstat -ano` to find listening PIDs, then
+   *   `taskkill /F /T` to kill each process tree.
+   * - **Unix**: Uses `lsof -ti:<port> | xargs kill -9`.
+   *
+   * @param port - TCP port number to scan for listening processes.
    */
   killByPort(port: number): void {
     try {

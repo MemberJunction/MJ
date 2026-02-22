@@ -1,9 +1,31 @@
 /**
  * InstallerEngine — the core orchestrator for MemberJunction installs.
  *
- * This class is headless and event-driven. It never writes to stdout directly.
- * Frontends (CLI, VSCode, Docker) subscribe to events to render progress,
- * handle prompts, and display diagnostics.
+ * This class is **headless and event-driven**. It never writes to stdout directly.
+ * Frontends (CLI, VSCode extension, Docker/CI) subscribe to typed events to
+ * render progress, handle interactive prompts, and display diagnostics.
+ *
+ * **Architecture**:
+ * - 9 ordered phases executed sequentially: preflight → scaffold → configure →
+ *   database → platform → dependencies → migrate → codegen → smoke_test.
+ * - Checkpoint/resume via `.mj-install-state.json` — if a phase fails, the user
+ *   can re-run `mj install` and it resumes from the last incomplete phase.
+ * - Each phase is a standalone class with its own context/result types, making
+ *   them independently testable and composable.
+ *
+ * **Public API**:
+ * - {@link InstallerEngine.On | On}/{@link InstallerEngine.Off | Off} — subscribe/unsubscribe to events.
+ * - {@link InstallerEngine.ListVersions | ListVersions} — fetch available MJ releases from GitHub.
+ * - {@link InstallerEngine.CreatePlan | CreatePlan} — build an install plan (dry-run safe).
+ * - {@link InstallerEngine.Run | Run} — execute a plan, emitting events throughout.
+ * - {@link InstallerEngine.Doctor | Doctor} — run diagnostics on an existing install.
+ * - {@link InstallerEngine.Resume | Resume} — resume from a checkpoint state file.
+ *
+ * @module InstallerEngine
+ * @see InstallerEventEmitter — the typed event system used for all communication.
+ * @see InstallPlan — the plan object returned by {@link InstallerEngine.CreatePlan}.
+ * @see InstallState — checkpoint/resume persistence.
+ * @see InstallerError — structured errors thrown by phases.
  */
 
 import { InstallerEventEmitter, type InstallerEventMap } from './events/InstallerEvents.js';
@@ -25,8 +47,12 @@ import type { VersionInfo } from './models/VersionInfo.js';
 import type { Diagnostics } from './models/Diagnostics.js';
 
 /**
- * Ordered list of all install phases. Used for plan generation and
- * checkpoint/resume logic.
+ * Ordered list of all install phases in execution order.
+ *
+ * Used internally for plan generation and checkpoint/resume logic.
+ * The order is significant — each phase may depend on outputs from
+ * earlier phases (e.g., `codegen` requires `dependencies` and `migrate`
+ * to have completed first).
  */
 const ALL_PHASES: PhaseId[] = [
   'preflight',
@@ -40,6 +66,27 @@ const ALL_PHASES: PhaseId[] = [
   'smoke_test',
 ];
 
+/**
+ * Core orchestrator for MemberJunction installs.
+ *
+ * Headless and event-driven — never writes to stdout. Frontends subscribe to
+ * typed events via {@link InstallerEngine.On} to render progress, handle prompts,
+ * and display diagnostics. Supports checkpoint/resume for long-running installs.
+ *
+ * @example
+ * ```typescript
+ * const engine = new InstallerEngine();
+ *
+ * // Subscribe to events
+ * engine.On('phase:start', (e) => console.log(`Phase: ${e.Phase}`));
+ * engine.On('step:progress', (e) => console.log(`  ${e.Message}`));
+ * engine.On('error', (e) => console.error(e.Error.message));
+ *
+ * // Create and execute a plan
+ * const plan = await engine.CreatePlan({ Dir: '/app', Tag: 'v5.1.0' });
+ * const result = await engine.Run(plan, { Verbose: true, Yes: true });
+ * ```
+ */
 export class InstallerEngine {
   private emitter = new InstallerEventEmitter();
   private github = new GitHubReleaseProvider();
@@ -53,7 +100,10 @@ export class InstallerEngine {
   private codeGen = new CodeGenPhase();
   private smokeTest = new SmokeTestPhase();
 
-  /** Resolved config — populated by the configure phase, used by subsequent phases */
+  /**
+   * Resolved config accumulator — populated incrementally by the configure phase,
+   * then consumed by all subsequent phases (database, migrate, smoke test, etc.).
+   */
   private resolvedConfig: PartialInstallConfig = {};
 
   // -------------------------------------------------------------------------
@@ -62,6 +112,17 @@ export class InstallerEngine {
 
   /**
    * Subscribe to installer events.
+   *
+   * @typeParam K - The event name (e.g., `'phase:start'`, `'step:progress'`, `'error'`).
+   * @param event - The event to listen for.
+   * @param handler - Callback invoked with the event payload.
+   *
+   * @example
+   * ```typescript
+   * engine.On('phase:end', (e) => {
+   *   console.log(`${e.Phase} ${e.Status} in ${e.DurationMs}ms`);
+   * });
+   * ```
    */
   On<K extends keyof InstallerEventMap>(event: K, handler: (...args: InstallerEventMap[K]) => void): void {
     this.emitter.On(event, handler);
@@ -69,6 +130,10 @@ export class InstallerEngine {
 
   /**
    * Unsubscribe from installer events.
+   *
+   * @typeParam K - The event name.
+   * @param event - The event to stop listening for.
+   * @param handler - The same handler reference passed to {@link On}.
    */
   Off<K extends keyof InstallerEventMap>(event: K, handler: (...args: InstallerEventMap[K]) => void): void {
     this.emitter.Off(event, handler);
@@ -76,6 +141,12 @@ export class InstallerEngine {
 
   /**
    * List available MemberJunction release versions from GitHub.
+   *
+   * Fetches releases from the MemberJunction GitHub repository using the
+   * unauthenticated REST API (60 requests/hour rate limit).
+   *
+   * @param includePrerelease - Whether to include pre-release tags (default: `false`).
+   * @returns Array of available versions sorted by publish date (newest first).
    */
   async ListVersions(includePrerelease: boolean = false): Promise<VersionInfo[]> {
     return this.github.ListReleases(includePrerelease);
@@ -83,6 +154,13 @@ export class InstallerEngine {
 
   /**
    * Build an install plan (dry-run friendly — no side effects).
+   *
+   * The plan describes which phases will run, which will be skipped, and
+   * with what configuration. It can be inspected before execution (e.g.,
+   * with `plan.Summarize()`) or passed directly to {@link Run}.
+   *
+   * @param input - Plan inputs including target directory, tag, skip flags, and config overrides.
+   * @returns A new {@link InstallPlan} ready for execution or inspection.
    */
   async CreatePlan(input: CreatePlanInput): Promise<InstallPlan> {
     const config: PartialInstallConfig = {
@@ -107,6 +185,17 @@ export class InstallerEngine {
 
   /**
    * Execute an install plan, emitting events throughout.
+   *
+   * Iterates through plan phases in order. Supports checkpoint/resume — if a
+   * previous install left a `.mj-install-state.json`, completed phases are
+   * skipped automatically. Pass `NoResume: true` in options to force a fresh start.
+   *
+   * Stops on the first phase failure and returns partial results. The state file
+   * is updated after each phase, so re-running resumes from the failed phase.
+   *
+   * @param plan - The install plan from {@link CreatePlan}.
+   * @param options - Runtime options (verbose, yes, fast, no-resume, config overrides).
+   * @returns Install result with success status, duration, warnings, and phase lists.
    */
   async Run(plan: InstallPlan, options?: RunOptions): Promise<InstallResult> {
     const startTime = Date.now();
@@ -240,6 +329,14 @@ export class InstallerEngine {
 
   /**
    * Run diagnostics on an existing or target install directory.
+   *
+   * Performs preflight checks (Node version, disk space, SQL connectivity, etc.)
+   * and known-issue detection. Does **not** modify any files. Results are
+   * returned as a {@link Diagnostics} object and also emitted as `diagnostic` events.
+   *
+   * @param targetDir - Absolute path to the directory to diagnose.
+   * @param options - Optional doctor options (currently reserved for future use).
+   * @returns Diagnostics with environment info, check results, and last install info.
    */
   async Doctor(targetDir: string, options?: DoctorOptions): Promise<Diagnostics> {
     const config: PartialInstallConfig = { ...InstallConfigDefaults };
@@ -285,7 +382,15 @@ export class InstallerEngine {
   }
 
   /**
-   * Resume a previously interrupted install from a state file.
+   * Resume a previously interrupted install from a checkpoint state file.
+   *
+   * Loads the `.mj-install-state.json` from the given directory, reconstructs
+   * a plan from the saved tag, and calls {@link Run} with resume enabled.
+   *
+   * @param stateFileDir - Directory containing the `.mj-install-state.json` file.
+   * @param options - Runtime options forwarded to {@link Run}.
+   * @returns Install result from the resumed execution.
+   * @throws {InstallerError} With code `NO_STATE_FILE` if no checkpoint exists.
    */
   async Resume(stateFileDir: string, options?: RunOptions): Promise<InstallResult> {
     const state = await InstallState.Load(stateFileDir);
@@ -307,6 +412,16 @@ export class InstallerEngine {
   // Phase execution dispatch
   // -------------------------------------------------------------------------
 
+  /**
+   * Dispatch a single phase to its corresponding execute method.
+   *
+   * @param phaseId - Which phase to execute.
+   * @param plan - The current install plan.
+   * @param config - Resolved config (may include overrides from options).
+   * @param yes - Non-interactive mode — skips all user prompts.
+   * @param fast - Fast mode — enables optimistic skipping in codegen.
+   * @returns Phase-specific result containing any warnings to bubble up.
+   */
   private async executePhase(
     phaseId: PhaseId,
     plan: InstallPlan,
@@ -493,6 +608,11 @@ export class InstallerEngine {
   // Helpers
   // -------------------------------------------------------------------------
 
+  /**
+   * Detect the current operating system from `process.platform`.
+   *
+   * @returns Normalized OS identifier used by {@link PlatformCompatPhase}.
+   */
   private detectOS(): 'windows' | 'macos' | 'linux' | 'other' {
     switch (process.platform) {
       case 'win32': return 'windows';
@@ -503,6 +623,13 @@ export class InstallerEngine {
   }
 }
 
+/**
+ * Internal result from executing a single phase.
+ *
+ * Each `execute*` method returns this to bubble up non-fatal warnings
+ * collected during the phase. Fatal errors are thrown as {@link InstallerError}.
+ */
 interface PhaseExecutionResult {
+  /** Non-fatal warnings collected during the phase. */
   Warnings: string[];
 }

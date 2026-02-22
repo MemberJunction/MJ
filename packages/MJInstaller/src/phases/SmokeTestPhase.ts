@@ -1,8 +1,24 @@
 /**
  * Phase I — Smoke Test
  *
- * Starts MJAPI and Explorer, verifies they respond to HTTP,
- * then lets them terminate. This confirms the install is functional.
+ * The final phase in the install pipeline. Starts MJAPI and Explorer as
+ * background processes, verifies they respond to HTTP health checks, then
+ * cleans up the processes. This confirms the install is functional end-to-end.
+ *
+ * Key behaviors:
+ * - **Pre-check**: Verifies `mj_generatedentities` exists (MJAPI can't start without it).
+ * - **Service startup**: Runs `npm run start:api` and `npm run start:explorer` as
+ *   background processes with configurable timeouts.
+ * - **Health checks**: Polls each service's HTTP endpoint at 5-second intervals.
+ *   Uses `127.0.0.1` instead of `localhost` to avoid IPv6 resolution issues on Windows.
+ * - **Port-based cleanup**: Kills processes by port number after verification, since
+ *   on Windows `child.kill()` only terminates the shell, not turbo/node grandchildren.
+ *
+ * This phase is automatically skipped in `--fast` mode (saves ~5.5 minutes).
+ *
+ * @module phases/SmokeTestPhase
+ * @see ProcessRunner — handles process spawning and port-based cleanup.
+ * @see CodeGenPhase — produces the generated entities required by the pre-check.
  */
 
 import path from 'node:path';
@@ -12,38 +28,72 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 
-/** How long to wait for MJAPI to start (ms) */
+/** Maximum time to wait for MJAPI to start responding (ms). */
 const API_STARTUP_TIMEOUT = 90_000;
-/** How long to wait for Explorer to start (ms) */
+/** Maximum time to wait for Explorer to start responding (ms). */
 const EXPLORER_STARTUP_TIMEOUT = 180_000;
-/** Interval between HTTP health checks (ms) */
+/** Interval between HTTP health check attempts (ms). */
 const HEALTH_CHECK_INTERVAL = 5_000;
-/** Max retries for HTTP health checks */
+/** Maximum number of health check retries before declaring failure. */
 const MAX_HEALTH_RETRIES = 24;
 
+/**
+ * Input context for the smoke test phase.
+ *
+ * @see SmokeTestPhase.Run
+ */
 export interface SmokeTestContext {
-  /** Target directory (repo root) */
+  /** Absolute path to the repo root. */
   Dir: string;
-  /** Current install config */
+  /** Current install config (used for API/Explorer port numbers). */
   Config: PartialInstallConfig;
+  /** Event emitter for progress, warn, and log events. */
   Emitter: InstallerEventEmitter;
 }
 
+/**
+ * Result of the smoke test phase.
+ *
+ * @see SmokeTestPhase.Run
+ */
 export interface SmokeTestResult {
-  /** Whether MJAPI responded */
+  /** Whether MJAPI responded to HTTP health checks within the timeout. */
   ApiRunning: boolean;
-  /** Whether Explorer responded */
+  /** Whether Explorer responded to HTTP health checks within the timeout. */
   ExplorerRunning: boolean;
-  /** API URL that was verified */
+  /** The API URL that was verified (e.g., `"http://localhost:4000/"`). */
   ApiUrl: string;
-  /** Explorer URL that was verified */
+  /** The Explorer URL that was verified (e.g., `"http://localhost:4200/"`). */
   ExplorerUrl: string;
 }
 
+/**
+ * Phase I — Starts MJAPI and Explorer, verifies HTTP health, then cleans up.
+ *
+ * @example
+ * ```typescript
+ * const smokeTest = new SmokeTestPhase();
+ * const result = await smokeTest.Run({
+ *   Dir: '/path/to/install',
+ *   Config: { APIPort: 4000, ExplorerPort: 4200 },
+ *   Emitter: emitter,
+ * });
+ * if (result.ApiRunning && result.ExplorerRunning) {
+ *   console.log('Smoke test passed!');
+ * }
+ * ```
+ */
 export class SmokeTestPhase {
   private processRunner = new ProcessRunner();
   private fileSystem = new FileSystemAdapter();
 
+  /**
+   * Execute the smoke test phase: pre-check, start services, verify health, clean up.
+   *
+   * @param context - Smoke test input with directory, config, and emitter.
+   * @returns Health check results for MJAPI and Explorer.
+   * @throws {InstallerError} With code `MISSING_GENERATED_ENTITIES` if the pre-check fails.
+   */
   async Run(context: SmokeTestContext): Promise<SmokeTestResult> {
     const { Config: config, Emitter: emitter } = context;
     const apiPort = config.APIPort ?? 4000;
