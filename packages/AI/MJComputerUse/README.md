@@ -1,4 +1,4 @@
-# @memberjunction/mj-computer-use
+# @memberjunction/computer-use-engine
 
 MemberJunction integration layer for the Computer Use browser automation engine, providing seamless integration with MJ's credential management, AI prompts, actions system, and testing framework.
 
@@ -58,7 +58,7 @@ This package is Layer 2 of MJ's Computer Use capabilities - it requires the base
 ## Installation
 
 ```bash
-npm install @memberjunction/mj-computer-use
+npm install @memberjunction/computer-use-engine
 ```
 
 **Dependencies**: This package requires the base Computer Use package and core MJ packages:
@@ -112,7 +112,7 @@ if (result.Success) {
 For programmatic access with full type safety:
 
 ```typescript
-import { MJComputerUseEngine, MJRunComputerUseParams, PromptEntityRef } from '@memberjunction/mj-computer-use';
+import { MJComputerUseEngine, MJRunComputerUseParams, PromptEntityRef } from '@memberjunction/computer-use-engine';
 import { Metadata } from '@memberjunction/core';
 
 const engine = new MJComputerUseEngine();
@@ -152,7 +152,7 @@ if (result.Success) {
 ### Using MJ Credentials for Authentication
 
 ```typescript
-import { MJRunComputerUseParams, MJDomainAuthBinding } from '@memberjunction/mj-computer-use';
+import { MJRunComputerUseParams, MJDomainAuthBinding } from '@memberjunction/computer-use-engine';
 import { Metadata } from '@memberjunction/core';
 
 const md = new Metadata();
@@ -199,7 +199,7 @@ const result = await engine.Run(params);
 Expose any MJ Action to the controller LLM as a callable tool:
 
 ```typescript
-import { MJRunComputerUseParams, ActionRef } from '@memberjunction/mj-computer-use';
+import { MJRunComputerUseParams, ActionRef } from '@memberjunction/computer-use-engine';
 
 const params = new MJRunComputerUseParams();
 params.Goal = "Research competitor pricing and send summary email";
@@ -308,7 +308,7 @@ await test.Save();
 ### Running Tests Programmatically
 
 ```typescript
-import { ComputerUseTestDriver } from '@memberjunction/mj-computer-use';
+import { ComputerUseTestDriver } from '@memberjunction/computer-use-engine';
 import { TestRunnerEngine } from '@memberjunction/testing-engine';
 
 const driver = new ComputerUseTestDriver();
@@ -645,7 +645,7 @@ Analyze the screenshot and determine next action...
 Override `onStepComplete` to implement custom persistence:
 
 ```typescript
-import { MJComputerUseEngine } from '@memberjunction/mj-computer-use';
+import { MJComputerUseEngine } from '@memberjunction/computer-use-engine';
 import { Metadata } from '@memberjunction/core';
 
 class CustomMJEngine extends MJComputerUseEngine {
@@ -689,7 +689,7 @@ const result = await engine.Run(params);
 ### Complex Multi-Domain Authentication
 
 ```typescript
-import { MJRunComputerUseParams, MJDomainAuthBinding } from '@memberjunction/mj-computer-use';
+import { MJRunComputerUseParams, MJDomainAuthBinding } from '@memberjunction/computer-use-engine';
 import { ComputerUseAuthConfig, CookieInjectionAuthMethod } from '@memberjunction/computer-use';
 
 const params = new MJRunComputerUseParams();
@@ -727,7 +727,7 @@ const result = await engine.Run(params);
 ### Timeout and Graceful Cancellation
 
 ```typescript
-import { MJComputerUseEngine } from '@memberjunction/mj-computer-use';
+import { MJComputerUseEngine } from '@memberjunction/computer-use-engine';
 
 const engine = new MJComputerUseEngine();
 const params = new MJRunComputerUseParams();

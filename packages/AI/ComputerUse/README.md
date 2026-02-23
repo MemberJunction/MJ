@@ -8,7 +8,7 @@ The ComputerUse package provides a sophisticated abstraction layer for LLM-contr
 
 **Core Concept**: The engine captures screenshots of web pages, sends them to vision-capable LLMs, and executes the actions the model determines are necessary to accomplish a natural language goal. A separate judge component evaluates progress and determines goal completion.
 
-This package serves as the foundational layer for MemberJunction's Computer Use capabilities, designed to be extended by the `@memberjunction/mj-computer-use` package for full MJ integration.
+This package serves as the foundational layer for MemberJunction's Computer Use capabilities, designed to be extended by the `@memberjunction/computer-use-engine` package for full MJ integration.
 
 ## Key Features
 

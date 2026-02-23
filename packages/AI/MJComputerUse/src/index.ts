@@ -1,4 +1,4 @@
-// @memberjunction/mj-computer-use
+// @memberjunction/computer-use-engine
 //
 // Provides MJComputerUseEngine (extends ComputerUseEngine) with:
 // - AIPromptRunner integration for controller and judge prompts

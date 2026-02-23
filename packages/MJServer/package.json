@@ -64,7 +64,7 @@
     "@memberjunction/global": "5.2.0",
     "@memberjunction/graphql-dataprovider": "5.2.0",
     "@memberjunction/interactive-component-types": "5.2.0",
-    "@memberjunction/mj-computer-use": "5.2.0",
+    "@memberjunction/computer-use-engine": "5.2.0",
     "@memberjunction/notifications": "5.2.0",
     "@memberjunction/queue": "5.2.0",
     "@memberjunction/scheduling-actions": "5.2.0",
