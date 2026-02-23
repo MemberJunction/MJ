@@ -293,7 +293,7 @@ export class CreateTableRule implements IConversionRule {
     return segments.map(seg => {
       if (seg.startsWith("'")) return seg; // String literal — don't touch
       return seg.replace(
-        /(?<!")([A-Z][a-zA-Z_]\w*)(?!")/g,
+        /(?<!")\b([A-Z][a-zA-Z_]\w*)\b(?!")/g,
         (m, name: string) => {
           if (CreateTableRule.CHECK_BODY_KEYWORDS.has(name.toUpperCase())) return m;
           return `"${name}"`;
