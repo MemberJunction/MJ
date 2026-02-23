@@ -6,7 +6,7 @@ import { AuthProviderFactory } from './AuthProviderFactory.js';
  * Initialize authentication providers from configuration
  */
 export function initializeAuthProviders(): void {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   
   // Clear any existing providers
   factory.clear();

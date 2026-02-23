@@ -11,15 +11,19 @@ const mockModels: Array<{ ID: string; Name: string; IsActive: boolean; APIName: 
 const mockModelVendors: Array<{ ModelID: string; Status: string; Priority: number; DriverClass: string; APIName: string }> = [];
 const mockCreateInstance = vi.fn().mockReturnValue(null);
 
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: {
-        Instance: {
-            ClassFactory: {
-                CreateInstance: (...args: unknown[]) => mockCreateInstance(...args)
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        MJGlobal: {
+            Instance: {
+                ClassFactory: {
+                    CreateInstance: (...args: unknown[]) => mockCreateInstance(...args)
+                }
             }
         }
-    }
-}));
+    };
+});
 
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
@@ -39,9 +43,17 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 import { RerankerService, RerankObservabilityOptions } from '../RerankerService';
-import { RerankerConfiguration, parseRerankerConfiguration } from '../config.types';
+import { RerankerConfiguration } from '../config.types';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 
 const mockUser = { ID: 'user-1', Name: 'Test' } as never;
+
+function resetSingleton(): void {
+    const g = GetGlobalObjectStore();
+    if (g) {
+        delete g['___SINGLETON__RerankerService'];
+    }
+}
 
 function makeConfig(overrides?: Partial<RerankerConfiguration>): RerankerConfiguration {
     return { enabled: true, rerankerModelId: 'model-1', retrievalMultiplier: 3, minRelevanceThreshold: 0.5, fallbackOnError: true, ...overrides };
@@ -53,8 +65,7 @@ describe('RerankerService', () => {
         mockCreateInstance.mockReturnValue(null);
         mockModels.length = 0;
         mockModelVendors.length = 0;
-        // Reset singleton
-        (RerankerService as Record<string, unknown>)['_instance'] = null;
+        resetSingleton();
     });
 
     describe('Instance (singleton)', () => {

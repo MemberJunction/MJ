@@ -1,7 +1,7 @@
 import { AuthProviderConfig } from '@memberjunction/core';
 import { IAuthProvider } from './IAuthProvider.js';
 import { BaseAuthProvider } from './BaseAuthProvider.js';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, BaseSingleton } from '@memberjunction/global';
 
 // Import providers to ensure they're registered
 import './providers/Auth0Provider.js';
@@ -14,21 +14,19 @@ import './providers/GoogleProvider.js';
  * Factory and registry for managing authentication providers
  * Combines provider creation and lifecycle management in a single class
  */
-export class AuthProviderFactory {
-  private static instance: AuthProviderFactory;
+export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
   private providers: Map<string, IAuthProvider> = new Map();
   private issuerCache: Map<string, IAuthProvider> = new Map();
 
-  private constructor() {}
+  public constructor() {
+    super();
+  }
 
   /**
    * Gets the singleton instance of the factory
    */
-  static getInstance(): AuthProviderFactory {
-    if (!AuthProviderFactory.instance) {
-      AuthProviderFactory.instance = new AuthProviderFactory();
-    }
-    return AuthProviderFactory.instance;
+  public static get Instance(): AuthProviderFactory {
+    return AuthProviderFactory.getInstance<AuthProviderFactory>();
   }
 
   /**

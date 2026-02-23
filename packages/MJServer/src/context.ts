@@ -158,7 +158,7 @@ export const getUserPayload = async (
       }
 
       // Verify issuer is supported
-      const factory = AuthProviderFactory.getInstance();
+      const factory = AuthProviderFactory.Instance;
       if (!factory.getByIssuer(issuer)) {
         console.warn(`Unsupported issuer: ${issuer}`);
         throw new AuthenticationError(`Unsupported authentication provider: ${issuer}`);

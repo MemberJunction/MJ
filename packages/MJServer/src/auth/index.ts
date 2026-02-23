@@ -51,7 +51,7 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
  * This maintains backward compatibility with the old structure
  */
 export const getValidationOptions = (issuer: string): { audience: string; jwksUri: string } | undefined => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const provider = factory.getByIssuer(issuer);
   
   if (!provider) {
@@ -76,7 +76,7 @@ export const validationOptions: Record<string, { audience: string; jwksUri: stri
     return getValidationOptions(prop) !== undefined;
   },
   ownKeys: () => {
-    const factory = AuthProviderFactory.getInstance();
+    const factory = AuthProviderFactory.Instance;
     return factory.getAllProviders().map(p => p.issuer);
   }
 });
@@ -107,7 +107,7 @@ export class UserPayload {
  * Gets signing keys for JWT validation
  */
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   
   // Initialize providers if not already done
   if (!factory.hasProviders()) {
@@ -137,7 +137,7 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
   fullName?: string;
   preferredUsername?: string;
 } => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const issuer = payload.iss;
   
   if (!issuer) {

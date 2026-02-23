@@ -9,7 +9,7 @@
  */
 
 import { LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, BaseSingleton } from '@memberjunction/global';
 import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
 import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { BaseReranker, RerankDocument } from '@memberjunction/ai';
@@ -98,24 +98,19 @@ export interface RerankObservabilityOptions {
  * }
  * ```
  */
-export class RerankerService {
-    private static _instance: RerankerService | null = null;
+export class RerankerService extends BaseSingleton<RerankerService> {
     private _rerankerCache: Map<string, BaseReranker> = new Map();
 
     /**
      * Get the singleton instance of RerankerService
      */
     public static get Instance(): RerankerService {
-        if (!RerankerService._instance) {
-            RerankerService._instance = new RerankerService();
-        }
-        return RerankerService._instance;
+        return RerankerService.getInstance<RerankerService>();
     }
 
-    /**
-     * Private constructor to enforce singleton pattern
-     */
-    private constructor() {}
+    public constructor() {
+        super();
+    }
 
     /**
      * Parse RerankerConfiguration JSON from agent settings.

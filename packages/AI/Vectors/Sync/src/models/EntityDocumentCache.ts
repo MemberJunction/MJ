@@ -1,27 +1,22 @@
 import { UserInfo, RunView, LogStatus, RunViewResult } from "@memberjunction/core";
 import { MJEntityDocumentEntity, MJEntityDocumentTypeEntity } from "@memberjunction/core-entities";
+import { BaseSingleton } from "@memberjunction/global";
 
 /**
  * Simple caching class to load all Entity Documents and related data at once into memory
  */
-export class EntityDocumentCache {
-    private static _instance: EntityDocumentCache;
+export class EntityDocumentCache extends BaseSingleton<EntityDocumentCache> {
     private _loaded: boolean = false;
     private _cache: { [key: string]: MJEntityDocumentEntity } = {};
     private _typeCache: { [key: string]: MJEntityDocumentTypeEntity } = {};
     private _contextUser: UserInfo | null = null;
 
-    private constructor() {
-        // load up the cache
-        this._cache = {};
-        this._typeCache = {};
-    } 
+    public constructor() {
+        super();
+    }
 
     public static get Instance(): EntityDocumentCache {
-        if(!EntityDocumentCache._instance){
-            EntityDocumentCache._instance = new EntityDocumentCache();
-        }
-        return EntityDocumentCache._instance;
+        return EntityDocumentCache.getInstance<EntityDocumentCache>();
     }
 
     public get IsLoaded(): boolean {

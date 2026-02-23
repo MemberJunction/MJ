@@ -16,6 +16,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
+import { GetGlobalObjectStore } from "@memberjunction/global";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -121,15 +122,35 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
  * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
  */
 export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
-    private static _instance: GraphQLDataProvider;
+    /**
+     * Global Object Store key — follows BaseSingleton's naming convention so the
+     * singleton is discoverable in the same way as BaseSingleton-derived classes.
+     *
+     * NOTE: GraphQLDataProvider cannot extend BaseSingleton because it already
+     * extends ProviderBase (TypeScript single-inheritance constraint). Instead we
+     * use GetGlobalObjectStore() directly with the same key format.
+     */
+    private static readonly _globalStoreKey = '___SINGLETON__GraphQLDataProvider';
+
+    /**
+     * Returns the singleton instance of GraphQLDataProvider.
+     * Uses the Global Object Store to guarantee a single instance across the
+     * entire process, even if bundlers duplicate this module.
+     */
     public static get Instance(): GraphQLDataProvider {
-        return GraphQLDataProvider._instance;
+        const g = GetGlobalObjectStore();
+        return g ? g[GraphQLDataProvider._globalStoreKey] as GraphQLDataProvider : undefined;
     }
 
     constructor() {
         super();
-        if (!GraphQLDataProvider._instance)
-            GraphQLDataProvider._instance = this;
+        const g = GetGlobalObjectStore();
+        if (g && g[GraphQLDataProvider._globalStoreKey]) {
+            return g[GraphQLDataProvider._globalStoreKey] as this;
+        }
+        if (g) {
+            g[GraphQLDataProvider._globalStoreKey] = this;
+        }
     }
 
     private _client: GraphQLClient;

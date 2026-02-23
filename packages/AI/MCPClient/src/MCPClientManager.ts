@@ -17,6 +17,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import {
     MJMCPServerEntity,
@@ -90,10 +91,7 @@ import type {
  * await manager.disconnect('connection-id', { contextUser });
  * ```
  */
-export class MCPClientManager {
-    /** Singleton instance */
-    private static _instance: MCPClientManager | null = null;
-
+export class MCPClientManager extends BaseSingleton<MCPClientManager> {
     /** Active connections */
     private readonly connections: Map<string, MCPActiveConnection> = new Map();
 
@@ -134,10 +132,8 @@ export class MCPClientManager {
     private static readonly ENTITY_MCP_CONNECTION_TOOLS = 'MJ: MCP Server Connection Tools';
     private static readonly ENTITY_MCP_PERMISSIONS = 'MJ: MCP Server Connection Permissions';
 
-    /**
-     * Private constructor for singleton pattern
-     */
-    private constructor() {
+    public constructor() {
+        super();
         // Initialize event listener maps
         const eventTypes: MCPClientEventType[] = [
             'connected', 'disconnected', 'toolCalled', 'toolCallCompleted',
@@ -152,10 +148,7 @@ export class MCPClientManager {
      * Gets the singleton instance of MCPClientManager
      */
     public static get Instance(): MCPClientManager {
-        if (!MCPClientManager._instance) {
-            MCPClientManager._instance = new MCPClientManager();
-        }
-        return MCPClientManager._instance;
+        return MCPClientManager.getInstance<MCPClientManager>();
     }
 
     /**

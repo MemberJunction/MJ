@@ -136,7 +136,7 @@ type VerifyUserRecordFn = (
   attemptCacheUpdateIfNeeded?: boolean
 ) => Promise<UserInfo | undefined>;
 interface AuthProviderFactoryType {
-  getInstance(): {
+  Instance: {
     getByIssuer(issuer: string): { issuer: string; audience: string } | undefined;
     hasProviders(): boolean;
     getAllProviders(): Array<{ name: string; issuer: string; audience: string }>;
@@ -347,7 +347,7 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
   // 3. Verify issuer matches a configured provider and get audience
   // For Azure AD, try both v1 and v2 issuer formats since the token might
   // use a different format than what the provider is configured with
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const issuerVariants = getAzureAdIssuerVariants(issuer);
   let provider: { issuer: string; audience: string } | undefined;
 
@@ -580,5 +580,5 @@ export async function resolveOAuthUser(
  */
 export async function hasAuthProviders(): Promise<boolean> {
   await ensureMJServerImported();
-  return AuthProviderFactory.getInstance().hasProviders();
+  return AuthProviderFactory.Instance.hasProviders();
 }

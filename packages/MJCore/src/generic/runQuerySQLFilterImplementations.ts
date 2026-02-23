@@ -7,6 +7,7 @@
  * @module @memberjunction/core/runQuerySQLFilterImplementations
  */
 
+import { BaseSingleton } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
 
 /**
@@ -210,14 +211,19 @@ export const RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS: RunQuerySQLFilter[] =
     }));
 
 /**
- * Singleton class for managing RunQuery SQL filters with implementations
+ * Singleton class for managing RunQuery SQL filters with implementations.
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
  */
-export class RunQuerySQLFilterManager {
-    private static _instance: RunQuerySQLFilterManager;
-    private _filters: Map<string, RunQuerySQLFilter>;
+export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterManager> {
+    private _filters: Map<string, RunQuerySQLFilter> = new Map();
 
-    private constructor() {
-        this._filters = new Map();
+    /**
+     * Use RunQuerySQLFilterManager.Instance to get the singleton instance.
+     */
+    public constructor() {
+        super();
         // Initialize with all filters that have implementations
         RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS.forEach(filter => {
             if (filter.implementation) {
@@ -230,10 +236,7 @@ export class RunQuerySQLFilterManager {
      * Gets the singleton instance
      */
     public static get Instance(): RunQuerySQLFilterManager {
-        if (!this._instance) {
-            this._instance = new RunQuerySQLFilterManager();
-        }
-        return this._instance;
+        return RunQuerySQLFilterManager.getInstance<RunQuerySQLFilterManager>();
     }
 
     /**

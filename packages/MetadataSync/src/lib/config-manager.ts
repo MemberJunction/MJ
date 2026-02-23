@@ -9,6 +9,7 @@
 
 import { cosmiconfigSync } from 'cosmiconfig';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
+import { BaseSingleton } from '@memberjunction/global';
 import { MJConfig } from '../config';
 
 /**
@@ -38,24 +39,20 @@ const DEFAULT_SYNC_CONFIG: Partial<MJConfig> = {
  * consistent access across all commands, even when the current working
  * directory changes during execution.
  */
-export class ConfigManager {
-  private static instance: ConfigManager;
+export class ConfigManager extends BaseSingleton<ConfigManager> {
   private originalCwd: string | null = null;
   private mjConfig: MJConfig | null = null;
   private configLoaded = false;
 
-  private constructor() {
-    // Original cwd will be set on first access
+  public constructor() {
+    super();
   }
 
   /**
    * Get the singleton instance of ConfigManager
    */
-  static getInstance(): ConfigManager {
-    if (!ConfigManager.instance) {
-      ConfigManager.instance = new ConfigManager();
-    }
-    return ConfigManager.instance;
+  public static get Instance(): ConfigManager {
+    return ConfigManager.getInstance<ConfigManager>();
   }
 
   /**
@@ -129,4 +126,4 @@ export class ConfigManager {
 }
 
 // Export singleton instance for convenience
-export const configManager = ConfigManager.getInstance();
+export const configManager = ConfigManager.Instance;

@@ -1,3 +1,4 @@
+import { BaseSingleton } from "@memberjunction/global";
 import { UserInfo } from "./securityInfo";
 import { IMetadataProvider } from "./interfaces";
 import { Metadata } from "./metadata";
@@ -226,25 +227,28 @@ export function RegisterForStartup<T extends StartupClassConstructor>(
 /**
  * Manages registration and loading of startup classes.
  * This is a singleton that handles the @RegisterForStartup decorator pattern.
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
  */
-export class StartupManager {
-    private static _instance: StartupManager;
-
+export class StartupManager extends BaseSingleton<StartupManager> {
     private _registrations: StartupRegistration[] = [];
     private _loadCompleted: boolean = false;
     private _loadPromise: Promise<LoadAllResult> | null = null;
     private _lastResult: LoadAllResult | null = null;
 
-    private constructor() {}
+    /**
+     * Use StartupManager.Instance to get the singleton instance.
+     */
+    public constructor() {
+        super();
+    }
 
     /**
      * Returns the singleton instance of StartupManager
      */
     public static get Instance(): StartupManager {
-        if (!StartupManager._instance) {
-            StartupManager._instance = new StartupManager();
-        }
-        return StartupManager._instance;
+        return StartupManager.getInstance<StartupManager>();
     }
 
     /**

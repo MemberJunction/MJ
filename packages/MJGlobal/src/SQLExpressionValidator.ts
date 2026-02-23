@@ -9,6 +9,8 @@
  * @module @memberjunction/global/SQLExpressionValidator
  */
 
+import { BaseSingleton } from './BaseSingleton';
+
 /**
  * Dangerous SQL keywords that are never allowed in user-provided expressions
  */
@@ -155,19 +157,19 @@ export interface SQLValidationOptions {
  * }
  * ```
  */
-export class SQLExpressionValidator {
-  private static _instance: SQLExpressionValidator;
-
-  private constructor() {}
+export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator> {
+  /**
+   * Use SQLExpressionValidator.Instance to get the singleton instance.
+   */
+  public constructor() {
+    super();
+  }
 
   /**
    * Gets the singleton instance of the validator
    */
   public static get Instance(): SQLExpressionValidator {
-    if (!this._instance) {
-      this._instance = new SQLExpressionValidator();
-    }
-    return this._instance;
+    return SQLExpressionValidator.getInstance<SQLExpressionValidator>();
   }
 
   /**

@@ -2,7 +2,7 @@
 import { TaskBase, QueueBase } from "./QueueBase";
 import { LogError, Metadata, RunView, UserInfo, BaseEntity } from "@memberjunction/core";
 import { MJQueueEntity, MJQueueTaskEntity, MJQueueTypeEntity } from "@memberjunction/core-entities";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, BaseSingleton } from "@memberjunction/global";
 import os from 'os';
 
 /**
@@ -18,21 +18,16 @@ import os from 'os';
  *information. Heartbeat information is used to determine if a queue has crashed or not by other processes 
  *or not. After a heartbeat timeout is reached, other queues can pick up tasks from a crashed process.
  */
-export class QueueManager { 
+export class QueueManager extends BaseSingleton<QueueManager> {
   private _queueTypes: MJQueueTypeEntity[] = [];
   private _queues: QueueBase[] = [];
-  private static _instance: QueueManager | null = null;
-  private static _globalInstanceKey = '__mj_queue_manager_instance__';
 
   public static get QueueTypes(): MJQueueTypeEntity[] {
     return QueueManager.Instance._queueTypes;
   }
 
   public static get Instance(): QueueManager {
-    if (QueueManager._instance === null)
-      QueueManager._instance = new QueueManager();
-
-    return QueueManager._instance;
+    return QueueManager.getInstance<QueueManager>();
   }
 
   private configPromise: Promise<void> | null = null;
@@ -63,23 +58,8 @@ export class QueueManager {
     QueueManager.Instance._queueTypes = queueTypes.Results;
   }
 
-  constructor() {
-    if (QueueManager._instance === null) {
-      // check the global object first to see if we have an instance there since multiple modules might load this code
-      // and the static instance colud be different for each module based on JS import paths
-      const g = MJGlobal.Instance.GetGlobalObjectStore();
-      if (g && g[QueueManager._globalInstanceKey]) {
-        QueueManager._instance = g[QueueManager._globalInstanceKey];
-      } 
-      else {
-        if (g)
-          g[QueueManager._globalInstanceKey] = this; // save the instance to the global object store if we have a global object store
-
-        QueueManager._instance = this; // and save our new instance to the static member for future use
-      }
-    }
-
-    return QueueManager._instance;
+  public constructor() {
+    super();
   }
 
   public static async AddTask(QueueType: string, data: any, options: any, contextUser: UserInfo): Promise<TaskBase | undefined> {

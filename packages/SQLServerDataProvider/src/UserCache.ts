@@ -1,40 +1,25 @@
 import { LogError, Metadata, UserInfo } from "@memberjunction/core";
-import { MJGlobal } from "@memberjunction/global";
+import { BaseSingleton } from "@memberjunction/global";
 import sql from 'mssql';
 
 const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
 
 /**
- * Server side cache of users and their roles
+ * Server side cache of users and their roles.
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
  */
-export class UserCache {
-    static _instance: UserCache;
-    private _globalObjectKey: string = 'MJ.SQLServerDataProvider.UserCache.Instance';
+export class UserCache extends BaseSingleton<UserCache> {
     private _users: UserInfo[];
 
-    constructor() {
-      if (UserCache._instance) 
-          return UserCache._instance;
-      else {
-          const g = MJGlobal.Instance.GetGlobalObjectStore();
-          if (g && g[this._globalObjectKey]) {
-            UserCache._instance = g[this._globalObjectKey];
-              return UserCache._instance;
-          }
-
-          // finally, if we get here, we are the first instance of this class, so create it
-          if (!UserCache._instance) {
-            UserCache._instance = this;
-          
-              // try to put this in global object store if there is a window/e.g. we're in a browser, a global object, we're in node, etc...
-              if (g)
-                  g[this._globalObjectKey] = UserCache._instance;
-              
-              return this;
-          }
-      }
+    /**
+     * Use UserCache.Instance to get the singleton instance.
+     */
+    public constructor() {
+      super();
     }
-    
+
     public get SYSTEM_USER_ID(): string {
       return SYSTEM_USER_ID;
     }
@@ -72,15 +57,12 @@ export class UserCache {
         }
       }
       catch (err) {
-        LogError(err); 
+        LogError(err);
       }
     }
 
-    static get Instance(): UserCache {
-      if (!UserCache._instance) {
-        UserCache._instance = new UserCache();
-      }
-      return UserCache._instance;
+    public static get Instance(): UserCache {
+      return UserCache.getInstance<UserCache>();
     }
 
     public get Users(): UserInfo[] {
@@ -88,14 +70,14 @@ export class UserCache {
     }
 
     static get Users(): UserInfo[] {
-      return UserCache.Instance.Users; 
+      return UserCache.Instance.Users;
     }
 
     /**
      * Convenience method to get a user by their name
      * @param name - name of the user
      * @param caseSensitive - optional, if true, the search will be case sensitive
-     * @returns 
+     * @returns
      */
     public UserByName(name: string, caseSensitive: boolean = false): UserInfo | undefined {
       return UserCache.Users.find(u => {
@@ -104,6 +86,5 @@ export class UserCache {
         return caseSensitive ? comparisonItem === item : comparisonItem.toLowerCase() === item.toLowerCase();
       });
     }
-  }
-  
+}
   

@@ -22,7 +22,7 @@ describe('Authentication Provider Backward Compatibility', () => {
   let factory: AuthProviderFactory;
   
   beforeEach(() => {
-    factory = AuthProviderFactory.getInstance();
+    factory = AuthProviderFactory.Instance;
     factory.clear();
   });
   
