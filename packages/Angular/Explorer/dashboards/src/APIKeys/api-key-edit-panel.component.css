@@ -47,8 +47,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 20px 24px;
-    background: linear-gradient(135deg, var(--mj-color-brand-100) 0%, var(--mj-color-brand-200) 100%);
-    border-bottom: 1px solid var(--mj-color-accent-300);
+    background: var(--mj-brand-accent-subtle);
+    border-bottom: 1px solid var(--mj-border-default);
     flex-shrink: 0;
 }
 
@@ -58,7 +58,7 @@
     gap: 12px;
     font-weight: 600;
     font-size: 17px;
-    color: var(--mj-color-brand-800);
+    color: var(--mj-text-primary);
     flex: 1;
     min-width: 0;
 }
@@ -80,12 +80,12 @@
 
 .key-status.active {
     background: var(--mj-status-success-bg);
-    color: var(--mj-color-success-600);
+    color: var(--mj-status-success-text);
 }
 
 .key-status.revoked {
     background: var(--mj-status-error-bg);
-    color: var(--mj-color-error-600);
+    color: var(--mj-status-error);
 }
 
 .slideout-close {
@@ -94,18 +94,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.5);
+    background: var(--mj-bg-surface-hover);
     border: none;
     border-radius: 8px;
-    color: var(--mj-color-brand-800);  /* slideout close on amber header */
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
 }
 
 .slideout-close:hover {
-    background: rgba(255, 255, 255, 0.8);
-    color: var(--mj-color-brand-800);
+    background: var(--mj-bg-surface-active);
+    color: var(--mj-text-primary);
 }
 
 /* Panel Tabs */
@@ -136,7 +136,7 @@
 
 .slideout-tab:hover {
     background: var(--mj-border-default);
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
 }
 
 .slideout-tab.active {
@@ -168,7 +168,7 @@
 
 .slideout-tab:not(.active) .tab-badge {
     background: var(--mj-border-default);
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
 }
 
 /* Panel Content */
@@ -212,20 +212,20 @@
 }
 
 .message.success {
-    background: var(--mj-color-success-100);
-    color: var(--mj-color-success-600);
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
 }
 
 .message.error {
-    background: var(--mj-color-error-100);
-    color: var(--mj-color-error-600);
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error);
 }
 
 /* Legacy tab styles removed - now using slideout-tabs */
 
 /* Key Info Card */
 .key-info-card {
-    background: linear-gradient(135deg, var(--mj-color-brand-100) 0%, var(--mj-color-brand-200) 100%);
+    background: var(--mj-brand-accent-subtle);
     border-radius: 10px;
     padding: 14px 16px;
     margin-bottom: 16px;
@@ -246,7 +246,7 @@
 .info-label {
     font-size: 12px;
     font-weight: 500;
-    color: var(--mj-color-brand-800);
+    color: var(--mj-text-primary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -254,9 +254,9 @@
 .hash-value {
     font-family: 'Fira Code', 'Consolas', monospace;
     font-size: 13px;
-    color: var(--mj-color-brand-800);
+    color: var(--mj-text-primary);
     word-break: break-all;
-    background: rgba(255, 255, 255, 0.5);
+    background: var(--mj-bg-surface);
     padding: 8px 12px;
     border-radius: 6px;
 }
@@ -276,7 +276,7 @@
 .info-value {
     font-size: 13px;
     font-weight: 500;
-    color: var(--mj-color-brand-800);
+    color: var(--mj-text-primary);
 }
 
 .info-value.never-used {
@@ -334,7 +334,7 @@
     display: block;
     font-size: 12px;
     font-weight: 500;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
     margin-bottom: 4px;
 }
 
@@ -355,7 +355,7 @@
     gap: 6px;
     padding: 8px 12px;
     background: transparent;
-    border: 1px dashed var(--mj-color-neutral-300);
+    border: 1px dashed var(--mj-border-strong);
     border-radius: 6px;
     font-size: 13px;
     color: var(--mj-text-secondary);
@@ -376,7 +376,7 @@
 
 /* Danger Zone */
 .danger-zone {
-    background: var(--mj-color-error-50);
+    background: var(--mj-status-error-bg);
     border: 1px solid var(--mj-status-error-border);
     border-radius: 10px;
     padding: 14px 16px;
@@ -386,7 +386,7 @@
     margin: 0 0 12px 0;
     font-size: 12px;
     font-weight: 600;
-    color: var(--mj-color-error-600);
+    color: var(--mj-status-error);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -406,20 +406,20 @@
 
 .revoke-info i {
     font-size: 20px;
-    color: var(--mj-color-error-600);
+    color: var(--mj-status-error);
     margin-top: 2px;
 }
 
 .revoke-info strong {
     display: block;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error-text);
     margin-bottom: 4px;
 }
 
 .revoke-info p {
     margin: 0;
     font-size: 13px;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error-text);
 }
 
 .revoke-btn {
@@ -428,24 +428,24 @@
     gap: 8px;
     padding: 10px 20px;
     background: var(--mj-bg-surface);
-    border: 1px solid var(--mj-color-error-600);
+    border: 1px solid var(--mj-status-error);
     border-radius: 8px;
     font-size: 14px;
     font-weight: 600;
-    color: var(--mj-color-error-600);
+    color: var(--mj-status-error);
     cursor: pointer;
     transition: all 0.2s ease;
     white-space: nowrap;
 }
 
 .revoke-btn:hover {
-    background: var(--mj-color-error-600);
+    background: var(--mj-status-error);
     color: var(--mj-text-inverse);
 }
 
 /* Revoke Confirm */
 .revoke-confirm {
-    background: var(--mj-color-error-50);
+    background: var(--mj-status-error-bg);
     border-radius: 8px;
 }
 
@@ -457,12 +457,12 @@
 
 .confirm-warning i {
     font-size: 24px;
-    color: var(--mj-color-error-600);
+    color: var(--mj-status-error);
 }
 
 .confirm-warning strong {
     display: block;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error-text);
     font-size: 16px;
     margin-bottom: 4px;
 }
@@ -470,7 +470,7 @@
 .confirm-warning p {
     margin: 0;
     font-size: 13px;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error-text);
 }
 
 .confirm-input {
@@ -481,12 +481,12 @@
     display: block;
     font-size: 14px;
     font-weight: 500;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error-text);
     margin-bottom: 8px;
 }
 
 .confirm-input code {
-    background: var(--mj-color-error-100);
+    background: var(--mj-status-error-bg);
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 600;
@@ -507,7 +507,7 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: var(--mj-color-error-600);
+    background: var(--mj-status-error);
     border: none;
     border-radius: 8px;
     font-size: 14px;
@@ -518,7 +518,7 @@
 }
 
 .confirm-revoke-btn:hover:not(:disabled) {
-    background: var(--mj-color-error-700);
+    background: var(--mj-status-error-text);
 }
 
 .confirm-revoke-btn:disabled {
@@ -542,7 +542,7 @@
 
 .revoked-notice strong {
     display: block;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
     margin-bottom: 4px;
 }
 
@@ -569,7 +569,7 @@
 .scope-count {
     font-size: 14px;
     font-weight: 500;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
 }
 
 /* Scope Categories */
@@ -690,7 +690,7 @@
     display: block;
     font-weight: 500;
     font-size: 13px;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
     font-family: monospace;
 }
 
@@ -718,7 +718,7 @@
     flex-direction: column;
     align-items: center;
     padding: 20px;
-    background: linear-gradient(135deg, var(--mj-color-brand-100) 0%, var(--mj-color-brand-200) 100%);
+    background: var(--mj-brand-accent-subtle);
     border-radius: 12px;
     text-align: center;
 }
@@ -732,12 +732,12 @@
 .stat-value {
     font-size: 24px;
     font-weight: 700;
-    color: var(--mj-color-brand-800);
+    color: var(--mj-text-primary);
 }
 
 .stat-label {
     font-size: 12px;
-    color: var(--mj-color-brand-800);
+    color: var(--mj-text-primary);
     margin-top: 4px;
 }
 
@@ -784,7 +784,7 @@
     align-items: center;
     gap: 8px;
     font-family: monospace;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
 }
 
 .method-badge {
@@ -837,7 +837,7 @@
 .empty-state span {
     font-size: 16px;
     font-weight: 500;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
 }
 
 .empty-state p {
@@ -910,24 +910,24 @@
     align-items: flex-start;
     gap: 12px;
     padding: 16px;
-    background: linear-gradient(135deg, var(--mj-color-error-50) 0%, var(--mj-color-error-100) 100%);
+    background: var(--mj-status-error-bg);
     border: 1px solid var(--mj-status-error-border);
     border-radius: 10px;
     margin-bottom: 16px;
     font-size: 13px;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error-text);
 }
 
 .no-scopes-warning i {
     font-size: 20px;
-    color: var(--mj-color-error-600);
+    color: var(--mj-status-error);
     margin-top: 2px;
     flex-shrink: 0;
 }
 
 .no-scopes-warning strong {
     display: block;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error-text);
     font-size: 14px;
     margin-bottom: 4px;
 }

@@ -435,7 +435,7 @@
 }
 
 .role-card.selected {
-  background: var(--mj-color-accent-300);
+  background: var(--mj-brand-accent-subtle);
   border-color: var(--mj-brand-primary);
   box-shadow: var(--mj-shadow-md);
 }

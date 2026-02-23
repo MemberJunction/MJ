@@ -369,7 +369,7 @@
 
 /* Info Alert (Blue) */
 .alert-info {
-  background: var(--mj-color-accent-300);
+  background: var(--mj-brand-accent-subtle);
   border-color: var(--mj-brand-primary);
   color: var(--mj-text-primary);
 }

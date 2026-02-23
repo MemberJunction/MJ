@@ -351,6 +351,7 @@
     border-radius: 16px !important;
     overflow: hidden;
     box-shadow: var(--mj-shadow-2xl) !important;
+    background: var(--mj-bg-surface) !important;
 }
 
 :host ::ng-deep kendo-window .k-window-content {
@@ -358,6 +359,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    background: var(--mj-bg-surface) !important;
 }
 
 :host ::ng-deep kendo-window-titlebar {
@@ -396,7 +398,7 @@
 }
 
 .window-close-btn:hover {
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
     background: var(--mj-bg-surface-hover);
 }
 
@@ -424,7 +426,7 @@
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
     margin-bottom: 8px;
     letter-spacing: 0.01em;
 }
@@ -446,6 +448,8 @@
     border-radius: 8px;
     font-size: 14px;
     border-color: var(--mj-border-default);
+    background: var(--mj-bg-surface) !important;
+    color: var(--mj-text-primary) !important;
     transition: all 0.2s ease;
 }
 
@@ -486,7 +490,7 @@
 
 .checkbox-label:hover {
     background: var(--mj-bg-surface-sunken);
-    border-color: var(--mj-color-neutral-300);
+    border-color: var(--mj-border-strong);
 }
 
 .checkbox-label input {
@@ -496,7 +500,7 @@
 
 .checkbox-label span:first-of-type {
     font-weight: 600;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-primary);
     font-size: 14px;
 }
 

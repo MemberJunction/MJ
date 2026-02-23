@@ -464,7 +464,7 @@
 .entity-item .entity-info .entity-icon {
   width: 40px;
   height: 40px;
-  background: var(--mj-color-accent-300);
+  background: var(--mj-brand-accent-subtle);
   border-radius: var(--mj-radius-md);
   display: flex;
   align-items: center;
@@ -810,7 +810,7 @@
 
 .entity-chip:hover {
   border-color: var(--mj-brand-primary);
-  background: var(--mj-color-accent-300);
+  background: var(--mj-brand-accent-subtle);
   transform: translateY(-1px);
   box-shadow: var(--mj-shadow-sm);
 }
@@ -941,7 +941,7 @@
 
 /* Icon wrapper color variants */
 .icon-wrapper-primary {
-  background: var(--mj-color-accent-300);
+  background: var(--mj-brand-accent-subtle);
   color: var(--mj-brand-primary);
 }
 
@@ -1178,7 +1178,7 @@
 
   .drag-handle:active {
     cursor: grabbing;
-    background: var(--mj-color-accent-300);
+    background: var(--mj-brand-accent-subtle);
   }
 
   .entity-item .entity-info {

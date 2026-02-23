@@ -99,7 +99,7 @@
 }
 
 .kpi-card.success {
-    background: linear-gradient(135deg, var(--mj-color-success-50) 0%, var(--mj-color-success-100) 100%);
+    background: var(--mj-status-success-bg);
 }
 
 .kpi-card.warning {
