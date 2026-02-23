@@ -1088,16 +1088,31 @@ SELECT * FROM delete_result`;
             // Skip string literals and already-quoted identifiers
             if (token.startsWith("'") || token.startsWith('"')) return token;
 
-            // Replace bare field names: e.g.  UserID='...'  →  "UserID"='...'
-            // A bare field name can appear as  FieldName=  or  FieldName =  etc.
-            for (const fieldName of fieldNames) {
-                // Match the field name at word boundary (case-insensitive match
-                // so that callers who write 'userid' still find 'UserID')
-                const re = new RegExp(`\\b${fieldName}\\b`, 'gi');
-                token = token.replace(re, pgDialect.QuoteIdentifier(fieldName));
+            // When \S+ captures a token like  RecordID='ID|uuid'  the embedded
+            // single-quoted value must NOT be subject to field-name replacement.
+            // Split at the first single quote: only the part before it (the
+            // identifier portion) gets field names quoted.
+            const quoteIdx = token.indexOf("'");
+            if (quoteIdx > 0) {
+                const identPart = token.substring(0, quoteIdx);
+                const valuePart = token.substring(quoteIdx);
+                return this.quoteFieldNamesInToken(identPart, fieldNames) + valuePart;
             }
-            return token;
+
+            return this.quoteFieldNamesInToken(token, fieldNames);
         }).join(' ');
+    }
+
+    /**
+     * Replaces bare field names in a token fragment with double-quoted identifiers.
+     * Uses word-boundary matching so that callers who write 'userid' still find 'UserID'.
+     */
+    private quoteFieldNamesInToken(token: string, fieldNames: Set<string>): string {
+        for (const fieldName of fieldNames) {
+            const re = new RegExp(`\\b${fieldName}\\b`, 'gi');
+            token = token.replace(re, pgDialect.QuoteIdentifier(fieldName));
+        }
+        return token;
     }
 
     private resolveOrderBy(params: RunViewParams, entityInfo: EntityInfo): string {
