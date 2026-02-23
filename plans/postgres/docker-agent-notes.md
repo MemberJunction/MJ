@@ -752,3 +752,58 @@ Report: `packages/SQLConverter/VERIFICATION_REPORT.md` (385 lines)
   - `MJ_Workbench_PG_v3` — full schema from Session 9
   - `MJ_Workbench_pg_v4` — fresh install from Session 11 verification
 - **Next Step**: Full stack integration testing with MJAPI/MJExplorer + Playwright (per user's instruction, after verification is complete)
+
+---
+
+### Session 12: CRM Schema Parity Test (Planned)
+**Date**: 2026-02-23
+**Prompt**: `prompt-v15-crm-parity-test.md`
+**Status**: NOT YET STARTED - plan written, waiting for CC Docker session to execute
+
+#### Objective
+Full vertical-slice parity test: write a sample CRM schema (12 tables in `sample_crm` schema), run through the full MJ pipeline (migration -> conversion -> CodeGen -> MJAPI -> MJExplorer) on BOTH SQL Server and PostgreSQL, and compare results at every layer.
+
+#### Pre-Conditions (verified 2026-02-23)
+- Docker containers all healthy: claude-dev, postgres-claude (555 tables in __mj), sql-claude
+- Branch: `postgres-5-0-implementation` at commit `48febdffc` (clean working tree)
+- MJAPI running inside container against PostgreSQL (port 4000)
+- MJExplorer running inside container (port 4200)
+- PostgreSQL actively processing scheduled jobs (Agent Memory Manager: 406 runs, 404 successes)
+- All prior work committed and pushed to origin/postgres-5-0-implementation
+
+#### Approach: Sequential (One DB at a Time)
+- NOT side-by-side (avoids worktree complexity and singleton state conflicts)
+- Run against SQL Server first, capture snapshots
+- Switch .env to PostgreSQL, re-run, capture snapshots
+- Diff the snapshots at each layer
+
+#### 8 Phases
+1. Write SQL Server migration (12-table CRM schema with seed data + extended props)
+2. Convert to PostgreSQL via SQLConverter pipeline
+3. Apply migrations to both databases
+4. CodeGen against SQL Server + metadata snapshot
+5. CodeGen against PostgreSQL + metadata snapshot + diff
+6. MJAPI runtime testing against SQL Server (GraphQL API + optional Playwright)
+7. MJAPI runtime testing against PostgreSQL (same tests)
+8. Generate comprehensive parity report
+
+#### Key Files
+- Plan: `plans/postgres/prompt-v15-crm-parity-test.md`
+- Report (to be created): `plans/postgres/CRM_PARITY_REPORT.md`
+- Migration (to be created): `migrations/v5/V202602240001__v5.3.x__Sample_CRM_Schema.sql`
+- PG Migration (to be created): `migrations-postgres/v5/V202602240001__v5.3.x__Sample_CRM_Schema_PG.sql`
+
+#### How to Start This Session
+```bash
+# Inside claude-dev container:
+cd /workspace/MJ
+git checkout postgres-5-0-implementation
+git pull origin postgres-5-0-implementation
+cat plans/postgres/prompt-v15-crm-parity-test.md
+
+# Then launch CC with the plan:
+cc -p "Read and execute the plan at plans/postgres/prompt-v15-crm-parity-test.md. This is a PostgreSQL parity test - follow all 8 phases sequentially, committing after each phase. Read the full plan first before starting."
+```
+
+#### Estimated Duration: 2.5-3.5 hours
+#### Estimated Cost: ~$20-30 (based on Session 4 which was similar scope)
