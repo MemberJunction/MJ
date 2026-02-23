@@ -184,7 +184,7 @@ export class CreateTableRule implements IConversionRule {
         // Column definitions: ColName TYPE ... (includes both PG and SQL Server type
         // names since type conversion may not have run yet at this phase)
         if (parenDepth >= 1) {
-          const colMatch = trimmed.match(/^([A-Za-z_]\w*)\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR|NVARCHAR|CHAR|NCHAR|INTEGER|INT|BIGINT|SMALLINT|TINYINT|DOUBLE|FLOAT|REAL|NUMERIC|DECIMAL|MONEY|BYTEA|IMAGE|VARBINARY|XML|BIT|UNIQUEIDENTIFIER|DATETIMEOFFSET|DATETIME2|DATETIME|DATE|SERIAL|JSON|JSONB|GENERATED)\b/i);
+          const colMatch = trimmed.match(/^([A-Za-z_]\w*)\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR|NVARCHAR|CHAR|NCHAR|INTEGER|INT|BIGINT|SMALLINT|TINYINT|DOUBLE|FLOAT|REAL|NUMERIC|DECIMAL|MONEY|BYTEA|IMAGE|VARBINARY|XML|BIT|UNIQUEIDENTIFIER|DATETIMEOFFSET|DATETIME2|DATETIME|DATE|TIME|SERIAL|JSON|JSONB|GENERATED)\b/i);
           if (colMatch && !trimmed.startsWith('"') && !trimmed.startsWith('CONSTRAINT')) {
             const colName = colMatch[1];
             if (/[A-Z]/.test(colName)) {
@@ -389,7 +389,7 @@ export class CreateTableRule implements IConversionRule {
     for (const line of lines) {
       const trimmed = line.trim();
       // Match: "ColumnName" TYPE ... or ColumnName TYPE ...
-      const colMatch = trimmed.match(/^"?(\w+)"?\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR\(\d+\)|CHAR\(\d+\)|INTEGER|BIGINT|SMALLINT|DOUBLE PRECISION|REAL|NUMERIC\([^)]+\)|BYTEA|XML)\b/i);
+      const colMatch = trimmed.match(/^"?(\w+)"?\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR\(\d+\)|CHAR\(\d+\)|INTEGER|BIGINT|SMALLINT|DOUBLE PRECISION|REAL|NUMERIC\([^)]+\)|BYTEA|XML|TIME)\b/i);
       if (colMatch) {
         columns.set(colMatch[1].toLowerCase(), colMatch[2].toUpperCase());
       }

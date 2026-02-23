@@ -111,6 +111,23 @@ function parseBalancedArgs(sql: string, openIdx: number): { args: string[]; endI
   return { args, endIdx: i };
 }
 
+function isTimeExpression(expr: string): boolean {
+  const upper = expr.toUpperCase().trim();
+  return /\bAS\s+TIME\s*\)/i.test(upper) || /::TIME\b/i.test(upper);
+}
+
+function buildDateDiffExpr(e: string, s: string, extractExpr: string, useTimestamp: boolean): string {
+  if (useTimestamp) {
+    return extractExpr
+      .replace(/\$E/g, `${e}::TIMESTAMPTZ`)
+      .replace(/\$S/g, `${s}::TIMESTAMPTZ`);
+  }
+  // TIME expressions: subtract directly without TIMESTAMPTZ cast
+  return extractExpr
+    .replace(/\$E/g, e)
+    .replace(/\$S/g, s);
+}
+
 function convertDateDiff(sql: string): string {
   const pattern = /\bDATEDIFF\s*\(/gi;
   let result = '';
@@ -128,22 +145,24 @@ function convertDateDiff(sql: string): string {
     const unitLower = unit.toLowerCase();
     const s = startExpr;
     const e = endExpr;
+    // Detect TIME-typed expressions to avoid invalid ::TIMESTAMPTZ casts
+    const useTimestamp = !isTimeExpression(s) && !isTimeExpression(e);
     let replacement: string;
     switch (unitLower) {
       case 'day': case 'dd': case 'd':
-        replacement = `EXTRACT(DAY FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`; break;
+        replacement = buildDateDiffExpr(e, s, `EXTRACT(DAY FROM ($E - $S))`, useTimestamp); break;
       case 'hour': case 'hh':
-        replacement = `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ)) / 3600`; break;
+        replacement = buildDateDiffExpr(e, s, `EXTRACT(EPOCH FROM ($E - $S)) / 3600`, useTimestamp); break;
       case 'minute': case 'mi': case 'n':
-        replacement = `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ)) / 60`; break;
+        replacement = buildDateDiffExpr(e, s, `EXTRACT(EPOCH FROM ($E - $S)) / 60`, useTimestamp); break;
       case 'second': case 'ss': case 's':
-        replacement = `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`; break;
+        replacement = buildDateDiffExpr(e, s, `EXTRACT(EPOCH FROM ($E - $S))`, useTimestamp); break;
       case 'year': case 'yy': case 'yyyy':
-        replacement = `EXTRACT(YEAR FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ))`; break;
+        replacement = buildDateDiffExpr(e, s, `EXTRACT(YEAR FROM AGE($E, $S))`, useTimestamp); break;
       case 'month': case 'mm': case 'm':
-        replacement = `(EXTRACT(YEAR FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ)) * 12 + EXTRACT(MONTH FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ)))`; break;
+        replacement = buildDateDiffExpr(e, s, `(EXTRACT(YEAR FROM AGE($E, $S)) * 12 + EXTRACT(MONTH FROM AGE($E, $S)))`, useTimestamp); break;
       default:
-        replacement = `EXTRACT(DAY FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`; break;
+        replacement = buildDateDiffExpr(e, s, `EXTRACT(DAY FROM ($E - $S))`, useTimestamp); break;
     }
     result += sql.slice(lastIdx, match.index) + replacement;
     lastIdx = parsed.endIdx;
