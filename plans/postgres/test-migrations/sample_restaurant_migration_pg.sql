@@ -8,8 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Schema
-CREATE SCHEMA IF NOT EXISTS sample_rest;
-SET search_path TO sample_rest, public;
+CREATE SCHEMA IF NOT EXISTS sample_restaurant;
+SET search_path TO sample_restaurant, public;
 
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
@@ -177,7 +177,7 @@ END $$;
 
 -- ===================== Views =====================
 
-CREATE OR REPLACE VIEW sample_rest."vwActiveMenu" AS SELECT
+CREATE OR REPLACE VIEW sample_rest.vwActiveMenu AS SELECT
     mi."ID" AS "MenuItemID",
     mi."Name" AS "ItemName",
     mi."Description" AS "ItemDescription",
@@ -198,7 +198,7 @@ FROM sample_rest."MenuItem" mi
 INNER JOIN sample_rest."MenuCategory" mc ON mc."ID" = mi."CategoryID"
 WHERE mi."IsAvailable" = 1 AND mc."IsActive" = 1;
 
-CREATE OR REPLACE VIEW sample_rest."vwTodayReservations" AS SELECT
+CREATE OR REPLACE VIEW sample_rest.vwTodayReservations AS SELECT
     r."ID" AS "ReservationID",
     r."GuestName",
     r."GuestPhone",
@@ -220,7 +220,7 @@ FROM sample_rest."Reservation" r
 LEFT JOIN sample_rest."TableSeating" ts ON ts."ID" = r."TableID"
 WHERE r."ReservationDate" = CAST(NOW() AS DATE);
 
-CREATE OR REPLACE VIEW sample_rest."vwServerSales" AS SELECT
+CREATE OR REPLACE VIEW sample_rest.vwServerSales AS SELECT
     s."ID" AS "StaffID",
     s."FirstName" || ' ' || s."LastName" AS "ServerName",
     s."Email",
@@ -246,7 +246,7 @@ GROUP BY s."ID", s."FirstName", s."LastName", s."Email", s."HourlyRate",
          EXTRACT(YEAR FROM co."OrderDate"), EXTRACT(MONTH FROM co."OrderDate")
 HAVING COUNT(co."ID") > 0;
 
-CREATE OR REPLACE VIEW sample_rest."vwDailyReport" AS SELECT
+CREATE OR REPLACE VIEW sample_rest.vwDailyReport AS SELECT
     CAST(co."OrderDate" AS DATE) AS "OrderDate",
     COUNT(co."ID") AS "TotalOrders",
     COALESCE(SUM(co."SubTotal"), 0) AS "GrossRevenue",

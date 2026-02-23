@@ -8,8 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Schema
-CREATE SCHEMA IF NOT EXISTS sample_lib;
-SET search_path TO sample_lib, public;
+CREATE SCHEMA IF NOT EXISTS sample_library;
+SET search_path TO sample_library, public;
 
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
@@ -176,7 +176,7 @@ END $$;
 
 -- ===================== Views =====================
 
-CREATE OR REPLACE VIEW sample_lib."vwAvailableBooks" AS SELECT
+CREATE OR REPLACE VIEW sample_lib.vwAvailableBooks AS SELECT
     b."ID" AS "BookID",
     b."Title",
     b."ISBN",
@@ -194,7 +194,7 @@ INNER JOIN sample_lib."Branch" br ON br."ID" = bc."BranchID"
 WHERE b."IsActive" = 1
 GROUP BY b."ID", b."Title", b."ISBN", a."FirstName", a."LastName", g."Name", br."ID", br."Name";
 
-CREATE OR REPLACE VIEW sample_lib."vwOverdueCheckouts" AS SELECT
+CREATE OR REPLACE VIEW sample_lib.vwOverdueCheckouts AS SELECT
     c."ID" AS "CheckoutID",
     p."FirstName" || ' ' || p."LastName" AS "PatronName",
     p."CardNumber",
@@ -217,7 +217,7 @@ INNER JOIN sample_lib."Book" bk ON bk."ID" = bc."BookID"
 INNER JOIN sample_lib."Branch" br ON br."ID" = bc."BranchID"
 WHERE c."IsReturned" = 0 AND c."DueDate" < NOW();
 
-CREATE OR REPLACE VIEW sample_lib."vwPatronHistory" AS SELECT
+CREATE OR REPLACE VIEW sample_lib.vwPatronHistory AS SELECT
     p."ID" AS "PatronID",
     p."CardNumber",
     p."FirstName" || ' ' || p."LastName" AS "PatronName",
@@ -259,7 +259,7 @@ LEFT JOIN (
     GROUP BY "PatronID"
 ) fines ON fines."PatronID" = p."ID";
 
-CREATE OR REPLACE VIEW sample_lib."vwPopularBooks" AS SELECT
+CREATE OR REPLACE VIEW sample_lib.vwPopularBooks AS SELECT
     bk."ID" AS "BookID",
     bk."Title",
     bk."ISBN",

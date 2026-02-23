@@ -8,8 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
+CREATE SCHEMA IF NOT EXISTS sample_travel;
+SET search_path TO sample_travel, public;
 
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
@@ -237,7 +237,7 @@ END $$;
 
 -- ===================== Views =====================
 
-CREATE OR REPLACE VIEW sample_travel.vwBookingSummary AS SELECT
+CREATE OR REPLACE VIEW sample_travel."vwBookingSummary" AS SELECT
     b."ID" AS "BookingID",
     c."FirstName",
     c."LastName",
@@ -276,7 +276,7 @@ GROUP BY b."ID", c."FirstName", c."LastName", c."Email", c."LoyaltyTier",
          d."Name", d."Country", b."BookingDate", b."TravelStartDate", b."TravelEndDate",
          b."NumAdults", b."NumChildren", b."TotalAmount", b."DiscountPercent", b."Status";
 
-CREATE OR REPLACE VIEW sample_travel.vwDestinationRevenue AS SELECT
+CREATE OR REPLACE VIEW sample_travel."vwDestinationRevenue" AS SELECT
     d."ID" AS "DestinationID",
     d."Name" AS "DestinationName",
     d."Country",
@@ -303,7 +303,7 @@ LEFT JOIN sample_travel."Booking" b ON b."DestinationID" = d."ID"
 LEFT JOIN sample_travel."Review" r ON r."DestinationID" = d."ID" AND r."IsPublished" = 1
 GROUP BY d."ID", d."Name", d."Country", d."Climate", d."PopularityScore";
 
-CREATE OR REPLACE VIEW sample_travel.vwCustomerLifetimeValue AS SELECT
+CREATE OR REPLACE VIEW sample_travel."vwCustomerLifetimeValue" AS SELECT
     c."ID" AS "CustomerID",
     c."FirstName",
     c."LastName",
@@ -335,7 +335,7 @@ LEFT JOIN sample_travel."Booking" b ON b."CustomerID" = c."ID"
 LEFT JOIN sample_travel."Review" r ON r."CustomerID" = c."ID"
 GROUP BY c."ID", c."FirstName", c."LastName", c."Email", c."LoyaltyTier", c."LoyaltyPoints", c."RegisteredAt";
 
-CREATE OR REPLACE VIEW sample_travel.vwHotelPerformance AS SELECT
+CREATE OR REPLACE VIEW sample_travel."vwHotelPerformance" AS SELECT
     h."ID" AS "HotelID",
     h."Name" AS "HotelName",
     d."Name" AS "DestinationName",

@@ -2,7 +2,7 @@ import type { IConversionRule, ConversionContext, StatementType } from './types.
 import {
   convertIdentifiers, removeNPrefix, removeCollate, convertCastTypes,
   quotePascalCaseIdentifiers, convertCommonFunctions, convertStringConcat,
-  convertCharIndex, convertStuff, convertConvertFunction, convertIIF,
+  convertCharIndex, convertStuff, convertConvertFunction, convertIIF, convertTopToLimit,
 } from './ExpressionHelpers.js';
 
 export class InsertRule implements IConversionRule {
@@ -25,6 +25,8 @@ export class InsertRule implements IConversionRule {
     result = convertConvertFunction(result);
     result = convertIIF(result);
     result = convertCastTypes(result);
+    // Convert SELECT TOP N subqueries to SELECT ... LIMIT N
+    result = convertTopToLimit(result);
     // Quote column names in INSERT INTO table (col1, col2, ...) — these are always column
     // names even if they collide with SQL keywords (e.g. Language, Condition, Action)
     result = this.quoteInsertColumnList(result);

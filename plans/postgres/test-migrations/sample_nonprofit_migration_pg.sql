@@ -8,8 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Schema
-CREATE SCHEMA IF NOT EXISTS sample_npo;
-SET search_path TO sample_npo, public;
+CREATE SCHEMA IF NOT EXISTS sample_nonprofit;
+SET search_path TO sample_nonprofit, public;
 
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
@@ -200,7 +200,7 @@ END $$;
 
 -- ===================== Views =====================
 
-CREATE OR REPLACE VIEW sample_npo."vwCampaignProgress" AS SELECT
+CREATE OR REPLACE VIEW sample_npo.vwCampaignProgress AS SELECT
     c."ID" AS "CampaignID",
     c."Name" AS "CampaignName",
     c."GoalAmount",
@@ -222,7 +222,7 @@ FROM sample_npo."Campaign" c
 LEFT JOIN sample_npo."Donation" d ON d."CampaignID" = c."ID"
 GROUP BY c."ID", c."Name", c."GoalAmount", c."StartDate", c."EndDate", c."Status", c."IsActive";
 
-CREATE OR REPLACE VIEW sample_npo."vwDonorSummary" AS SELECT
+CREATE OR REPLACE VIEW sample_npo.vwDonorSummary AS SELECT
     dn."ID" AS "DonorID",
     dn."FirstName",
     dn."LastName",
@@ -242,7 +242,7 @@ FROM sample_npo."Donor" dn
 LEFT JOIN sample_npo."Donation" d ON d."DonorID" = dn."ID"
 GROUP BY dn."ID", dn."FirstName", dn."LastName", dn."Email", dn."DonorType", dn."IsAnonymous", dn."RegisteredAt";
 
-CREATE OR REPLACE VIEW sample_npo."vwUpcomingEvents" AS SELECT
+CREATE OR REPLACE VIEW sample_npo.vwUpcomingEvents AS SELECT
     e."ID" AS "EventID",
     e."Name" AS "EventName",
     e."EventDate",
@@ -265,7 +265,7 @@ LEFT JOIN sample_npo."Campaign" c ON c."ID" = e."CampaignID"
 LEFT JOIN sample_npo."EventAttendee" ea ON ea."EventID" = e."ID"
 GROUP BY e."ID", e."Name", e."EventDate", e."StartTime", e."EndTime", e."Location", e."Status", e."MaxAttendees", c."Name";
 
-CREATE OR REPLACE VIEW sample_npo."vwVolunteerLeaderboard" AS SELECT
+CREATE OR REPLACE VIEW sample_npo.vwVolunteerLeaderboard AS SELECT
     v."ID" AS "VolunteerID",
     v."FirstName",
     v."LastName",
