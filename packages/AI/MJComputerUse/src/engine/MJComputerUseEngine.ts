@@ -16,17 +16,17 @@
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, MJAIPromptEntityExtended as AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { ChatMessageRole, createBase64DataUrl } from '@memberjunction/ai';
 import type { ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
-    ActionEntity,
-    ActionParamEntity,
-    AIPromptRunMediaEntity,
-    CredentialEntity,
+    MJActionEntity as ActionEntity,
+    MJActionParamEntity as ActionParamEntity,
+    MJAIPromptRunMediaEntity as AIPromptRunMediaEntity,
+    MJCredentialEntity as CredentialEntity,
 } from '@memberjunction/core-entities';
 
 import {

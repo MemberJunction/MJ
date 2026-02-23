@@ -43,7 +43,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { TestEntity } from '@memberjunction/core-entities';
+import { MJTestEntity as TestEntity } from '@memberjunction/core-entities';
 import {
     BaseTestDriver,
     type IOracle,

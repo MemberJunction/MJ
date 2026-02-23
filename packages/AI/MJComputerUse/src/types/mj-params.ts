@@ -12,7 +12,7 @@
  */
 
 import { UserInfo } from '@memberjunction/core';
-import { CredentialEntity } from '@memberjunction/core-entities';
+import { MJCredentialEntity as CredentialEntity } from '@memberjunction/core-entities';
 
 import {
     RunComputerUseParams,

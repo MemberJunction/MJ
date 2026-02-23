@@ -14,7 +14,7 @@
  * overrides to use AIPromptRunner).
  */
 
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended as AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     LLMJudge,
     JudgePromptRequest,
