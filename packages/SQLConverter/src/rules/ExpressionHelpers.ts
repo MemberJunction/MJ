@@ -162,14 +162,8 @@ export function convertStringConcat(sql: string): string {
   );
   // After closing paren + column ref: ) + colname.
   sql = sql.replace(/\)\s*\+\s*(\w+\.)/g, ') || $1');
-  // Quoted identifiers: "Col1" + "Col2"
-  sql = sql.replace(/"([\w]+)"\s*\+\s*"([\w]+)"/g, '"$1" || "$2"');
   // After quoted identifier + string literal: "Col" + 'text'
   sql = sql.replace(/"(\w+)"\s*\+\s*N?'/g, (m) => m.replace('+', '||'));
-  // After quoted identifier + function/identifier: "Col" + COALESCE/REPLACE/etc or "Col" + alias.
-  sql = sql.replace(/"(\w+)"\s*\+\s*(?=[A-Za-z_])/g, (m) => m.replace('+', '||'));
-  // After closing paren + function/identifier: ) + FUNC(  or  ) + alias.
-  sql = sql.replace(/\)\s*\+\s*(?=[A-Za-z_"'])/g, (m) => m.replace('+', '||'));
   return sql;
 }
 
@@ -409,7 +403,7 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
   'FOREIGN', 'REFERENCES', 'UNIQUE', 'INDEX', 'ON', 'AS', 'BEGIN', 'END',
   'IF', 'THEN', 'ELSE', 'EXISTS', 'CREATE', 'DROP', 'TRUE', 'FALSE',
   'VARCHAR', 'TEXT', 'UUID', 'BOOLEAN', 'INTEGER', 'BIGINT', 'SMALLINT',
-  'TIMESTAMPTZ', 'BYTEA', 'REAL', 'NUMERIC', 'DOUBLE', 'PRECISION', 'XML',
+  'TIMESTAMPTZ', 'BYTEA', 'REAL', 'NUMERIC', 'DECIMAL', 'DOUBLE', 'PRECISION', 'XML',
   'CHAR', 'LIKE', 'SIMILAR', 'TO', 'WITH', 'NOCHECK', 'DEFERRABLE',
   'INITIALLY', 'DEFERRED', 'CASCADE', 'RESTRICT', 'VALID', 'GRANT',
   'EXECUTE', 'FUNCTION', 'PROCEDURE', 'VIEW', 'TRIGGER', 'SCHEMA',

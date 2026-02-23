@@ -32,7 +32,7 @@ const SQL_KEYWORDS = new Set([
   'INSTEAD', 'OF', 'EXECUTE', 'PERFORM', 'RAISE', 'NOTICE', 'EXCEPTION',
   'SCHEMA', 'CONSTRAINT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CHECK',
   'UNIQUE', 'DEFAULT', 'IDENTITY', 'GENERATED', 'ALWAYS', 'INTERVAL',
-  'ENUM', 'ARRAY', 'RECORD', 'SETOF', 'RETURNS',
+  'ENUM', 'ARRAY', 'RECORD', 'SETOF', 'RETURNS', 'DECIMAL',
 ]);
 
 export class ViewRule implements IConversionRule {

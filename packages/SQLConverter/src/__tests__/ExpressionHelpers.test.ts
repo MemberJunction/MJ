@@ -303,9 +303,11 @@ describe('convertStringConcat', () => {
       .toBe(') || schema.col');
   });
 
-  it('converts quoted identifier concatenation "Col1" + "Col2"', () => {
+  it('preserves + between quoted identifiers (could be numeric)', () => {
+    // Without string-literal context, + stays as arithmetic — avoids
+    // false positives on numeric expressions like "SubTotal" + "TaxAmount"
     expect(convertStringConcat('"FirstName" + "LastName"'))
-      .toBe('"FirstName" || "LastName"');
+      .toBe('"FirstName" + "LastName"');
   });
 });
 
