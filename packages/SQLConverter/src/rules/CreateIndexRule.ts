@@ -46,6 +46,20 @@ export class CreateIndexRule implements IConversionRule {
       }
     );
 
+    // Quote PascalCase identifiers in WHERE clause of filtered indexes
+    result = result.replace(
+      /(\bWHERE\s+)([\s\S]+)$/i,
+      (_match, whereKw: string, clause: string) => {
+        // Quote bare PascalCase identifiers that aren't already quoted
+        const quotedClause = clause.replace(/(?<!")(?<!\w)([A-Z][a-zA-Z_]\w*)(?!")(?!\w)/g, (m, word: string) => {
+          const upper = word.toUpperCase();
+          if (['IS', 'NOT', 'NULL', 'AND', 'OR', 'TRUE', 'FALSE', 'IN', 'BETWEEN', 'LIKE'].includes(upper)) return m;
+          return `"${word}"`;
+        });
+        return `${whereKw}${quotedClause}`;
+      }
+    );
+
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
     return result + '\n';

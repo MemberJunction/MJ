@@ -23,12 +23,51 @@ WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'with') THEN
-        CREATE ROLE with;
-    END IF;
-END $$;
+-- TODO: Review conditional DDL
+-- /*
+--  * Sample Medical Clinic Migration (T-SQL)
+--  * Schema: sample_clinic
+--  * 8 tables, 5 views, CHECK constraints (inline + ALTER TABLE),
+--  * extended properties, GRANT/ROLE, 150+ seed rows.
+--  * SQL constructs: DATEDIFF, ISNULL, GETDATE(), GETUTCDATE(), YEAR(), MONTH(), DAY(),
+--  *                 COALESCE, CASE WHEN, IIF, ROUND, CAST, LEN, COUNT, SUM, AVG,
+--  *                 GROUP BY, HAVING, LEFT JOIN, subqueries
+--  *
+--  * This migration exercises ALL constructs fixed in passes 1-9:
+--  * - Inline CHECK constraints with PascalCase column names
+--  * - ALTER TABLE CHECK constraints
+--  * - Self-referencing FK
+--  * - Multi-FK to same table (Billing → Doctor, LabResult → Doctor)
+--  * - TIME columns
+--  * - SMALLINT columns
+--  * - DECIMAL with varied precision
+--  * - TEXT / TEXT
+--  * - TIMESTAMPTZ DEFAULT GETUTCDATE()
+--  * - TIMESTAMPTZ DEFAULT GETDATE() (both variants)
+--  * - UUID DEFAULT NEWSEQUENTIALID()
+--  * - BOOLEAN DEFAULT 0/1
+--  * - DEFAULT string values
+--  * - UNIQUE constraints on columns
+--  * - Composite UNIQUE constraint
+--  * - CLUSTERED PRIMARY KEY
+--  * - N-string literals in INSERTs
+--  * - LENGTH() in a CHECK constraint
+--  * - DATEDIFF with nested function calls (balanced parens)
+--  * - DATEDIFF with TIME expressions
+--  * - Numeric + between columns (NOT string concat)
+--  * - sp_addextendedproperty for tables and columns
+--  * - CREATE ROLE with quoted name + GRANT SELECT ON SCHEMA
+--  * - GO batch separators
+--  * - Comments with PascalCase words (-- and block styles)
+--  * - FK REFERENCES with schema prefix
+--  */
+-- 
+-- -- ============================================================
+-- -- Schema Creation
+-- -- ============================================================
+-- IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'sample_clinic')
+--     EXEC('CREATE SCHEMA sample_clinic');
+
 
 -- ============================================================
 -- Tables

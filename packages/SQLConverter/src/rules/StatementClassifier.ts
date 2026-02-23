@@ -160,6 +160,11 @@ export function classifyBatch(batch: string): StatementType {
     return 'SKIP_SQLSERVER';
   }
 
+  // USE database — SQL Server-specific, not needed in PG
+  if (/^USE\s+/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
+  }
+
   return 'UNKNOWN';
 }
 
@@ -218,5 +223,5 @@ function isCommentOnly(batch: string, upper: string): boolean {
     .replace(/--[^\n]*/g, '')
     .trim()
     .toUpperCase();
-  return !/^(CREATE|ALTER|INSERT|UPDATE|DELETE|GRANT|EXEC)/.test(stripped);
+  return !/^(CREATE|ALTER|INSERT|UPDATE|DELETE|GRANT|EXEC|USE)/.test(stripped);
 }

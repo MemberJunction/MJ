@@ -594,8 +594,8 @@ CREATE TABLE [__mj].[Action] (ID UNIQUEIDENTIFIER NOT NULL)`;
       expect(classifyBatch('TRUNCATE TABLE [__mj].[TempData]')).toBe('UNKNOWN');
     });
 
-    it('should classify USE statement as UNKNOWN', () => {
-      expect(classifyBatch('USE [MemberJunction]')).toBe('UNKNOWN');
+    it('should classify USE statement as SKIP_SQLSERVER', () => {
+      expect(classifyBatch('USE [MemberJunction]')).toBe('SKIP_SQLSERVER');
     });
   });
 

@@ -84,6 +84,18 @@ export class ViewRule implements IConversionRule {
     result = convertTopToLimit(result);
     result = removeCollate(result);
     result = convertDateFunctions(result);
+
+    // Fix DATEDIFF TIME column casts — TIME columns can't be cast to TIMESTAMPTZ.
+    // Remove ::TIMESTAMPTZ from references to columns known to be TIME type.
+    for (const [, cols] of context.TableColumns) {
+      for (const [colName, colType] of cols) {
+        if (colType === 'TIME') {
+          const pattern = new RegExp(`("${colName}")::TIMESTAMPTZ`, 'gi');
+          result = result.replace(pattern, '$1');
+        }
+      }
+    }
+
     result = convertCharIndex(result);
     result = convertStuff(result);
     result = convertIIF(result);

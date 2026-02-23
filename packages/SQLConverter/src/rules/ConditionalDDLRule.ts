@@ -102,7 +102,10 @@ export class ConditionalDDLRule implements IConversionRule {
    *   - Bare: CREATE ROLE role_name;
    *   - Wrapped: IF NOT EXISTS (... sys.database_principals ...) CREATE ROLE role_name; */
   private tryConvertConditionalRole(sql: string): string | null {
-    const roleMatch = sql.match(/CREATE\s+ROLE\s+("?\w+"?)/i);
+    // Strip comments before matching to avoid matching role keywords inside comments
+    // (e.g., "Create Role and Grant Permissions" in a comment would match "and" as role name)
+    const stripped = sql.replace(/\/\*[\s\S]*?\*\//g, '').replace(/--[^\n]*/g, '');
+    const roleMatch = stripped.match(/CREATE\s+ROLE\s+("?\w+"?)/i);
     if (!roleMatch) return null;
     const roleName = roleMatch[1];
     // Strip quotes to get the bare name for the pg_roles lookup
