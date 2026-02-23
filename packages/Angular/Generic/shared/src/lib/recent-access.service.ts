@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, CompositeKey, LogError } from '@memberjunction/core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import { MJUserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 
@@ -26,20 +27,21 @@ export interface RecentAccessItem {
   providedIn: 'root'
 })
 export class RecentAccessService {
-  private static _instance: RecentAccessService;
+  private static readonly _globalStoreKey = '___SINGLETON__RecentAccessService';
   private _recentItems$ = new BehaviorSubject<RecentAccessItem[]>([]);
   private _isLoading$ = new BehaviorSubject<boolean>(false);
   private _isLoaded = false;
 
   constructor() {
-    if (RecentAccessService._instance) {
-      return RecentAccessService._instance;
+    const g = GetGlobalObjectStore()!;
+    if (g[RecentAccessService._globalStoreKey]) {
+      return g[RecentAccessService._globalStoreKey] as RecentAccessService;
     }
-    RecentAccessService._instance = this;
+    g[RecentAccessService._globalStoreKey] = this;
   }
 
   public static get Instance(): RecentAccessService {
-    return RecentAccessService._instance;
+    return GetGlobalObjectStore()![RecentAccessService._globalStoreKey] as RecentAccessService;
   }
 
   /**

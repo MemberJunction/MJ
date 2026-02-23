@@ -3,7 +3,7 @@ import { CompositeKey, LocalCacheManager, LogError, Metadata, StartupManager } f
 import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, MJResourceTypeEntity, MJUserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
-import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
+import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
@@ -15,7 +15,7 @@ import { NavigationService } from './navigation.service';
   providedIn: 'root'
 })
 export class SharedService {
-  private static _instance: SharedService;
+  private static readonly _globalStoreKey = '___SINGLETON__SharedService';
   private static _loaded: boolean = false;
   private static _resourceTypes: MJResourceTypeEntity[] = [];
   private static isLoading$ = new BehaviorSubject<boolean>(false);
@@ -28,12 +28,11 @@ export class SharedService {
     private mjNotificationsService: MJNotificationService,
     private injector: Injector
   ) {
-    if (SharedService._instance) {
-      // return existing instance which will short circuit the creation of a new instance
-      return SharedService._instance;
+    const g = GetGlobalObjectStore()!;
+    if (g[SharedService._globalStoreKey]) {
+      return g[SharedService._globalStoreKey] as SharedService;
     }
-    // first time this has been called, so return ourselves since we're in the constructor
-    SharedService._instance = this;
+    g[SharedService._globalStoreKey] = this;
 
     MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
       switch (event.event) {
@@ -56,7 +55,7 @@ export class SharedService {
   }
 
   public static get Instance(): SharedService {
-    return SharedService._instance;
+    return GetGlobalObjectStore()![SharedService._globalStoreKey] as SharedService;
   }
 
   /**

@@ -1,7 +1,7 @@
 import { ElementRef, Injectable } from '@angular/core';
 import { LogError, Metadata } from '@memberjunction/core';
 import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-entities';
-import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
+import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
@@ -14,7 +14,7 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
   providedIn: 'root'
 })
 export class MJNotificationService {
-  private static _instance: MJNotificationService;
+  private static readonly _globalStoreKey = '___SINGLETON__MJNotificationService';
   private static _loaded: boolean = false;
 
   private static isLoading$ = new BehaviorSubject<boolean>(false);
@@ -26,12 +26,11 @@ export class MJNotificationService {
   private static _unreadCount$ = new BehaviorSubject<number>(0);
 
   constructor(private notificationService: NotificationService) {
-    if (MJNotificationService._instance) {
-      // return existing instance which will short circuit the creation of a new instance
-      return MJNotificationService._instance;
+    const g = GetGlobalObjectStore()!;
+    if (g[MJNotificationService._globalStoreKey]) {
+      return g[MJNotificationService._globalStoreKey] as MJNotificationService;
     }
-    // first time this has been called, so return ourselves since we're in the constructor
-    MJNotificationService._instance = this;
+    g[MJNotificationService._globalStoreKey] = this;
 
     MJGlobal.Instance.GetEventListener(true).subscribe( (event) => {
       switch (event.event) {
@@ -93,7 +92,7 @@ export class MJNotificationService {
   }
 
   public static get Instance(): MJNotificationService {
-    return MJNotificationService._instance;
+    return GetGlobalObjectStore()![MJNotificationService._globalStoreKey] as MJNotificationService;
   }
  
   private static _userNotifications: MJUserNotificationEntity[] = [];
