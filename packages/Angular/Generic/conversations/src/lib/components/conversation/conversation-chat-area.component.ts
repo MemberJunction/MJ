@@ -298,11 +298,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         }
       });
 
-    // Subscribe to polling-based agent state to detect completions after page refresh.
-    // After a refresh the server publishes completion events for the OLD sessionId, so the
-    // WebSocket subscription (which uses the NEW sessionId) never receives them.
-    // The polling mechanism is our fallback: when agents transition from active → none
-    // for the current conversation, we reload messages to show the final response.
+    // Subscribe to polling-based agent state as a secondary fallback for completion detection.
+    // The sessionId is persisted in localStorage and reused on refresh, so WebSocket events
+    // normally arrive correctly. However, there's a brief timing gap between page load and
+    // WebSocket reconnection where events can be lost. The catch-up check in
+    // detectAndReconnectToInProgressRuns() is the primary fallback; polling is the last resort.
     this.agentStateService.activeAgents$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (agents) => {
@@ -2038,11 +2038,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Detect in-progress agent runs/tasks and reconnect to their streaming updates
-   * Called after loading a conversation to resume progress tracking
+   * Detect in-progress agent runs/tasks and reconnect to their streaming updates.
+   * Called after loading a conversation to resume progress tracking.
+   *
+   * Also handles the "timing gap" scenario: if an agent completed between the page
+   * refresh and the WebSocket reconnection, the completion PubSub event is lost.
+   * We catch this by comparing message status against the agent run status from
+   * the database — if the run is already complete, we handle the completion immediately.
    */
   private async detectAndReconnectToInProgressRuns(conversationId: string): Promise<void> {
-    // Check for in-progress messages
     const inProgressMessages = this.messages.filter(
       m => m.Status === 'In-Progress' && m.Role === 'AI'
     );
@@ -2051,27 +2055,28 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       return;
     }
 
-    LogStatusEx({message: `🔄 Found ${inProgressMessages.length} in-progress messages, reconnecting...`, verboseOnly: true});
+    LogStatusEx({message: `🔄 Found ${inProgressMessages.length} in-progress messages, checking status...`, verboseOnly: true});
 
-    // For each in-progress message, check if there's an active agent run
+    const completedStatuses = ['Completed', 'Failed', 'Error', 'Cancelled'];
+
     for (const message of inProgressMessages) {
-      if (message.AgentID) {
-        // Check agent state service for this run
-        const agentRun = this.agentRunsByDetailId.get(message.ID);
+      const agentRun = this.agentRunsByDetailId.get(message.ID);
 
-        if (agentRun && agentRun.Status === 'Running') {
-          LogStatusEx({message: `🔌 Reconnecting to agent run ${agentRun.ID} for message ${message.ID}`, verboseOnly: true});
+      if (!agentRun) {
+        // No agent run yet — fire-and-forget may not have created it.
+        // Polling will pick this up once the server creates the run.
+        LogStatusEx({message: `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`, verboseOnly: true});
+        continue;
+      }
 
-          // Agent state service polling will automatically pick this up
-          // The WebSocket subscription is already active via PushStatusUpdates()
-          // No additional action needed - just log for visibility
-        }
+      if (completedStatuses.includes(agentRun.Status)) {
+        // Agent completed during the WebSocket reconnection gap — handle now
+        LogStatusEx({message: `🔄 Agent run ${agentRun.ID} already completed (${agentRun.Status}) for message ${message.ID}, handling catch-up...`, verboseOnly: true});
+        await this.handleMessageCompletion(message, agentRun.ID);
+      } else {
+        LogStatusEx({message: `🔌 Agent run ${agentRun.ID} still ${agentRun.Status} for message ${message.ID}, WebSocket will receive updates`, verboseOnly: true});
       }
     }
-
-    // Agent state service is already polling via startPolling() in onConversationChanged()
-    // WebSocket subscription is already active via message-input component's subscribeToPushStatus()
-    // Both will automatically receive updates for these in-progress runs
   }
 
   /**
