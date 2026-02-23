@@ -1,0 +1,31 @@
+import { Component } from '@angular/core';
+import { MJFileStorageProvidersEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
+
+@RegisterClass(BaseFormComponent, 'MJ: File Storage Providers') // Tell MemberJunction about this class
+@Component({
+    standalone: false,
+    selector: 'gen-mjfilestorageproviders-form',
+    templateUrl: './mjfilestorageproviders.form.component.html'
+})
+export class MJFileStorageProvidersFormComponent extends BaseFormComponent {
+    public record!: MJFileStorageProvidersEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'providerIdentification', sectionName: 'Provider Identification', isExpanded: true },
+            { sectionKey: 'driverConfiguration', sectionName: 'Driver Configuration', isExpanded: true },
+            { sectionKey: 'selectionAvailability', sectionName: 'Selection & Availability', isExpanded: false },
+            { sectionKey: 'authenticationAccess', sectionName: 'Authentication & Access', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'files', sectionName: 'Files', isExpanded: false },
+            { sectionKey: 'mJFileStorageAccounts', sectionName: 'MJ: File Storage Accounts', isExpanded: false },
+            { sectionKey: 'mJAIConfigurations', sectionName: 'MJ: AI Configurations', isExpanded: false },
+            { sectionKey: 'aIAgents', sectionName: 'AI Agents', isExpanded: false }
+        ]);
+    }
+}
+

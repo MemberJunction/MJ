@@ -1,0 +1,28 @@
+import { Component } from '@angular/core';
+import { MJDataContextsEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
+
+@RegisterClass(BaseFormComponent, 'MJ: Data Contexts') // Tell MemberJunction about this class
+@Component({
+    standalone: false,
+    selector: 'gen-mjdatacontexts-form',
+    templateUrl: './mjdatacontexts.form.component.html'
+})
+export class MJDataContextsFormComponent extends BaseFormComponent {
+    public record!: MJDataContextsEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'identifiers', sectionName: 'Identifiers', isExpanded: true },
+            { sectionKey: 'contextDetails', sectionName: 'Context Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'dataContextItems', sectionName: 'Data Context Items', isExpanded: false },
+            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
+            { sectionKey: 'conversations', sectionName: 'Conversations', isExpanded: false }
+        ]);
+    }
+}
+

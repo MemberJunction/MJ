@@ -11,7 +11,7 @@ export const loadModule = () => {
 /**
  * zod schema definition for the entity MJ: Access Control Rules
  */
-export const MJAccessControlRuleSchema = z.object({
+export const MJAccessControlRulesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -102,12 +102,12 @@ export const MJAccessControlRuleSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAccessControlRuleEntityType = z.infer<typeof MJAccessControlRuleSchema>;
+export type MJAccessControlRulesEntityType = z.infer<typeof MJAccessControlRulesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Authorizations
  */
-export const MJActionAuthorizationSchema = z.object({
+export const MJActionAuthorizationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -147,12 +147,12 @@ export const MJActionAuthorizationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJActionAuthorizationEntityType = z.infer<typeof MJActionAuthorizationSchema>;
+export type MJActionAuthorizationsEntityType = z.infer<typeof MJActionAuthorizationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Categories
  */
-export const MJActionCategorySchema = z.object({
+export const MJActionCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -204,12 +204,12 @@ export const MJActionCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJActionCategoryEntityType = z.infer<typeof MJActionCategorySchema>;
+export type MJActionCategoriesEntityType = z.infer<typeof MJActionCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Context Types
  */
-export const MJActionContextTypeSchema = z.object({
+export const MJActionContextTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -237,12 +237,12 @@ export const MJActionContextTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJActionContextTypeEntityType = z.infer<typeof MJActionContextTypeSchema>;
+export type MJActionContextTypesEntityType = z.infer<typeof MJActionContextTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Contexts
  */
-export const MJActionContextSchema = z.object({
+export const MJActionContextsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -289,12 +289,12 @@ export const MJActionContextSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJActionContextEntityType = z.infer<typeof MJActionContextSchema>;
+export type MJActionContextsEntityType = z.infer<typeof MJActionContextsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Execution Logs
  */
-export const MJActionExecutionLogSchema = z.object({
+export const MJActionExecutionLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -361,12 +361,12 @@ export const MJActionExecutionLogSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJActionExecutionLogEntityType = z.infer<typeof MJActionExecutionLogSchema>;
+export type MJActionExecutionLogsEntityType = z.infer<typeof MJActionExecutionLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Filters
  */
-export const MJActionFilterSchema = z.object({
+export const MJActionFiltersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -404,12 +404,12 @@ export const MJActionFilterSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJActionFilterEntityType = z.infer<typeof MJActionFilterSchema>;
+export type MJActionFiltersEntityType = z.infer<typeof MJActionFiltersSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Libraries
  */
-export const MJActionLibrarySchema = z.object({
+export const MJActionLibrariesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -450,12 +450,12 @@ export const MJActionLibrarySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJActionLibraryEntityType = z.infer<typeof MJActionLibrarySchema>;
+export type MJActionLibrariesEntityType = z.infer<typeof MJActionLibrariesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Params
  */
-export const MJActionParamSchema = z.object({
+export const MJActionParamsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -485,7 +485,7 @@ export const MJActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Other'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -495,8 +495,8 @@ export const MJActionParamSchema = z.object({
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Scalar
     *   * Other
+    *   * Scalar
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
@@ -543,12 +543,12 @@ export const MJActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(425)`),
 });
 
-export type MJActionParamEntityType = z.infer<typeof MJActionParamSchema>;
+export type MJActionParamsEntityType = z.infer<typeof MJActionParamsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Action Result Codes
  */
-export const MJActionResultCodeSchema = z.object({
+export const MJActionResultCodesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -591,12 +591,12 @@ export const MJActionResultCodeSchema = z.object({
         * * SQL Data Type: nvarchar(425)`),
 });
 
-export type MJActionResultCodeEntityType = z.infer<typeof MJActionResultCodeSchema>;
+export type MJActionResultCodesEntityType = z.infer<typeof MJActionResultCodesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Actions
  */
-export const MJActionSchema = z.object({
+export const MJActionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -754,12 +754,12 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJActionEntityType = z.infer<typeof MJActionSchema>;
+export type MJActionsEntityType = z.infer<typeof MJActionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Actions
  */
-export const MJAIActionSchema = z.object({
+export const MJAIActionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -805,12 +805,12 @@ export const MJAIActionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAIActionEntityType = z.infer<typeof MJAIActionSchema>;
+export type MJAIActionsEntityType = z.infer<typeof MJAIActionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Actions
  */
-export const MJAIAgentActionSchema = z.object({
+export const MJAIAgentActionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -909,12 +909,12 @@ export const MJAIAgentActionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentActionEntityType = z.infer<typeof MJAIAgentActionSchema>;
+export type MJAIAgentActionsEntityType = z.infer<typeof MJAIAgentActionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Artifact Types
  */
-export const MJAIAgentArtifactTypeSchema = z.object({
+export const MJAIAgentArtifactTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -957,12 +957,12 @@ export const MJAIAgentArtifactTypeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIAgentArtifactTypeEntityType = z.infer<typeof MJAIAgentArtifactTypeSchema>;
+export type MJAIAgentArtifactTypesEntityType = z.infer<typeof MJAIAgentArtifactTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Configurations
  */
-export const MJAIAgentConfigurationSchema = z.object({
+export const MJAIAgentConfigurationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1039,12 +1039,12 @@ export const MJAIAgentConfigurationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIAgentConfigurationEntityType = z.infer<typeof MJAIAgentConfigurationSchema>;
+export type MJAIAgentConfigurationsEntityType = z.infer<typeof MJAIAgentConfigurationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Data Sources
  */
-export const MJAIAgentDataSourceSchema = z.object({
+export const MJAIAgentDataSourcesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1189,12 +1189,12 @@ export const MJAIAgentDataSourceSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentDataSourceEntityType = z.infer<typeof MJAIAgentDataSourceSchema>;
+export type MJAIAgentDataSourcesEntityType = z.infer<typeof MJAIAgentDataSourcesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Examples
  */
-export const MJAIAgentExampleSchema = z.object({
+export const MJAIAgentExamplesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1373,12 +1373,12 @@ export const MJAIAgentExampleSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentExampleEntityType = z.infer<typeof MJAIAgentExampleSchema>;
+export type MJAIAgentExamplesEntityType = z.infer<typeof MJAIAgentExamplesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Learning Cycles
  */
-export const MJAIAgentLearningCycleSchema = z.object({
+export const MJAIAgentLearningCyclesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1433,12 +1433,12 @@ export const MJAIAgentLearningCycleSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentLearningCycleEntityType = z.infer<typeof MJAIAgentLearningCycleSchema>;
+export type MJAIAgentLearningCyclesEntityType = z.infer<typeof MJAIAgentLearningCyclesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Modalities
  */
-export const MJAIAgentModalitySchema = z.object({
+export const MJAIAgentModalitiesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1499,12 +1499,12 @@ export const MJAIAgentModalitySchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAIAgentModalityEntityType = z.infer<typeof MJAIAgentModalitySchema>;
+export type MJAIAgentModalitiesEntityType = z.infer<typeof MJAIAgentModalitiesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Models
  */
-export const MJAIAgentModelSchema = z.object({
+export const MJAIAgentModelsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1553,12 +1553,12 @@ export const MJAIAgentModelSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAIAgentModelEntityType = z.infer<typeof MJAIAgentModelSchema>;
+export type MJAIAgentModelsEntityType = z.infer<typeof MJAIAgentModelsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Note Types
  */
-export const MJAIAgentNoteTypeSchema = z.object({
+export const MJAIAgentNoteTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1601,12 +1601,12 @@ export const MJAIAgentNoteTypeSchema = z.object({
         * * Description: Status of the note type: Pending (awaiting approval), Active (available for use), or Revoked (deprecated).`),
 });
 
-export type MJAIAgentNoteTypeEntityType = z.infer<typeof MJAIAgentNoteTypeSchema>;
+export type MJAIAgentNoteTypesEntityType = z.infer<typeof MJAIAgentNoteTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Notes
  */
-export const MJAIAgentNoteSchema = z.object({
+export const MJAIAgentNotesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1783,12 +1783,12 @@ export const MJAIAgentNoteSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentNoteEntityType = z.infer<typeof MJAIAgentNoteSchema>;
+export type MJAIAgentNotesEntityType = z.infer<typeof MJAIAgentNotesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Permissions
  */
-export const MJAIAgentPermissionSchema = z.object({
+export const MJAIAgentPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1864,12 +1864,12 @@ export const MJAIAgentPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIAgentPermissionEntityType = z.infer<typeof MJAIAgentPermissionSchema>;
+export type MJAIAgentPermissionsEntityType = z.infer<typeof MJAIAgentPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Prompts
  */
-export const MJAIAgentPromptSchema = z.object({
+export const MJAIAgentPromptsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -1959,12 +1959,12 @@ export const MJAIAgentPromptSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIAgentPromptEntityType = z.infer<typeof MJAIAgentPromptSchema>;
+export type MJAIAgentPromptsEntityType = z.infer<typeof MJAIAgentPromptsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Relationships
  */
-export const MJAIAgentRelationshipSchema = z.object({
+export const MJAIAgentRelationshipsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -2045,12 +2045,12 @@ export const MJAIAgentRelationshipSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentRelationshipEntityType = z.infer<typeof MJAIAgentRelationshipSchema>;
+export type MJAIAgentRelationshipsEntityType = z.infer<typeof MJAIAgentRelationshipsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Requests
  */
-export const MJAIAgentRequestSchema = z.object({
+export const MJAIAgentRequestsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -2135,12 +2135,12 @@ export const MJAIAgentRequestSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIAgentRequestEntityType = z.infer<typeof MJAIAgentRequestSchema>;
+export type MJAIAgentRequestsEntityType = z.infer<typeof MJAIAgentRequestsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Run Medias
  */
-export const MJAIAgentRunMediaSchema = z.object({
+export const MJAIAgentRunMediasSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -2244,12 +2244,12 @@ export const MJAIAgentRunMediaSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
 });
 
-export type MJAIAgentRunMediaEntityType = z.infer<typeof MJAIAgentRunMediaSchema>;
+export type MJAIAgentRunMediasEntityType = z.infer<typeof MJAIAgentRunMediasSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Run Steps
  */
-export const MJAIAgentRunStepSchema = z.object({
+export const MJAIAgentRunStepsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -2401,7 +2401,7 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Step
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -2409,12 +2409,12 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAIAgentRunStepEntityType = z.infer<typeof MJAIAgentRunStepSchema>;
+export type MJAIAgentRunStepsEntityType = z.infer<typeof MJAIAgentRunStepsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Runs
  */
-export const MJAIAgentRunSchema = z.object({
+export const MJAIAgentRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -2735,12 +2735,12 @@ each time the agent processes a prompt step.`),
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAIAgentRunEntityType = z.infer<typeof MJAIAgentRunSchema>;
+export type MJAIAgentRunsEntityType = z.infer<typeof MJAIAgentRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Step Paths
  */
-export const MJAIAgentStepPathSchema = z.object({
+export const MJAIAgentStepPathsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -2795,12 +2795,12 @@ export const MJAIAgentStepPathSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentStepPathEntityType = z.infer<typeof MJAIAgentStepPathSchema>;
+export type MJAIAgentStepPathsEntityType = z.infer<typeof MJAIAgentStepPathsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Steps
  */
-export const MJAIAgentStepSchema = z.object({
+export const MJAIAgentStepsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -2956,12 +2956,12 @@ export const MJAIAgentStepSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentStepEntityType = z.infer<typeof MJAIAgentStepSchema>;
+export type MJAIAgentStepsEntityType = z.infer<typeof MJAIAgentStepsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Types
  */
-export const MJAIAgentTypeSchema = z.object({
+export const MJAIAgentTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3037,12 +3037,12 @@ export const MJAIAgentTypeSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAIAgentTypeEntityType = z.infer<typeof MJAIAgentTypeSchema>;
+export type MJAIAgentTypesEntityType = z.infer<typeof MJAIAgentTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agents
  */
-export const MJAIAgentSchema = z.object({
+export const MJAIAgentsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3469,12 +3469,12 @@ if this limit is exceeded.`),
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAIAgentEntityType = z.infer<typeof MJAIAgentSchema>;
+export type MJAIAgentsEntityType = z.infer<typeof MJAIAgentsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Architectures
  */
-export const MJAIArchitectureSchema = z.object({
+export const MJAIArchitecturesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3536,12 +3536,12 @@ export const MJAIArchitectureSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAIArchitectureEntityType = z.infer<typeof MJAIArchitectureSchema>;
+export type MJAIArchitecturesEntityType = z.infer<typeof MJAIArchitecturesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Configuration Params
  */
-export const MJAIConfigurationParamSchema = z.object({
+export const MJAIConfigurationParamsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3596,12 +3596,12 @@ export const MJAIConfigurationParamSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIConfigurationParamEntityType = z.infer<typeof MJAIConfigurationParamSchema>;
+export type MJAIConfigurationParamsEntityType = z.infer<typeof MJAIConfigurationParamsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Configurations
  */
-export const MJAIConfigurationSchema = z.object({
+export const MJAIConfigurationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3696,12 +3696,12 @@ export const MJAIConfigurationSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAIConfigurationEntityType = z.infer<typeof MJAIConfigurationSchema>;
+export type MJAIConfigurationsEntityType = z.infer<typeof MJAIConfigurationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Credential Bindings
  */
-export const MJAICredentialBindingSchema = z.object({
+export const MJAICredentialBindingsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3781,12 +3781,12 @@ export const MJAICredentialBindingSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAICredentialBindingEntityType = z.infer<typeof MJAICredentialBindingSchema>;
+export type MJAICredentialBindingsEntityType = z.infer<typeof MJAICredentialBindingsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Modalities
  */
-export const MJAIModalitySchema = z.object({
+export const MJAIModalitiesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3859,12 +3859,12 @@ export const MJAIModalitySchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJAIModalityEntityType = z.infer<typeof MJAIModalitySchema>;
+export type MJAIModalitiesEntityType = z.infer<typeof MJAIModalitiesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Actions
  */
-export const MJAIModelActionSchema = z.object({
+export const MJAIModelActionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3906,12 +3906,12 @@ export const MJAIModelActionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAIModelActionEntityType = z.infer<typeof MJAIModelActionSchema>;
+export type MJAIModelActionsEntityType = z.infer<typeof MJAIModelActionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Architectures
  */
-export const MJAIModelArchitectureSchema = z.object({
+export const MJAIModelArchitecturesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -3962,12 +3962,12 @@ export const MJAIModelArchitectureSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIModelArchitectureEntityType = z.infer<typeof MJAIModelArchitectureSchema>;
+export type MJAIModelArchitecturesEntityType = z.infer<typeof MJAIModelArchitecturesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Costs
  */
-export const MJAIModelCostSchema = z.object({
+export const MJAIModelCostsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4072,12 +4072,12 @@ export const MJAIModelCostSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIModelCostEntityType = z.infer<typeof MJAIModelCostSchema>;
+export type MJAIModelCostsEntityType = z.infer<typeof MJAIModelCostsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Modalities
  */
-export const MJAIModelModalitySchema = z.object({
+export const MJAIModelModalitiesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4159,12 +4159,12 @@ export const MJAIModelModalitySchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAIModelModalityEntityType = z.infer<typeof MJAIModelModalitySchema>;
+export type MJAIModelModalitiesEntityType = z.infer<typeof MJAIModelModalitiesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Price Types
  */
-export const MJAIModelPriceTypeSchema = z.object({
+export const MJAIModelPriceTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4192,12 +4192,12 @@ export const MJAIModelPriceTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJAIModelPriceTypeEntityType = z.infer<typeof MJAIModelPriceTypeSchema>;
+export type MJAIModelPriceTypesEntityType = z.infer<typeof MJAIModelPriceTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Price Unit Types
  */
-export const MJAIModelPriceUnitTypeSchema = z.object({
+export const MJAIModelPriceUnitTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4230,12 +4230,12 @@ export const MJAIModelPriceUnitTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJAIModelPriceUnitTypeEntityType = z.infer<typeof MJAIModelPriceUnitTypeSchema>;
+export type MJAIModelPriceUnitTypesEntityType = z.infer<typeof MJAIModelPriceUnitTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Types
  */
-export const MJAIModelTypeSchema = z.object({
+export const MJAIModelTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4281,12 +4281,12 @@ export const MJAIModelTypeSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAIModelTypeEntityType = z.infer<typeof MJAIModelTypeSchema>;
+export type MJAIModelTypesEntityType = z.infer<typeof MJAIModelTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Vendors
  */
-export const MJAIModelVendorSchema = z.object({
+export const MJAIModelVendorsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4393,12 +4393,12 @@ export const MJAIModelVendorSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAIModelVendorEntityType = z.infer<typeof MJAIModelVendorSchema>;
+export type MJAIModelVendorsEntityType = z.infer<typeof MJAIModelVendorsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Models
  */
-export const MJAIModelSchema = z.object({
+export const MJAIModelsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4502,12 +4502,12 @@ export const MJAIModelSchema = z.object({
         * * SQL Data Type: bit`),
 });
 
-export type MJAIModelEntityType = z.infer<typeof MJAIModelSchema>;
+export type MJAIModelsEntityType = z.infer<typeof MJAIModelsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Categories
  */
-export const MJAIPromptCategorySchema = z.object({
+export const MJAIPromptCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4547,12 +4547,12 @@ export const MJAIPromptCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAIPromptCategoryEntityType = z.infer<typeof MJAIPromptCategorySchema>;
+export type MJAIPromptCategoriesEntityType = z.infer<typeof MJAIPromptCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Models
  */
-export const MJAIPromptModelSchema = z.object({
+export const MJAIPromptModelsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4666,12 +4666,12 @@ export const MJAIPromptModelSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIPromptModelEntityType = z.infer<typeof MJAIPromptModelSchema>;
+export type MJAIPromptModelsEntityType = z.infer<typeof MJAIPromptModelsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Run Medias
  */
-export const MJAIPromptRunMediaSchema = z.object({
+export const MJAIPromptRunMediasSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -4762,12 +4762,12 @@ export const MJAIPromptRunMediaSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
 });
 
-export type MJAIPromptRunMediaEntityType = z.infer<typeof MJAIPromptRunMediaSchema>;
+export type MJAIPromptRunMediasEntityType = z.infer<typeof MJAIPromptRunMediasSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Runs
  */
-export const MJAIPromptRunSchema = z.object({
+export const MJAIPromptRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -5285,12 +5285,12 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAIPromptRunEntityType = z.infer<typeof MJAIPromptRunSchema>;
+export type MJAIPromptRunsEntityType = z.infer<typeof MJAIPromptRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Types
  */
-export const MJAIPromptTypeSchema = z.object({
+export const MJAIPromptTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -5316,12 +5316,12 @@ export const MJAIPromptTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJAIPromptTypeEntityType = z.infer<typeof MJAIPromptTypeSchema>;
+export type MJAIPromptTypesEntityType = z.infer<typeof MJAIPromptTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompts
  */
-export const MJAIPromptSchema = z.object({
+export const MJAIPromptsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -5716,7 +5716,7 @@ export const MJAIPromptSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAIPromptEntityType = z.infer<typeof MJAIPromptSchema>;
+export type MJAIPromptsEntityType = z.infer<typeof MJAIPromptsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Result Cache
@@ -5838,7 +5838,7 @@ export type MJAIResultCacheEntityType = z.infer<typeof MJAIResultCacheSchema>;
 /**
  * zod schema definition for the entity MJ: AI Vendor Type Definitions
  */
-export const MJAIVendorTypeDefinitionSchema = z.object({
+export const MJAIVendorTypeDefinitionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -5865,12 +5865,12 @@ export const MJAIVendorTypeDefinitionSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJAIVendorTypeDefinitionEntityType = z.infer<typeof MJAIVendorTypeDefinitionSchema>;
+export type MJAIVendorTypeDefinitionsEntityType = z.infer<typeof MJAIVendorTypeDefinitionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Vendor Types
  */
-export const MJAIVendorTypeSchema = z.object({
+export const MJAIVendorTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -5924,12 +5924,12 @@ export const MJAIVendorTypeSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAIVendorTypeEntityType = z.infer<typeof MJAIVendorTypeSchema>;
+export type MJAIVendorTypesEntityType = z.infer<typeof MJAIVendorTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Vendors
  */
-export const MJAIVendorSchema = z.object({
+export const MJAIVendorsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -5967,12 +5967,12 @@ export const MJAIVendorSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAIVendorEntityType = z.infer<typeof MJAIVendorSchema>;
+export type MJAIVendorsEntityType = z.infer<typeof MJAIVendorsSchema>;
 
 /**
  * zod schema definition for the entity MJ: API Application Scopes
  */
-export const MJAPIApplicationScopeSchema = z.object({
+export const MJAPIApplicationScopesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6037,12 +6037,12 @@ export const MJAPIApplicationScopeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAPIApplicationScopeEntityType = z.infer<typeof MJAPIApplicationScopeSchema>;
+export type MJAPIApplicationScopesEntityType = z.infer<typeof MJAPIApplicationScopesSchema>;
 
 /**
  * zod schema definition for the entity MJ: API Applications
  */
-export const MJAPIApplicationSchema = z.object({
+export const MJAPIApplicationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6076,12 +6076,12 @@ export const MJAPIApplicationSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJAPIApplicationEntityType = z.infer<typeof MJAPIApplicationSchema>;
+export type MJAPIApplicationsEntityType = z.infer<typeof MJAPIApplicationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: API Key Applications
  */
-export const MJAPIKeyApplicationSchema = z.object({
+export const MJAPIKeyApplicationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6119,12 +6119,12 @@ export const MJAPIKeyApplicationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAPIKeyApplicationEntityType = z.infer<typeof MJAPIKeyApplicationSchema>;
+export type MJAPIKeyApplicationsEntityType = z.infer<typeof MJAPIKeyApplicationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: API Key Scopes
  */
-export const MJAPIKeyScopeSchema = z.object({
+export const MJAPIKeyScopesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6187,12 +6187,12 @@ export const MJAPIKeyScopeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAPIKeyScopeEntityType = z.infer<typeof MJAPIKeyScopeSchema>;
+export type MJAPIKeyScopesEntityType = z.infer<typeof MJAPIKeyScopesSchema>;
 
 /**
  * zod schema definition for the entity MJ: API Key Usage Logs
  */
-export const MJAPIKeyUsageLogSchema = z.object({
+export const MJAPIKeyUsageLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6290,12 +6290,12 @@ export const MJAPIKeyUsageLogSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAPIKeyUsageLogEntityType = z.infer<typeof MJAPIKeyUsageLogSchema>;
+export type MJAPIKeyUsageLogsEntityType = z.infer<typeof MJAPIKeyUsageLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: API Keys
  */
-export const MJAPIKeySchema = z.object({
+export const MJAPIKeysSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6366,12 +6366,12 @@ export const MJAPIKeySchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJAPIKeyEntityType = z.infer<typeof MJAPIKeySchema>;
+export type MJAPIKeysEntityType = z.infer<typeof MJAPIKeysSchema>;
 
 /**
  * zod schema definition for the entity MJ: API Scopes
  */
-export const MJAPIScopeSchema = z.object({
+export const MJAPIScopesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6439,12 +6439,12 @@ export const MJAPIScopeSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAPIScopeEntityType = z.infer<typeof MJAPIScopeSchema>;
+export type MJAPIScopesEntityType = z.infer<typeof MJAPIScopesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Application Entities
  */
-export const MJApplicationEntitySchema = z.object({
+export const MJApplicationEntitiesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -6503,12 +6503,12 @@ export const MJApplicationEntitySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
 });
 
-export type MJApplicationEntityEntityType = z.infer<typeof MJApplicationEntitySchema>;
+export type MJApplicationEntitiesEntityType = z.infer<typeof MJApplicationEntitiesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Application Settings
  */
-export const MJApplicationSettingSchema = z.object({
+export const MJApplicationSettingsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6548,12 +6548,12 @@ export const MJApplicationSettingSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJApplicationSettingEntityType = z.infer<typeof MJApplicationSettingSchema>;
+export type MJApplicationSettingsEntityType = z.infer<typeof MJApplicationSettingsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Applications
  */
-export const MJApplicationSchema = z.object({
+export const MJApplicationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6665,12 +6665,12 @@ export const MJApplicationSchema = z.object({
         * * Description: When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.`),
 });
 
-export type MJApplicationEntityType = z.infer<typeof MJApplicationSchema>;
+export type MJApplicationsEntityType = z.infer<typeof MJApplicationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifact Permissions
  */
-export const MJArtifactPermissionSchema = z.object({
+export const MJArtifactPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6740,12 +6740,12 @@ export const MJArtifactPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJArtifactPermissionEntityType = z.infer<typeof MJArtifactPermissionSchema>;
+export type MJArtifactPermissionsEntityType = z.infer<typeof MJArtifactPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifact Types
  */
-export const MJArtifactTypeSchema = z.object({
+export const MJArtifactTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6812,12 +6812,12 @@ export const MJArtifactTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJArtifactTypeEntityType = z.infer<typeof MJArtifactTypeSchema>;
+export type MJArtifactTypesEntityType = z.infer<typeof MJArtifactTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifact Uses
  */
-export const MJArtifactUseSchema = z.object({
+export const MJArtifactUsesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6872,12 +6872,12 @@ export const MJArtifactUseSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJArtifactUseEntityType = z.infer<typeof MJArtifactUseSchema>;
+export type MJArtifactUsesEntityType = z.infer<typeof MJArtifactUsesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifact Version Attributes
  */
-export const MJArtifactVersionAttributeSchema = z.object({
+export const MJArtifactVersionAttributesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6931,12 +6931,12 @@ export const MJArtifactVersionAttributeSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJArtifactVersionAttributeEntityType = z.infer<typeof MJArtifactVersionAttributeSchema>;
+export type MJArtifactVersionAttributesEntityType = z.infer<typeof MJArtifactVersionAttributesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifact Versions
  */
-export const MJArtifactVersionSchema = z.object({
+export const MJArtifactVersionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7007,12 +7007,12 @@ export const MJArtifactVersionSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJArtifactVersionEntityType = z.infer<typeof MJArtifactVersionSchema>;
+export type MJArtifactVersionsEntityType = z.infer<typeof MJArtifactVersionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifacts
  */
-export const MJArtifactSchema = z.object({
+export const MJArtifactsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7083,12 +7083,12 @@ export const MJArtifactSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJArtifactEntityType = z.infer<typeof MJArtifactSchema>;
+export type MJArtifactsEntityType = z.infer<typeof MJArtifactsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Audit Log Types
  */
-export const MJAuditLogTypeSchema = z.object({
+export const MJAuditLogTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7136,12 +7136,12 @@ export const MJAuditLogTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAuditLogTypeEntityType = z.infer<typeof MJAuditLogTypeSchema>;
+export type MJAuditLogTypesEntityType = z.infer<typeof MJAuditLogTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Audit Logs
  */
-export const MJAuditLogSchema = z.object({
+export const MJAuditLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7218,12 +7218,12 @@ export const MJAuditLogSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJAuditLogEntityType = z.infer<typeof MJAuditLogSchema>;
+export type MJAuditLogsEntityType = z.infer<typeof MJAuditLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Authorization Roles
  */
-export const MJAuthorizationRoleSchema = z.object({
+export const MJAuthorizationRolesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7269,12 +7269,12 @@ export const MJAuthorizationRoleSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJAuthorizationRoleEntityType = z.infer<typeof MJAuthorizationRoleSchema>;
+export type MJAuthorizationRolesEntityType = z.infer<typeof MJAuthorizationRolesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Authorizations
  */
-export const MJAuthorizationSchema = z.object({
+export const MJAuthorizationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7325,12 +7325,12 @@ export const MJAuthorizationSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
+export type MJAuthorizationsEntityType = z.infer<typeof MJAuthorizationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Collection Artifacts
  */
-export const MJCollectionArtifactSchema = z.object({
+export const MJCollectionArtifactsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7373,12 +7373,12 @@ export const MJCollectionArtifactSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJCollectionArtifactEntityType = z.infer<typeof MJCollectionArtifactSchema>;
+export type MJCollectionArtifactsEntityType = z.infer<typeof MJCollectionArtifactsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Collection Permissions
  */
-export const MJCollectionPermissionSchema = z.object({
+export const MJCollectionPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7448,12 +7448,12 @@ export const MJCollectionPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJCollectionPermissionEntityType = z.infer<typeof MJCollectionPermissionSchema>;
+export type MJCollectionPermissionsEntityType = z.infer<typeof MJCollectionPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Collections
  */
-export const MJCollectionSchema = z.object({
+export const MJCollectionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7529,12 +7529,12 @@ export const MJCollectionSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJCollectionEntityType = z.infer<typeof MJCollectionSchema>;
+export type MJCollectionsEntityType = z.infer<typeof MJCollectionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Base Message Types
  */
-export const MJCommunicationBaseMessageTypeSchema = z.object({
+export const MJCommunicationBaseMessageTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7580,12 +7580,12 @@ export const MJCommunicationBaseMessageTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJCommunicationBaseMessageTypeEntityType = z.infer<typeof MJCommunicationBaseMessageTypeSchema>;
+export type MJCommunicationBaseMessageTypesEntityType = z.infer<typeof MJCommunicationBaseMessageTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Logs
  */
-export const MJCommunicationLogSchema = z.object({
+export const MJCommunicationLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7666,12 +7666,12 @@ export const MJCommunicationLogSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJCommunicationLogEntityType = z.infer<typeof MJCommunicationLogSchema>;
+export type MJCommunicationLogsEntityType = z.infer<typeof MJCommunicationLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Provider Message Types
  */
-export const MJCommunicationProviderMessageTypeSchema = z.object({
+export const MJCommunicationProviderMessageTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7726,12 +7726,12 @@ export const MJCommunicationProviderMessageTypeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJCommunicationProviderMessageTypeEntityType = z.infer<typeof MJCommunicationProviderMessageTypeSchema>;
+export type MJCommunicationProviderMessageTypesEntityType = z.infer<typeof MJCommunicationProviderMessageTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Providers
  */
-export const MJCommunicationProviderSchema = z.object({
+export const MJCommunicationProvidersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7803,12 +7803,12 @@ export const MJCommunicationProviderSchema = z.object({
         * * Description: Whether or not the provider supports creating draft messages`),
 });
 
-export type MJCommunicationProviderEntityType = z.infer<typeof MJCommunicationProviderSchema>;
+export type MJCommunicationProvidersEntityType = z.infer<typeof MJCommunicationProvidersSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Runs
  */
-export const MJCommunicationRunSchema = z.object({
+export const MJCommunicationRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7872,12 +7872,12 @@ export const MJCommunicationRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJCommunicationRunEntityType = z.infer<typeof MJCommunicationRunSchema>;
+export type MJCommunicationRunsEntityType = z.infer<typeof MJCommunicationRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Companies
  */
-export const MJCompanySchema = z.object({
+export const MJCompaniesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -7914,12 +7914,12 @@ export const MJCompanySchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJCompanyEntityType = z.infer<typeof MJCompanySchema>;
+export type MJCompaniesEntityType = z.infer<typeof MJCompaniesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Company Integration Record Maps
  */
-export const MJCompanyIntegrationRecordMapSchema = z.object({
+export const MJCompanyIntegrationRecordMapsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7965,12 +7965,12 @@ export const MJCompanyIntegrationRecordMapSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJCompanyIntegrationRecordMapEntityType = z.infer<typeof MJCompanyIntegrationRecordMapSchema>;
+export type MJCompanyIntegrationRecordMapsEntityType = z.infer<typeof MJCompanyIntegrationRecordMapsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Company Integration Run API Logs
  */
-export const MJCompanyIntegrationRunAPILogSchema = z.object({
+export const MJCompanyIntegrationRunAPILogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8033,12 +8033,12 @@ export const MJCompanyIntegrationRunAPILogSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJCompanyIntegrationRunAPILogEntityType = z.infer<typeof MJCompanyIntegrationRunAPILogSchema>;
+export type MJCompanyIntegrationRunAPILogsEntityType = z.infer<typeof MJCompanyIntegrationRunAPILogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Company Integration Run Details
  */
-export const MJCompanyIntegrationRunDetailSchema = z.object({
+export const MJCompanyIntegrationRunDetailsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8100,12 +8100,12 @@ export const MJCompanyIntegrationRunDetailSchema = z.object({
         * * SQL Data Type: datetimeoffset`),
 });
 
-export type MJCompanyIntegrationRunDetailEntityType = z.infer<typeof MJCompanyIntegrationRunDetailSchema>;
+export type MJCompanyIntegrationRunDetailsEntityType = z.infer<typeof MJCompanyIntegrationRunDetailsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Company Integration Runs
  */
-export const MJCompanyIntegrationRunSchema = z.object({
+export const MJCompanyIntegrationRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8184,12 +8184,12 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJCompanyIntegrationRunEntityType = z.infer<typeof MJCompanyIntegrationRunSchema>;
+export type MJCompanyIntegrationRunsEntityType = z.infer<typeof MJCompanyIntegrationRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Company Integrations
  */
-export const MJCompanyIntegrationSchema = z.object({
+export const MJCompanyIntegrationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8301,12 +8301,12 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: datetimeoffset`),
 });
 
-export type MJCompanyIntegrationEntityType = z.infer<typeof MJCompanyIntegrationSchema>;
+export type MJCompanyIntegrationsEntityType = z.infer<typeof MJCompanyIntegrationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Component Dependencies
  */
-export const MJComponentDependencySchema = z.object({
+export const MJComponentDependenciesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8345,12 +8345,12 @@ export const MJComponentDependencySchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
 });
 
-export type MJComponentDependencyEntityType = z.infer<typeof MJComponentDependencySchema>;
+export type MJComponentDependenciesEntityType = z.infer<typeof MJComponentDependenciesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Component Libraries
  */
-export const MJComponentLibrarySchema = z.object({
+export const MJComponentLibrariesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8449,12 +8449,12 @@ export const MJComponentLibrarySchema = z.object({
         * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both`),
 });
 
-export type MJComponentLibraryEntityType = z.infer<typeof MJComponentLibrarySchema>;
+export type MJComponentLibrariesEntityType = z.infer<typeof MJComponentLibrariesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Component Library Links
  */
-export const MJComponentLibraryLinkSchema = z.object({
+export const MJComponentLibraryLinksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8498,12 +8498,12 @@ export const MJComponentLibraryLinkSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
 });
 
-export type MJComponentLibraryLinkEntityType = z.infer<typeof MJComponentLibraryLinkSchema>;
+export type MJComponentLibraryLinksEntityType = z.infer<typeof MJComponentLibraryLinksSchema>;
 
 /**
  * zod schema definition for the entity MJ: Component Registries
  */
-export const MJComponentRegistrySchema = z.object({
+export const MJComponentRegistriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8562,12 +8562,12 @@ export const MJComponentRegistrySchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJComponentRegistryEntityType = z.infer<typeof MJComponentRegistrySchema>;
+export type MJComponentRegistriesEntityType = z.infer<typeof MJComponentRegistriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Components
  */
-export const MJComponentSchema = z.object({
+export const MJComponentsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8744,12 +8744,12 @@ export const MJComponentSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJComponentEntityType = z.infer<typeof MJComponentSchema>;
+export type MJComponentsEntityType = z.infer<typeof MJComponentsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content File Types
  */
-export const MJContentFileTypeSchema = z.object({
+export const MJContentFileTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8776,12 +8776,12 @@ export const MJContentFileTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJContentFileTypeEntityType = z.infer<typeof MJContentFileTypeSchema>;
+export type MJContentFileTypesEntityType = z.infer<typeof MJContentFileTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Item Attributes
  */
-export const MJContentItemAttributeSchema = z.object({
+export const MJContentItemAttributesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8817,12 +8817,12 @@ export const MJContentItemAttributeSchema = z.object({
         * * SQL Data Type: nvarchar(250)`),
 });
 
-export type MJContentItemAttributeEntityType = z.infer<typeof MJContentItemAttributeSchema>;
+export type MJContentItemAttributesEntityType = z.infer<typeof MJContentItemAttributesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Item Tags
  */
-export const MJContentItemTagSchema = z.object({
+export const MJContentItemTagsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8854,12 +8854,12 @@ export const MJContentItemTagSchema = z.object({
         * * SQL Data Type: nvarchar(250)`),
 });
 
-export type MJContentItemTagEntityType = z.infer<typeof MJContentItemTagSchema>;
+export type MJContentItemTagsEntityType = z.infer<typeof MJContentItemTagsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Items
  */
-export const MJContentItemSchema = z.object({
+export const MJContentItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8936,12 +8936,12 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJContentItemEntityType = z.infer<typeof MJContentItemSchema>;
+export type MJContentItemsEntityType = z.infer<typeof MJContentItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Process Runs
  */
-export const MJContentProcessRunSchema = z.object({
+export const MJContentProcessRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -8987,12 +8987,12 @@ export const MJContentProcessRunSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJContentProcessRunEntityType = z.infer<typeof MJContentProcessRunSchema>;
+export type MJContentProcessRunsEntityType = z.infer<typeof MJContentProcessRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Source Params
  */
-export const MJContentSourceParamSchema = z.object({
+export const MJContentSourceParamsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9029,12 +9029,12 @@ export const MJContentSourceParamSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJContentSourceParamEntityType = z.infer<typeof MJContentSourceParamSchema>;
+export type MJContentSourceParamsEntityType = z.infer<typeof MJContentSourceParamsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Source Type Params
  */
-export const MJContentSourceTypeParamSchema = z.object({
+export const MJContentSourceTypeParamsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9075,12 +9075,12 @@ export const MJContentSourceTypeParamSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJContentSourceTypeParamEntityType = z.infer<typeof MJContentSourceTypeParamSchema>;
+export type MJContentSourceTypeParamsEntityType = z.infer<typeof MJContentSourceTypeParamsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Source Types
  */
-export const MJContentSourceTypeSchema = z.object({
+export const MJContentSourceTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9106,12 +9106,12 @@ export const MJContentSourceTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJContentSourceTypeEntityType = z.infer<typeof MJContentSourceTypeSchema>;
+export type MJContentSourceTypesEntityType = z.infer<typeof MJContentSourceTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Sources
  */
-export const MJContentSourceSchema = z.object({
+export const MJContentSourcesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9165,12 +9165,12 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJContentSourceEntityType = z.infer<typeof MJContentSourceSchema>;
+export type MJContentSourcesEntityType = z.infer<typeof MJContentSourcesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Type Attributes
  */
-export const MJContentTypeAttributeSchema = z.object({
+export const MJContentTypeAttributesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9206,12 +9206,12 @@ export const MJContentTypeAttributeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJContentTypeAttributeEntityType = z.infer<typeof MJContentTypeAttributeSchema>;
+export type MJContentTypeAttributesEntityType = z.infer<typeof MJContentTypeAttributesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Content Types
  */
-export const MJContentTypeSchema = z.object({
+export const MJContentTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9256,12 +9256,12 @@ export const MJContentTypeSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJContentTypeEntityType = z.infer<typeof MJContentTypeSchema>;
+export type MJContentTypesEntityType = z.infer<typeof MJContentTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Artifact Permissions
  */
-export const MJConversationArtifactPermissionSchema = z.object({
+export const MJConversationArtifactPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9304,12 +9304,12 @@ export const MJConversationArtifactPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJConversationArtifactPermissionEntityType = z.infer<typeof MJConversationArtifactPermissionSchema>;
+export type MJConversationArtifactPermissionsEntityType = z.infer<typeof MJConversationArtifactPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Artifact Versions
  */
-export const MJConversationArtifactVersionSchema = z.object({
+export const MJConversationArtifactVersionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9357,12 +9357,12 @@ export const MJConversationArtifactVersionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJConversationArtifactVersionEntityType = z.infer<typeof MJConversationArtifactVersionSchema>;
+export type MJConversationArtifactVersionsEntityType = z.infer<typeof MJConversationArtifactVersionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Artifacts
  */
-export const MJConversationArtifactSchema = z.object({
+export const MJConversationArtifactsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9426,12 +9426,12 @@ export const MJConversationArtifactSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJConversationArtifactEntityType = z.infer<typeof MJConversationArtifactSchema>;
+export type MJConversationArtifactsEntityType = z.infer<typeof MJConversationArtifactsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Detail Artifacts
  */
-export const MJConversationDetailArtifactSchema = z.object({
+export const MJConversationDetailArtifactsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9471,7 +9471,7 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * Default Value: getutcdate()`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Summary
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
@@ -9479,12 +9479,12 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJConversationDetailArtifactEntityType = z.infer<typeof MJConversationDetailArtifactSchema>;
+export type MJConversationDetailArtifactsEntityType = z.infer<typeof MJConversationDetailArtifactsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Detail Attachments
  */
-export const MJConversationDetailAttachmentSchema = z.object({
+export const MJConversationDetailAttachmentsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9582,12 +9582,12 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
 });
 
-export type MJConversationDetailAttachmentEntityType = z.infer<typeof MJConversationDetailAttachmentSchema>;
+export type MJConversationDetailAttachmentsEntityType = z.infer<typeof MJConversationDetailAttachmentsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Detail Ratings
  */
-export const MJConversationDetailRatingSchema = z.object({
+export const MJConversationDetailRatingsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9635,12 +9635,12 @@ export const MJConversationDetailRatingSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJConversationDetailRatingEntityType = z.infer<typeof MJConversationDetailRatingSchema>;
+export type MJConversationDetailRatingsEntityType = z.infer<typeof MJConversationDetailRatingsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Details
  */
-export const MJConversationDetailSchema = z.object({
+export const MJConversationDetailsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9831,12 +9831,12 @@ export const MJConversationDetailSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJConversationDetailEntityType = z.infer<typeof MJConversationDetailSchema>;
+export type MJConversationDetailsEntityType = z.infer<typeof MJConversationDetailsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversations
  */
-export const MJConversationSchema = z.object({
+export const MJConversationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -9936,7 +9936,7 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
-        * * Display Name: Linked Entity Type
+        * * Display Name: Linked Entity Name
         * * SQL Data Type: nvarchar(255)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
@@ -9952,16 +9952,16 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
+export type MJConversationsEntityType = z.infer<typeof MJConversationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Credential Categories
  */
-export const MJCredentialCategorySchema = z.object({
+export const MJCredentialCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10008,12 +10008,12 @@ export const MJCredentialCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJCredentialCategoryEntityType = z.infer<typeof MJCredentialCategorySchema>;
+export type MJCredentialCategoriesEntityType = z.infer<typeof MJCredentialCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Credential Types
  */
-export const MJCredentialTypeSchema = z.object({
+export const MJCredentialTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10069,12 +10069,12 @@ export const MJCredentialTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJCredentialTypeEntityType = z.infer<typeof MJCredentialTypeSchema>;
+export type MJCredentialTypesEntityType = z.infer<typeof MJCredentialTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Credentials
  */
-export const MJCredentialSchema = z.object({
+export const MJCredentialsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10159,12 +10159,12 @@ export const MJCredentialSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJCredentialEntityType = z.infer<typeof MJCredentialSchema>;
+export type MJCredentialsEntityType = z.infer<typeof MJCredentialsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard Categories
  */
-export const MJDashboardCategorySchema = z.object({
+export const MJDashboardCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10212,12 +10212,12 @@ export const MJDashboardCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJDashboardCategoryEntityType = z.infer<typeof MJDashboardCategorySchema>;
+export type MJDashboardCategoriesEntityType = z.infer<typeof MJDashboardCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard Category Links
  */
-export const MJDashboardCategoryLinkSchema = z.object({
+export const MJDashboardCategoryLinksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10274,12 +10274,12 @@ export const MJDashboardCategoryLinkSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJDashboardCategoryLinkEntityType = z.infer<typeof MJDashboardCategoryLinkSchema>;
+export type MJDashboardCategoryLinksEntityType = z.infer<typeof MJDashboardCategoryLinksSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard Category Permissions
  */
-export const MJDashboardCategoryPermissionSchema = z.object({
+export const MJDashboardCategoryPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10349,12 +10349,12 @@ export const MJDashboardCategoryPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJDashboardCategoryPermissionEntityType = z.infer<typeof MJDashboardCategoryPermissionSchema>;
+export type MJDashboardCategoryPermissionsEntityType = z.infer<typeof MJDashboardCategoryPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard Part Types
  */
-export const MJDashboardPartTypeSchema = z.object({
+export const MJDashboardPartTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10415,12 +10415,12 @@ export const MJDashboardPartTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJDashboardPartTypeEntityType = z.infer<typeof MJDashboardPartTypeSchema>;
+export type MJDashboardPartTypesEntityType = z.infer<typeof MJDashboardPartTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard Permissions
  */
-export const MJDashboardPermissionSchema = z.object({
+export const MJDashboardPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10490,12 +10490,12 @@ export const MJDashboardPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJDashboardPermissionEntityType = z.infer<typeof MJDashboardPermissionSchema>;
+export type MJDashboardPermissionsEntityType = z.infer<typeof MJDashboardPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard User Preferences
  */
-export const MJDashboardUserPreferenceSchema = z.object({
+export const MJDashboardUserPreferencesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10557,12 +10557,12 @@ export const MJDashboardUserPreferenceSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJDashboardUserPreferenceEntityType = z.infer<typeof MJDashboardUserPreferenceSchema>;
+export type MJDashboardUserPreferencesEntityType = z.infer<typeof MJDashboardUserPreferencesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard User States
  */
-export const MJDashboardUserStateSchema = z.object({
+export const MJDashboardUserStatesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10605,12 +10605,12 @@ export const MJDashboardUserStateSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJDashboardUserStateEntityType = z.infer<typeof MJDashboardUserStateSchema>;
+export type MJDashboardUserStatesEntityType = z.infer<typeof MJDashboardUserStatesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboards
  */
-export const MJDashboardSchema = z.object({
+export const MJDashboardsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10715,12 +10715,12 @@ export const MJDashboardSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJDashboardEntityType = z.infer<typeof MJDashboardSchema>;
+export type MJDashboardsEntityType = z.infer<typeof MJDashboardsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Data Context Items
  */
-export const MJDataContextItemSchema = z.object({
+export const MJDataContextItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10815,12 +10815,12 @@ export const MJDataContextItemSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJDataContextItemEntityType = z.infer<typeof MJDataContextItemSchema>;
+export type MJDataContextItemsEntityType = z.infer<typeof MJDataContextItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Data Contexts
  */
-export const MJDataContextSchema = z.object({
+export const MJDataContextsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10860,12 +10860,12 @@ export const MJDataContextSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJDataContextEntityType = z.infer<typeof MJDataContextSchema>;
+export type MJDataContextsEntityType = z.infer<typeof MJDataContextsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dataset Items
  */
-export const MJDatasetItemSchema = z.object({
+export const MJDatasetItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10931,12 +10931,12 @@ export const MJDatasetItemSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJDatasetItemEntityType = z.infer<typeof MJDatasetItemSchema>;
+export type MJDatasetItemsEntityType = z.infer<typeof MJDatasetItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Datasets
  */
-export const MJDatasetSchema = z.object({
+export const MJDatasetsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -10962,12 +10962,12 @@ export const MJDatasetSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJDatasetEntityType = z.infer<typeof MJDatasetSchema>;
+export type MJDatasetsEntityType = z.infer<typeof MJDatasetsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Duplicate Run Detail Matches
  */
-export const MJDuplicateRunDetailMatchSchema = z.object({
+export const MJDuplicateRunDetailMatchesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11064,12 +11064,12 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * SQL Data Type: nvarchar(450)`),
 });
 
-export type MJDuplicateRunDetailMatchEntityType = z.infer<typeof MJDuplicateRunDetailMatchSchema>;
+export type MJDuplicateRunDetailMatchesEntityType = z.infer<typeof MJDuplicateRunDetailMatchesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Duplicate Run Details
  */
-export const MJDuplicateRunDetailSchema = z.object({
+export const MJDuplicateRunDetailsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11140,12 +11140,12 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJDuplicateRunDetailEntityType = z.infer<typeof MJDuplicateRunDetailSchema>;
+export type MJDuplicateRunDetailsEntityType = z.infer<typeof MJDuplicateRunDetailsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Duplicate Runs
  */
-export const MJDuplicateRunSchema = z.object({
+export const MJDuplicateRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11241,12 +11241,12 @@ export const MJDuplicateRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJDuplicateRunEntityType = z.infer<typeof MJDuplicateRunSchema>;
+export type MJDuplicateRunsEntityType = z.infer<typeof MJDuplicateRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Employee Company Integrations
  */
-export const MJEmployeeCompanyIntegrationSchema = z.object({
+export const MJEmployeeCompanyIntegrationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11264,12 +11264,12 @@ export const MJEmployeeCompanyIntegrationSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
     ExternalSystemRecordID: z.string().describe(`
         * * Field Name: ExternalSystemRecordID
-        * * Display Name: External ID
+        * * Display Name: External Record ID
         * * SQL Data Type: nvarchar(750)
         * * Description: The employee's unique identifier in the external integrated system.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if this employee integration mapping is currently active.`),
@@ -11285,7 +11285,7 @@ export const MJEmployeeCompanyIntegrationSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
@@ -11293,12 +11293,12 @@ export const MJEmployeeCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJEmployeeCompanyIntegrationEntityType = z.infer<typeof MJEmployeeCompanyIntegrationSchema>;
+export type MJEmployeeCompanyIntegrationsEntityType = z.infer<typeof MJEmployeeCompanyIntegrationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Employee Roles
  */
-export const MJEmployeeRoleSchema = z.object({
+export const MJEmployeeRolesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11326,7 +11326,7 @@ export const MJEmployeeRoleSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     Role: z.string().describe(`
         * * Field Name: Role
@@ -11334,12 +11334,12 @@ export const MJEmployeeRoleSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJEmployeeRoleEntityType = z.infer<typeof MJEmployeeRoleSchema>;
+export type MJEmployeeRolesEntityType = z.infer<typeof MJEmployeeRolesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Employee Skills
  */
-export const MJEmployeeSkillSchema = z.object({
+export const MJEmployeeSkillsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11352,7 +11352,7 @@ export const MJEmployeeSkillSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Employees (vwEmployees.ID)`),
     SkillID: z.string().describe(`
         * * Field Name: SkillID
-        * * Display Name: Skill ID
+        * * Display Name: Skill
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Skills (vwSkills.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -11367,20 +11367,20 @@ export const MJEmployeeSkillSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
-        * * Display Name: Skill
+        * * Display Name: Skill Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJEmployeeSkillEntityType = z.infer<typeof MJEmployeeSkillSchema>;
+export type MJEmployeeSkillsEntityType = z.infer<typeof MJEmployeeSkillsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Employees
  */
-export const MJEmployeeSchema = z.object({
+export const MJEmployeesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -11460,12 +11460,12 @@ export const MJEmployeeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJEmployeeEntityType = z.infer<typeof MJEmployeeSchema>;
+export type MJEmployeesEntityType = z.infer<typeof MJEmployeesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Encryption Algorithms
  */
-export const MJEncryptionAlgorithmSchema = z.object({
+export const MJEncryptionAlgorithmsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11521,12 +11521,12 @@ export const MJEncryptionAlgorithmSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJEncryptionAlgorithmEntityType = z.infer<typeof MJEncryptionAlgorithmSchema>;
+export type MJEncryptionAlgorithmsEntityType = z.infer<typeof MJEncryptionAlgorithmsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Encryption Key Sources
  */
-export const MJEncryptionKeySourceSchema = z.object({
+export const MJEncryptionKeySourcesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11587,12 +11587,12 @@ export const MJEncryptionKeySourceSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJEncryptionKeySourceEntityType = z.infer<typeof MJEncryptionKeySourceSchema>;
+export type MJEncryptionKeySourcesEntityType = z.infer<typeof MJEncryptionKeySourcesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Encryption Keys
  */
-export const MJEncryptionKeySchema = z.object({
+export const MJEncryptionKeysSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -11686,12 +11686,12 @@ export const MJEncryptionKeySchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJEncryptionKeyEntityType = z.infer<typeof MJEncryptionKeySchema>;
+export type MJEncryptionKeysEntityType = z.infer<typeof MJEncryptionKeysSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entities
  */
-export const MJEntitySchema = z.object({
+export const MJEntitiesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12030,26 +12030,21 @@ export const MJEntitySchema = z.object({
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)
         * * Description: User-friendly display name shown in the Explorer UI and other interfaces. When set, this is used instead of the entity Name for display purposes. Typically contains the entity name without the schema prefix — e.g., "AI Models" when Name is "MJ: AI Models". If NULL, the UI falls back to using the full Name.`),
-    AllowMultipleSubtypes: z.boolean().describe(`
-        * * Field Name: AllowMultipleSubtypes
-        * * Display Name: Allow Multiple Subtypes
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`),
+        * * Description: Schema-aware programmatic code name derived from the entity Name. Computed by stripping the EntityNamePrefix from the Name, removing spaces, and prepending the alphanumeric-only prefix. For "MJ: AI Models" with prefix "MJ: ", this produces "MJAIModels". For entities in schemas without a prefix, this is simply the entity Name with spaces removed and non-alphanumeric characters replaced. Used in GraphQL type generation and internal code references.`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
         * * Display Name: Class Name
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().`),
+        * * Description: Schema-aware programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(StripToAlphanumeric(SchemaInfo.EntityNamePrefix) + BaseTable + NameSuffix). For the core MJ schema with prefix "MJ: ", a table named "AIModel" produces ClassName "MJAIModel", yielding class MJAIModelEntity. For schemas without a prefix configured, ClassName equals BaseTableCodeName. This prevents cross-schema collisions when two schemas have tables with the same name.`),
     BaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Programmatic name derived solely from BaseTable + NameSuffix, intentionally schema-unaware. Unlike ClassName (which incorporates the schema prefix), BaseTableCodeName always matches the raw SQL table name. Used for SQL generation, table references, and cases where the physical table identity is needed without schema disambiguation.`),
     ParentEntity: z.string().nullable().describe(`
         * * Field Name: ParentEntity
         * * Display Name: Parent Entity
@@ -12064,12 +12059,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJEntityEntityType = z.infer<typeof MJEntitySchema>;
+export type MJEntitiesEntityType = z.infer<typeof MJEntitiesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Action Filters
  */
-export const MJEntityActionFilterSchema = z.object({
+export const MJEntityActionFiltersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12077,12 +12072,12 @@ export const MJEntityActionFilterSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)`),
     ActionFilterID: z.string().describe(`
         * * Field Name: ActionFilterID
-        * * Display Name: Action Filter
+        * * Display Name: Action Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Action Filters (vwActionFilters.ID)`),
     Sequence: z.number().describe(`
@@ -12113,20 +12108,20 @@ export const MJEntityActionFilterSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
+        * * Display Name: Entity Action
         * * SQL Data Type: nvarchar(425)`),
     ActionFilter: z.string().describe(`
         * * Field Name: ActionFilter
-        * * Display Name: Action Filter Name
+        * * Display Name: Action Filter
         * * SQL Data Type: nvarchar(MAX)`),
 });
 
-export type MJEntityActionFilterEntityType = z.infer<typeof MJEntityActionFilterSchema>;
+export type MJEntityActionFiltersEntityType = z.infer<typeof MJEntityActionFiltersSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Action Invocation Types
  */
-export const MJEntityActionInvocationTypeSchema = z.object({
+export const MJEntityActionInvocationTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12160,12 +12155,12 @@ export const MJEntityActionInvocationTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJEntityActionInvocationTypeEntityType = z.infer<typeof MJEntityActionInvocationTypeSchema>;
+export type MJEntityActionInvocationTypesEntityType = z.infer<typeof MJEntityActionInvocationTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Action Invocations
  */
-export const MJEntityActionInvocationSchema = z.object({
+export const MJEntityActionInvocationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12204,7 +12199,7 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
+        * * Display Name: Entity Action
         * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
@@ -12212,12 +12207,12 @@ export const MJEntityActionInvocationSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJEntityActionInvocationEntityType = z.infer<typeof MJEntityActionInvocationSchema>;
+export type MJEntityActionInvocationsEntityType = z.infer<typeof MJEntityActionInvocationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Action Params
  */
-export const MJEntityActionParamSchema = z.object({
+export const MJEntityActionParamsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12230,7 +12225,7 @@ export const MJEntityActionParamSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)`),
     ActionParamID: z.string().describe(`
         * * Field Name: ActionParamID
-        * * Display Name: Action Parameter ID
+        * * Display Name: Action Param ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)`),
     ValueType: z.union([z.literal('Entity Field'), z.literal('Entity Object'), z.literal('Script'), z.literal('Static')]).describe(`
@@ -12270,16 +12265,16 @@ export const MJEntityActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Action Parameter
+        * * Display Name: Action Param
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJEntityActionParamEntityType = z.infer<typeof MJEntityActionParamSchema>;
+export type MJEntityActionParamsEntityType = z.infer<typeof MJEntityActionParamsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Actions
  */
-export const MJEntityActionSchema = z.object({
+export const MJEntityActionsSchema = z.object({
     EntityID: z.string().describe(`
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -12326,12 +12321,12 @@ export const MJEntityActionSchema = z.object({
         * * SQL Data Type: nvarchar(425)`),
 });
 
-export type MJEntityActionEntityType = z.infer<typeof MJEntityActionSchema>;
+export type MJEntityActionsEntityType = z.infer<typeof MJEntityActionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity AI Actions
  */
-export const MJEntityAIActionSchema = z.object({
+export const MJEntityAIActionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12434,12 +12429,12 @@ export const MJEntityAIActionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJEntityAIActionEntityType = z.infer<typeof MJEntityAIActionSchema>;
+export type MJEntityAIActionsEntityType = z.infer<typeof MJEntityAIActionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Communication Fields
  */
-export const MJEntityCommunicationFieldSchema = z.object({
+export const MJEntityCommunicationFieldsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12447,7 +12442,7 @@ export const MJEntityCommunicationFieldSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityCommunicationMessageTypeID: z.string().describe(`
         * * Field Name: EntityCommunicationMessageTypeID
-        * * Display Name: Message Type
+        * * Display Name: Message Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)`),
     FieldName: z.string().describe(`
@@ -12472,16 +12467,16 @@ export const MJEntityCommunicationFieldSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityCommunicationMessageType: z.string().describe(`
         * * Field Name: EntityCommunicationMessageType
-        * * Display Name: Message Type Name
+        * * Display Name: Entity Communication Message Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJEntityCommunicationFieldEntityType = z.infer<typeof MJEntityCommunicationFieldSchema>;
+export type MJEntityCommunicationFieldsEntityType = z.infer<typeof MJEntityCommunicationFieldsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Communication Message Types
  */
-export const MJEntityCommunicationMessageTypeSchema = z.object({
+export const MJEntityCommunicationMessageTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12523,12 +12518,12 @@ export const MJEntityCommunicationMessageTypeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJEntityCommunicationMessageTypeEntityType = z.infer<typeof MJEntityCommunicationMessageTypeSchema>;
+export type MJEntityCommunicationMessageTypesEntityType = z.infer<typeof MJEntityCommunicationMessageTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Document Runs
  */
-export const MJEntityDocumentRunSchema = z.object({
+export const MJEntityDocumentRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12574,12 +12569,12 @@ export const MJEntityDocumentRunSchema = z.object({
         * * SQL Data Type: nvarchar(250)`),
 });
 
-export type MJEntityDocumentRunEntityType = z.infer<typeof MJEntityDocumentRunSchema>;
+export type MJEntityDocumentRunsEntityType = z.infer<typeof MJEntityDocumentRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Document Settings
  */
-export const MJEntityDocumentSettingSchema = z.object({
+export const MJEntityDocumentSettingsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12619,12 +12614,12 @@ export const MJEntityDocumentSettingSchema = z.object({
         * * SQL Data Type: nvarchar(250)`),
 });
 
-export type MJEntityDocumentSettingEntityType = z.infer<typeof MJEntityDocumentSettingSchema>;
+export type MJEntityDocumentSettingsEntityType = z.infer<typeof MJEntityDocumentSettingsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Document Types
  */
-export const MJEntityDocumentTypeSchema = z.object({
+export const MJEntityDocumentTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12650,12 +12645,12 @@ export const MJEntityDocumentTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJEntityDocumentTypeEntityType = z.infer<typeof MJEntityDocumentTypeSchema>;
+export type MJEntityDocumentTypesEntityType = z.infer<typeof MJEntityDocumentTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Documents
  */
-export const MJEntityDocumentSchema = z.object({
+export const MJEntityDocumentsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12743,12 +12738,12 @@ export const MJEntityDocumentSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJEntityDocumentEntityType = z.infer<typeof MJEntityDocumentSchema>;
+export type MJEntityDocumentsEntityType = z.infer<typeof MJEntityDocumentsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Field Values
  */
-export const MJEntityFieldValueSchema = z.object({
+export const MJEntityFieldValuesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -12802,12 +12797,12 @@ export const MJEntityFieldValueSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJEntityFieldValueEntityType = z.infer<typeof MJEntityFieldValueSchema>;
+export type MJEntityFieldValuesEntityType = z.infer<typeof MJEntityFieldValuesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Fields
  */
-export const MJEntityFieldSchema = z.object({
+export const MJEntityFieldsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13217,12 +13212,12 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
 });
 
-export type MJEntityFieldEntityType = z.infer<typeof MJEntityFieldSchema>;
+export type MJEntityFieldsEntityType = z.infer<typeof MJEntityFieldsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Permissions
  */
-export const MJEntityPermissionSchema = z.object({
+export const MJEntityPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -13321,12 +13316,12 @@ export const MJEntityPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJEntityPermissionEntityType = z.infer<typeof MJEntityPermissionSchema>;
+export type MJEntityPermissionsEntityType = z.infer<typeof MJEntityPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Record Documents
  */
-export const MJEntityRecordDocumentSchema = z.object({
+export const MJEntityRecordDocumentsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13396,12 +13391,12 @@ export const MJEntityRecordDocumentSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJEntityRecordDocumentEntityType = z.infer<typeof MJEntityRecordDocumentSchema>;
+export type MJEntityRecordDocumentsEntityType = z.infer<typeof MJEntityRecordDocumentsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Relationship Display Components
  */
-export const MJEntityRelationshipDisplayComponentSchema = z.object({
+export const MJEntityRelationshipDisplayComponentsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13437,12 +13432,12 @@ export const MJEntityRelationshipDisplayComponentSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJEntityRelationshipDisplayComponentEntityType = z.infer<typeof MJEntityRelationshipDisplayComponentSchema>;
+export type MJEntityRelationshipDisplayComponentsEntityType = z.infer<typeof MJEntityRelationshipDisplayComponentsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Relationships
  */
-export const MJEntityRelationshipSchema = z.object({
+export const MJEntityRelationshipsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -13629,12 +13624,12 @@ export const MJEntityRelationshipSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJEntityRelationshipEntityType = z.infer<typeof MJEntityRelationshipSchema>;
+export type MJEntityRelationshipsEntityType = z.infer<typeof MJEntityRelationshipsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Settings
  */
-export const MJEntitySettingSchema = z.object({
+export const MJEntitySettingsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13674,12 +13669,12 @@ export const MJEntitySettingSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJEntitySettingEntityType = z.infer<typeof MJEntitySettingSchema>;
+export type MJEntitySettingsEntityType = z.infer<typeof MJEntitySettingsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Environments
  */
-export const MJEnvironmentSchema = z.object({
+export const MJEnvironmentsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13718,12 +13713,12 @@ export const MJEnvironmentSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJEnvironmentEntityType = z.infer<typeof MJEnvironmentSchema>;
+export type MJEnvironmentsEntityType = z.infer<typeof MJEnvironmentsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Error Logs
  */
-export const MJErrorLogSchema = z.object({
+export const MJErrorLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13789,12 +13784,12 @@ export const MJErrorLogSchema = z.object({
         * * SQL Data Type: nvarchar(450)`),
 });
 
-export type MJErrorLogEntityType = z.infer<typeof MJErrorLogSchema>;
+export type MJErrorLogsEntityType = z.infer<typeof MJErrorLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Explorer Navigation Items
  */
-export const MJExplorerNavigationItemSchema = z.object({
+export const MJExplorerNavigationItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13861,12 +13856,12 @@ export const MJExplorerNavigationItemSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJExplorerNavigationItemEntityType = z.infer<typeof MJExplorerNavigationItemSchema>;
+export type MJExplorerNavigationItemsEntityType = z.infer<typeof MJExplorerNavigationItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: File Categories
  */
-export const MJFileCategorySchema = z.object({
+export const MJFileCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13905,12 +13900,12 @@ export const MJFileCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJFileCategoryEntityType = z.infer<typeof MJFileCategorySchema>;
+export type MJFileCategoriesEntityType = z.infer<typeof MJFileCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: File Entity Record Links
  */
-export const MJFileEntityRecordLinkSchema = z.object({
+export const MJFileEntityRecordLinksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -13951,12 +13946,12 @@ export const MJFileEntityRecordLinkSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJFileEntityRecordLinkEntityType = z.infer<typeof MJFileEntityRecordLinkSchema>;
+export type MJFileEntityRecordLinksEntityType = z.infer<typeof MJFileEntityRecordLinksSchema>;
 
 /**
  * zod schema definition for the entity MJ: File Storage Accounts
  */
-export const MJFileStorageAccountSchema = z.object({
+export const MJFileStorageAccountsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14005,12 +14000,12 @@ export const MJFileStorageAccountSchema = z.object({
         * * SQL Data Type: nvarchar(200)`),
 });
 
-export type MJFileStorageAccountEntityType = z.infer<typeof MJFileStorageAccountSchema>;
+export type MJFileStorageAccountsEntityType = z.infer<typeof MJFileStorageAccountsSchema>;
 
 /**
  * zod schema definition for the entity MJ: File Storage Providers
  */
-export const MJFileStorageProviderSchema = z.object({
+export const MJFileStorageProvidersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14075,12 +14070,12 @@ export const MJFileStorageProviderSchema = z.object({
         * * Description: If true, this provider requires OAuth authentication. Enterprise OAuth integration via Credential Engine is planned but not yet implemented.`),
 });
 
-export type MJFileStorageProviderEntityType = z.infer<typeof MJFileStorageProviderSchema>;
+export type MJFileStorageProvidersEntityType = z.infer<typeof MJFileStorageProvidersSchema>;
 
 /**
  * zod schema definition for the entity MJ: Files
  */
-export const MJFileSchema = z.object({
+export const MJFilesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14140,12 +14135,12 @@ export const MJFileSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJFileEntityType = z.infer<typeof MJFileSchema>;
+export type MJFilesEntityType = z.infer<typeof MJFilesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Generated Code Categories
  */
-export const MJGeneratedCodeCategorySchema = z.object({
+export const MJGeneratedCodeCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14185,12 +14180,12 @@ export const MJGeneratedCodeCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJGeneratedCodeCategoryEntityType = z.infer<typeof MJGeneratedCodeCategorySchema>;
+export type MJGeneratedCodeCategoriesEntityType = z.infer<typeof MJGeneratedCodeCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Generated Codes
  */
-export const MJGeneratedCodeSchema = z.object({
+export const MJGeneratedCodesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14294,12 +14289,12 @@ export const MJGeneratedCodeSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
+export type MJGeneratedCodesEntityType = z.infer<typeof MJGeneratedCodesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Integration URL Formats
  */
-export const MJIntegrationURLFormatSchema = z.object({
+export const MJIntegrationURLFormatsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -14347,12 +14342,12 @@ export const MJIntegrationURLFormatSchema = z.object({
         * * SQL Data Type: nvarchar(1000)`),
 });
 
-export type MJIntegrationURLFormatEntityType = z.infer<typeof MJIntegrationURLFormatSchema>;
+export type MJIntegrationURLFormatsEntityType = z.infer<typeof MJIntegrationURLFormatsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Integrations
  */
-export const MJIntegrationSchema = z.object({
+export const MJIntegrationsSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)`),
@@ -14402,12 +14397,12 @@ export const MJIntegrationSchema = z.object({
         * * Default Value: newsequentialid()`),
 });
 
-export type MJIntegrationEntityType = z.infer<typeof MJIntegrationSchema>;
+export type MJIntegrationsEntityType = z.infer<typeof MJIntegrationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Libraries
  */
-export const MJLibrarySchema = z.object({
+export const MJLibrariesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14454,12 +14449,12 @@ export const MJLibrarySchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJLibraryEntityType = z.infer<typeof MJLibrarySchema>;
+export type MJLibrariesEntityType = z.infer<typeof MJLibrariesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Library Items
  */
-export const MJLibraryItemSchema = z.object({
+export const MJLibraryItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14503,12 +14498,12 @@ export const MJLibraryItemSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJLibraryItemEntityType = z.infer<typeof MJLibraryItemSchema>;
+export type MJLibraryItemsEntityType = z.infer<typeof MJLibraryItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: List Categories
  */
-export const MJListCategorySchema = z.object({
+export const MJListCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14556,12 +14551,12 @@ export const MJListCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJListCategoryEntityType = z.infer<typeof MJListCategorySchema>;
+export type MJListCategoriesEntityType = z.infer<typeof MJListCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: List Details
  */
-export const MJListDetailSchema = z.object({
+export const MJListDetailsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -14617,12 +14612,12 @@ export const MJListDetailSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJListDetailEntityType = z.infer<typeof MJListDetailSchema>;
+export type MJListDetailsEntityType = z.infer<typeof MJListDetailsSchema>;
 
 /**
  * zod schema definition for the entity MJ: List Invitations
  */
-export const MJListInvitationSchema = z.object({
+export const MJListInvitationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14697,12 +14692,12 @@ export const MJListInvitationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJListInvitationEntityType = z.infer<typeof MJListInvitationSchema>;
+export type MJListInvitationsEntityType = z.infer<typeof MJListInvitationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: List Shares
  */
-export const MJListShareSchema = z.object({
+export const MJListSharesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14760,12 +14755,12 @@ export const MJListShareSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJListShareEntityType = z.infer<typeof MJListShareSchema>;
+export type MJListSharesEntityType = z.infer<typeof MJListSharesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Lists
  */
-export const MJListSchema = z.object({
+export const MJListsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -14829,12 +14824,12 @@ export const MJListSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJListEntityType = z.infer<typeof MJListSchema>;
+export type MJListsEntityType = z.infer<typeof MJListsSchema>;
 
 /**
  * zod schema definition for the entity MJ: MCP Server Connection Permissions
  */
-export const MJMCPServerConnectionPermissionSchema = z.object({
+export const MJMCPServerConnectionPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14899,12 +14894,12 @@ export const MJMCPServerConnectionPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJMCPServerConnectionPermissionEntityType = z.infer<typeof MJMCPServerConnectionPermissionSchema>;
+export type MJMCPServerConnectionPermissionsEntityType = z.infer<typeof MJMCPServerConnectionPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: MCP Server Connection Tools
  */
-export const MJMCPServerConnectionToolSchema = z.object({
+export const MJMCPServerConnectionToolsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -14952,16 +14947,16 @@ export const MJMCPServerConnectionToolSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: Tool Name
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJMCPServerConnectionToolEntityType = z.infer<typeof MJMCPServerConnectionToolSchema>;
+export type MJMCPServerConnectionToolsEntityType = z.infer<typeof MJMCPServerConnectionToolsSchema>;
 
 /**
  * zod schema definition for the entity MJ: MCP Server Connections
  */
-export const MJMCPServerConnectionSchema = z.object({
+export const MJMCPServerConnectionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15076,12 +15071,12 @@ export const MJMCPServerConnectionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJMCPServerConnectionEntityType = z.infer<typeof MJMCPServerConnectionSchema>;
+export type MJMCPServerConnectionsEntityType = z.infer<typeof MJMCPServerConnectionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: MCP Server Tools
  */
-export const MJMCPServerToolSchema = z.object({
+export const MJMCPServerToolsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15172,12 +15167,12 @@ export const MJMCPServerToolSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJMCPServerToolEntityType = z.infer<typeof MJMCPServerToolSchema>;
+export type MJMCPServerToolsEntityType = z.infer<typeof MJMCPServerToolsSchema>;
 
 /**
  * zod schema definition for the entity MJ: MCP Servers
  */
-export const MJMCPServerSchema = z.object({
+export const MJMCPServersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15307,12 +15302,12 @@ export const MJMCPServerSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJMCPServerEntityType = z.infer<typeof MJMCPServerSchema>;
+export type MJMCPServersEntityType = z.infer<typeof MJMCPServersSchema>;
 
 /**
  * zod schema definition for the entity MJ: MCP Tool Execution Logs
  */
-export const MJMCPToolExecutionLogSchema = z.object({
+export const MJMCPToolExecutionLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15395,7 +15390,7 @@ export const MJMCPToolExecutionLogSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: Tool
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -15403,12 +15398,12 @@ export const MJMCPToolExecutionLogSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJMCPToolExecutionLogEntityType = z.infer<typeof MJMCPToolExecutionLogSchema>;
+export type MJMCPToolExecutionLogsEntityType = z.infer<typeof MJMCPToolExecutionLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: O Auth Auth Server Metadata Caches
  */
-export const MJOAuthAuthServerMetadataCacheSchema = z.object({
+export const MJOAuthAuthServerMetadataCachesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15488,12 +15483,12 @@ export const MJOAuthAuthServerMetadataCacheSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJOAuthAuthServerMetadataCacheEntityType = z.infer<typeof MJOAuthAuthServerMetadataCacheSchema>;
+export type MJOAuthAuthServerMetadataCachesEntityType = z.infer<typeof MJOAuthAuthServerMetadataCachesSchema>;
 
 /**
  * zod schema definition for the entity MJ: O Auth Authorization States
  */
-export const MJOAuthAuthorizationStateSchema = z.object({
+export const MJOAuthAuthorizationStatesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15594,12 +15589,12 @@ export const MJOAuthAuthorizationStateSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJOAuthAuthorizationStateEntityType = z.infer<typeof MJOAuthAuthorizationStateSchema>;
+export type MJOAuthAuthorizationStatesEntityType = z.infer<typeof MJOAuthAuthorizationStatesSchema>;
 
 /**
  * zod schema definition for the entity MJ: O Auth Client Registrations
  */
-export const MJOAuthClientRegistrationSchema = z.object({
+export const MJOAuthClientRegistrationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15698,12 +15693,12 @@ export const MJOAuthClientRegistrationSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJOAuthClientRegistrationEntityType = z.infer<typeof MJOAuthClientRegistrationSchema>;
+export type MJOAuthClientRegistrationsEntityType = z.infer<typeof MJOAuthClientRegistrationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: O Auth Tokens
  */
-export const MJOAuthTokenSchema = z.object({
+export const MJOAuthTokensSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15768,12 +15763,12 @@ export const MJOAuthTokenSchema = z.object({
         * * SQL Data Type: nvarchar(200)`),
 });
 
-export type MJOAuthTokenEntityType = z.infer<typeof MJOAuthTokenSchema>;
+export type MJOAuthTokensEntityType = z.infer<typeof MJOAuthTokensSchema>;
 
 /**
  * zod schema definition for the entity MJ: Open App Dependencies
  */
-export const MJOpenAppDependencySchema = z.object({
+export const MJOpenAppDependenciesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15835,12 +15830,12 @@ export const MJOpenAppDependencySchema = z.object({
         * * SQL Data Type: nvarchar(64)`),
 });
 
-export type MJOpenAppDependencyEntityType = z.infer<typeof MJOpenAppDependencySchema>;
+export type MJOpenAppDependenciesEntityType = z.infer<typeof MJOpenAppDependenciesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Open App Install Histories
  */
-export const MJOpenAppInstallHistorySchema = z.object({
+export const MJOpenAppInstallHistoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -15945,12 +15940,12 @@ export const MJOpenAppInstallHistorySchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJOpenAppInstallHistoryEntityType = z.infer<typeof MJOpenAppInstallHistorySchema>;
+export type MJOpenAppInstallHistoriesEntityType = z.infer<typeof MJOpenAppInstallHistoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Open Apps
  */
-export const MJOpenAppSchema = z.object({
+export const MJOpenAppsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16067,12 +16062,12 @@ export const MJOpenAppSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJOpenAppEntityType = z.infer<typeof MJOpenAppSchema>;
+export type MJOpenAppsEntityType = z.infer<typeof MJOpenAppsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Output Delivery Types
  */
-export const MJOutputDeliveryTypeSchema = z.object({
+export const MJOutputDeliveryTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16098,12 +16093,12 @@ export const MJOutputDeliveryTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJOutputDeliveryTypeEntityType = z.infer<typeof MJOutputDeliveryTypeSchema>;
+export type MJOutputDeliveryTypesEntityType = z.infer<typeof MJOutputDeliveryTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Output Format Types
  */
-export const MJOutputFormatTypeSchema = z.object({
+export const MJOutputFormatTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16134,12 +16129,12 @@ export const MJOutputFormatTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJOutputFormatTypeEntityType = z.infer<typeof MJOutputFormatTypeSchema>;
+export type MJOutputFormatTypesEntityType = z.infer<typeof MJOutputFormatTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Output Trigger Types
  */
-export const MJOutputTriggerTypeSchema = z.object({
+export const MJOutputTriggerTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16165,12 +16160,12 @@ export const MJOutputTriggerTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJOutputTriggerTypeEntityType = z.infer<typeof MJOutputTriggerTypeSchema>;
+export type MJOutputTriggerTypesEntityType = z.infer<typeof MJOutputTriggerTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Projects
  */
-export const MJProjectSchema = z.object({
+export const MJProjectsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16237,12 +16232,12 @@ export const MJProjectSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJProjectEntityType = z.infer<typeof MJProjectSchema>;
+export type MJProjectsEntityType = z.infer<typeof MJProjectsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Public Links
  */
-export const MJPublicLinkSchema = z.object({
+export const MJPublicLinksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16315,12 +16310,12 @@ export const MJPublicLinkSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJPublicLinkEntityType = z.infer<typeof MJPublicLinkSchema>;
+export type MJPublicLinksEntityType = z.infer<typeof MJPublicLinksSchema>;
 
 /**
  * zod schema definition for the entity MJ: Queries
  */
-export const MJQuerySchema = z.object({
+export const MJQueriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16440,6 +16435,10 @@ export const MJQuerySchema = z.object({
         * * Display Name: Cache Validation SQL
         * * SQL Data Type: nvarchar(MAX)
         * * Description: SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`),
+    PlatformVariants: z.string().nullable().describe(`
+        * * Field Name: PlatformVariants
+        * * Display Name: Platform Variants
+        * * SQL Data Type: nvarchar(MAX)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -16450,12 +16449,12 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJQueryEntityType = z.infer<typeof MJQuerySchema>;
+export type MJQueriesEntityType = z.infer<typeof MJQueriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Query Categories
  */
-export const MJQueryCategorySchema = z.object({
+export const MJQueryCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16525,12 +16524,12 @@ export const MJQueryCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJQueryCategoryEntityType = z.infer<typeof MJQueryCategorySchema>;
+export type MJQueryCategoriesEntityType = z.infer<typeof MJQueryCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Query Entities
  */
-export const MJQueryEntitySchema = z.object({
+export const MJQueryEntitiesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16584,12 +16583,12 @@ export const MJQueryEntitySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJQueryEntityEntityType = z.infer<typeof MJQueryEntitySchema>;
+export type MJQueryEntitiesEntityType = z.infer<typeof MJQueryEntitiesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Query Fields
  */
-export const MJQueryFieldSchema = z.object({
+export const MJQueryFieldsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16690,12 +16689,12 @@ export const MJQueryFieldSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJQueryFieldEntityType = z.infer<typeof MJQueryFieldSchema>;
+export type MJQueryFieldsEntityType = z.infer<typeof MJQueryFieldsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Query Parameters
  */
-export const MJQueryParameterSchema = z.object({
+export const MJQueryParametersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16780,12 +16779,12 @@ export const MJQueryParameterSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJQueryParameterEntityType = z.infer<typeof MJQueryParameterSchema>;
+export type MJQueryParametersEntityType = z.infer<typeof MJQueryParametersSchema>;
 
 /**
  * zod schema definition for the entity MJ: Query Permissions
  */
-export const MJQueryPermissionSchema = z.object({
+export const MJQueryPermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16821,12 +16820,12 @@ export const MJQueryPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJQueryPermissionEntityType = z.infer<typeof MJQueryPermissionSchema>;
+export type MJQueryPermissionsEntityType = z.infer<typeof MJQueryPermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Queue Tasks
  */
-export const MJQueueTaskSchema = z.object({
+export const MJQueueTasksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16895,12 +16894,12 @@ export const MJQueueTaskSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJQueueTaskEntityType = z.infer<typeof MJQueueTaskSchema>;
+export type MJQueueTasksEntityType = z.infer<typeof MJQueueTasksSchema>;
 
 /**
  * zod schema definition for the entity MJ: Queue Types
  */
-export const MJQueueTypeSchema = z.object({
+export const MJQueueTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -16942,12 +16941,12 @@ export const MJQueueTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJQueueTypeEntityType = z.infer<typeof MJQueueTypeSchema>;
+export type MJQueueTypesEntityType = z.infer<typeof MJQueueTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Queues
  */
-export const MJQueueSchema = z.object({
+export const MJQueuesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17049,12 +17048,12 @@ export const MJQueueSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJQueueEntityType = z.infer<typeof MJQueueSchema>;
+export type MJQueuesEntityType = z.infer<typeof MJQueuesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Recommendation Items
  */
-export const MJRecommendationItemSchema = z.object({
+export const MJRecommendationItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17067,7 +17066,7 @@ export const MJRecommendationItemSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Recommendations (vwRecommendations.ID)`),
     DestinationEntityID: z.string().describe(`
         * * Field Name: DestinationEntityID
-        * * Display Name: Destination Entity ID
+        * * Display Name: Destination Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     DestinationEntityRecordID: z.string().describe(`
@@ -17096,16 +17095,16 @@ export const MJRecommendationItemSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     DestinationEntity: z.string().describe(`
         * * Field Name: DestinationEntity
-        * * Display Name: Destination Entity
+        * * Display Name: Destination Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJRecommendationItemEntityType = z.infer<typeof MJRecommendationItemSchema>;
+export type MJRecommendationItemsEntityType = z.infer<typeof MJRecommendationItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Recommendation Providers
  */
-export const MJRecommendationProviderSchema = z.object({
+export const MJRecommendationProvidersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17131,12 +17130,12 @@ export const MJRecommendationProviderSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJRecommendationProviderEntityType = z.infer<typeof MJRecommendationProviderSchema>;
+export type MJRecommendationProvidersEntityType = z.infer<typeof MJRecommendationProvidersSchema>;
 
 /**
  * zod schema definition for the entity MJ: Recommendation Runs
  */
-export const MJRecommendationRunSchema = z.object({
+export const MJRecommendationRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17198,12 +17197,12 @@ export const MJRecommendationRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJRecommendationRunEntityType = z.infer<typeof MJRecommendationRunSchema>;
+export type MJRecommendationRunsEntityType = z.infer<typeof MJRecommendationRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Recommendations
  */
-export const MJRecommendationSchema = z.object({
+export const MJRecommendationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17244,12 +17243,12 @@ export const MJRecommendationSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJRecommendationEntityType = z.infer<typeof MJRecommendationSchema>;
+export type MJRecommendationsEntityType = z.infer<typeof MJRecommendationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Record Change Replay Runs
  */
-export const MJRecordChangeReplayRunSchema = z.object({
+export const MJRecordChangeReplayRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17297,12 +17296,12 @@ export const MJRecordChangeReplayRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJRecordChangeReplayRunEntityType = z.infer<typeof MJRecordChangeReplayRunSchema>;
+export type MJRecordChangeReplayRunsEntityType = z.infer<typeof MJRecordChangeReplayRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Record Changes
  */
-export const MJRecordChangeSchema = z.object({
+export const MJRecordChangesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17310,7 +17309,7 @@ export const MJRecordChangeSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     RecordID: z.string().describe(`
@@ -17320,7 +17319,7 @@ export const MJRecordChangeSchema = z.object({
         * * Description: Field RecordID for entity Record Changes.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Snapshot'), z.literal('Update')]).describe(`
@@ -17353,12 +17352,12 @@ export const MJRecordChangeSchema = z.object({
         * * Description: The date/time that the change occured.`),
     ChangesJSON: z.string().describe(`
         * * Field Name: ChangesJSON
-        * * Display Name: Changes JSON
+        * * Display Name: Changes (JSON)
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON structure that describes what was changed in a structured format.`),
     ChangesDescription: z.string().describe(`
         * * Field Name: ChangesDescription
-        * * Display Name: Changes Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: A generated, human-readable description of what was changed.`),
     FullRecordJSON: z.string().describe(`
@@ -17384,12 +17383,12 @@ export const MJRecordChangeSchema = z.object({
         * * Description: Field ErrorLog for entity Record Changes.`),
     ReplayRunID: z.string().nullable().describe(`
         * * Field Name: ReplayRunID
-        * * Display Name: Replay Run ID
+        * * Display Name: Replay Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Record Change Replay Runs (vwRecordChangeReplayRuns.ID)`),
     IntegrationID: z.string().nullable().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration ID
+        * * Display Name: Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)`),
     Comments: z.string().nullable().describe(`
@@ -17410,11 +17409,11 @@ export const MJRecordChangeSchema = z.object({
         * * Description: Field UpdatedAt for entity Record Changes.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     ReplayRun: z.string().nullable().describe(`
         * * Field Name: ReplayRun
@@ -17422,16 +17421,16 @@ export const MJRecordChangeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     Integration: z.string().nullable().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
+export type MJRecordChangesEntityType = z.infer<typeof MJRecordChangesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Record Links
  */
-export const MJRecordLinkSchema = z.object({
+export const MJRecordLinksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17492,12 +17491,12 @@ export const MJRecordLinkSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJRecordLinkEntityType = z.infer<typeof MJRecordLinkSchema>;
+export type MJRecordLinksEntityType = z.infer<typeof MJRecordLinksSchema>;
 
 /**
  * zod schema definition for the entity MJ: Record Merge Deletion Logs
  */
-export const MJRecordMergeDeletionLogSchema = z.object({
+export const MJRecordMergeDeletionLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17540,16 +17539,16 @@ export const MJRecordMergeDeletionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     RecordMergeLog: z.string().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Merge Log Summary
+        * * Display Name: Record Merge Log
         * * SQL Data Type: nvarchar(450)`),
 });
 
-export type MJRecordMergeDeletionLogEntityType = z.infer<typeof MJRecordMergeDeletionLogSchema>;
+export type MJRecordMergeDeletionLogsEntityType = z.infer<typeof MJRecordMergeDeletionLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Record Merge Logs
  */
-export const MJRecordMergeLogSchema = z.object({
+export const MJRecordMergeLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17641,12 +17640,12 @@ export const MJRecordMergeLogSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJRecordMergeLogEntityType = z.infer<typeof MJRecordMergeLogSchema>;
+export type MJRecordMergeLogsEntityType = z.infer<typeof MJRecordMergeLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Report Categories
  */
-export const MJReportCategorySchema = z.object({
+export const MJReportCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17694,12 +17693,12 @@ export const MJReportCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJReportCategoryEntityType = z.infer<typeof MJReportCategorySchema>;
+export type MJReportCategoriesEntityType = z.infer<typeof MJReportCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Report Snapshots
  */
-export const MJReportSnapshotSchema = z.object({
+export const MJReportSnapshotsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17740,12 +17739,12 @@ export const MJReportSnapshotSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJReportSnapshotEntityType = z.infer<typeof MJReportSnapshotSchema>;
+export type MJReportSnapshotsEntityType = z.infer<typeof MJReportSnapshotsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Report User States
  */
-export const MJReportUserStateSchema = z.object({
+export const MJReportUserStatesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17786,12 +17785,12 @@ export const MJReportUserStateSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJReportUserStateEntityType = z.infer<typeof MJReportUserStateSchema>;
+export type MJReportUserStatesEntityType = z.infer<typeof MJReportUserStatesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Report Versions
  */
-export const MJReportVersionSchema = z.object({
+export const MJReportVersionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17844,12 +17843,12 @@ export const MJReportVersionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJReportVersionEntityType = z.infer<typeof MJReportVersionSchema>;
+export type MJReportVersionsEntityType = z.infer<typeof MJReportVersionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Reports
  */
-export const MJReportSchema = z.object({
+export const MJReportsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -17957,52 +17956,52 @@ export const MJReportSchema = z.object({
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category Name
+        * * Display Name: Category
         * * SQL Data Type: nvarchar(100)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Name
+        * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(MAX)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
-        * * Display Name: Data Context Name
+        * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
     OutputTriggerType: z.string().nullable().describe(`
         * * Field Name: OutputTriggerType
-        * * Display Name: Output Trigger Type Name
+        * * Display Name: Output Trigger Type
         * * SQL Data Type: nvarchar(255)`),
     OutputFormatType: z.string().nullable().describe(`
         * * Field Name: OutputFormatType
-        * * Display Name: Output Format Type Name
+        * * Display Name: Output Format Type
         * * SQL Data Type: nvarchar(255)`),
     OutputDeliveryType: z.string().nullable().describe(`
         * * Field Name: OutputDeliveryType
-        * * Display Name: Output Delivery Type Name
+        * * Display Name: Output Delivery Type
         * * SQL Data Type: nvarchar(255)`),
     OutputWorkflow: z.string().nullable().describe(`
         * * Field Name: OutputWorkflow
-        * * Display Name: Output Workflow Name
+        * * Display Name: Output Workflow
         * * SQL Data Type: nvarchar(100)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment Name
+        * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJReportEntityType = z.infer<typeof MJReportSchema>;
+export type MJReportsEntityType = z.infer<typeof MJReportsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Resource Links
  */
-export const MJResourceLinkSchema = z.object({
+export const MJResourceLinksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18051,12 +18050,12 @@ export const MJResourceLinkSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJResourceLinkEntityType = z.infer<typeof MJResourceLinkSchema>;
+export type MJResourceLinksEntityType = z.infer<typeof MJResourceLinksSchema>;
 
 /**
  * zod schema definition for the entity MJ: Resource Permissions
  */
-export const MJResourcePermissionSchema = z.object({
+export const MJResourcePermissionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18148,12 +18147,12 @@ export const MJResourcePermissionSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJResourcePermissionEntityType = z.infer<typeof MJResourcePermissionSchema>;
+export type MJResourcePermissionsEntityType = z.infer<typeof MJResourcePermissionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Resource Types
  */
-export const MJResourceTypeSchema = z.object({
+export const MJResourceTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18213,12 +18212,12 @@ export const MJResourceTypeSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJResourceTypeEntityType = z.infer<typeof MJResourceTypeSchema>;
+export type MJResourceTypesEntityType = z.infer<typeof MJResourceTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Roles
  */
-export const MJRoleSchema = z.object({
+export const MJRolesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -18253,12 +18252,12 @@ export const MJRoleSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJRoleEntityType = z.infer<typeof MJRoleSchema>;
+export type MJRolesEntityType = z.infer<typeof MJRolesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Row Level Security Filters
  */
-export const MJRowLevelSecurityFilterSchema = z.object({
+export const MJRowLevelSecurityFiltersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18287,14 +18286,18 @@ export const MJRowLevelSecurityFilterSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    PlatformVariants: z.string().nullable().describe(`
+        * * Field Name: PlatformVariants
+        * * Display Name: Platform Variants
+        * * SQL Data Type: nvarchar(MAX)`),
 });
 
-export type MJRowLevelSecurityFilterEntityType = z.infer<typeof MJRowLevelSecurityFilterSchema>;
+export type MJRowLevelSecurityFiltersEntityType = z.infer<typeof MJRowLevelSecurityFiltersSchema>;
 
 /**
  * zod schema definition for the entity MJ: Scheduled Action Params
  */
-export const MJScheduledActionParamSchema = z.object({
+export const MJScheduledActionParamsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18348,12 +18351,12 @@ export const MJScheduledActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJScheduledActionParamEntityType = z.infer<typeof MJScheduledActionParamSchema>;
+export type MJScheduledActionParamsEntityType = z.infer<typeof MJScheduledActionParamsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Scheduled Actions
  */
-export const MJScheduledActionSchema = z.object({
+export const MJScheduledActionsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18456,12 +18459,12 @@ export const MJScheduledActionSchema = z.object({
         * * SQL Data Type: nvarchar(425)`),
 });
 
-export type MJScheduledActionEntityType = z.infer<typeof MJScheduledActionSchema>;
+export type MJScheduledActionsEntityType = z.infer<typeof MJScheduledActionsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Scheduled Job Runs
  */
-export const MJScheduledJobRunSchema = z.object({
+export const MJScheduledJobRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18542,12 +18545,12 @@ export const MJScheduledJobRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJScheduledJobRunEntityType = z.infer<typeof MJScheduledJobRunSchema>;
+export type MJScheduledJobRunsEntityType = z.infer<typeof MJScheduledJobRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Scheduled Job Types
  */
-export const MJScheduledJobTypeSchema = z.object({
+export const MJScheduledJobTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18596,12 +18599,12 @@ export const MJScheduledJobTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJScheduledJobTypeEntityType = z.infer<typeof MJScheduledJobTypeSchema>;
+export type MJScheduledJobTypesEntityType = z.infer<typeof MJScheduledJobTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Scheduled Jobs
  */
-export const MJScheduledJobSchema = z.object({
+export const MJScheduledJobsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18780,7 +18783,7 @@ export const MJScheduledJobSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJScheduledJobEntityType = z.infer<typeof MJScheduledJobSchema>;
+export type MJScheduledJobsEntityType = z.infer<typeof MJScheduledJobsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Schema Info
@@ -18841,7 +18844,7 @@ export type MJSchemaInfoEntityType = z.infer<typeof MJSchemaInfoSchema>;
 /**
  * zod schema definition for the entity MJ: Skills
  */
-export const MJSkillSchema = z.object({
+export const MJSkillsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -18874,12 +18877,12 @@ export const MJSkillSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJSkillEntityType = z.infer<typeof MJSkillSchema>;
+export type MJSkillsEntityType = z.infer<typeof MJSkillsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Tagged Items
  */
-export const MJTaggedItemSchema = z.object({
+export const MJTaggedItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18920,12 +18923,12 @@ export const MJTaggedItemSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJTaggedItemEntityType = z.infer<typeof MJTaggedItemSchema>;
+export type MJTaggedItemsEntityType = z.infer<typeof MJTaggedItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Tags
  */
-export const MJTagSchema = z.object({
+export const MJTagsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -18969,12 +18972,12 @@ export const MJTagSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJTagEntityType = z.infer<typeof MJTagSchema>;
+export type MJTagsEntityType = z.infer<typeof MJTagsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Task Dependencies
  */
-export const MJTaskDependencySchema = z.object({
+export const MJTaskDependenciesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19021,12 +19024,12 @@ export const MJTaskDependencySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJTaskDependencyEntityType = z.infer<typeof MJTaskDependencySchema>;
+export type MJTaskDependenciesEntityType = z.infer<typeof MJTaskDependenciesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Task Types
  */
-export const MJTaskTypeSchema = z.object({
+export const MJTaskTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19054,12 +19057,12 @@ export const MJTaskTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJTaskTypeEntityType = z.infer<typeof MJTaskTypeSchema>;
+export type MJTaskTypesEntityType = z.infer<typeof MJTaskTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Tasks
  */
-export const MJTaskSchema = z.object({
+export const MJTasksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19067,7 +19070,7 @@ export const MJTaskSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
     Name: z.string().describe(`
@@ -19082,33 +19085,33 @@ export const MJTaskSchema = z.object({
         * * Description: Detailed description of the task requirements and objectives`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment
+        * * Display Name: Environment ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project
+        * * Display Name: Project ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     ConversationDetailID: z.string().nullable().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent
+        * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
     Status: z.union([z.literal('Blocked'), z.literal('Cancelled'), z.literal('Complete'), z.literal('Deferred'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
@@ -19159,31 +19162,31 @@ export const MJTaskSchema = z.object({
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment Name
+        * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
-        * * Display Name: Project Name
+        * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -19191,12 +19194,12 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJTaskEntityType = z.infer<typeof MJTaskSchema>;
+export type MJTasksEntityType = z.infer<typeof MJTasksSchema>;
 
 /**
  * zod schema definition for the entity MJ: Template Categories
  */
-export const MJTemplateCategorySchema = z.object({
+export const MJTemplateCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19246,12 +19249,12 @@ export const MJTemplateCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJTemplateCategoryEntityType = z.infer<typeof MJTemplateCategorySchema>;
+export type MJTemplateCategoriesEntityType = z.infer<typeof MJTemplateCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Template Content Types
  */
-export const MJTemplateContentTypeSchema = z.object({
+export const MJTemplateContentTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19295,12 +19298,12 @@ export const MJTemplateContentTypeSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJTemplateContentTypeEntityType = z.infer<typeof MJTemplateContentTypeSchema>;
+export type MJTemplateContentTypesEntityType = z.infer<typeof MJTemplateContentTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Template Contents
  */
-export const MJTemplateContentSchema = z.object({
+export const MJTemplateContentsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19352,12 +19355,12 @@ export const MJTemplateContentSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJTemplateContentEntityType = z.infer<typeof MJTemplateContentSchema>;
+export type MJTemplateContentsEntityType = z.infer<typeof MJTemplateContentsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Template Params
  */
-export const MJTemplateParamSchema = z.object({
+export const MJTemplateParamsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19404,12 +19407,12 @@ export const MJTemplateParamSchema = z.object({
         * * Description: Whether this parameter must be provided when using the template.`),
     LinkedParameterName: z.string().nullable().describe(`
         * * Field Name: LinkedParameterName
-        * * Display Name: Linked Parameter Name
+        * * Display Name: Linked Parameter
         * * SQL Data Type: nvarchar(255)
         * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.`),
     LinkedParameterField: z.string().nullable().describe(`
         * * Field Name: LinkedParameterField
-        * * Display Name: Linked Parameter Field
+        * * Display Name: Linked Field
         * * SQL Data Type: nvarchar(500)
         * * Description: If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.`),
     ExtraFilter: z.string().nullable().describe(`
@@ -19458,16 +19461,16 @@ export const MJTemplateParamSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     TemplateContent: z.string().nullable().describe(`
         * * Field Name: TemplateContent
-        * * Display Name: Template Content Name
+        * * Display Name: Template Content
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJTemplateParamEntityType = z.infer<typeof MJTemplateParamSchema>;
+export type MJTemplateParamsEntityType = z.infer<typeof MJTemplateParamsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Templates
  */
-export const MJTemplateSchema = z.object({
+export const MJTemplatesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19534,12 +19537,12 @@ export const MJTemplateSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJTemplateEntityType = z.infer<typeof MJTemplateSchema>;
+export type MJTemplatesEntityType = z.infer<typeof MJTemplatesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Rubrics
  */
-export const MJTestRubricSchema = z.object({
+export const MJTestRubricsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19603,12 +19606,12 @@ export const MJTestRubricSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJTestRubricEntityType = z.infer<typeof MJTestRubricSchema>;
+export type MJTestRubricsEntityType = z.infer<typeof MJTestRubricsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Run Feedbacks
  */
-export const MJTestRunFeedbackSchema = z.object({
+export const MJTestRunFeedbacksSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19672,12 +19675,12 @@ export const MJTestRunFeedbackSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJTestRunFeedbackEntityType = z.infer<typeof MJTestRunFeedbackSchema>;
+export type MJTestRunFeedbacksEntityType = z.infer<typeof MJTestRunFeedbacksSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Runs
  */
-export const MJTestRunSchema = z.object({
+export const MJTestRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -19870,12 +19873,12 @@ export const MJTestRunSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJTestRunEntityType = z.infer<typeof MJTestRunSchema>;
+export type MJTestRunsEntityType = z.infer<typeof MJTestRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Suite Runs
  */
-export const MJTestSuiteRunSchema = z.object({
+export const MJTestSuiteRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20041,12 +20044,12 @@ export const MJTestSuiteRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJTestSuiteRunEntityType = z.infer<typeof MJTestSuiteRunSchema>;
+export type MJTestSuiteRunsEntityType = z.infer<typeof MJTestSuiteRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Suite Tests
  */
-export const MJTestSuiteTestSchema = z.object({
+export const MJTestSuiteTestsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20106,12 +20109,12 @@ export const MJTestSuiteTestSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJTestSuiteTestEntityType = z.infer<typeof MJTestSuiteTestSchema>;
+export type MJTestSuiteTestsEntityType = z.infer<typeof MJTestSuiteTestsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Suites
  */
-export const MJTestSuiteSchema = z.object({
+export const MJTestSuitesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20184,12 +20187,12 @@ export const MJTestSuiteSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJTestSuiteEntityType = z.infer<typeof MJTestSuiteSchema>;
+export type MJTestSuitesEntityType = z.infer<typeof MJTestSuitesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Types
  */
-export const MJTestTypeSchema = z.object({
+export const MJTestTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20238,12 +20241,12 @@ export const MJTestTypeSchema = z.object({
         * * Description: JSON schema defining the variables available for tests of this type. Contains schemaVersion and array of variable definitions with name, displayName, description, dataType, valueSource, possibleValues, defaultValue, and required fields.`),
 });
 
-export type MJTestTypeEntityType = z.infer<typeof MJTestTypeSchema>;
+export type MJTestTypesEntityType = z.infer<typeof MJTestTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Tests
  */
-export const MJTestSchema = z.object({
+export const MJTestsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20343,12 +20346,12 @@ export const MJTestSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJTestEntityType = z.infer<typeof MJTestSchema>;
+export type MJTestsEntityType = z.infer<typeof MJTestsSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Application Entities
  */
-export const MJUserApplicationEntitySchema = z.object({
+export const MJUserApplicationEntitiesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -20392,12 +20395,12 @@ export const MJUserApplicationEntitySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJUserApplicationEntityEntityType = z.infer<typeof MJUserApplicationEntitySchema>;
+export type MJUserApplicationEntitiesEntityType = z.infer<typeof MJUserApplicationEntitiesSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Applications
  */
-export const MJUserApplicationSchema = z.object({
+export const MJUserApplicationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -20443,12 +20446,12 @@ export const MJUserApplicationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJUserApplicationEntityType = z.infer<typeof MJUserApplicationSchema>;
+export type MJUserApplicationsEntityType = z.infer<typeof MJUserApplicationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Favorites
  */
-export const MJUserFavoriteSchema = z.object({
+export const MJUserFavoritesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -20491,12 +20494,12 @@ export const MJUserFavoriteSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJUserFavoriteEntityType = z.infer<typeof MJUserFavoriteSchema>;
+export type MJUserFavoritesEntityType = z.infer<typeof MJUserFavoritesSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Notification Preferences
  */
-export const MJUserNotificationPreferenceSchema = z.object({
+export const MJUserNotificationPreferencesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20552,12 +20555,12 @@ export const MJUserNotificationPreferenceSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJUserNotificationPreferenceEntityType = z.infer<typeof MJUserNotificationPreferenceSchema>;
+export type MJUserNotificationPreferencesEntityType = z.infer<typeof MJUserNotificationPreferencesSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Notification Types
  */
-export const MJUserNotificationTypeSchema = z.object({
+export const MJUserNotificationTypesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20643,12 +20646,12 @@ export const MJUserNotificationTypeSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJUserNotificationTypeEntityType = z.infer<typeof MJUserNotificationTypeSchema>;
+export type MJUserNotificationTypesEntityType = z.infer<typeof MJUserNotificationTypesSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Notifications
  */
-export const MJUserNotificationSchema = z.object({
+export const MJUserNotificationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20725,12 +20728,12 @@ export const MJUserNotificationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJUserNotificationEntityType = z.infer<typeof MJUserNotificationSchema>;
+export type MJUserNotificationsEntityType = z.infer<typeof MJUserNotificationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Record Logs
  */
-export const MJUserRecordLogSchema = z.object({
+export const MJUserRecordLogsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20805,12 +20808,12 @@ export const MJUserRecordLogSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJUserRecordLogEntityType = z.infer<typeof MJUserRecordLogSchema>;
+export type MJUserRecordLogsEntityType = z.infer<typeof MJUserRecordLogsSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Roles
  */
-export const MJUserRoleSchema = z.object({
+export const MJUserRolesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20846,12 +20849,12 @@ export const MJUserRoleSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJUserRoleEntityType = z.infer<typeof MJUserRoleSchema>;
+export type MJUserRolesEntityType = z.infer<typeof MJUserRolesSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Settings
  */
-export const MJUserSettingSchema = z.object({
+export const MJUserSettingsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20889,12 +20892,12 @@ export const MJUserSettingSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJUserSettingEntityType = z.infer<typeof MJUserSettingSchema>;
+export type MJUserSettingsEntityType = z.infer<typeof MJUserSettingsSchema>;
 
 /**
  * zod schema definition for the entity MJ: User View Categories
  */
-export const MJUserViewCategorySchema = z.object({
+export const MJUserViewCategoriesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -20951,12 +20954,12 @@ export const MJUserViewCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJUserViewCategoryEntityType = z.infer<typeof MJUserViewCategorySchema>;
+export type MJUserViewCategoriesEntityType = z.infer<typeof MJUserViewCategoriesSchema>;
 
 /**
  * zod schema definition for the entity MJ: User View Run Details
  */
-export const MJUserViewRunDetailSchema = z.object({
+export const MJUserViewRunDetailsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -20991,12 +20994,12 @@ export const MJUserViewRunDetailSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJUserViewRunDetailEntityType = z.infer<typeof MJUserViewRunDetailSchema>;
+export type MJUserViewRunDetailsEntityType = z.infer<typeof MJUserViewRunDetailsSchema>;
 
 /**
  * zod schema definition for the entity MJ: User View Runs
  */
-export const MJUserViewRunSchema = z.object({
+export const MJUserViewRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21037,12 +21040,12 @@ export const MJUserViewRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJUserViewRunEntityType = z.infer<typeof MJUserViewRunSchema>;
+export type MJUserViewRunsEntityType = z.infer<typeof MJUserViewRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Views
  */
-export const MJUserViewSchema = z.object({
+export const MJUserViewsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21187,12 +21190,12 @@ export const MJUserViewSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJUserViewEntityType = z.infer<typeof MJUserViewSchema>;
+export type MJUserViewsEntityType = z.infer<typeof MJUserViewsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Users
  */
-export const MJUserSchema = z.object({
+export const MJUsersSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -21300,12 +21303,12 @@ export const MJUserSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJUserEntityType = z.infer<typeof MJUserSchema>;
+export type MJUsersEntityType = z.infer<typeof MJUsersSchema>;
 
 /**
  * zod schema definition for the entity MJ: Vector Databases
  */
-export const MJVectorDatabaseSchema = z.object({
+export const MJVectorDatabasesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21341,12 +21344,12 @@ export const MJVectorDatabaseSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJVectorDatabaseEntityType = z.infer<typeof MJVectorDatabaseSchema>;
+export type MJVectorDatabasesEntityType = z.infer<typeof MJVectorDatabasesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Vector Indexes
  */
-export const MJVectorIndexSchema = z.object({
+export const MJVectorIndexesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21390,12 +21393,12 @@ export const MJVectorIndexSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
 });
 
-export type MJVectorIndexEntityType = z.infer<typeof MJVectorIndexSchema>;
+export type MJVectorIndexesEntityType = z.infer<typeof MJVectorIndexesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Version Installations
  */
-export const MJVersionInstallationSchema = z.object({
+export const MJVersionInstallationsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21469,12 +21472,12 @@ export const MJVersionInstallationSchema = z.object({
         * * SQL Data Type: nvarchar(302)`),
 });
 
-export type MJVersionInstallationEntityType = z.infer<typeof MJVersionInstallationSchema>;
+export type MJVersionInstallationsEntityType = z.infer<typeof MJVersionInstallationsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Version Label Items
  */
-export const MJVersionLabelItemSchema = z.object({
+export const MJVersionLabelItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21527,12 +21530,12 @@ export const MJVersionLabelItemSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJVersionLabelItemEntityType = z.infer<typeof MJVersionLabelItemSchema>;
+export type MJVersionLabelItemsEntityType = z.infer<typeof MJVersionLabelItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Version Label Restores
  */
-export const MJVersionLabelRestoreSchema = z.object({
+export const MJVersionLabelRestoresSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21627,12 +21630,12 @@ export const MJVersionLabelRestoreSchema = z.object({
         * * SQL Data Type: nvarchar(200)`),
 });
 
-export type MJVersionLabelRestoreEntityType = z.infer<typeof MJVersionLabelRestoreSchema>;
+export type MJVersionLabelRestoresEntityType = z.infer<typeof MJVersionLabelRestoresSchema>;
 
 /**
  * zod schema definition for the entity MJ: Version Labels
  */
-export const MJVersionLabelSchema = z.object({
+export const MJVersionLabelsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21738,12 +21741,12 @@ export const MJVersionLabelSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
 });
 
-export type MJVersionLabelEntityType = z.infer<typeof MJVersionLabelSchema>;
+export type MJVersionLabelsEntityType = z.infer<typeof MJVersionLabelsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Workflow Engines
  */
-export const MJWorkflowEngineSchema = z.object({
+export const MJWorkflowEnginesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -21776,12 +21779,12 @@ export const MJWorkflowEngineSchema = z.object({
         * * Default Value: getutcdate()`),
 });
 
-export type MJWorkflowEngineEntityType = z.infer<typeof MJWorkflowEngineSchema>;
+export type MJWorkflowEnginesEntityType = z.infer<typeof MJWorkflowEnginesSchema>;
 
 /**
  * zod schema definition for the entity MJ: Workflow Runs
  */
-export const MJWorkflowRunSchema = z.object({
+export const MJWorkflowRunsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21841,12 +21844,12 @@ export const MJWorkflowRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJWorkflowRunEntityType = z.infer<typeof MJWorkflowRunSchema>;
+export type MJWorkflowRunsEntityType = z.infer<typeof MJWorkflowRunsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Workflows
  */
-export const MJWorkflowSchema = z.object({
+export const MJWorkflowsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
@@ -21912,12 +21915,12 @@ export const MJWorkflowSchema = z.object({
         * * SQL Data Type: int`),
 });
 
-export type MJWorkflowEntityType = z.infer<typeof MJWorkflowSchema>;
+export type MJWorkflowsEntityType = z.infer<typeof MJWorkflowsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Workspace Items
  */
-export const MJWorkspaceItemSchema = z.object({
+export const MJWorkspaceItemsSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -21976,12 +21979,12 @@ export const MJWorkspaceItemSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type MJWorkspaceItemEntityType = z.infer<typeof MJWorkspaceItemSchema>;
+export type MJWorkspaceItemsEntityType = z.infer<typeof MJWorkspaceItemsSchema>;
 
 /**
  * zod schema definition for the entity MJ: Workspaces
  */
-export const MJWorkspaceSchema = z.object({
+export const MJWorkspacesSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -22021,7 +22024,7 @@ export const MJWorkspaceSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type MJWorkspaceEntityType = z.infer<typeof MJWorkspaceSchema>;
+export type MJWorkspacesEntityType = z.infer<typeof MJWorkspacesSchema>;
  
  
 
@@ -22037,7 +22040,7 @@ export type MJWorkspaceEntityType = z.infer<typeof MJWorkspaceSchema>;
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Access Control Rules')
-export class MJAccessControlRuleEntity extends BaseEntity<MJAccessControlRuleEntityType> {
+export class MJAccessControlRulesEntity extends BaseEntity<MJAccessControlRulesEntityType> {
     /**
     * Loads the MJ: Access Control Rules record from the database
     * @param ID: string - primary key value to load the MJ: Access Control Rules record.
@@ -22045,7 +22048,7 @@ export class MJAccessControlRuleEntity extends BaseEntity<MJAccessControlRuleEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAccessControlRuleEntity
+    * @memberof MJAccessControlRulesEntity
     * @method
     * @override
     */
@@ -22273,7 +22276,7 @@ export class MJAccessControlRuleEntity extends BaseEntity<MJAccessControlRuleEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Authorizations')
-export class MJActionAuthorizationEntity extends BaseEntity<MJActionAuthorizationEntityType> {
+export class MJActionAuthorizationsEntity extends BaseEntity<MJActionAuthorizationsEntityType> {
     /**
     * Loads the MJ: Action Authorizations record from the database
     * @param ID: string - primary key value to load the MJ: Action Authorizations record.
@@ -22281,7 +22284,7 @@ export class MJActionAuthorizationEntity extends BaseEntity<MJActionAuthorizatio
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionAuthorizationEntity
+    * @memberof MJActionAuthorizationsEntity
     * @method
     * @override
     */
@@ -22394,7 +22397,7 @@ export class MJActionAuthorizationEntity extends BaseEntity<MJActionAuthorizatio
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Categories')
-export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityType> {
+export class MJActionCategoriesEntity extends BaseEntity<MJActionCategoriesEntityType> {
     /**
     * Loads the MJ: Action Categories record from the database
     * @param ID: string - primary key value to load the MJ: Action Categories record.
@@ -22402,7 +22405,7 @@ export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionCategoryEntity
+    * @memberof MJActionCategoriesEntity
     * @method
     * @override
     */
@@ -22535,7 +22538,7 @@ export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Context Types')
-export class MJActionContextTypeEntity extends BaseEntity<MJActionContextTypeEntityType> {
+export class MJActionContextTypesEntity extends BaseEntity<MJActionContextTypesEntityType> {
     /**
     * Loads the MJ: Action Context Types record from the database
     * @param ID: string - primary key value to load the MJ: Action Context Types record.
@@ -22543,7 +22546,7 @@ export class MJActionContextTypeEntity extends BaseEntity<MJActionContextTypeEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionContextTypeEntity
+    * @memberof MJActionContextTypesEntity
     * @method
     * @override
     */
@@ -22626,7 +22629,7 @@ export class MJActionContextTypeEntity extends BaseEntity<MJActionContextTypeEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Contexts')
-export class MJActionContextEntity extends BaseEntity<MJActionContextEntityType> {
+export class MJActionContextsEntity extends BaseEntity<MJActionContextsEntityType> {
     /**
     * Loads the MJ: Action Contexts record from the database
     * @param ID: string - primary key value to load the MJ: Action Contexts record.
@@ -22634,7 +22637,7 @@ export class MJActionContextEntity extends BaseEntity<MJActionContextEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionContextEntity
+    * @memberof MJActionContextsEntity
     * @method
     * @override
     */
@@ -22754,7 +22757,7 @@ export class MJActionContextEntity extends BaseEntity<MJActionContextEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Execution Logs')
-export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogEntityType> {
+export class MJActionExecutionLogsEntity extends BaseEntity<MJActionExecutionLogsEntityType> {
     /**
     * Loads the MJ: Action Execution Logs record from the database
     * @param ID: string - primary key value to load the MJ: Action Execution Logs record.
@@ -22762,7 +22765,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionExecutionLogEntity
+    * @memberof MJActionExecutionLogsEntity
     * @method
     * @override
     */
@@ -22942,7 +22945,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Filters')
-export class MJActionFilterEntity extends BaseEntity<MJActionFilterEntityType> {
+export class MJActionFiltersEntity extends BaseEntity<MJActionFiltersEntityType> {
     /**
     * Loads the MJ: Action Filters record from the database
     * @param ID: string - primary key value to load the MJ: Action Filters record.
@@ -22950,7 +22953,7 @@ export class MJActionFilterEntity extends BaseEntity<MJActionFilterEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionFilterEntity
+    * @memberof MJActionFiltersEntity
     * @method
     * @override
     */
@@ -23059,7 +23062,7 @@ export class MJActionFilterEntity extends BaseEntity<MJActionFilterEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Libraries')
-export class MJActionLibraryEntity extends BaseEntity<MJActionLibraryEntityType> {
+export class MJActionLibrariesEntity extends BaseEntity<MJActionLibrariesEntityType> {
     /**
     * Loads the MJ: Action Libraries record from the database
     * @param ID: string - primary key value to load the MJ: Action Libraries record.
@@ -23067,7 +23070,7 @@ export class MJActionLibraryEntity extends BaseEntity<MJActionLibraryEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionLibraryEntity
+    * @memberof MJActionLibrariesEntity
     * @method
     * @override
     */
@@ -23181,7 +23184,7 @@ export class MJActionLibraryEntity extends BaseEntity<MJActionLibraryEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Params')
-export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
+export class MJActionParamsEntity extends BaseEntity<MJActionParamsEntityType> {
     /**
     * Loads the MJ: Action Params record from the database
     * @param ID: string - primary key value to load the MJ: Action Params record.
@@ -23189,7 +23192,7 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionParamEntity
+    * @memberof MJActionParamsEntity
     * @method
     * @override
     */
@@ -23278,17 +23281,17 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Scalar
     *   * Other
+    *   * Scalar
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -23393,7 +23396,7 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Action Result Codes')
-export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntityType> {
+export class MJActionResultCodesEntity extends BaseEntity<MJActionResultCodesEntityType> {
     /**
     * Loads the MJ: Action Result Codes record from the database
     * @param ID: string - primary key value to load the MJ: Action Result Codes record.
@@ -23401,7 +23404,7 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionResultCodeEntity
+    * @memberof MJActionResultCodesEntity
     * @method
     * @override
     */
@@ -23520,7 +23523,7 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Actions')
-export class MJActionEntity extends BaseEntity<MJActionEntityType> {
+export class MJActionsEntity extends BaseEntity<MJActionsEntityType> {
     /**
     * Loads the MJ: Actions record from the database
     * @param ID: string - primary key value to load the MJ: Actions record.
@@ -23528,7 +23531,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJActionEntity
+    * @memberof MJActionsEntity
     * @method
     * @override
     */
@@ -23544,7 +23547,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJActionEntity
+    * @memberof MJActionsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -23946,7 +23949,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Actions')
-export class MJAIActionEntity extends BaseEntity<MJAIActionEntityType> {
+export class MJAIActionsEntity extends BaseEntity<MJAIActionsEntityType> {
     /**
     * Loads the MJ: AI Actions record from the database
     * @param ID: string - primary key value to load the MJ: AI Actions record.
@@ -23954,7 +23957,7 @@ export class MJAIActionEntity extends BaseEntity<MJAIActionEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIActionEntity
+    * @memberof MJAIActionsEntity
     * @method
     * @override
     */
@@ -24084,7 +24087,7 @@ export class MJAIActionEntity extends BaseEntity<MJAIActionEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Actions')
-export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType> {
+export class MJAIAgentActionsEntity extends BaseEntity<MJAIAgentActionsEntityType> {
     /**
     * Loads the MJ: AI Agent Actions record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Actions record.
@@ -24092,7 +24095,7 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentActionEntity
+    * @memberof MJAIAgentActionsEntity
     * @method
     * @override
     */
@@ -24472,7 +24475,7 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Artifact Types')
-export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTypeEntityType> {
+export class MJAIAgentArtifactTypesEntity extends BaseEntity<MJAIAgentArtifactTypesEntityType> {
     /**
     * Loads the MJ: AI Agent Artifact Types record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Artifact Types record.
@@ -24480,7 +24483,7 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentArtifactTypeEntity
+    * @memberof MJAIAgentArtifactTypesEntity
     * @method
     * @override
     */
@@ -24596,7 +24599,7 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Configurations')
-export class MJAIAgentConfigurationEntity extends BaseEntity<MJAIAgentConfigurationEntityType> {
+export class MJAIAgentConfigurationsEntity extends BaseEntity<MJAIAgentConfigurationsEntityType> {
     /**
     * Loads the MJ: AI Agent Configurations record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Configurations record.
@@ -24604,7 +24607,7 @@ export class MJAIAgentConfigurationEntity extends BaseEntity<MJAIAgentConfigurat
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentConfigurationEntity
+    * @memberof MJAIAgentConfigurationsEntity
     * @method
     * @override
     */
@@ -24794,7 +24797,7 @@ export class MJAIAgentConfigurationEntity extends BaseEntity<MJAIAgentConfigurat
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Data Sources')
-export class MJAIAgentDataSourceEntity extends BaseEntity<MJAIAgentDataSourceEntityType> {
+export class MJAIAgentDataSourcesEntity extends BaseEntity<MJAIAgentDataSourcesEntityType> {
     /**
     * Loads the MJ: AI Agent Data Sources record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Data Sources record.
@@ -24802,7 +24805,7 @@ export class MJAIAgentDataSourceEntity extends BaseEntity<MJAIAgentDataSourceEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentDataSourceEntity
+    * @memberof MJAIAgentDataSourcesEntity
     * @method
     * @override
     */
@@ -25218,7 +25221,7 @@ export class MJAIAgentDataSourceEntity extends BaseEntity<MJAIAgentDataSourceEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Examples')
-export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityType> {
+export class MJAIAgentExamplesEntity extends BaseEntity<MJAIAgentExamplesEntityType> {
     /**
     * Loads the MJ: AI Agent Examples record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Examples record.
@@ -25226,7 +25229,7 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentExampleEntity
+    * @memberof MJAIAgentExamplesEntity
     * @method
     * @override
     */
@@ -25652,7 +25655,7 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Learning Cycles')
-export class MJAIAgentLearningCycleEntity extends BaseEntity<MJAIAgentLearningCycleEntityType> {
+export class MJAIAgentLearningCyclesEntity extends BaseEntity<MJAIAgentLearningCyclesEntityType> {
     /**
     * Loads the MJ: AI Agent Learning Cycles record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Learning Cycles record.
@@ -25660,7 +25663,7 @@ export class MJAIAgentLearningCycleEntity extends BaseEntity<MJAIAgentLearningCy
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentLearningCycleEntity
+    * @memberof MJAIAgentLearningCyclesEntity
     * @method
     * @override
     */
@@ -25799,7 +25802,7 @@ export class MJAIAgentLearningCycleEntity extends BaseEntity<MJAIAgentLearningCy
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Modalities')
-export class MJAIAgentModalityEntity extends BaseEntity<MJAIAgentModalityEntityType> {
+export class MJAIAgentModalitiesEntity extends BaseEntity<MJAIAgentModalitiesEntityType> {
     /**
     * Loads the MJ: AI Agent Modalities record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Modalities record.
@@ -25807,7 +25810,7 @@ export class MJAIAgentModalityEntity extends BaseEntity<MJAIAgentModalityEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentModalityEntity
+    * @memberof MJAIAgentModalitiesEntity
     * @method
     * @override
     */
@@ -25966,7 +25969,7 @@ export class MJAIAgentModalityEntity extends BaseEntity<MJAIAgentModalityEntityT
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Models')
-export class MJAIAgentModelEntity extends BaseEntity<MJAIAgentModelEntityType> {
+export class MJAIAgentModelsEntity extends BaseEntity<MJAIAgentModelsEntityType> {
     /**
     * Loads the MJ: AI Agent Models record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Models record.
@@ -25974,7 +25977,7 @@ export class MJAIAgentModelEntity extends BaseEntity<MJAIAgentModelEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentModelEntity
+    * @memberof MJAIAgentModelsEntity
     * @method
     * @override
     */
@@ -26104,7 +26107,7 @@ export class MJAIAgentModelEntity extends BaseEntity<MJAIAgentModelEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Note Types')
-export class MJAIAgentNoteTypeEntity extends BaseEntity<MJAIAgentNoteTypeEntityType> {
+export class MJAIAgentNoteTypesEntity extends BaseEntity<MJAIAgentNoteTypesEntityType> {
     /**
     * Loads the MJ: AI Agent Note Types record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Note Types record.
@@ -26112,7 +26115,7 @@ export class MJAIAgentNoteTypeEntity extends BaseEntity<MJAIAgentNoteTypeEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentNoteTypeEntity
+    * @memberof MJAIAgentNoteTypesEntity
     * @method
     * @override
     */
@@ -26226,7 +26229,7 @@ export class MJAIAgentNoteTypeEntity extends BaseEntity<MJAIAgentNoteTypeEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Notes')
-export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
+export class MJAIAgentNotesEntity extends BaseEntity<MJAIAgentNotesEntityType> {
     /**
     * Loads the MJ: AI Agent Notes record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Notes record.
@@ -26234,7 +26237,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentNoteEntity
+    * @memberof MJAIAgentNotesEntity
     * @method
     * @override
     */
@@ -26655,7 +26658,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Permissions')
-export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEntityType> {
+export class MJAIAgentPermissionsEntity extends BaseEntity<MJAIAgentPermissionsEntityType> {
     /**
     * Loads the MJ: AI Agent Permissions record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Permissions record.
@@ -26663,7 +26666,7 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentPermissionEntity
+    * @memberof MJAIAgentPermissionsEntity
     * @method
     * @override
     */
@@ -26891,7 +26894,7 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Prompts')
-export class MJAIAgentPromptEntity extends BaseEntity<MJAIAgentPromptEntityType> {
+export class MJAIAgentPromptsEntity extends BaseEntity<MJAIAgentPromptsEntityType> {
     /**
     * Loads the MJ: AI Agent Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Prompts record.
@@ -26899,7 +26902,7 @@ export class MJAIAgentPromptEntity extends BaseEntity<MJAIAgentPromptEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentPromptEntity
+    * @memberof MJAIAgentPromptsEntity
     * @method
     * @override
     */
@@ -27134,7 +27137,7 @@ export class MJAIAgentPromptEntity extends BaseEntity<MJAIAgentPromptEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Relationships')
-export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshipEntityType> {
+export class MJAIAgentRelationshipsEntity extends BaseEntity<MJAIAgentRelationshipsEntityType> {
     /**
     * Loads the MJ: AI Agent Relationships record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Relationships record.
@@ -27142,7 +27145,7 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentRelationshipEntity
+    * @memberof MJAIAgentRelationshipsEntity
     * @method
     * @override
     */
@@ -27363,7 +27366,7 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Requests')
-export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityType> {
+export class MJAIAgentRequestsEntity extends BaseEntity<MJAIAgentRequestsEntityType> {
     /**
     * Loads the MJ: AI Agent Requests record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Requests record.
@@ -27371,7 +27374,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentRequestEntity
+    * @memberof MJAIAgentRequestsEntity
     * @method
     * @override
     */
@@ -27581,7 +27584,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Run Medias')
-export class MJAIAgentRunMediaEntity extends BaseEntity<MJAIAgentRunMediaEntityType> {
+export class MJAIAgentRunMediasEntity extends BaseEntity<MJAIAgentRunMediasEntityType> {
     /**
     * Loads the MJ: AI Agent Run Medias record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Run Medias record.
@@ -27589,7 +27592,7 @@ export class MJAIAgentRunMediaEntity extends BaseEntity<MJAIAgentRunMediaEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentRunMediaEntity
+    * @memberof MJAIAgentRunMediasEntity
     * @method
     * @override
     */
@@ -27880,7 +27883,7 @@ export class MJAIAgentRunMediaEntity extends BaseEntity<MJAIAgentRunMediaEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Run Steps')
-export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityType> {
+export class MJAIAgentRunStepsEntity extends BaseEntity<MJAIAgentRunStepsEntityType> {
     /**
     * Loads the MJ: AI Agent Run Steps record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Run Steps record.
@@ -27888,7 +27891,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentRunStepEntity
+    * @memberof MJAIAgentRunStepsEntity
     * @method
     * @override
     */
@@ -27904,7 +27907,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * @public
     * @method
     * @override
-    * @memberof MJAIAgentRunStepEntity
+    * @memberof MJAIAgentRunStepsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -28310,7 +28313,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Step
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -28340,7 +28343,7 @@ detailed information about what validation rules failed.
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Runs')
-export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
+export class MJAIAgentRunsEntity extends BaseEntity<MJAIAgentRunsEntityType> {
     /**
     * Loads the MJ: AI Agent Runs record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Runs record.
@@ -28348,7 +28351,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentRunEntity
+    * @memberof MJAIAgentRunsEntity
     * @method
     * @override
     */
@@ -28364,7 +28367,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJAIAgentRunEntity
+    * @memberof MJAIAgentRunsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -29193,7 +29196,7 @@ each time the agent processes a prompt step.
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Step Paths')
-export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityType> {
+export class MJAIAgentStepPathsEntity extends BaseEntity<MJAIAgentStepPathsEntityType> {
     /**
     * Loads the MJ: AI Agent Step Paths record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Step Paths record.
@@ -29201,7 +29204,7 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentStepPathEntity
+    * @memberof MJAIAgentStepPathsEntity
     * @method
     * @override
     */
@@ -29380,7 +29383,7 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Steps')
-export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
+export class MJAIAgentStepsEntity extends BaseEntity<MJAIAgentStepsEntityType> {
     /**
     * Loads the MJ: AI Agent Steps record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Steps record.
@@ -29388,7 +29391,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentStepEntity
+    * @memberof MJAIAgentStepsEntity
     * @method
     * @override
     */
@@ -29404,7 +29407,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJAIAgentStepEntity
+    * @memberof MJAIAgentStepsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -29839,7 +29842,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Types')
-export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
+export class MJAIAgentTypesEntity extends BaseEntity<MJAIAgentTypesEntityType> {
     /**
     * Loads the MJ: AI Agent Types record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Types record.
@@ -29847,7 +29850,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentTypeEntity
+    * @memberof MJAIAgentTypesEntity
     * @method
     * @override
     */
@@ -30047,7 +30050,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agents')
-export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
+export class MJAIAgentsEntity extends BaseEntity<MJAIAgentsEntityType> {
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -30055,7 +30058,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIAgentEntity
+    * @memberof MJAIAgentsEntity
     * @method
     * @override
     */
@@ -30071,7 +30074,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJAIAgentEntity
+    * @memberof MJAIAgentsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -31177,7 +31180,7 @@ if this limit is exceeded.
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Architectures')
-export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityType> {
+export class MJAIArchitecturesEntity extends BaseEntity<MJAIArchitecturesEntityType> {
     /**
     * Loads the MJ: AI Architectures record from the database
     * @param ID: string - primary key value to load the MJ: AI Architectures record.
@@ -31185,7 +31188,7 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIArchitectureEntity
+    * @memberof MJAIArchitecturesEntity
     * @method
     * @override
     */
@@ -31352,7 +31355,7 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Configuration Params')
-export class MJAIConfigurationParamEntity extends BaseEntity<MJAIConfigurationParamEntityType> {
+export class MJAIConfigurationParamsEntity extends BaseEntity<MJAIConfigurationParamsEntityType> {
     /**
     * Loads the MJ: AI Configuration Params record from the database
     * @param ID: string - primary key value to load the MJ: AI Configuration Params record.
@@ -31360,7 +31363,7 @@ export class MJAIConfigurationParamEntity extends BaseEntity<MJAIConfigurationPa
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIConfigurationParamEntity
+    * @memberof MJAIConfigurationParamsEntity
     * @method
     * @override
     */
@@ -31499,7 +31502,7 @@ export class MJAIConfigurationParamEntity extends BaseEntity<MJAIConfigurationPa
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Configurations')
-export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityType> {
+export class MJAIConfigurationsEntity extends BaseEntity<MJAIConfigurationsEntityType> {
     /**
     * Loads the MJ: AI Configurations record from the database
     * @param ID: string - primary key value to load the MJ: AI Configurations record.
@@ -31507,7 +31510,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIConfigurationEntity
+    * @memberof MJAIConfigurationsEntity
     * @method
     * @override
     */
@@ -31523,7 +31526,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
     * @public
     * @method
     * @override
-    * @memberof MJAIConfigurationEntity
+    * @memberof MJAIConfigurationsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -31773,7 +31776,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Credential Bindings')
-export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindingEntityType> {
+export class MJAICredentialBindingsEntity extends BaseEntity<MJAICredentialBindingsEntityType> {
     /**
     * Loads the MJ: AI Credential Bindings record from the database
     * @param ID: string - primary key value to load the MJ: AI Credential Bindings record.
@@ -31781,7 +31784,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAICredentialBindingEntity
+    * @memberof MJAICredentialBindingsEntity
     * @method
     * @override
     */
@@ -32091,7 +32094,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Modalities')
-export class MJAIModalityEntity extends BaseEntity<MJAIModalityEntityType> {
+export class MJAIModalitiesEntity extends BaseEntity<MJAIModalitiesEntityType> {
     /**
     * Loads the MJ: AI Modalities record from the database
     * @param ID: string - primary key value to load the MJ: AI Modalities record.
@@ -32099,7 +32102,7 @@ export class MJAIModalityEntity extends BaseEntity<MJAIModalityEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModalityEntity
+    * @memberof MJAIModalitiesEntity
     * @method
     * @override
     */
@@ -32276,7 +32279,7 @@ export class MJAIModalityEntity extends BaseEntity<MJAIModalityEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Model Actions')
-export class MJAIModelActionEntity extends BaseEntity<MJAIModelActionEntityType> {
+export class MJAIModelActionsEntity extends BaseEntity<MJAIModelActionsEntityType> {
     /**
     * Loads the MJ: AI Model Actions record from the database
     * @param ID: string - primary key value to load the MJ: AI Model Actions record.
@@ -32284,7 +32287,7 @@ export class MJAIModelActionEntity extends BaseEntity<MJAIModelActionEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelActionEntity
+    * @memberof MJAIModelActionsEntity
     * @method
     * @override
     */
@@ -32399,7 +32402,7 @@ export class MJAIModelActionEntity extends BaseEntity<MJAIModelActionEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Model Architectures')
-export class MJAIModelArchitectureEntity extends BaseEntity<MJAIModelArchitectureEntityType> {
+export class MJAIModelArchitecturesEntity extends BaseEntity<MJAIModelArchitecturesEntityType> {
     /**
     * Loads the MJ: AI Model Architectures record from the database
     * @param ID: string - primary key value to load the MJ: AI Model Architectures record.
@@ -32407,7 +32410,7 @@ export class MJAIModelArchitectureEntity extends BaseEntity<MJAIModelArchitectur
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelArchitectureEntity
+    * @memberof MJAIModelArchitecturesEntity
     * @method
     * @override
     */
@@ -32599,7 +32602,7 @@ export class MJAIModelArchitectureEntity extends BaseEntity<MJAIModelArchitectur
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Model Costs')
-export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
+export class MJAIModelCostsEntity extends BaseEntity<MJAIModelCostsEntityType> {
     /**
     * Loads the MJ: AI Model Costs record from the database
     * @param ID: string - primary key value to load the MJ: AI Model Costs record.
@@ -32607,7 +32610,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelCostEntity
+    * @memberof MJAIModelCostsEntity
     * @method
     * @override
     */
@@ -32938,7 +32941,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Model Modalities')
-export class MJAIModelModalityEntity extends BaseEntity<MJAIModelModalityEntityType> {
+export class MJAIModelModalitiesEntity extends BaseEntity<MJAIModelModalitiesEntityType> {
     /**
     * Loads the MJ: AI Model Modalities record from the database
     * @param ID: string - primary key value to load the MJ: AI Model Modalities record.
@@ -32946,7 +32949,7 @@ export class MJAIModelModalityEntity extends BaseEntity<MJAIModelModalityEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelModalityEntity
+    * @memberof MJAIModelModalitiesEntity
     * @method
     * @override
     */
@@ -33157,7 +33160,7 @@ export class MJAIModelModalityEntity extends BaseEntity<MJAIModelModalityEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Model Price Types')
-export class MJAIModelPriceTypeEntity extends BaseEntity<MJAIModelPriceTypeEntityType> {
+export class MJAIModelPriceTypesEntity extends BaseEntity<MJAIModelPriceTypesEntityType> {
     /**
     * Loads the MJ: AI Model Price Types record from the database
     * @param ID: string - primary key value to load the MJ: AI Model Price Types record.
@@ -33165,7 +33168,7 @@ export class MJAIModelPriceTypeEntity extends BaseEntity<MJAIModelPriceTypeEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelPriceTypeEntity
+    * @memberof MJAIModelPriceTypesEntity
     * @method
     * @override
     */
@@ -33275,7 +33278,7 @@ export class MJAIModelPriceTypeEntity extends BaseEntity<MJAIModelPriceTypeEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Model Price Unit Types')
-export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitTypeEntityType> {
+export class MJAIModelPriceUnitTypesEntity extends BaseEntity<MJAIModelPriceUnitTypesEntityType> {
     /**
     * Loads the MJ: AI Model Price Unit Types record from the database
     * @param ID: string - primary key value to load the MJ: AI Model Price Unit Types record.
@@ -33283,7 +33286,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelPriceUnitTypeEntity
+    * @memberof MJAIModelPriceUnitTypesEntity
     * @method
     * @override
     */
@@ -33420,7 +33423,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Model Types')
-export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
+export class MJAIModelTypesEntity extends BaseEntity<MJAIModelTypesEntityType> {
     /**
     * Loads the MJ: AI Model Types record from the database
     * @param ID: string - primary key value to load the MJ: AI Model Types record.
@@ -33428,7 +33431,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelTypeEntity
+    * @memberof MJAIModelTypesEntity
     * @method
     * @override
     */
@@ -33555,7 +33558,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Model Vendors')
-export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType> {
+export class MJAIModelVendorsEntity extends BaseEntity<MJAIModelVendorsEntityType> {
     /**
     * Loads the MJ: AI Model Vendors record from the database
     * @param ID: string - primary key value to load the MJ: AI Model Vendors record.
@@ -33563,7 +33566,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelVendorEntity
+    * @memberof MJAIModelVendorsEntity
     * @method
     * @override
     */
@@ -33883,7 +33886,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Models')
-export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
+export class MJAIModelsEntity extends BaseEntity<MJAIModelsEntityType> {
     /**
     * Loads the MJ: AI Models record from the database
     * @param ID: string - primary key value to load the MJ: AI Models record.
@@ -33891,7 +33894,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIModelEntity
+    * @memberof MJAIModelsEntity
     * @method
     * @override
     */
@@ -34230,7 +34233,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Categories')
-export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntityType> {
+export class MJAIPromptCategoriesEntity extends BaseEntity<MJAIPromptCategoriesEntityType> {
     /**
     * Loads the MJ: AI Prompt Categories record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Categories record.
@@ -34238,7 +34241,7 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIPromptCategoryEntity
+    * @memberof MJAIPromptCategoriesEntity
     * @method
     * @override
     */
@@ -34351,7 +34354,7 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Models')
-export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType> {
+export class MJAIPromptModelsEntity extends BaseEntity<MJAIPromptModelsEntityType> {
     /**
     * Loads the MJ: AI Prompt Models record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Models record.
@@ -34359,7 +34362,7 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIPromptModelEntity
+    * @memberof MJAIPromptModelsEntity
     * @method
     * @override
     */
@@ -34722,7 +34725,7 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Run Medias')
-export class MJAIPromptRunMediaEntity extends BaseEntity<MJAIPromptRunMediaEntityType> {
+export class MJAIPromptRunMediasEntity extends BaseEntity<MJAIPromptRunMediasEntityType> {
     /**
     * Loads the MJ: AI Prompt Run Medias record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Run Medias record.
@@ -34730,7 +34733,7 @@ export class MJAIPromptRunMediaEntity extends BaseEntity<MJAIPromptRunMediaEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIPromptRunMediaEntity
+    * @memberof MJAIPromptRunMediasEntity
     * @method
     * @override
     */
@@ -34987,7 +34990,7 @@ export class MJAIPromptRunMediaEntity extends BaseEntity<MJAIPromptRunMediaEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Runs')
-export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
+export class MJAIPromptRunsEntity extends BaseEntity<MJAIPromptRunsEntityType> {
     /**
     * Loads the MJ: AI Prompt Runs record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Runs record.
@@ -34995,7 +34998,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIPromptRunEntity
+    * @memberof MJAIPromptRunsEntity
     * @method
     * @override
     */
@@ -35011,7 +35014,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJAIPromptRunEntity
+    * @memberof MJAIPromptRunsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -36364,7 +36367,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Types')
-export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
+export class MJAIPromptTypesEntity extends BaseEntity<MJAIPromptTypesEntityType> {
     /**
     * Loads the MJ: AI Prompt Types record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Types record.
@@ -36372,7 +36375,7 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIPromptTypeEntity
+    * @memberof MJAIPromptTypesEntity
     * @method
     * @override
     */
@@ -36453,7 +36456,7 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompts')
-export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
+export class MJAIPromptsEntity extends BaseEntity<MJAIPromptsEntityType> {
     /**
     * Loads the MJ: AI Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompts record.
@@ -36461,7 +36464,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIPromptEntity
+    * @memberof MJAIPromptsEntity
     * @method
     * @override
     */
@@ -36477,7 +36480,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJAIPromptEntity
+    * @memberof MJAIPromptsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -37754,7 +37757,7 @@ export class MJAIResultCacheEntity extends BaseEntity<MJAIResultCacheEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Vendor Type Definitions')
-export class MJAIVendorTypeDefinitionEntity extends BaseEntity<MJAIVendorTypeDefinitionEntityType> {
+export class MJAIVendorTypeDefinitionsEntity extends BaseEntity<MJAIVendorTypeDefinitionsEntityType> {
     /**
     * Loads the MJ: AI Vendor Type Definitions record from the database
     * @param ID: string - primary key value to load the MJ: AI Vendor Type Definitions record.
@@ -37762,7 +37765,7 @@ export class MJAIVendorTypeDefinitionEntity extends BaseEntity<MJAIVendorTypeDef
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIVendorTypeDefinitionEntity
+    * @memberof MJAIVendorTypeDefinitionsEntity
     * @method
     * @override
     */
@@ -37844,7 +37847,7 @@ export class MJAIVendorTypeDefinitionEntity extends BaseEntity<MJAIVendorTypeDef
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Vendor Types')
-export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
+export class MJAIVendorTypesEntity extends BaseEntity<MJAIVendorTypesEntityType> {
     /**
     * Loads the MJ: AI Vendor Types record from the database
     * @param ID: string - primary key value to load the MJ: AI Vendor Types record.
@@ -37852,7 +37855,7 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIVendorTypeEntity
+    * @memberof MJAIVendorTypesEntity
     * @method
     * @override
     */
@@ -38014,7 +38017,7 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: AI Vendors')
-export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
+export class MJAIVendorsEntity extends BaseEntity<MJAIVendorsEntityType> {
     /**
     * Loads the MJ: AI Vendors record from the database
     * @param ID: string - primary key value to load the MJ: AI Vendors record.
@@ -38022,7 +38025,7 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAIVendorEntity
+    * @memberof MJAIVendorsEntity
     * @method
     * @override
     */
@@ -38128,7 +38131,7 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: API Application Scopes')
-export class MJAPIApplicationScopeEntity extends BaseEntity<MJAPIApplicationScopeEntityType> {
+export class MJAPIApplicationScopesEntity extends BaseEntity<MJAPIApplicationScopesEntityType> {
     /**
     * Loads the MJ: API Application Scopes record from the database
     * @param ID: string - primary key value to load the MJ: API Application Scopes record.
@@ -38136,7 +38139,7 @@ export class MJAPIApplicationScopeEntity extends BaseEntity<MJAPIApplicationScop
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAPIApplicationScopeEntity
+    * @memberof MJAPIApplicationScopesEntity
     * @method
     * @override
     */
@@ -38298,7 +38301,7 @@ export class MJAPIApplicationScopeEntity extends BaseEntity<MJAPIApplicationScop
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: API Applications')
-export class MJAPIApplicationEntity extends BaseEntity<MJAPIApplicationEntityType> {
+export class MJAPIApplicationsEntity extends BaseEntity<MJAPIApplicationsEntityType> {
     /**
     * Loads the MJ: API Applications record from the database
     * @param ID: string - primary key value to load the MJ: API Applications record.
@@ -38306,7 +38309,7 @@ export class MJAPIApplicationEntity extends BaseEntity<MJAPIApplicationEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAPIApplicationEntity
+    * @memberof MJAPIApplicationsEntity
     * @method
     * @override
     */
@@ -38403,7 +38406,7 @@ export class MJAPIApplicationEntity extends BaseEntity<MJAPIApplicationEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: API Key Applications')
-export class MJAPIKeyApplicationEntity extends BaseEntity<MJAPIKeyApplicationEntityType> {
+export class MJAPIKeyApplicationsEntity extends BaseEntity<MJAPIKeyApplicationsEntityType> {
     /**
     * Loads the MJ: API Key Applications record from the database
     * @param ID: string - primary key value to load the MJ: API Key Applications record.
@@ -38411,7 +38414,7 @@ export class MJAPIKeyApplicationEntity extends BaseEntity<MJAPIKeyApplicationEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAPIKeyApplicationEntity
+    * @memberof MJAPIKeyApplicationsEntity
     * @method
     * @override
     */
@@ -38514,7 +38517,7 @@ export class MJAPIKeyApplicationEntity extends BaseEntity<MJAPIKeyApplicationEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: API Key Scopes')
-export class MJAPIKeyScopeEntity extends BaseEntity<MJAPIKeyScopeEntityType> {
+export class MJAPIKeyScopesEntity extends BaseEntity<MJAPIKeyScopesEntityType> {
     /**
     * Loads the MJ: API Key Scopes record from the database
     * @param ID: string - primary key value to load the MJ: API Key Scopes record.
@@ -38522,7 +38525,7 @@ export class MJAPIKeyScopeEntity extends BaseEntity<MJAPIKeyScopeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAPIKeyScopeEntity
+    * @memberof MJAPIKeyScopesEntity
     * @method
     * @override
     */
@@ -38682,7 +38685,7 @@ export class MJAPIKeyScopeEntity extends BaseEntity<MJAPIKeyScopeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: API Key Usage Logs')
-export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityType> {
+export class MJAPIKeyUsageLogsEntity extends BaseEntity<MJAPIKeyUsageLogsEntityType> {
     /**
     * Loads the MJ: API Key Usage Logs record from the database
     * @param ID: string - primary key value to load the MJ: API Key Usage Logs record.
@@ -38690,7 +38693,7 @@ export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAPIKeyUsageLogEntity
+    * @memberof MJAPIKeyUsageLogsEntity
     * @method
     * @override
     */
@@ -38941,7 +38944,7 @@ export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: API Keys')
-export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
+export class MJAPIKeysEntity extends BaseEntity<MJAPIKeysEntityType> {
     /**
     * Loads the MJ: API Keys record from the database
     * @param ID: string - primary key value to load the MJ: API Keys record.
@@ -38949,7 +38952,7 @@ export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAPIKeyEntity
+    * @memberof MJAPIKeysEntity
     * @method
     * @override
     */
@@ -39133,7 +39136,7 @@ export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: API Scopes')
-export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
+export class MJAPIScopesEntity extends BaseEntity<MJAPIScopesEntityType> {
     /**
     * Loads the MJ: API Scopes record from the database
     * @param ID: string - primary key value to load the MJ: API Scopes record.
@@ -39141,7 +39144,7 @@ export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAPIScopeEntity
+    * @memberof MJAPIScopesEntity
     * @method
     * @override
     */
@@ -39322,7 +39325,7 @@ export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Application Entities')
-export class MJApplicationEntityEntity extends BaseEntity<MJApplicationEntityEntityType> {
+export class MJApplicationEntitiesEntity extends BaseEntity<MJApplicationEntitiesEntityType> {
     /**
     * Loads the MJ: Application Entities record from the database
     * @param ID: string - primary key value to load the MJ: Application Entities record.
@@ -39330,7 +39333,7 @@ export class MJApplicationEntityEntity extends BaseEntity<MJApplicationEntityEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJApplicationEntityEntity
+    * @memberof MJApplicationEntitiesEntity
     * @method
     * @override
     */
@@ -39490,7 +39493,7 @@ export class MJApplicationEntityEntity extends BaseEntity<MJApplicationEntityEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Application Settings')
-export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingEntityType> {
+export class MJApplicationSettingsEntity extends BaseEntity<MJApplicationSettingsEntityType> {
     /**
     * Loads the MJ: Application Settings record from the database
     * @param ID: string - primary key value to load the MJ: Application Settings record.
@@ -39498,7 +39501,7 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJApplicationSettingEntity
+    * @memberof MJApplicationSettingsEntity
     * @method
     * @override
     */
@@ -39614,7 +39617,7 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Applications')
-export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
+export class MJApplicationsEntity extends BaseEntity<MJApplicationsEntityType> {
     /**
     * Loads the MJ: Applications record from the database
     * @param ID: string - primary key value to load the MJ: Applications record.
@@ -39622,7 +39625,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJApplicationEntity
+    * @memberof MJApplicationsEntity
     * @method
     * @override
     */
@@ -39893,7 +39896,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Artifact Permissions')
-export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionEntityType> {
+export class MJArtifactPermissionsEntity extends BaseEntity<MJArtifactPermissionsEntityType> {
     /**
     * Loads the MJ: Artifact Permissions record from the database
     * @param ID: string - primary key value to load the MJ: Artifact Permissions record.
@@ -39901,7 +39904,7 @@ export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJArtifactPermissionEntity
+    * @memberof MJArtifactPermissionsEntity
     * @method
     * @override
     */
@@ -40081,7 +40084,7 @@ export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Artifact Types')
-export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
+export class MJArtifactTypesEntity extends BaseEntity<MJArtifactTypesEntityType> {
     /**
     * Loads the MJ: Artifact Types record from the database
     * @param ID: string - primary key value to load the MJ: Artifact Types record.
@@ -40089,7 +40092,7 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJArtifactTypeEntity
+    * @memberof MJArtifactTypesEntity
     * @method
     * @override
     */
@@ -40269,7 +40272,7 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Artifact Uses')
-export class MJArtifactUseEntity extends BaseEntity<MJArtifactUseEntityType> {
+export class MJArtifactUsesEntity extends BaseEntity<MJArtifactUsesEntityType> {
     /**
     * Loads the MJ: Artifact Uses record from the database
     * @param ID: string - primary key value to load the MJ: Artifact Uses record.
@@ -40277,7 +40280,7 @@ export class MJArtifactUseEntity extends BaseEntity<MJArtifactUseEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJArtifactUseEntity
+    * @memberof MJArtifactUsesEntity
     * @method
     * @override
     */
@@ -40413,7 +40416,7 @@ export class MJArtifactUseEntity extends BaseEntity<MJArtifactUseEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Artifact Version Attributes')
-export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersionAttributeEntityType> {
+export class MJArtifactVersionAttributesEntity extends BaseEntity<MJArtifactVersionAttributesEntityType> {
     /**
     * Loads the MJ: Artifact Version Attributes record from the database
     * @param ID: string - primary key value to load the MJ: Artifact Version Attributes record.
@@ -40421,7 +40424,7 @@ export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersi
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJArtifactVersionAttributeEntity
+    * @memberof MJArtifactVersionAttributesEntity
     * @method
     * @override
     */
@@ -40559,7 +40562,7 @@ export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersi
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Artifact Versions')
-export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityType> {
+export class MJArtifactVersionsEntity extends BaseEntity<MJArtifactVersionsEntityType> {
     /**
     * Loads the MJ: Artifact Versions record from the database
     * @param ID: string - primary key value to load the MJ: Artifact Versions record.
@@ -40567,7 +40570,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJArtifactVersionEntity
+    * @memberof MJArtifactVersionsEntity
     * @method
     * @override
     */
@@ -40759,7 +40762,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Artifacts')
-export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
+export class MJArtifactsEntity extends BaseEntity<MJArtifactsEntityType> {
     /**
     * Loads the MJ: Artifacts record from the database
     * @param ID: string - primary key value to load the MJ: Artifacts record.
@@ -40767,7 +40770,7 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJArtifactEntity
+    * @memberof MJArtifactsEntity
     * @method
     * @override
     */
@@ -40948,7 +40951,7 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Audit Log Types')
-export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
+export class MJAuditLogTypesEntity extends BaseEntity<MJAuditLogTypesEntityType> {
     /**
     * Loads the MJ: Audit Log Types record from the database
     * @param ID: string - primary key value to load the MJ: Audit Log Types record.
@@ -40956,7 +40959,7 @@ export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAuditLogTypeEntity
+    * @memberof MJAuditLogTypesEntity
     * @method
     * @override
     */
@@ -41090,7 +41093,7 @@ export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Audit Logs')
-export class MJAuditLogEntity extends BaseEntity<MJAuditLogEntityType> {
+export class MJAuditLogsEntity extends BaseEntity<MJAuditLogsEntityType> {
     /**
     * Loads the MJ: Audit Logs record from the database
     * @param ID: string - primary key value to load the MJ: Audit Logs record.
@@ -41098,7 +41101,7 @@ export class MJAuditLogEntity extends BaseEntity<MJAuditLogEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAuditLogEntity
+    * @memberof MJAuditLogsEntity
     * @method
     * @override
     */
@@ -41298,7 +41301,7 @@ export class MJAuditLogEntity extends BaseEntity<MJAuditLogEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Authorization Roles')
-export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEntityType> {
+export class MJAuthorizationRolesEntity extends BaseEntity<MJAuthorizationRolesEntityType> {
     /**
     * Loads the MJ: Authorization Roles record from the database
     * @param ID: string - primary key value to load the MJ: Authorization Roles record.
@@ -41306,7 +41309,7 @@ export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAuthorizationRoleEntity
+    * @memberof MJAuthorizationRolesEntity
     * @method
     * @override
     */
@@ -41425,7 +41428,7 @@ export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Authorizations')
-export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType> {
+export class MJAuthorizationsEntity extends BaseEntity<MJAuthorizationsEntityType> {
     /**
     * Loads the MJ: Authorizations record from the database
     * @param ID: string - primary key value to load the MJ: Authorizations record.
@@ -41433,7 +41436,7 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJAuthorizationEntity
+    * @memberof MJAuthorizationsEntity
     * @method
     * @override
     */
@@ -41573,7 +41576,7 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Collection Artifacts')
-export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactEntityType> {
+export class MJCollectionArtifactsEntity extends BaseEntity<MJCollectionArtifactsEntityType> {
     /**
     * Loads the MJ: Collection Artifacts record from the database
     * @param ID: string - primary key value to load the MJ: Collection Artifacts record.
@@ -41581,7 +41584,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCollectionArtifactEntity
+    * @memberof MJCollectionArtifactsEntity
     * @method
     * @override
     */
@@ -41697,7 +41700,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Collection Permissions')
-export class MJCollectionPermissionEntity extends BaseEntity<MJCollectionPermissionEntityType> {
+export class MJCollectionPermissionsEntity extends BaseEntity<MJCollectionPermissionsEntityType> {
     /**
     * Loads the MJ: Collection Permissions record from the database
     * @param ID: string - primary key value to load the MJ: Collection Permissions record.
@@ -41705,7 +41708,7 @@ export class MJCollectionPermissionEntity extends BaseEntity<MJCollectionPermiss
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCollectionPermissionEntity
+    * @memberof MJCollectionPermissionsEntity
     * @method
     * @override
     */
@@ -41885,7 +41888,7 @@ export class MJCollectionPermissionEntity extends BaseEntity<MJCollectionPermiss
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Collections')
-export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
+export class MJCollectionsEntity extends BaseEntity<MJCollectionsEntityType> {
     /**
     * Loads the MJ: Collections record from the database
     * @param ID: string - primary key value to load the MJ: Collections record.
@@ -41893,7 +41896,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCollectionEntity
+    * @memberof MJCollectionsEntity
     * @method
     * @override
     */
@@ -42092,7 +42095,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Communication Base Message Types')
-export class MJCommunicationBaseMessageTypeEntity extends BaseEntity<MJCommunicationBaseMessageTypeEntityType> {
+export class MJCommunicationBaseMessageTypesEntity extends BaseEntity<MJCommunicationBaseMessageTypesEntityType> {
     /**
     * Loads the MJ: Communication Base Message Types record from the database
     * @param ID: string - primary key value to load the MJ: Communication Base Message Types record.
@@ -42100,7 +42103,7 @@ export class MJCommunicationBaseMessageTypeEntity extends BaseEntity<MJCommunica
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCommunicationBaseMessageTypeEntity
+    * @memberof MJCommunicationBaseMessageTypesEntity
     * @method
     * @override
     */
@@ -42225,7 +42228,7 @@ export class MJCommunicationBaseMessageTypeEntity extends BaseEntity<MJCommunica
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Communication Logs')
-export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntityType> {
+export class MJCommunicationLogsEntity extends BaseEntity<MJCommunicationLogsEntityType> {
     /**
     * Loads the MJ: Communication Logs record from the database
     * @param ID: string - primary key value to load the MJ: Communication Logs record.
@@ -42233,7 +42236,7 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCommunicationLogEntity
+    * @memberof MJCommunicationLogsEntity
     * @method
     * @override
     */
@@ -42432,7 +42435,7 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Communication Provider Message Types')
-export class MJCommunicationProviderMessageTypeEntity extends BaseEntity<MJCommunicationProviderMessageTypeEntityType> {
+export class MJCommunicationProviderMessageTypesEntity extends BaseEntity<MJCommunicationProviderMessageTypesEntityType> {
     /**
     * Loads the MJ: Communication Provider Message Types record from the database
     * @param ID: string - primary key value to load the MJ: Communication Provider Message Types record.
@@ -42440,7 +42443,7 @@ export class MJCommunicationProviderMessageTypeEntity extends BaseEntity<MJCommu
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCommunicationProviderMessageTypeEntity
+    * @memberof MJCommunicationProviderMessageTypesEntity
     * @method
     * @override
     */
@@ -42584,7 +42587,7 @@ export class MJCommunicationProviderMessageTypeEntity extends BaseEntity<MJCommu
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Communication Providers')
-export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationProviderEntityType> {
+export class MJCommunicationProvidersEntity extends BaseEntity<MJCommunicationProvidersEntityType> {
     /**
     * Loads the MJ: Communication Providers record from the database
     * @param ID: string - primary key value to load the MJ: Communication Providers record.
@@ -42592,7 +42595,7 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCommunicationProviderEntity
+    * @memberof MJCommunicationProvidersEntity
     * @method
     * @override
     */
@@ -42802,7 +42805,7 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Communication Runs')
-export class MJCommunicationRunEntity extends BaseEntity<MJCommunicationRunEntityType> {
+export class MJCommunicationRunsEntity extends BaseEntity<MJCommunicationRunsEntityType> {
     /**
     * Loads the MJ: Communication Runs record from the database
     * @param ID: string - primary key value to load the MJ: Communication Runs record.
@@ -42810,7 +42813,7 @@ export class MJCommunicationRunEntity extends BaseEntity<MJCommunicationRunEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCommunicationRunEntity
+    * @memberof MJCommunicationRunsEntity
     * @method
     * @override
     */
@@ -42974,7 +42977,7 @@ export class MJCommunicationRunEntity extends BaseEntity<MJCommunicationRunEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Companies')
-export class MJCompanyEntity extends BaseEntity<MJCompanyEntityType> {
+export class MJCompaniesEntity extends BaseEntity<MJCompaniesEntityType> {
     /**
     * Loads the MJ: Companies record from the database
     * @param ID: string - primary key value to load the MJ: Companies record.
@@ -42982,7 +42985,7 @@ export class MJCompanyEntity extends BaseEntity<MJCompanyEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCompanyEntity
+    * @memberof MJCompaniesEntity
     * @method
     * @override
     */
@@ -43098,7 +43101,7 @@ export class MJCompanyEntity extends BaseEntity<MJCompanyEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Company Integration Record Maps')
-export class MJCompanyIntegrationRecordMapEntity extends BaseEntity<MJCompanyIntegrationRecordMapEntityType> {
+export class MJCompanyIntegrationRecordMapsEntity extends BaseEntity<MJCompanyIntegrationRecordMapsEntityType> {
     /**
     * Loads the MJ: Company Integration Record Maps record from the database
     * @param ID: string - primary key value to load the MJ: Company Integration Record Maps record.
@@ -43106,7 +43109,7 @@ export class MJCompanyIntegrationRecordMapEntity extends BaseEntity<MJCompanyInt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCompanyIntegrationRecordMapEntity
+    * @memberof MJCompanyIntegrationRecordMapsEntity
     * @method
     * @override
     */
@@ -43233,7 +43236,7 @@ export class MJCompanyIntegrationRecordMapEntity extends BaseEntity<MJCompanyInt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Company Integration Run API Logs')
-export class MJCompanyIntegrationRunAPILogEntity extends BaseEntity<MJCompanyIntegrationRunAPILogEntityType> {
+export class MJCompanyIntegrationRunAPILogsEntity extends BaseEntity<MJCompanyIntegrationRunAPILogsEntityType> {
     /**
     * Loads the MJ: Company Integration Run API Logs record from the database
     * @param ID: string - primary key value to load the MJ: Company Integration Run API Logs record.
@@ -43241,7 +43244,7 @@ export class MJCompanyIntegrationRunAPILogEntity extends BaseEntity<MJCompanyInt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCompanyIntegrationRunAPILogEntity
+    * @memberof MJCompanyIntegrationRunAPILogsEntity
     * @method
     * @override
     */
@@ -43396,7 +43399,7 @@ export class MJCompanyIntegrationRunAPILogEntity extends BaseEntity<MJCompanyInt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Company Integration Run Details')
-export class MJCompanyIntegrationRunDetailEntity extends BaseEntity<MJCompanyIntegrationRunDetailEntityType> {
+export class MJCompanyIntegrationRunDetailsEntity extends BaseEntity<MJCompanyIntegrationRunDetailsEntityType> {
     /**
     * Loads the MJ: Company Integration Run Details record from the database
     * @param ID: string - primary key value to load the MJ: Company Integration Run Details record.
@@ -43404,7 +43407,7 @@ export class MJCompanyIntegrationRunDetailEntity extends BaseEntity<MJCompanyInt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCompanyIntegrationRunDetailEntity
+    * @memberof MJCompanyIntegrationRunDetailsEntity
     * @method
     * @override
     */
@@ -43568,7 +43571,7 @@ export class MJCompanyIntegrationRunDetailEntity extends BaseEntity<MJCompanyInt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Company Integration Runs')
-export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrationRunEntityType> {
+export class MJCompanyIntegrationRunsEntity extends BaseEntity<MJCompanyIntegrationRunsEntityType> {
     /**
     * Loads the MJ: Company Integration Runs record from the database
     * @param ID: string - primary key value to load the MJ: Company Integration Runs record.
@@ -43576,7 +43579,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCompanyIntegrationRunEntity
+    * @memberof MJCompanyIntegrationRunsEntity
     * @method
     * @override
     */
@@ -43781,7 +43784,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Company Integrations')
-export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationEntityType> {
+export class MJCompanyIntegrationsEntity extends BaseEntity<MJCompanyIntegrationsEntityType> {
     /**
     * Loads the MJ: Company Integrations record from the database
     * @param ID: string - primary key value to load the MJ: Company Integrations record.
@@ -43789,7 +43792,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCompanyIntegrationEntity
+    * @memberof MJCompanyIntegrationsEntity
     * @method
     * @override
     */
@@ -44079,7 +44082,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Component Dependencies')
-export class MJComponentDependencyEntity extends BaseEntity<MJComponentDependencyEntityType> {
+export class MJComponentDependenciesEntity extends BaseEntity<MJComponentDependenciesEntityType> {
     /**
     * Loads the MJ: Component Dependencies record from the database
     * @param ID: string - primary key value to load the MJ: Component Dependencies record.
@@ -44087,7 +44090,7 @@ export class MJComponentDependencyEntity extends BaseEntity<MJComponentDependenc
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJComponentDependencyEntity
+    * @memberof MJComponentDependenciesEntity
     * @method
     * @override
     */
@@ -44191,7 +44194,7 @@ export class MJComponentDependencyEntity extends BaseEntity<MJComponentDependenc
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Component Libraries')
-export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntityType> {
+export class MJComponentLibrariesEntity extends BaseEntity<MJComponentLibrariesEntityType> {
     /**
     * Loads the MJ: Component Libraries record from the database
     * @param ID: string - primary key value to load the MJ: Component Libraries record.
@@ -44199,7 +44202,7 @@ export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJComponentLibraryEntity
+    * @memberof MJComponentLibrariesEntity
     * @method
     * @override
     */
@@ -44433,7 +44436,7 @@ export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Component Library Links')
-export class MJComponentLibraryLinkEntity extends BaseEntity<MJComponentLibraryLinkEntityType> {
+export class MJComponentLibraryLinksEntity extends BaseEntity<MJComponentLibraryLinksEntityType> {
     /**
     * Loads the MJ: Component Library Links record from the database
     * @param ID: string - primary key value to load the MJ: Component Library Links record.
@@ -44441,7 +44444,7 @@ export class MJComponentLibraryLinkEntity extends BaseEntity<MJComponentLibraryL
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJComponentLibraryLinkEntity
+    * @memberof MJComponentLibraryLinksEntity
     * @method
     * @override
     */
@@ -44558,7 +44561,7 @@ export class MJComponentLibraryLinkEntity extends BaseEntity<MJComponentLibraryL
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Component Registries')
-export class MJComponentRegistryEntity extends BaseEntity<MJComponentRegistryEntityType> {
+export class MJComponentRegistriesEntity extends BaseEntity<MJComponentRegistriesEntityType> {
     /**
     * Loads the MJ: Component Registries record from the database
     * @param ID: string - primary key value to load the MJ: Component Registries record.
@@ -44566,7 +44569,7 @@ export class MJComponentRegistryEntity extends BaseEntity<MJComponentRegistryEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJComponentRegistryEntity
+    * @memberof MJComponentRegistriesEntity
     * @method
     * @override
     */
@@ -44712,7 +44715,7 @@ export class MJComponentRegistryEntity extends BaseEntity<MJComponentRegistryEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Components')
-export class MJComponentEntity extends BaseEntity<MJComponentEntityType> {
+export class MJComponentsEntity extends BaseEntity<MJComponentsEntityType> {
     /**
     * Loads the MJ: Components record from the database
     * @param ID: string - primary key value to load the MJ: Components record.
@@ -44720,7 +44723,7 @@ export class MJComponentEntity extends BaseEntity<MJComponentEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJComponentEntity
+    * @memberof MJComponentsEntity
     * @method
     * @override
     */
@@ -45149,7 +45152,7 @@ export class MJComponentEntity extends BaseEntity<MJComponentEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content File Types')
-export class MJContentFileTypeEntity extends BaseEntity<MJContentFileTypeEntityType> {
+export class MJContentFileTypesEntity extends BaseEntity<MJContentFileTypesEntityType> {
     /**
     * Loads the MJ: Content File Types record from the database
     * @param ID: string - primary key value to load the MJ: Content File Types record.
@@ -45157,7 +45160,7 @@ export class MJContentFileTypeEntity extends BaseEntity<MJContentFileTypeEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentFileTypeEntity
+    * @memberof MJContentFileTypesEntity
     * @method
     * @override
     */
@@ -45239,7 +45242,7 @@ export class MJContentFileTypeEntity extends BaseEntity<MJContentFileTypeEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Item Attributes')
-export class MJContentItemAttributeEntity extends BaseEntity<MJContentItemAttributeEntityType> {
+export class MJContentItemAttributesEntity extends BaseEntity<MJContentItemAttributesEntityType> {
     /**
     * Loads the MJ: Content Item Attributes record from the database
     * @param ID: string - primary key value to load the MJ: Content Item Attributes record.
@@ -45247,7 +45250,7 @@ export class MJContentItemAttributeEntity extends BaseEntity<MJContentItemAttrib
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentItemAttributeEntity
+    * @memberof MJContentItemAttributesEntity
     * @method
     * @override
     */
@@ -45351,7 +45354,7 @@ export class MJContentItemAttributeEntity extends BaseEntity<MJContentItemAttrib
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Item Tags')
-export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityType> {
+export class MJContentItemTagsEntity extends BaseEntity<MJContentItemTagsEntityType> {
     /**
     * Loads the MJ: Content Item Tags record from the database
     * @param ID: string - primary key value to load the MJ: Content Item Tags record.
@@ -45359,7 +45362,7 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentItemTagEntity
+    * @memberof MJContentItemTagsEntity
     * @method
     * @override
     */
@@ -45451,7 +45454,7 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Items')
-export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
+export class MJContentItemsEntity extends BaseEntity<MJContentItemsEntityType> {
     /**
     * Loads the MJ: Content Items record from the database
     * @param ID: string - primary key value to load the MJ: Content Items record.
@@ -45459,7 +45462,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentItemEntity
+    * @memberof MJContentItemsEntity
     * @method
     * @override
     */
@@ -45667,7 +45670,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Process Runs')
-export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEntityType> {
+export class MJContentProcessRunsEntity extends BaseEntity<MJContentProcessRunsEntityType> {
     /**
     * Loads the MJ: Content Process Runs record from the database
     * @param ID: string - primary key value to load the MJ: Content Process Runs record.
@@ -45675,7 +45678,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentProcessRunEntity
+    * @memberof MJContentProcessRunsEntity
     * @method
     * @override
     */
@@ -45805,7 +45808,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Source Params')
-export class MJContentSourceParamEntity extends BaseEntity<MJContentSourceParamEntityType> {
+export class MJContentSourceParamsEntity extends BaseEntity<MJContentSourceParamsEntityType> {
     /**
     * Loads the MJ: Content Source Params record from the database
     * @param ID: string - primary key value to load the MJ: Content Source Params record.
@@ -45813,7 +45816,7 @@ export class MJContentSourceParamEntity extends BaseEntity<MJContentSourceParamE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentSourceParamEntity
+    * @memberof MJContentSourceParamsEntity
     * @method
     * @override
     */
@@ -45918,7 +45921,7 @@ export class MJContentSourceParamEntity extends BaseEntity<MJContentSourceParamE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Source Type Params')
-export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTypeParamEntityType> {
+export class MJContentSourceTypeParamsEntity extends BaseEntity<MJContentSourceTypeParamsEntityType> {
     /**
     * Loads the MJ: Content Source Type Params record from the database
     * @param ID: string - primary key value to load the MJ: Content Source Type Params record.
@@ -45926,7 +45929,7 @@ export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTy
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentSourceTypeParamEntity
+    * @memberof MJContentSourceTypeParamsEntity
     * @method
     * @override
     */
@@ -46046,7 +46049,7 @@ export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTy
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Source Types')
-export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEntityType> {
+export class MJContentSourceTypesEntity extends BaseEntity<MJContentSourceTypesEntityType> {
     /**
     * Loads the MJ: Content Source Types record from the database
     * @param ID: string - primary key value to load the MJ: Content Source Types record.
@@ -46054,7 +46057,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentSourceTypeEntity
+    * @memberof MJContentSourceTypesEntity
     * @method
     * @override
     */
@@ -46135,7 +46138,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Sources')
-export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType> {
+export class MJContentSourcesEntity extends BaseEntity<MJContentSourcesEntityType> {
     /**
     * Loads the MJ: Content Sources record from the database
     * @param ID: string - primary key value to load the MJ: Content Sources record.
@@ -46143,7 +46146,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentSourceEntity
+    * @memberof MJContentSourcesEntity
     * @method
     * @override
     */
@@ -46291,7 +46294,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Type Attributes')
-export class MJContentTypeAttributeEntity extends BaseEntity<MJContentTypeAttributeEntityType> {
+export class MJContentTypeAttributesEntity extends BaseEntity<MJContentTypeAttributesEntityType> {
     /**
     * Loads the MJ: Content Type Attributes record from the database
     * @param ID: string - primary key value to load the MJ: Content Type Attributes record.
@@ -46299,7 +46302,7 @@ export class MJContentTypeAttributeEntity extends BaseEntity<MJContentTypeAttrib
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentTypeAttributeEntity
+    * @memberof MJContentTypeAttributesEntity
     * @method
     * @override
     */
@@ -46406,7 +46409,7 @@ export class MJContentTypeAttributeEntity extends BaseEntity<MJContentTypeAttrib
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Content Types')
-export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
+export class MJContentTypesEntity extends BaseEntity<MJContentTypesEntityType> {
     /**
     * Loads the MJ: Content Types record from the database
     * @param ID: string - primary key value to load the MJ: Content Types record.
@@ -46414,7 +46417,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJContentTypeEntity
+    * @memberof MJContentTypesEntity
     * @method
     * @override
     */
@@ -46544,7 +46547,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifact Permissions')
-export class MJConversationArtifactPermissionEntity extends BaseEntity<MJConversationArtifactPermissionEntityType> {
+export class MJConversationArtifactPermissionsEntity extends BaseEntity<MJConversationArtifactPermissionsEntityType> {
     /**
     * Loads the MJ: Conversation Artifact Permissions record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Artifact Permissions record.
@@ -46552,7 +46555,7 @@ export class MJConversationArtifactPermissionEntity extends BaseEntity<MJConvers
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJConversationArtifactPermissionEntity
+    * @memberof MJConversationArtifactPermissionsEntity
     * @method
     * @override
     */
@@ -46664,7 +46667,7 @@ export class MJConversationArtifactPermissionEntity extends BaseEntity<MJConvers
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifact Versions')
-export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversationArtifactVersionEntityType> {
+export class MJConversationArtifactVersionsEntity extends BaseEntity<MJConversationArtifactVersionsEntityType> {
     /**
     * Loads the MJ: Conversation Artifact Versions record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Artifact Versions record.
@@ -46672,7 +46675,7 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJConversationArtifactVersionEntity
+    * @memberof MJConversationArtifactVersionsEntity
     * @method
     * @override
     */
@@ -46688,7 +46691,7 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
     * @public
     * @method
     * @override
-    * @memberof MJConversationArtifactVersionEntity
+    * @memberof MJConversationArtifactVersionsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -46867,7 +46870,7 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifacts')
-export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtifactEntityType> {
+export class MJConversationArtifactsEntity extends BaseEntity<MJConversationArtifactsEntityType> {
     /**
     * Loads the MJ: Conversation Artifacts record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Artifacts record.
@@ -46875,7 +46878,7 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJConversationArtifactEntity
+    * @memberof MJConversationArtifactsEntity
     * @method
     * @override
     */
@@ -46891,7 +46894,7 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
     * @public
     * @method
     * @override
-    * @memberof MJConversationArtifactEntity
+    * @memberof MJConversationArtifactsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -47071,7 +47074,7 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Detail Artifacts')
-export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversationDetailArtifactEntityType> {
+export class MJConversationDetailArtifactsEntity extends BaseEntity<MJConversationDetailArtifactsEntityType> {
     /**
     * Loads the MJ: Conversation Detail Artifacts record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Detail Artifacts record.
@@ -47079,7 +47082,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJConversationDetailArtifactEntity
+    * @memberof MJConversationDetailArtifactsEntity
     * @method
     * @override
     */
@@ -47170,7 +47173,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Summary
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -47200,7 +47203,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Detail Attachments')
-export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversationDetailAttachmentEntityType> {
+export class MJConversationDetailAttachmentsEntity extends BaseEntity<MJConversationDetailAttachmentsEntityType> {
     /**
     * Loads the MJ: Conversation Detail Attachments record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Detail Attachments record.
@@ -47208,7 +47211,7 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJConversationDetailAttachmentEntity
+    * @memberof MJConversationDetailAttachmentsEntity
     * @method
     * @override
     */
@@ -47497,7 +47500,7 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Detail Ratings')
-export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationDetailRatingEntityType> {
+export class MJConversationDetailRatingsEntity extends BaseEntity<MJConversationDetailRatingsEntityType> {
     /**
     * Loads the MJ: Conversation Detail Ratings record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Detail Ratings record.
@@ -47505,7 +47508,7 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJConversationDetailRatingEntity
+    * @memberof MJConversationDetailRatingsEntity
     * @method
     * @override
     */
@@ -47661,7 +47664,7 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Details')
-export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailEntityType> {
+export class MJConversationDetailsEntity extends BaseEntity<MJConversationDetailsEntityType> {
     /**
     * Loads the MJ: Conversation Details record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Details record.
@@ -47669,7 +47672,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJConversationDetailEntity
+    * @memberof MJConversationDetailsEntity
     * @method
     * @override
     */
@@ -47685,7 +47688,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     * @public
     * @method
     * @override
-    * @memberof MJConversationDetailEntity
+    * @memberof MJConversationDetailsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -48196,7 +48199,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Conversations')
-export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
+export class MJConversationsEntity extends BaseEntity<MJConversationsEntityType> {
     /**
     * Loads the MJ: Conversations record from the database
     * @param ID: string - primary key value to load the MJ: Conversations record.
@@ -48204,7 +48207,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJConversationEntity
+    * @memberof MJConversationsEntity
     * @method
     * @override
     */
@@ -48220,7 +48223,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJConversationEntity
+    * @memberof MJConversationsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -48483,7 +48486,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntity
-    * * Display Name: Linked Entity Type
+    * * Display Name: Linked Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get LinkedEntity(): string | null {
@@ -48519,7 +48522,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -48540,7 +48543,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Credential Categories')
-export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryEntityType> {
+export class MJCredentialCategoriesEntity extends BaseEntity<MJCredentialCategoriesEntityType> {
     /**
     * Loads the MJ: Credential Categories record from the database
     * @param ID: string - primary key value to load the MJ: Credential Categories record.
@@ -48548,7 +48551,7 @@ export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCredentialCategoryEntity
+    * @memberof MJCredentialCategoriesEntity
     * @method
     * @override
     */
@@ -48676,7 +48679,7 @@ export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Credential Types')
-export class MJCredentialTypeEntity extends BaseEntity<MJCredentialTypeEntityType> {
+export class MJCredentialTypesEntity extends BaseEntity<MJCredentialTypesEntityType> {
     /**
     * Loads the MJ: Credential Types record from the database
     * @param ID: string - primary key value to load the MJ: Credential Types record.
@@ -48684,7 +48687,7 @@ export class MJCredentialTypeEntity extends BaseEntity<MJCredentialTypeEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCredentialTypeEntity
+    * @memberof MJCredentialTypesEntity
     * @method
     * @override
     */
@@ -48827,7 +48830,7 @@ export class MJCredentialTypeEntity extends BaseEntity<MJCredentialTypeEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Credentials')
-export class MJCredentialEntity extends BaseEntity<MJCredentialEntityType> {
+export class MJCredentialsEntity extends BaseEntity<MJCredentialsEntityType> {
     /**
     * Loads the MJ: Credentials record from the database
     * @param ID: string - primary key value to load the MJ: Credentials record.
@@ -48835,7 +48838,7 @@ export class MJCredentialEntity extends BaseEntity<MJCredentialEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJCredentialEntity
+    * @memberof MJCredentialsEntity
     * @method
     * @override
     */
@@ -49057,7 +49060,7 @@ export class MJCredentialEntity extends BaseEntity<MJCredentialEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard Categories')
-export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEntityType> {
+export class MJDashboardCategoriesEntity extends BaseEntity<MJDashboardCategoriesEntityType> {
     /**
     * Loads the MJ: Dashboard Categories record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard Categories record.
@@ -49065,7 +49068,7 @@ export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDashboardCategoryEntity
+    * @memberof MJDashboardCategoriesEntity
     * @method
     * @override
     */
@@ -49199,7 +49202,7 @@ export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard Category Links')
-export class MJDashboardCategoryLinkEntity extends BaseEntity<MJDashboardCategoryLinkEntityType> {
+export class MJDashboardCategoryLinksEntity extends BaseEntity<MJDashboardCategoryLinksEntityType> {
     /**
     * Loads the MJ: Dashboard Category Links record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard Category Links record.
@@ -49207,7 +49210,7 @@ export class MJDashboardCategoryLinkEntity extends BaseEntity<MJDashboardCategor
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDashboardCategoryLinkEntity
+    * @memberof MJDashboardCategoryLinksEntity
     * @method
     * @override
     */
@@ -49358,7 +49361,7 @@ export class MJDashboardCategoryLinkEntity extends BaseEntity<MJDashboardCategor
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard Category Permissions')
-export class MJDashboardCategoryPermissionEntity extends BaseEntity<MJDashboardCategoryPermissionEntityType> {
+export class MJDashboardCategoryPermissionsEntity extends BaseEntity<MJDashboardCategoryPermissionsEntityType> {
     /**
     * Loads the MJ: Dashboard Category Permissions record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard Category Permissions record.
@@ -49366,7 +49369,7 @@ export class MJDashboardCategoryPermissionEntity extends BaseEntity<MJDashboardC
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDashboardCategoryPermissionEntity
+    * @memberof MJDashboardCategoryPermissionsEntity
     * @method
     * @override
     */
@@ -49546,7 +49549,7 @@ export class MJDashboardCategoryPermissionEntity extends BaseEntity<MJDashboardC
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard Part Types')
-export class MJDashboardPartTypeEntity extends BaseEntity<MJDashboardPartTypeEntityType> {
+export class MJDashboardPartTypesEntity extends BaseEntity<MJDashboardPartTypesEntityType> {
     /**
     * Loads the MJ: Dashboard Part Types record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard Part Types record.
@@ -49554,7 +49557,7 @@ export class MJDashboardPartTypeEntity extends BaseEntity<MJDashboardPartTypeEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDashboardPartTypeEntity
+    * @memberof MJDashboardPartTypesEntity
     * @method
     * @override
     */
@@ -49718,7 +49721,7 @@ export class MJDashboardPartTypeEntity extends BaseEntity<MJDashboardPartTypeEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard Permissions')
-export class MJDashboardPermissionEntity extends BaseEntity<MJDashboardPermissionEntityType> {
+export class MJDashboardPermissionsEntity extends BaseEntity<MJDashboardPermissionsEntityType> {
     /**
     * Loads the MJ: Dashboard Permissions record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard Permissions record.
@@ -49726,7 +49729,7 @@ export class MJDashboardPermissionEntity extends BaseEntity<MJDashboardPermissio
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDashboardPermissionEntity
+    * @memberof MJDashboardPermissionsEntity
     * @method
     * @override
     */
@@ -49906,7 +49909,7 @@ export class MJDashboardPermissionEntity extends BaseEntity<MJDashboardPermissio
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard User Preferences')
-export class MJDashboardUserPreferenceEntity extends BaseEntity<MJDashboardUserPreferenceEntityType> {
+export class MJDashboardUserPreferencesEntity extends BaseEntity<MJDashboardUserPreferencesEntityType> {
     /**
     * Loads the MJ: Dashboard User Preferences record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard User Preferences record.
@@ -49914,7 +49917,7 @@ export class MJDashboardUserPreferenceEntity extends BaseEntity<MJDashboardUserP
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDashboardUserPreferenceEntity
+    * @memberof MJDashboardUserPreferencesEntity
     * @method
     * @override
     */
@@ -50097,7 +50100,7 @@ export class MJDashboardUserPreferenceEntity extends BaseEntity<MJDashboardUserP
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard User States')
-export class MJDashboardUserStateEntity extends BaseEntity<MJDashboardUserStateEntityType> {
+export class MJDashboardUserStatesEntity extends BaseEntity<MJDashboardUserStatesEntityType> {
     /**
     * Loads the MJ: Dashboard User States record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard User States record.
@@ -50105,7 +50108,7 @@ export class MJDashboardUserStateEntity extends BaseEntity<MJDashboardUserStateE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDashboardUserStateEntity
+    * @memberof MJDashboardUserStatesEntity
     * @method
     * @override
     */
@@ -50221,7 +50224,7 @@ export class MJDashboardUserStateEntity extends BaseEntity<MJDashboardUserStateE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboards')
-export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
+export class MJDashboardsEntity extends BaseEntity<MJDashboardsEntityType> {
     /**
     * Loads the MJ: Dashboards record from the database
     * @param ID: string - primary key value to load the MJ: Dashboards record.
@@ -50229,7 +50232,7 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDashboardEntity
+    * @memberof MJDashboardsEntity
     * @method
     * @override
     */
@@ -50489,7 +50492,7 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Data Context Items')
-export class MJDataContextItemEntity extends BaseEntity<MJDataContextItemEntityType> {
+export class MJDataContextItemsEntity extends BaseEntity<MJDataContextItemsEntityType> {
     /**
     * Loads the MJ: Data Context Items record from the database
     * @param ID: string - primary key value to load the MJ: Data Context Items record.
@@ -50497,7 +50500,7 @@ export class MJDataContextItemEntity extends BaseEntity<MJDataContextItemEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDataContextItemEntity
+    * @memberof MJDataContextItemsEntity
     * @method
     * @override
     */
@@ -50739,7 +50742,7 @@ export class MJDataContextItemEntity extends BaseEntity<MJDataContextItemEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Data Contexts')
-export class MJDataContextEntity extends BaseEntity<MJDataContextEntityType> {
+export class MJDataContextsEntity extends BaseEntity<MJDataContextsEntityType> {
     /**
     * Loads the MJ: Data Contexts record from the database
     * @param ID: string - primary key value to load the MJ: Data Contexts record.
@@ -50747,7 +50750,7 @@ export class MJDataContextEntity extends BaseEntity<MJDataContextEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDataContextEntity
+    * @memberof MJDataContextsEntity
     * @method
     * @override
     */
@@ -50863,7 +50866,7 @@ export class MJDataContextEntity extends BaseEntity<MJDataContextEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Dataset Items')
-export class MJDatasetItemEntity extends BaseEntity<MJDatasetItemEntityType> {
+export class MJDatasetItemsEntity extends BaseEntity<MJDatasetItemsEntityType> {
     /**
     * Loads the MJ: Dataset Items record from the database
     * @param ID: string - primary key value to load the MJ: Dataset Items record.
@@ -50871,7 +50874,7 @@ export class MJDatasetItemEntity extends BaseEntity<MJDatasetItemEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDatasetItemEntity
+    * @memberof MJDatasetItemsEntity
     * @method
     * @override
     */
@@ -51050,7 +51053,7 @@ export class MJDatasetItemEntity extends BaseEntity<MJDatasetItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Datasets')
-export class MJDatasetEntity extends BaseEntity<MJDatasetEntityType> {
+export class MJDatasetsEntity extends BaseEntity<MJDatasetsEntityType> {
     /**
     * Loads the MJ: Datasets record from the database
     * @param ID: string - primary key value to load the MJ: Datasets record.
@@ -51058,7 +51061,7 @@ export class MJDatasetEntity extends BaseEntity<MJDatasetEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDatasetEntity
+    * @memberof MJDatasetsEntity
     * @method
     * @override
     */
@@ -51139,7 +51142,7 @@ export class MJDatasetEntity extends BaseEntity<MJDatasetEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Duplicate Run Detail Matches')
-export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDetailMatchEntityType> {
+export class MJDuplicateRunDetailMatchesEntity extends BaseEntity<MJDuplicateRunDetailMatchesEntityType> {
     /**
     * Loads the MJ: Duplicate Run Detail Matches record from the database
     * @param ID: string - primary key value to load the MJ: Duplicate Run Detail Matches record.
@@ -51147,7 +51150,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDuplicateRunDetailMatchEntity
+    * @memberof MJDuplicateRunDetailMatchesEntity
     * @method
     * @override
     */
@@ -51373,7 +51376,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Duplicate Run Details')
-export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailEntityType> {
+export class MJDuplicateRunDetailsEntity extends BaseEntity<MJDuplicateRunDetailsEntityType> {
     /**
     * Loads the MJ: Duplicate Run Details record from the database
     * @param ID: string - primary key value to load the MJ: Duplicate Run Details record.
@@ -51381,7 +51384,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDuplicateRunDetailEntity
+    * @memberof MJDuplicateRunDetailsEntity
     * @method
     * @override
     */
@@ -51552,7 +51555,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
-export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
+export class MJDuplicateRunsEntity extends BaseEntity<MJDuplicateRunsEntityType> {
     /**
     * Loads the MJ: Duplicate Runs record from the database
     * @param ID: string - primary key value to load the MJ: Duplicate Runs record.
@@ -51560,7 +51563,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJDuplicateRunEntity
+    * @memberof MJDuplicateRunsEntity
     * @method
     * @override
     */
@@ -51795,7 +51798,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Employee Company Integrations')
-export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCompanyIntegrationEntityType> {
+export class MJEmployeeCompanyIntegrationsEntity extends BaseEntity<MJEmployeeCompanyIntegrationsEntityType> {
     /**
     * Loads the MJ: Employee Company Integrations record from the database
     * @param ID: string - primary key value to load the MJ: Employee Company Integrations record.
@@ -51803,7 +51806,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEmployeeCompanyIntegrationEntity
+    * @memberof MJEmployeeCompanyIntegrationsEntity
     * @method
     * @override
     */
@@ -51854,7 +51857,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
 
     /**
     * * Field Name: ExternalSystemRecordID
-    * * Display Name: External ID
+    * * Display Name: External Record ID
     * * SQL Data Type: nvarchar(750)
     * * Description: The employee's unique identifier in the external integrated system.
     */
@@ -51867,7 +51870,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if this employee integration mapping is currently active.
@@ -51901,7 +51904,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -51931,7 +51934,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Employee Roles')
-export class MJEmployeeRoleEntity extends BaseEntity<MJEmployeeRoleEntityType> {
+export class MJEmployeeRolesEntity extends BaseEntity<MJEmployeeRolesEntityType> {
     /**
     * Loads the MJ: Employee Roles record from the database
     * @param ID: string - primary key value to load the MJ: Employee Roles record.
@@ -51939,7 +51942,7 @@ export class MJEmployeeRoleEntity extends BaseEntity<MJEmployeeRoleEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEmployeeRoleEntity
+    * @memberof MJEmployeeRolesEntity
     * @method
     * @override
     */
@@ -52010,7 +52013,7 @@ export class MJEmployeeRoleEntity extends BaseEntity<MJEmployeeRoleEntityType> {
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -52040,7 +52043,7 @@ export class MJEmployeeRoleEntity extends BaseEntity<MJEmployeeRoleEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Employee Skills')
-export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType> {
+export class MJEmployeeSkillsEntity extends BaseEntity<MJEmployeeSkillsEntityType> {
     /**
     * Loads the MJ: Employee Skills record from the database
     * @param ID: string - primary key value to load the MJ: Employee Skills record.
@@ -52048,7 +52051,7 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEmployeeSkillEntity
+    * @memberof MJEmployeeSkillsEntity
     * @method
     * @override
     */
@@ -52086,7 +52089,7 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
 
     /**
     * * Field Name: SkillID
-    * * Display Name: Skill ID
+    * * Display Name: Skill
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Skills (vwSkills.ID)
     */
@@ -52119,7 +52122,7 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -52128,7 +52131,7 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
 
     /**
     * * Field Name: Skill
-    * * Display Name: Skill
+    * * Display Name: Skill Name
     * * SQL Data Type: nvarchar(50)
     */
     get Skill(): string {
@@ -52149,7 +52152,7 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Employees')
-export class MJEmployeeEntity extends BaseEntity<MJEmployeeEntityType> {
+export class MJEmployeesEntity extends BaseEntity<MJEmployeesEntityType> {
     /**
     * Loads the MJ: Employees record from the database
     * @param ID: string - primary key value to load the MJ: Employees record.
@@ -52157,7 +52160,7 @@ export class MJEmployeeEntity extends BaseEntity<MJEmployeeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEmployeeEntity
+    * @memberof MJEmployeesEntity
     * @method
     * @override
     */
@@ -52370,7 +52373,7 @@ export class MJEmployeeEntity extends BaseEntity<MJEmployeeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Encryption Algorithms')
-export class MJEncryptionAlgorithmEntity extends BaseEntity<MJEncryptionAlgorithmEntityType> {
+export class MJEncryptionAlgorithmsEntity extends BaseEntity<MJEncryptionAlgorithmsEntityType> {
     /**
     * Loads the MJ: Encryption Algorithms record from the database
     * @param ID: string - primary key value to load the MJ: Encryption Algorithms record.
@@ -52378,7 +52381,7 @@ export class MJEncryptionAlgorithmEntity extends BaseEntity<MJEncryptionAlgorith
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEncryptionAlgorithmEntity
+    * @memberof MJEncryptionAlgorithmsEntity
     * @method
     * @override
     */
@@ -52529,7 +52532,7 @@ export class MJEncryptionAlgorithmEntity extends BaseEntity<MJEncryptionAlgorith
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Encryption Key Sources')
-export class MJEncryptionKeySourceEntity extends BaseEntity<MJEncryptionKeySourceEntityType> {
+export class MJEncryptionKeySourcesEntity extends BaseEntity<MJEncryptionKeySourcesEntityType> {
     /**
     * Loads the MJ: Encryption Key Sources record from the database
     * @param ID: string - primary key value to load the MJ: Encryption Key Sources record.
@@ -52537,7 +52540,7 @@ export class MJEncryptionKeySourceEntity extends BaseEntity<MJEncryptionKeySourc
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEncryptionKeySourceEntity
+    * @memberof MJEncryptionKeySourcesEntity
     * @method
     * @override
     */
@@ -52693,7 +52696,7 @@ export class MJEncryptionKeySourceEntity extends BaseEntity<MJEncryptionKeySourc
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Encryption Keys')
-export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType> {
+export class MJEncryptionKeysEntity extends BaseEntity<MJEncryptionKeysEntityType> {
     /**
     * Loads the MJ: Encryption Keys record from the database
     * @param ID: string - primary key value to load the MJ: Encryption Keys record.
@@ -52701,7 +52704,7 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEncryptionKeyEntity
+    * @memberof MJEncryptionKeysEntity
     * @method
     * @override
     */
@@ -52932,7 +52935,7 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entities')
-export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
+export class MJEntitiesEntity extends BaseEntity<MJEntitiesEntityType> {
     /**
     * Loads the MJ: Entities record from the database
     * @param ID: string - primary key value to load the MJ: Entities record.
@@ -52940,7 +52943,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityEntity
+    * @memberof MJEntitiesEntity
     * @method
     * @override
     */
@@ -53760,24 +53763,10 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
-    * * Field Name: AllowMultipleSubtypes
-    * * Display Name: Allow Multiple Subtypes
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).
-    */
-    get AllowMultipleSubtypes(): boolean {
-        return this.Get('AllowMultipleSubtypes');
-    }
-    set AllowMultipleSubtypes(value: boolean) {
-        this.Set('AllowMultipleSubtypes', value);
-    }
-
-    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.
+    * * Description: Schema-aware programmatic code name derived from the entity Name. Computed by stripping the EntityNamePrefix from the Name, removing spaces, and prepending the alphanumeric-only prefix. For "MJ: AI Models" with prefix "MJ: ", this produces "MJAIModels". For entities in schemas without a prefix, this is simply the entity Name with spaces removed and non-alphanumeric characters replaced. Used in GraphQL type generation and internal code references.
     */
     get CodeName(): string | null {
         return this.Get('CodeName');
@@ -53787,7 +53776,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Field Name: ClassName
     * * Display Name: Class Name
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().
+    * * Description: Schema-aware programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(StripToAlphanumeric(SchemaInfo.EntityNamePrefix) + BaseTable + NameSuffix). For the core MJ schema with prefix "MJ: ", a table named "AIModel" produces ClassName "MJAIModel", yielding class MJAIModelEntity. For schemas without a prefix configured, ClassName equals BaseTableCodeName. This prevents cross-schema collisions when two schemas have tables with the same name.
     */
     get ClassName(): string | null {
         return this.Get('ClassName');
@@ -53797,6 +53786,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Field Name: BaseTableCodeName
     * * Display Name: Base Table Code Name
     * * SQL Data Type: nvarchar(MAX)
+    * * Description: Programmatic name derived solely from BaseTable + NameSuffix, intentionally schema-unaware. Unlike ClassName (which incorporates the schema prefix), BaseTableCodeName always matches the raw SQL table name. Used for SQL generation, table references, and cases where the physical table identity is needed without schema disambiguation.
     */
     get BaseTableCodeName(): string | null {
         return this.Get('BaseTableCodeName');
@@ -53843,7 +53833,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Action Filters')
-export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterEntityType> {
+export class MJEntityActionFiltersEntity extends BaseEntity<MJEntityActionFiltersEntityType> {
     /**
     * Loads the MJ: Entity Action Filters record from the database
     * @param ID: string - primary key value to load the MJ: Entity Action Filters record.
@@ -53851,7 +53841,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityActionFilterEntity
+    * @memberof MJEntityActionFiltersEntity
     * @method
     * @override
     */
@@ -53876,7 +53866,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
     */
@@ -53889,7 +53879,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
 
     /**
     * * Field Name: ActionFilterID
-    * * Display Name: Action Filter
+    * * Display Name: Action Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Action Filters (vwActionFilters.ID)
     */
@@ -53954,7 +53944,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
+    * * Display Name: Entity Action
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -53963,7 +53953,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
 
     /**
     * * Field Name: ActionFilter
-    * * Display Name: Action Filter Name
+    * * Display Name: Action Filter
     * * SQL Data Type: nvarchar(MAX)
     */
     get ActionFilter(): string {
@@ -53984,7 +53974,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Action Invocation Types')
-export class MJEntityActionInvocationTypeEntity extends BaseEntity<MJEntityActionInvocationTypeEntityType> {
+export class MJEntityActionInvocationTypesEntity extends BaseEntity<MJEntityActionInvocationTypesEntityType> {
     /**
     * Loads the MJ: Entity Action Invocation Types record from the database
     * @param ID: string - primary key value to load the MJ: Entity Action Invocation Types record.
@@ -53992,7 +53982,7 @@ export class MJEntityActionInvocationTypeEntity extends BaseEntity<MJEntityActio
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityActionInvocationTypeEntity
+    * @memberof MJEntityActionInvocationTypesEntity
     * @method
     * @override
     */
@@ -54089,7 +54079,7 @@ export class MJEntityActionInvocationTypeEntity extends BaseEntity<MJEntityActio
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Action Invocations')
-export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInvocationEntityType> {
+export class MJEntityActionInvocationsEntity extends BaseEntity<MJEntityActionInvocationsEntityType> {
     /**
     * Loads the MJ: Entity Action Invocations record from the database
     * @param ID: string - primary key value to load the MJ: Entity Action Invocations record.
@@ -54097,7 +54087,7 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityActionInvocationEntity
+    * @memberof MJEntityActionInvocationsEntity
     * @method
     * @override
     */
@@ -54187,7 +54177,7 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
+    * * Display Name: Entity Action
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -54217,7 +54207,7 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Action Params')
-export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEntityType> {
+export class MJEntityActionParamsEntity extends BaseEntity<MJEntityActionParamsEntityType> {
     /**
     * Loads the MJ: Entity Action Params record from the database
     * @param ID: string - primary key value to load the MJ: Entity Action Params record.
@@ -54225,7 +54215,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityActionParamEntity
+    * @memberof MJEntityActionParamsEntity
     * @method
     * @override
     */
@@ -54263,7 +54253,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
 
     /**
     * * Field Name: ActionParamID
-    * * Display Name: Action Parameter ID
+    * * Display Name: Action Param ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)
     */
@@ -54350,7 +54340,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
 
     /**
     * * Field Name: ActionParam
-    * * Display Name: Action Parameter
+    * * Display Name: Action Param
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -54371,7 +54361,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Actions')
-export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
+export class MJEntityActionsEntity extends BaseEntity<MJEntityActionsEntityType> {
     /**
     * Loads the MJ: Entity Actions record from the database
     * @param ID: string - primary key value to load the MJ: Entity Actions record.
@@ -54379,7 +54369,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityActionEntity
+    * @memberof MJEntityActionsEntity
     * @method
     * @override
     */
@@ -54500,7 +54490,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Entity AI Actions')
-export class MJEntityAIActionEntity extends BaseEntity<MJEntityAIActionEntityType> {
+export class MJEntityAIActionsEntity extends BaseEntity<MJEntityAIActionsEntityType> {
     /**
     * Loads the MJ: Entity AI Actions record from the database
     * @param ID: string - primary key value to load the MJ: Entity AI Actions record.
@@ -54508,7 +54498,7 @@ export class MJEntityAIActionEntity extends BaseEntity<MJEntityAIActionEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityAIActionEntity
+    * @memberof MJEntityAIActionsEntity
     * @method
     * @override
     */
@@ -54766,7 +54756,7 @@ export class MJEntityAIActionEntity extends BaseEntity<MJEntityAIActionEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Communication Fields')
-export class MJEntityCommunicationFieldEntity extends BaseEntity<MJEntityCommunicationFieldEntityType> {
+export class MJEntityCommunicationFieldsEntity extends BaseEntity<MJEntityCommunicationFieldsEntityType> {
     /**
     * Loads the MJ: Entity Communication Fields record from the database
     * @param ID: string - primary key value to load the MJ: Entity Communication Fields record.
@@ -54774,7 +54764,7 @@ export class MJEntityCommunicationFieldEntity extends BaseEntity<MJEntityCommuni
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityCommunicationFieldEntity
+    * @memberof MJEntityCommunicationFieldsEntity
     * @method
     * @override
     */
@@ -54799,7 +54789,7 @@ export class MJEntityCommunicationFieldEntity extends BaseEntity<MJEntityCommuni
 
     /**
     * * Field Name: EntityCommunicationMessageTypeID
-    * * Display Name: Message Type
+    * * Display Name: Message Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)
     */
@@ -54858,7 +54848,7 @@ export class MJEntityCommunicationFieldEntity extends BaseEntity<MJEntityCommuni
 
     /**
     * * Field Name: EntityCommunicationMessageType
-    * * Display Name: Message Type Name
+    * * Display Name: Entity Communication Message Type
     * * SQL Data Type: nvarchar(100)
     */
     get EntityCommunicationMessageType(): string {
@@ -54879,7 +54869,7 @@ export class MJEntityCommunicationFieldEntity extends BaseEntity<MJEntityCommuni
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Communication Message Types')
-export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityCommunicationMessageTypeEntityType> {
+export class MJEntityCommunicationMessageTypesEntity extends BaseEntity<MJEntityCommunicationMessageTypesEntityType> {
     /**
     * Loads the MJ: Entity Communication Message Types record from the database
     * @param ID: string - primary key value to load the MJ: Entity Communication Message Types record.
@@ -54887,7 +54877,7 @@ export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityC
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityCommunicationMessageTypeEntity
+    * @memberof MJEntityCommunicationMessageTypesEntity
     * @method
     * @override
     */
@@ -55002,7 +54992,7 @@ export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityC
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Document Runs')
-export class MJEntityDocumentRunEntity extends BaseEntity<MJEntityDocumentRunEntityType> {
+export class MJEntityDocumentRunsEntity extends BaseEntity<MJEntityDocumentRunsEntityType> {
     /**
     * Loads the MJ: Entity Document Runs record from the database
     * @param ID: string - primary key value to load the MJ: Entity Document Runs record.
@@ -55010,7 +55000,7 @@ export class MJEntityDocumentRunEntity extends BaseEntity<MJEntityDocumentRunEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityDocumentRunEntity
+    * @memberof MJEntityDocumentRunsEntity
     * @method
     * @override
     */
@@ -55132,7 +55122,7 @@ export class MJEntityDocumentRunEntity extends BaseEntity<MJEntityDocumentRunEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Document Settings')
-export class MJEntityDocumentSettingEntity extends BaseEntity<MJEntityDocumentSettingEntityType> {
+export class MJEntityDocumentSettingsEntity extends BaseEntity<MJEntityDocumentSettingsEntityType> {
     /**
     * Loads the MJ: Entity Document Settings record from the database
     * @param ID: string - primary key value to load the MJ: Entity Document Settings record.
@@ -55140,7 +55130,7 @@ export class MJEntityDocumentSettingEntity extends BaseEntity<MJEntityDocumentSe
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityDocumentSettingEntity
+    * @memberof MJEntityDocumentSettingsEntity
     * @method
     * @override
     */
@@ -55256,7 +55246,7 @@ export class MJEntityDocumentSettingEntity extends BaseEntity<MJEntityDocumentSe
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Document Types')
-export class MJEntityDocumentTypeEntity extends BaseEntity<MJEntityDocumentTypeEntityType> {
+export class MJEntityDocumentTypesEntity extends BaseEntity<MJEntityDocumentTypesEntityType> {
     /**
     * Loads the MJ: Entity Document Types record from the database
     * @param ID: string - primary key value to load the MJ: Entity Document Types record.
@@ -55264,7 +55254,7 @@ export class MJEntityDocumentTypeEntity extends BaseEntity<MJEntityDocumentTypeE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityDocumentTypeEntity
+    * @memberof MJEntityDocumentTypesEntity
     * @method
     * @override
     */
@@ -55345,7 +55335,7 @@ export class MJEntityDocumentTypeEntity extends BaseEntity<MJEntityDocumentTypeE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Documents')
-export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityType> {
+export class MJEntityDocumentsEntity extends BaseEntity<MJEntityDocumentsEntityType> {
     /**
     * Loads the MJ: Entity Documents record from the database
     * @param ID: string - primary key value to load the MJ: Entity Documents record.
@@ -55353,7 +55343,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityDocumentEntity
+    * @memberof MJEntityDocumentsEntity
     * @method
     * @override
     */
@@ -55610,7 +55600,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Field Values')
-export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntityType> {
+export class MJEntityFieldValuesEntity extends BaseEntity<MJEntityFieldValuesEntityType> {
     /**
     * Loads the MJ: Entity Field Values record from the database
     * @param ID: string - primary key value to load the MJ: Entity Field Values record.
@@ -55618,7 +55608,7 @@ export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityFieldValueEntity
+    * @memberof MJEntityFieldValuesEntity
     * @method
     * @override
     */
@@ -55766,7 +55756,7 @@ export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Fields')
-export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
+export class MJEntityFieldsEntity extends BaseEntity<MJEntityFieldsEntityType> {
     /**
     * Loads the MJ: Entity Fields record from the database
     * @param ID: string - primary key value to load the MJ: Entity Fields record.
@@ -55774,7 +55764,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityFieldEntity
+    * @memberof MJEntityFieldsEntity
     * @method
     * @override
     */
@@ -56679,7 +56669,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Permissions')
-export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntityType> {
+export class MJEntityPermissionsEntity extends BaseEntity<MJEntityPermissionsEntityType> {
     /**
     * Loads the MJ: Entity Permissions record from the database
     * @param ID: string - primary key value to load the MJ: Entity Permissions record.
@@ -56687,7 +56677,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityPermissionEntity
+    * @memberof MJEntityPermissionsEntity
     * @method
     * @override
     */
@@ -56940,7 +56930,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Record Documents')
-export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocumentEntityType> {
+export class MJEntityRecordDocumentsEntity extends BaseEntity<MJEntityRecordDocumentsEntityType> {
     /**
     * Loads the MJ: Entity Record Documents record from the database
     * @param ID: string - primary key value to load the MJ: Entity Record Documents record.
@@ -56948,7 +56938,7 @@ export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocum
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityRecordDocumentEntity
+    * @memberof MJEntityRecordDocumentsEntity
     * @method
     * @override
     */
@@ -57136,7 +57126,7 @@ export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocum
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Relationship Display Components')
-export class MJEntityRelationshipDisplayComponentEntity extends BaseEntity<MJEntityRelationshipDisplayComponentEntityType> {
+export class MJEntityRelationshipDisplayComponentsEntity extends BaseEntity<MJEntityRelationshipDisplayComponentsEntityType> {
     /**
     * Loads the MJ: Entity Relationship Display Components record from the database
     * @param ID: string - primary key value to load the MJ: Entity Relationship Display Components record.
@@ -57144,7 +57134,7 @@ export class MJEntityRelationshipDisplayComponentEntity extends BaseEntity<MJEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityRelationshipDisplayComponentEntity
+    * @memberof MJEntityRelationshipDisplayComponentsEntity
     * @method
     * @override
     */
@@ -57243,7 +57233,7 @@ export class MJEntityRelationshipDisplayComponentEntity extends BaseEntity<MJEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Relationships')
-export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipEntityType> {
+export class MJEntityRelationshipsEntity extends BaseEntity<MJEntityRelationshipsEntityType> {
     /**
     * Loads the MJ: Entity Relationships record from the database
     * @param ID: string - primary key value to load the MJ: Entity Relationships record.
@@ -57251,7 +57241,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntityRelationshipEntity
+    * @memberof MJEntityRelationshipsEntity
     * @method
     * @override
     */
@@ -57700,7 +57690,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Settings')
-export class MJEntitySettingEntity extends BaseEntity<MJEntitySettingEntityType> {
+export class MJEntitySettingsEntity extends BaseEntity<MJEntitySettingsEntityType> {
     /**
     * Loads the MJ: Entity Settings record from the database
     * @param ID: string - primary key value to load the MJ: Entity Settings record.
@@ -57708,7 +57698,7 @@ export class MJEntitySettingEntity extends BaseEntity<MJEntitySettingEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEntitySettingEntity
+    * @memberof MJEntitySettingsEntity
     * @method
     * @override
     */
@@ -57824,7 +57814,7 @@ export class MJEntitySettingEntity extends BaseEntity<MJEntitySettingEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Environments')
-export class MJEnvironmentEntity extends BaseEntity<MJEnvironmentEntityType> {
+export class MJEnvironmentsEntity extends BaseEntity<MJEnvironmentsEntityType> {
     /**
     * Loads the MJ: Environments record from the database
     * @param ID: string - primary key value to load the MJ: Environments record.
@@ -57832,7 +57822,7 @@ export class MJEnvironmentEntity extends BaseEntity<MJEnvironmentEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJEnvironmentEntity
+    * @memberof MJEnvironmentsEntity
     * @method
     * @override
     */
@@ -57942,7 +57932,7 @@ export class MJEnvironmentEntity extends BaseEntity<MJEnvironmentEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Error Logs')
-export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
+export class MJErrorLogsEntity extends BaseEntity<MJErrorLogsEntityType> {
     /**
     * Loads the MJ: Error Logs record from the database
     * @param ID: string - primary key value to load the MJ: Error Logs record.
@@ -57950,7 +57940,7 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJErrorLogEntity
+    * @memberof MJErrorLogsEntity
     * @method
     * @override
     */
@@ -58130,7 +58120,7 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Explorer Navigation Items')
-export class MJExplorerNavigationItemEntity extends BaseEntity<MJExplorerNavigationItemEntityType> {
+export class MJExplorerNavigationItemsEntity extends BaseEntity<MJExplorerNavigationItemsEntityType> {
     /**
     * Loads the MJ: Explorer Navigation Items record from the database
     * @param ID: string - primary key value to load the MJ: Explorer Navigation Items record.
@@ -58138,7 +58128,7 @@ export class MJExplorerNavigationItemEntity extends BaseEntity<MJExplorerNavigat
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJExplorerNavigationItemEntity
+    * @memberof MJExplorerNavigationItemsEntity
     * @method
     * @override
     */
@@ -58343,7 +58333,7 @@ export class MJExplorerNavigationItemEntity extends BaseEntity<MJExplorerNavigat
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: File Categories')
-export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
+export class MJFileCategoriesEntity extends BaseEntity<MJFileCategoriesEntityType> {
     /**
     * Loads the MJ: File Categories record from the database
     * @param ID: string - primary key value to load the MJ: File Categories record.
@@ -58351,7 +58341,7 @@ export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJFileCategoryEntity
+    * @memberof MJFileCategoriesEntity
     * @method
     * @override
     */
@@ -58463,7 +58453,7 @@ export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: File Entity Record Links')
-export class MJFileEntityRecordLinkEntity extends BaseEntity<MJFileEntityRecordLinkEntityType> {
+export class MJFileEntityRecordLinksEntity extends BaseEntity<MJFileEntityRecordLinksEntityType> {
     /**
     * Loads the MJ: File Entity Record Links record from the database
     * @param ID: string - primary key value to load the MJ: File Entity Record Links record.
@@ -58471,7 +58461,7 @@ export class MJFileEntityRecordLinkEntity extends BaseEntity<MJFileEntityRecordL
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJFileEntityRecordLinkEntity
+    * @memberof MJFileEntityRecordLinksEntity
     * @method
     * @override
     */
@@ -58585,7 +58575,7 @@ export class MJFileEntityRecordLinkEntity extends BaseEntity<MJFileEntityRecordL
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: File Storage Accounts')
-export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountEntityType> {
+export class MJFileStorageAccountsEntity extends BaseEntity<MJFileStorageAccountsEntityType> {
     /**
     * Loads the MJ: File Storage Accounts record from the database
     * @param ID: string - primary key value to load the MJ: File Storage Accounts record.
@@ -58593,7 +58583,7 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJFileStorageAccountEntity
+    * @memberof MJFileStorageAccountsEntity
     * @method
     * @override
     */
@@ -58723,7 +58713,7 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: File Storage Providers')
-export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProviderEntityType> {
+export class MJFileStorageProvidersEntity extends BaseEntity<MJFileStorageProvidersEntityType> {
     /**
     * Loads the MJ: File Storage Providers record from the database
     * @param ID: string - primary key value to load the MJ: File Storage Providers record.
@@ -58731,7 +58721,7 @@ export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProvide
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJFileStorageProviderEntity
+    * @memberof MJFileStorageProvidersEntity
     * @method
     * @override
     */
@@ -58907,7 +58897,7 @@ export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProvide
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Files')
-export class MJFileEntity extends BaseEntity<MJFileEntityType> {
+export class MJFilesEntity extends BaseEntity<MJFilesEntityType> {
     /**
     * Loads the MJ: Files record from the database
     * @param ID: string - primary key value to load the MJ: Files record.
@@ -58915,7 +58905,7 @@ export class MJFileEntity extends BaseEntity<MJFileEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJFileEntity
+    * @memberof MJFilesEntity
     * @method
     * @override
     */
@@ -59080,7 +59070,7 @@ export class MJFileEntity extends BaseEntity<MJFileEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Generated Code Categories')
-export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCategoryEntityType> {
+export class MJGeneratedCodeCategoriesEntity extends BaseEntity<MJGeneratedCodeCategoriesEntityType> {
     /**
     * Loads the MJ: Generated Code Categories record from the database
     * @param ID: string - primary key value to load the MJ: Generated Code Categories record.
@@ -59088,7 +59078,7 @@ export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCat
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJGeneratedCodeCategoryEntity
+    * @memberof MJGeneratedCodeCategoriesEntity
     * @method
     * @override
     */
@@ -59201,7 +59191,7 @@ export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCat
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Generated Codes')
-export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType> {
+export class MJGeneratedCodesEntity extends BaseEntity<MJGeneratedCodesEntityType> {
     /**
     * Loads the MJ: Generated Codes record from the database
     * @param ID: string - primary key value to load the MJ: Generated Codes record.
@@ -59209,7 +59199,7 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJGeneratedCodeEntity
+    * @memberof MJGeneratedCodesEntity
     * @method
     * @override
     */
@@ -59455,7 +59445,7 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Integration URL Formats')
-export class MJIntegrationURLFormatEntity extends BaseEntity<MJIntegrationURLFormatEntityType> {
+export class MJIntegrationURLFormatsEntity extends BaseEntity<MJIntegrationURLFormatsEntityType> {
     /**
     * Loads the MJ: Integration URL Formats record from the database
     * @param ID: string - primary key value to load the MJ: Integration URL Formats record.
@@ -59463,7 +59453,7 @@ export class MJIntegrationURLFormatEntity extends BaseEntity<MJIntegrationURLFor
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJIntegrationURLFormatEntity
+    * @memberof MJIntegrationURLFormatsEntity
     * @method
     * @override
     */
@@ -59597,7 +59587,7 @@ export class MJIntegrationURLFormatEntity extends BaseEntity<MJIntegrationURLFor
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Integrations')
-export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
+export class MJIntegrationsEntity extends BaseEntity<MJIntegrationsEntityType> {
     /**
     * Loads the MJ: Integrations record from the database
     * @param ID: string - primary key value to load the MJ: Integrations record.
@@ -59605,7 +59595,7 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJIntegrationEntity
+    * @memberof MJIntegrationsEntity
     * @method
     * @override
     */
@@ -59750,7 +59740,7 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Libraries')
-export class MJLibraryEntity extends BaseEntity<MJLibraryEntityType> {
+export class MJLibrariesEntity extends BaseEntity<MJLibrariesEntityType> {
     /**
     * Loads the MJ: Libraries record from the database
     * @param ID: string - primary key value to load the MJ: Libraries record.
@@ -59758,7 +59748,7 @@ export class MJLibraryEntity extends BaseEntity<MJLibraryEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJLibraryEntity
+    * @memberof MJLibrariesEntity
     * @method
     * @override
     */
@@ -59884,7 +59874,7 @@ export class MJLibraryEntity extends BaseEntity<MJLibraryEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Library Items')
-export class MJLibraryItemEntity extends BaseEntity<MJLibraryItemEntityType> {
+export class MJLibraryItemsEntity extends BaseEntity<MJLibraryItemsEntityType> {
     /**
     * Loads the MJ: Library Items record from the database
     * @param ID: string - primary key value to load the MJ: Library Items record.
@@ -59892,7 +59882,7 @@ export class MJLibraryItemEntity extends BaseEntity<MJLibraryItemEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJLibraryItemEntity
+    * @memberof MJLibraryItemsEntity
     * @method
     * @override
     */
@@ -60004,7 +59994,7 @@ export class MJLibraryItemEntity extends BaseEntity<MJLibraryItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: List Categories')
-export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
+export class MJListCategoriesEntity extends BaseEntity<MJListCategoriesEntityType> {
     /**
     * Loads the MJ: List Categories record from the database
     * @param ID: string - primary key value to load the MJ: List Categories record.
@@ -60012,7 +60002,7 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJListCategoryEntity
+    * @memberof MJListCategoriesEntity
     * @method
     * @override
     */
@@ -60146,7 +60136,7 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: List Details')
-export class MJListDetailEntity extends BaseEntity<MJListDetailEntityType> {
+export class MJListDetailsEntity extends BaseEntity<MJListDetailsEntityType> {
     /**
     * Loads the MJ: List Details record from the database
     * @param ID: string - primary key value to load the MJ: List Details record.
@@ -60154,7 +60144,7 @@ export class MJListDetailEntity extends BaseEntity<MJListDetailEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJListDetailEntity
+    * @memberof MJListDetailsEntity
     * @method
     * @override
     */
@@ -60294,7 +60284,7 @@ export class MJListDetailEntity extends BaseEntity<MJListDetailEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: List Invitations')
-export class MJListInvitationEntity extends BaseEntity<MJListInvitationEntityType> {
+export class MJListInvitationsEntity extends BaseEntity<MJListInvitationsEntityType> {
     /**
     * Loads the MJ: List Invitations record from the database
     * @param ID: string - primary key value to load the MJ: List Invitations record.
@@ -60302,7 +60292,7 @@ export class MJListInvitationEntity extends BaseEntity<MJListInvitationEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJListInvitationEntity
+    * @memberof MJListInvitationsEntity
     * @method
     * @override
     */
@@ -60482,7 +60472,7 @@ export class MJListInvitationEntity extends BaseEntity<MJListInvitationEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: List Shares')
-export class MJListShareEntity extends BaseEntity<MJListShareEntityType> {
+export class MJListSharesEntity extends BaseEntity<MJListSharesEntityType> {
     /**
     * Loads the MJ: List Shares record from the database
     * @param ID: string - primary key value to load the MJ: List Shares record.
@@ -60490,7 +60480,7 @@ export class MJListShareEntity extends BaseEntity<MJListShareEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJListShareEntity
+    * @memberof MJListSharesEntity
     * @method
     * @override
     */
@@ -60629,7 +60619,7 @@ export class MJListShareEntity extends BaseEntity<MJListShareEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Lists')
-export class MJListEntity extends BaseEntity<MJListEntityType> {
+export class MJListsEntity extends BaseEntity<MJListsEntityType> {
     /**
     * Loads the MJ: Lists record from the database
     * @param ID: string - primary key value to load the MJ: Lists record.
@@ -60637,7 +60627,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJListEntity
+    * @memberof MJListsEntity
     * @method
     * @override
     */
@@ -60815,7 +60805,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: MCP Server Connection Permissions')
-export class MJMCPServerConnectionPermissionEntity extends BaseEntity<MJMCPServerConnectionPermissionEntityType> {
+export class MJMCPServerConnectionPermissionsEntity extends BaseEntity<MJMCPServerConnectionPermissionsEntityType> {
     /**
     * Loads the MJ: MCP Server Connection Permissions record from the database
     * @param ID: string - primary key value to load the MJ: MCP Server Connection Permissions record.
@@ -60823,7 +60813,7 @@ export class MJMCPServerConnectionPermissionEntity extends BaseEntity<MJMCPServe
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJMCPServerConnectionPermissionEntity
+    * @memberof MJMCPServerConnectionPermissionsEntity
     * @method
     * @override
     */
@@ -61022,7 +61012,7 @@ export class MJMCPServerConnectionPermissionEntity extends BaseEntity<MJMCPServe
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: MCP Server Connection Tools')
-export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConnectionToolEntityType> {
+export class MJMCPServerConnectionToolsEntity extends BaseEntity<MJMCPServerConnectionToolsEntityType> {
     /**
     * Loads the MJ: MCP Server Connection Tools record from the database
     * @param ID: string - primary key value to load the MJ: MCP Server Connection Tools record.
@@ -61030,7 +61020,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJMCPServerConnectionToolEntity
+    * @memberof MJMCPServerConnectionToolsEntity
     * @method
     * @override
     */
@@ -61150,7 +61140,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: Tool Name
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -61170,7 +61160,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: MCP Server Connections')
-export class MJMCPServerConnectionEntity extends BaseEntity<MJMCPServerConnectionEntityType> {
+export class MJMCPServerConnectionsEntity extends BaseEntity<MJMCPServerConnectionsEntityType> {
     /**
     * Loads the MJ: MCP Server Connections record from the database
     * @param ID: string - primary key value to load the MJ: MCP Server Connections record.
@@ -61178,7 +61168,7 @@ export class MJMCPServerConnectionEntity extends BaseEntity<MJMCPServerConnectio
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJMCPServerConnectionEntity
+    * @memberof MJMCPServerConnectionsEntity
     * @method
     * @override
     */
@@ -61474,7 +61464,7 @@ export class MJMCPServerConnectionEntity extends BaseEntity<MJMCPServerConnectio
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: MCP Server Tools')
-export class MJMCPServerToolEntity extends BaseEntity<MJMCPServerToolEntityType> {
+export class MJMCPServerToolsEntity extends BaseEntity<MJMCPServerToolsEntityType> {
     /**
     * Loads the MJ: MCP Server Tools record from the database
     * @param ID: string - primary key value to load the MJ: MCP Server Tools record.
@@ -61482,7 +61472,7 @@ export class MJMCPServerToolEntity extends BaseEntity<MJMCPServerToolEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJMCPServerToolEntity
+    * @memberof MJMCPServerToolsEntity
     * @method
     * @override
     */
@@ -61722,7 +61712,7 @@ export class MJMCPServerToolEntity extends BaseEntity<MJMCPServerToolEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: MCP Servers')
-export class MJMCPServerEntity extends BaseEntity<MJMCPServerEntityType> {
+export class MJMCPServersEntity extends BaseEntity<MJMCPServersEntityType> {
     /**
     * Loads the MJ: MCP Servers record from the database
     * @param ID: string - primary key value to load the MJ: MCP Servers record.
@@ -61730,7 +61720,7 @@ export class MJMCPServerEntity extends BaseEntity<MJMCPServerEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJMCPServerEntity
+    * @memberof MJMCPServersEntity
     * @method
     * @override
     */
@@ -62079,7 +62069,7 @@ export class MJMCPServerEntity extends BaseEntity<MJMCPServerEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: MCP Tool Execution Logs')
-export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLogEntityType> {
+export class MJMCPToolExecutionLogsEntity extends BaseEntity<MJMCPToolExecutionLogsEntityType> {
     /**
     * Loads the MJ: MCP Tool Execution Logs record from the database
     * @param ID: string - primary key value to load the MJ: MCP Tool Execution Logs record.
@@ -62087,7 +62077,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJMCPToolExecutionLogEntity
+    * @memberof MJMCPToolExecutionLogsEntity
     * @method
     * @override
     */
@@ -62298,7 +62288,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: Tool
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -62328,7 +62318,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: O Auth Auth Server Metadata Caches')
-export class MJOAuthAuthServerMetadataCacheEntity extends BaseEntity<MJOAuthAuthServerMetadataCacheEntityType> {
+export class MJOAuthAuthServerMetadataCachesEntity extends BaseEntity<MJOAuthAuthServerMetadataCachesEntityType> {
     /**
     * Loads the MJ: O Auth Auth Server Metadata Caches record from the database
     * @param ID: string - primary key value to load the MJ: O Auth Auth Server Metadata Caches record.
@@ -62336,7 +62326,7 @@ export class MJOAuthAuthServerMetadataCacheEntity extends BaseEntity<MJOAuthAuth
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOAuthAuthServerMetadataCacheEntity
+    * @memberof MJOAuthAuthServerMetadataCachesEntity
     * @method
     * @override
     */
@@ -62567,7 +62557,7 @@ export class MJOAuthAuthServerMetadataCacheEntity extends BaseEntity<MJOAuthAuth
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: O Auth Authorization States')
-export class MJOAuthAuthorizationStateEntity extends BaseEntity<MJOAuthAuthorizationStateEntityType> {
+export class MJOAuthAuthorizationStatesEntity extends BaseEntity<MJOAuthAuthorizationStatesEntityType> {
     /**
     * Loads the MJ: O Auth Authorization States record from the database
     * @param ID: string - primary key value to load the MJ: O Auth Authorization States record.
@@ -62575,7 +62565,7 @@ export class MJOAuthAuthorizationStateEntity extends BaseEntity<MJOAuthAuthoriza
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOAuthAuthorizationStateEntity
+    * @memberof MJOAuthAuthorizationStatesEntity
     * @method
     * @override
     */
@@ -62845,7 +62835,7 @@ export class MJOAuthAuthorizationStateEntity extends BaseEntity<MJOAuthAuthoriza
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: O Auth Client Registrations')
-export class MJOAuthClientRegistrationEntity extends BaseEntity<MJOAuthClientRegistrationEntityType> {
+export class MJOAuthClientRegistrationsEntity extends BaseEntity<MJOAuthClientRegistrationsEntityType> {
     /**
     * Loads the MJ: O Auth Client Registrations record from the database
     * @param ID: string - primary key value to load the MJ: O Auth Client Registrations record.
@@ -62853,7 +62843,7 @@ export class MJOAuthClientRegistrationEntity extends BaseEntity<MJOAuthClientReg
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOAuthClientRegistrationEntity
+    * @memberof MJOAuthClientRegistrationsEntity
     * @method
     * @override
     */
@@ -63121,7 +63111,7 @@ export class MJOAuthClientRegistrationEntity extends BaseEntity<MJOAuthClientReg
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: O Auth Tokens')
-export class MJOAuthTokenEntity extends BaseEntity<MJOAuthTokenEntityType> {
+export class MJOAuthTokensEntity extends BaseEntity<MJOAuthTokensEntityType> {
     /**
     * Loads the MJ: O Auth Tokens record from the database
     * @param ID: string - primary key value to load the MJ: O Auth Tokens record.
@@ -63129,7 +63119,7 @@ export class MJOAuthTokenEntity extends BaseEntity<MJOAuthTokenEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOAuthTokenEntity
+    * @memberof MJOAuthTokensEntity
     * @method
     * @override
     */
@@ -63307,7 +63297,7 @@ export class MJOAuthTokenEntity extends BaseEntity<MJOAuthTokenEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Open App Dependencies')
-export class MJOpenAppDependencyEntity extends BaseEntity<MJOpenAppDependencyEntityType> {
+export class MJOpenAppDependenciesEntity extends BaseEntity<MJOpenAppDependenciesEntityType> {
     /**
     * Loads the MJ: Open App Dependencies record from the database
     * @param ID: string - primary key value to load the MJ: Open App Dependencies record.
@@ -63315,7 +63305,7 @@ export class MJOpenAppDependencyEntity extends BaseEntity<MJOpenAppDependencyEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOpenAppDependencyEntity
+    * @memberof MJOpenAppDependenciesEntity
     * @method
     * @override
     */
@@ -63474,7 +63464,7 @@ export class MJOpenAppDependencyEntity extends BaseEntity<MJOpenAppDependencyEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Open App Install Histories')
-export class MJOpenAppInstallHistoryEntity extends BaseEntity<MJOpenAppInstallHistoryEntityType> {
+export class MJOpenAppInstallHistoriesEntity extends BaseEntity<MJOpenAppInstallHistoriesEntityType> {
     /**
     * Loads the MJ: Open App Install Histories record from the database
     * @param ID: string - primary key value to load the MJ: Open App Install Histories record.
@@ -63482,7 +63472,7 @@ export class MJOpenAppInstallHistoryEntity extends BaseEntity<MJOpenAppInstallHi
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOpenAppInstallHistoryEntity
+    * @memberof MJOpenAppInstallHistoriesEntity
     * @method
     * @override
     */
@@ -63740,7 +63730,7 @@ export class MJOpenAppInstallHistoryEntity extends BaseEntity<MJOpenAppInstallHi
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Open Apps')
-export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
+export class MJOpenAppsEntity extends BaseEntity<MJOpenAppsEntityType> {
     /**
     * Loads the MJ: Open Apps record from the database
     * @param ID: string - primary key value to load the MJ: Open Apps record.
@@ -63748,7 +63738,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOpenAppEntity
+    * @memberof MJOpenAppsEntity
     * @method
     * @override
     */
@@ -63756,40 +63746,6 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Open Apps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Name: The name must consist only of lowercase letters, numbers, and hyphens to ensure it is compatible with system naming standards.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateNameAlphanumericHyphenOnly(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * The name must consist only of lowercase letters, numbers, and hyphens to ensure it is compatible with system naming standards.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateNameAlphanumericHyphenOnly(result: ValidationResult) {
-    	// The regex checks that the entire string consists only of lowercase letters, digits, or hyphens
-    	const regex = /^[a-z0-9-]+$/;
-    	if (this.Name != null && !regex.test(this.Name)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Name",
-    			"The name must only contain lowercase letters, numbers, and hyphens.",
-    			this.Name,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -64080,7 +64036,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Output Delivery Types')
-export class MJOutputDeliveryTypeEntity extends BaseEntity<MJOutputDeliveryTypeEntityType> {
+export class MJOutputDeliveryTypesEntity extends BaseEntity<MJOutputDeliveryTypesEntityType> {
     /**
     * Loads the MJ: Output Delivery Types record from the database
     * @param ID: string - primary key value to load the MJ: Output Delivery Types record.
@@ -64088,7 +64044,7 @@ export class MJOutputDeliveryTypeEntity extends BaseEntity<MJOutputDeliveryTypeE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOutputDeliveryTypeEntity
+    * @memberof MJOutputDeliveryTypesEntity
     * @method
     * @override
     */
@@ -64170,7 +64126,7 @@ export class MJOutputDeliveryTypeEntity extends BaseEntity<MJOutputDeliveryTypeE
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Output Format Types')
-export class MJOutputFormatTypeEntity extends BaseEntity<MJOutputFormatTypeEntityType> {
+export class MJOutputFormatTypesEntity extends BaseEntity<MJOutputFormatTypesEntityType> {
     /**
     * Loads the MJ: Output Format Types record from the database
     * @param ID: string - primary key value to load the MJ: Output Format Types record.
@@ -64178,7 +64134,7 @@ export class MJOutputFormatTypeEntity extends BaseEntity<MJOutputFormatTypeEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOutputFormatTypeEntity
+    * @memberof MJOutputFormatTypesEntity
     * @method
     * @override
     */
@@ -64273,7 +64229,7 @@ export class MJOutputFormatTypeEntity extends BaseEntity<MJOutputFormatTypeEntit
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Output Trigger Types')
-export class MJOutputTriggerTypeEntity extends BaseEntity<MJOutputTriggerTypeEntityType> {
+export class MJOutputTriggerTypesEntity extends BaseEntity<MJOutputTriggerTypesEntityType> {
     /**
     * Loads the MJ: Output Trigger Types record from the database
     * @param ID: string - primary key value to load the MJ: Output Trigger Types record.
@@ -64281,7 +64237,7 @@ export class MJOutputTriggerTypeEntity extends BaseEntity<MJOutputTriggerTypeEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJOutputTriggerTypeEntity
+    * @memberof MJOutputTriggerTypesEntity
     * @method
     * @override
     */
@@ -64362,7 +64318,7 @@ export class MJOutputTriggerTypeEntity extends BaseEntity<MJOutputTriggerTypeEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Projects')
-export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
+export class MJProjectsEntity extends BaseEntity<MJProjectsEntityType> {
     /**
     * Loads the MJ: Projects record from the database
     * @param ID: string - primary key value to load the MJ: Projects record.
@@ -64370,7 +64326,7 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJProjectEntity
+    * @memberof MJProjectsEntity
     * @method
     * @override
     */
@@ -64547,7 +64503,7 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Public Links')
-export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {
+export class MJPublicLinksEntity extends BaseEntity<MJPublicLinksEntityType> {
     /**
     * Loads the MJ: Public Links record from the database
     * @param ID: string - primary key value to load the MJ: Public Links record.
@@ -64555,7 +64511,7 @@ export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJPublicLinkEntity
+    * @memberof MJPublicLinksEntity
     * @method
     * @override
     */
@@ -64744,7 +64700,7 @@ export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Queries')
-export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
+export class MJQueriesEntity extends BaseEntity<MJQueriesEntityType> {
     /**
     * Loads the MJ: Queries record from the database
     * @param ID: string - primary key value to load the MJ: Queries record.
@@ -64752,7 +64708,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueryEntity
+    * @memberof MJQueriesEntity
     * @method
     * @override
     */
@@ -64768,7 +64724,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJQueryEntity
+    * @memberof MJQueriesEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -65087,6 +65043,18 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: PlatformVariants
+    * * Display Name: Platform Variants
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get PlatformVariants(): string | null {
+        return this.Get('PlatformVariants');
+    }
+    set PlatformVariants(value: string | null) {
+        this.Set('PlatformVariants', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(50)
@@ -65118,7 +65086,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Query Categories')
-export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType> {
+export class MJQueryCategoriesEntity extends BaseEntity<MJQueryCategoriesEntityType> {
     /**
     * Loads the MJ: Query Categories record from the database
     * @param ID: string - primary key value to load the MJ: Query Categories record.
@@ -65126,7 +65094,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueryCategoryEntity
+    * @memberof MJQueryCategoriesEntity
     * @method
     * @override
     */
@@ -65314,7 +65282,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Query Entities')
-export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
+export class MJQueryEntitiesEntity extends BaseEntity<MJQueryEntitiesEntityType> {
     /**
     * Loads the MJ: Query Entities record from the database
     * @param ID: string - primary key value to load the MJ: Query Entities record.
@@ -65322,7 +65290,7 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueryEntityEntity
+    * @memberof MJQueryEntitiesEntity
     * @method
     * @override
     */
@@ -65457,7 +65425,7 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Query Fields')
-export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
+export class MJQueryFieldsEntity extends BaseEntity<MJQueryFieldsEntityType> {
     /**
     * Loads the MJ: Query Fields record from the database
     * @param ID: string - primary key value to load the MJ: Query Fields record.
@@ -65465,7 +65433,7 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueryFieldEntity
+    * @memberof MJQueryFieldsEntity
     * @method
     * @override
     */
@@ -65727,7 +65695,7 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Query Parameters')
-export class MJQueryParameterEntity extends BaseEntity<MJQueryParameterEntityType> {
+export class MJQueryParametersEntity extends BaseEntity<MJQueryParametersEntityType> {
     /**
     * Loads the MJ: Query Parameters record from the database
     * @param ID: string - primary key value to load the MJ: Query Parameters record.
@@ -65735,7 +65703,7 @@ export class MJQueryParameterEntity extends BaseEntity<MJQueryParameterEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueryParameterEntity
+    * @memberof MJQueryParametersEntity
     * @method
     * @override
     */
@@ -65944,7 +65912,7 @@ export class MJQueryParameterEntity extends BaseEntity<MJQueryParameterEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Query Permissions')
-export class MJQueryPermissionEntity extends BaseEntity<MJQueryPermissionEntityType> {
+export class MJQueryPermissionsEntity extends BaseEntity<MJQueryPermissionsEntityType> {
     /**
     * Loads the MJ: Query Permissions record from the database
     * @param ID: string - primary key value to load the MJ: Query Permissions record.
@@ -65952,7 +65920,7 @@ export class MJQueryPermissionEntity extends BaseEntity<MJQueryPermissionEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueryPermissionEntity
+    * @memberof MJQueryPermissionsEntity
     * @method
     * @override
     */
@@ -66053,7 +66021,7 @@ export class MJQueryPermissionEntity extends BaseEntity<MJQueryPermissionEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Queue Tasks')
-export class MJQueueTaskEntity extends BaseEntity<MJQueueTaskEntityType> {
+export class MJQueueTasksEntity extends BaseEntity<MJQueueTasksEntityType> {
     /**
     * Loads the MJ: Queue Tasks record from the database
     * @param ID: string - primary key value to load the MJ: Queue Tasks record.
@@ -66061,7 +66029,7 @@ export class MJQueueTaskEntity extends BaseEntity<MJQueueTaskEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueueTaskEntity
+    * @memberof MJQueueTasksEntity
     * @method
     * @override
     */
@@ -66246,7 +66214,7 @@ export class MJQueueTaskEntity extends BaseEntity<MJQueueTaskEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Queue Types')
-export class MJQueueTypeEntity extends BaseEntity<MJQueueTypeEntityType> {
+export class MJQueueTypesEntity extends BaseEntity<MJQueueTypesEntityType> {
     /**
     * Loads the MJ: Queue Types record from the database
     * @param ID: string - primary key value to load the MJ: Queue Types record.
@@ -66254,7 +66222,7 @@ export class MJQueueTypeEntity extends BaseEntity<MJQueueTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueueTypeEntity
+    * @memberof MJQueueTypesEntity
     * @method
     * @override
     */
@@ -66375,7 +66343,7 @@ export class MJQueueTypeEntity extends BaseEntity<MJQueueTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Queues')
-export class MJQueueEntity extends BaseEntity<MJQueueEntityType> {
+export class MJQueuesEntity extends BaseEntity<MJQueuesEntityType> {
     /**
     * Loads the MJ: Queues record from the database
     * @param ID: string - primary key value to load the MJ: Queues record.
@@ -66383,7 +66351,7 @@ export class MJQueueEntity extends BaseEntity<MJQueueEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJQueueEntity
+    * @memberof MJQueuesEntity
     * @method
     * @override
     */
@@ -66657,7 +66625,7 @@ export class MJQueueEntity extends BaseEntity<MJQueueEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Recommendation Items')
-export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemEntityType> {
+export class MJRecommendationItemsEntity extends BaseEntity<MJRecommendationItemsEntityType> {
     /**
     * Loads the MJ: Recommendation Items record from the database
     * @param ID: string - primary key value to load the MJ: Recommendation Items record.
@@ -66665,7 +66633,7 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecommendationItemEntity
+    * @memberof MJRecommendationItemsEntity
     * @method
     * @override
     */
@@ -66730,7 +66698,7 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
 
     /**
     * * Field Name: DestinationEntityID
-    * * Display Name: Destination Entity ID
+    * * Display Name: Destination Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -66798,7 +66766,7 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
 
     /**
     * * Field Name: DestinationEntity
-    * * Display Name: Destination Entity
+    * * Display Name: Destination Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get DestinationEntity(): string {
@@ -66819,7 +66787,7 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Recommendation Providers')
-export class MJRecommendationProviderEntity extends BaseEntity<MJRecommendationProviderEntityType> {
+export class MJRecommendationProvidersEntity extends BaseEntity<MJRecommendationProvidersEntityType> {
     /**
     * Loads the MJ: Recommendation Providers record from the database
     * @param ID: string - primary key value to load the MJ: Recommendation Providers record.
@@ -66827,7 +66795,7 @@ export class MJRecommendationProviderEntity extends BaseEntity<MJRecommendationP
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecommendationProviderEntity
+    * @memberof MJRecommendationProvidersEntity
     * @method
     * @override
     */
@@ -66908,7 +66876,7 @@ export class MJRecommendationProviderEntity extends BaseEntity<MJRecommendationP
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Recommendation Runs')
-export class MJRecommendationRunEntity extends BaseEntity<MJRecommendationRunEntityType> {
+export class MJRecommendationRunsEntity extends BaseEntity<MJRecommendationRunsEntityType> {
     /**
     * Loads the MJ: Recommendation Runs record from the database
     * @param ID: string - primary key value to load the MJ: Recommendation Runs record.
@@ -66916,7 +66884,7 @@ export class MJRecommendationRunEntity extends BaseEntity<MJRecommendationRunEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecommendationRunEntity
+    * @memberof MJRecommendationRunsEntity
     * @method
     * @override
     */
@@ -67075,7 +67043,7 @@ export class MJRecommendationRunEntity extends BaseEntity<MJRecommendationRunEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Recommendations')
-export class MJRecommendationEntity extends BaseEntity<MJRecommendationEntityType> {
+export class MJRecommendationsEntity extends BaseEntity<MJRecommendationsEntityType> {
     /**
     * Loads the MJ: Recommendations record from the database
     * @param ID: string - primary key value to load the MJ: Recommendations record.
@@ -67083,7 +67051,7 @@ export class MJRecommendationEntity extends BaseEntity<MJRecommendationEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecommendationEntity
+    * @memberof MJRecommendationsEntity
     * @method
     * @override
     */
@@ -67197,7 +67165,7 @@ export class MJRecommendationEntity extends BaseEntity<MJRecommendationEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Record Change Replay Runs')
-export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeReplayRunEntityType> {
+export class MJRecordChangeReplayRunsEntity extends BaseEntity<MJRecordChangeReplayRunsEntityType> {
     /**
     * Loads the MJ: Record Change Replay Runs record from the database
     * @param ID: string - primary key value to load the MJ: Record Change Replay Runs record.
@@ -67205,7 +67173,7 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecordChangeReplayRunEntity
+    * @memberof MJRecordChangeReplayRunsEntity
     * @method
     * @override
     */
@@ -67329,7 +67297,7 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Record Changes')
-export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
+export class MJRecordChangesEntity extends BaseEntity<MJRecordChangesEntityType> {
     /**
     * Loads the MJ: Record Changes record from the database
     * @param ID: string - primary key value to load the MJ: Record Changes record.
@@ -67337,7 +67305,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecordChangeEntity
+    * @memberof MJRecordChangesEntity
     * @method
     * @override
     */
@@ -67362,7 +67330,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -67388,7 +67356,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -67453,7 +67421,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: ChangesJSON
-    * * Display Name: Changes JSON
+    * * Display Name: Changes (JSON)
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON structure that describes what was changed in a structured format.
     */
@@ -67466,7 +67434,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: ChangesDescription
-    * * Display Name: Changes Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     * * Description: A generated, human-readable description of what was changed.
     */
@@ -67524,7 +67492,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: ReplayRunID
-    * * Display Name: Replay Run ID
+    * * Display Name: Replay Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Change Replay Runs (vwRecordChangeReplayRuns.ID)
     */
@@ -67537,7 +67505,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration ID
+    * * Display Name: Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
     */
@@ -67584,7 +67552,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -67593,7 +67561,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -67611,7 +67579,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string | null {
@@ -67632,7 +67600,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Record Links')
-export class MJRecordLinkEntity extends BaseEntity<MJRecordLinkEntityType> {
+export class MJRecordLinksEntity extends BaseEntity<MJRecordLinksEntityType> {
     /**
     * Loads the MJ: Record Links record from the database
     * @param ID: string - primary key value to load the MJ: Record Links record.
@@ -67640,7 +67608,7 @@ export class MJRecordLinkEntity extends BaseEntity<MJRecordLinkEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecordLinkEntity
+    * @memberof MJRecordLinksEntity
     * @method
     * @override
     */
@@ -67806,7 +67774,7 @@ export class MJRecordLinkEntity extends BaseEntity<MJRecordLinkEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Record Merge Deletion Logs')
-export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDeletionLogEntityType> {
+export class MJRecordMergeDeletionLogsEntity extends BaseEntity<MJRecordMergeDeletionLogsEntityType> {
     /**
     * Loads the MJ: Record Merge Deletion Logs record from the database
     * @param ID: string - primary key value to load the MJ: Record Merge Deletion Logs record.
@@ -67814,7 +67782,7 @@ export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDele
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecordMergeDeletionLogEntity
+    * @memberof MJRecordMergeDeletionLogsEntity
     * @method
     * @override
     */
@@ -67916,7 +67884,7 @@ export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDele
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Merge Log Summary
+    * * Display Name: Record Merge Log
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string {
@@ -67937,7 +67905,7 @@ export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDele
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Record Merge Logs')
-export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityType> {
+export class MJRecordMergeLogsEntity extends BaseEntity<MJRecordMergeLogsEntityType> {
     /**
     * Loads the MJ: Record Merge Logs record from the database
     * @param ID: string - primary key value to load the MJ: Record Merge Logs record.
@@ -67945,7 +67913,7 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRecordMergeLogEntity
+    * @memberof MJRecordMergeLogsEntity
     * @method
     * @override
     */
@@ -68171,7 +68139,7 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Report Categories')
-export class MJReportCategoryEntity extends BaseEntity<MJReportCategoryEntityType> {
+export class MJReportCategoriesEntity extends BaseEntity<MJReportCategoriesEntityType> {
     /**
     * Loads the MJ: Report Categories record from the database
     * @param ID: string - primary key value to load the MJ: Report Categories record.
@@ -68179,7 +68147,7 @@ export class MJReportCategoryEntity extends BaseEntity<MJReportCategoryEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJReportCategoryEntity
+    * @memberof MJReportCategoriesEntity
     * @method
     * @override
     */
@@ -68313,7 +68281,7 @@ export class MJReportCategoryEntity extends BaseEntity<MJReportCategoryEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Report Snapshots')
-export class MJReportSnapshotEntity extends BaseEntity<MJReportSnapshotEntityType> {
+export class MJReportSnapshotsEntity extends BaseEntity<MJReportSnapshotsEntityType> {
     /**
     * Loads the MJ: Report Snapshots record from the database
     * @param ID: string - primary key value to load the MJ: Report Snapshots record.
@@ -68321,7 +68289,7 @@ export class MJReportSnapshotEntity extends BaseEntity<MJReportSnapshotEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJReportSnapshotEntity
+    * @memberof MJReportSnapshotsEntity
     * @method
     * @override
     */
@@ -68435,7 +68403,7 @@ export class MJReportSnapshotEntity extends BaseEntity<MJReportSnapshotEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Report User States')
-export class MJReportUserStateEntity extends BaseEntity<MJReportUserStateEntityType> {
+export class MJReportUserStatesEntity extends BaseEntity<MJReportUserStatesEntityType> {
     /**
     * Loads the MJ: Report User States record from the database
     * @param ID: string - primary key value to load the MJ: Report User States record.
@@ -68443,7 +68411,7 @@ export class MJReportUserStateEntity extends BaseEntity<MJReportUserStateEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJReportUserStateEntity
+    * @memberof MJReportUserStatesEntity
     * @method
     * @override
     */
@@ -68557,7 +68525,7 @@ export class MJReportUserStateEntity extends BaseEntity<MJReportUserStateEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Report Versions')
-export class MJReportVersionEntity extends BaseEntity<MJReportVersionEntityType> {
+export class MJReportVersionsEntity extends BaseEntity<MJReportVersionsEntityType> {
     /**
     * Loads the MJ: Report Versions record from the database
     * @param ID: string - primary key value to load the MJ: Report Versions record.
@@ -68565,7 +68533,7 @@ export class MJReportVersionEntity extends BaseEntity<MJReportVersionEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJReportVersionEntity
+    * @memberof MJReportVersionsEntity
     * @method
     * @override
     */
@@ -68737,7 +68705,7 @@ export class MJReportVersionEntity extends BaseEntity<MJReportVersionEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Reports')
-export class MJReportEntity extends BaseEntity<MJReportEntityType> {
+export class MJReportsEntity extends BaseEntity<MJReportsEntityType> {
     /**
     * Loads the MJ: Reports record from the database
     * @param ID: string - primary key value to load the MJ: Reports record.
@@ -68745,7 +68713,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJReportEntity
+    * @memberof MJReportsEntity
     * @method
     * @override
     */
@@ -68761,7 +68729,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
     * @public
     * @method
     * @override
-    * @memberof MJReportEntity
+    * @memberof MJReportsEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -69051,7 +69019,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category Name
+    * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
     */
     get Category(): string | null {
@@ -69060,7 +69028,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -69069,7 +69037,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Name
+    * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -69078,7 +69046,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -69087,7 +69055,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: DataContext
-    * * Display Name: Data Context Name
+    * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
     */
     get DataContext(): string | null {
@@ -69096,7 +69064,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: OutputTriggerType
-    * * Display Name: Output Trigger Type Name
+    * * Display Name: Output Trigger Type
     * * SQL Data Type: nvarchar(255)
     */
     get OutputTriggerType(): string | null {
@@ -69105,7 +69073,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: OutputFormatType
-    * * Display Name: Output Format Type Name
+    * * Display Name: Output Format Type
     * * SQL Data Type: nvarchar(255)
     */
     get OutputFormatType(): string | null {
@@ -69114,7 +69082,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: OutputDeliveryType
-    * * Display Name: Output Delivery Type Name
+    * * Display Name: Output Delivery Type
     * * SQL Data Type: nvarchar(255)
     */
     get OutputDeliveryType(): string | null {
@@ -69123,7 +69091,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: OutputWorkflow
-    * * Display Name: Output Workflow Name
+    * * Display Name: Output Workflow
     * * SQL Data Type: nvarchar(100)
     */
     get OutputWorkflow(): string | null {
@@ -69132,7 +69100,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment Name
+    * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -69153,7 +69121,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Resource Links')
-export class MJResourceLinkEntity extends BaseEntity<MJResourceLinkEntityType> {
+export class MJResourceLinksEntity extends BaseEntity<MJResourceLinksEntityType> {
     /**
     * Loads the MJ: Resource Links record from the database
     * @param ID: string - primary key value to load the MJ: Resource Links record.
@@ -69161,7 +69129,7 @@ export class MJResourceLinkEntity extends BaseEntity<MJResourceLinkEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJResourceLinkEntity
+    * @memberof MJResourceLinksEntity
     * @method
     * @override
     */
@@ -69291,7 +69259,7 @@ export class MJResourceLinkEntity extends BaseEntity<MJResourceLinkEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Resource Permissions')
-export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionEntityType> {
+export class MJResourcePermissionsEntity extends BaseEntity<MJResourcePermissionsEntityType> {
     /**
     * Loads the MJ: Resource Permissions record from the database
     * @param ID: string - primary key value to load the MJ: Resource Permissions record.
@@ -69299,7 +69267,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJResourcePermissionEntity
+    * @memberof MJResourcePermissionsEntity
     * @method
     * @override
     */
@@ -69556,7 +69524,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Resource Types')
-export class MJResourceTypeEntity extends BaseEntity<MJResourceTypeEntityType> {
+export class MJResourceTypesEntity extends BaseEntity<MJResourceTypesEntityType> {
     /**
     * Loads the MJ: Resource Types record from the database
     * @param ID: string - primary key value to load the MJ: Resource Types record.
@@ -69564,7 +69532,7 @@ export class MJResourceTypeEntity extends BaseEntity<MJResourceTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJResourceTypeEntity
+    * @memberof MJResourceTypesEntity
     * @method
     * @override
     */
@@ -69729,7 +69697,7 @@ export class MJResourceTypeEntity extends BaseEntity<MJResourceTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Roles')
-export class MJRoleEntity extends BaseEntity<MJRoleEntityType> {
+export class MJRolesEntity extends BaseEntity<MJRolesEntityType> {
     /**
     * Loads the MJ: Roles record from the database
     * @param ID: string - primary key value to load the MJ: Roles record.
@@ -69737,7 +69705,7 @@ export class MJRoleEntity extends BaseEntity<MJRoleEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRoleEntity
+    * @memberof MJRolesEntity
     * @method
     * @override
     */
@@ -69843,7 +69811,7 @@ export class MJRoleEntity extends BaseEntity<MJRoleEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Row Level Security Filters')
-export class MJRowLevelSecurityFilterEntity extends BaseEntity<MJRowLevelSecurityFilterEntityType> {
+export class MJRowLevelSecurityFiltersEntity extends BaseEntity<MJRowLevelSecurityFiltersEntityType> {
     /**
     * Loads the MJ: Row Level Security Filters record from the database
     * @param ID: string - primary key value to load the MJ: Row Level Security Filters record.
@@ -69851,7 +69819,7 @@ export class MJRowLevelSecurityFilterEntity extends BaseEntity<MJRowLevelSecurit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJRowLevelSecurityFilterEntity
+    * @memberof MJRowLevelSecurityFiltersEntity
     * @method
     * @override
     */
@@ -69930,6 +69898,18 @@ export class MJRowLevelSecurityFilterEntity extends BaseEntity<MJRowLevelSecurit
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: PlatformVariants
+    * * Display Name: Platform Variants
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get PlatformVariants(): string | null {
+        return this.Get('PlatformVariants');
+    }
+    set PlatformVariants(value: string | null) {
+        this.Set('PlatformVariants', value);
+    }
 }
 
 
@@ -69945,7 +69925,7 @@ export class MJRowLevelSecurityFilterEntity extends BaseEntity<MJRowLevelSecurit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Scheduled Action Params')
-export class MJScheduledActionParamEntity extends BaseEntity<MJScheduledActionParamEntityType> {
+export class MJScheduledActionParamsEntity extends BaseEntity<MJScheduledActionParamsEntityType> {
     /**
     * Loads the MJ: Scheduled Action Params record from the database
     * @param ID: string - primary key value to load the MJ: Scheduled Action Params record.
@@ -69953,7 +69933,7 @@ export class MJScheduledActionParamEntity extends BaseEntity<MJScheduledActionPa
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJScheduledActionParamEntity
+    * @memberof MJScheduledActionParamsEntity
     * @method
     * @override
     */
@@ -70096,7 +70076,7 @@ export class MJScheduledActionParamEntity extends BaseEntity<MJScheduledActionPa
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Scheduled Actions')
-export class MJScheduledActionEntity extends BaseEntity<MJScheduledActionEntityType> {
+export class MJScheduledActionsEntity extends BaseEntity<MJScheduledActionsEntityType> {
     /**
     * Loads the MJ: Scheduled Actions record from the database
     * @param ID: string - primary key value to load the MJ: Scheduled Actions record.
@@ -70104,7 +70084,7 @@ export class MJScheduledActionEntity extends BaseEntity<MJScheduledActionEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJScheduledActionEntity
+    * @memberof MJScheduledActionsEntity
     * @method
     * @override
     */
@@ -70360,7 +70340,7 @@ export class MJScheduledActionEntity extends BaseEntity<MJScheduledActionEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Scheduled Job Runs')
-export class MJScheduledJobRunEntity extends BaseEntity<MJScheduledJobRunEntityType> {
+export class MJScheduledJobRunsEntity extends BaseEntity<MJScheduledJobRunsEntityType> {
     /**
     * Loads the MJ: Scheduled Job Runs record from the database
     * @param ID: string - primary key value to load the MJ: Scheduled Job Runs record.
@@ -70368,7 +70348,7 @@ export class MJScheduledJobRunEntity extends BaseEntity<MJScheduledJobRunEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJScheduledJobRunEntity
+    * @memberof MJScheduledJobRunsEntity
     * @method
     * @override
     */
@@ -70601,7 +70581,7 @@ export class MJScheduledJobRunEntity extends BaseEntity<MJScheduledJobRunEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Scheduled Job Types')
-export class MJScheduledJobTypeEntity extends BaseEntity<MJScheduledJobTypeEntityType> {
+export class MJScheduledJobTypesEntity extends BaseEntity<MJScheduledJobTypesEntityType> {
     /**
     * Loads the MJ: Scheduled Job Types record from the database
     * @param ID: string - primary key value to load the MJ: Scheduled Job Types record.
@@ -70609,7 +70589,7 @@ export class MJScheduledJobTypeEntity extends BaseEntity<MJScheduledJobTypeEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJScheduledJobTypeEntity
+    * @memberof MJScheduledJobTypesEntity
     * @method
     * @override
     */
@@ -70745,7 +70725,7 @@ export class MJScheduledJobTypeEntity extends BaseEntity<MJScheduledJobTypeEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Scheduled Jobs')
-export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
+export class MJScheduledJobsEntity extends BaseEntity<MJScheduledJobsEntityType> {
     /**
     * Loads the MJ: Scheduled Jobs record from the database
     * @param ID: string - primary key value to load the MJ: Scheduled Jobs record.
@@ -70753,7 +70733,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJScheduledJobEntity
+    * @memberof MJScheduledJobsEntity
     * @method
     * @override
     */
@@ -71415,7 +71395,7 @@ export class MJSchemaInfoEntity extends BaseEntity<MJSchemaInfoEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Skills')
-export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
+export class MJSkillsEntity extends BaseEntity<MJSkillsEntityType> {
     /**
     * Loads the MJ: Skills record from the database
     * @param ID: string - primary key value to load the MJ: Skills record.
@@ -71423,7 +71403,7 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJSkillEntity
+    * @memberof MJSkillsEntity
     * @method
     * @override
     */
@@ -71521,7 +71501,7 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Tagged Items')
-export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
+export class MJTaggedItemsEntity extends BaseEntity<MJTaggedItemsEntityType> {
     /**
     * Loads the MJ: Tagged Items record from the database
     * @param ID: string - primary key value to load the MJ: Tagged Items record.
@@ -71529,7 +71509,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTaggedItemEntity
+    * @memberof MJTaggedItemsEntity
     * @method
     * @override
     */
@@ -71643,7 +71623,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Tags')
-export class MJTagEntity extends BaseEntity<MJTagEntityType> {
+export class MJTagsEntity extends BaseEntity<MJTagsEntityType> {
     /**
     * Loads the MJ: Tags record from the database
     * @param ID: string - primary key value to load the MJ: Tags record.
@@ -71651,7 +71631,7 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTagEntity
+    * @memberof MJTagsEntity
     * @method
     * @override
     */
@@ -71776,7 +71756,7 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Task Dependencies')
-export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityType> {
+export class MJTaskDependenciesEntity extends BaseEntity<MJTaskDependenciesEntityType> {
     /**
     * Loads the MJ: Task Dependencies record from the database
     * @param ID: string - primary key value to load the MJ: Task Dependencies record.
@@ -71784,7 +71764,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTaskDependencyEntity
+    * @memberof MJTaskDependenciesEntity
     * @method
     * @override
     */
@@ -71936,7 +71916,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Task Types')
-export class MJTaskTypeEntity extends BaseEntity<MJTaskTypeEntityType> {
+export class MJTaskTypesEntity extends BaseEntity<MJTaskTypesEntityType> {
     /**
     * Loads the MJ: Task Types record from the database
     * @param ID: string - primary key value to load the MJ: Task Types record.
@@ -71944,7 +71924,7 @@ export class MJTaskTypeEntity extends BaseEntity<MJTaskTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTaskTypeEntity
+    * @memberof MJTaskTypesEntity
     * @method
     * @override
     */
@@ -72027,7 +72007,7 @@ export class MJTaskTypeEntity extends BaseEntity<MJTaskTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Tasks')
-export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
+export class MJTasksEntity extends BaseEntity<MJTasksEntityType> {
     /**
     * Loads the MJ: Tasks record from the database
     * @param ID: string - primary key value to load the MJ: Tasks record.
@@ -72035,7 +72015,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTaskEntity
+    * @memberof MJTasksEntity
     * @method
     * @override
     */
@@ -72101,7 +72081,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
     */
@@ -72140,7 +72120,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)
     */
@@ -72153,7 +72133,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment
+    * * Display Name: Environment ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -72167,7 +72147,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project
+    * * Display Name: Project ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -72180,7 +72160,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
     */
@@ -72193,7 +72173,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -72206,7 +72186,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent
+    * * Display Name: Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     */
@@ -72315,7 +72295,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -72324,7 +72304,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(255)
     */
     get Type(): string {
@@ -72333,7 +72313,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment Name
+    * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -72342,7 +72322,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Project
-    * * Display Name: Project Name
+    * * Display Name: Project
     * * SQL Data Type: nvarchar(255)
     */
     get Project(): string | null {
@@ -72351,7 +72331,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -72360,7 +72340,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -72369,7 +72349,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -72399,7 +72379,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Template Categories')
-export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntityType> {
+export class MJTemplateCategoriesEntity extends BaseEntity<MJTemplateCategoriesEntityType> {
     /**
     * Loads the MJ: Template Categories record from the database
     * @param ID: string - primary key value to load the MJ: Template Categories record.
@@ -72407,7 +72387,7 @@ export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTemplateCategoryEntity
+    * @memberof MJTemplateCategoriesEntity
     * @method
     * @override
     */
@@ -72543,7 +72523,7 @@ export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Template Content Types')
-export class MJTemplateContentTypeEntity extends BaseEntity<MJTemplateContentTypeEntityType> {
+export class MJTemplateContentTypesEntity extends BaseEntity<MJTemplateContentTypesEntityType> {
     /**
     * Loads the MJ: Template Content Types record from the database
     * @param ID: string - primary key value to load the MJ: Template Content Types record.
@@ -72551,7 +72531,7 @@ export class MJTemplateContentTypeEntity extends BaseEntity<MJTemplateContentTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTemplateContentTypeEntity
+    * @memberof MJTemplateContentTypesEntity
     * @method
     * @override
     */
@@ -72658,7 +72638,7 @@ export class MJTemplateContentTypeEntity extends BaseEntity<MJTemplateContentTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Template Contents')
-export class MJTemplateContentEntity extends BaseEntity<MJTemplateContentEntityType> {
+export class MJTemplateContentsEntity extends BaseEntity<MJTemplateContentsEntityType> {
     /**
     * Loads the MJ: Template Contents record from the database
     * @param ID: string - primary key value to load the MJ: Template Contents record.
@@ -72666,7 +72646,7 @@ export class MJTemplateContentEntity extends BaseEntity<MJTemplateContentEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTemplateContentEntity
+    * @memberof MJTemplateContentsEntity
     * @method
     * @override
     */
@@ -72807,7 +72787,7 @@ export class MJTemplateContentEntity extends BaseEntity<MJTemplateContentEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Template Params')
-export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType> {
+export class MJTemplateParamsEntity extends BaseEntity<MJTemplateParamsEntityType> {
     /**
     * Loads the MJ: Template Params record from the database
     * @param ID: string - primary key value to load the MJ: Template Params record.
@@ -72815,7 +72795,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTemplateParamEntity
+    * @memberof MJTemplateParamsEntity
     * @method
     * @override
     */
@@ -72927,7 +72907,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: LinkedParameterName
-    * * Display Name: Linked Parameter Name
+    * * Display Name: Linked Parameter
     * * SQL Data Type: nvarchar(255)
     * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.
     */
@@ -72940,7 +72920,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: LinkedParameterField
-    * * Display Name: Linked Parameter Field
+    * * Display Name: Linked Field
     * * SQL Data Type: nvarchar(500)
     * * Description: If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.
     */
@@ -73057,7 +73037,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: TemplateContent
-    * * Display Name: Template Content Name
+    * * Display Name: Template Content
     * * SQL Data Type: nvarchar(255)
     */
     get TemplateContent(): string | null {
@@ -73078,7 +73058,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Templates')
-export class MJTemplateEntity extends BaseEntity<MJTemplateEntityType> {
+export class MJTemplatesEntity extends BaseEntity<MJTemplatesEntityType> {
     /**
     * Loads the MJ: Templates record from the database
     * @param ID: string - primary key value to load the MJ: Templates record.
@@ -73086,7 +73066,7 @@ export class MJTemplateEntity extends BaseEntity<MJTemplateEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTemplateEntity
+    * @memberof MJTemplatesEntity
     * @method
     * @override
     */
@@ -73266,7 +73246,7 @@ export class MJTemplateEntity extends BaseEntity<MJTemplateEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Test Rubrics')
-export class MJTestRubricEntity extends BaseEntity<MJTestRubricEntityType> {
+export class MJTestRubricsEntity extends BaseEntity<MJTestRubricsEntityType> {
     /**
     * Loads the MJ: Test Rubrics record from the database
     * @param ID: string - primary key value to load the MJ: Test Rubrics record.
@@ -73274,7 +73254,7 @@ export class MJTestRubricEntity extends BaseEntity<MJTestRubricEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTestRubricEntity
+    * @memberof MJTestRubricsEntity
     * @method
     * @override
     */
@@ -73438,7 +73418,7 @@ export class MJTestRubricEntity extends BaseEntity<MJTestRubricEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Test Run Feedbacks')
-export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityType> {
+export class MJTestRunFeedbacksEntity extends BaseEntity<MJTestRunFeedbacksEntityType> {
     /**
     * Loads the MJ: Test Run Feedbacks record from the database
     * @param ID: string - primary key value to load the MJ: Test Run Feedbacks record.
@@ -73446,7 +73426,7 @@ export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTestRunFeedbackEntity
+    * @memberof MJTestRunFeedbacksEntity
     * @method
     * @override
     */
@@ -73647,7 +73627,7 @@ export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Test Runs')
-export class MJTestRunEntity extends BaseEntity<MJTestRunEntityType> {
+export class MJTestRunsEntity extends BaseEntity<MJTestRunsEntityType> {
     /**
     * Loads the MJ: Test Runs record from the database
     * @param ID: string - primary key value to load the MJ: Test Runs record.
@@ -73655,7 +73635,7 @@ export class MJTestRunEntity extends BaseEntity<MJTestRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTestRunEntity
+    * @memberof MJTestRunsEntity
     * @method
     * @override
     */
@@ -74139,7 +74119,7 @@ export class MJTestRunEntity extends BaseEntity<MJTestRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Test Suite Runs')
-export class MJTestSuiteRunEntity extends BaseEntity<MJTestSuiteRunEntityType> {
+export class MJTestSuiteRunsEntity extends BaseEntity<MJTestSuiteRunsEntityType> {
     /**
     * Loads the MJ: Test Suite Runs record from the database
     * @param ID: string - primary key value to load the MJ: Test Suite Runs record.
@@ -74147,7 +74127,7 @@ export class MJTestSuiteRunEntity extends BaseEntity<MJTestSuiteRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTestSuiteRunEntity
+    * @memberof MJTestSuiteRunsEntity
     * @method
     * @override
     */
@@ -74570,7 +74550,7 @@ export class MJTestSuiteRunEntity extends BaseEntity<MJTestSuiteRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Test Suite Tests')
-export class MJTestSuiteTestEntity extends BaseEntity<MJTestSuiteTestEntityType> {
+export class MJTestSuiteTestsEntity extends BaseEntity<MJTestSuiteTestsEntityType> {
     /**
     * Loads the MJ: Test Suite Tests record from the database
     * @param ID: string - primary key value to load the MJ: Test Suite Tests record.
@@ -74578,7 +74558,7 @@ export class MJTestSuiteTestEntity extends BaseEntity<MJTestSuiteTestEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTestSuiteTestEntity
+    * @memberof MJTestSuiteTestsEntity
     * @method
     * @override
     */
@@ -74727,7 +74707,7 @@ export class MJTestSuiteTestEntity extends BaseEntity<MJTestSuiteTestEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Test Suites')
-export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
+export class MJTestSuitesEntity extends BaseEntity<MJTestSuitesEntityType> {
     /**
     * Loads the MJ: Test Suites record from the database
     * @param ID: string - primary key value to load the MJ: Test Suites record.
@@ -74735,7 +74715,7 @@ export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTestSuiteEntity
+    * @memberof MJTestSuitesEntity
     * @method
     * @override
     */
@@ -74921,7 +74901,7 @@ export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Test Types')
-export class MJTestTypeEntity extends BaseEntity<MJTestTypeEntityType> {
+export class MJTestTypesEntity extends BaseEntity<MJTestTypesEntityType> {
     /**
     * Loads the MJ: Test Types record from the database
     * @param ID: string - primary key value to load the MJ: Test Types record.
@@ -74929,7 +74909,7 @@ export class MJTestTypeEntity extends BaseEntity<MJTestTypeEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTestTypeEntity
+    * @memberof MJTestTypesEntity
     * @method
     * @override
     */
@@ -75057,7 +75037,7 @@ export class MJTestTypeEntity extends BaseEntity<MJTestTypeEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Tests')
-export class MJTestEntity extends BaseEntity<MJTestEntityType> {
+export class MJTestsEntity extends BaseEntity<MJTestsEntityType> {
     /**
     * Loads the MJ: Tests record from the database
     * @param ID: string - primary key value to load the MJ: Tests record.
@@ -75065,7 +75045,7 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJTestEntity
+    * @memberof MJTestsEntity
     * @method
     * @override
     */
@@ -75354,7 +75334,7 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Application Entities')
-export class MJUserApplicationEntityEntity extends BaseEntity<MJUserApplicationEntityEntityType> {
+export class MJUserApplicationEntitiesEntity extends BaseEntity<MJUserApplicationEntitiesEntityType> {
     /**
     * Loads the MJ: User Application Entities record from the database
     * @param ID: string - primary key value to load the MJ: User Application Entities record.
@@ -75362,7 +75342,7 @@ export class MJUserApplicationEntityEntity extends BaseEntity<MJUserApplicationE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserApplicationEntityEntity
+    * @memberof MJUserApplicationEntitiesEntity
     * @method
     * @override
     */
@@ -75484,7 +75464,7 @@ export class MJUserApplicationEntityEntity extends BaseEntity<MJUserApplicationE
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Applications')
-export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityType> {
+export class MJUserApplicationsEntity extends BaseEntity<MJUserApplicationsEntityType> {
     /**
     * Loads the MJ: User Applications record from the database
     * @param ID: string - primary key value to load the MJ: User Applications record.
@@ -75492,7 +75472,7 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserApplicationEntity
+    * @memberof MJUserApplicationsEntity
     * @method
     * @override
     */
@@ -75619,7 +75599,7 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Favorites')
-export class MJUserFavoriteEntity extends BaseEntity<MJUserFavoriteEntityType> {
+export class MJUserFavoritesEntity extends BaseEntity<MJUserFavoritesEntityType> {
     /**
     * Loads the MJ: User Favorites record from the database
     * @param ID: string - primary key value to load the MJ: User Favorites record.
@@ -75627,7 +75607,7 @@ export class MJUserFavoriteEntity extends BaseEntity<MJUserFavoriteEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserFavoriteEntity
+    * @memberof MJUserFavoritesEntity
     * @method
     * @override
     */
@@ -75748,7 +75728,7 @@ export class MJUserFavoriteEntity extends BaseEntity<MJUserFavoriteEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Notification Preferences')
-export class MJUserNotificationPreferenceEntity extends BaseEntity<MJUserNotificationPreferenceEntityType> {
+export class MJUserNotificationPreferencesEntity extends BaseEntity<MJUserNotificationPreferencesEntityType> {
     /**
     * Loads the MJ: User Notification Preferences record from the database
     * @param ID: string - primary key value to load the MJ: User Notification Preferences record.
@@ -75756,7 +75736,7 @@ export class MJUserNotificationPreferenceEntity extends BaseEntity<MJUserNotific
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserNotificationPreferenceEntity
+    * @memberof MJUserNotificationPreferencesEntity
     * @method
     * @override
     */
@@ -75909,7 +75889,7 @@ export class MJUserNotificationPreferenceEntity extends BaseEntity<MJUserNotific
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Notification Types')
-export class MJUserNotificationTypeEntity extends BaseEntity<MJUserNotificationTypeEntityType> {
+export class MJUserNotificationTypesEntity extends BaseEntity<MJUserNotificationTypesEntityType> {
     /**
     * Loads the MJ: User Notification Types record from the database
     * @param ID: string - primary key value to load the MJ: User Notification Types record.
@@ -75917,7 +75897,7 @@ export class MJUserNotificationTypeEntity extends BaseEntity<MJUserNotificationT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserNotificationTypeEntity
+    * @memberof MJUserNotificationTypesEntity
     * @method
     * @override
     */
@@ -76148,7 +76128,7 @@ export class MJUserNotificationTypeEntity extends BaseEntity<MJUserNotificationT
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Notifications')
-export class MJUserNotificationEntity extends BaseEntity<MJUserNotificationEntityType> {
+export class MJUserNotificationsEntity extends BaseEntity<MJUserNotificationsEntityType> {
     /**
     * Loads the MJ: User Notifications record from the database
     * @param ID: string - primary key value to load the MJ: User Notifications record.
@@ -76156,7 +76136,7 @@ export class MJUserNotificationEntity extends BaseEntity<MJUserNotificationEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserNotificationEntity
+    * @memberof MJUserNotificationsEntity
     * @method
     * @override
     */
@@ -76359,7 +76339,7 @@ export class MJUserNotificationEntity extends BaseEntity<MJUserNotificationEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Record Logs')
-export class MJUserRecordLogEntity extends BaseEntity<MJUserRecordLogEntityType> {
+export class MJUserRecordLogsEntity extends BaseEntity<MJUserRecordLogsEntityType> {
     /**
     * Loads the MJ: User Record Logs record from the database
     * @param ID: string - primary key value to load the MJ: User Record Logs record.
@@ -76367,7 +76347,7 @@ export class MJUserRecordLogEntity extends BaseEntity<MJUserRecordLogEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserRecordLogEntity
+    * @memberof MJUserRecordLogsEntity
     * @method
     * @override
     */
@@ -76559,7 +76539,7 @@ export class MJUserRecordLogEntity extends BaseEntity<MJUserRecordLogEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Roles')
-export class MJUserRoleEntity extends BaseEntity<MJUserRoleEntityType> {
+export class MJUserRolesEntity extends BaseEntity<MJUserRolesEntityType> {
     /**
     * Loads the MJ: User Roles record from the database
     * @param ID: string - primary key value to load the MJ: User Roles record.
@@ -76567,7 +76547,7 @@ export class MJUserRoleEntity extends BaseEntity<MJUserRoleEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserRoleEntity
+    * @memberof MJUserRolesEntity
     * @method
     * @override
     */
@@ -76668,7 +76648,7 @@ export class MJUserRoleEntity extends BaseEntity<MJUserRoleEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Settings')
-export class MJUserSettingEntity extends BaseEntity<MJUserSettingEntityType> {
+export class MJUserSettingsEntity extends BaseEntity<MJUserSettingsEntityType> {
     /**
     * Loads the MJ: User Settings record from the database
     * @param ID: string - primary key value to load the MJ: User Settings record.
@@ -76676,7 +76656,7 @@ export class MJUserSettingEntity extends BaseEntity<MJUserSettingEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserSettingEntity
+    * @memberof MJUserSettingsEntity
     * @method
     * @override
     */
@@ -76782,7 +76762,7 @@ export class MJUserSettingEntity extends BaseEntity<MJUserSettingEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User View Categories')
-export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntityType> {
+export class MJUserViewCategoriesEntity extends BaseEntity<MJUserViewCategoriesEntityType> {
     /**
     * Loads the MJ: User View Categories record from the database
     * @param ID: string - primary key value to load the MJ: User View Categories record.
@@ -76790,7 +76770,7 @@ export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserViewCategoryEntity
+    * @memberof MJUserViewCategoriesEntity
     * @method
     * @override
     */
@@ -76946,7 +76926,7 @@ export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User View Run Details')
-export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEntityType> {
+export class MJUserViewRunDetailsEntity extends BaseEntity<MJUserViewRunDetailsEntityType> {
     /**
     * Loads the MJ: User View Run Details record from the database
     * @param ID: string - primary key value to load the MJ: User View Run Details record.
@@ -76954,7 +76934,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserViewRunDetailEntity
+    * @memberof MJUserViewRunDetailsEntity
     * @method
     * @override
     */
@@ -77054,7 +77034,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User View Runs')
-export class MJUserViewRunEntity extends BaseEntity<MJUserViewRunEntityType> {
+export class MJUserViewRunsEntity extends BaseEntity<MJUserViewRunsEntityType> {
     /**
     * Loads the MJ: User View Runs record from the database
     * @param ID: string - primary key value to load the MJ: User View Runs record.
@@ -77062,7 +77042,7 @@ export class MJUserViewRunEntity extends BaseEntity<MJUserViewRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserViewRunEntity
+    * @memberof MJUserViewRunsEntity
     * @method
     * @override
     */
@@ -77176,7 +77156,7 @@ export class MJUserViewRunEntity extends BaseEntity<MJUserViewRunEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: User Views')
-export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
+export class MJUserViewsEntity extends BaseEntity<MJUserViewsEntityType> {
     /**
     * Loads the MJ: User Views record from the database
     * @param ID: string - primary key value to load the MJ: User Views record.
@@ -77184,7 +77164,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserViewEntity
+    * @memberof MJUserViewsEntity
     * @method
     * @override
     */
@@ -77558,7 +77538,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Users')
-export class MJUserEntity extends BaseEntity<MJUserEntityType> {
+export class MJUsersEntity extends BaseEntity<MJUsersEntityType> {
     /**
     * Loads the MJ: Users record from the database
     * @param ID: string - primary key value to load the MJ: Users record.
@@ -77566,7 +77546,7 @@ export class MJUserEntity extends BaseEntity<MJUserEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJUserEntity
+    * @memberof MJUsersEntity
     * @method
     * @override
     */
@@ -77847,7 +77827,7 @@ export class MJUserEntity extends BaseEntity<MJUserEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Vector Databases')
-export class MJVectorDatabaseEntity extends BaseEntity<MJVectorDatabaseEntityType> {
+export class MJVectorDatabasesEntity extends BaseEntity<MJVectorDatabasesEntityType> {
     /**
     * Loads the MJ: Vector Databases record from the database
     * @param ID: string - primary key value to load the MJ: Vector Databases record.
@@ -77855,7 +77835,7 @@ export class MJVectorDatabaseEntity extends BaseEntity<MJVectorDatabaseEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJVectorDatabaseEntity
+    * @memberof MJVectorDatabasesEntity
     * @method
     * @override
     */
@@ -77962,7 +77942,7 @@ export class MJVectorDatabaseEntity extends BaseEntity<MJVectorDatabaseEntityTyp
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Vector Indexes')
-export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
+export class MJVectorIndexesEntity extends BaseEntity<MJVectorIndexesEntityType> {
     /**
     * Loads the MJ: Vector Indexes record from the database
     * @param ID: string - primary key value to load the MJ: Vector Indexes record.
@@ -77970,7 +77950,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJVectorIndexEntity
+    * @memberof MJVectorIndexesEntity
     * @method
     * @override
     */
@@ -78095,7 +78075,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Version Installations')
-export class MJVersionInstallationEntity extends BaseEntity<MJVersionInstallationEntityType> {
+export class MJVersionInstallationsEntity extends BaseEntity<MJVersionInstallationsEntityType> {
     /**
     * Loads the MJ: Version Installations record from the database
     * @param ID: string - primary key value to load the MJ: Version Installations record.
@@ -78103,7 +78083,7 @@ export class MJVersionInstallationEntity extends BaseEntity<MJVersionInstallatio
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJVersionInstallationEntity
+    * @memberof MJVersionInstallationsEntity
     * @method
     * @override
     */
@@ -78285,7 +78265,7 @@ export class MJVersionInstallationEntity extends BaseEntity<MJVersionInstallatio
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Version Label Items')
-export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntityType> {
+export class MJVersionLabelItemsEntity extends BaseEntity<MJVersionLabelItemsEntityType> {
     /**
     * Loads the MJ: Version Label Items record from the database
     * @param ID: string - primary key value to load the MJ: Version Label Items record.
@@ -78293,7 +78273,7 @@ export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntit
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJVersionLabelItemEntity
+    * @memberof MJVersionLabelItemsEntity
     * @method
     * @override
     */
@@ -78432,7 +78412,7 @@ export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntit
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Version Label Restores')
-export class MJVersionLabelRestoreEntity extends BaseEntity<MJVersionLabelRestoreEntityType> {
+export class MJVersionLabelRestoresEntity extends BaseEntity<MJVersionLabelRestoresEntityType> {
     /**
     * Loads the MJ: Version Label Restores record from the database
     * @param ID: string - primary key value to load the MJ: Version Label Restores record.
@@ -78440,7 +78420,7 @@ export class MJVersionLabelRestoreEntity extends BaseEntity<MJVersionLabelRestor
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJVersionLabelRestoreEntity
+    * @memberof MJVersionLabelRestoresEntity
     * @method
     * @override
     */
@@ -78669,7 +78649,7 @@ export class MJVersionLabelRestoreEntity extends BaseEntity<MJVersionLabelRestor
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Version Labels')
-export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
+export class MJVersionLabelsEntity extends BaseEntity<MJVersionLabelsEntityType> {
     /**
     * Loads the MJ: Version Labels record from the database
     * @param ID: string - primary key value to load the MJ: Version Labels record.
@@ -78677,7 +78657,7 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJVersionLabelEntity
+    * @memberof MJVersionLabelsEntity
     * @method
     * @override
     */
@@ -78931,7 +78911,7 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Workflow Engines')
-export class MJWorkflowEngineEntity extends BaseEntity<MJWorkflowEngineEntityType> {
+export class MJWorkflowEnginesEntity extends BaseEntity<MJWorkflowEnginesEntityType> {
     /**
     * Loads the MJ: Workflow Engines record from the database
     * @param ID: string - primary key value to load the MJ: Workflow Engines record.
@@ -78939,7 +78919,7 @@ export class MJWorkflowEngineEntity extends BaseEntity<MJWorkflowEngineEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJWorkflowEngineEntity
+    * @memberof MJWorkflowEnginesEntity
     * @method
     * @override
     */
@@ -79044,7 +79024,7 @@ export class MJWorkflowEngineEntity extends BaseEntity<MJWorkflowEngineEntityTyp
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Workflow Runs')
-export class MJWorkflowRunEntity extends BaseEntity<MJWorkflowRunEntityType> {
+export class MJWorkflowRunsEntity extends BaseEntity<MJWorkflowRunsEntityType> {
     /**
     * Loads the MJ: Workflow Runs record from the database
     * @param ID: string - primary key value to load the MJ: Workflow Runs record.
@@ -79052,7 +79032,7 @@ export class MJWorkflowRunEntity extends BaseEntity<MJWorkflowRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJWorkflowRunEntity
+    * @memberof MJWorkflowRunsEntity
     * @method
     * @override
     */
@@ -79210,7 +79190,7 @@ export class MJWorkflowRunEntity extends BaseEntity<MJWorkflowRunEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Workflows')
-export class MJWorkflowEntity extends BaseEntity<MJWorkflowEntityType> {
+export class MJWorkflowsEntity extends BaseEntity<MJWorkflowsEntityType> {
     /**
     * Loads the MJ: Workflows record from the database
     * @param ID: string - primary key value to load the MJ: Workflows record.
@@ -79218,7 +79198,7 @@ export class MJWorkflowEntity extends BaseEntity<MJWorkflowEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJWorkflowEntity
+    * @memberof MJWorkflowsEntity
     * @method
     * @override
     */
@@ -79393,7 +79373,7 @@ export class MJWorkflowEntity extends BaseEntity<MJWorkflowEntityType> {
  * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Workspace Items')
-export class MJWorkspaceItemEntity extends BaseEntity<MJWorkspaceItemEntityType> {
+export class MJWorkspaceItemsEntity extends BaseEntity<MJWorkspaceItemsEntityType> {
     /**
     * Loads the MJ: Workspace Items record from the database
     * @param ID: string - primary key value to load the MJ: Workspace Items record.
@@ -79401,7 +79381,7 @@ export class MJWorkspaceItemEntity extends BaseEntity<MJWorkspaceItemEntityType>
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJWorkspaceItemEntity
+    * @memberof MJWorkspaceItemsEntity
     * @method
     * @override
     */
@@ -79565,7 +79545,7 @@ export class MJWorkspaceItemEntity extends BaseEntity<MJWorkspaceItemEntityType>
  * @public
  */
 @RegisterClass(BaseEntity, 'MJ: Workspaces')
-export class MJWorkspaceEntity extends BaseEntity<MJWorkspaceEntityType> {
+export class MJWorkspacesEntity extends BaseEntity<MJWorkspacesEntityType> {
     /**
     * Loads the MJ: Workspaces record from the database
     * @param ID: string - primary key value to load the MJ: Workspaces record.
@@ -79573,7 +79553,7 @@ export class MJWorkspaceEntity extends BaseEntity<MJWorkspaceEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof MJWorkspaceEntity
+    * @memberof MJWorkspacesEntity
     * @method
     * @override
     */
