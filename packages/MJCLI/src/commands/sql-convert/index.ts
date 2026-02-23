@@ -1,23 +1,24 @@
 import { Command, Args, Flags } from '@oclif/core';
+import type { BatchConverterConfig, BatchConverterResult, ConversionStats } from '@memberjunction/sql-converter';
 
 /**
  * CLI command for converting SQL files between database dialects using
- * the deterministic sqlglot transpiler with optional database verification
- * and LLM fallback.
+ * a rule-based BatchConverter engine that applies dialect-specific
+ * conversion rules (CREATE TABLE, VIEW, PROCEDURE→FUNCTION, triggers, etc.).
  *
  * Usage:
  *   mj sql-convert source.sql --from tsql --to postgres
- *   mj sql-convert source.sql --from tsql --to postgres --verify --target-db "postgres://..."
  *   mj sql-convert source.sql --from tsql --to postgres --output converted.sql --verbose
+ *   mj sql-convert source.sql --from tsql --to postgres --schema my_schema --no-header
  */
 export default class SqlConvert extends Command {
-  static description = 'Convert SQL files between database dialects using sqlglot (deterministic transpilation)';
+  static description = 'Convert SQL files between database dialects using rule-based BatchConverter engine';
 
   static examples = [
     '<%= config.bin %> sql-convert ./migration.sql --from tsql --to postgres',
     '<%= config.bin %> sql-convert ./migration.sql --from tsql --to postgres --output converted.sql',
-    '<%= config.bin %> sql-convert ./migration.sql --from tsql --to postgres --verify --target-db "postgres://user:pass@host:5432/db"',
-    '<%= config.bin %> sql-convert ./migration.sql --from tsql --to postgres --verbose',
+    '<%= config.bin %> sql-convert ./migration.sql --from tsql --to postgres --schema my_schema',
+    '<%= config.bin %> sql-convert ./migration.sql --from tsql --to postgres --no-header --verbose',
   ];
 
   static args = {
@@ -40,25 +41,21 @@ export default class SqlConvert extends Command {
       char: 'o',
       description: 'Output file path (default: <source>.converted.<ext>)',
     }),
-    verify: Flags.boolean({
-      description: 'Execute each statement against target DB to verify',
+    schema: Flags.string({
+      description: 'Target schema name',
+      default: '__mj',
+    }),
+    'no-header': Flags.boolean({
+      description: 'Skip PG header (extensions, schema, implicit cast)',
       default: false,
     }),
-    'target-db': Flags.string({
-      description: 'Target database connection string for verification',
-    }),
-    'stop-on-error': Flags.boolean({
-      description: 'Stop on first conversion failure',
+    'no-post-process': Flags.boolean({
+      description: 'Skip post-processing pass',
       default: false,
-    }),
-    pretty: Flags.boolean({
-      description: 'Pretty-print output',
-      default: true,
-      allowNo: true,
     }),
     verbose: Flags.boolean({
       char: 'v',
-      description: 'Show per-statement progress',
+      description: 'Show per-statement progress and detailed report',
       default: false,
     }),
   };
@@ -67,7 +64,7 @@ export default class SqlConvert extends Command {
     const { args, flags } = await this.parse(SqlConvert);
 
     // Lazy-load dependencies
-    const { ConversionPipeline } = await import('@memberjunction/sql-converter');
+    const { convertFile, getRulesForDialects, printReport } = await import('@memberjunction/sql-converter');
     const fs = await import('node:fs');
     const path = await import('node:path');
 
@@ -81,56 +78,63 @@ export default class SqlConvert extends Command {
     // Determine output file path
     const outputFile = flags.output ?? this.defaultOutputPath(sourceFile, path);
 
+    // Load rules for the requested dialect pair
+    const rules = getRulesForDialects(flags.from, flags.to);
+    if (rules.length === 0) {
+      this.error(`No conversion rules found for ${flags.from} -> ${flags.to}`);
+    }
+
     this.log(`Converting: ${sourceFile}`);
     this.log(`  From: ${flags.from} → To: ${flags.to}`);
+    this.log(`  Schema: ${flags.schema}`);
+    this.log(`  Rules: ${rules.length} conversion rules loaded`);
     this.log(`  Output: ${outputFile}`);
-    if (flags.verify) {
-      this.log(`  Verification: enabled`);
-    }
     this.log('');
 
-    const pipeline = new ConversionPipeline();
+    const config: BatchConverterConfig = {
+      Source: sourceFile,
+      SourceIsFile: true,
+      OutputFile: outputFile,
+      Rules: rules,
+      Schema: flags.schema,
+      SourceDialect: flags.from,
+      TargetDialect: flags.to,
+      IncludeHeader: !flags['no-header'],
+      EnablePostProcess: !flags['no-post-process'],
+      OnProgress: flags.verbose ? (msg: string) => this.log(`  ${msg}`) : undefined,
+    };
 
-    const result = await pipeline.Run({
-      source: sourceFile,
-      sourceIsFile: true,
-      sourceDialect: flags.from,
-      targetDialect: flags.to,
-      outputFile,
-      verify: flags.verify,
-      llmFallback: false,
-      audit: false,
-      stopOnError: flags['stop-on-error'],
-      maxLLMRetries: 0,
-      pretty: flags.pretty,
-      onProgress: flags.verbose ? (msg) => this.log(`  ${msg}`) : undefined,
-    });
+    const result: BatchConverterResult = convertFile(config);
 
-    // Print results
+    // Print summary
+    const stats: ConversionStats = result.Stats;
     this.log('');
-    this.log('=== Conversion Results ===');
-    this.log(`  Total statements: ${result.totalStatements}`);
-    this.log(`  Successful: ${result.successCount}`);
-    this.log(`  Failed: ${result.failureCount}`);
-    this.log(`  Method: sqlglot=${result.sqlglotCount}, llm=${result.llmCount}, passthrough=${result.passthroughCount}`);
-    this.log(`  Duration: ${(result.durationMs / 1000).toFixed(1)}s`);
+    this.log('=== Conversion Summary ===');
+    this.log(`  Total batches: ${stats.TotalBatches}`);
+    this.log(`  Converted:     ${stats.Converted}`);
+    this.log(`  Skipped:       ${stats.Skipped}`);
+    this.log(`  Errors:        ${stats.Errors}`);
+    this.log('');
+    this.log('  Objects created:');
+    this.log(`    Tables:      ${stats.TablesCreated}`);
+    this.log(`    Views:       ${stats.ViewsCreated}`);
+    this.log(`    Procedures:  ${stats.ProceduresConverted}`);
+    this.log(`    Functions:   ${stats.FunctionsConverted}`);
+    this.log(`    Triggers:    ${stats.TriggersConverted}`);
+    this.log(`    Indexes:     ${stats.IndexesCreated}`);
+    this.log(`    Inserts:     ${stats.InsertsConverted}`);
+    this.log(`    Grants:      ${stats.GrantsConverted}`);
+    this.log(`    FK Constr.:  ${stats.FKConstraints}`);
+    this.log(`    Comments:    ${stats.CommentsConverted}`);
     this.log(`  Output: ${outputFile}`);
 
-    if (result.failureCount > 0) {
-      this.log('');
-      this.log('--- Failed Statements ---');
-      for (const stmt of result.statements) {
-        if (!stmt.success) {
-          this.log(`  [${stmt.index + 1}] ${stmt.error}`);
-          if (flags.verbose) {
-            this.log(`       Original: ${stmt.originalSQL.slice(0, 100).replace(/\n/g, ' ')}...`);
-          }
-        }
-      }
+    // Print detailed report in verbose mode
+    if (flags.verbose) {
+      printReport(stats, (msg: string) => this.log(msg));
     }
 
-    if (!result.success) {
-      this.error(`Conversion completed with ${result.failureCount} failures`);
+    if (stats.Errors > 0) {
+      this.error(`Conversion completed with ${stats.Errors} errors`);
     }
   }
 

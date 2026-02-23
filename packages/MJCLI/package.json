@@ -61,6 +61,7 @@
     "@memberjunction/metadata-sync": "5.2.0",
     "@memberjunction/query-gen": "5.2.0",
     "@memberjunction/server-bootstrap-lite": "5.2.0",
+    "@memberjunction/sql-converter": "5.2.0",
     "@memberjunction/sqlserver-dataprovider": "5.2.0",
     "@memberjunction/testing-cli": "5.2.0",
     "@oclif/core": "^3.27.0",
