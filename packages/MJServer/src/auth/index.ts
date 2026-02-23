@@ -53,7 +53,7 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
  * are aggregated into an array. jwt.verify() natively accepts string | string[].
  */
 export const getValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const providers = factory.getAllByIssuer(issuer);
 
   if (providers.length === 0) {
@@ -81,7 +81,7 @@ export const validationOptions: Record<string, { audience: string | string[]; jw
     return getValidationOptions(prop) !== undefined;
   },
   ownKeys: () => {
-    const factory = AuthProviderFactory.getInstance();
+    const factory = AuthProviderFactory.Instance;
     return factory.getAllProviders().map(p => p.issuer);
   }
 });
@@ -112,7 +112,7 @@ export class UserPayload {
  * Gets signing keys for JWT validation
  */
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   
   // Initialize providers if not already done
   if (!factory.hasProviders()) {
@@ -142,7 +142,7 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
   fullName?: string;
   preferredUsername?: string;
 } => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const issuer = payload.iss;
   
   if (!issuer) {

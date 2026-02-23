@@ -910,7 +910,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             if (providersConfigured) {
                 try {
                     const { AuthProviderFactory } = await import('@memberjunction/server');
-                    const factory = AuthProviderFactory.getInstance();
+                    const factory = AuthProviderFactory.Instance;
                     configuredProviderNames = factory.getAllProviders().map((p: { name: string }) => p.name);
                 } catch {
                     // Ignore errors getting provider names - just for logging
@@ -963,7 +963,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             try {
                 // Get the upstream provider configuration
                 const { AuthProviderFactory } = await import('@memberjunction/server');
-                const factory = AuthProviderFactory.getInstance();
+                const factory = AuthProviderFactory.Instance;
                 const providers = factory.getAllProviders();
 
                 if (providers.length === 0) {
@@ -1106,7 +1106,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 try {
                     // Dynamically import AuthProviderFactory to get configured providers
                     const { AuthProviderFactory } = await import('@memberjunction/server');
-                    const factory = AuthProviderFactory.getInstance();
+                    const factory = AuthProviderFactory.Instance;
                     const providers = factory.getAllProviders();
 
                     // Extract issuer URLs from configured auth providers

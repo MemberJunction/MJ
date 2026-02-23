@@ -1,4 +1,4 @@
-import { MJGlobal } from ".";
+import { MJGlobal } from "./Global";
 import { IMJComponent, MJEventType } from "./interface";
 import { v4 } from 'uuid';
 import _ from 'lodash';
