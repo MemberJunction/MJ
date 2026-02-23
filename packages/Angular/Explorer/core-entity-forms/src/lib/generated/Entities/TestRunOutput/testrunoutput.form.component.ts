@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
-import { TestRunOutputEntity } from '@memberjunction/core-entities';
+import { BaseEntity } from '@memberjunction/core';
+// CAELEB import { MJTestRunOutputEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
@@ -10,7 +11,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
     templateUrl: './testrunoutput.form.component.html'
 })
 export class TestRunOutputFormComponent extends BaseFormComponent {
-    public record!: TestRunOutputEntity;
+    public record!: BaseEntity; // CAELEB MJTestRunOutputEntity;
 
     override async ngOnInit() {
         await super.ngOnInit();

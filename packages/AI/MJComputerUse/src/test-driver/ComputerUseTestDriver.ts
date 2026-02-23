@@ -43,7 +43,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { TestEntity } from '@memberjunction/core-entities';
+import { MJTestEntity } from '@memberjunction/core-entities';
 import {
     BaseTestDriver,
     type IOracle,
@@ -235,7 +235,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
      * - URL patterns are valid regexes
      * - Scoring weights sum to ~1.0
      */
-    public override async Validate(test: TestEntity): Promise<ValidationResult> {
+    public override async Validate(test: MJTestEntity): Promise<ValidationResult> {
         const baseResult = await super.Validate(test);
         if (!baseResult.valid) {
             return baseResult;
