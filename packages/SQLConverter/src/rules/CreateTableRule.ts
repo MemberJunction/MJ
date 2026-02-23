@@ -218,9 +218,9 @@ export class CreateTableRule implements IConversionRule {
       }
     );
 
-    // REFERENCES table(Column) — handle both quoted and unquoted table names
+    // REFERENCES [schema.]table(Column) — handle arbitrary schema-qualified table names
     joined = joined.replace(
-      /(REFERENCES\s+(?:__mj\.)?(?:"[^"]+"|\w+)\s*\()([A-Za-z_]\w*)(\))/gi,
+      /(REFERENCES\s+(?:\w+\.)?(?:"[^"]+"|\w+)\s*\()([A-Za-z_]\w*)(\))/gi,
       (_match, prefix: string, colName: string, suffix: string) => {
         if (/[A-Z]/.test(colName)) return `${prefix}"${colName}"${suffix}`;
         return _match;

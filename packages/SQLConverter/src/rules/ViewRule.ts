@@ -179,17 +179,54 @@ export class ViewRule implements IConversionRule {
 
   /** Quote bare PascalCase identifiers that appear as column references without table alias prefix */
   private quoteBareIdentifiers(sql: string): string {
-    // Quote PascalCase word after ORDER BY: ORDER BY StartedAt → ORDER BY "StartedAt"
+    // Quote PascalCase word after ORDER BY / GROUP BY:
+    // ORDER BY StartedAt → ORDER BY "StartedAt"
+    // GROUP BY PatronID  → GROUP BY "PatronID"
     sql = sql.replace(
-      /(\bORDER\s+BY\s+)([A-Z][a-z]\w+)(\s+(?:ASC|DESC)\b)?/gi,
-      (match, prefix: string, ident: string, suffix: string) => {
+      /(\b(?:ORDER|GROUP)\s+BY\s+)([A-Z][a-z]\w+)/gi,
+      (match, prefix: string, ident: string) => {
         if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
-        return `${prefix}"${ident}"${suffix || ''}`;
+        return `${prefix}"${ident}"`;
       }
     );
     // Quote PascalCase word after CASE keyword: CASE PascalName WHEN → CASE "PascalName" WHEN
     sql = sql.replace(
       /(\bCASE\s+)([A-Z][a-z]\w+)(\s+WHEN\b)/gi,
+      (match, prefix: string, ident: string, suffix: string) => {
+        if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
+        return `${prefix}"${ident}"${suffix}`;
+      }
+    );
+    // Quote bare PascalCase after WHERE, AND, OR, WHEN, HAVING, ON:
+    // WHERE IsReturned = → WHERE "IsReturned" =
+    // AND DueDate < → AND "DueDate" <
+    sql = sql.replace(
+      /(\b(?:WHERE|AND|OR|WHEN|HAVING|ON)\s+)([A-Z][a-z]\w+)(\s*[=<>!]|\s+(?:IN|IS|BETWEEN|LIKE|NOT)\b)/gi,
+      (match, prefix: string, ident: string, suffix: string) => {
+        if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
+        return `${prefix}"${ident}"${suffix}`;
+      }
+    );
+    // Quote bare PascalCase inside aggregate/function args: SUM(Amount), COUNT(PatronID)
+    sql = sql.replace(
+      /(\b(?:SUM|AVG|MIN|MAX|COUNT|COALESCE|ISNULL|ABS|ROUND|CEILING|FLOOR)\s*\(\s*)([A-Z][a-z]\w+)(\s*[),])/gi,
+      (match, prefix: string, ident: string, suffix: string) => {
+        if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
+        return `${prefix}"${ident}"${suffix}`;
+      }
+    );
+    // Quote bare PascalCase after THEN / ELSE: THEN Amount → THEN "Amount"
+    sql = sql.replace(
+      /(\b(?:THEN|ELSE)\s+)([A-Z][a-z]\w+)(\s)/gi,
+      (match, prefix: string, ident: string, suffix: string) => {
+        if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
+        return `${prefix}"${ident}"${suffix}`;
+      }
+    );
+    // Quote bare PascalCase after SELECT (in subqueries without aliases):
+    // SELECT PatronID, → SELECT "PatronID",
+    sql = sql.replace(
+      /(\bSELECT\s+)([A-Z][a-z]\w+)(\s*,)/gi,
       (match, prefix: string, ident: string, suffix: string) => {
         if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
         return `${prefix}"${ident}"${suffix}`;

@@ -25,11 +25,35 @@ export class InsertRule implements IConversionRule {
     result = convertConvertFunction(result);
     result = convertIIF(result);
     result = convertCastTypes(result);
+    // Quote column names in INSERT INTO table (col1, col2, ...) — these are always column
+    // names even if they collide with SQL keywords (e.g. Language, Condition, Action)
+    result = this.quoteInsertColumnList(result);
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
     result = quotePascalCaseIdentifiers(result);
     // Ensure semicolon
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
     return result + '\n';
+  }
+
+  /** Quote all bare PascalCase column names in the INSERT INTO ... (...) column list.
+   *  Column names in this position are always identifiers, never SQL keywords. */
+  private quoteInsertColumnList(sql: string): string {
+    return sql.replace(
+      /(INSERT\s+INTO\s+\S+\s*\()([^)]+)(\))/gi,
+      (_match, prefix: string, cols: string, suffix: string) => {
+        const quoted = cols.split(',').map(col => {
+          const trimmed = col.trim();
+          // Already quoted
+          if (trimmed.startsWith('"')) return col;
+          // Has uppercase and is a valid identifier — quote it
+          if (/^[A-Za-z_]\w*$/.test(trimmed) && /[A-Z]/.test(trimmed)) {
+            return col.replace(trimmed, `"${trimmed}"`);
+          }
+          return col;
+        }).join(',');
+        return `${prefix}${quoted}${suffix}`;
+      }
+    );
   }
 }
