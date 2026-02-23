@@ -119,7 +119,7 @@ export class PostgreSQLCodeGenConnection implements CodeGenConnection {
         // Use word boundary to avoid replacing @ParamName inside longer identifiers
         let text = sql;
         for (const key of keys) {
-            const regex = new RegExp(`@${key}\b`, 'g');
+            const regex = new RegExp(`@${key}\\b`, 'g');
             if (regex.test(text)) {
                 paramIndex++;
                 values.push(params[key]);
