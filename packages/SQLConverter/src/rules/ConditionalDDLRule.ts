@@ -48,6 +48,10 @@ export class ConditionalDDLRule implements IConversionRule {
     const indexResult = this.tryConvertConditionalIndex(result);
     if (indexResult) return indexResult + '\n';
 
+    // Try CREATE ROLE conditional pattern (sys.database_principals → pg_roles)
+    const roleResult = this.tryConvertConditionalRole(result);
+    if (roleResult) return roleResult + '\n';
+
     // Convert IF NOT EXISTS (...) BEGIN ... END → DO $$ BEGIN IF NOT EXISTS (...) THEN ... END IF; END $$;
     result = this.convertToDoBlock(result);
 
@@ -91,6 +95,24 @@ export class ConditionalDDLRule implements IConversionRule {
       }
     }
     return -1;
+  }
+
+  /** Convert CREATE ROLE (with or without IF NOT EXISTS wrapper) to PG-compatible DO block.
+   *  Handles both:
+   *   - Bare: CREATE ROLE role_name;
+   *   - Wrapped: IF NOT EXISTS (... sys.database_principals ...) CREATE ROLE role_name; */
+  private tryConvertConditionalRole(sql: string): string | null {
+    const roleMatch = sql.match(/CREATE\s+ROLE\s+(\w+)/i);
+    if (!roleMatch) return null;
+    const roleName = roleMatch[1];
+    return [
+      'DO $$',
+      'BEGIN',
+      `    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${roleName}') THEN`,
+      `        CREATE ROLE ${roleName};`,
+      '    END IF;',
+      'END $$;',
+    ].join('\n');
   }
 
   private convertToDoBlock(sql: string): string {

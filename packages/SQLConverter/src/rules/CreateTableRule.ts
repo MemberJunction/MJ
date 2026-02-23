@@ -45,12 +45,15 @@ export class CreateTableRule implements IConversionRule {
     // Phase 4: Constraint and default handling
     result = this.convertConstraintsAndDefaults(result);
 
-    // Phase 5a: Quote unquoted PascalCase column names (AFTER type conversion)
-    result = this.quoteColumnDefinitions(result);
-
-    // Phase 5: Remove SQL Server keywords
+    // Phase 5: Remove SQL Server keywords (BEFORE column quoting so
+    // CLUSTERED/NONCLUSTERED don't block the PK/UNIQUE constraint regex)
     result = result.replace(/\bCLUSTERED\b/gi, '');
     result = result.replace(/\bNONCLUSTERED\b/gi, '');
+
+    // Phase 5a: Quote unquoted PascalCase column names (AFTER type conversion
+    // and AFTER CLUSTERED removal so the PK regex matches correctly)
+    result = this.quoteColumnDefinitions(result);
+
     // Remove ON [PRIMARY] / ON "PRIMARY" filegroup clause
     result = result.replace(/\)\s*ON\s+\[?PRIMARY\]?\s*;?/gi, ');');
     result = result.replace(/\bON\s+"PRIMARY"/g, '');
@@ -181,7 +184,7 @@ export class CreateTableRule implements IConversionRule {
         // Column definitions: ColName TYPE ... (includes both PG and SQL Server type
         // names since type conversion may not have run yet at this phase)
         if (parenDepth >= 1) {
-          const colMatch = trimmed.match(/^([A-Za-z_]\w*)\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR|NVARCHAR|CHAR|NCHAR|INTEGER|INT|BIGINT|SMALLINT|TINYINT|DOUBLE|FLOAT|REAL|NUMERIC|DECIMAL|MONEY|BYTEA|IMAGE|VARBINARY|XML|BIT|UNIQUEIDENTIFIER|DATETIMEOFFSET|DATETIME2|DATETIME|GENERATED)\b/i);
+          const colMatch = trimmed.match(/^([A-Za-z_]\w*)\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR|NVARCHAR|CHAR|NCHAR|INTEGER|INT|BIGINT|SMALLINT|TINYINT|DOUBLE|FLOAT|REAL|NUMERIC|DECIMAL|MONEY|BYTEA|IMAGE|VARBINARY|XML|BIT|UNIQUEIDENTIFIER|DATETIMEOFFSET|DATETIME2|DATETIME|DATE|SERIAL|JSON|JSONB|GENERATED)\b/i);
           if (colMatch && !trimmed.startsWith('"') && !trimmed.startsWith('CONSTRAINT')) {
             const colName = colMatch[1];
             if (/[A-Z]/.test(colName)) {

@@ -14,6 +14,20 @@ export class GrantRule implements IConversionRule {
     // Remove N prefix from strings
     result = result.replace(/(?<![a-zA-Z])N'/g, "'");
 
+    // Convert GRANT/REVOKE ... ON SCHEMA::schema_name TO role
+    // SQL Server: GRANT SELECT ON SCHEMA::myschema TO myrole
+    // PostgreSQL:  GRANT SELECT ON ALL TABLES IN SCHEMA myschema TO myrole
+    const schemaMatch = result.match(
+      /\b(GRANT|REVOKE)\s+(SELECT|INSERT|UPDATE|DELETE|ALL(?:\s+PRIVILEGES)?)\s+ON\s+SCHEMA\s*::\s*(\w+)\s+TO\s+(.+)/i
+    );
+    if (schemaMatch) {
+      const [, verb, perm, schema, role] = schemaMatch;
+      let out = `${verb} ${perm} ON ALL TABLES IN SCHEMA ${schema} TO ${role.trim()}`;
+      out = out.replace(/;?\s*$/, '');
+      if (!out.endsWith(';')) out += ';';
+      return out + '\n';
+    }
+
     // Check if this is a GRANT/REVOKE EXECUTE (function/procedure)
     const isExecuteGrant = /\b(?:GRANT|REVOKE)\s+EXECUTE\b/i.test(result);
 

@@ -31,6 +31,21 @@ export class CreateIndexRule implements IConversionRule {
     result = result.replace(/=\s*\(1\)/g, '=TRUE');
     result = result.replace(/=\s*\(0\)/g, '=FALSE');
 
+    // Quote PascalCase column names inside index column lists
+    // Matches: table("Col1", Col2) or table(Col1) — quote unquoted PascalCase identifiers
+    result = result.replace(
+      /(ON\s+\S+\s*\()([^)]+)(\))/gi,
+      (_match, prefix: string, cols: string, suffix: string) => {
+        const quotedCols = cols.split(',').map(c => {
+          const t = c.trim();
+          if (t.startsWith('"') || !t) return c;
+          if (/[A-Z]/.test(t) && /^[A-Za-z_]\w*$/.test(t)) return c.replace(t, `"${t}"`);
+          return c;
+        }).join(',');
+        return `${prefix}${quotedCols}${suffix}`;
+      }
+    );
+
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
     return result + '\n';

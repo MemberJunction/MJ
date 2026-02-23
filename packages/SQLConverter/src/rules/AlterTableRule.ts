@@ -54,9 +54,70 @@ export class AlterTableRule implements IConversionRule {
     // Remove N prefix from strings
     result = result.replace(/(?<![a-zA-Z])N'/g, "'");
 
+    // Quote PascalCase column names inside FK/PK/UNIQUE column lists and REFERENCES(col)
+    result = this.quoteConstraintColumns(result);
+
+    // Quote PascalCase column names inside CHECK constraint bodies (preserve string literals)
+    result = this.quoteCheckColumns(result);
+
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
     return result + '\n';
+  }
+
+  /** Quote PascalCase column names inside FOREIGN KEY(...), PRIMARY KEY(...),
+   *  UNIQUE(...), and REFERENCES table(col) parenthesized column lists */
+  private quoteConstraintColumns(sql: string): string {
+    // FK/PK/UNIQUE column lists
+    sql = sql.replace(
+      /((?:PRIMARY\s+KEY|UNIQUE|FOREIGN\s+KEY)\s*\()([^)]+)(\))/gi,
+      (_match, prefix: string, cols: string, suffix: string) => {
+        const quotedCols = cols.split(',').map(c => {
+          const t = c.trim();
+          if (t.startsWith('"') || !t) return c;
+          if (/[A-Z]/.test(t) && /^[A-Za-z_]\w*$/.test(t)) return c.replace(t, `"${t}"`);
+          return c;
+        }).join(',');
+        return `${prefix}${quotedCols}${suffix}`;
+      }
+    );
+
+    // REFERENCES table(Column)
+    sql = sql.replace(
+      /(REFERENCES\s+(?:\w+\.)?(?:"[^"]+"|\w+)\s*\()([A-Za-z_]\w*)(\))/gi,
+      (_match, prefix: string, colName: string, suffix: string) => {
+        if (/[A-Z]/.test(colName)) return `${prefix}"${colName}"${suffix}`;
+        return _match;
+      }
+    );
+
+    return sql;
+  }
+
+  /** Keywords that should NOT be quoted inside CHECK constraint bodies */
+  private static readonly CHECK_KEYWORDS = new Set([
+    'IN', 'IS', 'NULL', 'NOT', 'OR', 'AND', 'LIKE', 'BETWEEN',
+    'TRUE', 'FALSE', 'CHECK', 'CONSTRAINT', 'SIMILAR', 'TO',
+    'VALID',
+  ]);
+
+  /** Quote PascalCase column names inside CHECK(...) bodies, preserving string literals
+   *  and already-quoted identifiers */
+  private quoteCheckColumns(sql: string): string {
+    return sql.replace(
+      /(CHECK\s*\()([^;]+)(NOT\s+VALID)?/gi,
+      (_match, prefix: string, body: string, notValid: string | undefined) => {
+        // Quote unquoted PascalCase identifiers — skip those already inside quotes
+        const quotedBody = body.replace(
+          /(?<!['"])\b([A-Z][a-zA-Z_]\w*)\b(?!['"])/g,
+          (m: string, name: string) => {
+            if (AlterTableRule.CHECK_KEYWORDS.has(name.toUpperCase())) return m;
+            return `"${name}"`;
+          }
+        );
+        return `${prefix}${quotedBody}${notValid || ''}`;
+      }
+    );
   }
 
   /** Convert SQL Server types to PostgreSQL equivalents */

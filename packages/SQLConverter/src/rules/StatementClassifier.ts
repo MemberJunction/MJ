@@ -47,6 +47,10 @@ export function classifyBatch(batch: string): StatementType {
 
   // IF NOT EXISTS ... → conditional DDL or SKIP depending on body content
   if (/^IF\s+NOT\s+EXISTS\s*\(/i.test(upper)) {
+    // CREATE ROLE conditional: convert to PG-compatible DO block
+    if (upper.includes('SYS.DATABASE_PRINCIPAL') && /CREATE\s+ROLE\b/i.test(upper)) {
+      return 'CONDITIONAL_DDL';
+    }
     // Skip IF NOT EXISTS blocks that use SQL Server system features
     if (upper.includes('SERVERPROPERTY') || upper.includes('CREATE LOGIN') ||
         upper.includes('SYS.SERVER_PRINCIPAL') || upper.includes('SYS.DATABASE_PRINCIPAL')) {
@@ -137,9 +141,13 @@ export function classifyBatch(batch: string): StatementType {
     return 'EXTENDED_PROPERTY';
   }
 
-  // CREATE USER / CREATE ROLE — SQL Server-specific
-  if (/^CREATE\s+(USER|ROLE)\s/i.test(upper)) {
+  // CREATE USER — SQL Server-specific (skip)
+  if (/^CREATE\s+USER\s/i.test(upper)) {
     return 'SKIP_SQLSERVER';
+  }
+  // CREATE ROLE — valid in both SQL Server and PostgreSQL (convert via CONDITIONAL_DDL)
+  if (/^CREATE\s+ROLE\s/i.test(upper)) {
+    return 'CONDITIONAL_DDL';
   }
 
   // Orphaned control flow fragments from sub-splitting
