@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRulesEntity, MJActionAuthorizationsEntity, MJActionCategoriesEntity, MJActionContextTypesEntity, MJActionContextsEntity, MJActionExecutionLogsEntity, MJActionFiltersEntity, MJActionLibrariesEntity, MJActionParamsEntity, MJActionResultCodesEntity, MJActionsEntity, MJAIActionsEntity, MJAIAgentActionsEntity, MJAIAgentArtifactTypesEntity, MJAIAgentConfigurationsEntity, MJAIAgentDataSourcesEntity, MJAIAgentExamplesEntity, MJAIAgentLearningCyclesEntity, MJAIAgentModalitiesEntity, MJAIAgentModelsEntity, MJAIAgentNoteTypesEntity, MJAIAgentNotesEntity, MJAIAgentPermissionsEntity, MJAIAgentPromptsEntity, MJAIAgentRelationshipsEntity, MJAIAgentRequestsEntity, MJAIAgentRunMediasEntity, MJAIAgentRunStepsEntity, MJAIAgentRunsEntity, MJAIAgentStepPathsEntity, MJAIAgentStepsEntity, MJAIAgentTypesEntity, MJAIAgentsEntity, MJAIArchitecturesEntity, MJAIConfigurationParamsEntity, MJAIConfigurationsEntity, MJAICredentialBindingsEntity, MJAIModalitiesEntity, MJAIModelActionsEntity, MJAIModelArchitecturesEntity, MJAIModelCostsEntity, MJAIModelModalitiesEntity, MJAIModelPriceTypesEntity, MJAIModelPriceUnitTypesEntity, MJAIModelTypesEntity, MJAIModelVendorsEntity, MJAIModelsEntity, MJAIPromptCategoriesEntity, MJAIPromptModelsEntity, MJAIPromptRunMediasEntity, MJAIPromptRunsEntity, MJAIPromptTypesEntity, MJAIPromptsEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionsEntity, MJAIVendorTypesEntity, MJAIVendorsEntity, MJAPIApplicationScopesEntity, MJAPIApplicationsEntity, MJAPIKeyApplicationsEntity, MJAPIKeyScopesEntity, MJAPIKeyUsageLogsEntity, MJAPIKeysEntity, MJAPIScopesEntity, MJApplicationEntitiesEntity, MJApplicationSettingsEntity, MJApplicationsEntity, MJArtifactPermissionsEntity, MJArtifactTypesEntity, MJArtifactUsesEntity, MJArtifactVersionAttributesEntity, MJArtifactVersionsEntity, MJArtifactsEntity, MJAuditLogTypesEntity, MJAuditLogsEntity, MJAuthorizationRolesEntity, MJAuthorizationsEntity, MJCollectionArtifactsEntity, MJCollectionPermissionsEntity, MJCollectionsEntity, MJCommunicationBaseMessageTypesEntity, MJCommunicationLogsEntity, MJCommunicationProviderMessageTypesEntity, MJCommunicationProvidersEntity, MJCommunicationRunsEntity, MJCompaniesEntity, MJCompanyIntegrationRecordMapsEntity, MJCompanyIntegrationRunAPILogsEntity, MJCompanyIntegrationRunDetailsEntity, MJCompanyIntegrationRunsEntity, MJCompanyIntegrationsEntity, MJComponentDependenciesEntity, MJComponentLibrariesEntity, MJComponentLibraryLinksEntity, MJComponentRegistriesEntity, MJComponentsEntity, MJContentFileTypesEntity, MJContentItemAttributesEntity, MJContentItemTagsEntity, MJContentItemsEntity, MJContentProcessRunsEntity, MJContentSourceParamsEntity, MJContentSourceTypeParamsEntity, MJContentSourceTypesEntity, MJContentSourcesEntity, MJContentTypeAttributesEntity, MJContentTypesEntity, MJConversationArtifactPermissionsEntity, MJConversationArtifactVersionsEntity, MJConversationArtifactsEntity, MJConversationDetailArtifactsEntity, MJConversationDetailAttachmentsEntity, MJConversationDetailRatingsEntity, MJConversationDetailsEntity, MJConversationsEntity, MJCredentialCategoriesEntity, MJCredentialTypesEntity, MJCredentialsEntity, MJDashboardCategoriesEntity, MJDashboardCategoryLinksEntity, MJDashboardCategoryPermissionsEntity, MJDashboardPartTypesEntity, MJDashboardPermissionsEntity, MJDashboardUserPreferencesEntity, MJDashboardUserStatesEntity, MJDashboardsEntity, MJDataContextItemsEntity, MJDataContextsEntity, MJDatasetItemsEntity, MJDatasetsEntity, MJDuplicateRunDetailMatchesEntity, MJDuplicateRunDetailsEntity, MJDuplicateRunsEntity, MJEmployeeCompanyIntegrationsEntity, MJEmployeeRolesEntity, MJEmployeeSkillsEntity, MJEmployeesEntity, MJEncryptionAlgorithmsEntity, MJEncryptionKeySourcesEntity, MJEncryptionKeysEntity, MJEntitiesEntity, MJEntityActionFiltersEntity, MJEntityActionInvocationTypesEntity, MJEntityActionInvocationsEntity, MJEntityActionParamsEntity, MJEntityActionsEntity, MJEntityAIActionsEntity, MJEntityCommunicationFieldsEntity, MJEntityCommunicationMessageTypesEntity, MJEntityDocumentRunsEntity, MJEntityDocumentSettingsEntity, MJEntityDocumentTypesEntity, MJEntityDocumentsEntity, MJEntityFieldValuesEntity, MJEntityFieldsEntity, MJEntityPermissionsEntity, MJEntityRecordDocumentsEntity, MJEntityRelationshipDisplayComponentsEntity, MJEntityRelationshipsEntity, MJEntitySettingsEntity, MJEnvironmentsEntity, MJErrorLogsEntity, MJExplorerNavigationItemsEntity, MJFileCategoriesEntity, MJFileEntityRecordLinksEntity, MJFileStorageAccountsEntity, MJFileStorageProvidersEntity, MJFilesEntity, MJGeneratedCodeCategoriesEntity, MJGeneratedCodesEntity, MJIntegrationURLFormatsEntity, MJIntegrationsEntity, MJLibrariesEntity, MJLibraryItemsEntity, MJListCategoriesEntity, MJListDetailsEntity, MJListInvitationsEntity, MJListSharesEntity, MJListsEntity, MJMCPServerConnectionPermissionsEntity, MJMCPServerConnectionToolsEntity, MJMCPServerConnectionsEntity, MJMCPServerToolsEntity, MJMCPServersEntity, MJMCPToolExecutionLogsEntity, MJOAuthAuthServerMetadataCachesEntity, MJOAuthAuthorizationStatesEntity, MJOAuthClientRegistrationsEntity, MJOAuthTokensEntity, MJOpenAppDependenciesEntity, MJOpenAppInstallHistoriesEntity, MJOpenAppsEntity, MJOutputDeliveryTypesEntity, MJOutputFormatTypesEntity, MJOutputTriggerTypesEntity, MJProjectsEntity, MJPublicLinksEntity, MJQueriesEntity, MJQueryCategoriesEntity, MJQueryEntitiesEntity, MJQueryFieldsEntity, MJQueryParametersEntity, MJQueryPermissionsEntity, MJQueueTasksEntity, MJQueueTypesEntity, MJQueuesEntity, MJRecommendationItemsEntity, MJRecommendationProvidersEntity, MJRecommendationRunsEntity, MJRecommendationsEntity, MJRecordChangeReplayRunsEntity, MJRecordChangesEntity, MJRecordLinksEntity, MJRecordMergeDeletionLogsEntity, MJRecordMergeLogsEntity, MJReportCategoriesEntity, MJReportSnapshotsEntity, MJReportUserStatesEntity, MJReportVersionsEntity, MJReportsEntity, MJResourceLinksEntity, MJResourcePermissionsEntity, MJResourceTypesEntity, MJRolesEntity, MJRowLevelSecurityFiltersEntity, MJScheduledActionParamsEntity, MJScheduledActionsEntity, MJScheduledJobRunsEntity, MJScheduledJobTypesEntity, MJScheduledJobsEntity, MJSchemaInfoEntity, MJSkillsEntity, MJTaggedItemsEntity, MJTagsEntity, MJTaskDependenciesEntity, MJTaskTypesEntity, MJTasksEntity, MJTemplateCategoriesEntity, MJTemplateContentTypesEntity, MJTemplateContentsEntity, MJTemplateParamsEntity, MJTemplatesEntity, MJTestRubricsEntity, MJTestRunFeedbacksEntity, MJTestRunsEntity, MJTestSuiteRunsEntity, MJTestSuiteTestsEntity, MJTestSuitesEntity, MJTestTypesEntity, MJTestsEntity, MJUserApplicationEntitiesEntity, MJUserApplicationsEntity, MJUserFavoritesEntity, MJUserNotificationPreferencesEntity, MJUserNotificationTypesEntity, MJUserNotificationsEntity, MJUserRecordLogsEntity, MJUserRolesEntity, MJUserSettingsEntity, MJUserViewCategoriesEntity, MJUserViewRunDetailsEntity, MJUserViewRunsEntity, MJUserViewsEntity, MJUsersEntity, MJVectorDatabasesEntity, MJVectorIndexesEntity, MJVersionInstallationsEntity, MJVersionLabelItemsEntity, MJVersionLabelRestoresEntity, MJVersionLabelsEntity, MJWorkflowEnginesEntity, MJWorkflowRunsEntity, MJWorkflowsEntity, MJWorkspaceItemsEntity, MJWorkspacesEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSkillEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -469,13 +469,13 @@ export class MJActionCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJActionCategory_])
-    false_ParentIDArray: MJActionCategory_[]; // Link to false
+    MJActionCategories_ParentIDArray: MJActionCategory_[]; // Link to MJActionCategories
     
     @Field(() => [MJAction_])
-    false_CategoryIDArray: MJAction_[]; // Link to false
+    MJActions_CategoryIDArray: MJAction_[]; // Link to MJActions
     
     @Field(() => [MJMCPServerTool_])
-    false_GeneratedActionCategoryIDArray: MJMCPServerTool_[]; // Link to false
+    MJMCPServerTools_GeneratedActionCategoryIDArray: MJMCPServerTool_[]; // Link to MJMCPServerTools
     
 }
 
@@ -584,7 +584,7 @@ export class MJActionCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJActionCategory_])
-    async false_ParentIDArray(@Root() mjactioncategory_: MJActionCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionCategories_ParentIDArray(@Root() mjactioncategory_: MJActionCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -595,7 +595,7 @@ export class MJActionCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAction_])
-    async false_CategoryIDArray(@Root() mjactioncategory_: MJActionCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActions_CategoryIDArray(@Root() mjactioncategory_: MJActionCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -606,7 +606,7 @@ export class MJActionCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerTool_])
-    async false_GeneratedActionCategoryIDArray(@Root() mjactioncategory_: MJActionCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerTools_GeneratedActionCategoryIDArray(@Root() mjactioncategory_: MJActionCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Tools', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -670,7 +670,7 @@ export class MJActionContextType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJActionContext_])
-    false_ContextTypeIDArray: MJActionContext_[]; // Link to false
+    MJActionContexts_ContextTypeIDArray: MJActionContext_[]; // Link to MJActionContexts
     
 }
 
@@ -767,7 +767,7 @@ export class MJActionContextTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJActionContext_])
-    async false_ContextTypeIDArray(@Root() mjactioncontexttype_: MJActionContextType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionContexts_ContextTypeIDArray(@Root() mjactioncontexttype_: MJActionContextType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Contexts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -1215,7 +1215,7 @@ export class MJActionFilter_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJEntityActionFilter_])
-    false_ActionFilterIDArray: MJEntityActionFilter_[]; // Link to false
+    MJEntityActionFilters_ActionFilterIDArray: MJEntityActionFilter_[]; // Link to MJEntityActionFilters
     
 }
 
@@ -1324,7 +1324,7 @@ export class MJActionFilterResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityActionFilter_])
-    async false_ActionFilterIDArray(@Root() mjactionfilter_: MJActionFilter_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityActionFilters_ActionFilterIDArray(@Root() mjactionfilter_: MJActionFilter_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Action Filters', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -1582,10 +1582,10 @@ export class MJActionParam_ {
     Action: string;
         
     @Field(() => [MJEntityActionParam_])
-    false_ActionParamIDArray: MJEntityActionParam_[]; // Link to false
+    MJEntityActionParams_ActionParamIDArray: MJEntityActionParam_[]; // Link to MJEntityActionParams
     
     @Field(() => [MJScheduledActionParam_])
-    false_ActionParamIDArray: MJScheduledActionParam_[]; // Link to false
+    MJScheduledActionParams_ActionParamIDArray: MJScheduledActionParam_[]; // Link to MJScheduledActionParams
     
 }
 
@@ -1724,7 +1724,7 @@ export class MJActionParamResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityActionParam_])
-    async false_ActionParamIDArray(@Root() mjactionparam_: MJActionParam_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityActionParams_ActionParamIDArray(@Root() mjactionparam_: MJActionParam_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Action Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -1735,7 +1735,7 @@ export class MJActionParamResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJScheduledActionParam_])
-    async false_ActionParamIDArray(@Root() mjactionparam_: MJActionParam_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledActionParams_ActionParamIDArray(@Root() mjactionparam_: MJActionParam_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Action Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2053,40 +2053,40 @@ export class MJAction_ {
     RootParentID?: string;
         
     @Field(() => [MJActionParam_])
-    false_ActionIDArray: MJActionParam_[]; // Link to false
+    MJActionParams_ActionIDArray: MJActionParam_[]; // Link to MJActionParams
     
     @Field(() => [MJActionLibrary_])
-    false_ActionIDArray: MJActionLibrary_[]; // Link to false
+    MJActionLibraries_ActionIDArray: MJActionLibrary_[]; // Link to MJActionLibraries
     
     @Field(() => [MJActionResultCode_])
-    false_ActionIDArray: MJActionResultCode_[]; // Link to false
+    MJActionResultCodes_ActionIDArray: MJActionResultCode_[]; // Link to MJActionResultCodes
     
     @Field(() => [MJScheduledAction_])
-    false_ActionIDArray: MJScheduledAction_[]; // Link to false
+    MJScheduledActions_ActionIDArray: MJScheduledAction_[]; // Link to MJScheduledActions
     
     @Field(() => [MJAIAgentAction_])
-    false_ActionIDArray: MJAIAgentAction_[]; // Link to false
+    MJAIAgentActions_ActionIDArray: MJAIAgentAction_[]; // Link to MJAIAgentActions
     
     @Field(() => [MJMCPServerTool_])
-    false_GeneratedActionIDArray: MJMCPServerTool_[]; // Link to false
+    MJMCPServerTools_GeneratedActionIDArray: MJMCPServerTool_[]; // Link to MJMCPServerTools
     
     @Field(() => [MJActionContext_])
-    false_ActionIDArray: MJActionContext_[]; // Link to false
+    MJActionContexts_ActionIDArray: MJActionContext_[]; // Link to MJActionContexts
     
     @Field(() => [MJEntityAction_])
-    false_ActionIDArray: MJEntityAction_[]; // Link to false
+    MJEntityActions_ActionIDArray: MJEntityAction_[]; // Link to MJEntityActions
     
     @Field(() => [MJAIAgentStep_])
-    false_ActionIDArray: MJAIAgentStep_[]; // Link to false
+    MJAIAgentSteps_ActionIDArray: MJAIAgentStep_[]; // Link to MJAIAgentSteps
     
     @Field(() => [MJActionExecutionLog_])
-    false_ActionIDArray: MJActionExecutionLog_[]; // Link to false
+    MJActionExecutionLogs_ActionIDArray: MJActionExecutionLog_[]; // Link to MJActionExecutionLogs
     
     @Field(() => [MJActionAuthorization_])
-    false_ActionIDArray: MJActionAuthorization_[]; // Link to false
+    MJActionAuthorizations_ActionIDArray: MJActionAuthorization_[]; // Link to MJActionAuthorizations
     
     @Field(() => [MJAction_])
-    false_ParentIDArray: MJAction_[]; // Link to false
+    MJActions_ParentIDArray: MJAction_[]; // Link to MJActions
     
 }
 
@@ -2291,7 +2291,7 @@ export class MJActionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJActionParam_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionParams_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2302,7 +2302,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJActionLibrary_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionLibraries_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Libraries', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2313,7 +2313,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJActionResultCode_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionResultCodes_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Result Codes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2324,7 +2324,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJScheduledAction_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledActions_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2335,7 +2335,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentAction_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentActions_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2346,7 +2346,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerTool_])
-    async false_GeneratedActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerTools_GeneratedActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Tools', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2357,7 +2357,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJActionContext_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionContexts_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Contexts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2368,7 +2368,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityAction_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityActions_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2379,7 +2379,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentStep_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentSteps_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2390,7 +2390,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJActionExecutionLog_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionExecutionLogs_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Execution Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2401,7 +2401,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJActionAuthorization_])
-    async false_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionAuthorizations_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Authorizations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2412,7 +2412,7 @@ export class MJActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAction_])
-    async false_ParentIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActions_ParentIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2490,10 +2490,10 @@ export class MJAIAction_ {
     DefaultModel?: string;
         
     @Field(() => [MJAIModelAction_])
-    false_AIActionIDArray: MJAIModelAction_[]; // Link to false
+    MJAIModelActions_AIActionIDArray: MJAIModelAction_[]; // Link to MJAIModelActions
     
     @Field(() => [MJEntityAIAction_])
-    false_AIActionIDArray: MJEntityAIAction_[]; // Link to false
+    MJEntityAIActions_AIActionIDArray: MJEntityAIAction_[]; // Link to MJEntityAIActions
     
 }
 
@@ -2608,7 +2608,7 @@ export class MJAIActionResolver extends ResolverBase {
     }
     
     @Query(() => [MJAIAction_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJAIActions(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2619,7 +2619,7 @@ export class MJAIActionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIModelAction_])
-    async false_AIActionIDArray(@Root() mjaiaction_: MJAIAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelActions_AIActionIDArray(@Root() mjaiaction_: MJAIAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -2630,7 +2630,7 @@ export class MJAIActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityAIAction_])
-    async false_AIActionIDArray(@Root() mjaiaction_: MJAIAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityAIActions_AIActionIDArray(@Root() mjaiaction_: MJAIAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity AI Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -4539,7 +4539,7 @@ export class MJAIAgentNoteType_ {
     Status: string;
         
     @Field(() => [MJAIAgentNote_])
-    false_AgentNoteTypeIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_AgentNoteTypeIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
 }
 
@@ -4648,7 +4648,7 @@ export class MJAIAgentNoteTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_AgentNoteTypeIDArray(@Root() mjaiagentnotetype_: MJAIAgentNoteType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_AgentNoteTypeIDArray(@Root() mjaiagentnotetype_: MJAIAgentNoteType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -6310,7 +6310,7 @@ detailed information about what validation rules failed.`})
     RootParentID?: string;
         
     @Field(() => [MJAIAgentRunStep_])
-    false_ParentIDArray: MJAIAgentRunStep_[]; // Link to false
+    MJAIAgentRunSteps_ParentIDArray: MJAIAgentRunStep_[]; // Link to MJAIAgentRunSteps
     
 }
 
@@ -6509,7 +6509,7 @@ export class MJAIAgentRunStepResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgentRunStep_])
-    async false_ParentIDArray(@Root() mjaiagentrunstep_: MJAIAgentRunStep_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRunSteps_ParentIDArray(@Root() mjaiagentrunstep_: MJAIAgentRunStep_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -6764,22 +6764,22 @@ each time the agent processes a prompt step.`})
     RootLastRunID?: string;
         
     @Field(() => [MJAIAgentRunStep_])
-    false_AgentRunIDArray: MJAIAgentRunStep_[]; // Link to false
+    MJAIAgentRunSteps_AgentRunIDArray: MJAIAgentRunStep_[]; // Link to MJAIAgentRunSteps
     
     @Field(() => [MJAIAgentRun_])
-    false_ParentRunIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_ParentRunIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
     @Field(() => [MJAIAgentExample_])
-    false_SourceAIAgentRunIDArray: MJAIAgentExample_[]; // Link to false
+    MJAIAgentExamples_SourceAIAgentRunIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
     @Field(() => [MJAIAgentNote_])
-    false_SourceAIAgentRunIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_SourceAIAgentRunIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
     @Field(() => [MJAIAgentRunMedia_])
-    false_AgentRunIDArray: MJAIAgentRunMedia_[]; // Link to false
+    MJAIAgentRunMedias_AgentRunIDArray: MJAIAgentRunMedia_[]; // Link to MJAIAgentRunMedias
     
     @Field(() => [MJAIPromptRun_])
-    false_AgentRunIDArray: MJAIPromptRun_[]; // Link to false
+    MJAIPromptRuns_AgentRunIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
 }
 
@@ -7110,7 +7110,7 @@ export class MJAIAgentRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgentRunStep_])
-    async false_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRunSteps_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -7121,7 +7121,7 @@ export class MJAIAgentRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_ParentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_ParentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -7132,7 +7132,7 @@ export class MJAIAgentRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentExample_])
-    async false_SourceAIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentExamples_SourceAIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -7143,7 +7143,7 @@ export class MJAIAgentRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_SourceAIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_SourceAIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -7154,7 +7154,7 @@ export class MJAIAgentRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRunMedia_])
-    async false_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRunMedias_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Run Medias', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -7165,7 +7165,7 @@ export class MJAIAgentRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRun_])
-    async false_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRuns_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -7500,10 +7500,10 @@ export class MJAIAgentStep_ {
     Prompt?: string;
         
     @Field(() => [MJAIAgentStepPath_])
-    false_DestinationStepIDArray: MJAIAgentStepPath_[]; // Link to false
+    MJAIAgentStepPaths_DestinationStepIDArray: MJAIAgentStepPath_[]; // Link to MJAIAgentStepPaths
     
     @Field(() => [MJAIAgentStepPath_])
-    false_OriginStepIDArray: MJAIAgentStepPath_[]; // Link to false
+    MJAIAgentStepPaths_OriginStepIDArray: MJAIAgentStepPath_[]; // Link to MJAIAgentStepPaths
     
 }
 
@@ -7708,7 +7708,7 @@ export class MJAIAgentStepResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgentStepPath_])
-    async false_DestinationStepIDArray(@Root() mjaiagentstep_: MJAIAgentStep_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentStepPaths_DestinationStepIDArray(@Root() mjaiagentstep_: MJAIAgentStep_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Step Paths', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -7719,7 +7719,7 @@ export class MJAIAgentStepResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentStepPath_])
-    async false_OriginStepIDArray(@Root() mjaiagentstep_: MJAIAgentStep_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentStepPaths_OriginStepIDArray(@Root() mjaiagentstep_: MJAIAgentStep_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Step Paths', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -7816,7 +7816,7 @@ export class MJAIAgentType_ {
     SystemPrompt?: string;
         
     @Field(() => [MJAIAgent_])
-    false_TypeIDArray: MJAIAgent_[]; // Link to false
+    MJAIAgents_TypeIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
 }
 
@@ -7961,7 +7961,7 @@ export class MJAIAgentTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgent_])
-    async false_TypeIDArray(@Root() mjaiagenttype_: MJAIAgentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgents_TypeIDArray(@Root() mjaiagenttype_: MJAIAgentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8249,70 +8249,70 @@ if this limit is exceeded.`})
     RootParentID?: string;
         
     @Field(() => [MJAIAgentModel_])
-    false_AgentIDArray: MJAIAgentModel_[]; // Link to false
+    MJAIAgentModels_AgentIDArray: MJAIAgentModel_[]; // Link to MJAIAgentModels
     
     @Field(() => [MJAIAgentAction_])
-    false_AgentIDArray: MJAIAgentAction_[]; // Link to false
+    MJAIAgentActions_AgentIDArray: MJAIAgentAction_[]; // Link to MJAIAgentActions
     
     @Field(() => [MJAIAgentLearningCycle_])
-    false_AgentIDArray: MJAIAgentLearningCycle_[]; // Link to false
+    MJAIAgentLearningCycles_AgentIDArray: MJAIAgentLearningCycle_[]; // Link to MJAIAgentLearningCycles
     
     @Field(() => [MJAIAgentRequest_])
-    false_AgentIDArray: MJAIAgentRequest_[]; // Link to false
+    MJAIAgentRequests_AgentIDArray: MJAIAgentRequest_[]; // Link to MJAIAgentRequests
     
     @Field(() => [MJAIAgentStep_])
-    false_AgentIDArray: MJAIAgentStep_[]; // Link to false
+    MJAIAgentSteps_AgentIDArray: MJAIAgentStep_[]; // Link to MJAIAgentSteps
     
     @Field(() => [MJAIAgentRelationship_])
-    false_AgentIDArray: MJAIAgentRelationship_[]; // Link to false
+    MJAIAgentRelationships_AgentIDArray: MJAIAgentRelationship_[]; // Link to MJAIAgentRelationships
     
     @Field(() => [MJAIAgentArtifactType_])
-    false_AgentIDArray: MJAIAgentArtifactType_[]; // Link to false
+    MJAIAgentArtifactTypes_AgentIDArray: MJAIAgentArtifactType_[]; // Link to MJAIAgentArtifactTypes
     
     @Field(() => [MJAIAgentPermission_])
-    false_AgentIDArray: MJAIAgentPermission_[]; // Link to false
+    MJAIAgentPermissions_AgentIDArray: MJAIAgentPermission_[]; // Link to MJAIAgentPermissions
     
     @Field(() => [MJAIAgentDataSource_])
-    false_AgentIDArray: MJAIAgentDataSource_[]; // Link to false
+    MJAIAgentDataSources_AgentIDArray: MJAIAgentDataSource_[]; // Link to MJAIAgentDataSources
     
     @Field(() => [MJAIAgentModality_])
-    false_AgentIDArray: MJAIAgentModality_[]; // Link to false
+    MJAIAgentModalities_AgentIDArray: MJAIAgentModality_[]; // Link to MJAIAgentModalities
     
     @Field(() => [MJAIAgentNote_])
-    false_AgentIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_AgentIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
     @Field(() => [MJAIAgentPrompt_])
-    false_AgentIDArray: MJAIAgentPrompt_[]; // Link to false
+    MJAIAgentPrompts_AgentIDArray: MJAIAgentPrompt_[]; // Link to MJAIAgentPrompts
     
     @Field(() => [MJAIAgentRun_])
-    false_AgentIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_AgentIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
     @Field(() => [MJAIAgentStep_])
-    false_SubAgentIDArray: MJAIAgentStep_[]; // Link to false
+    MJAIAgentSteps_SubAgentIDArray: MJAIAgentStep_[]; // Link to MJAIAgentSteps
     
     @Field(() => [MJAIAgentRelationship_])
-    false_SubAgentIDArray: MJAIAgentRelationship_[]; // Link to false
+    MJAIAgentRelationships_SubAgentIDArray: MJAIAgentRelationship_[]; // Link to MJAIAgentRelationships
     
     @Field(() => [MJTask_])
-    false_AgentIDArray: MJTask_[]; // Link to false
+    MJTasks_AgentIDArray: MJTask_[]; // Link to MJTasks
     
     @Field(() => [MJAIAgentExample_])
-    false_AgentIDArray: MJAIAgentExample_[]; // Link to false
+    MJAIAgentExamples_AgentIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
     @Field(() => [MJAIAgentConfiguration_])
-    false_AgentIDArray: MJAIAgentConfiguration_[]; // Link to false
+    MJAIAgentConfigurations_AgentIDArray: MJAIAgentConfiguration_[]; // Link to MJAIAgentConfigurations
     
     @Field(() => [MJAIResultCache_])
-    false_AgentIDArray: MJAIResultCache_[]; // Link to false
+    MJAIResultCache_AgentIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
     
     @Field(() => [MJAIPromptRun_])
-    false_AgentIDArray: MJAIPromptRun_[]; // Link to false
+    MJAIPromptRuns_AgentIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
     @Field(() => [MJConversationDetail_])
-    false_AgentIDArray: MJConversationDetail_[]; // Link to false
+    MJConversationDetails_AgentIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
     @Field(() => [MJAIAgent_])
-    false_ParentIDArray: MJAIAgent_[]; // Link to false
+    MJAIAgents_ParentIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
 }
 
@@ -8745,7 +8745,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgentModel_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentModels_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8756,7 +8756,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentAction_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentActions_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8767,7 +8767,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentLearningCycle_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentLearningCycles_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Learning Cycles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8778,7 +8778,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRequest_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRequests_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Requests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8789,7 +8789,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentStep_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentSteps_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8800,7 +8800,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRelationship_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRelationships_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Relationships', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8811,7 +8811,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentArtifactType_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentArtifactTypes_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Artifact Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8822,7 +8822,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentPermission_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentPermissions_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8833,7 +8833,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentDataSource_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentDataSources_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Data Sources', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8844,7 +8844,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentModality_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentModalities_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Modalities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8855,7 +8855,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8866,7 +8866,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentPrompt_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentPrompts_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8877,7 +8877,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8888,7 +8888,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentStep_])
-    async false_SubAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentSteps_SubAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8899,7 +8899,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRelationship_])
-    async false_SubAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRelationships_SubAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Relationships', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8910,7 +8910,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTask_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTasks_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8921,7 +8921,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentExample_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentExamples_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8932,7 +8932,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentConfiguration_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentConfigurations_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Configurations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8943,7 +8943,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIResultCache_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIResultCache_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Result Cache', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8954,7 +8954,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRun_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRuns_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8965,7 +8965,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetail_])
-    async false_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetails_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -8976,7 +8976,7 @@ export class MJAIAgentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgent_])
-    async false_ParentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgents_ParentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9067,10 +9067,10 @@ export class MJAIArchitecture_ {
     RootParentArchitectureID?: string;
         
     @Field(() => [MJAIArchitecture_])
-    false_ParentArchitectureIDArray: MJAIArchitecture_[]; // Link to false
+    MJAIArchitectures_ParentArchitectureIDArray: MJAIArchitecture_[]; // Link to MJAIArchitectures
     
     @Field(() => [MJAIModelArchitecture_])
-    false_ArchitectureIDArray: MJAIModelArchitecture_[]; // Link to false
+    MJAIModelArchitectures_ArchitectureIDArray: MJAIModelArchitecture_[]; // Link to MJAIModelArchitectures
     
 }
 
@@ -9197,7 +9197,7 @@ export class MJAIArchitectureResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIArchitecture_])
-    async false_ParentArchitectureIDArray(@Root() mjaiarchitecture_: MJAIArchitecture_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIArchitectures_ParentArchitectureIDArray(@Root() mjaiarchitecture_: MJAIArchitecture_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Architectures', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9208,7 +9208,7 @@ export class MJAIArchitectureResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelArchitecture_])
-    async false_ArchitectureIDArray(@Root() mjaiarchitecture_: MJAIArchitecture_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelArchitectures_ArchitectureIDArray(@Root() mjaiarchitecture_: MJAIArchitecture_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Architectures', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9499,28 +9499,28 @@ export class MJAIConfiguration_ {
     RootParentID?: string;
         
     @Field(() => [MJAIConfigurationParam_])
-    false_ConfigurationIDArray: MJAIConfigurationParam_[]; // Link to false
+    MJAIConfigurationParams_ConfigurationIDArray: MJAIConfigurationParam_[]; // Link to MJAIConfigurationParams
     
     @Field(() => [MJAIAgentPrompt_])
-    false_ConfigurationIDArray: MJAIAgentPrompt_[]; // Link to false
+    MJAIAgentPrompts_ConfigurationIDArray: MJAIAgentPrompt_[]; // Link to MJAIAgentPrompts
     
     @Field(() => [MJAIAgentConfiguration_])
-    false_AIConfigurationIDArray: MJAIAgentConfiguration_[]; // Link to false
+    MJAIAgentConfigurations_AIConfigurationIDArray: MJAIAgentConfiguration_[]; // Link to MJAIAgentConfigurations
     
     @Field(() => [MJAIPromptModel_])
-    false_ConfigurationIDArray: MJAIPromptModel_[]; // Link to false
+    MJAIPromptModels_ConfigurationIDArray: MJAIPromptModel_[]; // Link to MJAIPromptModels
     
     @Field(() => [MJAIResultCache_])
-    false_ConfigurationIDArray: MJAIResultCache_[]; // Link to false
+    MJAIResultCache_ConfigurationIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
     
     @Field(() => [MJAIPromptRun_])
-    false_ConfigurationIDArray: MJAIPromptRun_[]; // Link to false
+    MJAIPromptRuns_ConfigurationIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
     @Field(() => [MJAIAgentRun_])
-    false_ConfigurationIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_ConfigurationIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
     @Field(() => [MJAIConfiguration_])
-    false_ParentIDArray: MJAIConfiguration_[]; // Link to false
+    MJAIConfigurations_ParentIDArray: MJAIConfiguration_[]; // Link to MJAIConfigurations
     
 }
 
@@ -9659,7 +9659,7 @@ export class MJAIConfigurationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIConfigurationParam_])
-    async false_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIConfigurationParams_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configuration Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9670,7 +9670,7 @@ export class MJAIConfigurationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentPrompt_])
-    async false_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentPrompts_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9681,7 +9681,7 @@ export class MJAIConfigurationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentConfiguration_])
-    async false_AIConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentConfigurations_AIConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Configurations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9692,7 +9692,7 @@ export class MJAIConfigurationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptModel_])
-    async false_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptModels_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9703,7 +9703,7 @@ export class MJAIConfigurationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIResultCache_])
-    async false_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIResultCache_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Result Cache', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9714,7 +9714,7 @@ export class MJAIConfigurationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRun_])
-    async false_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRuns_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9725,7 +9725,7 @@ export class MJAIConfigurationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -9736,7 +9736,7 @@ export class MJAIConfigurationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIConfiguration_])
-    async false_ParentIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIConfigurations_ParentIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -10034,25 +10034,25 @@ export class MJAIModality_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJAIAgentModality_])
-    false_ModalityIDArray: MJAIAgentModality_[]; // Link to false
+    MJAIAgentModalities_ModalityIDArray: MJAIAgentModality_[]; // Link to MJAIAgentModalities
     
     @Field(() => [MJAIModelModality_])
-    false_ModalityIDArray: MJAIModelModality_[]; // Link to false
+    MJAIModelModalities_ModalityIDArray: MJAIModelModality_[]; // Link to MJAIModelModalities
     
     @Field(() => [MJConversationDetailAttachment_])
-    false_ModalityIDArray: MJConversationDetailAttachment_[]; // Link to false
+    MJConversationDetailAttachments_ModalityIDArray: MJConversationDetailAttachment_[]; // Link to MJConversationDetailAttachments
     
     @Field(() => [MJAIModelType_])
-    false_DefaultOutputModalityIDArray: MJAIModelType_[]; // Link to false
+    MJAIModelTypes_DefaultOutputModalityIDArray: MJAIModelType_[]; // Link to MJAIModelTypes
     
     @Field(() => [MJAIPromptRunMedia_])
-    false_ModalityIDArray: MJAIPromptRunMedia_[]; // Link to false
+    MJAIPromptRunMedias_ModalityIDArray: MJAIPromptRunMedia_[]; // Link to MJAIPromptRunMedias
     
     @Field(() => [MJAIModelType_])
-    false_DefaultInputModalityIDArray: MJAIModelType_[]; // Link to false
+    MJAIModelTypes_DefaultInputModalityIDArray: MJAIModelType_[]; // Link to MJAIModelTypes
     
     @Field(() => [MJAIAgentRunMedia_])
-    false_ModalityIDArray: MJAIAgentRunMedia_[]; // Link to false
+    MJAIAgentRunMedias_ModalityIDArray: MJAIAgentRunMedia_[]; // Link to MJAIAgentRunMedias
     
 }
 
@@ -10185,7 +10185,7 @@ export class MJAIModalityResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgentModality_])
-    async false_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentModalities_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Modalities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -10196,7 +10196,7 @@ export class MJAIModalityResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelModality_])
-    async false_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelModalities_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Modalities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -10207,7 +10207,7 @@ export class MJAIModalityResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetailAttachment_])
-    async false_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetailAttachments_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Detail Attachments', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -10218,7 +10218,7 @@ export class MJAIModalityResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelType_])
-    async false_DefaultOutputModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelTypes_DefaultOutputModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -10229,7 +10229,7 @@ export class MJAIModalityResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRunMedia_])
-    async false_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRunMedias_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Run Medias', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -10240,7 +10240,7 @@ export class MJAIModalityResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelType_])
-    async false_DefaultInputModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelTypes_DefaultInputModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -10251,7 +10251,7 @@ export class MJAIModalityResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRunMedia_])
-    async false_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRunMedias_ModalityIDArray(@Root() mjaimodality_: MJAIModality_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Run Medias', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -10427,7 +10427,7 @@ export class MJAIModelActionResolver extends ResolverBase {
     }
     
     @Query(() => [MJAIModelAction_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJAIModelActions(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -11166,7 +11166,7 @@ export class MJAIModelPriceType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJAIModelCost_])
-    false_PriceTypeIDArray: MJAIModelCost_[]; // Link to false
+    MJAIModelCosts_PriceTypeIDArray: MJAIModelCost_[]; // Link to MJAIModelCosts
     
 }
 
@@ -11263,7 +11263,7 @@ export class MJAIModelPriceTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIModelCost_])
-    async false_PriceTypeIDArray(@Root() mjaimodelpricetype_: MJAIModelPriceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelCosts_PriceTypeIDArray(@Root() mjaimodelpricetype_: MJAIModelPriceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -11331,7 +11331,7 @@ export class MJAIModelPriceUnitType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJAIModelCost_])
-    false_UnitTypeIDArray: MJAIModelCost_[]; // Link to false
+    MJAIModelCosts_UnitTypeIDArray: MJAIModelCost_[]; // Link to MJAIModelCosts
     
 }
 
@@ -11434,7 +11434,7 @@ export class MJAIModelPriceUnitTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIModelCost_])
-    async false_UnitTypeIDArray(@Root() mjaimodelpriceunittype_: MJAIModelPriceUnitType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelCosts_UnitTypeIDArray(@Root() mjaimodelpriceunittype_: MJAIModelPriceUnitType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -11514,10 +11514,10 @@ export class MJAIModelType_ {
     DefaultOutputModality: string;
         
     @Field(() => [MJAIModel_])
-    false_AIModelTypeIDArray: MJAIModel_[]; // Link to false
+    MJAIModels_AIModelTypeIDArray: MJAIModel_[]; // Link to MJAIModels
     
     @Field(() => [MJAIPrompt_])
-    false_AIModelTypeIDArray: MJAIPrompt_[]; // Link to false
+    MJAIPrompts_AIModelTypeIDArray: MJAIPrompt_[]; // Link to MJAIPrompts
     
 }
 
@@ -11626,7 +11626,7 @@ export class MJAIModelTypeResolver extends ResolverBase {
     }
     
     @Query(() => [MJAIModelType_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJAIModelTypes(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -11637,7 +11637,7 @@ export class MJAIModelTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIModel_])
-    async false_AIModelTypeIDArray(@Root() mjaimodeltype_: MJAIModelType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModels_AIModelTypeIDArray(@Root() mjaimodeltype_: MJAIModelType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -11648,7 +11648,7 @@ export class MJAIModelTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPrompt_])
-    async false_AIModelTypeIDArray(@Root() mjaimodeltype_: MJAIModelType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPrompts_AIModelTypeIDArray(@Root() mjaimodeltype_: MJAIModelType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -11764,7 +11764,7 @@ export class MJAIModelVendor_ {
     Type: string;
         
     @Field(() => [MJAICredentialBinding_])
-    false_AIModelVendorIDArray: MJAICredentialBinding_[]; // Link to false
+    MJAICredentialBindings_AIModelVendorIDArray: MJAICredentialBinding_[]; // Link to MJAICredentialBindings
     
 }
 
@@ -11927,7 +11927,7 @@ export class MJAIModelVendorResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAICredentialBinding_])
-    async false_AIModelVendorIDArray(@Root() mjaimodelvendor_: MJAIModelVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAICredentialBindings_AIModelVendorIDArray(@Root() mjaimodelvendor_: MJAIModelVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12047,64 +12047,64 @@ export class MJAIModel_ {
     SupportsEffortLevel?: boolean;
         
     @Field(() => [MJAIAction_])
-    false_DefaultModelIDArray: MJAIAction_[]; // Link to false
+    MJAIActions_DefaultModelIDArray: MJAIAction_[]; // Link to MJAIActions
     
     @Field(() => [MJAIModelAction_])
-    false_AIModelIDArray: MJAIModelAction_[]; // Link to false
+    MJAIModelActions_AIModelIDArray: MJAIModelAction_[]; // Link to MJAIModelActions
     
     @Field(() => [MJVectorIndex_])
-    false_EmbeddingModelIDArray: MJVectorIndex_[]; // Link to false
+    MJVectorIndexes_EmbeddingModelIDArray: MJVectorIndex_[]; // Link to MJVectorIndexes
     
     @Field(() => [MJEntityDocument_])
-    false_AIModelIDArray: MJEntityDocument_[]; // Link to false
+    MJEntityDocuments_AIModelIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
     @Field(() => [MJEntityAIAction_])
-    false_AIModelIDArray: MJEntityAIAction_[]; // Link to false
+    MJEntityAIActions_AIModelIDArray: MJEntityAIAction_[]; // Link to MJEntityAIActions
     
     @Field(() => [MJContentType_])
-    false_AIModelIDArray: MJContentType_[]; // Link to false
+    MJContentTypes_AIModelIDArray: MJContentType_[]; // Link to MJContentTypes
     
     @Field(() => [MJAIResultCache_])
-    false_AIModelIDArray: MJAIResultCache_[]; // Link to false
+    MJAIResultCache_AIModelIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
     
     @Field(() => [MJAIAgentNote_])
-    false_EmbeddingModelIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_EmbeddingModelIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
     @Field(() => [MJAIAgentExample_])
-    false_EmbeddingModelIDArray: MJAIAgentExample_[]; // Link to false
+    MJAIAgentExamples_EmbeddingModelIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
     @Field(() => [MJAIModelModality_])
-    false_ModelIDArray: MJAIModelModality_[]; // Link to false
+    MJAIModelModalities_ModelIDArray: MJAIModelModality_[]; // Link to MJAIModelModalities
     
     @Field(() => [MJAIModelArchitecture_])
-    false_ModelIDArray: MJAIModelArchitecture_[]; // Link to false
+    MJAIModelArchitectures_ModelIDArray: MJAIModelArchitecture_[]; // Link to MJAIModelArchitectures
     
     @Field(() => [MJAIAgentModel_])
-    false_ModelIDArray: MJAIAgentModel_[]; // Link to false
+    MJAIAgentModels_ModelIDArray: MJAIAgentModel_[]; // Link to MJAIAgentModels
     
     @Field(() => [MJAIModelVendor_])
-    false_ModelIDArray: MJAIModelVendor_[]; // Link to false
+    MJAIModelVendors_ModelIDArray: MJAIModelVendor_[]; // Link to MJAIModelVendors
     
     @Field(() => [MJGeneratedCode_])
-    false_GeneratedByModelIDArray: MJGeneratedCode_[]; // Link to false
+    MJGeneratedCodes_GeneratedByModelIDArray: MJGeneratedCode_[]; // Link to MJGeneratedCodes
     
     @Field(() => [MJAIModelCost_])
-    false_ModelIDArray: MJAIModelCost_[]; // Link to false
+    MJAIModelCosts_ModelIDArray: MJAIModelCost_[]; // Link to MJAIModelCosts
     
     @Field(() => [MJAIPromptModel_])
-    false_ModelIDArray: MJAIPromptModel_[]; // Link to false
+    MJAIPromptModels_ModelIDArray: MJAIPromptModel_[]; // Link to MJAIPromptModels
     
     @Field(() => [MJAIPromptRun_])
-    false_ModelIDArray: MJAIPromptRun_[]; // Link to false
+    MJAIPromptRuns_ModelIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
     @Field(() => [MJAIAgentRun_])
-    false_OverrideModelIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_OverrideModelIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
     @Field(() => [MJQuery_])
-    false_EmbeddingModelIDArray: MJQuery_[]; // Link to false
+    MJQueries_EmbeddingModelIDArray: MJQuery_[]; // Link to MJQueries
     
     @Field(() => [MJAIModel_])
-    false_PriorVersionIDArray: MJAIModel_[]; // Link to false
+    MJAIModels_PriorVersionIDArray: MJAIModel_[]; // Link to MJAIModels
     
 }
 
@@ -12291,7 +12291,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
     
     @Query(() => [MJAIModel_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJAIModels(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12302,7 +12302,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAction_])
-    async false_DefaultModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIActions_DefaultModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12313,7 +12313,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelAction_])
-    async false_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelActions_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12324,7 +12324,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJVectorIndex_])
-    async false_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVectorIndexes_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Vector Indexes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12335,7 +12335,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityDocument_])
-    async false_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityDocuments_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12346,7 +12346,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityAIAction_])
-    async false_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityAIActions_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity AI Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12357,7 +12357,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJContentType_])
-    async false_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentTypes_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12368,7 +12368,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIResultCache_])
-    async false_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIResultCache_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Result Cache', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12379,7 +12379,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12390,7 +12390,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentExample_])
-    async false_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentExamples_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12401,7 +12401,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelModality_])
-    async false_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelModalities_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Modalities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12412,7 +12412,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelArchitecture_])
-    async false_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelArchitectures_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Architectures', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12423,7 +12423,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentModel_])
-    async false_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentModels_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12434,7 +12434,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelVendor_])
-    async false_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelVendors_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12445,7 +12445,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJGeneratedCode_])
-    async false_GeneratedByModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJGeneratedCodes_GeneratedByModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Generated Codes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12456,7 +12456,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelCost_])
-    async false_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelCosts_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12467,7 +12467,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptModel_])
-    async false_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptModels_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12478,7 +12478,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRun_])
-    async false_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRuns_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12489,7 +12489,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_OverrideModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_OverrideModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12500,7 +12500,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJQuery_])
-    async false_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueries_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Queries', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12511,7 +12511,7 @@ export class MJAIModelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModel_])
-    async false_PriorVersionIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModels_PriorVersionIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12587,10 +12587,10 @@ export class MJAIPromptCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJAIPrompt_])
-    false_CategoryIDArray: MJAIPrompt_[]; // Link to false
+    MJAIPrompts_CategoryIDArray: MJAIPrompt_[]; // Link to MJAIPrompts
     
     @Field(() => [MJAIPromptCategory_])
-    false_ParentIDArray: MJAIPromptCategory_[]; // Link to false
+    MJAIPromptCategories_ParentIDArray: MJAIPromptCategory_[]; // Link to MJAIPromptCategories
     
 }
 
@@ -12693,7 +12693,7 @@ export class MJAIPromptCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIPrompt_])
-    async false_CategoryIDArray(@Root() mjaipromptcategory_: MJAIPromptCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPrompts_CategoryIDArray(@Root() mjaipromptcategory_: MJAIPromptCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12704,7 +12704,7 @@ export class MJAIPromptCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptCategory_])
-    async false_ParentIDArray(@Root() mjaipromptcategory_: MJAIPromptCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptCategories_ParentIDArray(@Root() mjaipromptcategory_: MJAIPromptCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -12820,7 +12820,7 @@ export class MJAIPromptModel_ {
     Configuration?: string;
         
     @Field(() => [MJAICredentialBinding_])
-    false_AIPromptModelIDArray: MJAICredentialBinding_[]; // Link to false
+    MJAICredentialBindings_AIPromptModelIDArray: MJAICredentialBinding_[]; // Link to MJAICredentialBindings
     
 }
 
@@ -12977,7 +12977,7 @@ export class MJAIPromptModelResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAICredentialBinding_])
-    async false_AIPromptModelIDArray(@Root() mjaipromptmodel_: MJAIPromptModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAICredentialBindings_AIPromptModelIDArray(@Root() mjaipromptmodel_: MJAIPromptModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -13093,7 +13093,7 @@ export class MJAIPromptRunMedia_ {
     File?: string;
         
     @Field(() => [MJAIAgentRunMedia_])
-    false_SourcePromptRunMediaIDArray: MJAIAgentRunMedia_[]; // Link to false
+    MJAIAgentRunMedias_SourcePromptRunMediaIDArray: MJAIAgentRunMedia_[]; // Link to MJAIAgentRunMedias
     
 }
 
@@ -13262,7 +13262,7 @@ export class MJAIPromptRunMediaResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgentRunMedia_])
-    async false_SourcePromptRunMediaIDArray(@Root() mjaipromptrunmedia_: MJAIPromptRunMedia_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRunMedias_SourcePromptRunMediaIDArray(@Root() mjaipromptrunmedia_: MJAIPromptRunMedia_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Run Medias', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -13646,13 +13646,13 @@ export class MJAIPromptRun_ {
     RootRerunFromPromptRunID?: string;
         
     @Field(() => [MJAIPromptRun_])
-    false_ParentIDArray: MJAIPromptRun_[]; // Link to false
+    MJAIPromptRuns_ParentIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
     @Field(() => [MJAIPromptRunMedia_])
-    false_PromptRunIDArray: MJAIPromptRunMedia_[]; // Link to false
+    MJAIPromptRunMedias_PromptRunIDArray: MJAIPromptRunMedia_[]; // Link to MJAIPromptRunMedias
     
     @Field(() => [MJAIResultCache_])
-    false_PromptRunIDArray: MJAIResultCache_[]; // Link to false
+    MJAIResultCache_PromptRunIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
     
 }
 
@@ -14223,7 +14223,7 @@ export class MJAIPromptRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIPromptRun_])
-    async false_ParentIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRuns_ParentIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -14234,7 +14234,7 @@ export class MJAIPromptRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRunMedia_])
-    async false_PromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRunMedias_PromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Run Medias', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -14245,7 +14245,7 @@ export class MJAIPromptRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIResultCache_])
-    async false_PromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIResultCache_PromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Result Cache', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -14309,7 +14309,7 @@ export class MJAIPromptType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJAIPrompt_])
-    false_TypeIDArray: MJAIPrompt_[]; // Link to false
+    MJAIPrompts_TypeIDArray: MJAIPrompt_[]; // Link to MJAIPrompts
     
 }
 
@@ -14406,7 +14406,7 @@ export class MJAIPromptTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIPrompt_])
-    async false_TypeIDArray(@Root() mjaiprompttype_: MJAIPromptType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPrompts_TypeIDArray(@Root() mjaiprompttype_: MJAIPromptType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -14653,40 +14653,40 @@ export class MJAIPrompt_ {
     RootResultSelectorPromptID?: string;
         
     @Field(() => [MJAIResultCache_])
-    false_AIPromptIDArray: MJAIResultCache_[]; // Link to false
+    MJAIResultCache_AIPromptIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
     
     @Field(() => [MJAIConfiguration_])
-    false_DefaultPromptForContextCompressionIDArray: MJAIConfiguration_[]; // Link to false
+    MJAIConfigurations_DefaultPromptForContextCompressionIDArray: MJAIConfiguration_[]; // Link to MJAIConfigurations
     
     @Field(() => [MJAIAgentType_])
-    false_SystemPromptIDArray: MJAIAgentType_[]; // Link to false
+    MJAIAgentTypes_SystemPromptIDArray: MJAIAgentType_[]; // Link to MJAIAgentTypes
     
     @Field(() => [MJAIAgentAction_])
-    false_CompactPromptIDArray: MJAIAgentAction_[]; // Link to false
+    MJAIAgentActions_CompactPromptIDArray: MJAIAgentAction_[]; // Link to MJAIAgentActions
     
     @Field(() => [MJAIConfiguration_])
-    false_DefaultPromptForContextSummarizationIDArray: MJAIConfiguration_[]; // Link to false
+    MJAIConfigurations_DefaultPromptForContextSummarizationIDArray: MJAIConfiguration_[]; // Link to MJAIConfigurations
     
     @Field(() => [MJAIPrompt_])
-    false_ResultSelectorPromptIDArray: MJAIPrompt_[]; // Link to false
+    MJAIPrompts_ResultSelectorPromptIDArray: MJAIPrompt_[]; // Link to MJAIPrompts
     
     @Field(() => [MJAIPromptModel_])
-    false_PromptIDArray: MJAIPromptModel_[]; // Link to false
+    MJAIPromptModels_PromptIDArray: MJAIPromptModel_[]; // Link to MJAIPromptModels
     
     @Field(() => [MJAIAgentPrompt_])
-    false_PromptIDArray: MJAIAgentPrompt_[]; // Link to false
+    MJAIAgentPrompts_PromptIDArray: MJAIAgentPrompt_[]; // Link to MJAIAgentPrompts
     
     @Field(() => [MJAIAgentStep_])
-    false_PromptIDArray: MJAIAgentStep_[]; // Link to false
+    MJAIAgentSteps_PromptIDArray: MJAIAgentStep_[]; // Link to MJAIAgentSteps
     
     @Field(() => [MJAIPromptRun_])
-    false_PromptIDArray: MJAIPromptRun_[]; // Link to false
+    MJAIPromptRuns_PromptIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
     @Field(() => [MJAIAgent_])
-    false_ContextCompressionPromptIDArray: MJAIAgent_[]; // Link to false
+    MJAIAgents_ContextCompressionPromptIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
     @Field(() => [MJAction_])
-    false_DefaultCompactPromptIDArray: MJAction_[]; // Link to false
+    MJActions_DefaultCompactPromptIDArray: MJAction_[]; // Link to MJActions
     
 }
 
@@ -15059,7 +15059,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIResultCache_])
-    async false_AIPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIResultCache_AIPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Result Cache', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15070,7 +15070,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIConfiguration_])
-    async false_DefaultPromptForContextCompressionIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIConfigurations_DefaultPromptForContextCompressionIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15081,7 +15081,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentType_])
-    async false_SystemPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentTypes_SystemPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15092,7 +15092,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentAction_])
-    async false_CompactPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentActions_CompactPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15103,7 +15103,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIConfiguration_])
-    async false_DefaultPromptForContextSummarizationIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIConfigurations_DefaultPromptForContextSummarizationIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15114,7 +15114,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPrompt_])
-    async false_ResultSelectorPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPrompts_ResultSelectorPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15125,7 +15125,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptModel_])
-    async false_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptModels_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15136,7 +15136,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentPrompt_])
-    async false_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentPrompts_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15147,7 +15147,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentStep_])
-    async false_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentSteps_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15158,7 +15158,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRun_])
-    async false_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRuns_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15169,7 +15169,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgent_])
-    async false_ContextCompressionPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgents_ContextCompressionPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15180,7 +15180,7 @@ export class MJAIPromptResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAction_])
-    async false_DefaultCompactPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActions_DefaultCompactPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15513,10 +15513,10 @@ export class MJAIVendorTypeDefinition_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJAIModelVendor_])
-    false_TypeIDArray: MJAIModelVendor_[]; // Link to false
+    MJAIModelVendors_TypeIDArray: MJAIModelVendor_[]; // Link to MJAIModelVendors
     
     @Field(() => [MJAIVendorType_])
-    false_TypeIDArray: MJAIVendorType_[]; // Link to false
+    MJAIVendorTypes_TypeIDArray: MJAIVendorType_[]; // Link to MJAIVendorTypes
     
 }
 
@@ -15613,7 +15613,7 @@ export class MJAIVendorTypeDefinitionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIModelVendor_])
-    async false_TypeIDArray(@Root() mjaivendortypedefinition_: MJAIVendorTypeDefinition_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelVendors_TypeIDArray(@Root() mjaivendortypedefinition_: MJAIVendorTypeDefinition_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15624,7 +15624,7 @@ export class MJAIVendorTypeDefinitionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIVendorType_])
-    async false_TypeIDArray(@Root() mjaivendortypedefinition_: MJAIVendorTypeDefinition_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIVendorTypes_TypeIDArray(@Root() mjaivendortypedefinition_: MJAIVendorTypeDefinition_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Vendor Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -15871,28 +15871,28 @@ export class MJAIVendor_ {
     CredentialType?: string;
         
     @Field(() => [MJAIPromptModel_])
-    false_VendorIDArray: MJAIPromptModel_[]; // Link to false
+    MJAIPromptModels_VendorIDArray: MJAIPromptModel_[]; // Link to MJAIPromptModels
     
     @Field(() => [MJAIResultCache_])
-    false_VendorIDArray: MJAIResultCache_[]; // Link to false
+    MJAIResultCache_VendorIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
     
     @Field(() => [MJAIModelVendor_])
-    false_VendorIDArray: MJAIModelVendor_[]; // Link to false
+    MJAIModelVendors_VendorIDArray: MJAIModelVendor_[]; // Link to MJAIModelVendors
     
     @Field(() => [MJAIPromptRun_])
-    false_VendorIDArray: MJAIPromptRun_[]; // Link to false
+    MJAIPromptRuns_VendorIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
     @Field(() => [MJAIVendorType_])
-    false_VendorIDArray: MJAIVendorType_[]; // Link to false
+    MJAIVendorTypes_VendorIDArray: MJAIVendorType_[]; // Link to MJAIVendorTypes
     
     @Field(() => [MJAIModelCost_])
-    false_VendorIDArray: MJAIModelCost_[]; // Link to false
+    MJAIModelCosts_VendorIDArray: MJAIModelCost_[]; // Link to MJAIModelCosts
     
     @Field(() => [MJAICredentialBinding_])
-    false_AIVendorIDArray: MJAICredentialBinding_[]; // Link to false
+    MJAICredentialBindings_AIVendorIDArray: MJAICredentialBinding_[]; // Link to MJAICredentialBindings
     
     @Field(() => [MJAIAgentRun_])
-    false_OverrideVendorIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_OverrideVendorIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
 }
 
@@ -15995,7 +15995,7 @@ export class MJAIVendorResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIPromptModel_])
-    async false_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptModels_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16006,7 +16006,7 @@ export class MJAIVendorResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIResultCache_])
-    async false_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIResultCache_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Result Cache', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16017,7 +16017,7 @@ export class MJAIVendorResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelVendor_])
-    async false_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelVendors_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16028,7 +16028,7 @@ export class MJAIVendorResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRun_])
-    async false_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRuns_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16039,7 +16039,7 @@ export class MJAIVendorResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIVendorType_])
-    async false_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIVendorTypes_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Vendor Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16050,7 +16050,7 @@ export class MJAIVendorResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIModelCost_])
-    async false_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIModelCosts_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16061,7 +16061,7 @@ export class MJAIVendorResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAICredentialBinding_])
-    async false_AIVendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAICredentialBindings_AIVendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16072,7 +16072,7 @@ export class MJAIVendorResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_OverrideVendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_OverrideVendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16334,13 +16334,13 @@ export class MJAPIApplication_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJAPIKeyUsageLog_])
-    false_ApplicationIDArray: MJAPIKeyUsageLog_[]; // Link to false
+    MJAPIKeyUsageLogs_ApplicationIDArray: MJAPIKeyUsageLog_[]; // Link to MJAPIKeyUsageLogs
     
     @Field(() => [MJAPIApplicationScope_])
-    false_ApplicationIDArray: MJAPIApplicationScope_[]; // Link to false
+    MJAPIApplicationScopes_ApplicationIDArray: MJAPIApplicationScope_[]; // Link to MJAPIApplicationScopes
     
     @Field(() => [MJAPIKeyApplication_])
-    false_ApplicationIDArray: MJAPIKeyApplication_[]; // Link to false
+    MJAPIKeyApplications_ApplicationIDArray: MJAPIKeyApplication_[]; // Link to MJAPIKeyApplications
     
 }
 
@@ -16443,7 +16443,7 @@ export class MJAPIApplicationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAPIKeyUsageLog_])
-    async false_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIKeyUsageLogs_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Key Usage Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16454,7 +16454,7 @@ export class MJAPIApplicationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAPIApplicationScope_])
-    async false_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIApplicationScopes_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -16465,7 +16465,7 @@ export class MJAPIApplicationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAPIKeyApplication_])
-    async false_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIKeyApplications_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Key Applications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -17175,13 +17175,13 @@ export class MJAPIKey_ {
     CreatedByUser: string;
         
     @Field(() => [MJAPIKeyUsageLog_])
-    false_APIKeyIDArray: MJAPIKeyUsageLog_[]; // Link to false
+    MJAPIKeyUsageLogs_APIKeyIDArray: MJAPIKeyUsageLog_[]; // Link to MJAPIKeyUsageLogs
     
     @Field(() => [MJAPIKeyScope_])
-    false_APIKeyIDArray: MJAPIKeyScope_[]; // Link to false
+    MJAPIKeyScopes_APIKeyIDArray: MJAPIKeyScope_[]; // Link to MJAPIKeyScopes
     
     @Field(() => [MJAPIKeyApplication_])
-    false_APIKeyIDArray: MJAPIKeyApplication_[]; // Link to false
+    MJAPIKeyApplications_APIKeyIDArray: MJAPIKeyApplication_[]; // Link to MJAPIKeyApplications
     
 }
 
@@ -17314,7 +17314,7 @@ export class MJAPIKeyResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAPIKeyUsageLog_])
-    async false_APIKeyIDArray(@Root() mjapikey_: MJAPIKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIKeyUsageLogs_APIKeyIDArray(@Root() mjapikey_: MJAPIKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Key Usage Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -17325,7 +17325,7 @@ export class MJAPIKeyResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAPIKeyScope_])
-    async false_APIKeyIDArray(@Root() mjapikey_: MJAPIKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIKeyScopes_APIKeyIDArray(@Root() mjapikey_: MJAPIKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Key Scopes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -17336,7 +17336,7 @@ export class MJAPIKeyResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAPIKeyApplication_])
-    async false_APIKeyIDArray(@Root() mjapikey_: MJAPIKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIKeyApplications_APIKeyIDArray(@Root() mjapikey_: MJAPIKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Key Applications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -17431,13 +17431,13 @@ export class MJAPIScope_ {
     RootParentID?: string;
         
     @Field(() => [MJAPIKeyScope_])
-    false_ScopeIDArray: MJAPIKeyScope_[]; // Link to false
+    MJAPIKeyScopes_ScopeIDArray: MJAPIKeyScope_[]; // Link to MJAPIKeyScopes
     
     @Field(() => [MJAPIApplicationScope_])
-    false_ScopeIDArray: MJAPIApplicationScope_[]; // Link to false
+    MJAPIApplicationScopes_ScopeIDArray: MJAPIApplicationScope_[]; // Link to MJAPIApplicationScopes
     
     @Field(() => [MJAPIScope_])
-    false_ParentIDArray: MJAPIScope_[]; // Link to false
+    MJAPIScopes_ParentIDArray: MJAPIScope_[]; // Link to MJAPIScopes
     
 }
 
@@ -17570,7 +17570,7 @@ export class MJAPIScopeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAPIKeyScope_])
-    async false_ScopeIDArray(@Root() mjapiscope_: MJAPIScope_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIKeyScopes_ScopeIDArray(@Root() mjapiscope_: MJAPIScope_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Key Scopes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -17581,7 +17581,7 @@ export class MJAPIScopeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAPIApplicationScope_])
-    async false_ScopeIDArray(@Root() mjapiscope_: MJAPIScope_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIApplicationScopes_ScopeIDArray(@Root() mjapiscope_: MJAPIScope_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -17592,7 +17592,7 @@ export class MJAPIScopeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAPIScope_])
-    async false_ParentIDArray(@Root() mjapiscope_: MJAPIScope_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIScopes_ParentIDArray(@Root() mjapiscope_: MJAPIScope_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Scopes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18059,19 +18059,19 @@ export class MJApplication_ {
     AutoUpdatePath: boolean;
         
     @Field(() => [MJApplicationEntity_])
-    false_ApplicationIDArray: MJApplicationEntity_[]; // Link to false
+    MJApplicationEntities_ApplicationIDArray: MJApplicationEntity_[]; // Link to MJApplicationEntities
     
     @Field(() => [MJUserApplication_])
-    false_ApplicationIDArray: MJUserApplication_[]; // Link to false
+    MJUserApplications_ApplicationIDArray: MJUserApplication_[]; // Link to MJUserApplications
     
     @Field(() => [MJApplicationSetting_])
-    false_ApplicationIDArray: MJApplicationSetting_[]; // Link to false
+    MJApplicationSettings_ApplicationIDArray: MJApplicationSetting_[]; // Link to MJApplicationSettings
     
     @Field(() => [MJDashboard_])
-    false_ApplicationIDArray: MJDashboard_[]; // Link to false
+    MJDashboards_ApplicationIDArray: MJDashboard_[]; // Link to MJDashboards
     
     @Field(() => [MJDashboardUserPreference_])
-    false_ApplicationIDArray: MJDashboardUserPreference_[]; // Link to false
+    MJDashboardUserPreferences_ApplicationIDArray: MJDashboardUserPreference_[]; // Link to MJDashboardUserPreferences
     
 }
 
@@ -18246,7 +18246,7 @@ export class MJApplicationResolver extends ResolverBase {
     }
     
     @Query(() => [MJApplication_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJApplications(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Applications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18257,7 +18257,7 @@ export class MJApplicationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJApplicationEntity_])
-    async false_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJApplicationEntities_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Application Entities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18268,7 +18268,7 @@ export class MJApplicationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserApplication_])
-    async false_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserApplications_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Applications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18279,7 +18279,7 @@ export class MJApplicationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJApplicationSetting_])
-    async false_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJApplicationSettings_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Application Settings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18290,7 +18290,7 @@ export class MJApplicationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboard_])
-    async false_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboards_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboards', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18301,7 +18301,7 @@ export class MJApplicationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardUserPreference_])
-    async false_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardUserPreferences_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18601,19 +18601,19 @@ export class MJArtifactType_ {
     RootParentID?: string;
         
     @Field(() => [MJConversationArtifact_])
-    false_ArtifactTypeIDArray: MJConversationArtifact_[]; // Link to false
+    MJConversationArtifacts_ArtifactTypeIDArray: MJConversationArtifact_[]; // Link to MJConversationArtifacts
     
     @Field(() => [MJAIAgentArtifactType_])
-    false_ArtifactTypeIDArray: MJAIAgentArtifactType_[]; // Link to false
+    MJAIAgentArtifactTypes_ArtifactTypeIDArray: MJAIAgentArtifactType_[]; // Link to MJAIAgentArtifactTypes
     
     @Field(() => [MJArtifact_])
-    false_TypeIDArray: MJArtifact_[]; // Link to false
+    MJArtifacts_TypeIDArray: MJArtifact_[]; // Link to MJArtifacts
     
     @Field(() => [MJArtifactType_])
-    false_ParentIDArray: MJArtifactType_[]; // Link to false
+    MJArtifactTypes_ParentIDArray: MJArtifactType_[]; // Link to MJArtifactTypes
     
     @Field(() => [MJAIAgent_])
-    false_DefaultArtifactTypeIDArray: MJAIAgent_[]; // Link to false
+    MJAIAgents_DefaultArtifactTypeIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
 }
 
@@ -18746,7 +18746,7 @@ export class MJArtifactTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJConversationArtifact_])
-    async false_ArtifactTypeIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationArtifacts_ArtifactTypeIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18757,7 +18757,7 @@ export class MJArtifactTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentArtifactType_])
-    async false_ArtifactTypeIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentArtifactTypes_ArtifactTypeIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Artifact Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18768,7 +18768,7 @@ export class MJArtifactTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifact_])
-    async false_TypeIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifacts_TypeIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18779,7 +18779,7 @@ export class MJArtifactTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifactType_])
-    async false_ParentIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactTypes_ParentIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -18790,7 +18790,7 @@ export class MJArtifactTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgent_])
-    async false_DefaultArtifactTypeIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgents_DefaultArtifactTypeIDArray(@Root() mjartifacttype_: MJArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19242,16 +19242,16 @@ export class MJArtifactVersion_ {
     User: string;
         
     @Field(() => [MJArtifactVersionAttribute_])
-    false_ArtifactVersionIDArray: MJArtifactVersionAttribute_[]; // Link to false
+    MJArtifactVersionAttributes_ArtifactVersionIDArray: MJArtifactVersionAttribute_[]; // Link to MJArtifactVersionAttributes
     
     @Field(() => [MJCollectionArtifact_])
-    false_ArtifactVersionIDArray: MJCollectionArtifact_[]; // Link to false
+    MJCollectionArtifacts_ArtifactVersionIDArray: MJCollectionArtifact_[]; // Link to MJCollectionArtifacts
     
     @Field(() => [MJConversationDetailArtifact_])
-    false_ArtifactVersionIDArray: MJConversationDetailArtifact_[]; // Link to false
+    MJConversationDetailArtifacts_ArtifactVersionIDArray: MJConversationDetailArtifact_[]; // Link to MJConversationDetailArtifacts
     
     @Field(() => [MJArtifactUse_])
-    false_ArtifactVersionIDArray: MJArtifactUse_[]; // Link to false
+    MJArtifactUses_ArtifactVersionIDArray: MJArtifactUse_[]; // Link to MJArtifactUses
     
 }
 
@@ -19390,7 +19390,7 @@ export class MJArtifactVersionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJArtifactVersionAttribute_])
-    async false_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactVersionAttributes_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Version Attributes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19401,7 +19401,7 @@ export class MJArtifactVersionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCollectionArtifact_])
-    async false_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollectionArtifacts_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collection Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19412,7 +19412,7 @@ export class MJArtifactVersionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetailArtifact_])
-    async false_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetailArtifacts_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Detail Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19423,7 +19423,7 @@ export class MJArtifactVersionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifactUse_])
-    async false_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactUses_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Uses', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19518,13 +19518,13 @@ export class MJArtifact_ {
     User: string;
         
     @Field(() => [MJArtifactVersion_])
-    false_ArtifactIDArray: MJArtifactVersion_[]; // Link to false
+    MJArtifactVersions_ArtifactIDArray: MJArtifactVersion_[]; // Link to MJArtifactVersions
     
     @Field(() => [MJCollectionArtifact_])
-    false_ArtifactIDArray: MJCollectionArtifact_[]; // Link to false
+    MJCollectionArtifacts_ArtifactIDArray: MJCollectionArtifact_[]; // Link to MJCollectionArtifacts
     
     @Field(() => [MJArtifactPermission_])
-    false_ArtifactIDArray: MJArtifactPermission_[]; // Link to false
+    MJArtifactPermissions_ArtifactIDArray: MJArtifactPermission_[]; // Link to MJArtifactPermissions
     
 }
 
@@ -19651,7 +19651,7 @@ export class MJArtifactResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJArtifactVersion_])
-    async false_ArtifactIDArray(@Root() mjartifact_: MJArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactVersions_ArtifactIDArray(@Root() mjartifact_: MJArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Versions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19662,7 +19662,7 @@ export class MJArtifactResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCollectionArtifact_])
-    async false_ArtifactIDArray(@Root() mjartifact_: MJArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollectionArtifacts_ArtifactIDArray(@Root() mjartifact_: MJArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collection Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19673,7 +19673,7 @@ export class MJArtifactResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifactPermission_])
-    async false_ArtifactIDArray(@Root() mjartifact_: MJArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactPermissions_ArtifactIDArray(@Root() mjartifact_: MJArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19757,10 +19757,10 @@ export class MJAuditLogType_ {
     RootParentID?: string;
         
     @Field(() => [MJAuditLog_])
-    false_AuditLogTypeNameArray: MJAuditLog_[]; // Link to false
+    MJAuditLogs_AuditLogTypeNameArray: MJAuditLog_[]; // Link to MJAuditLogs
     
     @Field(() => [MJAuditLogType_])
-    false_ParentIDArray: MJAuditLogType_[]; // Link to false
+    MJAuditLogTypes_ParentIDArray: MJAuditLogType_[]; // Link to MJAuditLogTypes
     
 }
 
@@ -19869,7 +19869,7 @@ export class MJAuditLogTypeResolver extends ResolverBase {
     }
     
     @Query(() => [MJAuditLogType_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJAuditLogTypes(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Audit Log Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19880,7 +19880,7 @@ export class MJAuditLogTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAuditLog_])
-    async false_AuditLogTypeNameArray(@Root() mjauditlogtype_: MJAuditLogType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuditLogs_AuditLogTypeNameArray(@Root() mjauditlogtype_: MJAuditLogType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Audit Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -19891,7 +19891,7 @@ export class MJAuditLogTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAuditLogType_])
-    async false_ParentIDArray(@Root() mjauditlogtype_: MJAuditLogType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuditLogTypes_ParentIDArray(@Root() mjauditlogtype_: MJAuditLogType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Audit Log Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -20290,7 +20290,7 @@ export class MJAuthorizationRoleResolver extends ResolverBase {
     }
     
     @Query(() => [MJAuthorizationRole_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJAuthorizationRoles(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Authorization Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -20372,19 +20372,19 @@ export class MJAuthorization_ {
     RootParentID?: string;
         
     @Field(() => [MJAuthorizationRole_])
-    false_AuthorizationIDArray: MJAuthorizationRole_[]; // Link to false
+    MJAuthorizationRoles_AuthorizationIDArray: MJAuthorizationRole_[]; // Link to MJAuthorizationRoles
     
     @Field(() => [MJAuthorization_])
-    false_ParentIDArray: MJAuthorization_[]; // Link to false
+    MJAuthorizations_ParentIDArray: MJAuthorization_[]; // Link to MJAuthorizations
     
     @Field(() => [MJAuditLogType_])
-    false_AuthorizationNameArray: MJAuditLogType_[]; // Link to false
+    MJAuditLogTypes_AuthorizationNameArray: MJAuditLogType_[]; // Link to MJAuditLogTypes
     
     @Field(() => [MJAuditLog_])
-    false_AuthorizationNameArray: MJAuditLog_[]; // Link to false
+    MJAuditLogs_AuthorizationNameArray: MJAuditLog_[]; // Link to MJAuditLogs
     
     @Field(() => [MJActionAuthorization_])
-    false_AuthorizationIDArray: MJActionAuthorization_[]; // Link to false
+    MJActionAuthorizations_AuthorizationIDArray: MJActionAuthorization_[]; // Link to MJActionAuthorizations
     
 }
 
@@ -20499,7 +20499,7 @@ export class MJAuthorizationResolver extends ResolverBase {
     }
     
     @Query(() => [MJAuthorization_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJAuthorizations(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Authorizations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -20510,7 +20510,7 @@ export class MJAuthorizationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAuthorizationRole_])
-    async false_AuthorizationIDArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuthorizationRoles_AuthorizationIDArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Authorization Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -20521,7 +20521,7 @@ export class MJAuthorizationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAuthorization_])
-    async false_ParentIDArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuthorizations_ParentIDArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Authorizations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -20532,7 +20532,7 @@ export class MJAuthorizationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAuditLogType_])
-    async false_AuthorizationNameArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuditLogTypes_AuthorizationNameArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Audit Log Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -20543,7 +20543,7 @@ export class MJAuthorizationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAuditLog_])
-    async false_AuthorizationNameArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuditLogs_AuthorizationNameArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Audit Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -20554,7 +20554,7 @@ export class MJAuthorizationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJActionAuthorization_])
-    async false_AuthorizationIDArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionAuthorizations_AuthorizationIDArray(@Root() mjauthorization_: MJAuthorization_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Authorizations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -21028,13 +21028,13 @@ export class MJCollection_ {
     RootParentID?: string;
         
     @Field(() => [MJCollectionArtifact_])
-    false_CollectionIDArray: MJCollectionArtifact_[]; // Link to false
+    MJCollectionArtifacts_CollectionIDArray: MJCollectionArtifact_[]; // Link to MJCollectionArtifacts
     
     @Field(() => [MJCollectionPermission_])
-    false_CollectionIDArray: MJCollectionPermission_[]; // Link to false
+    MJCollectionPermissions_CollectionIDArray: MJCollectionPermission_[]; // Link to MJCollectionPermissions
     
     @Field(() => [MJCollection_])
-    false_ParentIDArray: MJCollection_[]; // Link to false
+    MJCollections_ParentIDArray: MJCollection_[]; // Link to MJCollections
     
 }
 
@@ -21167,7 +21167,7 @@ export class MJCollectionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJCollectionArtifact_])
-    async false_CollectionIDArray(@Root() mjcollection_: MJCollection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollectionArtifacts_CollectionIDArray(@Root() mjcollection_: MJCollection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collection Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -21178,7 +21178,7 @@ export class MJCollectionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCollectionPermission_])
-    async false_CollectionIDArray(@Root() mjcollection_: MJCollection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollectionPermissions_CollectionIDArray(@Root() mjcollection_: MJCollection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collection Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -21189,7 +21189,7 @@ export class MJCollectionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCollection_])
-    async false_ParentIDArray(@Root() mjcollection_: MJCollection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollections_ParentIDArray(@Root() mjcollection_: MJCollection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collections', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -21262,10 +21262,10 @@ export class MJCommunicationBaseMessageType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJCommunicationProviderMessageType_])
-    false_CommunicationBaseMessageTypeIDArray: MJCommunicationProviderMessageType_[]; // Link to false
+    MJCommunicationProviderMessageTypes_CommunicationBaseMessageTypeIDArray: MJCommunicationProviderMessageType_[]; // Link to MJCommunicationProviderMessageTypes
     
     @Field(() => [MJEntityCommunicationMessageType_])
-    false_BaseMessageTypeIDArray: MJEntityCommunicationMessageType_[]; // Link to false
+    MJEntityCommunicationMessageTypes_BaseMessageTypeIDArray: MJEntityCommunicationMessageType_[]; // Link to MJEntityCommunicationMessageTypes
     
 }
 
@@ -21380,7 +21380,7 @@ export class MJCommunicationBaseMessageTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJCommunicationProviderMessageType_])
-    async false_CommunicationBaseMessageTypeIDArray(@Root() mjcommunicationbasemessagetype_: MJCommunicationBaseMessageType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCommunicationProviderMessageTypes_CommunicationBaseMessageTypeIDArray(@Root() mjcommunicationbasemessagetype_: MJCommunicationBaseMessageType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Communication Provider Message Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -21391,7 +21391,7 @@ export class MJCommunicationBaseMessageTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityCommunicationMessageType_])
-    async false_BaseMessageTypeIDArray(@Root() mjcommunicationbasemessagetype_: MJCommunicationBaseMessageType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityCommunicationMessageTypes_BaseMessageTypeIDArray(@Root() mjcommunicationbasemessagetype_: MJCommunicationBaseMessageType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Communication Message Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -21693,7 +21693,7 @@ export class MJCommunicationProviderMessageType_ {
     CommunicationBaseMessageType: string;
         
     @Field(() => [MJCommunicationLog_])
-    false_CommunicationProviderMessageTypeIDArray: MJCommunicationLog_[]; // Link to false
+    MJCommunicationLogs_CommunicationProviderMessageTypeIDArray: MJCommunicationLog_[]; // Link to MJCommunicationLogs
     
 }
 
@@ -21808,7 +21808,7 @@ export class MJCommunicationProviderMessageTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJCommunicationLog_])
-    async false_CommunicationProviderMessageTypeIDArray(@Root() mjcommunicationprovidermessagetype_: MJCommunicationProviderMessageType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCommunicationLogs_CommunicationProviderMessageTypeIDArray(@Root() mjcommunicationprovidermessagetype_: MJCommunicationProviderMessageType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Communication Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -21894,10 +21894,10 @@ export class MJCommunicationProvider_ {
     SupportsDrafts: boolean;
         
     @Field(() => [MJCommunicationProviderMessageType_])
-    false_CommunicationProviderIDArray: MJCommunicationProviderMessageType_[]; // Link to false
+    MJCommunicationProviderMessageTypes_CommunicationProviderIDArray: MJCommunicationProviderMessageType_[]; // Link to MJCommunicationProviderMessageTypes
     
     @Field(() => [MJCommunicationLog_])
-    false_CommunicationProviderIDArray: MJCommunicationLog_[]; // Link to false
+    MJCommunicationLogs_CommunicationProviderIDArray: MJCommunicationLog_[]; // Link to MJCommunicationLogs
     
 }
 
@@ -22036,7 +22036,7 @@ export class MJCommunicationProviderResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJCommunicationProviderMessageType_])
-    async false_CommunicationProviderIDArray(@Root() mjcommunicationprovider_: MJCommunicationProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCommunicationProviderMessageTypes_CommunicationProviderIDArray(@Root() mjcommunicationprovider_: MJCommunicationProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Communication Provider Message Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22047,7 +22047,7 @@ export class MJCommunicationProviderResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCommunicationLog_])
-    async false_CommunicationProviderIDArray(@Root() mjcommunicationprovider_: MJCommunicationProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCommunicationLogs_CommunicationProviderIDArray(@Root() mjcommunicationprovider_: MJCommunicationProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Communication Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22134,7 +22134,7 @@ export class MJCommunicationRun_ {
     User: string;
         
     @Field(() => [MJCommunicationLog_])
-    false_CommunicationRunIDArray: MJCommunicationLog_[]; // Link to false
+    MJCommunicationLogs_CommunicationRunIDArray: MJCommunicationLog_[]; // Link to MJCommunicationLogs
     
 }
 
@@ -22261,7 +22261,7 @@ export class MJCommunicationRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJCommunicationLog_])
-    async false_CommunicationRunIDArray(@Root() mjcommunicationrun_: MJCommunicationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCommunicationLogs_CommunicationRunIDArray(@Root() mjcommunicationrun_: MJCommunicationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Communication Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22338,22 +22338,22 @@ export class MJCompany_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJEmployee_])
-    false_CompanyIDArray: MJEmployee_[]; // Link to false
+    MJEmployees_CompanyIDArray: MJEmployee_[]; // Link to MJEmployees
     
     @Field(() => [MJCompanyIntegration_])
-    false_CompanyNameArray: MJCompanyIntegration_[]; // Link to false
+    MJCompanyIntegrations_CompanyNameArray: MJCompanyIntegration_[]; // Link to MJCompanyIntegrations
     
     @Field(() => [MJWorkflow_])
-    false_CompanyNameArray: MJWorkflow_[]; // Link to false
+    MJWorkflows_CompanyNameArray: MJWorkflow_[]; // Link to MJWorkflows
     
     @Field(() => [MJMCPServerConnection_])
-    false_CompanyIDArray: MJMCPServerConnection_[]; // Link to false
+    MJMCPServerConnections_CompanyIDArray: MJMCPServerConnection_[]; // Link to MJMCPServerConnections
     
     @Field(() => [MJAIAgentNote_])
-    false_CompanyIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_CompanyIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
     @Field(() => [MJAIAgentExample_])
-    false_CompanyIDArray: MJAIAgentExample_[]; // Link to false
+    MJAIAgentExamples_CompanyIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
 }
 
@@ -22468,7 +22468,7 @@ export class MJCompanyResolver extends ResolverBase {
     }
     
     @Query(() => [MJCompany_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJCompanies(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Companies', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22479,7 +22479,7 @@ export class MJCompanyResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEmployee_])
-    async false_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEmployees_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employees', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22490,7 +22490,7 @@ export class MJCompanyResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCompanyIntegration_])
-    async false_CompanyNameArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrations_CompanyNameArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integrations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22501,7 +22501,7 @@ export class MJCompanyResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJWorkflow_])
-    async false_CompanyNameArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJWorkflows_CompanyNameArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Workflows', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22512,7 +22512,7 @@ export class MJCompanyResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerConnection_])
-    async false_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerConnections_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22523,7 +22523,7 @@ export class MJCompanyResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22534,7 +22534,7 @@ export class MJCompanyResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentExample_])
-    async false_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentExamples_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -22991,7 +22991,7 @@ export class MJCompanyIntegrationRunDetail_ {
     RunEndedAt?: Date;
         
     @Field(() => [MJErrorLog_])
-    false_CompanyIntegrationRunDetailIDArray: MJErrorLog_[]; // Link to false
+    MJErrorLogs_CompanyIntegrationRunDetailIDArray: MJErrorLog_[]; // Link to MJErrorLogs
     
 }
 
@@ -23112,7 +23112,7 @@ export class MJCompanyIntegrationRunDetailResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJErrorLog_])
-    async false_CompanyIntegrationRunDetailIDArray(@Root() mjcompanyintegrationrundetail_: MJCompanyIntegrationRunDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJErrorLogs_CompanyIntegrationRunDetailIDArray(@Root() mjcompanyintegrationrundetail_: MJCompanyIntegrationRunDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Error Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -23213,13 +23213,13 @@ export class MJCompanyIntegrationRun_ {
     RunByUser: string;
         
     @Field(() => [MJCompanyIntegrationRunAPILog_])
-    false_CompanyIntegrationRunIDArray: MJCompanyIntegrationRunAPILog_[]; // Link to false
+    MJCompanyIntegrationRunAPILogs_CompanyIntegrationRunIDArray: MJCompanyIntegrationRunAPILog_[]; // Link to MJCompanyIntegrationRunAPILogs
     
     @Field(() => [MJErrorLog_])
-    false_CompanyIntegrationRunIDArray: MJErrorLog_[]; // Link to false
+    MJErrorLogs_CompanyIntegrationRunIDArray: MJErrorLog_[]; // Link to MJErrorLogs
     
     @Field(() => [MJCompanyIntegrationRunDetail_])
-    false_CompanyIntegrationRunIDArray: MJCompanyIntegrationRunDetail_[]; // Link to false
+    MJCompanyIntegrationRunDetails_CompanyIntegrationRunIDArray: MJCompanyIntegrationRunDetail_[]; // Link to MJCompanyIntegrationRunDetails
     
 }
 
@@ -23358,7 +23358,7 @@ export class MJCompanyIntegrationRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJCompanyIntegrationRunAPILog_])
-    async false_CompanyIntegrationRunIDArray(@Root() mjcompanyintegrationrun_: MJCompanyIntegrationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrationRunAPILogs_CompanyIntegrationRunIDArray(@Root() mjcompanyintegrationrun_: MJCompanyIntegrationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integration Run API Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -23369,7 +23369,7 @@ export class MJCompanyIntegrationRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJErrorLog_])
-    async false_CompanyIntegrationRunIDArray(@Root() mjcompanyintegrationrun_: MJCompanyIntegrationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJErrorLogs_CompanyIntegrationRunIDArray(@Root() mjcompanyintegrationrun_: MJCompanyIntegrationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Error Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -23380,7 +23380,7 @@ export class MJCompanyIntegrationRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCompanyIntegrationRunDetail_])
-    async false_CompanyIntegrationRunIDArray(@Root() mjcompanyintegrationrun_: MJCompanyIntegrationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrationRunDetails_CompanyIntegrationRunIDArray(@Root() mjcompanyintegrationrun_: MJCompanyIntegrationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integration Run Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -23515,16 +23515,16 @@ export class MJCompanyIntegration_ {
     LastRunEndedAt?: Date;
         
     @Field(() => [MJList_])
-    false_CompanyIntegrationIDArray: MJList_[]; // Link to false
+    MJLists_CompanyIntegrationIDArray: MJList_[]; // Link to MJLists
     
     @Field(() => [MJEmployeeCompanyIntegration_])
-    false_CompanyIntegrationIDArray: MJEmployeeCompanyIntegration_[]; // Link to false
+    MJEmployeeCompanyIntegrations_CompanyIntegrationIDArray: MJEmployeeCompanyIntegration_[]; // Link to MJEmployeeCompanyIntegrations
     
     @Field(() => [MJCompanyIntegrationRun_])
-    false_CompanyIntegrationIDArray: MJCompanyIntegrationRun_[]; // Link to false
+    MJCompanyIntegrationRuns_CompanyIntegrationIDArray: MJCompanyIntegrationRun_[]; // Link to MJCompanyIntegrationRuns
     
     @Field(() => [MJCompanyIntegrationRecordMap_])
-    false_CompanyIntegrationIDArray: MJCompanyIntegrationRecordMap_[]; // Link to false
+    MJCompanyIntegrationRecordMaps_CompanyIntegrationIDArray: MJCompanyIntegrationRecordMap_[]; // Link to MJCompanyIntegrationRecordMaps
     
 }
 
@@ -23687,7 +23687,7 @@ export class MJCompanyIntegrationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJList_])
-    async false_CompanyIntegrationIDArray(@Root() mjcompanyintegration_: MJCompanyIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJLists_CompanyIntegrationIDArray(@Root() mjcompanyintegration_: MJCompanyIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Lists', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -23698,7 +23698,7 @@ export class MJCompanyIntegrationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEmployeeCompanyIntegration_])
-    async false_CompanyIntegrationIDArray(@Root() mjcompanyintegration_: MJCompanyIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEmployeeCompanyIntegrations_CompanyIntegrationIDArray(@Root() mjcompanyintegration_: MJCompanyIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employee Company Integrations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -23709,7 +23709,7 @@ export class MJCompanyIntegrationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCompanyIntegrationRun_])
-    async false_CompanyIntegrationIDArray(@Root() mjcompanyintegration_: MJCompanyIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrationRuns_CompanyIntegrationIDArray(@Root() mjcompanyintegration_: MJCompanyIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integration Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -23720,7 +23720,7 @@ export class MJCompanyIntegrationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCompanyIntegrationRecordMap_])
-    async false_CompanyIntegrationIDArray(@Root() mjcompanyintegration_: MJCompanyIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrationRecordMaps_CompanyIntegrationIDArray(@Root() mjcompanyintegration_: MJCompanyIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integration Record Maps', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -23978,7 +23978,7 @@ export class MJComponentLibrary_ {
     UsageType: string;
         
     @Field(() => [MJComponentLibraryLink_])
-    false_LibraryIDArray: MJComponentLibraryLink_[]; // Link to false
+    MJComponentLibraryLinks_LibraryIDArray: MJComponentLibraryLink_[]; // Link to MJComponentLibraryLinks
     
 }
 
@@ -24135,7 +24135,7 @@ export class MJComponentLibraryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJComponentLibraryLink_])
-    async false_LibraryIDArray(@Root() mjcomponentlibrary_: MJComponentLibrary_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJComponentLibraryLinks_LibraryIDArray(@Root() mjcomponentlibrary_: MJComponentLibrary_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Component Library Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -24381,7 +24381,7 @@ export class MJComponentRegistry_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJComponent_])
-    false_SourceRegistryIDArray: MJComponent_[]; // Link to false
+    MJComponents_SourceRegistryIDArray: MJComponent_[]; // Link to MJComponents
     
 }
 
@@ -24502,7 +24502,7 @@ export class MJComponentRegistryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJComponent_])
-    async false_SourceRegistryIDArray(@Root() mjcomponentregistry_: MJComponentRegistry_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJComponents_SourceRegistryIDArray(@Root() mjcomponentregistry_: MJComponentRegistry_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Components', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -24652,13 +24652,13 @@ export class MJComponent_ {
     SourceRegistry?: string;
         
     @Field(() => [MJComponentDependency_])
-    false_DependencyComponentIDArray: MJComponentDependency_[]; // Link to false
+    MJComponentDependencies_DependencyComponentIDArray: MJComponentDependency_[]; // Link to MJComponentDependencies
     
     @Field(() => [MJComponentLibraryLink_])
-    false_ComponentIDArray: MJComponentLibraryLink_[]; // Link to false
+    MJComponentLibraryLinks_ComponentIDArray: MJComponentLibraryLink_[]; // Link to MJComponentLibraryLinks
     
     @Field(() => [MJComponentDependency_])
-    false_ComponentIDArray: MJComponentDependency_[]; // Link to false
+    MJComponentDependencies_ComponentIDArray: MJComponentDependency_[]; // Link to MJComponentDependencies
     
 }
 
@@ -24899,7 +24899,7 @@ export class MJComponentResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJComponentDependency_])
-    async false_DependencyComponentIDArray(@Root() mjcomponent_: MJComponent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJComponentDependencies_DependencyComponentIDArray(@Root() mjcomponent_: MJComponent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Component Dependencies', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -24910,7 +24910,7 @@ export class MJComponentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJComponentLibraryLink_])
-    async false_ComponentIDArray(@Root() mjcomponent_: MJComponent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJComponentLibraryLinks_ComponentIDArray(@Root() mjcomponent_: MJComponent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Component Library Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -24921,7 +24921,7 @@ export class MJComponentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJComponentDependency_])
-    async false_ComponentIDArray(@Root() mjcomponent_: MJComponent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJComponentDependencies_ComponentIDArray(@Root() mjcomponent_: MJComponent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Component Dependencies', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -24986,10 +24986,10 @@ export class MJContentFileType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJContentSource_])
-    false_ContentFileTypeIDArray: MJContentSource_[]; // Link to false
+    MJContentSources_ContentFileTypeIDArray: MJContentSource_[]; // Link to MJContentSources
     
     @Field(() => [MJContentItem_])
-    false_ContentFileTypeIDArray: MJContentItem_[]; // Link to false
+    MJContentItems_ContentFileTypeIDArray: MJContentItem_[]; // Link to MJContentItems
     
 }
 
@@ -25086,7 +25086,7 @@ export class MJContentFileTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJContentSource_])
-    async false_ContentFileTypeIDArray(@Root() mjcontentfiletype_: MJContentFileType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentSources_ContentFileTypeIDArray(@Root() mjcontentfiletype_: MJContentFileType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -25097,7 +25097,7 @@ export class MJContentFileTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJContentItem_])
-    async false_ContentFileTypeIDArray(@Root() mjcontentfiletype_: MJContentFileType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentItems_ContentFileTypeIDArray(@Root() mjcontentfiletype_: MJContentFileType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -25517,10 +25517,10 @@ export class MJContentItem_ {
     ContentFileType: string;
         
     @Field(() => [MJContentItemAttribute_])
-    false_ContentItemIDArray: MJContentItemAttribute_[]; // Link to false
+    MJContentItemAttributes_ContentItemIDArray: MJContentItemAttribute_[]; // Link to MJContentItemAttributes
     
     @Field(() => [MJContentItemTag_])
-    false_ItemIDArray: MJContentItemTag_[]; // Link to false
+    MJContentItemTags_ItemIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
     
 }
 
@@ -25659,7 +25659,7 @@ export class MJContentItemResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJContentItemAttribute_])
-    async false_ContentItemIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentItemAttributes_ContentItemIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Item Attributes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -25670,7 +25670,7 @@ export class MJContentItemResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJContentItemTag_])
-    async false_ItemIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentItemTags_ItemIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -26252,10 +26252,10 @@ export class MJContentSourceType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJContentSource_])
-    false_ContentSourceTypeIDArray: MJContentSource_[]; // Link to false
+    MJContentSources_ContentSourceTypeIDArray: MJContentSource_[]; // Link to MJContentSources
     
     @Field(() => [MJContentItem_])
-    false_ContentSourceTypeIDArray: MJContentItem_[]; // Link to false
+    MJContentItems_ContentSourceTypeIDArray: MJContentItem_[]; // Link to MJContentItems
     
 }
 
@@ -26352,7 +26352,7 @@ export class MJContentSourceTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJContentSource_])
-    async false_ContentSourceTypeIDArray(@Root() mjcontentsourcetype_: MJContentSourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentSources_ContentSourceTypeIDArray(@Root() mjcontentsourcetype_: MJContentSourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -26363,7 +26363,7 @@ export class MJContentSourceTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJContentItem_])
-    async false_ContentSourceTypeIDArray(@Root() mjcontentsourcetype_: MJContentSourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentItems_ContentSourceTypeIDArray(@Root() mjcontentsourcetype_: MJContentSourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -26452,13 +26452,13 @@ export class MJContentSource_ {
     ContentFileType: string;
         
     @Field(() => [MJContentProcessRun_])
-    false_SourceIDArray: MJContentProcessRun_[]; // Link to false
+    MJContentProcessRuns_SourceIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
     
     @Field(() => [MJContentSourceParam_])
-    false_ContentSourceIDArray: MJContentSourceParam_[]; // Link to false
+    MJContentSourceParams_ContentSourceIDArray: MJContentSourceParam_[]; // Link to MJContentSourceParams
     
     @Field(() => [MJContentItem_])
-    false_ContentSourceIDArray: MJContentItem_[]; // Link to false
+    MJContentItems_ContentSourceIDArray: MJContentItem_[]; // Link to MJContentItems
     
 }
 
@@ -26573,7 +26573,7 @@ export class MJContentSourceResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJContentProcessRun_])
-    async false_SourceIDArray(@Root() mjcontentsource_: MJContentSource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentProcessRuns_SourceIDArray(@Root() mjcontentsource_: MJContentSource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Process Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -26584,7 +26584,7 @@ export class MJContentSourceResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJContentSourceParam_])
-    async false_ContentSourceIDArray(@Root() mjcontentsource_: MJContentSource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentSourceParams_ContentSourceIDArray(@Root() mjcontentsource_: MJContentSource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Source Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -26595,7 +26595,7 @@ export class MJContentSourceResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJContentItem_])
-    async false_ContentSourceIDArray(@Root() mjcontentsource_: MJContentSource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentItems_ContentSourceIDArray(@Root() mjcontentsource_: MJContentSource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -26839,10 +26839,10 @@ export class MJContentType_ {
     AIModel: string;
         
     @Field(() => [MJContentSource_])
-    false_ContentTypeIDArray: MJContentSource_[]; // Link to false
+    MJContentSources_ContentTypeIDArray: MJContentSource_[]; // Link to MJContentSources
     
     @Field(() => [MJContentItem_])
-    false_ContentTypeIDArray: MJContentItem_[]; // Link to false
+    MJContentItems_ContentTypeIDArray: MJContentItem_[]; // Link to MJContentItems
     
 }
 
@@ -26957,7 +26957,7 @@ export class MJContentTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJContentSource_])
-    async false_ContentTypeIDArray(@Root() mjcontenttype_: MJContentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentSources_ContentTypeIDArray(@Root() mjcontenttype_: MJContentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -26968,7 +26968,7 @@ export class MJContentTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJContentItem_])
-    async false_ContentTypeIDArray(@Root() mjcontenttype_: MJContentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentItems_ContentTypeIDArray(@Root() mjcontenttype_: MJContentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -27207,7 +27207,7 @@ export class MJConversationArtifactVersion_ {
     ConversationArtifact: string;
         
     @Field(() => [MJConversationDetail_])
-    false_ArtifactVersionIDArray: MJConversationDetail_[]; // Link to false
+    MJConversationDetails_ArtifactVersionIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
 }
 
@@ -27322,7 +27322,7 @@ export class MJConversationArtifactVersionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJConversationDetail_])
-    async false_ArtifactVersionIDArray(@Root() mjconversationartifactversion_: MJConversationArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetails_ArtifactVersionIDArray(@Root() mjconversationartifactversion_: MJConversationArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -27409,13 +27409,13 @@ export class MJConversationArtifact_ {
     ArtifactType: string;
         
     @Field(() => [MJConversationArtifactPermission_])
-    false_ConversationArtifactIDArray: MJConversationArtifactPermission_[]; // Link to false
+    MJConversationArtifactPermissions_ConversationArtifactIDArray: MJConversationArtifactPermission_[]; // Link to MJConversationArtifactPermissions
     
     @Field(() => [MJConversationArtifactVersion_])
-    false_ConversationArtifactIDArray: MJConversationArtifactVersion_[]; // Link to false
+    MJConversationArtifactVersions_ConversationArtifactIDArray: MJConversationArtifactVersion_[]; // Link to MJConversationArtifactVersions
     
     @Field(() => [MJConversationDetail_])
-    false_ArtifactIDArray: MJConversationDetail_[]; // Link to false
+    MJConversationDetails_ArtifactIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
 }
 
@@ -27536,7 +27536,7 @@ export class MJConversationArtifactResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJConversationArtifactPermission_])
-    async false_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationArtifactPermissions_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -27547,7 +27547,7 @@ export class MJConversationArtifactResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationArtifactVersion_])
-    async false_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationArtifactVersions_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -27558,7 +27558,7 @@ export class MJConversationArtifactResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetail_])
-    async false_ArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetails_ArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28327,31 +28327,31 @@ export class MJConversationDetail_ {
     RootParentID?: string;
         
     @Field(() => [MJReport_])
-    false_ConversationDetailIDArray: MJReport_[]; // Link to false
+    MJReports_ConversationDetailIDArray: MJReport_[]; // Link to MJReports
     
     @Field(() => [MJConversationDetailArtifact_])
-    false_ConversationDetailIDArray: MJConversationDetailArtifact_[]; // Link to false
+    MJConversationDetailArtifacts_ConversationDetailIDArray: MJConversationDetailArtifact_[]; // Link to MJConversationDetailArtifacts
     
     @Field(() => [MJConversationDetailAttachment_])
-    false_ConversationDetailIDArray: MJConversationDetailAttachment_[]; // Link to false
+    MJConversationDetailAttachments_ConversationDetailIDArray: MJConversationDetailAttachment_[]; // Link to MJConversationDetailAttachments
     
     @Field(() => [MJConversationDetailRating_])
-    false_ConversationDetailIDArray: MJConversationDetailRating_[]; // Link to false
+    MJConversationDetailRatings_ConversationDetailIDArray: MJConversationDetailRating_[]; // Link to MJConversationDetailRatings
     
     @Field(() => [MJAIAgentNote_])
-    false_SourceConversationDetailIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_SourceConversationDetailIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
     @Field(() => [MJAIAgentRun_])
-    false_ConversationDetailIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_ConversationDetailIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
     @Field(() => [MJConversationDetail_])
-    false_ParentIDArray: MJConversationDetail_[]; // Link to false
+    MJConversationDetails_ParentIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
     @Field(() => [MJTask_])
-    false_ConversationDetailIDArray: MJTask_[]; // Link to false
+    MJTasks_ConversationDetailIDArray: MJTask_[]; // Link to MJTasks
     
     @Field(() => [MJAIAgentExample_])
-    false_SourceConversationDetailIDArray: MJAIAgentExample_[]; // Link to false
+    MJAIAgentExamples_SourceConversationDetailIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
 }
 
@@ -28580,7 +28580,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJReport_])
-    async false_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28591,7 +28591,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetailArtifact_])
-    async false_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetailArtifacts_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Detail Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28602,7 +28602,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetailAttachment_])
-    async false_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetailAttachments_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Detail Attachments', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28613,7 +28613,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetailRating_])
-    async false_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetailRatings_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Detail Ratings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28624,7 +28624,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_SourceConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_SourceConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28635,7 +28635,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28646,7 +28646,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetail_])
-    async false_ParentIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetails_ParentIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28657,7 +28657,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTask_])
-    async false_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTasks_ConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28668,7 +28668,7 @@ export class MJConversationDetailResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentExample_])
-    async false_SourceConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentExamples_SourceConversationDetailIDArray(@Root() mjconversationdetail_: MJConversationDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28802,22 +28802,22 @@ export class MJConversation_ {
     TestRun?: string;
         
     @Field(() => [MJConversationDetail_])
-    false_ConversationIDArray: MJConversationDetail_[]; // Link to false
+    MJConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
     @Field(() => [MJReport_])
-    false_ConversationIDArray: MJReport_[]; // Link to false
+    MJReports_ConversationIDArray: MJReport_[]; // Link to MJReports
     
     @Field(() => [MJConversationArtifact_])
-    false_ConversationIDArray: MJConversationArtifact_[]; // Link to false
+    MJConversationArtifacts_ConversationIDArray: MJConversationArtifact_[]; // Link to MJConversationArtifacts
     
     @Field(() => [MJAIAgentRun_])
-    false_ConversationIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_ConversationIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
     @Field(() => [MJAIAgentNote_])
-    false_SourceConversationIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_SourceConversationIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
     @Field(() => [MJAIAgentExample_])
-    false_SourceConversationIDArray: MJAIAgentExample_[]; // Link to false
+    MJAIAgentExamples_SourceConversationIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
 }
 
@@ -28986,7 +28986,7 @@ export class MJConversationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJConversationDetail_])
-    async false_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetails_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -28997,7 +28997,7 @@ export class MJConversationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReport_])
-    async false_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29008,7 +29008,7 @@ export class MJConversationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationArtifact_])
-    async false_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationArtifacts_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29019,7 +29019,7 @@ export class MJConversationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29030,7 +29030,7 @@ export class MJConversationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_SourceConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_SourceConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29041,7 +29041,7 @@ export class MJConversationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentExample_])
-    async false_SourceConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentExamples_SourceConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29121,10 +29121,10 @@ export class MJCredentialCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJCredentialCategory_])
-    false_ParentIDArray: MJCredentialCategory_[]; // Link to false
+    MJCredentialCategories_ParentIDArray: MJCredentialCategory_[]; // Link to MJCredentialCategories
     
     @Field(() => [MJCredential_])
-    false_CategoryIDArray: MJCredential_[]; // Link to false
+    MJCredentials_CategoryIDArray: MJCredential_[]; // Link to MJCredentials
     
 }
 
@@ -29233,7 +29233,7 @@ export class MJCredentialCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJCredentialCategory_])
-    async false_ParentIDArray(@Root() mjcredentialcategory_: MJCredentialCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCredentialCategories_ParentIDArray(@Root() mjcredentialcategory_: MJCredentialCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Credential Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29244,7 +29244,7 @@ export class MJCredentialCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCredential_])
-    async false_CategoryIDArray(@Root() mjcredentialcategory_: MJCredentialCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCredentials_CategoryIDArray(@Root() mjcredentialcategory_: MJCredentialCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Credentials', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29323,13 +29323,13 @@ export class MJCredentialType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJCredential_])
-    false_CredentialTypeIDArray: MJCredential_[]; // Link to false
+    MJCredentials_CredentialTypeIDArray: MJCredential_[]; // Link to MJCredentials
     
     @Field(() => [MJMCPServer_])
-    false_CredentialTypeIDArray: MJMCPServer_[]; // Link to false
+    MJMCPServers_CredentialTypeIDArray: MJMCPServer_[]; // Link to MJMCPServers
     
     @Field(() => [MJAIVendor_])
-    false_CredentialTypeIDArray: MJAIVendor_[]; // Link to false
+    MJAIVendors_CredentialTypeIDArray: MJAIVendor_[]; // Link to MJAIVendors
     
 }
 
@@ -29450,7 +29450,7 @@ export class MJCredentialTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJCredential_])
-    async false_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCredentials_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Credentials', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29461,7 +29461,7 @@ export class MJCredentialTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServer_])
-    async false_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServers_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Servers', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29472,7 +29472,7 @@ export class MJCredentialTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIVendor_])
-    async false_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIVendors_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29577,16 +29577,16 @@ export class MJCredential_ {
     Category?: string;
         
     @Field(() => [MJOAuthToken_])
-    false_CredentialIDArray: MJOAuthToken_[]; // Link to false
+    MJOAuthTokens_CredentialIDArray: MJOAuthToken_[]; // Link to MJOAuthTokens
     
     @Field(() => [MJFileStorageAccount_])
-    false_CredentialIDArray: MJFileStorageAccount_[]; // Link to false
+    MJFileStorageAccounts_CredentialIDArray: MJFileStorageAccount_[]; // Link to MJFileStorageAccounts
     
     @Field(() => [MJMCPServerConnection_])
-    false_CredentialIDArray: MJMCPServerConnection_[]; // Link to false
+    MJMCPServerConnections_CredentialIDArray: MJMCPServerConnection_[]; // Link to MJMCPServerConnections
     
     @Field(() => [MJAICredentialBinding_])
-    false_CredentialIDArray: MJAICredentialBinding_[]; // Link to false
+    MJAICredentialBindings_CredentialIDArray: MJAICredentialBinding_[]; // Link to MJAICredentialBindings
     
 }
 
@@ -29737,7 +29737,7 @@ export class MJCredentialResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJOAuthToken_])
-    async false_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOAuthTokens_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: O Auth Tokens', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29748,7 +29748,7 @@ export class MJCredentialResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJFileStorageAccount_])
-    async false_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJFileStorageAccounts_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Storage Accounts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29759,7 +29759,7 @@ export class MJCredentialResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerConnection_])
-    async false_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerConnections_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29770,7 +29770,7 @@ export class MJCredentialResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAICredentialBinding_])
-    async false_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAICredentialBindings_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29854,16 +29854,16 @@ export class MJDashboardCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJDashboard_])
-    false_CategoryIDArray: MJDashboard_[]; // Link to false
+    MJDashboards_CategoryIDArray: MJDashboard_[]; // Link to MJDashboards
     
     @Field(() => [MJDashboardCategory_])
-    false_ParentIDArray: MJDashboardCategory_[]; // Link to false
+    MJDashboardCategories_ParentIDArray: MJDashboardCategory_[]; // Link to MJDashboardCategories
     
     @Field(() => [MJDashboardCategoryPermission_])
-    false_DashboardCategoryIDArray: MJDashboardCategoryPermission_[]; // Link to false
+    MJDashboardCategoryPermissions_DashboardCategoryIDArray: MJDashboardCategoryPermission_[]; // Link to MJDashboardCategoryPermissions
     
     @Field(() => [MJDashboardCategoryLink_])
-    false_DashboardCategoryIDArray: MJDashboardCategoryLink_[]; // Link to false
+    MJDashboardCategoryLinks_DashboardCategoryIDArray: MJDashboardCategoryLink_[]; // Link to MJDashboardCategoryLinks
     
 }
 
@@ -29972,7 +29972,7 @@ export class MJDashboardCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJDashboard_])
-    async false_CategoryIDArray(@Root() mjdashboardcategory_: MJDashboardCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboards_CategoryIDArray(@Root() mjdashboardcategory_: MJDashboardCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboards', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29983,7 +29983,7 @@ export class MJDashboardCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardCategory_])
-    async false_ParentIDArray(@Root() mjdashboardcategory_: MJDashboardCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardCategories_ParentIDArray(@Root() mjdashboardcategory_: MJDashboardCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -29994,7 +29994,7 @@ export class MJDashboardCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardCategoryPermission_])
-    async false_DashboardCategoryIDArray(@Root() mjdashboardcategory_: MJDashboardCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardCategoryPermissions_DashboardCategoryIDArray(@Root() mjdashboardcategory_: MJDashboardCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Category Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -30005,7 +30005,7 @@ export class MJDashboardCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardCategoryLink_])
-    async false_DashboardCategoryIDArray(@Root() mjdashboardcategory_: MJDashboardCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardCategoryLinks_DashboardCategoryIDArray(@Root() mjdashboardcategory_: MJDashboardCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Category Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -31282,16 +31282,16 @@ export class MJDashboard_ {
     Environment: string;
         
     @Field(() => [MJDashboardUserState_])
-    false_DashboardIDArray: MJDashboardUserState_[]; // Link to false
+    MJDashboardUserStates_DashboardIDArray: MJDashboardUserState_[]; // Link to MJDashboardUserStates
     
     @Field(() => [MJDashboardCategoryLink_])
-    false_DashboardIDArray: MJDashboardCategoryLink_[]; // Link to false
+    MJDashboardCategoryLinks_DashboardIDArray: MJDashboardCategoryLink_[]; // Link to MJDashboardCategoryLinks
     
     @Field(() => [MJDashboardUserPreference_])
-    false_DashboardIDArray: MJDashboardUserPreference_[]; // Link to false
+    MJDashboardUserPreferences_DashboardIDArray: MJDashboardUserPreference_[]; // Link to MJDashboardUserPreferences
     
     @Field(() => [MJDashboardPermission_])
-    false_DashboardIDArray: MJDashboardPermission_[]; // Link to false
+    MJDashboardPermissions_DashboardIDArray: MJDashboardPermission_[]; // Link to MJDashboardPermissions
     
 }
 
@@ -31448,7 +31448,7 @@ export class MJDashboardResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJDashboardUserState_])
-    async false_DashboardIDArray(@Root() mjdashboard_: MJDashboard_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardUserStates_DashboardIDArray(@Root() mjdashboard_: MJDashboard_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -31459,7 +31459,7 @@ export class MJDashboardResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardCategoryLink_])
-    async false_DashboardIDArray(@Root() mjdashboard_: MJDashboard_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardCategoryLinks_DashboardIDArray(@Root() mjdashboard_: MJDashboard_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Category Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -31470,7 +31470,7 @@ export class MJDashboardResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardUserPreference_])
-    async false_DashboardIDArray(@Root() mjdashboard_: MJDashboard_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardUserPreferences_DashboardIDArray(@Root() mjdashboard_: MJDashboard_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -31481,7 +31481,7 @@ export class MJDashboardResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardPermission_])
-    async false_DashboardIDArray(@Root() mjdashboard_: MJDashboard_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardPermissions_DashboardIDArray(@Root() mjdashboard_: MJDashboard_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -31808,13 +31808,13 @@ export class MJDataContext_ {
     User: string;
         
     @Field(() => [MJDataContextItem_])
-    false_DataContextIDArray: MJDataContextItem_[]; // Link to false
+    MJDataContextItems_DataContextIDArray: MJDataContextItem_[]; // Link to MJDataContextItems
     
     @Field(() => [MJReport_])
-    false_DataContextIDArray: MJReport_[]; // Link to false
+    MJReports_DataContextIDArray: MJReport_[]; // Link to MJReports
     
     @Field(() => [MJConversation_])
-    false_DataContextIDArray: MJConversation_[]; // Link to false
+    MJConversations_DataContextIDArray: MJConversation_[]; // Link to MJConversations
     
 }
 
@@ -31923,7 +31923,7 @@ export class MJDataContextResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJDataContextItem_])
-    async false_DataContextIDArray(@Root() mjdatacontext_: MJDataContext_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDataContextItems_DataContextIDArray(@Root() mjdatacontext_: MJDataContext_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Data Context Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -31934,7 +31934,7 @@ export class MJDataContextResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReport_])
-    async false_DataContextIDArray(@Root() mjdatacontext_: MJDataContext_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_DataContextIDArray(@Root() mjdatacontext_: MJDataContext_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -31945,7 +31945,7 @@ export class MJDataContextResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversation_])
-    async false_DataContextIDArray(@Root() mjdatacontext_: MJDataContext_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversations_DataContextIDArray(@Root() mjdatacontext_: MJDataContext_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -32221,7 +32221,7 @@ export class MJDataset_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJDatasetItem_])
-    false_DatasetNameArray: MJDatasetItem_[]; // Link to false
+    MJDatasetItems_DatasetNameArray: MJDatasetItem_[]; // Link to MJDatasetItems
     
 }
 
@@ -32318,7 +32318,7 @@ export class MJDatasetResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJDatasetItem_])
-    async false_DatasetNameArray(@Root() mjdataset_: MJDataset_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDatasetItems_DatasetNameArray(@Root() mjdataset_: MJDataset_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dataset Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -32639,7 +32639,7 @@ export class MJDuplicateRunDetail_ {
     DuplicateRun: string;
         
     @Field(() => [MJDuplicateRunDetailMatch_])
-    false_DuplicateRunDetailIDArray: MJDuplicateRunDetailMatch_[]; // Link to false
+    MJDuplicateRunDetailMatches_DuplicateRunDetailIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
     
 }
 
@@ -32766,7 +32766,7 @@ export class MJDuplicateRunDetailResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJDuplicateRunDetailMatch_])
-    async false_DuplicateRunDetailIDArray(@Root() mjduplicaterundetail_: MJDuplicateRunDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDuplicateRunDetailMatches_DuplicateRunDetailIDArray(@Root() mjduplicaterundetail_: MJDuplicateRunDetail_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Duplicate Run Detail Matches', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -32877,7 +32877,7 @@ export class MJDuplicateRun_ {
     ApprovedByUser?: string;
         
     @Field(() => [MJDuplicateRunDetail_])
-    false_DuplicateRunIDArray: MJDuplicateRunDetail_[]; // Link to false
+    MJDuplicateRunDetails_DuplicateRunIDArray: MJDuplicateRunDetail_[]; // Link to MJDuplicateRunDetails
     
 }
 
@@ -33022,7 +33022,7 @@ export class MJDuplicateRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJDuplicateRunDetail_])
-    async false_DuplicateRunIDArray(@Root() mjduplicaterun_: MJDuplicateRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDuplicateRunDetails_DuplicateRunIDArray(@Root() mjduplicaterun_: MJDuplicateRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Duplicate Run Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -33621,19 +33621,19 @@ export class MJEmployee_ {
     SupervisorEmail?: string;
         
     @Field(() => [MJEmployee_])
-    false_SupervisorIDArray: MJEmployee_[]; // Link to false
+    MJEmployees_SupervisorIDArray: MJEmployee_[]; // Link to MJEmployees
     
     @Field(() => [MJEmployeeCompanyIntegration_])
-    false_EmployeeIDArray: MJEmployeeCompanyIntegration_[]; // Link to false
+    MJEmployeeCompanyIntegrations_EmployeeIDArray: MJEmployeeCompanyIntegration_[]; // Link to MJEmployeeCompanyIntegrations
     
     @Field(() => [MJEmployeeRole_])
-    false_EmployeeIDArray: MJEmployeeRole_[]; // Link to false
+    MJEmployeeRoles_EmployeeIDArray: MJEmployeeRole_[]; // Link to MJEmployeeRoles
     
     @Field(() => [MJEmployeeSkill_])
-    false_EmployeeIDArray: MJEmployeeSkill_[]; // Link to false
+    MJEmployeeSkills_EmployeeIDArray: MJEmployeeSkill_[]; // Link to MJEmployeeSkills
     
     @Field(() => [MJUser_])
-    false_EmployeeIDArray: MJUser_[]; // Link to false
+    MJUsers_EmployeeIDArray: MJUser_[]; // Link to MJUsers
     
 }
 
@@ -33766,7 +33766,7 @@ export class MJEmployeeResolver extends ResolverBase {
     }
     
     @Query(() => [MJEmployee_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJEmployees(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employees', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -33777,7 +33777,7 @@ export class MJEmployeeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEmployee_])
-    async false_SupervisorIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEmployees_SupervisorIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employees', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -33788,7 +33788,7 @@ export class MJEmployeeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEmployeeCompanyIntegration_])
-    async false_EmployeeIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEmployeeCompanyIntegrations_EmployeeIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employee Company Integrations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -33799,7 +33799,7 @@ export class MJEmployeeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEmployeeRole_])
-    async false_EmployeeIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEmployeeRoles_EmployeeIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employee Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -33810,7 +33810,7 @@ export class MJEmployeeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEmployeeSkill_])
-    async false_EmployeeIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEmployeeSkills_EmployeeIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employee Skills', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -33821,7 +33821,7 @@ export class MJEmployeeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUser_])
-    async false_EmployeeIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUsers_EmployeeIDArray(@Root() mjemployee_: MJEmployee_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Users', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -33901,7 +33901,7 @@ export class MJEncryptionAlgorithm_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJEncryptionKey_])
-    false_EncryptionAlgorithmIDArray: MJEncryptionKey_[]; // Link to false
+    MJEncryptionKeys_EncryptionAlgorithmIDArray: MJEncryptionKey_[]; // Link to MJEncryptionKeys
     
 }
 
@@ -34028,7 +34028,7 @@ export class MJEncryptionAlgorithmResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEncryptionKey_])
-    async false_EncryptionAlgorithmIDArray(@Root() mjencryptionalgorithm_: MJEncryptionAlgorithm_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEncryptionKeys_EncryptionAlgorithmIDArray(@Root() mjencryptionalgorithm_: MJEncryptionAlgorithm_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Encryption Keys', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -34110,7 +34110,7 @@ export class MJEncryptionKeySource_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJEncryptionKey_])
-    false_EncryptionKeySourceIDArray: MJEncryptionKey_[]; // Link to false
+    MJEncryptionKeys_EncryptionKeySourceIDArray: MJEncryptionKey_[]; // Link to MJEncryptionKeys
     
 }
 
@@ -34237,7 +34237,7 @@ export class MJEncryptionKeySourceResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEncryptionKey_])
-    async false_EncryptionKeySourceIDArray(@Root() mjencryptionkeysource_: MJEncryptionKeySource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEncryptionKeys_EncryptionKeySourceIDArray(@Root() mjencryptionkeysource_: MJEncryptionKeySource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Encryption Keys', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -34344,7 +34344,7 @@ export class MJEncryptionKey_ {
     EncryptionAlgorithm: string;
         
     @Field(() => [MJEntityField_])
-    false_EncryptionKeyIDArray: MJEntityField_[]; // Link to false
+    MJEntityFields_EncryptionKeyIDArray: MJEntityField_[]; // Link to MJEntityFields
     
 }
 
@@ -34495,7 +34495,7 @@ export class MJEncryptionKeyResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityField_])
-    async false_EncryptionKeyIDArray(@Root() mjencryptionkey_: MJEncryptionKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityFields_EncryptionKeyIDArray(@Root() mjencryptionkey_: MJEncryptionKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Fields', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -34738,13 +34738,16 @@ export class MJEntity_ {
     @MaxLength(510)
     DisplayName?: string;
         
-    @Field({nullable: true, description: `Schema-aware programmatic code name derived from the entity Name. Computed by stripping the EntityNamePrefix from the Name, removing spaces, and prepending the alphanumeric-only prefix. For "MJ: AI Models" with prefix "MJ: ", this produces "MJAIModels". For entities in schemas without a prefix, this is simply the entity Name with spaces removed and non-alphanumeric characters replaced. Used in GraphQL type generation and internal code references.`}) 
+    @Field(() => Boolean, {description: `When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`}) 
+    AllowMultipleSubtypes: boolean;
+        
+    @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
-    @Field({nullable: true, description: `Schema-aware programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(StripToAlphanumeric(SchemaInfo.EntityNamePrefix) + BaseTable + NameSuffix). For the core MJ schema with prefix "MJ: ", a table named "AIModel" produces ClassName "MJAIModel", yielding class MJAIModelEntity. For schemas without a prefix configured, ClassName equals BaseTableCodeName. This prevents cross-schema collisions when two schemas have tables with the same name.`}) 
+    @Field({nullable: true, description: `Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().`}) 
     ClassName?: string;
         
-    @Field({nullable: true, description: `Programmatic name derived solely from BaseTable + NameSuffix, intentionally schema-unaware. Unlike ClassName (which incorporates the schema prefix), BaseTableCodeName always matches the raw SQL table name. Used for SQL generation, table references, and cases where the physical table identity is needed without schema disambiguation.`}) 
+    @Field({nullable: true}) 
     BaseTableCodeName?: string;
         
     @Field({nullable: true}) 
@@ -34760,142 +34763,142 @@ export class MJEntity_ {
     ParentBaseView?: string;
         
     @Field(() => [MJEntityPermission_])
-    false_EntityIDArray: MJEntityPermission_[]; // Link to false
+    MJEntityPermissions_EntityIDArray: MJEntityPermission_[]; // Link to MJEntityPermissions
     
     @Field(() => [MJEntityRelationship_])
-    false_EntityIDArray: MJEntityRelationship_[]; // Link to false
+    MJEntityRelationships_EntityIDArray: MJEntityRelationship_[]; // Link to MJEntityRelationships
     
     @Field(() => [MJEntityField_])
-    false_EntityIDArray: MJEntityField_[]; // Link to false
+    MJEntityFields_EntityIDArray: MJEntityField_[]; // Link to MJEntityFields
     
     @Field(() => [MJEntityAIAction_])
-    false_EntityIDArray: MJEntityAIAction_[]; // Link to false
+    MJEntityAIActions_EntityIDArray: MJEntityAIAction_[]; // Link to MJEntityAIActions
     
     @Field(() => [MJUserRecordLog_])
-    false_EntityIDArray: MJUserRecordLog_[]; // Link to false
+    MJUserRecordLogs_EntityIDArray: MJUserRecordLog_[]; // Link to MJUserRecordLogs
     
     @Field(() => [MJIntegrationURLFormat_])
-    false_EntityIDArray: MJIntegrationURLFormat_[]; // Link to false
+    MJIntegrationURLFormats_EntityIDArray: MJIntegrationURLFormat_[]; // Link to MJIntegrationURLFormats
     
     @Field(() => [MJEntity_])
-    false_ParentIDArray: MJEntity_[]; // Link to false
+    MJEntities_ParentIDArray: MJEntity_[]; // Link to MJEntities
     
     @Field(() => [MJUserFavorite_])
-    false_EntityIDArray: MJUserFavorite_[]; // Link to false
+    MJUserFavorites_EntityIDArray: MJUserFavorite_[]; // Link to MJUserFavorites
     
     @Field(() => [MJCompanyIntegrationRunDetail_])
-    false_EntityIDArray: MJCompanyIntegrationRunDetail_[]; // Link to false
+    MJCompanyIntegrationRunDetails_EntityIDArray: MJCompanyIntegrationRunDetail_[]; // Link to MJCompanyIntegrationRunDetails
     
     @Field(() => [MJApplicationEntity_])
-    false_EntityIDArray: MJApplicationEntity_[]; // Link to false
+    MJApplicationEntities_EntityIDArray: MJApplicationEntity_[]; // Link to MJApplicationEntities
     
     @Field(() => [MJUserApplicationEntity_])
-    false_EntityIDArray: MJUserApplicationEntity_[]; // Link to false
+    MJUserApplicationEntities_EntityIDArray: MJUserApplicationEntity_[]; // Link to MJUserApplicationEntities
     
     @Field(() => [MJList_])
-    false_EntityIDArray: MJList_[]; // Link to false
+    MJLists_EntityIDArray: MJList_[]; // Link to MJLists
     
     @Field(() => [MJUserView_])
-    false_EntityIDArray: MJUserView_[]; // Link to false
+    MJUserViews_EntityIDArray: MJUserView_[]; // Link to MJUserViews
     
     @Field(() => [MJRecordChange_])
-    false_EntityIDArray: MJRecordChange_[]; // Link to false
+    MJRecordChanges_EntityIDArray: MJRecordChange_[]; // Link to MJRecordChanges
     
     @Field(() => [MJAuditLog_])
-    false_EntityIDArray: MJAuditLog_[]; // Link to false
+    MJAuditLogs_EntityIDArray: MJAuditLog_[]; // Link to MJAuditLogs
     
     @Field(() => [MJResourceType_])
-    false_EntityIDArray: MJResourceType_[]; // Link to false
+    MJResourceTypes_EntityIDArray: MJResourceType_[]; // Link to MJResourceTypes
     
     @Field(() => [MJTaggedItem_])
-    false_EntityIDArray: MJTaggedItem_[]; // Link to false
+    MJTaggedItems_EntityIDArray: MJTaggedItem_[]; // Link to MJTaggedItems
     
     @Field(() => [MJDatasetItem_])
-    false_EntityIDArray: MJDatasetItem_[]; // Link to false
+    MJDatasetItems_EntityIDArray: MJDatasetItem_[]; // Link to MJDatasetItems
     
     @Field(() => [MJCompanyIntegrationRecordMap_])
-    false_EntityIDArray: MJCompanyIntegrationRecordMap_[]; // Link to false
+    MJCompanyIntegrationRecordMaps_EntityIDArray: MJCompanyIntegrationRecordMap_[]; // Link to MJCompanyIntegrationRecordMaps
     
     @Field(() => [MJRecordMergeLog_])
-    false_EntityIDArray: MJRecordMergeLog_[]; // Link to false
+    MJRecordMergeLogs_EntityIDArray: MJRecordMergeLog_[]; // Link to MJRecordMergeLogs
     
     @Field(() => [MJQueryField_])
-    false_SourceEntityIDArray: MJQueryField_[]; // Link to false
+    MJQueryFields_SourceEntityIDArray: MJQueryField_[]; // Link to MJQueryFields
     
     @Field(() => [MJConversation_])
-    false_LinkedEntityIDArray: MJConversation_[]; // Link to false
+    MJConversations_LinkedEntityIDArray: MJConversation_[]; // Link to MJConversations
     
     @Field(() => [MJEntityDocument_])
-    false_EntityIDArray: MJEntityDocument_[]; // Link to false
+    MJEntityDocuments_EntityIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
     @Field(() => [MJDataContextItem_])
-    false_EntityIDArray: MJDataContextItem_[]; // Link to false
+    MJDataContextItems_EntityIDArray: MJDataContextItem_[]; // Link to MJDataContextItems
     
     @Field(() => [MJUser_])
-    false_LinkedEntityIDArray: MJUser_[]; // Link to false
+    MJUsers_LinkedEntityIDArray: MJUser_[]; // Link to MJUsers
     
     @Field(() => [MJEntityRecordDocument_])
-    false_EntityIDArray: MJEntityRecordDocument_[]; // Link to false
+    MJEntityRecordDocuments_EntityIDArray: MJEntityRecordDocument_[]; // Link to MJEntityRecordDocuments
     
     @Field(() => [MJFileEntityRecordLink_])
-    false_EntityIDArray: MJFileEntityRecordLink_[]; // Link to false
+    MJFileEntityRecordLinks_EntityIDArray: MJFileEntityRecordLink_[]; // Link to MJFileEntityRecordLinks
     
     @Field(() => [MJUserViewCategory_])
-    false_EntityIDArray: MJUserViewCategory_[]; // Link to false
+    MJUserViewCategories_EntityIDArray: MJUserViewCategory_[]; // Link to MJUserViewCategories
     
     @Field(() => [MJEntitySetting_])
-    false_EntityIDArray: MJEntitySetting_[]; // Link to false
+    MJEntitySettings_EntityIDArray: MJEntitySetting_[]; // Link to MJEntitySettings
     
     @Field(() => [MJDuplicateRun_])
-    false_EntityIDArray: MJDuplicateRun_[]; // Link to false
+    MJDuplicateRuns_EntityIDArray: MJDuplicateRun_[]; // Link to MJDuplicateRuns
     
     @Field(() => [MJEntityAction_])
-    false_EntityIDArray: MJEntityAction_[]; // Link to false
+    MJEntityActions_EntityIDArray: MJEntityAction_[]; // Link to MJEntityActions
     
     @Field(() => [MJTemplateParam_])
-    false_EntityIDArray: MJTemplateParam_[]; // Link to false
+    MJTemplateParams_EntityIDArray: MJTemplateParam_[]; // Link to MJTemplateParams
     
     @Field(() => [MJRecommendation_])
-    false_SourceEntityIDArray: MJRecommendation_[]; // Link to false
+    MJRecommendations_SourceEntityIDArray: MJRecommendation_[]; // Link to MJRecommendations
     
     @Field(() => [MJRecommendationItem_])
-    false_DestinationEntityIDArray: MJRecommendationItem_[]; // Link to false
+    MJRecommendationItems_DestinationEntityIDArray: MJRecommendationItem_[]; // Link to MJRecommendationItems
     
     @Field(() => [MJEntityCommunicationMessageType_])
-    false_EntityIDArray: MJEntityCommunicationMessageType_[]; // Link to false
+    MJEntityCommunicationMessageTypes_EntityIDArray: MJEntityCommunicationMessageType_[]; // Link to MJEntityCommunicationMessageTypes
     
     @Field(() => [MJQueryEntity_])
-    false_EntityIDArray: MJQueryEntity_[]; // Link to false
+    MJQueryEntities_EntityIDArray: MJQueryEntity_[]; // Link to MJQueryEntities
     
     @Field(() => [MJAccessControlRule_])
-    false_EntityIDArray: MJAccessControlRule_[]; // Link to false
+    MJAccessControlRules_EntityIDArray: MJAccessControlRule_[]; // Link to MJAccessControlRules
     
     @Field(() => [MJRecordLink_])
-    false_SourceEntityIDArray: MJRecordLink_[]; // Link to false
+    MJRecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJRecordLinks
     
     @Field(() => [MJAIAgentExample_])
-    false_PrimaryScopeEntityIDArray: MJAIAgentExample_[]; // Link to false
+    MJAIAgentExamples_PrimaryScopeEntityIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
     @Field(() => [MJAIAgentNote_])
-    false_PrimaryScopeEntityIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_PrimaryScopeEntityIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
     @Field(() => [MJVersionLabel_])
-    false_EntityIDArray: MJVersionLabel_[]; // Link to false
+    MJVersionLabels_EntityIDArray: MJVersionLabel_[]; // Link to MJVersionLabels
     
     @Field(() => [MJVersionLabelItem_])
-    false_EntityIDArray: MJVersionLabelItem_[]; // Link to false
+    MJVersionLabelItems_EntityIDArray: MJVersionLabelItem_[]; // Link to MJVersionLabelItems
     
     @Field(() => [MJGeneratedCode_])
-    false_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to false
+    MJGeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to MJGeneratedCodes
     
     @Field(() => [MJRecordLink_])
-    false_TargetEntityIDArray: MJRecordLink_[]; // Link to false
+    MJRecordLinks_TargetEntityIDArray: MJRecordLink_[]; // Link to MJRecordLinks
     
     @Field(() => [MJTestRun_])
-    false_TargetLogEntityIDArray: MJTestRun_[]; // Link to false
+    MJTestRuns_TargetLogEntityIDArray: MJTestRun_[]; // Link to MJTestRuns
     
     @Field(() => [MJAIAgentRun_])
-    false_PrimaryScopeEntityIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_PrimaryScopeEntityIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
 }
 
@@ -35062,6 +35065,9 @@ export class CreateMJEntityInput {
 
     @Field({ nullable: true })
     DisplayName: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowMultipleSubtypes?: boolean;
 }
     
 
@@ -35229,6 +35235,9 @@ export class UpdateMJEntityInput {
     @Field({ nullable: true })
     DisplayName?: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    AllowMultipleSubtypes?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -35292,7 +35301,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
     
     @Query(() => [MJEntity_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJEntities(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35303,7 +35312,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityPermission_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityPermissions_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35314,7 +35323,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityRelationship_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityRelationships_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Relationships', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35325,7 +35334,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityField_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityFields_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Fields', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35336,7 +35345,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityAIAction_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityAIActions_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity AI Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35347,7 +35356,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserRecordLog_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserRecordLogs_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Record Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35358,7 +35367,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJIntegrationURLFormat_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJIntegrationURLFormats_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Integration URL Formats', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35369,7 +35378,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntity_])
-    async false_ParentIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntities_ParentIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35380,7 +35389,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserFavorite_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserFavorites_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Favorites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35391,7 +35400,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCompanyIntegrationRunDetail_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrationRunDetails_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integration Run Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35402,7 +35411,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJApplicationEntity_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJApplicationEntities_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Application Entities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35413,7 +35422,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserApplicationEntity_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserApplicationEntities_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Application Entities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35424,7 +35433,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJList_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJLists_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Lists', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35435,7 +35444,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserView_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViews_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Views', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35446,7 +35455,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecordChange_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordChanges_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Changes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35457,7 +35466,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAuditLog_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuditLogs_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Audit Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35468,7 +35477,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJResourceType_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJResourceTypes_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Resource Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35479,7 +35488,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTaggedItem_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTaggedItems_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tagged Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35490,7 +35499,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDatasetItem_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDatasetItems_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dataset Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35501,7 +35510,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCompanyIntegrationRecordMap_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrationRecordMaps_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integration Record Maps', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35512,7 +35521,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecordMergeLog_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordMergeLogs_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Merge Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35523,7 +35532,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJQueryField_])
-    async false_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryFields_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Fields', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35534,7 +35543,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversation_])
-    async false_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversations_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35545,7 +35554,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityDocument_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityDocuments_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35556,7 +35565,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDataContextItem_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDataContextItems_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Data Context Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35567,7 +35576,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUser_])
-    async false_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUsers_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Users', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35578,7 +35587,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityRecordDocument_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityRecordDocuments_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Record Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35589,7 +35598,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJFileEntityRecordLink_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJFileEntityRecordLinks_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Entity Record Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35600,7 +35609,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserViewCategory_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViewCategories_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User View Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35611,7 +35620,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntitySetting_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntitySettings_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Settings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35622,7 +35631,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDuplicateRun_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDuplicateRuns_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Duplicate Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35633,7 +35642,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityAction_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityActions_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35644,7 +35653,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTemplateParam_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplateParams_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Template Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35655,7 +35664,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecommendation_])
-    async false_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecommendations_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Recommendations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35666,7 +35675,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecommendationItem_])
-    async false_DestinationEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecommendationItems_DestinationEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Recommendation Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35677,7 +35686,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityCommunicationMessageType_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityCommunicationMessageTypes_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Communication Message Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35688,7 +35697,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJQueryEntity_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryEntities_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Entities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35699,7 +35708,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAccessControlRule_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAccessControlRules_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Access Control Rules', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35710,7 +35719,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecordLink_])
-    async false_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordLinks_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35721,7 +35730,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentExample_])
-    async false_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentExamples_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35732,7 +35741,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35743,7 +35752,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJVersionLabel_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabels_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Labels', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35754,7 +35763,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJVersionLabelItem_])
-    async false_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabelItems_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Label Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35765,7 +35774,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJGeneratedCode_])
-    async false_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJGeneratedCodes_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Generated Codes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35776,7 +35785,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecordLink_])
-    async false_TargetEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordLinks_TargetEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35787,7 +35796,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTestRun_])
-    async false_TargetLogEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestRuns_TargetLogEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -35798,7 +35807,7 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -36039,7 +36048,7 @@ export class MJEntityActionInvocationType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJEntityActionInvocation_])
-    false_InvocationTypeIDArray: MJEntityActionInvocation_[]; // Link to false
+    MJEntityActionInvocations_InvocationTypeIDArray: MJEntityActionInvocation_[]; // Link to MJEntityActionInvocations
     
 }
 
@@ -36142,7 +36151,7 @@ export class MJEntityActionInvocationTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityActionInvocation_])
-    async false_InvocationTypeIDArray(@Root() mjentityactioninvocationtype_: MJEntityActionInvocationType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityActionInvocations_InvocationTypeIDArray(@Root() mjentityactioninvocationtype_: MJEntityActionInvocationType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Action Invocations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -36569,13 +36578,13 @@ export class MJEntityAction_ {
     Action: string;
         
     @Field(() => [MJEntityActionInvocation_])
-    false_EntityActionIDArray: MJEntityActionInvocation_[]; // Link to false
+    MJEntityActionInvocations_EntityActionIDArray: MJEntityActionInvocation_[]; // Link to MJEntityActionInvocations
     
     @Field(() => [MJEntityActionFilter_])
-    false_EntityActionIDArray: MJEntityActionFilter_[]; // Link to false
+    MJEntityActionFilters_EntityActionIDArray: MJEntityActionFilter_[]; // Link to MJEntityActionFilters
     
     @Field(() => [MJEntityActionParam_])
-    false_EntityActionIDArray: MJEntityActionParam_[]; // Link to false
+    MJEntityActionParams_EntityActionIDArray: MJEntityActionParam_[]; // Link to MJEntityActionParams
     
 }
 
@@ -36678,7 +36687,7 @@ export class MJEntityActionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityActionInvocation_])
-    async false_EntityActionIDArray(@Root() mjentityaction_: MJEntityAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityActionInvocations_EntityActionIDArray(@Root() mjentityaction_: MJEntityAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Action Invocations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -36689,7 +36698,7 @@ export class MJEntityActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityActionFilter_])
-    async false_EntityActionIDArray(@Root() mjentityaction_: MJEntityAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityActionFilters_EntityActionIDArray(@Root() mjentityaction_: MJEntityAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Action Filters', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -36700,7 +36709,7 @@ export class MJEntityActionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityActionParam_])
-    async false_EntityActionIDArray(@Root() mjentityaction_: MJEntityAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityActionParams_EntityActionIDArray(@Root() mjentityaction_: MJEntityAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Action Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -36971,7 +36980,7 @@ export class MJEntityAIActionResolver extends ResolverBase {
     }
     
     @Query(() => [MJEntityAIAction_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJEntityAIActions(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity AI Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -37208,7 +37217,7 @@ export class MJEntityCommunicationMessageType_ {
     BaseMessageType: string;
         
     @Field(() => [MJEntityCommunicationField_])
-    false_EntityCommunicationMessageTypeIDArray: MJEntityCommunicationField_[]; // Link to false
+    MJEntityCommunicationFields_EntityCommunicationMessageTypeIDArray: MJEntityCommunicationField_[]; // Link to MJEntityCommunicationFields
     
 }
 
@@ -37311,7 +37320,7 @@ export class MJEntityCommunicationMessageTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityCommunicationField_])
-    async false_EntityCommunicationMessageTypeIDArray(@Root() mjentitycommunicationmessagetype_: MJEntityCommunicationMessageType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityCommunicationFields_EntityCommunicationMessageTypeIDArray(@Root() mjentitycommunicationmessagetype_: MJEntityCommunicationMessageType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Communication Fields', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -37717,7 +37726,7 @@ export class MJEntityDocumentType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJEntityDocument_])
-    false_TypeIDArray: MJEntityDocument_[]; // Link to false
+    MJEntityDocuments_TypeIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
 }
 
@@ -37814,7 +37823,7 @@ export class MJEntityDocumentTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityDocument_])
-    async false_TypeIDArray(@Root() mjentitydocumenttype_: MJEntityDocumentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityDocuments_TypeIDArray(@Root() mjentitydocumenttype_: MJEntityDocumentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -37925,13 +37934,13 @@ export class MJEntityDocument_ {
     AIModel: string;
         
     @Field(() => [MJEntityDocumentRun_])
-    false_EntityDocumentIDArray: MJEntityDocumentRun_[]; // Link to false
+    MJEntityDocumentRuns_EntityDocumentIDArray: MJEntityDocumentRun_[]; // Link to MJEntityDocumentRuns
     
     @Field(() => [MJEntityDocumentSetting_])
-    false_EntityDocumentIDArray: MJEntityDocumentSetting_[]; // Link to false
+    MJEntityDocumentSettings_EntityDocumentIDArray: MJEntityDocumentSetting_[]; // Link to MJEntityDocumentSettings
     
     @Field(() => [MJEntityRecordDocument_])
-    false_EntityDocumentIDArray: MJEntityRecordDocument_[]; // Link to false
+    MJEntityRecordDocuments_EntityDocumentIDArray: MJEntityRecordDocument_[]; // Link to MJEntityRecordDocuments
     
 }
 
@@ -38070,7 +38079,7 @@ export class MJEntityDocumentResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityDocumentRun_])
-    async false_EntityDocumentIDArray(@Root() mjentitydocument_: MJEntityDocument_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityDocumentRuns_EntityDocumentIDArray(@Root() mjentitydocument_: MJEntityDocument_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Document Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -38081,7 +38090,7 @@ export class MJEntityDocumentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityDocumentSetting_])
-    async false_EntityDocumentIDArray(@Root() mjentitydocument_: MJEntityDocument_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityDocumentSettings_EntityDocumentIDArray(@Root() mjentitydocument_: MJEntityDocument_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Document Settings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -38092,7 +38101,7 @@ export class MJEntityDocumentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityRecordDocument_])
-    async false_EntityDocumentIDArray(@Root() mjentitydocument_: MJEntityDocument_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityRecordDocuments_EntityDocumentIDArray(@Root() mjentitydocument_: MJEntityDocument_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Record Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -38291,7 +38300,7 @@ export class MJEntityFieldValueResolver extends ResolverBase {
     }
     
     @Query(() => [MJEntityFieldValue_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJEntityFieldValues(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Field Values', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -38574,7 +38583,7 @@ export class MJEntityField_ {
     RelatedEntityClassName?: string;
         
     @Field(() => [MJEntityFieldValue_])
-    false_EntityFieldIDArray: MJEntityFieldValue_[]; // Link to false
+    MJEntityFieldValues_EntityFieldIDArray: MJEntityFieldValue_[]; // Link to MJEntityFieldValues
     
 }
 
@@ -38911,7 +38920,7 @@ export class MJEntityFieldResolver extends ResolverBase {
     }
     
     @Query(() => [MJEntityField_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJEntityFields(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Fields', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -38922,7 +38931,7 @@ export class MJEntityFieldResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityFieldValue_])
-    async false_EntityFieldIDArray(@Root() mjentityfield_: MJEntityField_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityFieldValues_EntityFieldIDArray(@Root() mjentityfield_: MJEntityField_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Field Values', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -39185,7 +39194,7 @@ export class MJEntityPermissionResolver extends ResolverBase {
     }
     
     @Query(() => [MJEntityPermission_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJEntityPermissions(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -39471,7 +39480,7 @@ export class MJEntityRelationshipDisplayComponent_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJEntityRelationship_])
-    false_DisplayComponentIDArray: MJEntityRelationship_[]; // Link to false
+    MJEntityRelationships_DisplayComponentIDArray: MJEntityRelationship_[]; // Link to MJEntityRelationships
     
 }
 
@@ -39574,7 +39583,7 @@ export class MJEntityRelationshipDisplayComponentResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityRelationship_])
-    async false_DisplayComponentIDArray(@Root() mjentityrelationshipdisplaycomponent_: MJEntityRelationshipDisplayComponent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityRelationships_DisplayComponentIDArray(@Root() mjentityrelationshipdisplaycomponent_: MJEntityRelationshipDisplayComponent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Relationships', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -39956,7 +39965,7 @@ export class MJEntityRelationshipResolver extends ResolverBase {
     }
     
     @Query(() => [MJEntityRelationship_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJEntityRelationships(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Relationships', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -40196,25 +40205,25 @@ export class MJEnvironment_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJProject_])
-    false_EnvironmentIDArray: MJProject_[]; // Link to false
+    MJProjects_EnvironmentIDArray: MJProject_[]; // Link to MJProjects
     
     @Field(() => [MJCollection_])
-    false_EnvironmentIDArray: MJCollection_[]; // Link to false
+    MJCollections_EnvironmentIDArray: MJCollection_[]; // Link to MJCollections
     
     @Field(() => [MJArtifact_])
-    false_EnvironmentIDArray: MJArtifact_[]; // Link to false
+    MJArtifacts_EnvironmentIDArray: MJArtifact_[]; // Link to MJArtifacts
     
     @Field(() => [MJTask_])
-    false_EnvironmentIDArray: MJTask_[]; // Link to false
+    MJTasks_EnvironmentIDArray: MJTask_[]; // Link to MJTasks
     
     @Field(() => [MJDashboard_])
-    false_EnvironmentIDArray: MJDashboard_[]; // Link to false
+    MJDashboards_EnvironmentIDArray: MJDashboard_[]; // Link to MJDashboards
     
     @Field(() => [MJReport_])
-    false_EnvironmentIDArray: MJReport_[]; // Link to false
+    MJReports_EnvironmentIDArray: MJReport_[]; // Link to MJReports
     
     @Field(() => [MJConversation_])
-    false_EnvironmentIDArray: MJConversation_[]; // Link to false
+    MJConversations_EnvironmentIDArray: MJConversation_[]; // Link to MJConversations
     
 }
 
@@ -40323,7 +40332,7 @@ export class MJEnvironmentResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJProject_])
-    async false_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJProjects_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Projects', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -40334,7 +40343,7 @@ export class MJEnvironmentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCollection_])
-    async false_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollections_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collections', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -40345,7 +40354,7 @@ export class MJEnvironmentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifact_])
-    async false_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifacts_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -40356,7 +40365,7 @@ export class MJEnvironmentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTask_])
-    async false_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTasks_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -40367,7 +40376,7 @@ export class MJEnvironmentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboard_])
-    async false_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboards_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboards', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -40378,7 +40387,7 @@ export class MJEnvironmentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReport_])
-    async false_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -40389,7 +40398,7 @@ export class MJEnvironmentResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversation_])
-    async false_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversations_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -40891,10 +40900,10 @@ export class MJFileCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJFile_])
-    false_CategoryIDArray: MJFile_[]; // Link to false
+    MJFiles_CategoryIDArray: MJFile_[]; // Link to MJFiles
     
     @Field(() => [MJFileCategory_])
-    false_ParentIDArray: MJFileCategory_[]; // Link to false
+    MJFileCategories_ParentIDArray: MJFileCategory_[]; // Link to MJFileCategories
     
 }
 
@@ -40997,7 +41006,7 @@ export class MJFileCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJFile_])
-    async false_CategoryIDArray(@Root() mjfilecategory_: MJFileCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJFiles_CategoryIDArray(@Root() mjfilecategory_: MJFileCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Files', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41008,7 +41017,7 @@ export class MJFileCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJFileCategory_])
-    async false_ParentIDArray(@Root() mjfilecategory_: MJFileCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJFileCategories_ParentIDArray(@Root() mjfilecategory_: MJFileCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41436,16 +41445,16 @@ export class MJFileStorageProvider_ {
     RequiresOAuth: boolean;
         
     @Field(() => [MJFile_])
-    false_ProviderIDArray: MJFile_[]; // Link to false
+    MJFiles_ProviderIDArray: MJFile_[]; // Link to MJFiles
     
     @Field(() => [MJFileStorageAccount_])
-    false_ProviderIDArray: MJFileStorageAccount_[]; // Link to false
+    MJFileStorageAccounts_ProviderIDArray: MJFileStorageAccount_[]; // Link to MJFileStorageAccounts
     
     @Field(() => [MJAIConfiguration_])
-    false_DefaultStorageProviderIDArray: MJAIConfiguration_[]; // Link to false
+    MJAIConfigurations_DefaultStorageProviderIDArray: MJAIConfiguration_[]; // Link to MJAIConfigurations
     
     @Field(() => [MJAIAgent_])
-    false_AttachmentStorageProviderIDArray: MJAIAgent_[]; // Link to false
+    MJAIAgents_AttachmentStorageProviderIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
 }
 
@@ -41584,7 +41593,7 @@ export class MJFileStorageProviderResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJFile_])
-    async false_ProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJFiles_ProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Files', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41595,7 +41604,7 @@ export class MJFileStorageProviderResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJFileStorageAccount_])
-    async false_ProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJFileStorageAccounts_ProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Storage Accounts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41606,7 +41615,7 @@ export class MJFileStorageProviderResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIConfiguration_])
-    async false_DefaultStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIConfigurations_DefaultStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41617,7 +41626,7 @@ export class MJFileStorageProviderResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgent_])
-    async false_AttachmentStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgents_AttachmentStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41709,16 +41718,16 @@ export class MJFile_ {
     Provider: string;
         
     @Field(() => [MJFileEntityRecordLink_])
-    false_FileIDArray: MJFileEntityRecordLink_[]; // Link to false
+    MJFileEntityRecordLinks_FileIDArray: MJFileEntityRecordLink_[]; // Link to MJFileEntityRecordLinks
     
     @Field(() => [MJAIPromptRunMedia_])
-    false_FileIDArray: MJAIPromptRunMedia_[]; // Link to false
+    MJAIPromptRunMedias_FileIDArray: MJAIPromptRunMedia_[]; // Link to MJAIPromptRunMedias
     
     @Field(() => [MJConversationDetailAttachment_])
-    false_FileIDArray: MJConversationDetailAttachment_[]; // Link to false
+    MJConversationDetailAttachments_FileIDArray: MJConversationDetailAttachment_[]; // Link to MJConversationDetailAttachments
     
     @Field(() => [MJAIAgentRunMedia_])
-    false_FileIDArray: MJAIAgentRunMedia_[]; // Link to false
+    MJAIAgentRunMedias_FileIDArray: MJAIAgentRunMedia_[]; // Link to MJAIAgentRunMedias
     
 }
 
@@ -41845,7 +41854,7 @@ export class MJFileResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJFileEntityRecordLink_])
-    async false_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJFileEntityRecordLinks_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Entity Record Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41856,7 +41865,7 @@ export class MJFileResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRunMedia_])
-    async false_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRunMedias_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Run Medias', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41867,7 +41876,7 @@ export class MJFileResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetailAttachment_])
-    async false_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetailAttachments_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Detail Attachments', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41878,7 +41887,7 @@ export class MJFileResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRunMedia_])
-    async false_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRunMedias_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Run Medias', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -41954,10 +41963,10 @@ export class MJGeneratedCodeCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJGeneratedCodeCategory_])
-    false_ParentIDArray: MJGeneratedCodeCategory_[]; // Link to false
+    MJGeneratedCodeCategories_ParentIDArray: MJGeneratedCodeCategory_[]; // Link to MJGeneratedCodeCategories
     
     @Field(() => [MJGeneratedCode_])
-    false_CategoryIDArray: MJGeneratedCode_[]; // Link to false
+    MJGeneratedCodes_CategoryIDArray: MJGeneratedCode_[]; // Link to MJGeneratedCodes
     
 }
 
@@ -42060,7 +42069,7 @@ export class MJGeneratedCodeCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJGeneratedCodeCategory_])
-    async false_ParentIDArray(@Root() mjgeneratedcodecategory_: MJGeneratedCodeCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJGeneratedCodeCategories_ParentIDArray(@Root() mjgeneratedcodecategory_: MJGeneratedCodeCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Generated Code Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -42071,7 +42080,7 @@ export class MJGeneratedCodeCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJGeneratedCode_])
-    async false_CategoryIDArray(@Root() mjgeneratedcodecategory_: MJGeneratedCodeCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJGeneratedCodes_CategoryIDArray(@Root() mjgeneratedcodecategory_: MJGeneratedCodeCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Generated Codes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -42507,7 +42516,7 @@ export class MJIntegrationURLFormatResolver extends ResolverBase {
     }
     
     @Query(() => [MJIntegrationURLFormat_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJIntegrationURLFormats(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Integration URL Formats', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -42590,13 +42599,13 @@ export class MJIntegration_ {
     ID: string;
         
     @Field(() => [MJIntegrationURLFormat_])
-    false_IntegrationIDArray: MJIntegrationURLFormat_[]; // Link to false
+    MJIntegrationURLFormats_IntegrationIDArray: MJIntegrationURLFormat_[]; // Link to MJIntegrationURLFormats
     
     @Field(() => [MJCompanyIntegration_])
-    false_IntegrationNameArray: MJCompanyIntegration_[]; // Link to false
+    MJCompanyIntegrations_IntegrationNameArray: MJCompanyIntegration_[]; // Link to MJCompanyIntegrations
     
     @Field(() => [MJRecordChange_])
-    false_IntegrationIDArray: MJRecordChange_[]; // Link to false
+    MJRecordChanges_IntegrationIDArray: MJRecordChange_[]; // Link to MJRecordChanges
     
 }
 
@@ -42723,7 +42732,7 @@ export class MJIntegrationResolver extends ResolverBase {
     }
     
     @Query(() => [MJIntegration_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJIntegrations(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Integrations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -42734,7 +42743,7 @@ export class MJIntegrationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJIntegrationURLFormat_])
-    async false_IntegrationIDArray(@Root() mjintegration_: MJIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJIntegrationURLFormats_IntegrationIDArray(@Root() mjintegration_: MJIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Integration URL Formats', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -42745,7 +42754,7 @@ export class MJIntegrationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCompanyIntegration_])
-    async false_IntegrationNameArray(@Root() mjintegration_: MJIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrations_IntegrationNameArray(@Root() mjintegration_: MJIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integrations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -42756,7 +42765,7 @@ export class MJIntegrationResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecordChange_])
-    async false_IntegrationIDArray(@Root() mjintegration_: MJIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordChanges_IntegrationIDArray(@Root() mjintegration_: MJIntegration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Changes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -42830,10 +42839,10 @@ export class MJLibrary_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJActionLibrary_])
-    false_LibraryIDArray: MJActionLibrary_[]; // Link to false
+    MJActionLibraries_LibraryIDArray: MJActionLibrary_[]; // Link to MJActionLibraries
     
     @Field(() => [MJLibraryItem_])
-    false_LibraryIDArray: MJLibraryItem_[]; // Link to false
+    MJLibraryItems_LibraryIDArray: MJLibraryItem_[]; // Link to MJLibraryItems
     
 }
 
@@ -42948,7 +42957,7 @@ export class MJLibraryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJActionLibrary_])
-    async false_LibraryIDArray(@Root() mjlibrary_: MJLibrary_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionLibraries_LibraryIDArray(@Root() mjlibrary_: MJLibrary_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Libraries', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -42959,7 +42968,7 @@ export class MJLibraryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJLibraryItem_])
-    async false_LibraryIDArray(@Root() mjlibrary_: MJLibrary_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJLibraryItems_LibraryIDArray(@Root() mjlibrary_: MJLibrary_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Library Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -43205,10 +43214,10 @@ export class MJListCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJListCategory_])
-    false_ParentIDArray: MJListCategory_[]; // Link to false
+    MJListCategories_ParentIDArray: MJListCategory_[]; // Link to MJListCategories
     
     @Field(() => [MJList_])
-    false_CategoryIDArray: MJList_[]; // Link to false
+    MJLists_CategoryIDArray: MJList_[]; // Link to MJLists
     
 }
 
@@ -43317,7 +43326,7 @@ export class MJListCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJListCategory_])
-    async false_ParentIDArray(@Root() mjlistcategory_: MJListCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJListCategories_ParentIDArray(@Root() mjlistcategory_: MJListCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: List Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -43328,7 +43337,7 @@ export class MJListCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJList_])
-    async false_CategoryIDArray(@Root() mjlistcategory_: MJListCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJLists_CategoryIDArray(@Root() mjlistcategory_: MJListCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Lists', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -43990,16 +43999,16 @@ export class MJList_ {
     CompanyIntegration?: string;
         
     @Field(() => [MJListDetail_])
-    false_ListIDArray: MJListDetail_[]; // Link to false
+    MJListDetails_ListIDArray: MJListDetail_[]; // Link to MJListDetails
     
     @Field(() => [MJDuplicateRun_])
-    false_SourceListIDArray: MJDuplicateRun_[]; // Link to false
+    MJDuplicateRuns_SourceListIDArray: MJDuplicateRun_[]; // Link to MJDuplicateRuns
     
     @Field(() => [MJListShare_])
-    false_ListIDArray: MJListShare_[]; // Link to false
+    MJListShares_ListIDArray: MJListShare_[]; // Link to MJListShares
     
     @Field(() => [MJListInvitation_])
-    false_ListIDArray: MJListInvitation_[]; // Link to false
+    MJListInvitations_ListIDArray: MJListInvitation_[]; // Link to MJListInvitations
     
 }
 
@@ -44126,7 +44135,7 @@ export class MJListResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJListDetail_])
-    async false_ListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJListDetails_ListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: List Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44137,7 +44146,7 @@ export class MJListResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDuplicateRun_])
-    async false_SourceListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDuplicateRuns_SourceListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Duplicate Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44148,7 +44157,7 @@ export class MJListResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJListShare_])
-    async false_ListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJListShares_ListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: List Shares', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44159,7 +44168,7 @@ export class MJListResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJListInvitation_])
-    async false_ListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJListInvitations_ListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: List Invitations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44663,22 +44672,22 @@ export class MJMCPServerConnection_ {
     Company?: string;
         
     @Field(() => [MJMCPServerConnectionTool_])
-    false_MCPServerConnectionIDArray: MJMCPServerConnectionTool_[]; // Link to false
+    MJMCPServerConnectionTools_MCPServerConnectionIDArray: MJMCPServerConnectionTool_[]; // Link to MJMCPServerConnectionTools
     
     @Field(() => [MJMCPToolExecutionLog_])
-    false_MCPServerConnectionIDArray: MJMCPToolExecutionLog_[]; // Link to false
+    MJMCPToolExecutionLogs_MCPServerConnectionIDArray: MJMCPToolExecutionLog_[]; // Link to MJMCPToolExecutionLogs
     
     @Field(() => [MJOAuthClientRegistration_])
-    false_MCPServerConnectionIDArray: MJOAuthClientRegistration_[]; // Link to false
+    MJOAuthClientRegistrations_MCPServerConnectionIDArray: MJOAuthClientRegistration_[]; // Link to MJOAuthClientRegistrations
     
     @Field(() => [MJOAuthToken_])
-    false_MCPServerConnectionIDArray: MJOAuthToken_[]; // Link to false
+    MJOAuthTokens_MCPServerConnectionIDArray: MJOAuthToken_[]; // Link to MJOAuthTokens
     
     @Field(() => [MJOAuthAuthorizationState_])
-    false_MCPServerConnectionIDArray: MJOAuthAuthorizationState_[]; // Link to false
+    MJOAuthAuthorizationStates_MCPServerConnectionIDArray: MJOAuthAuthorizationState_[]; // Link to MJOAuthAuthorizationStates
     
     @Field(() => [MJMCPServerConnectionPermission_])
-    false_MCPServerConnectionIDArray: MJMCPServerConnectionPermission_[]; // Link to false
+    MJMCPServerConnectionPermissions_MCPServerConnectionIDArray: MJMCPServerConnectionPermission_[]; // Link to MJMCPServerConnectionPermissions
     
 }
 
@@ -44859,7 +44868,7 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJMCPServerConnectionTool_])
-    async false_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerConnectionTools_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Connection Tools', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44870,7 +44879,7 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPToolExecutionLog_])
-    async false_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPToolExecutionLogs_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Tool Execution Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44881,7 +44890,7 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJOAuthClientRegistration_])
-    async false_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOAuthClientRegistrations_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: O Auth Client Registrations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44892,7 +44901,7 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJOAuthToken_])
-    async false_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOAuthTokens_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: O Auth Tokens', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44903,7 +44912,7 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJOAuthAuthorizationState_])
-    async false_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOAuthAuthorizationStates_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -44914,7 +44923,7 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerConnectionPermission_])
-    async false_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerConnectionPermissions_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Connection Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -45027,10 +45036,10 @@ export class MJMCPServerTool_ {
     GeneratedActionCategory?: string;
         
     @Field(() => [MJMCPServerConnectionTool_])
-    false_MCPServerToolIDArray: MJMCPServerConnectionTool_[]; // Link to false
+    MJMCPServerConnectionTools_MCPServerToolIDArray: MJMCPServerConnectionTool_[]; // Link to MJMCPServerConnectionTools
     
     @Field(() => [MJMCPToolExecutionLog_])
-    false_MCPServerToolIDArray: MJMCPToolExecutionLog_[]; // Link to false
+    MJMCPToolExecutionLogs_MCPServerToolIDArray: MJMCPToolExecutionLog_[]; // Link to MJMCPToolExecutionLogs
     
 }
 
@@ -45187,7 +45196,7 @@ export class MJMCPServerToolResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJMCPServerConnectionTool_])
-    async false_MCPServerToolIDArray(@Root() mjmcpservertool_: MJMCPServerTool_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerConnectionTools_MCPServerToolIDArray(@Root() mjmcpservertool_: MJMCPServerTool_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Connection Tools', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -45198,7 +45207,7 @@ export class MJMCPServerToolResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPToolExecutionLog_])
-    async false_MCPServerToolIDArray(@Root() mjmcpservertool_: MJMCPServerTool_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPToolExecutionLogs_MCPServerToolIDArray(@Root() mjmcpservertool_: MJMCPServerTool_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Tool Execution Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -45338,13 +45347,13 @@ export class MJMCPServer_ {
     CredentialType?: string;
         
     @Field(() => [MJOAuthClientRegistration_])
-    false_MCPServerIDArray: MJOAuthClientRegistration_[]; // Link to false
+    MJOAuthClientRegistrations_MCPServerIDArray: MJOAuthClientRegistration_[]; // Link to MJOAuthClientRegistrations
     
     @Field(() => [MJMCPServerTool_])
-    false_MCPServerIDArray: MJMCPServerTool_[]; // Link to false
+    MJMCPServerTools_MCPServerIDArray: MJMCPServerTool_[]; // Link to MJMCPServerTools
     
     @Field(() => [MJMCPServerConnection_])
-    false_MCPServerIDArray: MJMCPServerConnection_[]; // Link to false
+    MJMCPServerConnections_MCPServerIDArray: MJMCPServerConnection_[]; // Link to MJMCPServerConnections
     
 }
 
@@ -45561,7 +45570,7 @@ export class MJMCPServerResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJOAuthClientRegistration_])
-    async false_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOAuthClientRegistrations_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: O Auth Client Registrations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -45572,7 +45581,7 @@ export class MJMCPServerResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerTool_])
-    async false_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerTools_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Tools', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -45583,7 +45592,7 @@ export class MJMCPServerResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerConnection_])
-    async false_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerConnections_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -47461,13 +47470,13 @@ export class MJOpenApp_ {
     InstalledByUser: string;
         
     @Field(() => [MJOpenAppDependency_])
-    false_OpenAppIDArray: MJOpenAppDependency_[]; // Link to false
+    MJOpenAppDependencies_OpenAppIDArray: MJOpenAppDependency_[]; // Link to MJOpenAppDependencies
     
     @Field(() => [MJOpenAppDependency_])
-    false_DependsOnAppIDArray: MJOpenAppDependency_[]; // Link to false
+    MJOpenAppDependencies_DependsOnAppIDArray: MJOpenAppDependency_[]; // Link to MJOpenAppDependencies
     
     @Field(() => [MJOpenAppInstallHistory_])
-    false_OpenAppIDArray: MJOpenAppInstallHistory_[]; // Link to false
+    MJOpenAppInstallHistories_OpenAppIDArray: MJOpenAppInstallHistory_[]; // Link to MJOpenAppInstallHistories
     
 }
 
@@ -47654,7 +47663,7 @@ export class MJOpenAppResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJOpenAppDependency_])
-    async false_OpenAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOpenAppDependencies_OpenAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Open App Dependencies', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -47665,7 +47674,7 @@ export class MJOpenAppResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJOpenAppDependency_])
-    async false_DependsOnAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOpenAppDependencies_DependsOnAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Open App Dependencies', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -47676,7 +47685,7 @@ export class MJOpenAppResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJOpenAppInstallHistory_])
-    async false_OpenAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOpenAppInstallHistories_OpenAppIDArray(@Root() mjopenapp_: MJOpenApp_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -47740,7 +47749,7 @@ export class MJOutputDeliveryType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJReport_])
-    false_OutputDeliveryTypeIDArray: MJReport_[]; // Link to false
+    MJReports_OutputDeliveryTypeIDArray: MJReport_[]; // Link to MJReports
     
 }
 
@@ -47837,7 +47846,7 @@ export class MJOutputDeliveryTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJReport_])
-    async false_OutputDeliveryTypeIDArray(@Root() mjoutputdeliverytype_: MJOutputDeliveryType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_OutputDeliveryTypeIDArray(@Root() mjoutputdeliverytype_: MJOutputDeliveryType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -47904,7 +47913,7 @@ export class MJOutputFormatType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJReport_])
-    false_OutputFormatTypeIDArray: MJReport_[]; // Link to false
+    MJReports_OutputFormatTypeIDArray: MJReport_[]; // Link to MJReports
     
 }
 
@@ -48007,7 +48016,7 @@ export class MJOutputFormatTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJReport_])
-    async false_OutputFormatTypeIDArray(@Root() mjoutputformattype_: MJOutputFormatType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_OutputFormatTypeIDArray(@Root() mjoutputformattype_: MJOutputFormatType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -48071,7 +48080,7 @@ export class MJOutputTriggerType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJReport_])
-    false_OutputTriggerTypeIDArray: MJReport_[]; // Link to false
+    MJReports_OutputTriggerTypeIDArray: MJReport_[]; // Link to MJReports
     
 }
 
@@ -48168,7 +48177,7 @@ export class MJOutputTriggerTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJReport_])
-    async false_OutputTriggerTypeIDArray(@Root() mjoutputtriggertype_: MJOutputTriggerType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_OutputTriggerTypeIDArray(@Root() mjoutputtriggertype_: MJOutputTriggerType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -48263,13 +48272,13 @@ export class MJProject_ {
     RootParentID?: string;
         
     @Field(() => [MJProject_])
-    false_ParentIDArray: MJProject_[]; // Link to false
+    MJProjects_ParentIDArray: MJProject_[]; // Link to MJProjects
     
     @Field(() => [MJConversation_])
-    false_ProjectIDArray: MJConversation_[]; // Link to false
+    MJConversations_ProjectIDArray: MJConversation_[]; // Link to MJConversations
     
     @Field(() => [MJTask_])
-    false_ProjectIDArray: MJTask_[]; // Link to false
+    MJTasks_ProjectIDArray: MJTask_[]; // Link to MJTasks
     
 }
 
@@ -48396,7 +48405,7 @@ export class MJProjectResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJProject_])
-    async false_ParentIDArray(@Root() mjproject_: MJProject_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJProjects_ParentIDArray(@Root() mjproject_: MJProject_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Projects', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -48407,7 +48416,7 @@ export class MJProjectResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversation_])
-    async false_ProjectIDArray(@Root() mjproject_: MJProject_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversations_ProjectIDArray(@Root() mjproject_: MJProject_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -48418,7 +48427,7 @@ export class MJProjectResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTask_])
-    async false_ProjectIDArray(@Root() mjproject_: MJProject_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTasks_ProjectIDArray(@Root() mjproject_: MJProject_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -48755,9 +48764,6 @@ export class MJQuery_ {
     CacheValidationSQL?: string;
         
     @Field({nullable: true}) 
-    PlatformVariants?: string;
-        
-    @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
         
@@ -48766,19 +48772,19 @@ export class MJQuery_ {
     EmbeddingModel?: string;
         
     @Field(() => [MJQueryField_])
-    false_QueryIDArray: MJQueryField_[]; // Link to false
+    MJQueryFields_QueryIDArray: MJQueryField_[]; // Link to MJQueryFields
     
     @Field(() => [MJQueryPermission_])
-    false_QueryIDArray: MJQueryPermission_[]; // Link to false
+    MJQueryPermissions_QueryIDArray: MJQueryPermission_[]; // Link to MJQueryPermissions
     
     @Field(() => [MJDataContextItem_])
-    false_QueryIDArray: MJDataContextItem_[]; // Link to false
+    MJDataContextItems_QueryIDArray: MJDataContextItem_[]; // Link to MJDataContextItems
     
     @Field(() => [MJQueryParameter_])
-    false_QueryIDArray: MJQueryParameter_[]; // Link to false
+    MJQueryParameters_QueryIDArray: MJQueryParameter_[]; // Link to MJQueryParameters
     
     @Field(() => [MJQueryEntity_])
-    false_QueryIDArray: MJQueryEntity_[]; // Link to false
+    MJQueryEntities_QueryIDArray: MJQueryEntity_[]; // Link to MJQueryEntities
     
 }
 
@@ -48846,9 +48852,6 @@ export class CreateMJQueryInput {
 
     @Field({ nullable: true })
     CacheValidationSQL: string | null;
-
-    @Field({ nullable: true })
-    PlatformVariants: string | null;
 }
     
 
@@ -48917,9 +48920,6 @@ export class UpdateMJQueryInput {
     @Field({ nullable: true })
     CacheValidationSQL?: string | null;
 
-    @Field({ nullable: true })
-    PlatformVariants?: string | null;
-
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -48983,7 +48983,7 @@ export class MJQueryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJQueryField_])
-    async false_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryFields_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Fields', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -48994,7 +48994,7 @@ export class MJQueryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJQueryPermission_])
-    async false_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryPermissions_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -49005,7 +49005,7 @@ export class MJQueryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDataContextItem_])
-    async false_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDataContextItems_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Data Context Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -49016,7 +49016,7 @@ export class MJQueryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJQueryParameter_])
-    async false_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryParameters_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Parameters', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -49027,7 +49027,7 @@ export class MJQueryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJQueryEntity_])
-    async false_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryEntities_QueryIDArray(@Root() mjquery_: MJQuery_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Entities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -49123,10 +49123,10 @@ export class MJQueryCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJQueryCategory_])
-    false_ParentIDArray: MJQueryCategory_[]; // Link to false
+    MJQueryCategories_ParentIDArray: MJQueryCategory_[]; // Link to MJQueryCategories
     
     @Field(() => [MJQuery_])
-    false_CategoryIDArray: MJQuery_[]; // Link to false
+    MJQueries_CategoryIDArray: MJQuery_[]; // Link to MJQueries
     
 }
 
@@ -49259,7 +49259,7 @@ export class MJQueryCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJQueryCategory_])
-    async false_ParentIDArray(@Root() mjquerycategory_: MJQueryCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryCategories_ParentIDArray(@Root() mjquerycategory_: MJQueryCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -49270,7 +49270,7 @@ export class MJQueryCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJQuery_])
-    async false_CategoryIDArray(@Root() mjquerycategory_: MJQueryCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueries_CategoryIDArray(@Root() mjquerycategory_: MJQueryCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Queries', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -50388,7 +50388,7 @@ export class MJQueueType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJQueue_])
-    false_QueueTypeIDArray: MJQueue_[]; // Link to false
+    MJQueues_QueueTypeIDArray: MJQueue_[]; // Link to MJQueues
     
 }
 
@@ -50503,7 +50503,7 @@ export class MJQueueTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJQueue_])
-    async false_QueueTypeIDArray(@Root() mjqueuetype_: MJQueueType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueues_QueueTypeIDArray(@Root() mjqueuetype_: MJQueueType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Queues', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -50625,7 +50625,7 @@ export class MJQueue_ {
     QueueType: string;
         
     @Field(() => [MJQueueTask_])
-    false_QueueIDArray: MJQueueTask_[]; // Link to false
+    MJQueueTasks_QueueIDArray: MJQueueTask_[]; // Link to MJQueueTasks
     
 }
 
@@ -50806,7 +50806,7 @@ export class MJQueueResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJQueueTask_])
-    async false_QueueIDArray(@Root() mjqueue_: MJQueue_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueueTasks_QueueIDArray(@Root() mjqueue_: MJQueue_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Queue Tasks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -51044,7 +51044,7 @@ export class MJRecommendationProvider_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJRecommendationRun_])
-    false_RecommendationProviderIDArray: MJRecommendationRun_[]; // Link to false
+    MJRecommendationRuns_RecommendationProviderIDArray: MJRecommendationRun_[]; // Link to MJRecommendationRuns
     
 }
 
@@ -51141,7 +51141,7 @@ export class MJRecommendationProviderResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJRecommendationRun_])
-    async false_RecommendationProviderIDArray(@Root() mjrecommendationprovider_: MJRecommendationProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecommendationRuns_RecommendationProviderIDArray(@Root() mjrecommendationprovider_: MJRecommendationProvider_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Recommendation Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -51229,7 +51229,7 @@ export class MJRecommendationRun_ {
     RunByUser: string;
         
     @Field(() => [MJRecommendation_])
-    false_RecommendationRunIDArray: MJRecommendation_[]; // Link to false
+    MJRecommendations_RecommendationRunIDArray: MJRecommendation_[]; // Link to MJRecommendations
     
 }
 
@@ -51350,7 +51350,7 @@ export class MJRecommendationRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJRecommendation_])
-    async false_RecommendationRunIDArray(@Root() mjrecommendationrun_: MJRecommendationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecommendations_RecommendationRunIDArray(@Root() mjrecommendationrun_: MJRecommendationRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Recommendations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -51426,7 +51426,7 @@ export class MJRecommendation_ {
     SourceEntity: string;
         
     @Field(() => [MJRecommendationItem_])
-    false_RecommendationIDArray: MJRecommendationItem_[]; // Link to false
+    MJRecommendationItems_RecommendationIDArray: MJRecommendationItem_[]; // Link to MJRecommendationItems
     
 }
 
@@ -51529,7 +51529,7 @@ export class MJRecommendationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJRecommendationItem_])
-    async false_RecommendationIDArray(@Root() mjrecommendation_: MJRecommendation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecommendationItems_RecommendationIDArray(@Root() mjrecommendation_: MJRecommendation_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Recommendation Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -51606,7 +51606,7 @@ export class MJRecordChangeReplayRun_ {
     User: string;
         
     @Field(() => [MJRecordChange_])
-    false_ReplayRunIDArray: MJRecordChange_[]; // Link to false
+    MJRecordChanges_ReplayRunIDArray: MJRecordChange_[]; // Link to MJRecordChanges
     
 }
 
@@ -51715,7 +51715,7 @@ export class MJRecordChangeReplayRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJRecordChange_])
-    async false_ReplayRunIDArray(@Root() mjrecordchangereplayrun_: MJRecordChangeReplayRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordChanges_ReplayRunIDArray(@Root() mjrecordchangereplayrun_: MJRecordChangeReplayRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Changes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -51839,7 +51839,7 @@ export class MJRecordChange_ {
     Integration?: string;
         
     @Field(() => [MJVersionLabelItem_])
-    false_RecordChangeIDArray: MJVersionLabelItem_[]; // Link to false
+    MJVersionLabelItems_RecordChangeIDArray: MJVersionLabelItem_[]; // Link to MJVersionLabelItems
     
 }
 
@@ -52008,7 +52008,7 @@ export class MJRecordChangeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJVersionLabelItem_])
-    async false_RecordChangeIDArray(@Root() mjrecordchange_: MJRecordChange_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabelItems_RecordChangeIDArray(@Root() mjrecordchange_: MJRecordChange_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Label Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -52490,10 +52490,10 @@ export class MJRecordMergeLog_ {
     ApprovedByUser?: string;
         
     @Field(() => [MJRecordMergeDeletionLog_])
-    false_RecordMergeLogIDArray: MJRecordMergeDeletionLog_[]; // Link to false
+    MJRecordMergeDeletionLogs_RecordMergeLogIDArray: MJRecordMergeDeletionLog_[]; // Link to MJRecordMergeDeletionLogs
     
     @Field(() => [MJDuplicateRunDetailMatch_])
-    false_RecordMergeLogIDArray: MJDuplicateRunDetailMatch_[]; // Link to false
+    MJDuplicateRunDetailMatches_RecordMergeLogIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
     
 }
 
@@ -52638,7 +52638,7 @@ export class MJRecordMergeLogResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJRecordMergeDeletionLog_])
-    async false_RecordMergeLogIDArray(@Root() mjrecordmergelog_: MJRecordMergeLog_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordMergeDeletionLogs_RecordMergeLogIDArray(@Root() mjrecordmergelog_: MJRecordMergeLog_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Merge Deletion Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -52649,7 +52649,7 @@ export class MJRecordMergeLogResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDuplicateRunDetailMatch_])
-    async false_RecordMergeLogIDArray(@Root() mjrecordmergelog_: MJRecordMergeLog_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDuplicateRunDetailMatches_RecordMergeLogIDArray(@Root() mjrecordmergelog_: MJRecordMergeLog_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Duplicate Run Detail Matches', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -52733,10 +52733,10 @@ export class MJReportCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJReportCategory_])
-    false_ParentIDArray: MJReportCategory_[]; // Link to false
+    MJReportCategories_ParentIDArray: MJReportCategory_[]; // Link to MJReportCategories
     
     @Field(() => [MJReport_])
-    false_CategoryIDArray: MJReport_[]; // Link to false
+    MJReports_CategoryIDArray: MJReport_[]; // Link to MJReports
     
 }
 
@@ -52845,7 +52845,7 @@ export class MJReportCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJReportCategory_])
-    async false_ParentIDArray(@Root() mjreportcategory_: MJReportCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReportCategories_ParentIDArray(@Root() mjreportcategory_: MJReportCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -52856,7 +52856,7 @@ export class MJReportCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReport_])
-    async false_CategoryIDArray(@Root() mjreportcategory_: MJReportCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_CategoryIDArray(@Root() mjreportcategory_: MJReportCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -53535,13 +53535,13 @@ export class MJReport_ {
     Environment: string;
         
     @Field(() => [MJReportSnapshot_])
-    false_ReportIDArray: MJReportSnapshot_[]; // Link to false
+    MJReportSnapshots_ReportIDArray: MJReportSnapshot_[]; // Link to MJReportSnapshots
     
     @Field(() => [MJReportVersion_])
-    false_ReportIDArray: MJReportVersion_[]; // Link to false
+    MJReportVersions_ReportIDArray: MJReportVersion_[]; // Link to MJReportVersions
     
     @Field(() => [MJReportUserState_])
-    false_ReportIDArray: MJReportUserState_[]; // Link to false
+    MJReportUserStates_ReportIDArray: MJReportUserState_[]; // Link to MJReportUserStates
     
 }
 
@@ -53728,7 +53728,7 @@ export class MJReportResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJReportSnapshot_])
-    async false_ReportIDArray(@Root() mjreport_: MJReport_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReportSnapshots_ReportIDArray(@Root() mjreport_: MJReport_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report Snapshots', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -53739,7 +53739,7 @@ export class MJReportResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReportVersion_])
-    async false_ReportIDArray(@Root() mjreport_: MJReport_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReportVersions_ReportIDArray(@Root() mjreport_: MJReport_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report Versions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -53750,7 +53750,7 @@ export class MJReportResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReportUserState_])
-    async false_ReportIDArray(@Root() mjreport_: MJReport_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReportUserStates_ReportIDArray(@Root() mjreport_: MJReport_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report User States', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54248,16 +54248,16 @@ export class MJResourceType_ {
     CategoryEntity?: string;
         
     @Field(() => [MJWorkspaceItem_])
-    false_ResourceTypeIDArray: MJWorkspaceItem_[]; // Link to false
+    MJWorkspaceItems_ResourceTypeIDArray: MJWorkspaceItem_[]; // Link to MJWorkspaceItems
     
     @Field(() => [MJUserNotification_])
-    false_ResourceTypeIDArray: MJUserNotification_[]; // Link to false
+    MJUserNotifications_ResourceTypeIDArray: MJUserNotification_[]; // Link to MJUserNotifications
     
     @Field(() => [MJResourceLink_])
-    false_ResourceTypeIDArray: MJResourceLink_[]; // Link to false
+    MJResourceLinks_ResourceTypeIDArray: MJResourceLink_[]; // Link to MJResourceLinks
     
     @Field(() => [MJResourcePermission_])
-    false_ResourceTypeIDArray: MJResourcePermission_[]; // Link to false
+    MJResourcePermissions_ResourceTypeIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
     
 }
 
@@ -54384,7 +54384,7 @@ export class MJResourceTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJWorkspaceItem_])
-    async false_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJWorkspaceItems_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Workspace Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54395,7 +54395,7 @@ export class MJResourceTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserNotification_])
-    async false_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserNotifications_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Notifications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54406,7 +54406,7 @@ export class MJResourceTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJResourceLink_])
-    async false_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJResourceLinks_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Resource Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54417,7 +54417,7 @@ export class MJResourceTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJResourcePermission_])
-    async false_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJResourcePermissions_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Resource Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54489,28 +54489,28 @@ export class MJRole_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJEmployeeRole_])
-    false_RoleIDArray: MJEmployeeRole_[]; // Link to false
+    MJEmployeeRoles_RoleIDArray: MJEmployeeRole_[]; // Link to MJEmployeeRoles
     
     @Field(() => [MJEntityPermission_])
-    false_RoleNameArray: MJEntityPermission_[]; // Link to false
+    MJEntityPermissions_RoleIDArray: MJEntityPermission_[]; // Link to MJEntityPermissions
     
     @Field(() => [MJUserRole_])
-    false_RoleNameArray: MJUserRole_[]; // Link to false
+    MJUserRoles_RoleIDArray: MJUserRole_[]; // Link to MJUserRoles
     
     @Field(() => [MJAuthorizationRole_])
-    false_RoleNameArray: MJAuthorizationRole_[]; // Link to false
+    MJAuthorizationRoles_RoleIDArray: MJAuthorizationRole_[]; // Link to MJAuthorizationRoles
     
     @Field(() => [MJQueryPermission_])
-    false_RoleNameArray: MJQueryPermission_[]; // Link to false
+    MJQueryPermissions_RoleIDArray: MJQueryPermission_[]; // Link to MJQueryPermissions
     
     @Field(() => [MJResourcePermission_])
-    false_RoleIDArray: MJResourcePermission_[]; // Link to false
+    MJResourcePermissions_RoleIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
     
     @Field(() => [MJMCPServerConnectionPermission_])
-    false_RoleIDArray: MJMCPServerConnectionPermission_[]; // Link to false
+    MJMCPServerConnectionPermissions_RoleIDArray: MJMCPServerConnectionPermission_[]; // Link to MJMCPServerConnectionPermissions
     
     @Field(() => [MJAIAgentPermission_])
-    false_RoleIDArray: MJAIAgentPermission_[]; // Link to false
+    MJAIAgentPermissions_RoleIDArray: MJAIAgentPermission_[]; // Link to MJAIAgentPermissions
     
 }
 
@@ -54619,7 +54619,7 @@ export class MJRoleResolver extends ResolverBase {
     }
     
     @Query(() => [MJRole_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJRoles(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54630,7 +54630,7 @@ export class MJRoleResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEmployeeRole_])
-    async false_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEmployeeRoles_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employee Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54641,51 +54641,51 @@ export class MJRoleResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityPermission_])
-    async false_RoleNameArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityPermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [RoleName]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [RoleID]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
     @FieldResolver(() => [MJUserRole_])
-    async false_RoleNameArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserRoles_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [RoleName]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [RoleID]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Roles', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Roles', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
     @FieldResolver(() => [MJAuthorizationRole_])
-    async false_RoleNameArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuthorizationRoles_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Authorization Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [RoleName]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [RoleID]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Authorization Roles', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
     @FieldResolver(() => [MJQueryPermission_])
-    async false_RoleNameArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryPermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [RoleName]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [RoleID]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Query Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
     @FieldResolver(() => [MJResourcePermission_])
-    async false_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJResourcePermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Resource Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54696,7 +54696,7 @@ export class MJRoleResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerConnectionPermission_])
-    async false_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerConnectionPermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Connection Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54707,7 +54707,7 @@ export class MJRoleResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentPermission_])
-    async false_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentPermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54773,11 +54773,8 @@ export class MJRowLevelSecurityFilter_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    PlatformVariants?: string;
-        
     @Field(() => [MJEntityPermission_])
-    false_ReadRLSFilterIDArray: MJEntityPermission_[]; // Link to false
+    MJEntityPermissions_ReadRLSFilterIDArray: MJEntityPermission_[]; // Link to MJEntityPermissions
     
 }
 
@@ -54797,9 +54794,6 @@ export class CreateMJRowLevelSecurityFilterInput {
 
     @Field({ nullable: true })
     FilterText: string | null;
-
-    @Field({ nullable: true })
-    PlatformVariants: string | null;
 }
     
 
@@ -54819,9 +54813,6 @@ export class UpdateMJRowLevelSecurityFilterInput {
 
     @Field({ nullable: true })
     FilterText?: string | null;
-
-    @Field({ nullable: true })
-    PlatformVariants?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -54886,7 +54877,7 @@ export class MJRowLevelSecurityFilterResolver extends ResolverBase {
     }
     
     @Query(() => [MJRowLevelSecurityFilter_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJRowLevelSecurityFilters(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Row Level Security Filters', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -54897,7 +54888,7 @@ export class MJRowLevelSecurityFilterResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityPermission_])
-    async false_ReadRLSFilterIDArray(@Root() mjrowlevelsecurityfilter_: MJRowLevelSecurityFilter_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityPermissions_ReadRLSFilterIDArray(@Root() mjrowlevelsecurityfilter_: MJRowLevelSecurityFilter_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -55195,7 +55186,7 @@ export class MJScheduledAction_ {
     Action: string;
         
     @Field(() => [MJScheduledActionParam_])
-    false_ScheduledActionIDArray: MJScheduledActionParam_[]; // Link to false
+    MJScheduledActionParams_ScheduledActionIDArray: MJScheduledActionParam_[]; // Link to MJScheduledActionParams
     
 }
 
@@ -55358,7 +55349,7 @@ export class MJScheduledActionResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJScheduledActionParam_])
-    async false_ScheduledActionIDArray(@Root() mjscheduledaction_: MJScheduledAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledActionParams_ScheduledActionIDArray(@Root() mjscheduledaction_: MJScheduledAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Action Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -55456,7 +55447,7 @@ export class MJScheduledJobRun_ {
     ExecutedByUser?: string;
         
     @Field(() => [MJAIAgentRun_])
-    false_ScheduledJobRunIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_ScheduledJobRunIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
 }
 
@@ -55595,7 +55586,7 @@ export class MJScheduledJobRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_ScheduledJobRunIDArray(@Root() mjscheduledjobrun_: MJScheduledJobRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_ScheduledJobRunIDArray(@Root() mjscheduledjobrun_: MJScheduledJobRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -55674,7 +55665,7 @@ export class MJScheduledJobType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJScheduledJob_])
-    false_JobTypeIDArray: MJScheduledJob_[]; // Link to false
+    MJScheduledJobs_JobTypeIDArray: MJScheduledJob_[]; // Link to MJScheduledJobs
     
 }
 
@@ -55795,7 +55786,7 @@ export class MJScheduledJobTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJScheduledJob_])
-    async false_JobTypeIDArray(@Root() mjscheduledjobtype_: MJScheduledJobType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledJobs_JobTypeIDArray(@Root() mjscheduledjobtype_: MJScheduledJobType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -55955,7 +55946,7 @@ export class MJScheduledJob_ {
     NotifyUser?: string;
         
     @Field(() => [MJScheduledJobRun_])
-    false_ScheduledJobIDArray: MJScheduledJobRun_[]; // Link to false
+    MJScheduledJobRuns_ScheduledJobIDArray: MJScheduledJobRun_[]; // Link to MJScheduledJobRuns
     
 }
 
@@ -56190,7 +56181,7 @@ export class MJScheduledJobResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJScheduledJobRun_])
-    async false_ScheduledJobIDArray(@Root() mjscheduledjob_: MJScheduledJob_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledJobRuns_ScheduledJobIDArray(@Root() mjscheduledjob_: MJScheduledJob_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -56457,10 +56448,10 @@ export class MJSkill_ {
     RootParentID?: string;
         
     @Field(() => [MJEmployeeSkill_])
-    false_SkillIDArray: MJEmployeeSkill_[]; // Link to false
+    MJEmployeeSkills_SkillIDArray: MJEmployeeSkill_[]; // Link to MJEmployeeSkills
     
     @Field(() => [MJSkill_])
-    false_ParentIDArray: MJSkill_[]; // Link to false
+    MJSkills_ParentIDArray: MJSkill_[]; // Link to MJSkills
     
 }
 
@@ -56557,7 +56548,7 @@ export class MJSkillResolver extends ResolverBase {
     }
     
     @Query(() => [MJSkill_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJSkills(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Skills', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -56568,7 +56559,7 @@ export class MJSkillResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEmployeeSkill_])
-    async false_SkillIDArray(@Root() mjskill_: MJSkill_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEmployeeSkills_SkillIDArray(@Root() mjskill_: MJSkill_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Employee Skills', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -56579,7 +56570,7 @@ export class MJSkillResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJSkill_])
-    async false_ParentIDArray(@Root() mjskill_: MJSkill_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJSkills_ParentIDArray(@Root() mjskill_: MJSkill_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Skills', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -56825,10 +56816,10 @@ export class MJTag_ {
     RootParentID?: string;
         
     @Field(() => [MJTag_])
-    false_ParentIDArray: MJTag_[]; // Link to false
+    MJTags_ParentIDArray: MJTag_[]; // Link to MJTags
     
     @Field(() => [MJTaggedItem_])
-    false_TagIDArray: MJTaggedItem_[]; // Link to false
+    MJTaggedItems_TagIDArray: MJTaggedItem_[]; // Link to MJTaggedItems
     
 }
 
@@ -56937,7 +56928,7 @@ export class MJTagResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTag_])
-    async false_ParentIDArray(@Root() mjtag_: MJTag_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTags_ParentIDArray(@Root() mjtag_: MJTag_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tags', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -56948,7 +56939,7 @@ export class MJTagResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTaggedItem_])
-    async false_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTaggedItems_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tagged Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -57178,7 +57169,7 @@ export class MJTaskType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJTask_])
-    false_TypeIDArray: MJTask_[]; // Link to false
+    MJTasks_TypeIDArray: MJTask_[]; // Link to MJTasks
     
 }
 
@@ -57275,7 +57266,7 @@ export class MJTaskTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTask_])
-    async false_TypeIDArray(@Root() mjtasktype_: MJTaskType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTasks_TypeIDArray(@Root() mjtasktype_: MJTaskType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -57417,13 +57408,13 @@ export class MJTask_ {
     RootParentID?: string;
         
     @Field(() => [MJTaskDependency_])
-    false_DependsOnTaskIDArray: MJTaskDependency_[]; // Link to false
+    MJTaskDependencies_DependsOnTaskIDArray: MJTaskDependency_[]; // Link to MJTaskDependencies
     
     @Field(() => [MJTaskDependency_])
-    false_TaskIDArray: MJTaskDependency_[]; // Link to false
+    MJTaskDependencies_TaskIDArray: MJTaskDependency_[]; // Link to MJTaskDependencies
     
     @Field(() => [MJTask_])
-    false_ParentIDArray: MJTask_[]; // Link to false
+    MJTasks_ParentIDArray: MJTask_[]; // Link to MJTasks
     
 }
 
@@ -57592,7 +57583,7 @@ export class MJTaskResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTaskDependency_])
-    async false_DependsOnTaskIDArray(@Root() mjtask_: MJTask_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTaskDependencies_DependsOnTaskIDArray(@Root() mjtask_: MJTask_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Task Dependencies', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -57603,7 +57594,7 @@ export class MJTaskResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTaskDependency_])
-    async false_TaskIDArray(@Root() mjtask_: MJTask_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTaskDependencies_TaskIDArray(@Root() mjtask_: MJTask_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Task Dependencies', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -57614,7 +57605,7 @@ export class MJTaskResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTask_])
-    async false_ParentIDArray(@Root() mjtask_: MJTask_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTasks_ParentIDArray(@Root() mjtask_: MJTask_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -57698,10 +57689,10 @@ export class MJTemplateCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJTemplate_])
-    false_CategoryIDArray: MJTemplate_[]; // Link to false
+    MJTemplates_CategoryIDArray: MJTemplate_[]; // Link to MJTemplates
     
     @Field(() => [MJTemplateCategory_])
-    false_ParentIDArray: MJTemplateCategory_[]; // Link to false
+    MJTemplateCategories_ParentIDArray: MJTemplateCategory_[]; // Link to MJTemplateCategories
     
 }
 
@@ -57810,7 +57801,7 @@ export class MJTemplateCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTemplate_])
-    async false_CategoryIDArray(@Root() mjtemplatecategory_: MJTemplateCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplates_CategoryIDArray(@Root() mjtemplatecategory_: MJTemplateCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Templates', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -57821,7 +57812,7 @@ export class MJTemplateCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTemplateCategory_])
-    async false_ParentIDArray(@Root() mjtemplatecategory_: MJTemplateCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplateCategories_ParentIDArray(@Root() mjtemplatecategory_: MJTemplateCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Template Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -57889,7 +57880,7 @@ export class MJTemplateContentType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJTemplateContent_])
-    false_TypeIDArray: MJTemplateContent_[]; // Link to false
+    MJTemplateContents_TypeIDArray: MJTemplateContent_[]; // Link to MJTemplateContents
     
 }
 
@@ -57992,7 +57983,7 @@ export class MJTemplateContentTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTemplateContent_])
-    async false_TypeIDArray(@Root() mjtemplatecontenttype_: MJTemplateContentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplateContents_TypeIDArray(@Root() mjtemplatecontenttype_: MJTemplateContentType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Template Contents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -58074,7 +58065,7 @@ export class MJTemplateContent_ {
     Type: string;
         
     @Field(() => [MJTemplateParam_])
-    false_TemplateContentIDArray: MJTemplateParam_[]; // Link to false
+    MJTemplateParams_TemplateContentIDArray: MJTemplateParam_[]; // Link to MJTemplateParams
     
 }
 
@@ -58189,7 +58180,7 @@ export class MJTemplateContentResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTemplateParam_])
-    async false_TemplateContentIDArray(@Root() mjtemplatecontent_: MJTemplateContent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplateParams_TemplateContentIDArray(@Root() mjtemplatecontent_: MJTemplateContent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Template Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -58548,22 +58539,22 @@ export class MJTemplate_ {
     User: string;
         
     @Field(() => [MJTemplateParam_])
-    false_TemplateIDArray: MJTemplateParam_[]; // Link to false
+    MJTemplateParams_TemplateIDArray: MJTemplateParam_[]; // Link to MJTemplateParams
     
     @Field(() => [MJTemplateContent_])
-    false_TemplateIDArray: MJTemplateContent_[]; // Link to false
+    MJTemplateContents_TemplateIDArray: MJTemplateContent_[]; // Link to MJTemplateContents
     
     @Field(() => [MJUserNotificationType_])
-    false_SMSTemplateIDArray: MJUserNotificationType_[]; // Link to false
+    MJUserNotificationTypes_SMSTemplateIDArray: MJUserNotificationType_[]; // Link to MJUserNotificationTypes
     
     @Field(() => [MJAIPrompt_])
-    false_TemplateIDArray: MJAIPrompt_[]; // Link to false
+    MJAIPrompts_TemplateIDArray: MJAIPrompt_[]; // Link to MJAIPrompts
     
     @Field(() => [MJUserNotificationType_])
-    false_EmailTemplateIDArray: MJUserNotificationType_[]; // Link to false
+    MJUserNotificationTypes_EmailTemplateIDArray: MJUserNotificationType_[]; // Link to MJUserNotificationTypes
     
     @Field(() => [MJEntityDocument_])
-    false_TemplateIDArray: MJEntityDocument_[]; // Link to false
+    MJEntityDocuments_TemplateIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
 }
 
@@ -58696,7 +58687,7 @@ export class MJTemplateResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTemplateParam_])
-    async false_TemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplateParams_TemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Template Params', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -58707,7 +58698,7 @@ export class MJTemplateResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTemplateContent_])
-    async false_TemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplateContents_TemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Template Contents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -58718,7 +58709,7 @@ export class MJTemplateResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserNotificationType_])
-    async false_SMSTemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserNotificationTypes_SMSTemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Notification Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -58729,7 +58720,7 @@ export class MJTemplateResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPrompt_])
-    async false_TemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPrompts_TemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -58740,7 +58731,7 @@ export class MJTemplateResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserNotificationType_])
-    async false_EmailTemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserNotificationTypes_EmailTemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Notification Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -58751,7 +58742,7 @@ export class MJTemplateResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityDocument_])
-    async false_TemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityDocuments_TemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -59325,19 +59316,19 @@ export class MJTestRun_ {
     TargetLogEntity?: string;
         
     @Field(() => [MJTestRunFeedback_])
-    false_TestRunIDArray: MJTestRunFeedback_[]; // Link to false
+    MJTestRunFeedbacks_TestRunIDArray: MJTestRunFeedback_[]; // Link to MJTestRunFeedbacks
     
     @Field(() => [MJAIPromptRun_])
-    false_TestRunIDArray: MJAIPromptRun_[]; // Link to false
+    MJAIPromptRuns_TestRunIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
     @Field(() => [MJAIAgentRun_])
-    false_TestRunIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_TestRunIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
     @Field(() => [MJConversation_])
-    false_TestRunIDArray: MJConversation_[]; // Link to false
+    MJConversations_TestRunIDArray: MJConversation_[]; // Link to MJConversations
     
     @Field(() => [MJConversationDetail_])
-    false_TestRunIDArray: MJConversationDetail_[]; // Link to false
+    MJConversationDetails_TestRunIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
 }
 
@@ -59596,7 +59587,7 @@ export class MJTestRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTestRunFeedback_])
-    async false_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestRunFeedbacks_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Run Feedbacks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -59607,7 +59598,7 @@ export class MJTestRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIPromptRun_])
-    async false_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIPromptRuns_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -59618,7 +59609,7 @@ export class MJTestRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -59629,7 +59620,7 @@ export class MJTestRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversation_])
-    async false_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversations_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -59640,7 +59631,7 @@ export class MJTestRunResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetail_])
-    async false_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetails_TestRunIDArray(@Root() mjtestrun_: MJTestRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -59796,7 +59787,7 @@ export class MJTestSuiteRun_ {
     RunByUser: string;
         
     @Field(() => [MJTestRun_])
-    false_TestSuiteRunIDArray: MJTestRun_[]; // Link to false
+    MJTestRuns_TestSuiteRunIDArray: MJTestRun_[]; // Link to MJTestRuns
     
 }
 
@@ -60037,7 +60028,7 @@ export class MJTestSuiteRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTestRun_])
-    async false_TestSuiteRunIDArray(@Root() mjtestsuiterun_: MJTestSuiteRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestRuns_TestSuiteRunIDArray(@Root() mjtestsuiterun_: MJTestSuiteRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -60313,13 +60304,13 @@ export class MJTestSuite_ {
     RootParentID?: string;
         
     @Field(() => [MJTestSuite_])
-    false_ParentIDArray: MJTestSuite_[]; // Link to false
+    MJTestSuites_ParentIDArray: MJTestSuite_[]; // Link to MJTestSuites
     
     @Field(() => [MJTestSuiteTest_])
-    false_SuiteIDArray: MJTestSuiteTest_[]; // Link to false
+    MJTestSuiteTests_SuiteIDArray: MJTestSuiteTest_[]; // Link to MJTestSuiteTests
     
     @Field(() => [MJTestSuiteRun_])
-    false_SuiteIDArray: MJTestSuiteRun_[]; // Link to false
+    MJTestSuiteRuns_SuiteIDArray: MJTestSuiteRun_[]; // Link to MJTestSuiteRuns
     
 }
 
@@ -60452,7 +60443,7 @@ export class MJTestSuiteResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTestSuite_])
-    async false_ParentIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestSuites_ParentIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Suites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -60463,7 +60454,7 @@ export class MJTestSuiteResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTestSuiteTest_])
-    async false_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestSuiteTests_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Suite Tests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -60474,7 +60465,7 @@ export class MJTestSuiteResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTestSuiteRun_])
-    async false_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestSuiteRuns_SuiteIDArray(@Root() mjtestsuite_: MJTestSuite_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Suite Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -60549,10 +60540,10 @@ export class MJTestType_ {
     VariablesSchema?: string;
         
     @Field(() => [MJTestRubric_])
-    false_TypeIDArray: MJTestRubric_[]; // Link to false
+    MJTestRubrics_TypeIDArray: MJTestRubric_[]; // Link to MJTestRubrics
     
     @Field(() => [MJTest_])
-    false_TypeIDArray: MJTest_[]; // Link to false
+    MJTests_TypeIDArray: MJTest_[]; // Link to MJTests
     
 }
 
@@ -60667,7 +60658,7 @@ export class MJTestTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTestRubric_])
-    async false_TypeIDArray(@Root() mjtesttype_: MJTestType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestRubrics_TypeIDArray(@Root() mjtesttype_: MJTestType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Rubrics', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -60678,7 +60669,7 @@ export class MJTestTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTest_])
-    async false_TypeIDArray(@Root() mjtesttype_: MJTestType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTests_TypeIDArray(@Root() mjtesttype_: MJTestType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -60784,10 +60775,10 @@ export class MJTest_ {
     Type: string;
         
     @Field(() => [MJTestRun_])
-    false_TestIDArray: MJTestRun_[]; // Link to false
+    MJTestRuns_TestIDArray: MJTestRun_[]; // Link to MJTestRuns
     
     @Field(() => [MJTestSuiteTest_])
-    false_TestIDArray: MJTestSuiteTest_[]; // Link to false
+    MJTestSuiteTests_TestIDArray: MJTestSuiteTest_[]; // Link to MJTestSuiteTests
     
 }
 
@@ -60956,7 +60947,7 @@ export class MJTestResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJTestRun_])
-    async false_TestIDArray(@Root() mjtest_: MJTest_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestRuns_TestIDArray(@Root() mjtest_: MJTest_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -60967,7 +60958,7 @@ export class MJTestResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTestSuiteTest_])
-    async false_TestIDArray(@Root() mjtest_: MJTest_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestSuiteTests_TestIDArray(@Root() mjtest_: MJTest_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Suite Tests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -61215,7 +61206,7 @@ export class MJUserApplication_ {
     Application: string;
         
     @Field(() => [MJUserApplicationEntity_])
-    false_UserApplicationIDArray: MJUserApplicationEntity_[]; // Link to false
+    MJUserApplicationEntities_UserApplicationIDArray: MJUserApplicationEntity_[]; // Link to MJUserApplicationEntities
     
 }
 
@@ -61324,7 +61315,7 @@ export class MJUserApplicationResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJUserApplicationEntity_])
-    async false_UserApplicationIDArray(@Root() mjuserapplication_: MJUserApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserApplicationEntities_UserApplicationIDArray(@Root() mjuserapplication_: MJUserApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Application Entities', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -61793,10 +61784,10 @@ export class MJUserNotificationType_ {
     SMSTemplate?: string;
         
     @Field(() => [MJUserNotification_])
-    false_NotificationTypeIDArray: MJUserNotification_[]; // Link to false
+    MJUserNotifications_NotificationTypeIDArray: MJUserNotification_[]; // Link to MJUserNotifications
     
     @Field(() => [MJUserNotificationPreference_])
-    false_NotificationTypeIDArray: MJUserNotificationPreference_[]; // Link to false
+    MJUserNotificationPreferences_NotificationTypeIDArray: MJUserNotificationPreference_[]; // Link to MJUserNotificationPreferences
     
 }
 
@@ -61953,7 +61944,7 @@ export class MJUserNotificationTypeResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJUserNotification_])
-    async false_NotificationTypeIDArray(@Root() mjusernotificationtype_: MJUserNotificationType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserNotifications_NotificationTypeIDArray(@Root() mjusernotificationtype_: MJUserNotificationType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Notifications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -61964,7 +61955,7 @@ export class MJUserNotificationTypeResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserNotificationPreference_])
-    async false_NotificationTypeIDArray(@Root() mjusernotificationtype_: MJUserNotificationType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserNotificationPreferences_NotificationTypeIDArray(@Root() mjusernotificationtype_: MJUserNotificationType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Notification Preferences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -62569,7 +62560,7 @@ export class MJUserRoleResolver extends ResolverBase {
     }
     
     @Query(() => [MJUserRole_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJUserRoles(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -62822,10 +62813,10 @@ export class MJUserViewCategory_ {
     RootParentID?: string;
         
     @Field(() => [MJUserViewCategory_])
-    false_ParentIDArray: MJUserViewCategory_[]; // Link to false
+    MJUserViewCategories_ParentIDArray: MJUserViewCategory_[]; // Link to MJUserViewCategories
     
     @Field(() => [MJUserView_])
-    false_CategoryIDArray: MJUserView_[]; // Link to false
+    MJUserViews_CategoryIDArray: MJUserView_[]; // Link to MJUserViews
     
 }
 
@@ -62940,7 +62931,7 @@ export class MJUserViewCategoryResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJUserViewCategory_])
-    async false_ParentIDArray(@Root() mjuserviewcategory_: MJUserViewCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViewCategories_ParentIDArray(@Root() mjuserviewcategory_: MJUserViewCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User View Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -62951,7 +62942,7 @@ export class MJUserViewCategoryResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserView_])
-    async false_CategoryIDArray(@Root() mjuserviewcategory_: MJUserViewCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViews_CategoryIDArray(@Root() mjuserviewcategory_: MJUserViewCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Views', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -63184,7 +63175,7 @@ export class MJUserViewRun_ {
     RunByUser: string;
         
     @Field(() => [MJUserViewRunDetail_])
-    false_UserViewRunIDArray: MJUserViewRunDetail_[]; // Link to false
+    MJUserViewRunDetails_UserViewRunIDArray: MJUserViewRunDetail_[]; // Link to MJUserViewRunDetails
     
 }
 
@@ -63287,7 +63278,7 @@ export class MJUserViewRunResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJUserViewRunDetail_])
-    async false_UserViewRunIDArray(@Root() mjuserviewrun_: MJUserViewRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViewRunDetails_UserViewRunIDArray(@Root() mjuserviewrun_: MJUserViewRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User View Run Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -63432,13 +63423,13 @@ export class MJUserView_ {
     EntityBaseView: string;
         
     @Field(() => [MJEntityRelationship_])
-    false_DisplayUserViewGUIDArray: MJEntityRelationship_[]; // Link to false
+    MJEntityRelationships_DisplayUserViewGUIDArray: MJEntityRelationship_[]; // Link to MJEntityRelationships
     
     @Field(() => [MJUserViewRun_])
-    false_UserViewIDArray: MJUserViewRun_[]; // Link to false
+    MJUserViewRuns_UserViewIDArray: MJUserViewRun_[]; // Link to MJUserViewRuns
     
     @Field(() => [MJDataContextItem_])
-    false_ViewIDArray: MJDataContextItem_[]; // Link to false
+    MJDataContextItems_ViewIDArray: MJDataContextItem_[]; // Link to MJDataContextItems
     
 }
 
@@ -63643,7 +63634,7 @@ export class MJUserViewResolverBase extends ResolverBase {
     }
     
     @Query(() => [MJUserView_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJUserViews(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Views', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -63654,7 +63645,7 @@ export class MJUserViewResolverBase extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityRelationship_])
-    async false_DisplayUserViewGUIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityRelationships_DisplayUserViewGUIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Relationships', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -63665,7 +63656,7 @@ export class MJUserViewResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserViewRun_])
-    async false_UserViewIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViewRuns_UserViewIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User View Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -63676,7 +63667,7 @@ export class MJUserViewResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDataContextItem_])
-    async false_ViewIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDataContextItems_ViewIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Data Context Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -63807,247 +63798,247 @@ export class MJUser_ {
     EmployeeSupervisorEmail?: string;
         
     @Field(() => [MJUserApplication_])
-    false_UserIDArray: MJUserApplication_[]; // Link to false
+    MJUserApplications_UserIDArray: MJUserApplication_[]; // Link to MJUserApplications
     
     @Field(() => [MJUserRole_])
-    false_UserIDArray: MJUserRole_[]; // Link to false
+    MJUserRoles_UserIDArray: MJUserRole_[]; // Link to MJUserRoles
     
     @Field(() => [MJWorkspace_])
-    false_UserIDArray: MJWorkspace_[]; // Link to false
+    MJWorkspaces_UserIDArray: MJWorkspace_[]; // Link to MJWorkspaces
     
     @Field(() => [MJReport_])
-    false_UserIDArray: MJReport_[]; // Link to false
+    MJReports_UserIDArray: MJReport_[]; // Link to MJReports
     
     @Field(() => [MJReportSnapshot_])
-    false_UserIDArray: MJReportSnapshot_[]; // Link to false
+    MJReportSnapshots_UserIDArray: MJReportSnapshot_[]; // Link to MJReportSnapshots
     
     @Field(() => [MJRecordChange_])
-    false_UserIDArray: MJRecordChange_[]; // Link to false
+    MJRecordChanges_UserIDArray: MJRecordChange_[]; // Link to MJRecordChanges
     
     @Field(() => [MJDashboard_])
-    false_UserIDArray: MJDashboard_[]; // Link to false
+    MJDashboards_UserIDArray: MJDashboard_[]; // Link to MJDashboards
     
     @Field(() => [MJUserViewRun_])
-    false_RunByUserIDArray: MJUserViewRun_[]; // Link to false
+    MJUserViewRuns_RunByUserIDArray: MJUserViewRun_[]; // Link to MJUserViewRuns
     
     @Field(() => [MJAuditLog_])
-    false_UserIDArray: MJAuditLog_[]; // Link to false
+    MJAuditLogs_UserIDArray: MJAuditLog_[]; // Link to MJAuditLogs
     
     @Field(() => [MJList_])
-    false_UserIDArray: MJList_[]; // Link to false
+    MJLists_UserIDArray: MJList_[]; // Link to MJLists
     
     @Field(() => [MJUserFavorite_])
-    false_UserIDArray: MJUserFavorite_[]; // Link to false
+    MJUserFavorites_UserIDArray: MJUserFavorite_[]; // Link to MJUserFavorites
     
     @Field(() => [MJUserRecordLog_])
-    false_UserIDArray: MJUserRecordLog_[]; // Link to false
+    MJUserRecordLogs_UserIDArray: MJUserRecordLog_[]; // Link to MJUserRecordLogs
     
     @Field(() => [MJUserView_])
-    false_UserIDArray: MJUserView_[]; // Link to false
+    MJUserViews_UserIDArray: MJUserView_[]; // Link to MJUserViews
     
     @Field(() => [MJCompanyIntegrationRun_])
-    false_RunByUserIDArray: MJCompanyIntegrationRun_[]; // Link to false
+    MJCompanyIntegrationRuns_RunByUserIDArray: MJCompanyIntegrationRun_[]; // Link to MJCompanyIntegrationRuns
     
     @Field(() => [MJUserNotification_])
-    false_UserIDArray: MJUserNotification_[]; // Link to false
+    MJUserNotifications_UserIDArray: MJUserNotification_[]; // Link to MJUserNotifications
     
     @Field(() => [MJConversation_])
-    false_UserIDArray: MJConversation_[]; // Link to false
+    MJConversations_UserIDArray: MJConversation_[]; // Link to MJConversations
     
     @Field(() => [MJRecordMergeLog_])
-    false_InitiatedByUserIDArray: MJRecordMergeLog_[]; // Link to false
+    MJRecordMergeLogs_InitiatedByUserIDArray: MJRecordMergeLog_[]; // Link to MJRecordMergeLogs
     
     @Field(() => [MJDataContext_])
-    false_UserIDArray: MJDataContext_[]; // Link to false
+    MJDataContexts_UserIDArray: MJDataContext_[]; // Link to MJDataContexts
     
     @Field(() => [MJReportCategory_])
-    false_UserIDArray: MJReportCategory_[]; // Link to false
+    MJReportCategories_UserIDArray: MJReportCategory_[]; // Link to MJReportCategories
     
     @Field(() => [MJUserViewCategory_])
-    false_UserIDArray: MJUserViewCategory_[]; // Link to false
+    MJUserViewCategories_UserIDArray: MJUserViewCategory_[]; // Link to MJUserViewCategories
     
     @Field(() => [MJDashboardCategory_])
-    false_UserIDArray: MJDashboardCategory_[]; // Link to false
+    MJDashboardCategories_UserIDArray: MJDashboardCategory_[]; // Link to MJDashboardCategories
     
     @Field(() => [MJQueryCategory_])
-    false_UserIDArray: MJQueryCategory_[]; // Link to false
+    MJQueryCategories_UserIDArray: MJQueryCategory_[]; // Link to MJQueryCategories
     
     @Field(() => [MJDuplicateRun_])
-    false_StartedByUserIDArray: MJDuplicateRun_[]; // Link to false
+    MJDuplicateRuns_StartedByUserIDArray: MJDuplicateRun_[]; // Link to MJDuplicateRuns
     
     @Field(() => [MJActionExecutionLog_])
-    false_UserIDArray: MJActionExecutionLog_[]; // Link to false
+    MJActionExecutionLogs_UserIDArray: MJActionExecutionLog_[]; // Link to MJActionExecutionLogs
     
     @Field(() => [MJAction_])
-    false_CodeApprovedByUserIDArray: MJAction_[]; // Link to false
+    MJActions_CodeApprovedByUserIDArray: MJAction_[]; // Link to MJActions
     
     @Field(() => [MJCommunicationRun_])
-    false_UserIDArray: MJCommunicationRun_[]; // Link to false
+    MJCommunicationRuns_UserIDArray: MJCommunicationRun_[]; // Link to MJCommunicationRuns
     
     @Field(() => [MJTemplate_])
-    false_UserIDArray: MJTemplate_[]; // Link to false
+    MJTemplates_UserIDArray: MJTemplate_[]; // Link to MJTemplates
     
     @Field(() => [MJTemplateCategory_])
-    false_UserIDArray: MJTemplateCategory_[]; // Link to false
+    MJTemplateCategories_UserIDArray: MJTemplateCategory_[]; // Link to MJTemplateCategories
     
     @Field(() => [MJRecommendationRun_])
-    false_RunByUserIDArray: MJRecommendationRun_[]; // Link to false
+    MJRecommendationRuns_RunByUserIDArray: MJRecommendationRun_[]; // Link to MJRecommendationRuns
     
     @Field(() => [MJRecordChangeReplayRun_])
-    false_UserIDArray: MJRecordChangeReplayRun_[]; // Link to false
+    MJRecordChangeReplayRuns_UserIDArray: MJRecordChangeReplayRun_[]; // Link to MJRecordChangeReplayRuns
     
     @Field(() => [MJListCategory_])
-    false_UserIDArray: MJListCategory_[]; // Link to false
+    MJListCategories_UserIDArray: MJListCategory_[]; // Link to MJListCategories
     
     @Field(() => [MJScheduledAction_])
-    false_CreatedByUserIDArray: MJScheduledAction_[]; // Link to false
+    MJScheduledActions_CreatedByUserIDArray: MJScheduledAction_[]; // Link to MJScheduledActions
     
     @Field(() => [MJResourceLink_])
-    false_UserIDArray: MJResourceLink_[]; // Link to false
+    MJResourceLinks_UserIDArray: MJResourceLink_[]; // Link to MJResourceLinks
     
     @Field(() => [MJAIAgentRequest_])
-    false_ResponseByUserIDArray: MJAIAgentRequest_[]; // Link to false
+    MJAIAgentRequests_ResponseByUserIDArray: MJAIAgentRequest_[]; // Link to MJAIAgentRequests
     
     @Field(() => [MJAIAgentNote_])
-    false_UserIDArray: MJAIAgentNote_[]; // Link to false
+    MJAIAgentNotes_UserIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
     @Field(() => [MJReportUserState_])
-    false_UserIDArray: MJReportUserState_[]; // Link to false
+    MJReportUserStates_UserIDArray: MJReportUserState_[]; // Link to MJReportUserStates
     
     @Field(() => [MJDashboardUserPreference_])
-    false_UserIDArray: MJDashboardUserPreference_[]; // Link to false
+    MJDashboardUserPreferences_UserIDArray: MJDashboardUserPreference_[]; // Link to MJDashboardUserPreferences
     
     @Field(() => [MJDashboardUserState_])
-    false_UserIDArray: MJDashboardUserState_[]; // Link to false
+    MJDashboardUserStates_UserIDArray: MJDashboardUserState_[]; // Link to MJDashboardUserStates
     
     @Field(() => [MJArtifactVersion_])
-    false_UserIDArray: MJArtifactVersion_[]; // Link to false
+    MJArtifactVersions_UserIDArray: MJArtifactVersion_[]; // Link to MJArtifactVersions
     
     @Field(() => [MJPublicLink_])
-    false_UserIDArray: MJPublicLink_[]; // Link to false
+    MJPublicLinks_UserIDArray: MJPublicLink_[]; // Link to MJPublicLinks
     
     @Field(() => [MJScheduledJobRun_])
-    false_ExecutedByUserIDArray: MJScheduledJobRun_[]; // Link to false
+    MJScheduledJobRuns_ExecutedByUserIDArray: MJScheduledJobRun_[]; // Link to MJScheduledJobRuns
     
     @Field(() => [MJScheduledJob_])
-    false_NotifyUserIDArray: MJScheduledJob_[]; // Link to false
+    MJScheduledJobs_NotifyUserIDArray: MJScheduledJob_[]; // Link to MJScheduledJobs
     
     @Field(() => [MJArtifactPermission_])
-    false_UserIDArray: MJArtifactPermission_[]; // Link to false
+    MJArtifactPermissions_UserIDArray: MJArtifactPermission_[]; // Link to MJArtifactPermissions
     
     @Field(() => [MJArtifactUse_])
-    false_UserIDArray: MJArtifactUse_[]; // Link to false
+    MJArtifactUses_UserIDArray: MJArtifactUse_[]; // Link to MJArtifactUses
     
     @Field(() => [MJConversationDetailRating_])
-    false_UserIDArray: MJConversationDetailRating_[]; // Link to false
+    MJConversationDetailRatings_UserIDArray: MJConversationDetailRating_[]; // Link to MJConversationDetailRatings
     
     @Field(() => [MJTestRunFeedback_])
-    false_ReviewerUserIDArray: MJTestRunFeedback_[]; // Link to false
+    MJTestRunFeedbacks_ReviewerUserIDArray: MJTestRunFeedback_[]; // Link to MJTestRunFeedbacks
     
     @Field(() => [MJTestSuiteRun_])
-    false_RunByUserIDArray: MJTestSuiteRun_[]; // Link to false
+    MJTestSuiteRuns_RunByUserIDArray: MJTestSuiteRun_[]; // Link to MJTestSuiteRuns
     
     @Field(() => [MJUserSetting_])
-    false_UserIDArray: MJUserSetting_[]; // Link to false
+    MJUserSettings_UserIDArray: MJUserSetting_[]; // Link to MJUserSettings
     
     @Field(() => [MJListShare_])
-    false_UserIDArray: MJListShare_[]; // Link to false
+    MJListShares_UserIDArray: MJListShare_[]; // Link to MJListShares
     
     @Field(() => [MJListInvitation_])
-    false_CreatedByUserIDArray: MJListInvitation_[]; // Link to false
+    MJListInvitations_CreatedByUserIDArray: MJListInvitation_[]; // Link to MJListInvitations
     
     @Field(() => [MJDashboardCategoryLink_])
-    false_UserIDArray: MJDashboardCategoryLink_[]; // Link to false
+    MJDashboardCategoryLinks_UserIDArray: MJDashboardCategoryLink_[]; // Link to MJDashboardCategoryLinks
     
     @Field(() => [MJDashboardCategoryPermission_])
-    false_UserIDArray: MJDashboardCategoryPermission_[]; // Link to false
+    MJDashboardCategoryPermissions_UserIDArray: MJDashboardCategoryPermission_[]; // Link to MJDashboardCategoryPermissions
     
     @Field(() => [MJDashboardPermission_])
-    false_SharedByUserIDArray: MJDashboardPermission_[]; // Link to false
+    MJDashboardPermissions_SharedByUserIDArray: MJDashboardPermission_[]; // Link to MJDashboardPermissions
     
     @Field(() => [MJAPIKey_])
-    false_UserIDArray: MJAPIKey_[]; // Link to false
+    MJAPIKeys_UserIDArray: MJAPIKey_[]; // Link to MJAPIKeys
     
     @Field(() => [MJUserNotificationPreference_])
-    false_UserIDArray: MJUserNotificationPreference_[]; // Link to false
+    MJUserNotificationPreferences_UserIDArray: MJUserNotificationPreference_[]; // Link to MJUserNotificationPreferences
     
     @Field(() => [MJMCPToolExecutionLog_])
-    false_UserIDArray: MJMCPToolExecutionLog_[]; // Link to false
+    MJMCPToolExecutionLogs_UserIDArray: MJMCPToolExecutionLog_[]; // Link to MJMCPToolExecutionLogs
     
     @Field(() => [MJVersionLabelRestore_])
-    false_UserIDArray: MJVersionLabelRestore_[]; // Link to false
+    MJVersionLabelRestores_UserIDArray: MJVersionLabelRestore_[]; // Link to MJVersionLabelRestores
     
     @Field(() => [MJOAuthAuthorizationState_])
-    false_UserIDArray: MJOAuthAuthorizationState_[]; // Link to false
-    
-    @Field(() => [MJOpenApp_])
-    false_InstalledByUserIDArray: MJOpenApp_[]; // Link to false
+    MJOAuthAuthorizationStates_UserIDArray: MJOAuthAuthorizationState_[]; // Link to MJOAuthAuthorizationStates
     
     @Field(() => [MJOpenAppInstallHistory_])
-    false_ExecutedByUserIDArray: MJOpenAppInstallHistory_[]; // Link to false
+    MJOpenAppInstallHistories_ExecutedByUserIDArray: MJOpenAppInstallHistory_[]; // Link to MJOpenAppInstallHistories
+    
+    @Field(() => [MJOpenApp_])
+    MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
     
     @Field(() => [MJResourcePermission_])
-    false_UserIDArray: MJResourcePermission_[]; // Link to false
+    MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
     
     @Field(() => [MJAIAgentRequest_])
-    false_RequestForUserIDArray: MJAIAgentRequest_[]; // Link to false
+    MJAIAgentRequests_RequestForUserIDArray: MJAIAgentRequest_[]; // Link to MJAIAgentRequests
     
     @Field(() => [MJConversationDetail_])
-    false_UserIDArray: MJConversationDetail_[]; // Link to false
+    MJConversationDetails_UserIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
     @Field(() => [MJAccessControlRule_])
-    false_GrantedByUserIDArray: MJAccessControlRule_[]; // Link to false
+    MJAccessControlRules_GrantedByUserIDArray: MJAccessControlRule_[]; // Link to MJAccessControlRules
     
     @Field(() => [MJArtifact_])
-    false_UserIDArray: MJArtifact_[]; // Link to false
+    MJArtifacts_UserIDArray: MJArtifact_[]; // Link to MJArtifacts
     
     @Field(() => [MJScheduledJob_])
-    false_OwnerUserIDArray: MJScheduledJob_[]; // Link to false
+    MJScheduledJobs_OwnerUserIDArray: MJScheduledJob_[]; // Link to MJScheduledJobs
     
     @Field(() => [MJCollectionPermission_])
-    false_SharedByUserIDArray: MJCollectionPermission_[]; // Link to false
+    MJCollectionPermissions_SharedByUserIDArray: MJCollectionPermission_[]; // Link to MJCollectionPermissions
     
     @Field(() => [MJArtifactPermission_])
-    false_SharedByUserIDArray: MJArtifactPermission_[]; // Link to false
+    MJArtifactPermissions_SharedByUserIDArray: MJArtifactPermission_[]; // Link to MJArtifactPermissions
     
     @Field(() => [MJTestRun_])
-    false_RunByUserIDArray: MJTestRun_[]; // Link to false
+    MJTestRuns_RunByUserIDArray: MJTestRun_[]; // Link to MJTestRuns
     
     @Field(() => [MJDashboardPermission_])
-    false_UserIDArray: MJDashboardPermission_[]; // Link to false
+    MJDashboardPermissions_UserIDArray: MJDashboardPermission_[]; // Link to MJDashboardPermissions
     
     @Field(() => [MJDashboardCategoryPermission_])
-    false_SharedByUserIDArray: MJDashboardCategoryPermission_[]; // Link to false
+    MJDashboardCategoryPermissions_SharedByUserIDArray: MJDashboardCategoryPermission_[]; // Link to MJDashboardCategoryPermissions
     
     @Field(() => [MJAPIKey_])
-    false_CreatedByUserIDArray: MJAPIKey_[]; // Link to false
+    MJAPIKeys_CreatedByUserIDArray: MJAPIKey_[]; // Link to MJAPIKeys
     
     @Field(() => [MJMCPServerConnectionPermission_])
-    false_UserIDArray: MJMCPServerConnectionPermission_[]; // Link to false
+    MJMCPServerConnectionPermissions_UserIDArray: MJMCPServerConnectionPermission_[]; // Link to MJMCPServerConnectionPermissions
     
     @Field(() => [MJVersionLabel_])
-    false_CreatedByUserIDArray: MJVersionLabel_[]; // Link to false
+    MJVersionLabels_CreatedByUserIDArray: MJVersionLabel_[]; // Link to MJVersionLabels
     
     @Field(() => [MJAIAgentRun_])
-    false_UserIDArray: MJAIAgentRun_[]; // Link to false
+    MJAIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
     @Field(() => [MJAIAgentPermission_])
-    false_UserIDArray: MJAIAgentPermission_[]; // Link to false
+    MJAIAgentPermissions_UserIDArray: MJAIAgentPermission_[]; // Link to MJAIAgentPermissions
     
     @Field(() => [MJCollection_])
-    false_OwnerIDArray: MJCollection_[]; // Link to false
+    MJCollections_OwnerIDArray: MJCollection_[]; // Link to MJCollections
     
     @Field(() => [MJCollectionPermission_])
-    false_UserIDArray: MJCollectionPermission_[]; // Link to false
+    MJCollectionPermissions_UserIDArray: MJCollectionPermission_[]; // Link to MJCollectionPermissions
     
     @Field(() => [MJTask_])
-    false_UserIDArray: MJTask_[]; // Link to false
+    MJTasks_UserIDArray: MJTask_[]; // Link to MJTasks
     
     @Field(() => [MJAIAgentExample_])
-    false_UserIDArray: MJAIAgentExample_[]; // Link to false
+    MJAIAgentExamples_UserIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
     @Field(() => [MJAIAgent_])
-    false_OwnerUserIDArray: MJAIAgent_[]; // Link to false
+    MJAIAgents_OwnerUserIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
 }
 
@@ -64210,7 +64201,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
     
     @Query(() => [MJUser_])
-    async Allfalse(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllMJUsers(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Users', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64221,7 +64212,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
     
     @FieldResolver(() => [MJUserApplication_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserApplications_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Applications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64232,7 +64223,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserRole_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserRoles_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64243,7 +64234,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJWorkspace_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJWorkspaces_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Workspaces', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64254,7 +64245,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReport_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64265,7 +64256,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReportSnapshot_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReportSnapshots_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report Snapshots', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64276,7 +64267,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecordChange_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordChanges_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Changes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64287,7 +64278,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboard_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboards_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboards', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64298,7 +64289,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserViewRun_])
-    async false_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViewRuns_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User View Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64309,7 +64300,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAuditLog_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAuditLogs_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Audit Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64320,7 +64311,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJList_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJLists_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Lists', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64331,7 +64322,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserFavorite_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserFavorites_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Favorites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64342,7 +64333,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserRecordLog_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserRecordLogs_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Record Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64353,7 +64344,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserView_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViews_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Views', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64364,7 +64355,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCompanyIntegrationRun_])
-    async false_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCompanyIntegrationRuns_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Company Integration Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64375,7 +64366,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserNotification_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserNotifications_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Notifications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64386,7 +64377,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversation_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversations_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64397,7 +64388,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecordMergeLog_])
-    async false_InitiatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordMergeLogs_InitiatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Merge Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64408,7 +64399,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDataContext_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDataContexts_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Data Contexts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64419,7 +64410,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReportCategory_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReportCategories_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64430,7 +64421,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserViewCategory_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserViewCategories_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User View Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64441,7 +64432,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardCategory_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardCategories_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64452,7 +64443,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJQueryCategory_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJQueryCategories_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Query Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64463,7 +64454,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDuplicateRun_])
-    async false_StartedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDuplicateRuns_StartedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Duplicate Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64474,7 +64465,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJActionExecutionLog_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActionExecutionLogs_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Execution Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64485,7 +64476,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAction_])
-    async false_CodeApprovedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJActions_CodeApprovedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64496,7 +64487,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCommunicationRun_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCommunicationRuns_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Communication Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64507,7 +64498,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTemplate_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplates_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Templates', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64518,7 +64509,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTemplateCategory_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTemplateCategories_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Template Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64529,7 +64520,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecommendationRun_])
-    async false_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecommendationRuns_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Recommendation Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64540,7 +64531,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJRecordChangeReplayRun_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJRecordChangeReplayRuns_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Change Replay Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64551,7 +64542,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJListCategory_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJListCategories_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: List Categories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64562,7 +64553,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJScheduledAction_])
-    async false_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledActions_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Actions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64573,7 +64564,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJResourceLink_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJResourceLinks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Resource Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64584,7 +64575,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRequest_])
-    async false_ResponseByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRequests_ResponseByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Requests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64595,7 +64586,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentNote_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentNotes_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64606,7 +64597,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJReportUserState_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReportUserStates_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report User States', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64617,7 +64608,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardUserPreference_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardUserPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64628,7 +64619,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardUserState_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardUserStates_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64639,7 +64630,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifactVersion_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactVersions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Versions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64650,7 +64641,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJPublicLink_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJPublicLinks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Public Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64661,7 +64652,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJScheduledJobRun_])
-    async false_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledJobRuns_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64672,7 +64663,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJScheduledJob_])
-    async false_NotifyUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledJobs_NotifyUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64683,7 +64674,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifactPermission_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64694,7 +64685,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifactUse_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactUses_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Uses', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64705,7 +64696,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetailRating_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetailRatings_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Detail Ratings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64716,7 +64707,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTestRunFeedback_])
-    async false_ReviewerUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestRunFeedbacks_ReviewerUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Run Feedbacks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64727,7 +64718,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTestSuiteRun_])
-    async false_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestSuiteRuns_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Suite Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64738,7 +64729,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserSetting_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserSettings_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Settings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64749,7 +64740,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJListShare_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJListShares_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: List Shares', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64760,7 +64751,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJListInvitation_])
-    async false_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJListInvitations_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: List Invitations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64771,7 +64762,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardCategoryLink_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardCategoryLinks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Category Links', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64782,7 +64773,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardCategoryPermission_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardCategoryPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Category Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64793,7 +64784,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardPermission_])
-    async false_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardPermissions_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64804,7 +64795,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAPIKey_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIKeys_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Keys', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64815,7 +64806,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJUserNotificationPreference_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJUserNotificationPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Notification Preferences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64826,7 +64817,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPToolExecutionLog_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPToolExecutionLogs_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Tool Execution Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64837,7 +64828,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJVersionLabelRestore_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabelRestores_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Label Restores', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64848,7 +64839,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJOAuthAuthorizationState_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOAuthAuthorizationStates_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64858,19 +64849,8 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJOpenApp_])
-    async false_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenApps] WHERE [InstalledByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJOpenAppInstallHistory_])
-    async false_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJOpenAppInstallHistories_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64880,8 +64860,19 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJOpenApp_])
+    async MJOpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenApps] WHERE [InstalledByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJResourcePermission_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJResourcePermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Resource Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64892,7 +64883,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRequest_])
-    async false_RequestForUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRequests_RequestForUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Requests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64903,7 +64894,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJConversationDetail_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJConversationDetails_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Details', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64914,7 +64905,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAccessControlRule_])
-    async false_GrantedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAccessControlRules_GrantedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Access Control Rules', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64925,7 +64916,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifact_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifacts_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifacts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64936,7 +64927,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJScheduledJob_])
-    async false_OwnerUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJScheduledJobs_OwnerUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64947,7 +64938,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCollectionPermission_])
-    async false_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollectionPermissions_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collection Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64958,7 +64949,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJArtifactPermission_])
-    async false_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJArtifactPermissions_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64969,7 +64960,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTestRun_])
-    async false_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTestRuns_RunByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64980,7 +64971,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardPermission_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -64991,7 +64982,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJDashboardCategoryPermission_])
-    async false_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJDashboardCategoryPermissions_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Category Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65002,7 +64993,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAPIKey_])
-    async false_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAPIKeys_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Keys', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65013,7 +65004,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJMCPServerConnectionPermission_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJMCPServerConnectionPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Connection Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65024,7 +65015,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJVersionLabel_])
-    async false_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabels_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Labels', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65035,7 +65026,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentRun_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentRuns_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65046,7 +65037,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentPermission_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65057,7 +65048,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCollection_])
-    async false_OwnerIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollections_OwnerIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collections', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65068,7 +65059,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJCollectionPermission_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJCollectionPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Collection Permissions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65079,7 +65070,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTask_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTasks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65090,7 +65081,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgentExample_])
-    async false_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgentExamples_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65101,7 +65092,7 @@ export class MJUserResolverBase extends ResolverBase {
     }
         
     @FieldResolver(() => [MJAIAgent_])
-    async false_OwnerUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJAIAgents_OwnerUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65173,10 +65164,10 @@ export class MJVectorDatabase_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJVectorIndex_])
-    false_VectorDatabaseIDArray: MJVectorIndex_[]; // Link to false
+    MJVectorIndexes_VectorDatabaseIDArray: MJVectorIndex_[]; // Link to MJVectorIndexes
     
     @Field(() => [MJEntityDocument_])
-    false_IDArray: MJEntityDocument_[]; // Link to false
+    MJEntityDocuments_IDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
 }
 
@@ -65285,7 +65276,7 @@ export class MJVectorDatabaseResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJVectorIndex_])
-    async false_VectorDatabaseIDArray(@Root() mjvectordatabase_: MJVectorDatabase_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVectorIndexes_VectorDatabaseIDArray(@Root() mjvectordatabase_: MJVectorDatabase_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Vector Indexes', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65296,7 +65287,7 @@ export class MJVectorDatabaseResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJEntityDocument_])
-    async false_IDArray(@Root() mjvectordatabase_: MJVectorDatabase_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityDocuments_IDArray(@Root() mjvectordatabase_: MJVectorDatabase_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -65376,7 +65367,7 @@ export class MJVectorIndex_ {
     EmbeddingModel: string;
         
     @Field(() => [MJEntityRecordDocument_])
-    false_VectorIndexIDArray: MJEntityRecordDocument_[]; // Link to false
+    MJEntityRecordDocuments_VectorIndexIDArray: MJEntityRecordDocument_[]; // Link to MJEntityRecordDocuments
     
 }
 
@@ -65485,7 +65476,7 @@ export class MJVectorIndexResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJEntityRecordDocument_])
-    async false_VectorIndexIDArray(@Root() mjvectorindex_: MJVectorIndex_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJEntityRecordDocuments_VectorIndexIDArray(@Root() mjvectorindex_: MJVectorIndex_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Entity Record Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -66221,16 +66212,16 @@ export class MJVersionLabel_ {
     RootParentID?: string;
         
     @Field(() => [MJVersionLabelRestore_])
-    false_PreRestoreLabelIDArray: MJVersionLabelRestore_[]; // Link to false
+    MJVersionLabelRestores_PreRestoreLabelIDArray: MJVersionLabelRestore_[]; // Link to MJVersionLabelRestores
     
     @Field(() => [MJVersionLabelItem_])
-    false_VersionLabelIDArray: MJVersionLabelItem_[]; // Link to false
+    MJVersionLabelItems_VersionLabelIDArray: MJVersionLabelItem_[]; // Link to MJVersionLabelItems
     
     @Field(() => [MJVersionLabelRestore_])
-    false_VersionLabelIDArray: MJVersionLabelRestore_[]; // Link to false
+    MJVersionLabelRestores_VersionLabelIDArray: MJVersionLabelRestore_[]; // Link to MJVersionLabelRestores
     
     @Field(() => [MJVersionLabel_])
-    false_ParentIDArray: MJVersionLabel_[]; // Link to false
+    MJVersionLabels_ParentIDArray: MJVersionLabel_[]; // Link to MJVersionLabels
     
 }
 
@@ -66381,7 +66372,7 @@ export class MJVersionLabelResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJVersionLabelRestore_])
-    async false_PreRestoreLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabelRestores_PreRestoreLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Label Restores', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -66392,7 +66383,7 @@ export class MJVersionLabelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJVersionLabelItem_])
-    async false_VersionLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabelItems_VersionLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Label Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -66403,7 +66394,7 @@ export class MJVersionLabelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJVersionLabelRestore_])
-    async false_VersionLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabelRestores_VersionLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Label Restores', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -66414,7 +66405,7 @@ export class MJVersionLabelResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJVersionLabel_])
-    async false_ParentIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJVersionLabels_ParentIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Labels', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -66486,7 +66477,7 @@ export class MJWorkflowEngine_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [MJWorkflow_])
-    false_WorkflowEngineNameArray: MJWorkflow_[]; // Link to false
+    MJWorkflows_WorkflowEngineNameArray: MJWorkflow_[]; // Link to MJWorkflows
     
 }
 
@@ -66595,7 +66586,7 @@ export class MJWorkflowEngineResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJWorkflow_])
-    async false_WorkflowEngineNameArray(@Root() mjworkflowengine_: MJWorkflowEngine_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJWorkflows_WorkflowEngineNameArray(@Root() mjworkflowengine_: MJWorkflowEngine_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Workflows', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -66879,10 +66870,10 @@ export class MJWorkflow_ {
     AutoRunIntervalMinutes?: number;
         
     @Field(() => [MJReport_])
-    false_OutputWorkflowIDArray: MJReport_[]; // Link to false
+    MJReports_OutputWorkflowIDArray: MJReport_[]; // Link to MJReports
     
     @Field(() => [MJWorkflowRun_])
-    false_WorkflowNameArray: MJWorkflowRun_[]; // Link to false
+    MJWorkflowRuns_WorkflowNameArray: MJWorkflowRun_[]; // Link to MJWorkflowRuns
     
 }
 
@@ -67015,7 +67006,7 @@ export class MJWorkflowResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJReport_])
-    async false_OutputWorkflowIDArray(@Root() mjworkflow_: MJWorkflow_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJReports_OutputWorkflowIDArray(@Root() mjworkflow_: MJWorkflow_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Reports', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -67026,7 +67017,7 @@ export class MJWorkflowResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJWorkflowRun_])
-    async false_WorkflowNameArray(@Root() mjworkflow_: MJWorkflow_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJWorkflowRuns_WorkflowNameArray(@Root() mjworkflow_: MJWorkflow_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Workflow Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -67304,7 +67295,7 @@ export class MJWorkspace_ {
     User: string;
         
     @Field(() => [MJWorkspaceItem_])
-    false_WorkSpaceIDArray: MJWorkspaceItem_[]; // Link to false
+    MJWorkspaceItems_WorkSpaceIDArray: MJWorkspaceItem_[]; // Link to MJWorkspaceItems
     
 }
 
@@ -67413,7 +67404,7 @@ export class MJWorkspaceResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJWorkspaceItem_])
-    async false_WorkSpaceIDArray(@Root() mjworkspace_: MJWorkspace_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJWorkspaceItems_WorkSpaceIDArray(@Root() mjworkspace_: MJWorkspace_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Workspace Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
