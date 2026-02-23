@@ -22,6 +22,8 @@ import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { SQLLogging } from './Misc/sql_logging';
+import { SQLServerCodeGenConnection } from './Database/SQLServerCodeGenConnection';
+import { CodeGenConnection } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -128,6 +130,7 @@ export class RunCodeGenBase {
 
       updateSpinner('Loading user cache and metadata...');
       const pool = await MSSQLConnection();
+      const conn: CodeGenConnection = new SQLServerCodeGenConnection(pool);
       await UserCache.Instance.Refresh(pool);
       const userMatch: MJ.UserInfo = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner')!;
       const currentUser = userMatch ? userMatch : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
@@ -170,7 +173,7 @@ export class RunCodeGenBase {
                 // STEP 0.1 --- Execute any before SQL Scripts specified in the config file
                 ****************************************************************************************/
         updateSpinner('Executing before-all SQL Scripts...');
-        if (!(await sqlCodeGenObject.runCustomSQLScripts(pool, 'before-all'))) logError('ERROR running before-all SQL Scripts');
+        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'before-all'))) logError('ERROR running before-all SQL Scripts');
 
         /****************************************************************************************
                 // STEP 0.2 --- Create a new user if there is newUserSetup info in the config file
@@ -195,7 +198,7 @@ export class RunCodeGenBase {
                 ****************************************************************************************/
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
         updateSpinner('Managing Metadata...');
-        const metadataSuccess = await manageMD.manageMetadata(pool, currentUser);
+        const metadataSuccess = await manageMD.manageMetadata(conn, currentUser);
         if (!metadataSuccess) {
           failSpinner('ERROR managing metadata');
         } else {
@@ -210,7 +213,7 @@ export class RunCodeGenBase {
         const sqlOutputDir = outputDir('SQL', true);
         if (sqlOutputDir) {
           startSpinner('Managing SQL Scripts and Execution...');
-          const sqlSuccess = await sqlCodeGenObject.manageSQLScriptsAndExecution(pool, md.Entities, sqlOutputDir, currentUser);
+          const sqlSuccess = await sqlCodeGenObject.manageSQLScriptsAndExecution(conn, md.Entities, sqlOutputDir, currentUser);
           if (!sqlSuccess) {
             failSpinner('Error managing SQL scripts and execution');
           } else {
@@ -228,7 +231,7 @@ export class RunCodeGenBase {
         // ready for later use.
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
         startSpinner('Checking/Loading AI Generated Code from Metadata...');
-        const metadataSuccess = await manageMD.loadGeneratedCode(pool, currentUser);
+        const metadataSuccess = await manageMD.loadGeneratedCode(conn, currentUser);
         if (!metadataSuccess) {
           failSpinner('ERROR checking/loading AI Generated Code from Metadata');
           return; // FATAL ERROR - we can't continue
@@ -318,7 +321,7 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(pool, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
           failSpinner('Error generating entity subclass code');
           return;
         } else if (isVerbose) {
@@ -335,7 +338,7 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(pool, nonCoreEntities, entitySubClassOutputDir, skipDB)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, nonCoreEntities, entitySubClassOutputDir, skipDB)) {
           failSpinner('Error generating entity subclass code');
           return;
         } else if (isVerbose) {
@@ -433,7 +436,7 @@ export class RunCodeGenBase {
 
       // now run integrity checks
       startSpinner('Running system integrity checks...');
-      await SystemIntegrityBase.RunIntegrityChecks(pool, true);
+      await SystemIntegrityBase.RunIntegrityChecks(conn, true);
       succeedSpinner('System integrity checks completed');
 
       /****************************************************************************************
@@ -455,7 +458,7 @@ export class RunCodeGenBase {
       ****************************************************************************************/
       if (!skipDB) {
         startSpinner('Executing after-all SQL Scripts...');
-        if (!(await sqlCodeGenObject.runCustomSQLScripts(pool, 'after-all'))) {
+        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'after-all'))) {
           failSpinner('ERROR running after-all SQL Scripts');
         } else {
           succeedSpinner('After-all SQL Scripts completed');

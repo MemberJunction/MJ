@@ -1,6 +1,140 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 
+// ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
+
+/**
+ * Represents a single row from a query result.
+ *
+ * NOTE: This is typed as `any` for backward compatibility with the existing codebase,
+ * which extensively accesses recordset rows with inline type annotations and untyped
+ * property access inherited from the mssql driver's `IRecordSet<any>`. As individual
+ * call sites are migrated to proper typing, this can be narrowed to
+ * `Record<string, unknown>` or a generic parameter.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CodeGenQueryRow = any;
+
+/**
+ * Result from executing a SQL query through a CodeGenConnection.
+ * Normalizes the result shapes from different database drivers (mssql, pg, etc.)
+ * into a single interface that the orchestrator code can rely on.
+ */
+export interface CodeGenQueryResult {
+    /** The array of rows returned by the query. Empty array if no rows. */
+    recordset: CodeGenQueryRow[];
+}
+
+/**
+ * A database transaction handle that supports query execution, commit, and rollback.
+ * Obtained from CodeGenConnection.beginTransaction().
+ */
+export interface CodeGenTransaction {
+    /**
+     * Executes a SQL query within this transaction.
+     * @param sql The SQL statement to execute.
+     * @returns The query result.
+     */
+    query(sql: string): Promise<CodeGenQueryResult>;
+
+    /**
+     * Commits the transaction. After commit, this transaction handle must not be reused.
+     */
+    commit(): Promise<void>;
+
+    /**
+     * Rolls back the transaction. After rollback, this transaction handle must not be reused.
+     */
+    rollback(): Promise<void>;
+}
+
+/**
+ * Database-agnostic connection interface for CodeGen operations.
+ *
+ * This interface abstracts the underlying database driver (mssql.ConnectionPool,
+ * pg.Pool, etc.) so that the orchestration code in SQLCodeGenBase, ManageMetadataBase,
+ * and related classes can work with any supported database platform.
+ *
+ * ## Usage Patterns
+ *
+ * **Simple query (no parameters):**
+ * ```typescript
+ * const result = await conn.query("SELECT ID, Name FROM MyTable WHERE Status = Active");
+ * const rows = result.recordset;
+ * ```
+ *
+ * **Parameterized query (safe from SQL injection):**
+ * ```typescript
+ * const result = await conn.queryWithParams(
+ *     "SELECT ID FROM MyTable WHERE Name = @Name AND SchemaName = @Schema",
+ *     { Name: Users, Schema: dbo }
+ * );
+ * ```
+ *
+ * **Stored procedure / function call:**
+ * ```typescript
+ * const result = await conn.executeStoredProcedure(
+ *     "[dbo].[spCreateEntity]",
+ *     { Name: NewEntity, SchemaName: dbo }
+ * );
+ * ```
+ *
+ * **Transaction:**
+ * ```typescript
+ * const tx = await conn.beginTransaction();
+ * try {
+ *     await tx.query("INSERT INTO ...");
+ *     await tx.query("UPDATE ...");
+ *     await tx.commit();
+ * } catch (e) {
+ *     await tx.rollback();
+ *     throw e;
+ * }
+ * ```
+ *
+ * ## Implementations
+ * - `SQLServerCodeGenConnection` wraps `mssql.ConnectionPool` (in CodeGenLib)
+ * - `PostgreSQLCodeGenConnection` wraps `pg.Pool` (in PostgreSQLDataProvider)
+ */
+export interface CodeGenConnection {
+    /**
+     * Executes a SQL query without parameters.
+     * @param sql The SQL statement to execute.
+     * @returns The query result with a `recordset` array.
+     */
+    query(sql: string): Promise<CodeGenQueryResult>;
+
+    /**
+     * Executes a SQL query with named parameters.
+     * Parameters are passed as key-value pairs and the implementation is responsible
+     * for binding them safely (e.g., @Name for SQL Server, $1/$2 for PostgreSQL).
+     *
+     * For SQL Server, the parameter names in the SQL should use @-prefix notation
+     * matching the keys in the params object.
+     * For PostgreSQL, the implementation translates @-prefixed names to $N notation.
+     *
+     * @param sql The SQL statement with parameter placeholders.
+     * @param params Named parameters as key-value pairs.
+     * @returns The query result with a `recordset` array.
+     */
+    queryWithParams(sql: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;
+
+    /**
+     * Executes a stored procedure (SQL Server) or function call (PostgreSQL).
+     * @param name The fully qualified routine name (e.g., "[dbo].[spCreateEntity]").
+     * @param params Named parameters for the routine.
+     * @returns The query result with a `recordset` array.
+     */
+    executeStoredProcedure(name: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;
+
+    /**
+     * Begins a new database transaction.
+     * @returns A CodeGenTransaction handle for executing queries within the transaction.
+     */
+    beginTransaction(): Promise<CodeGenTransaction>;
+}
+
+
 /**
  * Union type for stored procedure / function types (Create, Update, Delete).
  */

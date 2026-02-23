@@ -4,9 +4,9 @@ import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
-import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext } from './codeGenDatabaseProvider';
+import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection } from './codeGenDatabaseProvider';
 import { SQLServerCodeGenProvider } from './SQLServerCodeGenProvider';
-import sql from 'mssql';
+
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';
 
@@ -112,7 +112,7 @@ export class SQLCodeGenBase {
      */
     protected orderedEntitiesForDeleteSPRegeneration: string[] = [];
 
-    public async manageSQLScriptsAndExecution(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
+    public async manageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
@@ -125,7 +125,7 @@ export class SQLCodeGenBase {
                         FROM ${qs(mjCoreSchema, 'Entity')} 
                         WHERE ${whereClause}
                     `;
-                    const result = await pool.request().query(query);
+                    const result = await pool.query(query);
                     this.entitiesQualifiedForForcedRegeneration = result.recordset.map((r: any) => r.Name);
                     
                     logStatus(`Force regeneration filter enabled: ${this.entitiesQualifiedForForcedRegeneration.length} entities qualified based on entityWhereClause: ${whereClause}`);
@@ -327,7 +327,7 @@ export class SQLCodeGenBase {
         }
     }
 
-    public async runCustomSQLScripts(pool: sql.ConnectionPool, when: string): Promise<boolean> {
+    public async runCustomSQLScripts(pool: CodeGenConnection, when: string): Promise<boolean> {
         try {
             const scripts = customSqlScripts(when);
             let bSuccess: boolean = true;
@@ -351,7 +351,7 @@ export class SQLCodeGenBase {
     }
 
 
-    public async applyPermissions(pool: sql.ConnectionPool, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
+    public async applyPermissions(pool: CodeGenConnection, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
         try {
             let bSuccess = true;
 
@@ -367,7 +367,7 @@ export class SQLCodeGenBase {
                             const fileBuffer = fs.readFileSync(fullPath);
                             const fileContents = fileBuffer.toString();
                             try {
-                                await pool.request().query(fileContents);                            
+                                await pool.query(fileContents);                            
                             }
                             catch (e: any) {
                                 logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${e}`);
@@ -407,7 +407,7 @@ export class SQLCodeGenBase {
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
     public async generateAndExecuteEntitySQLToSeparateFiles(options: {
-        pool: sql.ConnectionPool, 
+        pool: CodeGenConnection, 
         entities: EntityInfo[], 
         directory: string, 
         onlyPermissions: boolean, 
@@ -508,7 +508,7 @@ export class SQLCodeGenBase {
 
 
     public async generateAndExecuteSingleEntitySQLToSeparateFiles(options: {
-        pool: sql.ConnectionPool, 
+        pool: CodeGenConnection, 
         entity: EntityInfo, 
         directory: string, 
         onlyPermissions: boolean, 
@@ -559,7 +559,7 @@ export class SQLCodeGenBase {
      * and the generated SQL, normalizing whitespace for a fair comparison.
      * @returns true if the base view changed, false otherwise
      */
-    protected async checkBaseViewChangedInDB(pool: sql.ConnectionPool, entity: EntityInfo, generatedViewSQL: string): Promise<boolean> {
+    protected async checkBaseViewChangedInDB(pool: CodeGenConnection, entity: EntityInfo, generatedViewSQL: string): Promise<boolean> {
         // Skip if entity is already tracked as new or modified — those are handled by existing logic
         if (ManageMetadataBase.newEntityList.includes(entity.Name) ||
             ManageMetadataBase.modifiedEntityList.includes(entity.Name)) {
@@ -569,7 +569,7 @@ export class SQLCodeGenBase {
         try {
             const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
             const viewDefSQL = this._dbProvider.getViewDefinitionSQL(entity.SchemaName, viewName);
-            const result = await pool.request().query(viewDefSQL);
+            const result = await pool.query(viewDefSQL);
             const dbDefinition = result.recordset?.[0]?.ViewDefinition;
             if (!dbDefinition) {
                 // View doesn't exist in DB yet — it's new, will be handled by existing new entity logic
@@ -683,7 +683,7 @@ export class SQLCodeGenBase {
     }
 
     public async generateSingleEntitySQLToSeparateFiles(options: {
-        pool: sql.ConnectionPool, 
+        pool: CodeGenConnection, 
         entity: EntityInfo, 
         directory: string, 
         onlyPermissions: boolean, 
@@ -956,7 +956,7 @@ export class SQLCodeGenBase {
      * @param entity 
      * @returns 
      */
-    public async generateEntitySQL(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
+    public async generateEntitySQL(pool: CodeGenConnection, entity: EntityInfo): Promise<string> {
         let sOutput: string = ''
         if (entity.BaseViewGenerated && !entity.VirtualEntity)
             // generated the base view (will include permissions)
@@ -999,7 +999,7 @@ export class SQLCodeGenBase {
         return sOutput
     }
 
-    async generateEntityFullTextSearchSQL(pool: sql.ConnectionPool, entity: EntityInfo): Promise<{sql: string, functionName: string}> {
+    async generateEntityFullTextSearchSQL(pool: CodeGenConnection, entity: EntityInfo): Promise<{sql: string, functionName: string}> {
         const searchFields = entity.Fields.filter(f => f.FullTextSearchEnabled);
         
         // Validate search fields exist when needed
@@ -1043,9 +1043,9 @@ export class SQLCodeGenBase {
         return result;
     }
 
-    async getEntityPrimaryKeyIndexName(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
+    async getEntityPrimaryKeyIndexName(pool: CodeGenConnection, entity: EntityInfo): Promise<string> {
         const sSQL = this._dbProvider.getPrimaryKeyIndexNameSQL(entity.SchemaName, entity.BaseTable);
-        const resultResult = await pool.request().query(sSQL);
+        const resultResult = await pool.query(sSQL);
         const result = resultResult.recordset;
         if (result && result.length > 0)
             return result[0].IndexName;
@@ -1065,7 +1065,7 @@ export class SQLCodeGenBase {
      * Generates the SQL for creating indexes for the foreign keys in the entity.
      * Delegates to the database provider for platform-specific index DDL.
      */
-    generateIndexesForForeignKeys(pool: sql.ConnectionPool, entity: EntityInfo): string {
+    generateIndexesForForeignKeys(pool: CodeGenConnection, entity: EntityInfo): string {
         const indexStatements = this._dbProvider.generateForeignKeyIndexes(entity);
         return indexStatements.join('\n\n');
     }
@@ -1211,7 +1211,7 @@ export class SQLCodeGenBase {
         return joins.join('\n');
     }
 
-    async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
+    async generateBaseView(pool: CodeGenConnection, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
@@ -1268,7 +1268,7 @@ export class SQLCodeGenBase {
         return sOutput;
     }
 
-    async generateBaseViewRelatedFieldsString(pool: sql.ConnectionPool, entityFields: EntityFieldInfo[]): Promise<string> {
+    async generateBaseViewRelatedFieldsString(pool: CodeGenConnection, entityFields: EntityFieldInfo[]): Promise<string> {
         let sOutput: string = '';
         let fieldCount: number = 0;
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
@@ -1491,12 +1491,12 @@ export class SQLCodeGenBase {
     }
 
 
-    protected async generateSPDelete(entity: EntityInfo, pool: sql.ConnectionPool): Promise<string> {
+    protected async generateSPDelete(entity: EntityInfo, pool: CodeGenConnection): Promise<string> {
         const cascadeSQL = await this.generateCascadeDeletes(entity, pool);
         return this._dbProvider.generateCRUDDelete(entity, cascadeSQL);
     }
 
-    protected async generateCascadeDeletes(entity: EntityInfo, pool: sql.ConnectionPool): Promise<string> {
+    protected async generateCascadeDeletes(entity: EntityInfo, pool: CodeGenConnection): Promise<string> {
         let sOutput: string = '';
         if (entity.CascadeDeletes) {
             const md = new Metadata();
@@ -1519,7 +1519,7 @@ export class SQLCodeGenBase {
         return sOutput === '' ? '' : `${sOutput}\n    `;
     }
 
-    protected async generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo, pool: sql.ConnectionPool): Promise<string> {
+    protected async generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo, pool: CodeGenConnection): Promise<string> {
         // Check if nullable FK is part of composite unique constraint
         // If so, we must DELETE instead of UPDATE to avoid unique constraint violations
         if (fkField.AllowsNull) {
@@ -1617,7 +1617,7 @@ export class SQLCodeGenBase {
      * during cascade operations, since setting to NULL could violate uniqueness.
      */
     protected async isFieldInCompositeUniqueConstraint(
-        pool: sql.ConnectionPool,
+        pool: CodeGenConnection,
         schemaName: string,
         tableName: string,
         columnName: string
@@ -1625,7 +1625,7 @@ export class SQLCodeGenBase {
         const query = this._dbProvider.getCompositeUniqueConstraintCheckSQL(schemaName, tableName, columnName);
 
         try {
-            const result = await pool.request().query(query);
+            const result = await pool.query(query);
             return result.recordset.length > 0;
         } catch (error) {
             logWarning(`Failed to check composite unique constraint for ${schemaName}.${tableName}.${columnName}: ${error}`);
@@ -1756,7 +1756,7 @@ export class SQLCodeGenBase {
      * due to cascade dependencies on entities that had schema changes.
      */
     protected async getEntitiesRequiringCascadeDeleteRegeneration(
-        pool: sql.ConnectionPool,
+        pool: CodeGenConnection,
         changedEntityIds: Set<string>
     ): Promise<Set<string>> {
         const entitiesNeedingRegeneration = new Set<string>();
@@ -1779,7 +1779,7 @@ export class SQLCodeGenBase {
      * This should be called after metadata management and before SQL generation.
      */
     protected async markEntitiesForCascadeDeleteRegeneration(
-        pool: sql.ConnectionPool,
+        pool: CodeGenConnection,
         entities: EntityInfo[]
     ): Promise<void> {
         try {

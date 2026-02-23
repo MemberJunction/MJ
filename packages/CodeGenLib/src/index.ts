@@ -45,6 +45,7 @@ export * from './Config/db-connection'
 // Database exports
 export * from './Database/codeGenDatabaseProvider'
 export * from './Database/SQLServerCodeGenProvider'
+export * from './Database/SQLServerCodeGenConnection'
 export * from './Database/dbSchema'
 export * from './Database/manage-metadata'
 export * from './Database/sql_codegen'

@@ -1,4 +1,4 @@
-import sql from 'mssql';
+import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { logError, logStatus } from "./status_logging";
 import { configInfo, mj_core_schema } from "../Config/config";
 
@@ -12,7 +12,7 @@ export type IntegrityCheckResult = {
 export type RunIntegrityCheck = {
     Name: string;
     Enabled: boolean;
-    Run: (pool: sql.ConnectionPool) => Promise<IntegrityCheckResult>;
+    Run: (pool: CodeGenConnection) => Promise<IntegrityCheckResult>;
 }
 
 /**
@@ -33,7 +33,7 @@ export class SystemIntegrityBase {
      * will be run. If false, all checks will be run.
      * @param pool
      */
-    public static async RunIntegrityChecks(pool: sql.ConnectionPool, onlyEnabled: boolean, logResults: boolean = true): Promise<IntegrityCheckResult[]> {
+    public static async RunIntegrityChecks(pool: CodeGenConnection, onlyEnabled: boolean, logResults: boolean = true): Promise<IntegrityCheckResult[]> {
         let results: IntegrityCheckResult[] = [];
         try {
             const runPromises = [];
@@ -76,7 +76,7 @@ export class SystemIntegrityBase {
      * @param pool
      * @returns
      */
-    public static async CheckEntityFieldSequences(pool: sql.ConnectionPool): Promise<IntegrityCheckResult> {
+    public static async CheckEntityFieldSequences(pool: CodeGenConnection): Promise<IntegrityCheckResult> {
         return SystemIntegrityBase.CheckEntityFieldSequencesInternal(pool, "");
     }
 
@@ -86,14 +86,14 @@ export class SystemIntegrityBase {
      * @param entityName
      * @returns
      */
-    public static async CheckSinleEntityFieldSequences(pool: sql.ConnectionPool, entityName: string): Promise<IntegrityCheckResult> {
+    public static async CheckSinleEntityFieldSequences(pool: CodeGenConnection, entityName: string): Promise<IntegrityCheckResult> {
         return SystemIntegrityBase.CheckEntityFieldSequencesInternal(pool, `WHERE Entity='${entityName}'`);
     }
 
-    protected static async CheckEntityFieldSequencesInternal(pool: sql.ConnectionPool, filter: string): Promise<IntegrityCheckResult> {
+    protected static async CheckEntityFieldSequencesInternal(pool: CodeGenConnection, filter: string): Promise<IntegrityCheckResult> {
         try {
             const sSQL = `SELECT ID, Entity, SchemaName, BaseView, EntityID, Name, Sequence FROM [${mj_core_schema()}].[vwEntityFields] ${filter} ORDER BY Entity, Sequence`;
-            const resultResult = await pool.request().query(sSQL);
+            const resultResult = await pool.query(sSQL);
       const result = resultResult.recordset;
             if (!result || result.length === 0) {
                 throw new Error("No entity fields found");
@@ -135,7 +135,7 @@ export class SystemIntegrityBase {
                                 // we will do this by SELECT TOP 1 * from the base view
                                 const entity = row.Entity;
                                 const sampleSQL = `SELECT TOP 1 * FROM [${row.SchemaName}].[${row.BaseView}]`;
-                                const sampleResultResult = await pool.request().query(sampleSQL);
+                                const sampleResultResult = await pool.query(sampleSQL);
       const sampleResult = sampleResultResult.recordset;
                                 // now check the order of the columns in the result set relative to the
                                 // fields array

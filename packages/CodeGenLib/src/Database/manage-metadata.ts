@@ -1,4 +1,4 @@
-import sql from 'mssql';
+import { CodeGenConnection, CodeGenTransaction } from './codeGenDatabaseProvider';
 import { configInfo, currentWorkingDirectory, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity } from "@memberjunction/core-entities";
@@ -309,7 +309,7 @@ export class ManageMetadataBase {
     * within the given schema) and sets Entity.ParentID on the child entity.
     * Must run AFTER entities are created but BEFORE manageParentEntityFields().
     */
-   protected async processISARelationshipConfig(pool: sql.ConnectionPool): Promise<{ success: boolean; updatedCount: number }> {
+   protected async processISARelationshipConfig(pool: CodeGenConnection): Promise<{ success: boolean; updatedCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
       if (!config) return { success: true, updatedCount: 0 };
 
@@ -322,16 +322,15 @@ export class ManageMetadataBase {
       for (const rel of relationships) {
          try {
             // Look up the parent entity — try by Name first, then by BaseTable within the given schema
-            const parentResult = await pool.request()
-               .input('ParentName', rel.ParentEntity)
-               .input('SchemaName', rel.SchemaName || null)
-               .query(`
+            const parentResult = await pool.queryWithParams(`
                   SELECT TOP 1 ID, Name
                   FROM [${schema}].vwEntities
                   WHERE Name = @ParentName
                      OR (BaseTable = @ParentName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))
                   ORDER BY CASE WHEN Name = @ParentName THEN 0 ELSE 1 END
-               `);
+               `,
+               { 'ParentName': rel.ParentEntity, 'SchemaName': rel.SchemaName || null }
+               );
 
             if (parentResult.recordset.length === 0) {
                logError(`    > IS-A config: parent entity "${rel.ParentEntity}" not found — skipping`);
@@ -342,16 +341,15 @@ export class ManageMetadataBase {
             const parentName = parentResult.recordset[0].Name;
 
             // Look up the child entity — same strategy
-            const childResult = await pool.request()
-               .input('ChildName', rel.ChildEntity)
-               .input('SchemaName', rel.SchemaName || null)
-               .query(`
+            const childResult = await pool.queryWithParams(`
                   SELECT TOP 1 ID, Name, ParentID
                   FROM [${schema}].vwEntities
                   WHERE Name = @ChildName
                      OR (BaseTable = @ChildName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))
                   ORDER BY CASE WHEN Name = @ChildName THEN 0 ELSE 1 END
-               `);
+               `,
+               { 'ChildName': rel.ChildEntity, 'SchemaName': rel.SchemaName || null }
+               );
 
             if (childResult.recordset.length === 0) {
                logError(`    > IS-A config: child entity "${rel.ChildEntity}" not found — skipping`);
@@ -367,10 +365,9 @@ export class ManageMetadataBase {
                logStatus(`    > IS-A: "${childName}" already has ParentID set to "${parentName}", skipping`);
             } else {
                // Set ParentID on the child entity
-               await pool.request()
-                  .input('ParentID', parentId)
-                  .input('ChildID', childId)
-                  .query(`UPDATE [${schema}].Entity SET ParentID = @ParentID WHERE ID = @ChildID`);
+               await pool.queryWithParams(`UPDATE [${schema}].Entity SET ParentID = @ParentID WHERE ID = @ChildID`,
+               { 'ParentID': parentId, 'ChildID': childId }
+               );
 
                if (existingParentId) {
                   logStatus(`    > IS-A: Updated "${childName}" ParentID from previous value to "${parentName}"`);
@@ -395,7 +392,7 @@ export class ManageMetadataBase {
     * Reserved keys (BaseTable, SchemaName) are excluded from the UPDATE statement.
     * Must run AFTER entities are created.
     */
-   protected async processEntityConfigs(pool: sql.ConnectionPool): Promise<{ success: boolean; updatedCount: number }> {
+   protected async processEntityConfigs(pool: CodeGenConnection): Promise<{ success: boolean; updatedCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
       if (!config) return { success: true, updatedCount: 0 };
 
@@ -416,14 +413,13 @@ export class ManageMetadataBase {
             }
 
             // Look up the entity by BaseTable + SchemaName
-            const entityResult = await pool.request()
-               .input('BaseTable', ec.BaseTable)
-               .input('SchemaName', ec.SchemaName)
-               .query(`
+            const entityResult = await pool.queryWithParams(`
                   SELECT TOP 1 ID, Name
                   FROM [${schema}].vwEntities
                   WHERE BaseTable = @BaseTable AND SchemaName = @SchemaName
-               `);
+               `,
+               { 'BaseTable': ec.BaseTable, 'SchemaName': ec.SchemaName }
+               );
 
             if (entityResult.recordset.length === 0) {
                logError(`    > Entities config: entity for "${ec.SchemaName}.${ec.BaseTable}" not found — skipping`);
@@ -434,17 +430,17 @@ export class ManageMetadataBase {
             const entityName = entityResult.recordset[0].Name;
 
             // Build a parameterized UPDATE with one SET clause per attribute
-            const request = pool.request().input('EntityID', entityId);
+            const queryParams: Record<string, unknown> = { 'EntityID': entityId };
             const setClauses: string[] = [];
             for (const [key, value] of attrs) {
                const paramName = `attr_${key}`;
                // Convert boolean values to SQL BIT (1/0)
                const sqlValue = typeof value === 'boolean' ? (value ? 1 : 0) : value;
-               request.input(paramName, sqlValue);
+               queryParams[paramName] = sqlValue;
                setClauses.push(`[${key}] = @${paramName}`);
             }
 
-            await request.query(`UPDATE [${schema}].Entity SET ${setClauses.join(', ')} WHERE ID = @EntityID`);
+            await pool.queryWithParams(`UPDATE [${schema}].Entity SET ${setClauses.join(', ')} WHERE ID = @EntityID`, queryParams);
 
             const attrSummary = attrs.map(([k, v]) => `${k}=${v}`).join(', ');
             logStatus(`    > Entities config: Set ${attrSummary} on "${entityName}"`);
@@ -464,7 +460,7 @@ export class ManageMetadataBase {
     * it if not. Uses the spCreateVirtualEntity stored procedure.
     * Must run BEFORE manageVirtualEntities() so newly created entities get field-synced.
     */
-   protected async processVirtualEntityConfig(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<{ success: boolean; createdCount: number }> {
+   protected async processVirtualEntityConfig(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; createdCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
       if (!config) return { success: true, createdCount: 0 };
 
@@ -481,10 +477,9 @@ export class ManageMetadataBase {
          const pkField = ve.PrimaryKey?.[0] || 'ID';
 
          // Check if entity already exists for this view
-         const existsResult = await pool.request()
-            .input('ViewName', viewName)
-            .input('SchemaName', viewSchema)
-            .query(`SELECT ID FROM [${schema}].vwEntities WHERE BaseView = @ViewName AND SchemaName = @SchemaName`);
+         const existsResult = await pool.queryWithParams(`SELECT ID FROM [${schema}].vwEntities WHERE BaseView = @ViewName AND SchemaName = @SchemaName`,
+               { 'ViewName': viewName, 'SchemaName': viewSchema }
+               );
 
          if (existsResult.recordset.length > 0) {
             logStatus(`    > Virtual entity "${entityName}" already exists for view [${viewSchema}].[${viewName}], skipping creation`);
@@ -492,10 +487,9 @@ export class ManageMetadataBase {
          }
 
          // Verify the view actually exists in the database
-         const viewExistsResult = await pool.request()
-            .input('ViewName', viewName)
-            .input('SchemaName', viewSchema)
-            .query(`SELECT 1 FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = @ViewName AND TABLE_SCHEMA = @SchemaName`);
+         const viewExistsResult = await pool.queryWithParams(`SELECT 1 FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = @ViewName AND TABLE_SCHEMA = @SchemaName`,
+               { 'ViewName': viewName, 'SchemaName': viewSchema }
+               );
 
          if (viewExistsResult.recordset.length === 0) {
             logError(`    > View [${viewSchema}].[${viewName}] does not exist — skipping virtual entity creation for "${entityName}"`);
@@ -504,13 +498,9 @@ export class ManageMetadataBase {
 
          // Create the virtual entity via the stored procedure
          try {
-            const createResult = await pool.request()
-               .input('Name', entityName)
-               .input('BaseView', viewName)
-               .input('SchemaName', viewSchema)
-               .input('PrimaryKeyFieldName', pkField)
-               .input('Description', ve.Description || null)
-               .execute(`[${schema}].spCreateVirtualEntity`);
+            const createResult = await pool.executeStoredProcedure(`[${schema}].spCreateVirtualEntity`,
+               { 'Name': entityName, 'BaseView': viewName, 'SchemaName': viewSchema, 'PrimaryKeyFieldName': pkField, 'Description': ve.Description || null }
+               );
 
             const newEntityId = createResult.recordset?.[0]?.['']
                || createResult.recordset?.[0]?.ID
@@ -553,7 +543,7 @@ export class ManageMetadataBase {
     * @param pool - the ConnectionPool object to use for querying and updating the database
     * @returns
     */
-   public async manageMetadata(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<boolean> {
+   public async manageMetadata(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       const md = new Metadata();
       const excludeSchemas = configInfo.excludeSchemas ? configInfo.excludeSchemas : [];
 
@@ -675,13 +665,13 @@ export class ManageMetadataBase {
       return bSuccess;
    }
 
-   protected async manageVirtualEntities(pool: sql.ConnectionPool): Promise<{success: boolean, anyUpdates: boolean}> {
+   protected async manageVirtualEntities(pool: CodeGenConnection): Promise<{success: boolean, anyUpdates: boolean}> {
       let bSuccess = true;
       // virtual entities are records defined in the entity metadata and do NOT define a distinct base table
       // but they do specify a base view. We DO NOT generate a base view for a virtual entity, we simply use it to figure
       // out the fields that should be in the entity definition and add/update/delete the entity definition to match what's in the view when this runs
       const sql = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE VirtualEntity = 1`;
-      const virtualEntitiesResult = await pool.request().query(sql);
+      const virtualEntitiesResult = await pool.query(sql);
       const virtualEntities = virtualEntitiesResult.recordset;
       let anyUpdates: boolean = false;
       if (virtualEntities && virtualEntities.length > 0) {
@@ -698,7 +688,7 @@ export class ManageMetadataBase {
       return {success: bSuccess, anyUpdates: anyUpdates};
    }
 
-   protected async manageSingleVirtualEntity(pool: sql.ConnectionPool, virtualEntity: EntityInfo): Promise<{success: boolean, updatedEntity: boolean}> {
+   protected async manageSingleVirtualEntity(pool: CodeGenConnection, virtualEntity: EntityInfo): Promise<{success: boolean, updatedEntity: boolean}> {
       let bSuccess = true;
       let bUpdated = false;
       try {
@@ -717,7 +707,7 @@ export class ManageMetadataBase {
                            SCHEMA_NAME(v.schema_id) = '${virtualEntity.SchemaName}'
                         ORDER BY
                            c.column_id`;
-         const veFieldsResult = await pool.request().query(sql);
+         const veFieldsResult = await pool.query(sql);
       const veFields = veFieldsResult.recordset;
          if (veFields && veFields.length > 0) {
             // we have 1+ fields, now loop through them and process each one
@@ -769,7 +759,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async manageSingleVirtualEntityField(pool: sql.ConnectionPool, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
+   protected async manageSingleVirtualEntityField(pool: CodeGenConnection, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
       // this protected checks to see if the field exists in the entity definition, and if not, adds it
       // if it exist it updates the entity field to match the view's data type and nullability attributes
 
@@ -831,7 +821,7 @@ export class ManageMetadataBase {
     * Only runs if the VirtualEntityFieldDecoration advanced generation feature is enabled.
     * Idempotent: skips entities that already have soft PK/FK annotations.
     */
-   protected async decorateVirtualEntitiesWithLLM(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<void> {
+   protected async decorateVirtualEntitiesWithLLM(pool: CodeGenConnection, currentUser: UserInfo): Promise<void> {
       const ag = new AdvancedGeneration();
       if (!ag.featureEnabled('VirtualEntityFieldDecoration')) {
          return; // Feature not enabled, nothing to do
@@ -885,7 +875,7 @@ export class ManageMetadataBase {
     * @returns Whether the entity was decorated, skipped, or encountered an error.
     */
    protected async decorateSingleVirtualEntityWithLLM(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entity: EntityInfo,
       ag: AdvancedGeneration,
       currentUser: UserInfo,
@@ -903,7 +893,7 @@ export class ManageMetadataBase {
 
          // Get view definition from SQL Server
          const viewDefSQL = `SELECT OBJECT_DEFINITION(OBJECT_ID('[${entity.SchemaName}].[${entity.BaseView}]')) AS ViewDef`;
-         const viewDefResult = await pool.request().query(viewDefSQL);
+         const viewDefResult = await pool.query(viewDefSQL);
          const viewDefinition = viewDefResult.recordset[0]?.ViewDef;
          if (!viewDefinition) {
             logStatus(`         Could not get view definition for ${entity.SchemaName}.${entity.BaseView} — skipping LLM decoration`);
@@ -1036,7 +1026,7 @@ export class ManageMetadataBase {
     * then delegates to the shared methods.
     */
    protected async applyVEFieldCategories(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entity: EntityInfo,
       result: VirtualEntityDecorationResult
    ): Promise<boolean> {
@@ -1053,7 +1043,7 @@ export class ManageMetadataBase {
          FROM [${schema}].EntityField
          WHERE EntityID = '${entity.ID}'
       `;
-      const fieldsResult = await pool.request().query(fieldsSQL);
+      const fieldsResult = await pool.query(fieldsSQL);
       const dbFields = fieldsResult.recordset as Array<{
          ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; 
          AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, 
@@ -1099,7 +1089,7 @@ export class ManageMetadataBase {
     * All SQL updates are batched into a single execution for performance.
     */
    protected async applyLLMPrimaryKeys(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entity: EntityInfo,
       primaryKeys: string[],
       schema: string
@@ -1143,7 +1133,7 @@ export class ManageMetadataBase {
     * All SQL updates are batched into a single execution for performance.
     */
    protected async applyLLMForeignKeys(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entity: EntityInfo,
       foreignKeys: VirtualEntityDecorationResult['foreignKeys'],
       schema: string
@@ -1200,7 +1190,7 @@ export class ManageMetadataBase {
     * All SQL updates are batched into a single execution for performance.
     */
    protected async applyLLMFieldDescriptions(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entity: EntityInfo,
       fieldDescriptions: VirtualEntityDecorationResult['fieldDescriptions'],
       schema: string
@@ -1296,7 +1286,7 @@ export class ManageMetadataBase {
     * that mirror the parent entity's base table fields (excluding PKs, timestamps, and virtual fields).
     * Runs collision detection to prevent child table columns from shadowing parent fields.
     */
-   protected async manageParentEntityFields(pool: sql.ConnectionPool): Promise<{success: boolean, anyUpdates: boolean}> {
+   protected async manageParentEntityFields(pool: CodeGenConnection): Promise<{success: boolean, anyUpdates: boolean}> {
       let bSuccess = true;
       let anyUpdates = false;
 
@@ -1330,7 +1320,7 @@ export class ManageMetadataBase {
     * Creates/updates virtual EntityField records for a single child entity's parent fields.
     * Detects field name collisions between child's own base table columns and parent fields.
     */
-   protected async manageSingleEntityParentFields(pool: sql.ConnectionPool, childEntity: EntityInfo): Promise<{success: boolean, updated: boolean}> {
+   protected async manageSingleEntityParentFields(pool: CodeGenConnection, childEntity: EntityInfo): Promise<{success: boolean, updated: boolean}> {
       let bUpdated = false;
 
       // Get all parent fields: non-PK, non-__mj_, non-virtual from each parent in chain
@@ -1358,12 +1348,11 @@ export class ManageMetadataBase {
 
          // Check the DATABASE for existing field record — in-memory metadata may be stale
          // (e.g. createNewEntityFieldsFromSchema may have already added this field from the view)
-         const existsResult = await pool.request()
-            .input('EntityID', childEntity.ID)
-            .input('FieldName', parentField.Name)
-            .query(`SELECT ID, IsVirtual, Type, Length, Precision, Scale, AllowsNull, AllowUpdateAPI
+         const existsResult = await pool.queryWithParams(`SELECT ID, IsVirtual, Type, Length, Precision, Scale, AllowsNull, AllowUpdateAPI
                     FROM [${mj_core_schema()}].EntityField
-                    WHERE EntityID = @EntityID AND Name = @FieldName`);
+                    WHERE EntityID = @EntityID AND Name = @FieldName`,
+               { 'EntityID': childEntity.ID, 'FieldName': parentField.Name }
+               );
 
          if (existsResult.recordset.length > 0) {
             // Field already exists — update it to ensure it's marked as a virtual IS-A field
@@ -1457,7 +1446,7 @@ export class ManageMetadataBase {
     * @param md
     * @returns
     */
-   protected async manageEntityRelationships(pool: sql.ConnectionPool, excludeSchemas: string[], md: Metadata, batchItems: number = 5): Promise<boolean> {
+   protected async manageEntityRelationships(pool: CodeGenConnection, excludeSchemas: string[], md: Metadata, batchItems: number = 5): Promise<boolean> {
       let bResult: boolean = true;
       bResult = bResult && await this.manageManyToManyEntityRelationships(pool, excludeSchemas, batchItems);
       bResult = bResult && await this.manageOneToManyEntityRelationships(pool, excludeSchemas, md, batchItems);
@@ -1471,7 +1460,7 @@ export class ManageMetadataBase {
     * @param md
     * @returns
     */
-   protected async manageOneToManyEntityRelationships(pool: sql.ConnectionPool, excludeSchemas: string[],  md: Metadata, batchItems: number = 5): Promise<boolean> {
+   protected async manageOneToManyEntityRelationships(pool: CodeGenConnection, excludeSchemas: string[],  md: Metadata, batchItems: number = 5): Promise<boolean> {
       // the way this works is that we look for entities in our catalog and we look for
       // foreign keys in those entities. For example, if we saw an entity called Persons and that entity
       // had a foreign key linking to an entity called Organizations via a field called OrganizationID, then we would create a relationship
@@ -1494,12 +1483,12 @@ export class ManageMetadataBase {
                              IsVirtual = 0 AND
                              EntityID NOT IN (SELECT ID FROM ${mj_core_schema()}.Entity WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
                        ORDER BY RelatedEntityID`;
-         const entityFieldsResult = await pool.request().query(sSQL);
+         const entityFieldsResult = await pool.query(sSQL);
          const entityFields = entityFieldsResult.recordset;
 
          // Get the relationship counts for each entity
          const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${mj_core_schema()}.EntityRelationship GROUP BY EntityID`;
-         const relationshipCountsResult = await pool.request().query(sSQLRelationshipCount);
+         const relationshipCountsResult = await pool.query(sSQLRelationshipCount);
          const relationshipCounts = relationshipCountsResult.recordset;
 
          const relationshipCountMap = new Map<number, number>();
@@ -1509,7 +1498,7 @@ export class ManageMetadataBase {
 
          // get all relationships in one query for performance improvement
          const sSQLRelationship = `SELECT * FROM ${mj_core_schema()}.EntityRelationship`;
-         const allRelationshipsResult = await pool.request().query(sSQLRelationship);
+         const allRelationshipsResult = await pool.query(sSQLRelationship);
          const allRelationships = allRelationshipsResult.recordset;
 
 
@@ -1571,10 +1560,10 @@ export class ManageMetadataBase {
     * @param ds
     * @param excludeSchemas
     */
-   protected async checkAndRemoveMetadataForDeletedTables(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async checkAndRemoveMetadataForDeletedTables(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
          const sql = `SELECT * FROM ${mj_core_schema()}.vwEntitiesWithMissingBaseTables WHERE VirtualEntity=0`
-         const entitiesResult = await pool.request().query(sql);
+         const entitiesResult = await pool.query(sql);
          const entities = <EntityInfo[]>entitiesResult.recordset;
          if (entities && entities.length > 0) {
             for (const e of entities) {
@@ -1611,7 +1600,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async checkDropSQLObject(pool: sql.ConnectionPool, proceed: boolean, type: 'procedure' | 'view' | 'function', schemaName: string, name: string) {
+   protected async checkDropSQLObject(pool: CodeGenConnection, proceed: boolean, type: 'procedure' | 'view' | 'function', schemaName: string, name: string) {
       try {
          if (proceed && schemaName && name && schemaName.trim().length > 0 && name.trim().length > 0) {
             // Use IF OBJECT_ID pattern for Flyway compatibility
@@ -1653,7 +1642,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   protected async manageManyToManyEntityRelationships(pool: sql.ConnectionPool, excludeSchemas: string[], batchItems: number = 5): Promise<boolean> {
+   protected async manageManyToManyEntityRelationships(pool: CodeGenConnection, excludeSchemas: string[], batchItems: number = 5): Promise<boolean> {
       return true; // not implemented for now, require the admin to manually create these relationships
    }
 
@@ -1663,7 +1652,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   public async manageEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false): Promise<boolean> {
+   public async manageEntityFields(pool: CodeGenConnection, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
@@ -1777,7 +1766,7 @@ export class ManageMetadataBase {
    /**
     * This method ensures that the __mj_DeletedAt field exists in each entity that has DeleteType=Soft. If the field does not exist, it is created.
     */
-   protected async ensureDeletedAtFieldsExist(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async ensureDeletedAtFieldsExist(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
          const sqlEntities = `SELECT
                                  *
@@ -1787,7 +1776,7 @@ export class ManageMetadataBase {
                                  VirtualEntity=0 AND
                                  DeleteType='Soft' AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
-         const entitiesResult = await pool.request().query(sqlEntities);
+         const entitiesResult = await pool.query(sqlEntities);
       const entities = entitiesResult.recordset;
          let overallResult = true;
          if (entities.length > 0) {
@@ -1798,7 +1787,7 @@ export class ManageMetadataBase {
                          WHERE
                          ${entities.map((e: { SchemaName: any; BaseTable: any; }) => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')}
                          AND COLUMN_NAME='${EntityInfo.DeletedAtFieldName}'`
-            const resultResult = await pool.request().query(sql);
+            const resultResult = await pool.query(sql);
       const result = resultResult.recordset;
 
             for (const e of entities) {
@@ -1825,7 +1814,7 @@ export class ManageMetadataBase {
     * For soft FKs: Sets RelatedEntityID/RelatedEntityFieldName + IsSoftForeignKey=1 (RelatedEntityID is source of truth, IsSoftForeignKey protects from schema sync).
     * All UPDATE statements are logged to migration files via LogSQLAndExecute() for CI/CD traceability.
     */
-   protected async applySoftPKFKConfig(pool: sql.ConnectionPool): Promise<boolean> {
+   protected async applySoftPKFKConfig(pool: CodeGenConnection): Promise<boolean> {
       // Check if additionalSchemaInfo is configured in mj.config.cjs
       if (!configInfo.additionalSchemaInfo) {
          // No additional schema info configured - this is fine, it's optional
@@ -1859,7 +1848,7 @@ export class ManageMetadataBase {
 
             // Look up entity ID (SELECT query - no need to log to migration file)
             const entityLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${tableSchema}' AND BaseTable = '${tableName}'`;
-            const entityResult = await pool.request().query(entityLookupSQL);
+            const entityResult = await pool.query(entityLookupSQL);
 
             if (entityResult.recordset.length === 0) {
                logStatus(`         ⚠️  Entity not found for ${tableSchema}.${tableName} - skipping`);
@@ -1894,7 +1883,7 @@ export class ManageMetadataBase {
                   const fkSchema = fk.SchemaName || tableSchema;
                   // Look up related entity ID (SELECT query - no need to log to migration file)
                   const relatedLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${fkSchema}' AND BaseTable = '${fk.RelatedTable}'`;
-                  const relatedEntityResult = await pool.request().query(relatedLookupSQL);
+                  const relatedEntityResult = await pool.query(relatedLookupSQL);
 
                   if (relatedEntityResult.recordset.length === 0) {
                      logStatus(`         ⚠️  Related entity not found for ${fkSchema}.${fk.RelatedTable} - skipping FK ${fk.FieldName}`);
@@ -1933,7 +1922,7 @@ export class ManageMetadataBase {
     * UTC date and time. This method is called as part of the manageEntityFields method and is not intended to be called directly.
     * @param pool
     */
-   protected async ensureCreatedAtUpdatedAtFieldsExist(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async ensureCreatedAtUpdatedAtFieldsExist(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
          const sqlEntities = `SELECT
                                  *
@@ -1943,7 +1932,7 @@ export class ManageMetadataBase {
                                  VirtualEntity = 0 AND
                                  TrackRecordChanges = 1 AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
-         const entitiesResult = await pool.request().query(sqlEntities);
+         const entitiesResult = await pool.query(sqlEntities);
       const entities = entitiesResult.recordset;
          let overallResult = true;
          if (entities.length > 0) {
@@ -1955,7 +1944,7 @@ export class ManageMetadataBase {
                                        WHERE
                                           ${entities.map((e: { SchemaName: any; BaseTable: any; }) => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')}
                                        AND COLUMN_NAME IN ('${EntityInfo.CreatedAtFieldName}','${EntityInfo.UpdatedAtFieldName}')`
-            const resultResult = await pool.request().query(sqlCreatedUpdated);
+            const resultResult = await pool.query(sqlCreatedUpdated);
       const result = resultResult.recordset;
             for (const e of entities) {
                // result has both created at and updated at fields, so filter on the result for each and do what we need to based on that
@@ -1985,7 +1974,7 @@ export class ManageMetadataBase {
     * @param fieldName
     * @param currentFieldData
     */
-   protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(pool: sql.ConnectionPool, entity: any, fieldName: string, currentFieldData: any, allowNull: boolean): Promise<boolean> {
+   protected async ensureSpecialDateFieldExistsAndHasCorrectDefaultValue(pool: CodeGenConnection, entity: any, fieldName: string, currentFieldData: any, allowNull: boolean): Promise<boolean> {
       try {
          if (!currentFieldData) {
             // field doesn't exist, let's create it
@@ -2031,7 +2020,7 @@ export class ManageMetadataBase {
    /**
     * Creates the default constraint for a special date field. This method is called as part of the ensureSpecialDateFieldExistsAndHasCorrectDefaultValue method and is not intended to be called directly.
     */
-   protected async createDefaultConstraintForSpecialDateField(pool: sql.ConnectionPool, entity: any, fieldName: string) {
+   protected async createDefaultConstraintForSpecialDateField(pool: CodeGenConnection, entity: any, fieldName: string) {
       try {
          const sqlAddDefaultConstraint = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT GETUTCDATE() FOR [${fieldName}]`;
          await this.LogSQLAndExecute(pool, sqlAddDefaultConstraint, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
@@ -2047,7 +2036,7 @@ export class ManageMetadataBase {
     * @param entity
     * @param fieldName
     */
-   protected async dropAndCreateDefaultConstraintForSpecialDateField(pool: sql.ConnectionPool, entity: any, fieldName: string) {
+   protected async dropAndCreateDefaultConstraintForSpecialDateField(pool: CodeGenConnection, entity: any, fieldName: string) {
       // default value is not correct, so let's update it
       await this.dropExistingDefaultConstraint(pool, entity, fieldName);
       await this.createDefaultConstraintForSpecialDateField(pool, entity, fieldName);
@@ -2059,7 +2048,7 @@ export class ManageMetadataBase {
     * @param entity
     * @param fieldName
     */
-   protected async dropExistingDefaultConstraint(pool: sql.ConnectionPool, entity: any, fieldName: string) {
+   protected async dropExistingDefaultConstraint(pool: CodeGenConnection, entity: any, fieldName: string) {
       try {
          const sqlDropDefaultConstraint = `
          DECLARE @constraintName NVARCHAR(255);
@@ -2095,15 +2084,15 @@ export class ManageMetadataBase {
     * @param md
     * @param currentUser
     */
-   protected async generateNewEntityDescriptions(pool: sql.ConnectionPool, md: Metadata, currentUser: UserInfo) {
+   protected async generateNewEntityDescriptions(pool: CodeGenConnection, md: Metadata, currentUser: UserInfo) {
       // for the list of new entities, go through and attempt to generate new entity descriptions
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityDescriptions')) {
          // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
-            const dataResult = await pool.request().query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
+            const dataResult = await pool.query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
             const data = dataResult.recordset;
-            const fieldsResult = await pool.request().query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID='${data[0].ID}'`);
+            const fieldsResult = await pool.query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID='${data[0].ID}'`);
             const fields = fieldsResult.recordset;
 
             // Use new API to generate entity description
@@ -2133,7 +2122,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   protected async updateEntityFieldDisplayNameWhereNull(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async updateEntityFieldDisplayNameWhereNull(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sql = `SELECT
                         ef.ID, ef.Name
@@ -2148,7 +2137,7 @@ export class ManageMetadataBase {
                         ef.Name <> \'ID\' AND
                         e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
                         `
-         const fieldsResult = await pool.request().query(sql)
+         const fieldsResult = await pool.query(sql)
          const fields = fieldsResult.recordset;
          if (fields && fields.length > 0)
             for (const field of fields) {
@@ -2175,7 +2164,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   protected async setDefaultColumnWidthWhereNeeded(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async setDefaultColumnWidthWhereNeeded(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC ${mj_core_schema()}.spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='${excludeSchemas.join(',')}'`
          await this.LogSQLAndExecute(pool, sSQL, `SQL text to set default column width where needed`, true);
@@ -2444,14 +2433,13 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       return sResult;
    }
 
-   protected async createNewEntityFieldsFromSchema(pool: sql.ConnectionPool): Promise<boolean> {
+   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection): Promise<boolean> {
       try   {
          const sSQL = this.getPendingEntityFieldsSELECTSQL();
-         const newEntityFieldsResult = await pool.request().query(sSQL);
+         const newEntityFieldsResult = await pool.query(sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
          if (newEntityFields.length > 0) {
-            const transaction = new sql.Transaction(pool);
-            await transaction.begin();
+            const transaction = await pool.beginTransaction();
             try {
                // wrap in a transaction so we get all of it or none of it
                for (let i = 0; i < newEntityFields.length; ++i) {
@@ -2499,7 +2487,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * @param relatedEntityNameFieldMap
     * @returns
     */
-   public async updateEntityFieldRelatedEntityNameFieldMap(pool: sql.ConnectionPool, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
+   public async updateEntityFieldRelatedEntityNameFieldMap(pool: CodeGenConnection, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateEntityFieldRelatedEntityNameFieldMap
          @EntityFieldID='${entityFieldID}',
@@ -2513,7 +2501,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
          return false;
       }
    }
-   protected async updateExistingEntitiesFromSchema(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async updateExistingEntitiesFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
          const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to update existing entities from schema`, true);
@@ -2540,7 +2528,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       ManageMetadataBase._modifiedEntityList = ManageMetadataBase._modifiedEntityList.concat(newlyModifiedEntityNames);
    }
 
-   protected async updateExistingEntityFieldsFromSchema(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async updateExistingEntityFieldsFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`
          const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to update existing entity fields from schema`, true);
@@ -2566,7 +2554,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * @param excludeSchemas - Array of schema names to exclude from processing
     * @returns Promise<boolean> - true if successful, false otherwise
     */
-   protected async updateSchemaInfoFromDatabase(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async updateSchemaInfoFromDatabase(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
          const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to sync schema info from database schemas`, true);
@@ -2601,10 +2589,10 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * entity name prefix/suffix rules are available before createNewEntities() runs.
     * This is a read-only SELECT — it does NOT create or update any records.
     */
-   protected async loadSchemaInfoRecords(pool: sql.ConnectionPool): Promise<boolean> {
+   protected async loadSchemaInfoRecords(pool: CodeGenConnection): Promise<boolean> {
       try {
          const sSQL = `SELECT * FROM [${mj_core_schema()}].SchemaInfo`;
-         const result = await pool.request().query(sSQL);
+         const result = await pool.query(sSQL);
          if (result?.recordset?.length > 0) {
             this.cacheSchemaInfoRecords(result.recordset);
          }
@@ -2616,7 +2604,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       }
    }
 
-   protected async deleteUnneededEntityFields(pool: sql.ConnectionPool, excludeSchemas: string[]): Promise<boolean> {
+   protected async deleteUnneededEntityFields(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
          const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to delete unneeded entity fields`, true);
@@ -2634,7 +2622,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       }
    }
 
-   protected async manageEntityFieldValuesAndValidatorFunctions(pool: sql.ConnectionPool, excludeSchemas: string[], currentUser: UserInfo, skipDBUpdate: boolean): Promise<boolean> {
+   protected async manageEntityFieldValuesAndValidatorFunctions(pool: CodeGenConnection, excludeSchemas: string[], currentUser: UserInfo, skipDBUpdate: boolean): Promise<boolean> {
       try  {
          // here we want to get all of the entity fields that have check constraints attached to them. For each field that has a check constraint, we want to
          // evaluate it to see if it is a simple series of OR statements or not, if it is a simple series of OR statements, we can parse the possible values
@@ -2642,15 +2630,15 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
          // just ignore it.
          const filter = excludeSchemas && excludeSchemas.length > 0 ? ` WHERE SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})` : '';
          const sSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFieldsWithCheckConstraints${filter}`
-         const resultResult = await pool.request().query(sSQL);
+         const resultResult = await pool.query(sSQL);
          const result = resultResult.recordset;
 
          const efvSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue`;
-         const allEntityFieldValuesResult = await pool.request().query(efvSQL);
+         const allEntityFieldValuesResult = await pool.query(efvSQL);
          const allEntityFieldValues = allEntityFieldValuesResult.recordset;
 
          const efSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFields ORDER BY EntityID, Sequence`;
-         const allEntityFieldsResult = await pool.request().query(efSQL);
+         const allEntityFieldsResult = await pool.query(efSQL);
          const allEntityFields = allEntityFieldsResult.recordset;
 
          const generationPromises = [];
@@ -2677,7 +2665,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
                      // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                      // check to see if the ValueListType is already set to "List", if not, update it
                      const sSQLCheck: string = `SELECT ValueListType FROM [${mj_core_schema()}].EntityField WHERE ID='${r.EntityFieldID}'`;
-                     const checkResultResult = await pool.request().query(sSQLCheck);
+                     const checkResultResult = await pool.query(sSQLCheck);
                      const checkResult = checkResultResult.recordset;
                      if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
                         const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
@@ -2726,7 +2714,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * @param pool 
     * @param currentUser 
     */
-   public async loadGeneratedCode(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<boolean> {
+   public async loadGeneratedCode(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       try {
          // right now we're just doing validator functions which are handled here
          return await this.manageEntityFieldValuesAndValidatorFunctions(pool, [], currentUser, true);
@@ -2816,7 +2804,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       }
    }
 
-   protected async syncEntityFieldValues(ds: sql.ConnectionPool, entityFieldID: number, possibleValues: string[], allEntityFieldValues: any): Promise<boolean> {
+   protected async syncEntityFieldValues(ds: CodeGenConnection, entityFieldID: number, possibleValues: string[], allEntityFieldValues: any): Promise<boolean> {
       try {
          // first, get a list of all of the existing entity field values for the field already in the database
          const existingValues = allEntityFieldValues.filter((efv: { EntityFieldID: number; }) => efv.EntityFieldID === entityFieldID);
@@ -2824,8 +2812,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 
          // Step 1: for any existing value that is NOT in the list of possible Values, delete it
          let numRemoved: number = 0;
-         const transaction = new sql.Transaction(ds);
-         await transaction.begin();
+         const transaction = await ds.beginTransaction();
          try {
             for (const ev of existingValues) {
                if (!possibleValues.find(v => v === ev.Value)) {
@@ -2964,16 +2951,15 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       return sWhere;
    }
 
-   protected async createNewEntities(pool: sql.ConnectionPool, currentUser: UserInfo): Promise<boolean> {
+   protected async createNewEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       try   {
          const sSQL = `SELECT * FROM [${mj_core_schema()}].vwSQLTablesAndEntities WHERE EntityID IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
-         const newEntitiesResult = await pool.request().query(sSQL);
+         const newEntitiesResult = await pool.query(sSQL);
       const newEntities = newEntitiesResult.recordset;
 
          if (newEntities && newEntities.length > 0 ) {
             const md = new Metadata()
-            const transaction = new sql.Transaction(pool);
-            await transaction.begin();
+            const transaction = await pool.beginTransaction();
             try {
                // wrap in a transaction so we get all of it or none of it
                for ( let i = 0; i < newEntities.length; ++i) {
@@ -3000,7 +2986,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       }
    }
 
-   protected async shouldCreateNewEntity(ds: sql.ConnectionPool, newEntity: any): Promise<{shouldCreate: boolean, validationMessage: string}> {
+   protected async shouldCreateNewEntity(ds: CodeGenConnection, newEntity: any): Promise<{shouldCreate: boolean, validationMessage: string}> {
       // validate that the new entity meets our criteria for creation
       // criteria:
       // 1) entity has a field that is a primary key
@@ -3009,7 +2995,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       const query = `EXEC ${Metadata.Provider.ConfigData.MJCoreSchemaName}.spGetPrimaryKeyForTable @TableName='${newEntity.TableName}', @SchemaName='${newEntity.SchemaName}'`;
 
       try {
-          const resultResult = await ds.request().query(query);
+          const resultResult = await ds.query(query);
       const result = resultResult.recordset;
           if (result.length === 0) {
               // No database PK constraint found - check if there's a soft PK defined in config
@@ -3214,7 +3200,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       return uuidv4();
    }
 
-   protected async createNewEntity(pool: sql.ConnectionPool, newEntity: any, md: Metadata, currentUser: UserInfo) {
+   protected async createNewEntity(pool: CodeGenConnection, newEntity: any, md: Metadata, currentUser: UserInfo) {
       try {
          const {shouldCreate, validationMessage} = await this.shouldCreateNewEntity(pool, newEntity);
          if (shouldCreate) {
@@ -3322,10 +3308,10 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       }
    }
 
-   protected async isSchemaNew(pool: sql.ConnectionPool, schemaName: string): Promise<boolean> {
+   protected async isSchemaNew(pool: CodeGenConnection, schemaName: string): Promise<boolean> {
       // check to see if there are any entities in the db with this schema name
       const sSQL: string = `SELECT COUNT(*) AS Count FROM [${mj_core_schema()}].Entity WHERE SchemaName = '${schemaName}'`;
-      const resultResult = await pool.request().query(sSQL);
+      const resultResult = await pool.query(sSQL);
       const result = resultResult.recordset;
       return result && result.length > 0 ? result[0].Count === 0 : true;
    }
@@ -3341,7 +3327,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * @param currentUser Current user for entity operations (unused but kept for signature compatibility)
     * @returns The application ID if successful, null otherwise
     */
-   protected async createNewApplication(pool: sql.ConnectionPool, appID: string, appName: string, schemaName: string, currentUser: UserInfo): Promise<string | null>{
+   protected async createNewApplication(pool: CodeGenConnection, appID: string, appName: string, schemaName: string, currentUser: UserInfo): Promise<string | null>{
       try {
          // Generate Path from Name using slug conversion:
          // 1. Convert to lowercase
@@ -3366,17 +3352,17 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
       }
    }
 
-   protected async applicationExists(pool: sql.ConnectionPool, applicationName: string): Promise<boolean>{
+   protected async applicationExists(pool: CodeGenConnection, applicationName: string): Promise<boolean>{
       const sSQL: string = `SELECT ID FROM [${mj_core_schema()}].Application WHERE Name = '${applicationName}'`;
-      const resultResult = await pool.request().query(sSQL);
+      const resultResult = await pool.query(sSQL);
       const result = resultResult.recordset;
       return result && result.length > 0 ? result[0].ID.length > 0 : false;
    }
 
-   protected async getApplicationIDForSchema(pool: sql.ConnectionPool, schemaName: string): Promise<string[] | null>{
+   protected async getApplicationIDForSchema(pool: CodeGenConnection, schemaName: string): Promise<string[] | null>{
       // get all the apps each time from DB as we might be adding, don't use Metadata here for that reason
       const sSQL: string = `SELECT ID, Name, SchemaAutoAddNewEntities FROM [${mj_core_schema()}].vwApplications`;
-      const resultResult = await pool.request().query(sSQL);
+      const resultResult = await pool.query(sSQL);
       const result = resultResult.recordset;
 
       if (!result || result.length === 0) {
@@ -3402,7 +3388,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * Shared by both table-backed entity creation and virtual entity creation.
     */
    protected async addEntityToApplicationForSchema(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entityId: string,
       entityName: string,
       schemaName: string,
@@ -3442,7 +3428,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * Shared by both table-backed entity creation and virtual entity creation.
     */
    protected async addDefaultPermissionsForEntity(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entityId: string,
       entityName: string
    ): Promise<void> {
@@ -3519,7 +3505,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
    /**
     * Apply Advanced Generation features - Smart Field Identification and Form Layout Generation
     */
-   protected async applyAdvancedGeneration(pool: sql.ConnectionPool, excludeSchemas: string[], currentUser: UserInfo): Promise<boolean> {
+   protected async applyAdvancedGeneration(pool: CodeGenConnection, excludeSchemas: string[], currentUser: UserInfo): Promise<boolean> {
       try {
          const ag = new AdvancedGeneration();
          if (!ag.enabled) {
@@ -3577,7 +3563,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
                e.Name
          `;
 
-         const entitiesResult = await pool.request().query(entitiesSQL);
+         const entitiesResult = await pool.query(entitiesSQL);
          const entities = entitiesResult.recordset;
 
          if (entities.length === 0) {
@@ -3619,7 +3605,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
                ef.Sequence
          `;
 
-         const fieldsResult = await pool.request().query(fieldsSQL);
+         const fieldsResult = await pool.query(fieldsSQL);
          const allFields = fieldsResult.recordset;
 
          // Get EntitySettings for all entities (for existing category icons/info)
@@ -3634,7 +3620,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
                es.EntityID IN (${entityIds})
                AND es.Name = 'FieldCategoryInfo'
          `;
-         const settingsResult = await pool.request().query(settingsSQL);
+         const settingsResult = await pool.query(settingsSQL);
          const allSettings = settingsResult.recordset;
 
          // Group settings by entity
@@ -3669,7 +3655,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * @param batchSize Number of entities to process in parallel (default 5)
     */
    protected async processEntitiesBatched(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entities: any[],
       allFields: any[],
       ag: AdvancedGeneration,
@@ -3714,7 +3700,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * @param currentUser User context
     */
    protected async processEntityAdvancedGeneration(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entity: EntityInfo,
       allFields: any[],
       ag: AdvancedGeneration,
@@ -3847,7 +3833,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * Apply smart field identification results to entity fields
     */
    protected async applySmartFieldIdentification(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entityId: string,
       fields: any[],
       result: SmartFieldIdentificationResult
@@ -3944,7 +3930,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * @param isNewEntity If true, apply entityImportance; if false, skip it
     */
    protected async applyFormLayout(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entity: EntityInfo,
       fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string }>,
       result: FormLayoutResult,
@@ -3999,7 +3985,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     * All SQL updates are batched into a single execution for performance.
     */
    protected async applyFieldCategories(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entity: EntityInfo,
       fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string}>,
       fieldCategories: Array<{
@@ -4086,14 +4072,14 @@ WHERE
     * Sets the entity icon if the entity doesn't already have one.
     */
    protected async applyEntityIcon(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entityId: string,
       entityIcon: string
    ): Promise<void> {
       if (!entityIcon || entityIcon.trim().length === 0) return;
 
       const checkSQL = `SELECT Icon FROM [${mj_core_schema()}].Entity WHERE ID = '${entityId}'`;
-      const entityCheck = await pool.request().query(checkSQL);
+      const entityCheck = await pool.query(checkSQL);
 
       if (entityCheck.recordset.length > 0) {
          const currentIcon = entityCheck.recordset[0].Icon;
@@ -4119,7 +4105,7 @@ WHERE
     * Upserts FieldCategoryInfo (new format) and FieldCategoryIcons (legacy format) in EntitySetting.
     */
    protected async applyCategoryInfoSettings(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entityId: string,
       categoryInfo: Record<string, FieldCategoryInfo>
    ): Promise<void> {
@@ -4129,7 +4115,7 @@ WHERE
 
       // Upsert FieldCategoryInfo (new format)
       const checkNewSQL = `SELECT ID FROM [${mj_core_schema()}].EntitySetting WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'`;
-      const existingNew = await pool.request().query(checkNewSQL);
+      const existingNew = await pool.query(checkNewSQL);
 
       if (existingNew.recordset.length > 0) {
          try {
@@ -4165,7 +4151,7 @@ WHERE
       const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
 
       const checkLegacySQL = `SELECT ID FROM [${mj_core_schema()}].EntitySetting WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'`;
-      const existingLegacy = await pool.request().query(checkLegacySQL);
+      const existingLegacy = await pool.query(checkLegacySQL);
 
       if (existingLegacy.recordset.length > 0) {
          try {
@@ -4197,7 +4183,7 @@ WHERE
     * Only called for NEW entities to set DefaultForNewUser.
     */
    protected async applyEntityImportance(
-      pool: sql.ConnectionPool,
+      pool: CodeGenConnection,
       entityId: string,
       importance: { defaultForNewUser: boolean; entityCategory: string; confidence: string; reasoning: string }
    ): Promise<void> {
@@ -4230,7 +4216,7 @@ WHERE
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(pool: sql.ConnectionPool, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
+   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
       return await SQLLogging.LogSQLAndExecute(pool, query, description, isRecurringScript);
    }
 }
