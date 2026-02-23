@@ -61,6 +61,8 @@ CREATE TRIGGER "tr_APIScope_UpdateFullPath"
 
 export class TriggerRule implements IConversionRule {
   Name = 'TriggerRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['CREATE_TRIGGER'];
   Priority = 40;
   BypassSqlglot = true;

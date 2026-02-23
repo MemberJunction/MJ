@@ -143,13 +143,13 @@ export function postProcess(sql: string): string {
   sql = sql.replace(/"COLUMN_NAME"/g, 'column_name');
   sql = sql.replace(/"DATA_TYPE"/g, 'data_type');
 
-  // Quote unquoted table names after __mj. (PascalCase identifiers)
+  // Quote unquoted table names after any schema prefix (PascalCase identifiers)
   // e.g., __mj.OpenApp → __mj."OpenApp"   but NOT __mj."OpenApp" (already quoted)
   // Also skip all-lowercase names like __mj.information_schema
-  sql = sql.replace(/__mj\.(?!")([A-Z][a-zA-Z_]\w*)/g, '__mj."$1"');
+  sql = sql.replace(/(\b\w+)\.(?!")([A-Z][a-zA-Z_]\w*)/g, '$1."$2"');
 
-  // Also handle quoted schema: "__mj".PascalCase → "__mj"."PascalCase"
-  sql = sql.replace(/"__mj"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"__mj"."$1"');
+  // Also handle quoted schema: "schema".PascalCase → "schema"."PascalCase"
+  sql = sql.replace(/"(\w+)"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"$1"."$2"');
 
   // ISNULL → COALESCE (SQL Server function)
   sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');

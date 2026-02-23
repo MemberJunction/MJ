@@ -37,12 +37,15 @@ const SQL_KEYWORDS = new Set([
 
 export class ViewRule implements IConversionRule {
   Name = 'ViewRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['CREATE_VIEW'];
   Priority = 20;
   BypassSqlglot = true;
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = sql;
+    const schema = context.Schema;
 
     // Skip views that reference sys.* (SQL Server system views)
     if (/\bsys\.\w+/i.test(result)) {
@@ -57,13 +60,15 @@ export class ViewRule implements IConversionRule {
     // Identifier conversion
     result = convertIdentifiers(result);
 
-    // Schema normalization: "__mj".Name → __mj."Name"
-    result = result.replace(/"__mj"\.(?!")/g, '__mj.');
-    // Quote unquoted table references after __mj.
-    result = result.replace(/\b__mj\.(?!")((?:vw)?[A-Za-z]\w+)\b/g, '__mj."$1"');
-    // Add schema to bare view references: FROM vwXxx → FROM __mj."vwXxx"
-    result = result.replace(/(\bFROM\s+)(vw\w+)\b/gi, '$1__mj."$2"');
-    result = result.replace(/(\bJOIN\s+)(vw\w+)\b/gi, '$1__mj."$2"');
+    // Schema normalization: "schema".Name → schema."Name"
+    const quotedSchemaPattern = new RegExp(`"${schema}"\\.(?!")`, 'g');
+    result = result.replace(quotedSchemaPattern, `${schema}.`);
+    // Quote unquoted table references after schema.
+    const bareSchemaPattern = new RegExp(`\\b${schema}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
+    result = result.replace(bareSchemaPattern, `${schema}."$1"`);
+    // Add schema to bare view references: FROM vwXxx → FROM schema."vwXxx"
+    result = result.replace(/(\bFROM\s+)(vw\w+)\b/gi, `$1${schema}."$2"`);
+    result = result.replace(/(\bJOIN\s+)(vw\w+)\b/gi, `$1${schema}."$2"`);
 
     // PascalCase column and alias quoting
     result = this.quoteColumnRefs(result);

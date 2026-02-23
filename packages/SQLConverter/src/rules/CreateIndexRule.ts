@@ -3,6 +3,8 @@ import { convertIdentifiers } from './ExpressionHelpers.js';
 
 export class CreateIndexRule implements IConversionRule {
   Name = 'CreateIndexRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['CREATE_INDEX'];
   Priority = 70;
   BypassSqlglot = true;

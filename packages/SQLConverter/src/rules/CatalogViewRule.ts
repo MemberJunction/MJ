@@ -292,6 +292,8 @@ const CATALOG_VIEW_NAMES = new Set(PG_CATALOG_VIEWS.keys());
 
 export class CatalogViewRule implements IConversionRule {
   Name = 'CatalogViewRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['CREATE_VIEW'];
   Priority = 15; // Run BEFORE ViewRule (priority 20)
   BypassSqlglot = true;

@@ -20,6 +20,7 @@ export {
   classifyBatch,
   subSplitCompoundBatch,
   getTSQLToPostgresRules,
+  getRulesForDialects,
   convertFile,
   printReport,
   postProcess,

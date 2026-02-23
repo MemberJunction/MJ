@@ -7,6 +7,8 @@ import {
 
 export class FunctionRule implements IConversionRule {
   Name = 'FunctionRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['CREATE_FUNCTION'];
   Priority = 35;
   BypassSqlglot = true;

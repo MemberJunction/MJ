@@ -3,6 +3,8 @@ import { convertIdentifiers, removeCollate } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['FK_CONSTRAINT', 'PK_CONSTRAINT', 'CHECK_CONSTRAINT', 'UNIQUE_CONSTRAINT', 'ENABLE_CONSTRAINT', 'ALTER_TABLE'];
   Priority = 60;
   BypassSqlglot = true;

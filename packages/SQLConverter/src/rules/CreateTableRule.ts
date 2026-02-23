@@ -10,6 +10,8 @@ import { convertIdentifiers, removeCollate } from './ExpressionHelpers.js';
 
 export class CreateTableRule implements IConversionRule {
   Name = 'CreateTableRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['CREATE_TABLE'];
   Priority = 10;
   BypassSqlglot = true;
@@ -372,8 +374,8 @@ export class CreateTableRule implements IConversionRule {
 
   /** Track column names and their PG types for INSERT boolean casting */
   private trackColumnTypes(sql: string, context: ConversionContext): void {
-    // Extract table name from CREATE TABLE __mj."TableName"
-    const tableMatch = sql.match(/CREATE\s+TABLE\s+(?:__mj\.)?"?(\w+)"?\s*\(/i);
+    // Extract table name from CREATE TABLE schema."TableName"
+    const tableMatch = sql.match(/CREATE\s+TABLE\s+(?:\w+\.)?"?(\w+)"?\s*\(/i);
     if (!tableMatch) return;
 
     const tableName = tableMatch[1].toLowerCase();

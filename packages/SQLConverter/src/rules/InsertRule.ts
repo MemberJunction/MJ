@@ -7,6 +7,8 @@ import {
 
 export class InsertRule implements IConversionRule {
   Name = 'InsertRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['INSERT', 'UPDATE', 'DELETE'];
   Priority = 50;
   BypassSqlglot = true;

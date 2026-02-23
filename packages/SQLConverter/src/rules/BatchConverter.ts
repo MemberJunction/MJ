@@ -30,8 +30,9 @@ const DATA_TYPES = new Set<StatementType>(['INSERT', 'UPDATE', 'DELETE']);
 const GRANT_TYPES = new Set<StatementType>(['GRANT', 'REVOKE']);
 const COMMENT_TYPES = new Set<StatementType>(['EXTENDED_PROPERTY']);
 
-/** PostgreSQL file header */
-const PG_HEADER = `-- ============================================================================
+/** Build PostgreSQL file header with the given schema name */
+function buildPgHeader(schema: string): string {
+  return `-- ============================================================================
 -- MemberJunction v5.0 PostgreSQL Baseline
 -- Deterministically converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
@@ -41,8 +42,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
+CREATE SCHEMA IF NOT EXISTS ${schema};
+SET search_path TO ${schema}, public;
 
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
@@ -54,6 +55,7 @@ UPDATE pg_cast SET castcontext = 'i'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 `;
+}
 
 /** Configuration for the batch converter */
 export interface BatchConverterConfig {
@@ -110,7 +112,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
 
   // Preprocess: replace Flyway placeholders
   log('Pre-processing (Flyway placeholders)...');
-  const processedSQL = preprocess(rawSQL);
+  const processedSQL = preprocess(rawSQL, schema);
 
   // Split into batches on GO
   log('Splitting into batches...');
@@ -172,7 +174,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   const outputParts: string[] = [];
 
   if (includeHeader) {
-    outputParts.push(PG_HEADER);
+    outputParts.push(buildPgHeader(schema));
   }
 
   outputParts.push('\n-- ===================== DDL: Tables, PKs, Indexes =====================\n');
@@ -221,9 +223,9 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   };
 }
 
-/** Replace Flyway placeholders with PG schema */
-function preprocess(sql: string): string {
-  return sql.replace(/\$\{flyway:defaultSchema\}/g, '__mj');
+/** Replace Flyway placeholders with target schema */
+function preprocess(sql: string, schema: string): string {
+  return sql.replace(/\$\{flyway:defaultSchema\}/g, schema);
 }
 
 /** Split SQL on GO batch separators */

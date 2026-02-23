@@ -35,3 +35,12 @@ export function getTSQLToPostgresRules(): IConversionRule[] {
     new ExtendedPropertyRule(),    // Priority 90
   ];
 }
+
+/**
+ * Get rules filtered by source and target dialect.
+ * Generic entry point for multi-dialect support.
+ */
+export function getRulesForDialects(from: string, to: string): IConversionRule[] {
+  const allRules = getTSQLToPostgresRules();
+  return allRules.filter(r => r.SourceDialect === from && r.TargetDialect === to);
+}

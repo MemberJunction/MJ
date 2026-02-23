@@ -77,6 +77,10 @@ export interface ConversionContext {
 export interface IConversionRule {
   /** Human-readable name for logging/debugging */
   Name: string;
+  /** Source SQL dialect this rule converts from (e.g., 'tsql') */
+  SourceDialect: string;
+  /** Target SQL dialect this rule converts to (e.g., 'postgres') */
+  TargetDialect: string;
   /** Statement types this rule applies to */
   AppliesTo: StatementType[];
   /** Priority — lower numbers run first (default: 100) */

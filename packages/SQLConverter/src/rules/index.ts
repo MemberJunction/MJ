@@ -36,7 +36,7 @@ export { ExtendedPropertyRule } from './ExtendedPropertyRule.js';
 export { ConditionalDDLRule } from './ConditionalDDLRule.js';
 
 // Rule registry
-export { getTSQLToPostgresRules } from './TSQLToPostgresRules.js';
+export { getTSQLToPostgresRules, getRulesForDialects } from './TSQLToPostgresRules.js';
 
 // Post-processor
 export { postProcess } from './PostProcessor.js';

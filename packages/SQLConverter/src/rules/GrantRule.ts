@@ -3,6 +3,8 @@ import { convertIdentifiers } from './ExpressionHelpers.js';
 
 export class GrantRule implements IConversionRule {
   Name = 'GrantRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['GRANT', 'REVOKE'];
   Priority = 80;
   BypassSqlglot = true;

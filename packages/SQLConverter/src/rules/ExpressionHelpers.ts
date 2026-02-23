@@ -5,10 +5,10 @@
  * convert_top_to_limit, etc.
  */
 
-/** Convert [schema].[name] bracket identifiers to "schema"."name" double-quote format */
+/** Convert [schema].[name] bracket identifiers to schema."name" double-quote format */
 export function convertIdentifiers(sql: string): string {
-  // Replace [__mj].[Name] with __mj."Name"
-  sql = sql.replace(/\[__mj\]\.\[([^\]]+)\]/g, '__mj."$1"');
+  // Replace [Schema].[Name] with Schema."Name" (any schema, not just __mj)
+  sql = sql.replace(/\[(\w+)\]\.\[([^\]]+)\]/g, '$1."$2"');
   // Replace remaining [Name] with "Name"
   sql = sql.replace(/\[([^\]]+)\]/g, '"$1"');
   return sql;

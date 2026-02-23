@@ -15,6 +15,8 @@ import {
 
 export class ProcedureToFunctionRule implements IConversionRule {
   Name = 'ProcedureToFunctionRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['CREATE_PROCEDURE'];
   Priority = 30;
   BypassSqlglot = true;

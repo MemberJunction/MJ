@@ -20,6 +20,8 @@ import { convertIdentifiers, removeCollate } from './ExpressionHelpers.js';
 
 export class ConditionalDDLRule implements IConversionRule {
   Name = 'ConditionalDDLRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['CONDITIONAL_DDL'];
   Priority = 55;
   BypassSqlglot = true;
