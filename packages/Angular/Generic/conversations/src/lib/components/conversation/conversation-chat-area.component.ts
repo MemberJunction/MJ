@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ConversationDataService } from '../../services/conversation-data.service';
@@ -261,6 +261,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       console.warn('⚠️ Mention autocomplete not initialized by workspace, initializing now...');
       await this.mentionAutocompleteService.initialize(this.currentUser);
     }
+
+    // Ensure ArtifactMetadataEngine is loaded so LazyArtifactInfo can
+    // resolve versions from its always-fresh in-memory cache.
+    // Config(false) is a no-op if already loaded by another component.
+    await ArtifactMetadataEngine.Instance.Config(false, this.currentUser);
 
     // Initialize attachment support based on agent modalities
     await this.initializeAttachmentSupport();
