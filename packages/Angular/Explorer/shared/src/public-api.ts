@@ -12,7 +12,6 @@ export * from './lib/navigation.service';
 export * from './lib/navigation.interfaces';
 export * from './lib/title.service';
 export * from './lib/developer-mode.service';
-export * from './lib/theme.service';
 export { SYSTEM_APP_ID } from './lib/navigation.service';
 // Re-export from ng-shared-generic for backwards compatibility
 export * from '@memberjunction/ng-shared-generic';

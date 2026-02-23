@@ -170,18 +170,8 @@ export class BaseUserMenu {
                 tooltip: 'View current application state in console'
             },
 
-            // === SYSTEM GROUP ===
-            {
-                id: 'toggle-theme',
-                label: this.GetThemeLabel(),
-                icon: this.GetThemeIcon(),
-                group: 'system',
-                order: 5,
-                developerOnly: false,
-                visible: true,
-                enabled: true,
-                tooltip: 'Switch between light and dark mode'
-            },
+            // === SYSTEM GROUP (Theme selection) ===
+            ...this.BuildThemeMenuItems(),
             {
                 id: 'reset-layout',
                 label: 'Reset Layout',
@@ -277,6 +267,7 @@ export class BaseUserMenu {
 
     /**
      * Handle menu item click. Dispatches to specific Handle_<id> methods.
+     * Theme selection items (select-theme-*) are routed to HandleThemeSelection.
      */
     public async HandleItemClick(itemId: string): Promise<UserMenuActionResult> {
         const items = this.GetMenuItems();
@@ -284,6 +275,12 @@ export class BaseUserMenu {
 
         if (!item || !item.enabled) {
             return { success: false, closeMenu: false, message: 'Item not found or disabled' };
+        }
+
+        // Route theme selection items to the theme handler
+        if (itemId.startsWith('select-theme-')) {
+            const themeId = itemId.substring('select-theme-'.length);
+            return await this.HandleThemeSelection(themeId);
         }
 
         // Convert item id to handler method name (e.g., 'toggle-dev-mode' -> 'Handle_toggle_dev_mode')
@@ -364,13 +361,14 @@ export class BaseUserMenu {
     }
 
     /**
-     * Handle "Toggle Theme" click
+     * Handle theme selection clicks.
+     * Item IDs follow the pattern 'select-theme-<themeId>'.
      */
-    protected async Handle_toggle_theme(): Promise<UserMenuActionResult> {
+    protected async HandleThemeSelection(themeId: string): Promise<UserMenuActionResult> {
         return {
             success: true,
             closeMenu: false, // Keep menu open to see updated state
-            message: 'toggle-theme' // Special signal for shell to handle
+            message: `select-theme-${themeId}` // Signal for shell to handle
         };
     }
 
@@ -409,18 +407,56 @@ export class BaseUserMenu {
     // ========================================
 
     /**
-     * Get the display label for the theme toggle (just "Theme" — the toggle switch conveys state)
+     * Build menu items for each registered theme plus a 'System' option.
+     * Each theme gets a `select-theme-<id>` item ID. The currently active
+     * theme (or 'system' preference) shows a checkmark icon.
      */
-    protected GetThemeLabel(): string {
-        return 'Theme';
+    protected BuildThemeMenuItems(): UserMenuItem[] {
+        const themes = this._context?.availableThemes ?? [];
+        const currentPreference = this._context?.themePreference ?? 'system';
+        const items: UserMenuItem[] = [];
+        let order = 1;
+
+        for (const theme of themes) {
+            const isActive = currentPreference === theme.Id;
+            items.push({
+                id: `select-theme-${theme.Id}`,
+                label: theme.Name,
+                icon: isActive ? 'fa-solid fa-check' : this.GetThemeIconForBaseTheme(theme.BaseTheme),
+                color: isActive ? '#4CAF50' : undefined,
+                group: 'system',
+                order: order++,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: theme.Description ?? `Switch to ${theme.Name} theme`
+            });
+        }
+
+        // Always add a 'System' option (auto-detect OS preference)
+        const isSystemActive = currentPreference === 'system';
+        items.push({
+            id: 'select-theme-system',
+            label: 'System',
+            icon: isSystemActive ? 'fa-solid fa-check' : 'fa-solid fa-desktop',
+            color: isSystemActive ? '#4CAF50' : undefined,
+            group: 'system',
+            order: order++,
+            developerOnly: false,
+            visible: true,
+            enabled: true,
+            tooltip: 'Auto-detect theme from OS preference'
+        });
+
+        return items;
     }
 
     /**
-     * Get the icon for the theme toggle based on current preference
+     * Get an appropriate icon for a base theme type.
+     * Used for non-active theme items to hint at light vs dark.
      */
-    protected GetThemeIcon(): string {
-        const pref = this._context?.themePreference ?? 'light';
-        return pref === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+    protected GetThemeIconForBaseTheme(baseTheme: 'light' | 'dark'): string {
+        return baseTheme === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
     }
 
     // ========================================
