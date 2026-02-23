@@ -1,4 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -15,6 +16,7 @@ const pgDialect = new PostgreSQLDialect();
  * Generates PostgreSQL-native DDL for views, CRUD functions, triggers, indexes,
  * full-text search, permissions, and other database objects.
  */
+@RegisterClass(CodeGenDatabaseProvider, 'PostgreSQLCodeGenProvider')
 export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
     get Dialect(): SQLDialect {
         return pgDialect;
@@ -422,10 +424,10 @@ $$ LANGUAGE sql STABLE;
     // ─── CASCADE DELETES ─────────────────────────────────────────────────
 
     generateSingleCascadeOperation(context: CascadeDeleteContext): string {
-        const { parentEntity, relatedEntity, fkField } = context;
+        const { parentEntity, relatedEntity, fkField, operation } = context;
 
-        // If FK allows NULL, set it to NULL (update). Otherwise, delete related records.
-        if (fkField.AllowsNull) {
+        // Use the operation type from the orchestrator's decision
+        if (operation === 'update') {
             return this.generateCascadeUpdateToNull(parentEntity, relatedEntity, fkField);
         }
         return this.generateCascadeCursorDelete(parentEntity, relatedEntity, fkField);
@@ -865,5 +867,56 @@ END $$;
             }
         }
         return roles;
+    }
+
+    // ─── DATABASE INTROSPECTION ──────────────────────────────────────────
+
+    getViewDefinitionSQL(schema: string, viewName: string): string {
+        return `SELECT pg_get_viewdef('"${schema}"."${viewName}"'::regclass, true) AS "ViewDefinition"`;
+    }
+
+    getPrimaryKeyIndexNameSQL(schema: string, tableName: string): string {
+        return `SELECT
+        i.relname AS "IndexName"
+    FROM
+        pg_index ix
+    INNER JOIN
+        pg_class t ON t.oid = ix.indrelid
+    INNER JOIN
+        pg_class i ON i.oid = ix.indexrelid
+    INNER JOIN
+        pg_namespace n ON n.oid = t.relnamespace
+    WHERE
+        ix.indisprimary = true
+        AND t.relname = '${tableName}'
+        AND n.nspname = '${schema}'`;
+    }
+
+    getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string {
+        return `SELECT ix.indexrelid AS index_id
+    FROM pg_index ix
+    INNER JOIN pg_class t ON t.oid = ix.indrelid
+    INNER JOIN pg_namespace n ON n.oid = t.relnamespace
+    INNER JOIN pg_class i ON i.oid = ix.indexrelid
+    WHERE ix.indisunique = true
+      AND ix.indisprimary = false
+      AND n.nspname = '${schema}'
+      AND t.relname = '${tableName}'
+      AND EXISTS (
+          SELECT 1
+          FROM pg_attribute a
+          WHERE a.attrelid = t.oid
+            AND a.attnum = ANY(ix.indkey)
+            AND a.attname = '${columnName}'
+      )
+      AND array_length(ix.indkey, 1) > 1`;
+    }
+
+    getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string {
+        return `SELECT 1
+    FROM pg_indexes
+    WHERE schemaname = '${schema}'
+      AND tablename = '${tableName}'
+      AND indexname = '${indexName}'`;
     }
 }

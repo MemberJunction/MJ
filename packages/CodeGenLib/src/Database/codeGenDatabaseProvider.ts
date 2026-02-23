@@ -51,6 +51,8 @@ export interface CascadeDeleteContext {
     relatedEntity: EntityInfo;
     /** The FK field on the related entity pointing to the parent */
     fkField: EntityFieldInfo;
+    /** The operation to perform: 'delete' cascades by deleting records, 'update' sets the FK to NULL */
+    operation: 'delete' | 'update';
 }
 
 /**
@@ -256,4 +258,55 @@ export abstract class CodeGenDatabaseProvider {
         fetchInto: string;
         routineParams: string;
     };
+
+    // ─── DATABASE INTROSPECTION ──────────────────────────────────────────
+
+    /**
+     * Returns a SQL query string to retrieve the current view definition from the database.
+     * SQL Server: `SELECT OBJECT_DEFINITION(OBJECT_ID('[schema].[viewName]')) AS ViewDefinition`
+     * PostgreSQL: `SELECT pg_get_viewdef('"schema"."viewName"'::regclass, true) AS "ViewDefinition"`
+     *
+     * The result set must include a column named `ViewDefinition`.
+     */
+    abstract getViewDefinitionSQL(schema: string, viewName: string): string;
+
+    /**
+     * Returns a SQL query string to retrieve the primary key index name for a table.
+     * SQL Server: queries `sys.indexes` + `sys.key_constraints`
+     * PostgreSQL: queries `pg_index` + `pg_class`
+     *
+     * The result set must include a column named `IndexName`.
+     */
+    abstract getPrimaryKeyIndexNameSQL(schema: string, tableName: string): string;
+
+    /**
+     * Returns a SQL query string to check if a given column is part of a composite unique constraint.
+     * The query should accept the schema, table, and column name as parameters (platform-specific).
+     *
+     * The orchestrator checks `result.recordset.length > 0` to determine if the column
+     * participates in a multi-column unique index.
+     *
+     * Note: Implementations should return the SQL query string. The orchestrator is responsible
+     * for executing the query with proper parameterization for the target database platform.
+     */
+    abstract getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string;
+
+    /**
+     * Returns a SQL query string to check if a foreign key index already exists.
+     * Used by the orchestrator to conditionally create FK indexes.
+     * SQL Server: queries `sys.indexes` with OBJECT_ID
+     * PostgreSQL: queries `pg_indexes`
+     *
+     * The result set should return rows if the index exists (length > 0 means exists).
+     */
+    abstract getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string;
+
+    /**
+     * Returns the batch separator for the database platform.
+     * SQL Server: 'GO'
+     * PostgreSQL: '' (empty string, uses semicolons)
+     */
+    get BatchSeparator(): string {
+        return this.Dialect.BatchSeparator();
+    }
 }
