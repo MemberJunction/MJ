@@ -2,4 +2,4 @@
 "@memberjunction/codegen-lib": minor
 ---
 
-migration
+metadata and migrations

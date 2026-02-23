@@ -194,11 +194,12 @@ import {
     PlanningDesignerAgent,
 } from '@memberjunction/ai-agent-manager';
 
-// @memberjunction/ai-agents (3 classes)
+// @memberjunction/ai-agents (4 classes)
 import {
     FlowAgentType,
     LoopAgentType,
     MemoryManagerAgent,
+    QueryBuilderAgent,
 } from '@memberjunction/ai-agents';
 
 // @memberjunction/ai-anthropic (1 classes)
@@ -965,6 +966,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FlowAgentType,
     LoopAgentType,
     MemoryManagerAgent,
+    QueryBuilderAgent,
     AnthropicLLM,
     AzureEmbedding,
     AzureLLM,
@@ -1431,7 +1433,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 610;
+export const CLASS_REGISTRATIONS_COUNT = 611;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
