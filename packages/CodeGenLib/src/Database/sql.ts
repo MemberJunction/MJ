@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
 import { CodeGenConnection } from './codeGenDatabaseProvider';
-import { configInfo, outputDir } from "../Config/config";
+import { configInfo, dbType, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { RegisterClass } from "@memberjunction/global";
 import { SQLCodeGenBase } from './sql_codegen';
@@ -215,23 +215,30 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
       let sqlCommand: string = '';
       const failedRefreshEntities: EntityInfo[] = [];
       
+      const isPG = dbType() === 'postgresql';
       for (const entity of l) {
         // if an excludeEntities variable was provided, skip this entity if it's in the list
         if (!excludeEntities || !excludeEntities.includes(entity.Name)) {
-          sqlCommand += ` DECLARE @RefreshError_${entity.CodeName} INT = 0;
-                          BEGIN TRY
-                              EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';
-                          END TRY
-                          BEGIN CATCH
-                              SET @RefreshError_${entity.CodeName} = 1;
-                              PRINT 'View refresh failed for ${entity.SchemaName}.${entity.BaseView}: ' + ERROR_MESSAGE();
-                          END CATCH
-                          
-                          IF @RefreshError_${entity.CodeName} = 1
-                          BEGIN
-                              PRINT 'Attempting to regenerate view definition for ${entity.SchemaName}.${entity.BaseView}';
-                          END
-                        `
+          if (isPG) {
+            // PostgreSQL views don't need explicit refresh - they resolve at query time.
+            // We can verify they're valid by doing a quick query. For now, skip.
+            // If the view was recreated by CodeGen, it's already up to date.
+          } else {
+            sqlCommand += ` DECLARE @RefreshError_${entity.CodeName} INT = 0;
+                            BEGIN TRY
+                                EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';
+                            END TRY
+                            BEGIN CATCH
+                                SET @RefreshError_${entity.CodeName} = 1;
+                                PRINT 'View refresh failed for ${entity.SchemaName}.${entity.BaseView}: ' + ERROR_MESSAGE();
+                            END CATCH
+                            
+                            IF @RefreshError_${entity.CodeName} = 1
+                            BEGIN
+                                PRINT 'Attempting to regenerate view definition for ${entity.SchemaName}.${entity.BaseView}';
+                            END
+                          `
+          }
         }
       }
 
@@ -292,8 +299,12 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
  }
  
  public async recompileSingleBaseView(ds: CodeGenConnection, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
-  // just call EXEC sp_refreshview 'your_schema_name.your_view_name';
   try {
+    if (dbType() === 'postgresql') {
+      // PostgreSQL views don't need explicit refresh - they resolve at query time.
+      return true;
+    }
+    // SQL Server: EXEC sp_refreshview to recompile the view
     await this.executeSQLScript(ds, `EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';`, false);
     return true;  
   }
