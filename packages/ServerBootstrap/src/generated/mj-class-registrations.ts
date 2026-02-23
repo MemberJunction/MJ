@@ -806,6 +806,12 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
+// @memberjunction/mj-computer-use (2 classes)
+import {
+    ComputerUseAction,
+    ComputerUseTestDriver,
+} from '@memberjunction/mj-computer-use';
+
 // @memberjunction/queue (2 classes)
 import {
     AIActionQueue,

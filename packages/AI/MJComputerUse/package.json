@@ -1,0 +1,48 @@
+{
+  "name": "@memberjunction/computer-use-engine",
+  "type": "module",
+  "version": "5.2.0",
+  "description": "MemberJunction: MJ Computer Use - MJ-aware subclass of the Computer Use engine with AIPromptRunner, MJ Credentials, Actions-as-Tools, and entity persistence.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/global": "5.2.0",
+    "@memberjunction/core": "5.2.0",
+    "@memberjunction/core-entities": "5.2.0",
+    "@memberjunction/ai": "5.2.0",
+    "@memberjunction/ai-core-plus": "5.2.0",
+    "@memberjunction/aiengine": "5.2.0",
+    "@memberjunction/ai-prompts": "5.2.0",
+    "@memberjunction/actions-base": "5.2.0",
+    "@memberjunction/actions": "5.2.0",
+    "@memberjunction/computer-use": "5.2.0",
+    "@memberjunction/testing-engine": "5.2.0"
+  },
+  "peerDependencies": {
+    "playwright": ">=1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
