@@ -78,15 +78,15 @@ export class ThemeService {
         }
 
         // Setup system theme listener
-        this.SetupSystemThemeListener();
+        this.setupSystemThemeListener();
 
         // Load saved preference
-        const savedPreference = await this.LoadSetting();
+        const savedPreference = await this.loadSetting();
         this._preference$.next(savedPreference);
 
         // Apply the theme
-        const resolvedTheme = this.ResolveTheme(savedPreference);
-        this.ApplyTheme(resolvedTheme);
+        const resolvedTheme = this.resolveTheme(savedPreference);
+        this.applyTheme(resolvedTheme);
 
         this._initialized = true;
     }
@@ -102,10 +102,10 @@ export class ThemeService {
 
         this._preference$.next(preference);
 
-        const resolvedTheme = this.ResolveTheme(preference);
-        this.ApplyTheme(resolvedTheme);
+        const resolvedTheme = this.resolveTheme(preference);
+        this.applyTheme(resolvedTheme);
 
-        await this.SaveSetting(preference);
+        await this.saveSetting(preference);
     }
 
     /**
@@ -131,7 +131,7 @@ export class ThemeService {
     /**
      * Apply theme to DOM by setting data-theme attribute on <html>
      */
-    private ApplyTheme(theme: AppliedTheme): void {
+    private applyTheme(theme: AppliedTheme): void {
         if (theme === 'dark') {
             document.documentElement.setAttribute('data-theme', 'dark');
         } else {
@@ -143,9 +143,9 @@ export class ThemeService {
     /**
      * Resolve preference to actual theme (handles 'system' mode)
      */
-    private ResolveTheme(preference: ThemePreference): AppliedTheme {
+    private resolveTheme(preference: ThemePreference): AppliedTheme {
         if (preference === 'system') {
-            return this.GetSystemTheme();
+            return this.getSystemTheme();
         }
         return preference;
     }
@@ -153,7 +153,7 @@ export class ThemeService {
     /**
      * Get system theme preference from OS
      */
-    private GetSystemTheme(): AppliedTheme {
+    private getSystemTheme(): AppliedTheme {
         if (typeof window === 'undefined') {
             return 'light';
         }
@@ -163,30 +163,30 @@ export class ThemeService {
     /**
      * Setup listener for system theme changes
      */
-    private SetupSystemThemeListener(): void {
+    private setupSystemThemeListener(): void {
         if (typeof window === 'undefined') {
             return;
         }
 
         this.systemMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        this.boundSystemThemeHandler = () => this.OnSystemThemeChange();
+        this.boundSystemThemeHandler = () => this.onSystemThemeChange();
         this.systemMediaQuery.addEventListener('change', this.boundSystemThemeHandler);
     }
 
     /**
      * Handle system theme change (only applies if in 'system' mode)
      */
-    private OnSystemThemeChange(): void {
+    private onSystemThemeChange(): void {
         if (this._preference$.value === 'system') {
-            const newTheme = this.GetSystemTheme();
-            this.ApplyTheme(newTheme);
+            const newTheme = this.getSystemTheme();
+            this.applyTheme(newTheme);
         }
     }
 
     /**
      * Load theme preference from User Settings
      */
-    private async LoadSetting(): Promise<ThemePreference> {
+    private async loadSetting(): Promise<ThemePreference> {
         try {
             const engine = UserInfoEngine.Instance;
             const settingValue = engine.GetSetting(THEME_SETTING_KEY);
@@ -203,7 +203,7 @@ export class ThemeService {
     /**
      * Save theme preference to User Settings
      */
-    private async SaveSetting(preference: ThemePreference): Promise<void> {
+    private async saveSetting(preference: ThemePreference): Promise<void> {
         try {
             const engine = UserInfoEngine.Instance;
             await engine.SetSetting(THEME_SETTING_KEY, preference);
