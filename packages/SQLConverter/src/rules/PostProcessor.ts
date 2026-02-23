@@ -38,7 +38,20 @@ export function postProcess(sql: string): string {
     "RAISE EXCEPTION '$1';"
   );
 
-  // Fix quoted type names — PG types are case-sensitive when quoted
+  // Fix remaining SQL Server type names used in procedure parameters
+  // NOTE: Type conversions must run BEFORE type unquoting so that
+  // e.g. "INT" → "INTEGER" gets cleaned up by the unquoting pass below.
+  sql = sql.replace(/\bnvarchar\s*\(\s*MAX\s*\)/gi, 'TEXT');
+  sql = sql.replace(/\bnvarchar\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
+  sql = sql.replace(/\bnvarchar\b/gi, 'TEXT');
+  sql = sql.replace(/\buniqueid(?:entifier)?\b/gi, 'UUID');
+  // int → INTEGER (standalone word only, avoid matching into "integer")
+  sql = sql.replace(/\bint\b(?!eger)/gi, 'INTEGER');
+  // varbinary → BYTEA
+  sql = sql.replace(/\bvarbinary\b/gi, 'BYTEA');
+
+  // Fix quoted type names — PG types are case-sensitive when quoted.
+  // Runs AFTER type conversions above so "INT"→"INTEGER" gets unquoted here.
   sql = sql.replace(/"UUID"/g, 'UUID');
   sql = sql.replace(/"BOOLEAN"/g, 'BOOLEAN');
   sql = sql.replace(/"TIMESTAMPTZ"/g, 'TIMESTAMPTZ');
@@ -49,16 +62,6 @@ export function postProcess(sql: string): string {
   sql = sql.replace(/"DOUBLE PRECISION"/g, 'DOUBLE PRECISION');
   sql = sql.replace(/"BYTEA"/g, 'BYTEA');
   sql = sql.replace(/"REAL"/g, 'REAL');
-
-  // Fix remaining SQL Server type names used in procedure parameters
-  sql = sql.replace(/\bnvarchar\s*\(\s*MAX\s*\)/gi, 'TEXT');
-  sql = sql.replace(/\bnvarchar\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
-  sql = sql.replace(/\bnvarchar\b/gi, 'TEXT');
-  sql = sql.replace(/\buniqueid(?:entifier)?\b/gi, 'UUID');
-  // int → INTEGER (standalone word only, avoid matching into "integer")
-  sql = sql.replace(/\bint\b(?!eger)/gi, 'INTEGER');
-  // varbinary → BYTEA
-  sql = sql.replace(/\bvarbinary\b/gi, 'BYTEA');
 
   // Fix boolean comparisons: =(1) → =TRUE, =(0) → =FALSE in WHERE clauses
   sql = sql.replace(/=\s*\(1\)/g, '=TRUE');

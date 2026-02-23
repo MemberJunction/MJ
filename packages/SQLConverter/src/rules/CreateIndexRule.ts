@@ -47,15 +47,23 @@ export class CreateIndexRule implements IConversionRule {
     );
 
     // Quote PascalCase identifiers in WHERE clause of filtered indexes
+    // Must avoid quoting words inside single-quoted string literals
     result = result.replace(
       /(\bWHERE\s+)([\s\S]+)$/i,
       (_match, whereKw: string, clause: string) => {
-        // Quote bare PascalCase identifiers that aren't already quoted
-        const quotedClause = clause.replace(/(?<!")(?<!\w)([A-Z][a-zA-Z_]\w*)(?!")(?!\w)/g, (m, word: string) => {
-          const upper = word.toUpperCase();
-          if (['IS', 'NOT', 'NULL', 'AND', 'OR', 'TRUE', 'FALSE', 'IN', 'BETWEEN', 'LIKE'].includes(upper)) return m;
-          return `"${word}"`;
-        });
+        // Split clause into string-literal tokens and non-literal tokens
+        // to avoid quoting identifiers inside 'string literals'
+        const parts = clause.split(/('(?:[^'\\]|\\.)*')/);
+        const quotedClause = parts.map((part, i) => {
+          // Odd-indexed parts are inside single quotes — leave them alone
+          if (i % 2 === 1) return part;
+          // Even-indexed parts are outside quotes — quote PascalCase identifiers
+          return part.replace(/(?<!")(?<!\w)([A-Z][a-zA-Z_]\w*)(?!")(?!\w)/g, (m, word: string) => {
+            const upper = word.toUpperCase();
+            if (['IS', 'NOT', 'NULL', 'AND', 'OR', 'TRUE', 'FALSE', 'IN', 'BETWEEN', 'LIKE'].includes(upper)) return m;
+            return `"${word}"`;
+          });
+        }).join('');
         return `${whereKw}${quotedClause}`;
       }
     );
