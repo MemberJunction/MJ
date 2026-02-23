@@ -75,13 +75,13 @@ GO
 -- ============================================================================
 INSERT INTO ${flyway:defaultSchema}.[TestRunOutputType] ([ID], [Name], [Description])
 VALUES
-    ('A1B2C3D4-E5F6-7890-ABCD-100000000001', 'Screenshot', 'Image capture at a point in time'),
-    ('A1B2C3D4-E5F6-7890-ABCD-100000000002', 'Log', 'Text log output'),
-    ('A1B2C3D4-E5F6-7890-ABCD-100000000003', 'Data', 'Structured JSON data'),
-    ('A1B2C3D4-E5F6-7890-ABCD-100000000004', 'HTML', 'HTML content'),
-    ('A1B2C3D4-E5F6-7890-ABCD-100000000005', 'Video', 'Video recording'),
-    ('A1B2C3D4-E5F6-7890-ABCD-100000000006', 'Audio', 'Audio recording'),
-    ('A1B2C3D4-E5F6-7890-ABCD-100000000007', 'File', 'Generic file output');
+    ('e946773a-09ac-445e-8ab9-075be4f397d8', 'Screenshot', 'Image capture at a point in time'),
+    ('b11b2c55-6f8e-42d2-a876-beba05c768be', 'Log', 'Text log output'),
+    ('e8ac7fb0-e7f9-4fc6-9791-2a623dc85d2c', 'Data', 'Structured JSON data'),
+    ('37fb1881-356d-4fd3-8689-f8fb5f3cab18', 'HTML', 'HTML content'),
+    ('1c25ceef-bea1-4484-bf80-b5a3d25a8381', 'Video', 'Video recording'),
+    ('023be4c1-abbb-4de1-b017-5acbfdcf7cba', 'Audio', 'Audio recording'),
+    ('c223778a-eb3f-41c8-8fa3-4faf2262b189', 'File', 'Generic file output');
 GO
 
 
@@ -173,110 +173,1611 @@ GO
 
 
 
+/* SQL generated to create new entity MJ: Test Run Output Types */
+
+      INSERT INTO [${flyway:defaultSchema}].Entity (
+         ID,
+         Name,
+         DisplayName,
+         Description,
+         NameSuffix,
+         BaseTable,
+         BaseView,
+         SchemaName,
+         IncludeInAPI,
+         AllowUserSearchAPI
+         , TrackRecordChanges
+         , AuditRecordAccess
+         , AuditViewRuns
+         , AllowAllRowsAPI
+         , AllowCreateAPI
+         , AllowUpdateAPI
+         , AllowDeleteAPI
+         , UserViewMaxRows
+      )
+      VALUES (
+         'c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94',
+         'MJ: Test Run Output Types',
+         'Test Run Output Types',
+         NULL,
+         NULL,
+         'TestRunOutputType',
+         'vwTestRunOutputTypes',
+         '${flyway:defaultSchema}',
+         1,
+         0
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+      )
+   
+
+/* SQL generated to add new entity MJ: Test Run Output Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
+                                       (ApplicationID, EntityID, Sequence) VALUES
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+
+/* SQL generated to add new permission for entity MJ: Test Run Output Types for role UI */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+
+/* SQL generated to add new permission for entity MJ: Test Run Output Types for role Developer */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+
+/* SQL generated to add new permission for entity MJ: Test Run Output Types for role Integration */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+
+/* SQL generated to create new entity MJ: Test Run Outputs */
+
+      INSERT INTO [${flyway:defaultSchema}].Entity (
+         ID,
+         Name,
+         DisplayName,
+         Description,
+         NameSuffix,
+         BaseTable,
+         BaseView,
+         SchemaName,
+         IncludeInAPI,
+         AllowUserSearchAPI
+         , TrackRecordChanges
+         , AuditRecordAccess
+         , AuditViewRuns
+         , AllowAllRowsAPI
+         , AllowCreateAPI
+         , AllowUpdateAPI
+         , AllowDeleteAPI
+         , UserViewMaxRows
+      )
+      VALUES (
+         '9081fd46-1eaf-487a-9f6c-af6679d65cd8',
+         'MJ: Test Run Outputs',
+         'Test Run Outputs',
+         NULL,
+         NULL,
+         'TestRunOutput',
+         'vwTestRunOutputs',
+         '${flyway:defaultSchema}',
+         1,
+         0
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+      )
+   
+
+/* SQL generated to add new entity MJ: Test Run Outputs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
+                                       (ApplicationID, EntityID, Sequence) VALUES
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '9081fd46-1eaf-487a-9f6c-af6679d65cd8', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+
+/* SQL generated to add new permission for entity MJ: Test Run Outputs for role UI */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('9081fd46-1eaf-487a-9f6c-af6679d65cd8', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+
+/* SQL generated to add new permission for entity MJ: Test Run Outputs for role Developer */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('9081fd46-1eaf-487a-9f6c-af6679d65cd8', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+
+/* SQL generated to add new permission for entity MJ: Test Run Outputs for role Integration */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('9081fd46-1eaf-487a-9f6c-af6679d65cd8', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TestRunOutputType */
+ALTER TABLE [${flyway:defaultSchema}].[TestRunOutputType] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TestRunOutputType */
+ALTER TABLE [${flyway:defaultSchema}].[TestRunOutputType] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TestRunOutput */
+ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TestRunOutput */
+ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'ea56125c-5f4c-4b58-9932-f97985cf7552'  OR 
+               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = 'ID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'ea56125c-5f4c-4b58-9932-f97985cf7552',
+            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '1c9b6404-1dad-451f-bc19-8f42d7f02dfa'  OR 
+               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = 'Name')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '1c9b6404-1dad-451f-bc19-8f42d7f02dfa',
+            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
+            100002,
+            'Name',
+            'Name',
+            'Unique name identifying this output type (e.g., Screenshot, Log, Data, Video)',
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '13321ae0-3aa2-4705-8361-47bc679e3784'  OR 
+               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = 'Description')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '13321ae0-3aa2-4705-8361-47bc679e3784',
+            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
+            100003,
+            'Description',
+            'Description',
+            'Description of what this output type represents and when it is used',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'a7c31957-eb83-4ae2-a3ba-15c96867d976'  OR 
+               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = '__mj_CreatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'a7c31957-eb83-4ae2-a3ba-15c96867d976',
+            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
+            100004,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'b13abbc2-3597-430b-b273-10253f6dbf7f'  OR 
+               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = '__mj_UpdatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'b13abbc2-3597-430b-b273-10253f6dbf7f',
+            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
+            100005,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'dc362872-24fa-48c4-a74b-c236b6b76aa0'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'ID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'dc362872-24fa-48c4-a74b-c236b6b76aa0',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '1eef9657-70fd-44d5-a9b9-8328022830d4'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'TestRunID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '1eef9657-70fd-44d5-a9b9-8328022830d4',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100002,
+            'TestRunID',
+            'Test Run ID',
+            'Foreign key to the parent test run that produced this output',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            '5DFD821D-E23E-43D3-8A41-60A7D36AE1BA',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '3ac5720d-4327-432f-9fe7-1486ebb84109'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'OutputTypeID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '3ac5720d-4327-432f-9fe7-1486ebb84109',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100003,
+            'OutputTypeID',
+            'Output Type ID',
+            'Foreign key to the output type category (Screenshot, Log, Video, etc.)',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '88854ac8-e11e-409c-a912-5d506afb8d3b'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Sequence')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '88854ac8-e11e-409c-a912-5d506afb8d3b',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100004,
+            'Sequence',
+            'Sequence',
+            'Chronological ordering for storyboarding outputs across steps',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'f035c9bd-42c4-44e1-9319-15ee41ead694'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'StepNumber')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'f035c9bd-42c4-44e1-9319-15ee41ead694',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100005,
+            'StepNumber',
+            'Step Number',
+            'Which step produced this output, for step-based tests like Computer Use',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'cc5dd3f1-8b25-41f0-93c3-2db1f70fac88'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Name')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'cc5dd3f1-8b25-41f0-93c3-2db1f70fac88',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100006,
+            'Name',
+            'Name',
+            'Human-readable label for this output (e.g., Step 3 Screenshot)',
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '997d9cbb-c916-412d-b7d2-5b5aa3bae4ed'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Description')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '997d9cbb-c916-412d-b7d2-5b5aa3bae4ed',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100007,
+            'Description',
+            'Description',
+            'Additional context about this output',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'f768a543-7d98-44b1-bfcc-d32f6527a5c5'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'MimeType')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'f768a543-7d98-44b1-bfcc-d32f6527a5c5',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100008,
+            'MimeType',
+            'Mime Type',
+            'MIME type of the output data (e.g., image/png, text/plain, application/json, video/mp4)',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '36773038-33ae-42df-90e6-05b83408ee7e'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'InlineData')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '36773038-33ae-42df-90e6-05b83408ee7e',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100009,
+            'InlineData',
+            'Inline Data',
+            'Base64-encoded binary data (images, audio, video) or text content (logs, JSON, HTML)',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'c0d41598-0d88-49ce-8642-da14ccade2ce'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'FileSizeBytes')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'c0d41598-0d88-49ce-8642-da14ccade2ce',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100010,
+            'FileSizeBytes',
+            'File Size Bytes',
+            'Size of the output data in bytes',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '58610d24-9956-41e5-a219-48f5b6c78dbd'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Width')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '58610d24-9956-41e5-a219-48f5b6c78dbd',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100011,
+            'Width',
+            'Width',
+            'Width in pixels for image or video outputs',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '5f6c5868-6389-4da6-9a8d-406db03f7cdf'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Height')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '5f6c5868-6389-4da6-9a8d-406db03f7cdf',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100012,
+            'Height',
+            'Height',
+            'Height in pixels for image or video outputs',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '5ba531df-3d07-433b-bcf9-f652f43c02e5'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'DurationSeconds')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '5ba531df-3d07-433b-bcf9-f652f43c02e5',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100013,
+            'DurationSeconds',
+            'Duration Seconds',
+            'Duration in seconds for audio or video outputs',
+            'decimal',
+            9,
+            10,
+            3,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'da0a3956-e102-4b17-8c67-fed887e7365e'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Metadata')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'da0a3956-e102-4b17-8c67-fed887e7365e',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100014,
+            'Metadata',
+            'Metadata',
+            'JSON object with additional metadata about this output (e.g., URL at time of capture, tool calls, error info)',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '0ce148dd-906f-45a2-9185-aecbad1ba6ac'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = '__mj_CreatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '0ce148dd-906f-45a2-9185-aecbad1ba6ac',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100015,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '8acc344e-6134-432e-8629-a2e738fa7eeb'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = '__mj_UpdatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '8acc344e-6134-432e-8629-a2e738fa7eeb',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100016,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
 
 
-/* Index for Foreign Keys for Entity */
+/* Create Entity Relationship: MJ: Test Runs -> MJ: Test Run Outputs (One To Many via TestRunID) */
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = '1e163a6d-ffeb-4770-b276-f302d7267463'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('1e163a6d-ffeb-4770-b276-f302d7267463', '5DFD821D-E23E-43D3-8A41-60A7D36AE1BA', '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', 'TestRunID', 'One To Many', 1, 1, 'MJ: Test Run Outputs', 1);
+   END
+                              
+
+
+/* Create Entity Relationship: MJ: Test Run Output Types -> MJ: Test Run Outputs (One To Many via OutputTypeID) */
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = '82cbbc83-623f-4061-978f-de3e315be710'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('82cbbc83-623f-4061-978f-de3e315be710', 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', 'OutputTypeID', 'One To Many', 1, 1, 'MJ: Test Run Outputs', 2);
+   END
+                              
+
+/* Index for Foreign Keys for TestRunOutputType */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
+-- Entity: MJ: Test Run Output Types
 -- Item: Index for Foreign Keys
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
--- Index for foreign key ParentID in table Entity
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_Entity_ParentID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Entity]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_Entity_ParentID ON [${flyway:defaultSchema}].[Entity] ([ParentID]);
 
-/* Base View Permissions SQL for MJ: Entities */
+
+/* Base View SQL for MJ: Test Run Output Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
--- Item: Permissions for vwEntities
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEntities] TO [cdp_Developer], [cdp_Integration], [cdp_UI]
-
-/* spCreate SQL for MJ: Entities */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entities
--- Item: spCreateEntity
+-- Entity: MJ: Test Run Output Types
+-- Item: vwTestRunOutputTypes
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ CREATE PROCEDURE FOR Entity
+----- BASE VIEW FOR ENTITY:      MJ: Test Run Output Types
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  TestRunOutputType
+-----               PRIMARY KEY: ID
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateEntity];
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwTestRunOutputTypes]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwTestRunOutputTypes];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateEntity]
+CREATE VIEW [${flyway:defaultSchema}].[vwTestRunOutputTypes]
+AS
+SELECT
+    t.*
+FROM
+    [${flyway:defaultSchema}].[TestRunOutputType] AS t
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwTestRunOutputTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Test Run Output Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Test Run Output Types
+-- Item: Permissions for vwTestRunOutputTypes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwTestRunOutputTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Test Run Output Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Test Run Output Types
+-- Item: spCreateTestRunOutputType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR TestRunOutputType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateTestRunOutputType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateTestRunOutputType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateTestRunOutputType]
     @ID uniqueidentifier = NULL,
-    @ParentID uniqueidentifier,
-    @Name nvarchar(255),
-    @NameSuffix nvarchar(255),
-    @Description nvarchar(MAX),
-    @AutoUpdateDescription bit = NULL,
-    @BaseView nvarchar(255),
-    @BaseViewGenerated bit = NULL,
-    @VirtualEntity bit = NULL,
-    @TrackRecordChanges bit = NULL,
-    @AuditRecordAccess bit = NULL,
-    @AuditViewRuns bit = NULL,
-    @IncludeInAPI bit = NULL,
-    @AllowAllRowsAPI bit = NULL,
-    @AllowUpdateAPI bit = NULL,
-    @AllowCreateAPI bit = NULL,
-    @AllowDeleteAPI bit = NULL,
-    @CustomResolverAPI bit = NULL,
-    @AllowUserSearchAPI bit = NULL,
-    @FullTextSearchEnabled bit = NULL,
-    @FullTextCatalog nvarchar(255),
-    @FullTextCatalogGenerated bit = NULL,
-    @FullTextIndex nvarchar(255),
-    @FullTextIndexGenerated bit = NULL,
-    @FullTextSearchFunction nvarchar(255),
-    @FullTextSearchFunctionGenerated bit = NULL,
-    @UserViewMaxRows int,
-    @spCreate nvarchar(255),
-    @spUpdate nvarchar(255),
-    @spDelete nvarchar(255),
-    @spCreateGenerated bit = NULL,
-    @spUpdateGenerated bit = NULL,
-    @spDeleteGenerated bit = NULL,
-    @CascadeDeletes bit = NULL,
-    @DeleteType nvarchar(10) = NULL,
-    @AllowRecordMerge bit = NULL,
-    @spMatch nvarchar(255),
-    @RelationshipDefaultDisplayType nvarchar(20) = NULL,
-    @UserFormGenerated bit = NULL,
-    @EntityObjectSubclassName nvarchar(255),
-    @EntityObjectSubclassImport nvarchar(255),
-    @PreferredCommunicationField nvarchar(255),
-    @Icon nvarchar(500),
-    @ScopeDefault nvarchar(100),
-    @RowsToPackWithSchema nvarchar(20) = NULL,
-    @RowsToPackSampleMethod nvarchar(20) = NULL,
-    @RowsToPackSampleCount int = NULL,
-    @RowsToPackSampleOrder nvarchar(MAX),
-    @AutoRowCountFrequency int,
-    @RowCount bigint,
-    @RowCountRunAt datetimeoffset,
-    @Status nvarchar(25) = NULL,
-    @DisplayName nvarchar(255),
-    @AllowMultipleSubtypes bit = NULL
+    @Name nvarchar(100),
+    @Description nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -285,423 +1786,117 @@ BEGIN
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[Entity]
+        INSERT INTO [${flyway:defaultSchema}].[TestRunOutputType]
             (
                 [ID],
-                [ParentID],
                 [Name],
-                [NameSuffix],
-                [Description],
-                [AutoUpdateDescription],
-                [BaseView],
-                [BaseViewGenerated],
-                [VirtualEntity],
-                [TrackRecordChanges],
-                [AuditRecordAccess],
-                [AuditViewRuns],
-                [IncludeInAPI],
-                [AllowAllRowsAPI],
-                [AllowUpdateAPI],
-                [AllowCreateAPI],
-                [AllowDeleteAPI],
-                [CustomResolverAPI],
-                [AllowUserSearchAPI],
-                [FullTextSearchEnabled],
-                [FullTextCatalog],
-                [FullTextCatalogGenerated],
-                [FullTextIndex],
-                [FullTextIndexGenerated],
-                [FullTextSearchFunction],
-                [FullTextSearchFunctionGenerated],
-                [UserViewMaxRows],
-                [spCreate],
-                [spUpdate],
-                [spDelete],
-                [spCreateGenerated],
-                [spUpdateGenerated],
-                [spDeleteGenerated],
-                [CascadeDeletes],
-                [DeleteType],
-                [AllowRecordMerge],
-                [spMatch],
-                [RelationshipDefaultDisplayType],
-                [UserFormGenerated],
-                [EntityObjectSubclassName],
-                [EntityObjectSubclassImport],
-                [PreferredCommunicationField],
-                [Icon],
-                [ScopeDefault],
-                [RowsToPackWithSchema],
-                [RowsToPackSampleMethod],
-                [RowsToPackSampleCount],
-                [RowsToPackSampleOrder],
-                [AutoRowCountFrequency],
-                [RowCount],
-                [RowCountRunAt],
-                [Status],
-                [DisplayName],
-                [AllowMultipleSubtypes]
+                [Description]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
                 @ID,
-                @ParentID,
                 @Name,
-                @NameSuffix,
-                @Description,
-                ISNULL(@AutoUpdateDescription, 1),
-                @BaseView,
-                ISNULL(@BaseViewGenerated, 1),
-                ISNULL(@VirtualEntity, 0),
-                ISNULL(@TrackRecordChanges, 1),
-                ISNULL(@AuditRecordAccess, 1),
-                ISNULL(@AuditViewRuns, 1),
-                ISNULL(@IncludeInAPI, 0),
-                ISNULL(@AllowAllRowsAPI, 0),
-                ISNULL(@AllowUpdateAPI, 0),
-                ISNULL(@AllowCreateAPI, 0),
-                ISNULL(@AllowDeleteAPI, 0),
-                ISNULL(@CustomResolverAPI, 0),
-                ISNULL(@AllowUserSearchAPI, 0),
-                ISNULL(@FullTextSearchEnabled, 0),
-                @FullTextCatalog,
-                ISNULL(@FullTextCatalogGenerated, 1),
-                @FullTextIndex,
-                ISNULL(@FullTextIndexGenerated, 1),
-                @FullTextSearchFunction,
-                ISNULL(@FullTextSearchFunctionGenerated, 1),
-                @UserViewMaxRows,
-                @spCreate,
-                @spUpdate,
-                @spDelete,
-                ISNULL(@spCreateGenerated, 1),
-                ISNULL(@spUpdateGenerated, 1),
-                ISNULL(@spDeleteGenerated, 1),
-                ISNULL(@CascadeDeletes, 0),
-                ISNULL(@DeleteType, 'Hard'),
-                ISNULL(@AllowRecordMerge, 0),
-                @spMatch,
-                ISNULL(@RelationshipDefaultDisplayType, 'Search'),
-                ISNULL(@UserFormGenerated, 1),
-                @EntityObjectSubclassName,
-                @EntityObjectSubclassImport,
-                @PreferredCommunicationField,
-                @Icon,
-                @ScopeDefault,
-                ISNULL(@RowsToPackWithSchema, 'None'),
-                ISNULL(@RowsToPackSampleMethod, 'random'),
-                ISNULL(@RowsToPackSampleCount, 0),
-                @RowsToPackSampleOrder,
-                @AutoRowCountFrequency,
-                @RowCount,
-                @RowCountRunAt,
-                ISNULL(@Status, 'Active'),
-                @DisplayName,
-                ISNULL(@AllowMultipleSubtypes, 0)
+                @Description
             )
     END
     ELSE
     BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[Entity]
+        INSERT INTO [${flyway:defaultSchema}].[TestRunOutputType]
             (
-                [ParentID],
                 [Name],
-                [NameSuffix],
-                [Description],
-                [AutoUpdateDescription],
-                [BaseView],
-                [BaseViewGenerated],
-                [VirtualEntity],
-                [TrackRecordChanges],
-                [AuditRecordAccess],
-                [AuditViewRuns],
-                [IncludeInAPI],
-                [AllowAllRowsAPI],
-                [AllowUpdateAPI],
-                [AllowCreateAPI],
-                [AllowDeleteAPI],
-                [CustomResolverAPI],
-                [AllowUserSearchAPI],
-                [FullTextSearchEnabled],
-                [FullTextCatalog],
-                [FullTextCatalogGenerated],
-                [FullTextIndex],
-                [FullTextIndexGenerated],
-                [FullTextSearchFunction],
-                [FullTextSearchFunctionGenerated],
-                [UserViewMaxRows],
-                [spCreate],
-                [spUpdate],
-                [spDelete],
-                [spCreateGenerated],
-                [spUpdateGenerated],
-                [spDeleteGenerated],
-                [CascadeDeletes],
-                [DeleteType],
-                [AllowRecordMerge],
-                [spMatch],
-                [RelationshipDefaultDisplayType],
-                [UserFormGenerated],
-                [EntityObjectSubclassName],
-                [EntityObjectSubclassImport],
-                [PreferredCommunicationField],
-                [Icon],
-                [ScopeDefault],
-                [RowsToPackWithSchema],
-                [RowsToPackSampleMethod],
-                [RowsToPackSampleCount],
-                [RowsToPackSampleOrder],
-                [AutoRowCountFrequency],
-                [RowCount],
-                [RowCountRunAt],
-                [Status],
-                [DisplayName],
-                [AllowMultipleSubtypes]
+                [Description]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ParentID,
                 @Name,
-                @NameSuffix,
-                @Description,
-                ISNULL(@AutoUpdateDescription, 1),
-                @BaseView,
-                ISNULL(@BaseViewGenerated, 1),
-                ISNULL(@VirtualEntity, 0),
-                ISNULL(@TrackRecordChanges, 1),
-                ISNULL(@AuditRecordAccess, 1),
-                ISNULL(@AuditViewRuns, 1),
-                ISNULL(@IncludeInAPI, 0),
-                ISNULL(@AllowAllRowsAPI, 0),
-                ISNULL(@AllowUpdateAPI, 0),
-                ISNULL(@AllowCreateAPI, 0),
-                ISNULL(@AllowDeleteAPI, 0),
-                ISNULL(@CustomResolverAPI, 0),
-                ISNULL(@AllowUserSearchAPI, 0),
-                ISNULL(@FullTextSearchEnabled, 0),
-                @FullTextCatalog,
-                ISNULL(@FullTextCatalogGenerated, 1),
-                @FullTextIndex,
-                ISNULL(@FullTextIndexGenerated, 1),
-                @FullTextSearchFunction,
-                ISNULL(@FullTextSearchFunctionGenerated, 1),
-                @UserViewMaxRows,
-                @spCreate,
-                @spUpdate,
-                @spDelete,
-                ISNULL(@spCreateGenerated, 1),
-                ISNULL(@spUpdateGenerated, 1),
-                ISNULL(@spDeleteGenerated, 1),
-                ISNULL(@CascadeDeletes, 0),
-                ISNULL(@DeleteType, 'Hard'),
-                ISNULL(@AllowRecordMerge, 0),
-                @spMatch,
-                ISNULL(@RelationshipDefaultDisplayType, 'Search'),
-                ISNULL(@UserFormGenerated, 1),
-                @EntityObjectSubclassName,
-                @EntityObjectSubclassImport,
-                @PreferredCommunicationField,
-                @Icon,
-                @ScopeDefault,
-                ISNULL(@RowsToPackWithSchema, 'None'),
-                ISNULL(@RowsToPackSampleMethod, 'random'),
-                ISNULL(@RowsToPackSampleCount, 0),
-                @RowsToPackSampleOrder,
-                @AutoRowCountFrequency,
-                @RowCount,
-                @RowCountRunAt,
-                ISNULL(@Status, 'Active'),
-                @DisplayName,
-                ISNULL(@AllowMultipleSubtypes, 0)
+                @Description
             )
     END
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwTestRunOutputTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntity] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTestRunOutputType] TO [cdp_Developer], [cdp_Integration]
     
 
-/* spCreate Permissions for MJ: Entities */
+/* spCreate Permissions for MJ: Test Run Output Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntity] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTestRunOutputType] TO [cdp_Developer], [cdp_Integration]
 
 
 
-/* spUpdate SQL for MJ: Entities */
+/* spUpdate SQL for MJ: Test Run Output Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
--- Item: spUpdateEntity
+-- Entity: MJ: Test Run Output Types
+-- Item: spUpdateTestRunOutputType
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ UPDATE PROCEDURE FOR Entity
+----- UPDATE PROCEDURE FOR TestRunOutputType
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateEntity];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateTestRunOutputType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateTestRunOutputType];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateEntity]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateTestRunOutputType]
     @ID uniqueidentifier,
-    @ParentID uniqueidentifier,
-    @Name nvarchar(255),
-    @NameSuffix nvarchar(255),
-    @Description nvarchar(MAX),
-    @AutoUpdateDescription bit,
-    @BaseView nvarchar(255),
-    @BaseViewGenerated bit,
-    @VirtualEntity bit,
-    @TrackRecordChanges bit,
-    @AuditRecordAccess bit,
-    @AuditViewRuns bit,
-    @IncludeInAPI bit,
-    @AllowAllRowsAPI bit,
-    @AllowUpdateAPI bit,
-    @AllowCreateAPI bit,
-    @AllowDeleteAPI bit,
-    @CustomResolverAPI bit,
-    @AllowUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @FullTextCatalog nvarchar(255),
-    @FullTextCatalogGenerated bit,
-    @FullTextIndex nvarchar(255),
-    @FullTextIndexGenerated bit,
-    @FullTextSearchFunction nvarchar(255),
-    @FullTextSearchFunctionGenerated bit,
-    @UserViewMaxRows int,
-    @spCreate nvarchar(255),
-    @spUpdate nvarchar(255),
-    @spDelete nvarchar(255),
-    @spCreateGenerated bit,
-    @spUpdateGenerated bit,
-    @spDeleteGenerated bit,
-    @CascadeDeletes bit,
-    @DeleteType nvarchar(10),
-    @AllowRecordMerge bit,
-    @spMatch nvarchar(255),
-    @RelationshipDefaultDisplayType nvarchar(20),
-    @UserFormGenerated bit,
-    @EntityObjectSubclassName nvarchar(255),
-    @EntityObjectSubclassImport nvarchar(255),
-    @PreferredCommunicationField nvarchar(255),
-    @Icon nvarchar(500),
-    @ScopeDefault nvarchar(100),
-    @RowsToPackWithSchema nvarchar(20),
-    @RowsToPackSampleMethod nvarchar(20),
-    @RowsToPackSampleCount int,
-    @RowsToPackSampleOrder nvarchar(MAX),
-    @AutoRowCountFrequency int,
-    @RowCount bigint,
-    @RowCountRunAt datetimeoffset,
-    @Status nvarchar(25),
-    @DisplayName nvarchar(255),
-    @AllowMultipleSubtypes bit
+    @Name nvarchar(100),
+    @Description nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[Entity]
+        [${flyway:defaultSchema}].[TestRunOutputType]
     SET
-        [ParentID] = @ParentID,
         [Name] = @Name,
-        [NameSuffix] = @NameSuffix,
-        [Description] = @Description,
-        [AutoUpdateDescription] = @AutoUpdateDescription,
-        [BaseView] = @BaseView,
-        [BaseViewGenerated] = @BaseViewGenerated,
-        [VirtualEntity] = @VirtualEntity,
-        [TrackRecordChanges] = @TrackRecordChanges,
-        [AuditRecordAccess] = @AuditRecordAccess,
-        [AuditViewRuns] = @AuditViewRuns,
-        [IncludeInAPI] = @IncludeInAPI,
-        [AllowAllRowsAPI] = @AllowAllRowsAPI,
-        [AllowUpdateAPI] = @AllowUpdateAPI,
-        [AllowCreateAPI] = @AllowCreateAPI,
-        [AllowDeleteAPI] = @AllowDeleteAPI,
-        [CustomResolverAPI] = @CustomResolverAPI,
-        [AllowUserSearchAPI] = @AllowUserSearchAPI,
-        [FullTextSearchEnabled] = @FullTextSearchEnabled,
-        [FullTextCatalog] = @FullTextCatalog,
-        [FullTextCatalogGenerated] = @FullTextCatalogGenerated,
-        [FullTextIndex] = @FullTextIndex,
-        [FullTextIndexGenerated] = @FullTextIndexGenerated,
-        [FullTextSearchFunction] = @FullTextSearchFunction,
-        [FullTextSearchFunctionGenerated] = @FullTextSearchFunctionGenerated,
-        [UserViewMaxRows] = @UserViewMaxRows,
-        [spCreate] = @spCreate,
-        [spUpdate] = @spUpdate,
-        [spDelete] = @spDelete,
-        [spCreateGenerated] = @spCreateGenerated,
-        [spUpdateGenerated] = @spUpdateGenerated,
-        [spDeleteGenerated] = @spDeleteGenerated,
-        [CascadeDeletes] = @CascadeDeletes,
-        [DeleteType] = @DeleteType,
-        [AllowRecordMerge] = @AllowRecordMerge,
-        [spMatch] = @spMatch,
-        [RelationshipDefaultDisplayType] = @RelationshipDefaultDisplayType,
-        [UserFormGenerated] = @UserFormGenerated,
-        [EntityObjectSubclassName] = @EntityObjectSubclassName,
-        [EntityObjectSubclassImport] = @EntityObjectSubclassImport,
-        [PreferredCommunicationField] = @PreferredCommunicationField,
-        [Icon] = @Icon,
-        [ScopeDefault] = @ScopeDefault,
-        [RowsToPackWithSchema] = @RowsToPackWithSchema,
-        [RowsToPackSampleMethod] = @RowsToPackSampleMethod,
-        [RowsToPackSampleCount] = @RowsToPackSampleCount,
-        [RowsToPackSampleOrder] = @RowsToPackSampleOrder,
-        [AutoRowCountFrequency] = @AutoRowCountFrequency,
-        [RowCount] = @RowCount,
-        [RowCountRunAt] = @RowCountRunAt,
-        [Status] = @Status,
-        [DisplayName] = @DisplayName,
-        [AllowMultipleSubtypes] = @AllowMultipleSubtypes
+        [Description] = @Description
     WHERE
         [ID] = @ID
 
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwEntities] WHERE 1=0
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwTestRunOutputTypes] WHERE 1=0
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         SELECT
                                         *
                                     FROM
-                                        [${flyway:defaultSchema}].[vwEntities]
+                                        [${flyway:defaultSchema}].[vwTestRunOutputTypes]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntity] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTestRunOutputType] TO [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the Entity table
+----- TRIGGER FOR __mj_UpdatedAt field for the TestRunOutputType table
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateEntity]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateEntity];
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateTestRunOutputType]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateTestRunOutputType];
 GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateEntity
-ON [${flyway:defaultSchema}].[Entity]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateTestRunOutputType
+ON [${flyway:defaultSchema}].[TestRunOutputType]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[Entity]
+        [${flyway:defaultSchema}].[TestRunOutputType]
     SET
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [${flyway:defaultSchema}].[Entity] AS _organicTable
+        [${flyway:defaultSchema}].[TestRunOutputType] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
@@ -709,37 +1904,37 @@ END;
 GO
         
 
-/* spUpdate Permissions for MJ: Entities */
+/* spUpdate Permissions for MJ: Test Run Output Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntity] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTestRunOutputType] TO [cdp_Developer], [cdp_Integration]
 
 
 
-/* spDelete SQL for MJ: Entities */
+/* spDelete SQL for MJ: Test Run Output Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
--- Item: spDeleteEntity
+-- Entity: MJ: Test Run Output Types
+-- Item: spDeleteTestRunOutputType
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ DELETE PROCEDURE FOR Entity
+----- DELETE PROCEDURE FOR TestRunOutputType
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntity];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteTestRunOutputType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteTestRunOutputType];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntity]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteTestRunOutputType]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM
-        [${flyway:defaultSchema}].[Entity]
+        [${flyway:defaultSchema}].[TestRunOutputType]
     WHERE
         [ID] = @ID
 
@@ -751,112 +1946,600 @@ BEGIN
         SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntity] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutputType] TO [cdp_Integration]
     
 
-/* spDelete Permissions for MJ: Entities */
+/* spDelete Permissions for MJ: Test Run Output Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntity] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutputType] TO [cdp_Integration]
 
 
+
+/* Index for Foreign Keys for TestRunOutput */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Test Run Outputs
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key TestRunID in table TestRunOutput
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TestRunOutput]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID ON [${flyway:defaultSchema}].[TestRunOutput] ([TestRunID]);
+
+-- Index for foreign key OutputTypeID in table TestRunOutput
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TestRunOutput]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID ON [${flyway:defaultSchema}].[TestRunOutput] ([OutputTypeID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID 1EEF9657-70FD-44D5-A9B9-8328022830D4 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='1EEF9657-70FD-44D5-A9B9-8328022830D4',
+         @RelatedEntityNameFieldMap='TestRun'
+
+/* SQL text to update entity field related entity name field map for entity field ID 3AC5720D-4327-432F-9FE7-1486EBB84109 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3AC5720D-4327-432F-9FE7-1486EBB84109',
+         @RelatedEntityNameFieldMap='OutputType'
+
+/* Base View SQL for MJ: Test Run Outputs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Test Run Outputs
+-- Item: vwTestRunOutputs
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Test Run Outputs
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  TestRunOutput
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwTestRunOutputs]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwTestRunOutputs];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwTestRunOutputs]
+AS
+SELECT
+    t.*,
+    MJTestRun_TestRunID.[Test] AS [TestRun],
+    MJTestRunOutputType_OutputTypeID.[Name] AS [OutputType]
+FROM
+    [${flyway:defaultSchema}].[TestRunOutput] AS t
+INNER JOIN
+    [${flyway:defaultSchema}].[vwTestRuns] AS MJTestRun_TestRunID
+  ON
+    [t].[TestRunID] = MJTestRun_TestRunID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[TestRunOutputType] AS MJTestRunOutputType_OutputTypeID
+  ON
+    [t].[OutputTypeID] = MJTestRunOutputType_OutputTypeID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwTestRunOutputs] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Test Run Outputs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Test Run Outputs
+-- Item: Permissions for vwTestRunOutputs
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwTestRunOutputs] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Test Run Outputs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Test Run Outputs
+-- Item: spCreateTestRunOutput
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR TestRunOutput
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateTestRunOutput]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateTestRunOutput];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateTestRunOutput]
+    @ID uniqueidentifier = NULL,
+    @TestRunID uniqueidentifier,
+    @OutputTypeID uniqueidentifier,
+    @Sequence int = NULL,
+    @StepNumber int,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @MimeType nvarchar(100),
+    @InlineData nvarchar(MAX),
+    @FileSizeBytes int,
+    @Width int,
+    @Height int,
+    @DurationSeconds decimal(10, 3),
+    @Metadata nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[TestRunOutput]
+            (
+                [ID],
+                [TestRunID],
+                [OutputTypeID],
+                [Sequence],
+                [StepNumber],
+                [Name],
+                [Description],
+                [MimeType],
+                [InlineData],
+                [FileSizeBytes],
+                [Width],
+                [Height],
+                [DurationSeconds],
+                [Metadata]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @TestRunID,
+                @OutputTypeID,
+                ISNULL(@Sequence, 0),
+                @StepNumber,
+                @Name,
+                @Description,
+                @MimeType,
+                @InlineData,
+                @FileSizeBytes,
+                @Width,
+                @Height,
+                @DurationSeconds,
+                @Metadata
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[TestRunOutput]
+            (
+                [TestRunID],
+                [OutputTypeID],
+                [Sequence],
+                [StepNumber],
+                [Name],
+                [Description],
+                [MimeType],
+                [InlineData],
+                [FileSizeBytes],
+                [Width],
+                [Height],
+                [DurationSeconds],
+                [Metadata]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @TestRunID,
+                @OutputTypeID,
+                ISNULL(@Sequence, 0),
+                @StepNumber,
+                @Name,
+                @Description,
+                @MimeType,
+                @InlineData,
+                @FileSizeBytes,
+                @Width,
+                @Height,
+                @DurationSeconds,
+                @Metadata
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwTestRunOutputs] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTestRunOutput] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Test Run Outputs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTestRunOutput] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Test Run Outputs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Test Run Outputs
+-- Item: spUpdateTestRunOutput
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR TestRunOutput
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateTestRunOutput]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateTestRunOutput];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateTestRunOutput]
+    @ID uniqueidentifier,
+    @TestRunID uniqueidentifier,
+    @OutputTypeID uniqueidentifier,
+    @Sequence int,
+    @StepNumber int,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @MimeType nvarchar(100),
+    @InlineData nvarchar(MAX),
+    @FileSizeBytes int,
+    @Width int,
+    @Height int,
+    @DurationSeconds decimal(10, 3),
+    @Metadata nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[TestRunOutput]
+    SET
+        [TestRunID] = @TestRunID,
+        [OutputTypeID] = @OutputTypeID,
+        [Sequence] = @Sequence,
+        [StepNumber] = @StepNumber,
+        [Name] = @Name,
+        [Description] = @Description,
+        [MimeType] = @MimeType,
+        [InlineData] = @InlineData,
+        [FileSizeBytes] = @FileSizeBytes,
+        [Width] = @Width,
+        [Height] = @Height,
+        [DurationSeconds] = @DurationSeconds,
+        [Metadata] = @Metadata
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwTestRunOutputs] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwTestRunOutputs]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTestRunOutput] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the TestRunOutput table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateTestRunOutput]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateTestRunOutput];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateTestRunOutput
+ON [${flyway:defaultSchema}].[TestRunOutput]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[TestRunOutput]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[TestRunOutput] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Test Run Outputs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTestRunOutput] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Test Run Outputs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Test Run Outputs
+-- Item: spDeleteTestRunOutput
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR TestRunOutput
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteTestRunOutput]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteTestRunOutput];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteTestRunOutput]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[TestRunOutput]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutput] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Test Run Outputs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutput] TO [cdp_Integration]
+
+
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '4825e62e-7b04-42e8-b62e-c986d1881a89'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'TestRun')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '4825e62e-7b04-42e8-b62e-c986d1881a89',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100033,
+            'TestRun',
+            'Test Run',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '6dc40152-a5d9-446f-8263-2ef3abee58a2'  OR 
+               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'OutputType')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '6dc40152-a5d9-446f-8263-2ef3abee58a2',
+            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            100034,
+            'OutputType',
+            'Output Type',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
 
 /* Set field properties for entity */
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET IsNameField = 1
-            WHERE ID = 'D8FC1AEC-A3A9-4240-B9FE-0F84D3B46D1F'
+            WHERE ID = '1C9B6404-1DAD-451F-BC19-8F42D7F02DFA'
             AND AutoUpdateIsNameField = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '1B5817F0-6F36-EF11-86D4-6045BDEE16E6'
+            WHERE ID = '1C9B6404-1DAD-451F-BC19-8F42D7F02DFA'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '554D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = '574D17F0-6F36-EF11-86D4-6045BDEE16E6'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'B9992893-7BD7-42EA-A2A8-48928D7A5CCE'
-            AND AutoUpdateDefaultInView = 1
-         
-
-            UPDATE [${flyway:defaultSchema}].EntityField
-            SET DefaultInView = 1
-            WHERE ID = 'D8FC1AEC-A3A9-4240-B9FE-0F84D3B46D1F'
+            WHERE ID = '13321AE0-3AA2-4705-8361-47BC679E3784'
             AND AutoUpdateDefaultInView = 1
          
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '1B5817F0-6F36-EF11-86D4-6045BDEE16E6'
+               WHERE ID = '1C9B6404-1DAD-451F-BC19-8F42D7F02DFA'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '554D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
+/* Set categories for 5 fields */
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'System Metadata',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'ID',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'EA56125C-5F4C-4B58-9932-F97985CF7552'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Output Type Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Name',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '1C9B6404-1DAD-451F-BC19-8F42D7F02DFA'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Output Type Details',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Description',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '13321AE0-3AA2-4705-8361-47BC679E3784'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'System Metadata',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Created At',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'A7C31957-EB83-4AE2-A3BA-15C96867D976'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'System Metadata',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Updated At',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'B13ABBC2-3597-430B-B273-10253F6DBF7F'
+   AND AutoUpdateCategory = 1
+
+/* Set entity icon to fa fa-file-alt */
+
+               UPDATE [${flyway:defaultSchema}].Entity
+               SET Icon = 'fa fa-file-alt', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94'
             
 
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '564D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
+/* Insert FieldCategoryInfo setting for entity */
 
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '574D17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('2d134f3a-622c-47ac-8013-88f32990c54e', 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', 'FieldCategoryInfo', '{"Output Type Details":{"icon":"fa fa-tag","description":"Basic identification and descriptive information for the test run output category"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE())
+         
 
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'D8FC1AEC-A3A9-4240-B9FE-0F84D3B46D1F'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
+/* Insert FieldCategoryIcons setting (legacy) */
 
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'AA4217F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('a3003744-94b2-4144-b385-8b5e632c7a19', 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', 'FieldCategoryIcons', '{"Output Type Details":"fa fa-tag","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+         
 
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'AB4217F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
+/* Set DefaultForNewUser=0 for NEW entity (category: reference, confidence: high) */
 
-/* Generated Validation Functions for MJ: Open Apps */
--- CHECK constraint for MJ: Open Apps: Field: Name was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '7B31F48E-EDA3-47B4-9602-D98B7EB1AF45', GETUTCDATE(), 'TypeScript','Approved', '(NOT [Name] like ''%[^a-z0-9-]%'')', 'public ValidateNameAllowedCharacters(result: ValidationResult) {
-	if (this.Name != null) {
-		// Regex matches strings containing only lowercase letters, numbers, and hyphens
-		const allowedPattern = /^[a-z0-9-]*$/;
-		if (!allowedPattern.test(this.Name)) {
-			result.Errors.push(new ValidationErrorInfo(
-				"Name",
-				"The Name field can only contain lowercase letters, numbers, and hyphens.",
-				this.Name,
-				ValidationErrorType.Failure
-			));
-		}
-	}
-}', 'The name must only contain lowercase letters, numbers, and hyphens to ensure it remains a valid system identifier.', 'ValidateNameAllowedCharacters', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '6AC413DC-EBE1-4DFC-9BE4-8E44377B7F46');
-  
-            
+         UPDATE [${flyway:defaultSchema}].ApplicationEntity
+         SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94'
+      
 
