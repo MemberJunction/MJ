@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -57,6 +57,11 @@ export class AlterTableRule implements IConversionRule {
     // Quote PascalCase column names inside FK/PK/UNIQUE column lists and REFERENCES(col)
     result = this.quoteConstraintColumns(result);
 
+    // Convert common functions (LEN→LENGTH, etc.) before quoting PascalCase identifiers
+    if (/\bCHECK\b/i.test(result)) {
+      result = convertCommonFunctions(result);
+    }
+
     // Quote PascalCase column names inside CHECK constraint bodies (preserve string literals)
     result = this.quoteCheckColumns(result);
 
@@ -98,7 +103,9 @@ export class AlterTableRule implements IConversionRule {
   private static readonly CHECK_KEYWORDS = new Set([
     'IN', 'IS', 'NULL', 'NOT', 'OR', 'AND', 'LIKE', 'BETWEEN',
     'TRUE', 'FALSE', 'CHECK', 'CONSTRAINT', 'SIMILAR', 'TO',
-    'VALID',
+    'VALID', 'LENGTH', 'COALESCE', 'CAST', 'TRIM', 'UPPER', 'LOWER',
+    'REPLACE', 'SUBSTRING', 'POSITION', 'ABS', 'ROUND', 'FLOOR', 'CEILING',
+    'NOW', 'EXTRACT', 'DATE', 'TIME', 'TIMESTAMP', 'INTERVAL',
   ]);
 
   /** Quote PascalCase column names inside CHECK(...) bodies, preserving string literals

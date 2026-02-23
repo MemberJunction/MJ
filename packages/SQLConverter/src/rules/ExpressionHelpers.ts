@@ -88,32 +88,69 @@ const DATEPART_UNIT_MAP: Record<string, string> = {
   'second': 'SECOND', 'ss': 'SECOND', 's': 'SECOND',
 };
 
-function convertDateDiff(sql: string): string {
-  return sql.replace(
-    /\bDATEDIFF\s*\(\s*(\w+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi,
-    (_match, unit: string, startExpr: string, endExpr: string) => {
-      const unitLower = unit.toLowerCase();
-      const s = startExpr.trim();
-      const e = endExpr.trim();
+/**
+ * Parse a balanced-paren argument list starting at the open-paren position.
+ * Returns an array of trimmed argument strings, handling nested parentheses.
+ */
+function parseBalancedArgs(sql: string, openIdx: number): { args: string[]; endIdx: number } | null {
+  if (sql[openIdx] !== '(') return null;
+  const args: string[] = [];
+  let depth = 1;
+  let current = '';
+  let i = openIdx + 1;
+  while (i < sql.length && depth > 0) {
+    const ch = sql[i];
+    if (ch === '(') { depth++; current += ch; }
+    else if (ch === ')') { depth--; if (depth > 0) current += ch; }
+    else if (ch === ',' && depth === 1) { args.push(current.trim()); current = ''; }
+    else { current += ch; }
+    i++;
+  }
+  if (depth !== 0) return null;
+  args.push(current.trim());
+  return { args, endIdx: i };
+}
 
-      switch (unitLower) {
-        case 'day': case 'dd': case 'd':
-          return `EXTRACT(DAY FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`;
-        case 'hour': case 'hh':
-          return `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ)) / 3600`;
-        case 'minute': case 'mi': case 'n':
-          return `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ)) / 60`;
-        case 'second': case 'ss': case 's':
-          return `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`;
-        case 'year': case 'yy': case 'yyyy':
-          return `EXTRACT(YEAR FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ))`;
-        case 'month': case 'mm': case 'm':
-          return `(EXTRACT(YEAR FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ)) * 12 + EXTRACT(MONTH FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ)))`;
-        default:
-          return `EXTRACT(DAY FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`;
-      }
+function convertDateDiff(sql: string): string {
+  const pattern = /\bDATEDIFF\s*\(/gi;
+  let result = '';
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(sql)) !== null) {
+    const openIdx = match.index + match[0].length - 1; // position of '('
+    const parsed = parseBalancedArgs(sql, openIdx);
+    if (!parsed || parsed.args.length !== 3) {
+      result += sql.slice(lastIdx, match.index + match[0].length);
+      lastIdx = match.index + match[0].length;
+      continue;
     }
-  );
+    const [unit, startExpr, endExpr] = parsed.args;
+    const unitLower = unit.toLowerCase();
+    const s = startExpr;
+    const e = endExpr;
+    let replacement: string;
+    switch (unitLower) {
+      case 'day': case 'dd': case 'd':
+        replacement = `EXTRACT(DAY FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`; break;
+      case 'hour': case 'hh':
+        replacement = `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ)) / 3600`; break;
+      case 'minute': case 'mi': case 'n':
+        replacement = `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ)) / 60`; break;
+      case 'second': case 'ss': case 's':
+        replacement = `EXTRACT(EPOCH FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`; break;
+      case 'year': case 'yy': case 'yyyy':
+        replacement = `EXTRACT(YEAR FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ))`; break;
+      case 'month': case 'mm': case 'm':
+        replacement = `(EXTRACT(YEAR FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ)) * 12 + EXTRACT(MONTH FROM AGE(${e}::TIMESTAMPTZ, ${s}::TIMESTAMPTZ)))`; break;
+      default:
+        replacement = `EXTRACT(DAY FROM (${e}::TIMESTAMPTZ - ${s}::TIMESTAMPTZ))`; break;
+    }
+    result += sql.slice(lastIdx, match.index) + replacement;
+    lastIdx = parsed.endIdx;
+    pattern.lastIndex = lastIdx;
+  }
+  result += sql.slice(lastIdx);
+  return result;
 }
 
 function convertDatePart(sql: string): string {
