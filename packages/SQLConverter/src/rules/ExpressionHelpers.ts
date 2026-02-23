@@ -23,7 +23,23 @@ export function convertDateFunctions(sql: string): string {
   sql = convertDateAdd(sql);
   sql = convertDateDiff(sql);
   sql = convertDatePart(sql);
+  sql = convertSimpleDateFunctions(sql);
   return sql;
+}
+
+/**
+ * Convert T-SQL shorthand date functions to PostgreSQL EXTRACT.
+ * YEAR(expr) → EXTRACT(YEAR FROM expr)
+ * MONTH(expr) → EXTRACT(MONTH FROM expr)
+ * DAY(expr) → EXTRACT(DAY FROM expr)
+ */
+function convertSimpleDateFunctions(sql: string): string {
+  return sql.replace(
+    /\b(YEAR|MONTH|DAY)\s*\(([^)]+)\)/gi,
+    (_match, func: string, expr: string) => {
+      return `EXTRACT(${func.toUpperCase()} FROM ${expr.trim()})`;
+    }
+  );
 }
 
 /** DATEADD unit → PG interval unit mapping */

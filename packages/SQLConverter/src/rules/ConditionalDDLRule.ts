@@ -229,7 +229,7 @@ export class ConditionalDDLRule implements IConversionRule {
     sql = sql.replace(/\bNVARCHAR\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
     sql = sql.replace(/\bVARCHAR\s*\(\s*MAX\s*\)/gi, 'TEXT');
     sql = sql.replace(/\bUNIQUEIDENTIFIER\b/gi, 'UUID');
-    sql = sql.replace(/(?<!")BIT\b(?!")/gi, 'BOOLEAN');
+    sql = sql.replace(/(?<![\w"])BIT(?![\w"])/gi, 'BOOLEAN');
     sql = sql.replace(/\bDATETIMEOFFSET\b(?:\s*\(\s*\d+\s*\))?/gi, 'TIMESTAMPTZ');
     sql = sql.replace(/\bDATETIME2?\b(?:\s*\(\s*\d+\s*\))?/gi, 'TIMESTAMPTZ');
     sql = sql.replace(/\bTINYINT\b/gi, 'SMALLINT');

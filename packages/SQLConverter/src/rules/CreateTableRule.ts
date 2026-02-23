@@ -134,8 +134,8 @@ export class CreateTableRule implements IConversionRule {
     sql = sql.replace(/\bnvarchar\s*\(\s*max\s*\)/gi, 'TEXT');
     sql = sql.replace(/\bvarchar\s*\(\s*max\s*\)/gi, 'TEXT');
     sql = sql.replace(/\bnvarchar\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
-    // BIT → BOOLEAN with lookbehind/lookahead to avoid re-quoting "BIT"
-    sql = sql.replace(/(?<!")BIT\b(?!")/gi, 'BOOLEAN');
+    // BIT → BOOLEAN: must be a standalone word (not inside 'Debit' etc.)
+    sql = sql.replace(/(?<![\w"])BIT(?![\w"])/gi, 'BOOLEAN');
     sql = sql.replace(/\bdatetimeoffset\b(?:\s*\(\s*\d+\s*\))?/gi, 'TIMESTAMPTZ');
     sql = sql.replace(/\bdatetime2\b(?:\s*\(\s*\d+\s*\))?/gi, 'TIMESTAMPTZ');
     sql = sql.replace(/\bdatetime\b/gi, 'TIMESTAMPTZ');

@@ -206,6 +206,35 @@ describe('convertDateFunctions', () => {
         .toBe('EXTRACT(YEAR FROM col)');
     });
   });
+
+  // --- Simple date functions (YEAR, MONTH, DAY) ---
+  describe('Simple date functions', () => {
+    it('converts YEAR(col) to EXTRACT(YEAR FROM col)', () => {
+      expect(convertDateFunctions('YEAR(p.PaymentDate)'))
+        .toBe('EXTRACT(YEAR FROM p.PaymentDate)');
+    });
+
+    it('converts MONTH(col) to EXTRACT(MONTH FROM col)', () => {
+      expect(convertDateFunctions('MONTH(p.PaymentDate)'))
+        .toBe('EXTRACT(MONTH FROM p.PaymentDate)');
+    });
+
+    it('converts DAY(col) to EXTRACT(DAY FROM col)', () => {
+      expect(convertDateFunctions('DAY(p.CreatedAt)'))
+        .toBe('EXTRACT(DAY FROM p.CreatedAt)');
+    });
+
+    it('is case insensitive for simple date functions', () => {
+      expect(convertDateFunctions('year(col)'))
+        .toBe('EXTRACT(YEAR FROM col)');
+    });
+
+    it('handles YEAR and MONTH in GROUP BY clause', () => {
+      const input = 'GROUP BY YEAR(p.PaymentDate), MONTH(p.PaymentDate)';
+      const expected = 'GROUP BY EXTRACT(YEAR FROM p.PaymentDate), EXTRACT(MONTH FROM p.PaymentDate)';
+      expect(convertDateFunctions(input)).toBe(expected);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

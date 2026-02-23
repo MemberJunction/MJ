@@ -54,6 +54,13 @@ describe('CreateTableRule', () => {
       expect(result).not.toMatch(/\bbit\b/i);
     });
 
+    it('should not replace BIT inside string literals like Debit', () => {
+      const sql = `CREATE TABLE [__mj].[Foo] (\n  [Method] VARCHAR(20) NOT NULL CHECK ([Method] IN ('Credit', 'Debit', 'Cash'))\n)`;
+      const result = convert(sql);
+      expect(result).toContain("'Debit'");
+      expect(result).not.toContain('DeBOOLEAN');
+    });
+
     it('should convert FLOAT to DOUBLE PRECISION', () => {
       const sql = 'CREATE TABLE [__mj].[Foo] (\n  [Score] [float] NULL\n)';
       const result = convert(sql);
