@@ -171,7 +171,7 @@ CREATE TABLE "sample_crm"."Activity" (
   "Type" VARCHAR(20) NOT NULL CONSTRAINT "CK_Activity_Type" CHECK ("Type" IN ('Call', 'Email', 'Meeting', 'Note', 'Task')),
   "Subject" VARCHAR(500) NOT NULL,
   "Description" TEXT NULL,
-  "ActivityDate" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP AT TIME ZONE 'UTC',
+  "ActivityDate" TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc'),
   "DurationMinutes" INT NULL,
   "CompanyID" UUID NULL REFERENCES "sample_crm"."Company" (
     "ID"
