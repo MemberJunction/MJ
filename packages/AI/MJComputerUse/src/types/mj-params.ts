@@ -6,13 +6,13 @@
  * context user, and agent run linkage.
  *
  * MJDomainAuthBinding extends DomainAuthBinding with optional
- * CredentialEntity support — when Credential is provided, the
+ * MJCredentialEntity support — when Credential is provided, the
  * MJComputerUseEngine resolves it to a concrete AuthMethod
  * automatically based on the credential type.
  */
 
 import { UserInfo } from '@memberjunction/core';
-import { CredentialEntity } from '@memberjunction/core-entities';
+import { MJCredentialEntity } from '@memberjunction/core-entities';
 
 import {
     RunComputerUseParams,
@@ -121,9 +121,9 @@ export class MJRunComputerUseParams extends RunComputerUseParams {
  */
 export class MJDomainAuthBinding extends DomainAuthBinding {
     /**
-     * Alternative to Method: resolve auth from an MJ CredentialEntity.
-     * Uses the actual CredentialEntity from @memberjunction/core-entities.
+     * Alternative to Method: resolve auth from an MJ MJCredentialEntity.
+     * Uses the actual MJCredentialEntity from @memberjunction/core-entities.
      * If Credential is set, Method is ignored.
      */
-    public Credential?: CredentialEntity;
+    public Credential?: MJCredentialEntity;
 }
