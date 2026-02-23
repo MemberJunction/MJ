@@ -93,6 +93,11 @@ export function classifyBatch(batch: string): StatementType {
     return 'SKIP_SQLSERVER';
   }
 
+  // CREATE SCHEMA — already handled by the converter header (CREATE SCHEMA IF NOT EXISTS)
+  if (/^CREATE\s+SCHEMA\s/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
+  }
+
   // ALTER TABLE sub-classification
   if (/^ALTER\s+TABLE\s/i.test(upper)) {
     return classifyAlterTable(upper);

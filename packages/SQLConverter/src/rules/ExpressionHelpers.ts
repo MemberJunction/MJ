@@ -470,6 +470,23 @@ export function quotePascalCaseIdentifiers(sql: string): string {
       continue;
     }
 
+    // Check for start of single-line comment (--)
+    if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
+      segments.push({ text: current, type: 'code' });
+      // Consume everything from -- to end of line (or end of string)
+      const lineEnd = sql.indexOf('\n', i);
+      if (lineEnd === -1) {
+        segments.push({ text: sql.slice(i), type: 'comment' });
+        current = '';
+        i = sql.length - 1;
+      } else {
+        segments.push({ text: sql.slice(i, lineEnd), type: 'comment' });
+        current = '\n';
+        i = lineEnd;
+      }
+      continue;
+    }
+
     // Check for start of block comment
     if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
       segments.push({ text: current, type: 'code' });
