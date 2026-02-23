@@ -18,7 +18,7 @@ export class GrantRule implements IConversionRule {
     // SQL Server: GRANT SELECT ON SCHEMA::myschema TO myrole
     // PostgreSQL:  GRANT SELECT ON ALL TABLES IN SCHEMA myschema TO myrole
     const schemaMatch = result.match(
-      /\b(GRANT|REVOKE)\s+(SELECT|INSERT|UPDATE|DELETE|ALL(?:\s+PRIVILEGES)?)\s+ON\s+SCHEMA\s*::\s*(\w+)\s+TO\s+(.+)/i
+      /\b(GRANT|REVOKE)\s+(SELECT|INSERT|UPDATE|DELETE|ALL(?:\s+PRIVILEGES)?)\s+ON\s+SCHEMA\s*::\s*("?\w+"?)\s+TO\s+(.+)/i
     );
     if (schemaMatch) {
       const [, verb, perm, schema, role] = schemaMatch;

@@ -129,6 +129,29 @@ describe('GrantRule', () => {
     });
   });
 
+  describe('GRANT on SCHEMA', () => {
+    it('should convert GRANT SELECT ON SCHEMA:: to ALL TABLES IN SCHEMA', () => {
+      const sql = 'GRANT SELECT ON SCHEMA::sample_inv TO InventoryReader';
+      const result = convert(sql);
+      expect(result).toContain('GRANT SELECT ON ALL TABLES IN SCHEMA sample_inv TO InventoryReader');
+      expect(result).not.toContain('::');
+    });
+
+    it('should handle quoted schema names from convertIdentifiers', () => {
+      // After convertIdentifiers runs, brackets become double-quotes
+      const sql = 'GRANT SELECT ON SCHEMA::"sample_inv" TO "InventoryReader"';
+      const result = convert(sql);
+      expect(result).toContain('GRANT SELECT ON ALL TABLES IN SCHEMA "sample_inv" TO "InventoryReader"');
+      expect(result).not.toContain('::');
+    });
+
+    it('should handle REVOKE on SCHEMA', () => {
+      const sql = 'REVOKE SELECT ON SCHEMA::"myschema" TO "myrole"';
+      const result = convert(sql);
+      expect(result).toContain('REVOKE SELECT ON ALL TABLES IN SCHEMA "myschema" TO "myrole"');
+    });
+  });
+
   describe('N-prefix removal', () => {
     it('should remove N prefix from string literals in GRANT statements', () => {
       const sql = "GRANT SELECT ON [__mj].[Users] TO [cdp_Developer] -- N'Comment'";

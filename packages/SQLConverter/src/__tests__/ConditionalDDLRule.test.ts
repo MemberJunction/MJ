@@ -258,6 +258,33 @@ END`;
     });
   });
 
+  describe('CREATE ROLE conversion', () => {
+    it('should convert bare CREATE ROLE to DO block with pg_roles check', () => {
+      const sql = 'CREATE ROLE MyRole';
+      const result = convert(sql);
+      expect(result).toContain('DO $$');
+      expect(result).toContain("rolname = 'MyRole'");
+      expect(result).toContain('CREATE ROLE MyRole;');
+    });
+
+    it('should handle quoted role names from convertIdentifiers', () => {
+      const sql = 'CREATE ROLE "InventoryReader"';
+      const result = convert(sql);
+      expect(result).toContain('DO $$');
+      expect(result).toContain("rolname = 'InventoryReader'");
+      expect(result).toContain('CREATE ROLE "InventoryReader";');
+    });
+
+    it('should handle IF NOT EXISTS wrapper around CREATE ROLE', () => {
+      const sql = `IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = 'MyRole')
+    CREATE ROLE "MyRole"`;
+      const result = convert(sql);
+      expect(result).toContain('DO $$');
+      expect(result).toContain("rolname = 'MyRole'");
+      expect(result).toContain('CREATE ROLE "MyRole";');
+    });
+  });
+
   describe('fallback behavior', () => {
     it('should comment out unparseable conditional DDL', () => {
       // No BEGIN...END block — should fall back to commenting out

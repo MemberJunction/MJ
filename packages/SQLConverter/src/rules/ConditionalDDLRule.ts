@@ -102,13 +102,15 @@ export class ConditionalDDLRule implements IConversionRule {
    *   - Bare: CREATE ROLE role_name;
    *   - Wrapped: IF NOT EXISTS (... sys.database_principals ...) CREATE ROLE role_name; */
   private tryConvertConditionalRole(sql: string): string | null {
-    const roleMatch = sql.match(/CREATE\s+ROLE\s+(\w+)/i);
+    const roleMatch = sql.match(/CREATE\s+ROLE\s+("?\w+"?)/i);
     if (!roleMatch) return null;
     const roleName = roleMatch[1];
+    // Strip quotes to get the bare name for the pg_roles lookup
+    const bareRoleName = roleName.replace(/^"|"$/g, '');
     return [
       'DO $$',
       'BEGIN',
-      `    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${roleName}') THEN`,
+      `    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${bareRoleName}') THEN`,
       `        CREATE ROLE ${roleName};`,
       '    END IF;',
       'END $$;',
