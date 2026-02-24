@@ -224,6 +224,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
             ]).then(([artifact, version]) => {
               instance.artifact = artifact;
               instance.artifactVersion = version;
+              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
+              existing.changeDetectorRef.detectChanges();
               this.cdRef.detectChanges();
             }).catch(err => {
               console.error('Failed to lazy-load artifact:', err);
@@ -246,8 +248,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           // This is necessary because we're using OnPush change detection and direct property assignment
           // doesn't trigger ngOnChanges (only reference changes do)
           if (previousMessage && previousMessage.Status !== message.Status) {
-            // Use ChangeDetectorRef from the component instance to force update
-            (instance as any).cdRef?.markForCheck();
+            // Use ComponentRef.changeDetectorRef to force update on dynamic child
+            existing.changeDetectorRef.markForCheck();
           }
         } else {
           // Create new component
@@ -279,6 +281,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
             ]).then(([artifact, version]) => {
               instance.artifact = artifact;
               instance.artifactVersion = version;
+              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
+              componentRef.changeDetectorRef.detectChanges();
               this.cdRef.detectChanges();
             }).catch(err => {
               console.error('Failed to lazy-load artifact:', err);
