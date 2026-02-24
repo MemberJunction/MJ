@@ -148,13 +148,6 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - User preferences and local caching
   - Layout patterns, permission checking, and more
 
-- **[Theming](guides/THEMING.md)**: Guide to the pluggable theme system including:
-  - Two-level CSS inheritance model (built-in + overlay)
-  - Design token catalog (semantic tokens to override)
-  - Creating custom themes with dynamic CSS loading
-  - ThemeService API reference and lifecycle
-  - User menu integration and persistence
-
 When building dashboards, creating new Angular applications, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
