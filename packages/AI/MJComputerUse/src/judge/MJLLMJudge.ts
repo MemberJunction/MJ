@@ -14,7 +14,7 @@
  * overrides to use AIPromptRunner).
  */
 
-import { MJAIPromptEntityExtended as AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     LLMJudge,
     JudgePromptRequest,
@@ -23,7 +23,7 @@ import {
 import type { JudgePromptExecutor } from '@memberjunction/computer-use';
 
 export class MJLLMJudge extends LLMJudge {
-    private judgePromptEntity: AIPromptEntityExtended;
+    private judgePromptEntity: MJAIPromptEntityExtended;
 
     /**
      * @param promptExecutor - Callback to execute the judge prompt (from the engine)
@@ -32,7 +32,7 @@ export class MJLLMJudge extends LLMJudge {
      */
     constructor(
         promptExecutor: JudgePromptExecutor,
-        judgePromptEntity: AIPromptEntityExtended,
+        judgePromptEntity: MJAIPromptEntityExtended,
         customPrompt?: string
     ) {
         super(promptExecutor, customPrompt);
@@ -48,7 +48,7 @@ export class MJLLMJudge extends LLMJudge {
      * Used by MJComputerUseEngine to determine which prompt entity
      * to use when executing the judge via AIPromptRunner.
      */
-    public get PromptEntity(): AIPromptEntityExtended {
+    public get PromptEntity(): MJAIPromptEntityExtended {
         return this.judgePromptEntity;
     }
 

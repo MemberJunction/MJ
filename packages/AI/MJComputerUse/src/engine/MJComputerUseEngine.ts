@@ -6,7 +6,7 @@
  *
  * - **Prompt execution** routes through AIPromptRunner for template
  *   rendering, model selection, prompt run logging, and token tracking
- * - **Credential resolution** maps MJDomainAuthBinding with CredentialEntity
+ * - **Credential resolution** maps MJDomainAuthBinding with MJCredentialEntity
  *   to concrete AuthMethod instances (API Key, Basic, OAuth, Bearer)
  * - **Action-to-tool wrapping** exposes MJ Actions as ComputerUseTool
  *   instances so the controller LLM can invoke them
@@ -16,17 +16,17 @@
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, MJAIPromptEntityExtended as AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { ChatMessageRole, createBase64DataUrl } from '@memberjunction/ai';
 import type { ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ActionEngineServer } from '@memberjunction/actions';
 import {
-    MJActionEntity as ActionEntity,
-    MJActionParamEntity as ActionParamEntity,
-    MJAIPromptRunMediaEntity as AIPromptRunMediaEntity,
-    MJCredentialEntity as CredentialEntity,
+    MJActionEntity,
+    MJActionParamEntity,
+    MJAIPromptRunMediaEntity,
+    MJCredentialEntity,
 } from '@memberjunction/core-entities';
 
 import {
@@ -56,8 +56,8 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private lastPromptRunId: string | undefined;
 
     /** Resolved prompt entities — populated in Run() from PromptEntityRef refs */
-    private controllerPromptEntity: AIPromptEntityExtended | undefined;
-    private judgePromptEntity: AIPromptEntityExtended | undefined;
+    private controllerPromptEntity: MJAIPromptEntityExtended | undefined;
+    private judgePromptEntity: MJAIPromptEntityExtended | undefined;
 
     constructor() {
         super();
@@ -73,7 +73,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      *
      * Before calling the base Run():
      * 1. Stashes MJ-specific fields (contextUser, agentRunId)
-     * 2. Resolves MJDomainAuthBindings with CredentialEntity → AuthMethod
+     * 2. Resolves MJDomainAuthBindings with MJCredentialEntity → AuthMethod
      * 3. Wraps MJ Actions as ComputerUseTool instances
      *
      * Then delegates to super.Run() which handles the full execution loop.
@@ -83,7 +83,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         this.agentRunId = params.AgentRunId;
         this.lastPromptRunId = undefined;
 
-        // Resolve prompt entity refs → full AIPromptEntityExtended
+        // Resolve prompt entity refs → full MJAIPromptEntityExtended
         this.controllerPromptEntity = await this.resolvePromptRef(params.ControllerPromptRef);
         this.judgePromptEntity = await this.resolvePromptRef(params.JudgePromptRef);
 
@@ -257,7 +257,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Resolve a PromptEntityRef to a full AIPromptEntityExtended.
+     * Resolve a PromptEntityRef to a full MJAIPromptEntityExtended.
      *
      * Uses AIEngine's in-memory Prompts cache for fast lookup.
      * Looks up by PromptId first (if set), then by PromptName.
@@ -266,14 +266,14 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      */
     private async resolvePromptRef(
         ref: PromptEntityRef | undefined
-    ): Promise<AIPromptEntityExtended | undefined> {
+    ): Promise<MJAIPromptEntityExtended | undefined> {
         if (!ref) return undefined;
         if (!ref.PromptId && !ref.PromptName) return undefined;
 
         // Ensure AIEngine metadata is loaded before accessing Prompts
         await AIEngine.Instance.Config(false, this.contextUser);
 
-        let prompt: AIPromptEntityExtended | undefined;
+        let prompt: MJAIPromptEntityExtended | undefined;
         if (ref.PromptId) {
             prompt = AIEngine.Instance.Prompts.find(p => p.ID === ref.PromptId);
         } else if (ref.PromptName) {
@@ -326,7 +326,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * base64 strings embedded in text.
      */
     private async executePromptViaRunner(
-        promptEntity: AIPromptEntityExtended,
+        promptEntity: MJAIPromptEntityExtended,
         data: Record<string, unknown>
     ) {
         // Extract screenshot fields — these go as image messages, not template data
@@ -414,7 +414,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
 
     /**
      * Resolve all MJDomainAuthBinding instances that have Credential set.
-     * Maps CredentialEntity → concrete AuthMethod based on CredentialType.
+     * Maps MJCredentialEntity → concrete AuthMethod based on CredentialType.
      * Returns a clean DomainAuthBinding[] that the base engine can consume.
      */
     private async resolveAuthBindings(
@@ -435,7 +435,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     }
 
     /**
-     * Resolve a single MJDomainAuthBinding with a CredentialEntity
+     * Resolve a single MJDomainAuthBinding with a MJCredentialEntity
      * into a plain DomainAuthBinding with a concrete AuthMethod.
      */
     private async resolveCredentialBinding(
@@ -456,7 +456,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * Parse the credential's Values JSON string into a record.
      * Values is auto-decrypted by MJ's field-level encryption on load.
      */
-    private parseCredentialValues(credential: CredentialEntity): Record<string, string> {
+    private parseCredentialValues(credential: MJCredentialEntity): Record<string, string> {
         try {
             return JSON.parse(credential.Values) as Record<string, string>;
         } catch {
@@ -579,7 +579,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private findAction(
         actionEngine: ActionEngineBase,
         ref: ActionRef
-    ): ActionEntity | undefined {
+    ): MJActionEntity | undefined {
         if (ref.ActionId) {
             return actionEngine.Actions.find(a => a.ID === ref.ActionId);
         }
@@ -597,7 +597,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private getActionParams(
         actionEngine: ActionEngineBase,
         actionId: string
-    ): ActionParamEntity[] {
+    ): MJActionParamEntity[] {
         const normalizedId = actionId.trim().toUpperCase();
         return actionEngine.ActionParams.filter(
             p => p.ActionID.trim().toUpperCase() === normalizedId && (p.Type === 'Input' || p.Type === 'Both')
@@ -609,9 +609,9 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * Used when ActionEngineBase.ActionParams cache doesn't contain params
      * for a given action (e.g., engine was loaded before params were synced).
      */
-    private async loadActionParamsFromDB(actionId: string): Promise<ActionParamEntity[]> {
+    private async loadActionParamsFromDB(actionId: string): Promise<MJActionParamEntity[]> {
         const rv = new RunView();
-        const result = await rv.RunView<ActionParamEntity>(
+        const result = await rv.RunView<MJActionParamEntity>(
             {
                 EntityName: 'Action Params',
                 ExtraFilter: `ActionID='${actionId}' AND (Type='Input' OR Type='Both')`,
@@ -629,11 +629,11 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     }
 
     /**
-     * Build a ComputerUseTool from an ActionEntity and its params.
+     * Build a ComputerUseTool from an MJActionEntity and its params.
      */
     private buildToolFromAction(
-        action: ActionEntity,
-        actionParams: ActionParamEntity[]
+        action: MJActionEntity,
+        actionParams: MJActionParamEntity[]
     ): ComputerUseTool {
         const toolName = this.sanitizeToolName(action.Name);
         const inputSchema = this.buildSchemaFromActionParams(actionParams);
@@ -652,7 +652,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * Execute an MJ Action via ActionEngineBase and return the result.
      */
     private async executeActionAsTool(
-        action: ActionEntity,
+        action: MJActionEntity,
         args: Record<string, unknown>
     ): Promise<Record<string, unknown>> {
         if (!this.contextUser) {
@@ -696,10 +696,10 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     }
 
     /**
-     * Build a JSON Schema from ActionParamEntity metadata.
+     * Build a JSON Schema from MJActionParamEntity metadata.
      * Maps ActionParam fields to JSON Schema properties.
      */
-    private buildSchemaFromActionParams(params: ActionParamEntity[]): JsonSchema {
+    private buildSchemaFromActionParams(params: MJActionParamEntity[]): JsonSchema {
         const schema = new JsonSchema();
         schema.Required = [];
 
@@ -756,7 +756,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         }
 
         const md = new Metadata();
-        const mediaEntity = await md.GetEntityObject<AIPromptRunMediaEntity>(
+        const mediaEntity = await md.GetEntityObject<MJAIPromptRunMediaEntity>(
             'MJ: AI Prompt Run Medias',
             this.contextUser
         );
