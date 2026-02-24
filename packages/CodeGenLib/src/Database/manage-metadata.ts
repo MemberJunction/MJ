@@ -1873,13 +1873,14 @@ export class ManageMetadataBase {
          const entityFields = entityFieldsResult.recordset;
 
          // Get the relationship counts for each entity
-         const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} GROUP BY EntityID`;
+         const sSQLRelationshipCount = `SELECT ${this.qi('EntityID')}, COUNT(*) AS ${this.qi('Count')} FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} GROUP BY ${this.qi('EntityID')}`;
          const relationshipCountsResult = await this.runQuery(pool, sSQLRelationshipCount);
          const relationshipCounts = relationshipCountsResult.recordset;
 
          const relationshipCountMap = new Map<number, number>();
          for (const rc of relationshipCounts) {
-            relationshipCountMap.set(rc.EntityID, rc.Count);
+            // Use Number() because PG returns COUNT(*) as bigint, which the pg driver delivers as a string
+            relationshipCountMap.set(rc.EntityID, Number(rc.Count));
          }
 
          // get all relationships in one query for performance improvement
@@ -3894,10 +3895,12 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
 
    protected async isSchemaNew(pool: CodeGenConnection, schemaName: string): Promise<boolean> {
       // check to see if there are any entities in the db with this schema name
-      const sSQL: string = `SELECT COUNT(*) AS Count FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName = '${schemaName}'`;
+      // Quote the alias so PostgreSQL preserves PascalCase (unquoted aliases are lowercased in PG)
+      const sSQL: string = `SELECT COUNT(*) AS ${this.qi('Count')} FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE ${this.qi('SchemaName')} = '${schemaName}'`;
       const resultResult = await this.runQuery(pool, sSQL);
       const result = resultResult.recordset;
-      return result && result.length > 0 ? result[0].Count === 0 : true;
+      // Use Number() because PG returns COUNT(*) as bigint, which the pg driver delivers as a string
+      return result && result.length > 0 ? Number(result[0].Count) === 0 : true;
    }
 
    /**
@@ -4037,7 +4040,7 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
-      const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
+      const newEntityDescriptionEscaped = newEntity.EntityDescription ? `'${newEntity.EntityDescription.replace(/'/g, "''")}'` : null;
       const q = (name: string) => this.qi(name);
       const sSQLInsert = `
       INSERT INTO ${this.qs(mj_core_schema(), 'Entity')} (
