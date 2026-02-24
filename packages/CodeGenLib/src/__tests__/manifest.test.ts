@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ts from 'typescript';
+import * as fs from 'fs';
+import { glob } from 'glob';
+import { generateClassRegistrationsManifest } from '../Manifest/GenerateClassRegistrationsManifest';
 
 // We test the pure functions from the manifest generator by importing via a module-level mock setup.
 // Many functions in the manifest generator are module-private, but we can test the exported types
@@ -355,5 +358,201 @@ describe('Dependency reconciliation (logic tests)', () => {
             expect(sorted['a']).toBe('1.0');
             expect(sorted['b']).toBe('2.0');
         });
+    });
+});
+
+// ============================================================================
+// Integration tests: exercise the real generateClassRegistrationsManifest
+// function with a virtual filesystem to verify the syncDependencies feature.
+// ============================================================================
+
+describe('generateClassRegistrationsManifest - syncDependencies integration', () => {
+    /**
+     * Virtual filesystem: path → file content.
+     * existsSync checks this map; readFileSync returns from it.
+     */
+    let virtualFiles: Record<string, string>;
+
+    /** Captures every writeFileSync call for assertions. */
+    let writtenFiles: Array<{ path: string; content: string }>;
+
+    const appDir = '/test-app';
+    const outputPath = '/test-app/src/generated/manifest.ts';
+
+    /**
+     * Builds a minimal dependency graph where:
+     *   test-app → @test/bundle → @test/provider (has @RegisterClass)
+     *
+     * @test/provider is a TRANSITIVE dependency — it is NOT listed in
+     * test-app's direct dependencies. This is the scenario from issue #2008.
+     */
+    function setupVirtualFileSystem(): void {
+        virtualFiles = {
+            // App package.json — only @test/bundle is a direct dependency
+            [`${appDir}/package.json`]: JSON.stringify({
+                name: 'test-app',
+                dependencies: { '@test/bundle': '1.0.0' }
+            }, null, 2),
+
+            // Bundle package — depends on @test/provider transitively
+            [`${appDir}/node_modules/@test/bundle/package.json`]: JSON.stringify({
+                name: '@test/bundle',
+                version: '1.0.0',
+                dependencies: { '@test/provider': '1.0.0' }
+            }),
+
+            // Provider package — has @RegisterClass but is NOT a direct dep
+            [`${appDir}/node_modules/@test/provider/package.json`]: JSON.stringify({
+                name: '@test/provider',
+                version: '1.0.0',
+                dependencies: {}
+            }),
+
+            // Provider source with @RegisterClass decorator
+            [`${appDir}/node_modules/@test/provider/src/provider.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseProvider, 'TestProvider')",
+                "export class TestProvider extends BaseProvider {}"
+            ].join('\n'),
+        };
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        writtenFiles = [];
+        setupVirtualFileSystem();
+
+        // existsSync: true for files in virtualFiles or directories containing them
+        vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = p.toString();
+            if (pathStr in virtualFiles) return true;
+            // Directory check: exists if any file lives under it
+            return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
+        });
+
+        // readFileSync: return content from virtual filesystem
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = p.toString();
+            if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
+            const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+            (err as NodeJS.ErrnoException).code = 'ENOENT';
+            throw err;
+        });
+
+        // writeFileSync: capture all writes
+        vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
+            writtenFiles.push({ path: p.toString(), content: content.toString() });
+        });
+
+        vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => p.toString() as string & Buffer);
+
+        // glob: return .ts source files under the requested cwd
+        vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
+            const cwd = (opts?.cwd as string) || '';
+            return Object.keys(virtualFiles).filter(
+                f => f.startsWith(cwd + '/') && f.endsWith('.ts') && !f.endsWith('.d.ts')
+            );
+        });
+    });
+
+    it('should add missing transitive dependencies to package.json', async () => {
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: true,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.AddedDependencies).toEqual({ '@test/provider': '1.0.0' });
+
+        // Verify package.json was rewritten with the added dependency
+        const pkgWrite = writtenFiles.find(w => w.path === `${appDir}/package.json`);
+        expect(pkgWrite).toBeDefined();
+        const updatedPkg = JSON.parse(pkgWrite!.content);
+        expect(updatedPkg.dependencies['@test/bundle']).toBe('1.0.0');
+        expect(updatedPkg.dependencies['@test/provider']).toBe('1.0.0');
+    });
+
+    it('should NOT modify package.json when syncDependencies is false', async () => {
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.AddedDependencies).toEqual({});
+
+        // package.json should NOT have been written
+        const pkgWrite = writtenFiles.find(w => w.path === `${appDir}/package.json`);
+        expect(pkgWrite).toBeUndefined();
+    });
+
+    it('should report no additions when all deps are already declared', async () => {
+        // Pre-declare @test/provider in the app's direct dependencies
+        virtualFiles[`${appDir}/package.json`] = JSON.stringify({
+            name: 'test-app',
+            dependencies: {
+                '@test/bundle': '1.0.0',
+                '@test/provider': '1.0.0'
+            }
+        }, null, 2);
+
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: true,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.AddedDependencies).toEqual({});
+
+        // package.json should NOT have been rewritten
+        const pkgWrite = writtenFiles.find(w => w.path === `${appDir}/package.json`);
+        expect(pkgWrite).toBeUndefined();
+    });
+
+    it('should sort dependencies alphabetically after adding', async () => {
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: true,
+        });
+
+        expect(result.success).toBe(true);
+
+        const pkgWrite = writtenFiles.find(w => w.path === `${appDir}/package.json`);
+        expect(pkgWrite).toBeDefined();
+        const updatedPkg = JSON.parse(pkgWrite!.content);
+        const depKeys = Object.keys(updatedPkg.dependencies);
+        // @test/bundle and @test/provider should be in sorted order
+        expect(depKeys).toEqual([...depKeys].sort());
+    });
+
+    it('should include the provider class in the generated manifest', async () => {
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: true,
+        });
+
+        expect(result.success).toBe(true);
+        // The manifest should contain the @RegisterClass class from the transitive dep
+        expect(result.classes.length).toBeGreaterThanOrEqual(1);
+        expect(result.classes.some(c => c.className === 'TestProvider')).toBe(true);
+        expect(result.classes.some(c => c.packageName === '@test/provider')).toBe(true);
+
+        // The manifest file should have been written with the import
+        const manifestWrite = writtenFiles.find(w => w.path === outputPath);
+        expect(manifestWrite).toBeDefined();
+        expect(manifestWrite!.content).toContain("import {");
+        expect(manifestWrite!.content).toContain("TestProvider");
+        expect(manifestWrite!.content).toContain("@test/provider");
     });
 });
