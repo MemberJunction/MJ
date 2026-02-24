@@ -3819,7 +3819,7 @@ export const MJAIModalitySchema = z.object({
         * * Field Name: MIMETypePattern
         * * Display Name: MIME Type Pattern
         * * SQL Data Type: nvarchar(100)
-        * * Description: MIME type pattern for this modality (e.g., image/*, audio/*, video/*, text/*, application/*). Used for file type validation.`),
+        * * Description: MIME type pattern for this modality (e.g., image/\*, audio/\*, video/\*, text/\*, application/\*). Used for file type validation.`),
     Type: z.union([z.literal('Binary'), z.literal('Content'), z.literal('Structured')]).describe(`
         * * Field Name: Type
         * * Display Name: Type
@@ -32173,7 +32173,7 @@ export class MJAIModalityEntity extends BaseEntity<MJAIModalityEntityType> {
     * * Field Name: MIMETypePattern
     * * Display Name: MIME Type Pattern
     * * SQL Data Type: nvarchar(100)
-    * * Description: MIME type pattern for this modality (e.g., image/*, audio/*, video/*, text/*, application/*). Used for file type validation.
+    * * Description: MIME type pattern for this modality (e.g., image/\*, audio/\*, video/\*, text/\*, application/\*). Used for file type validation.
     */
     get MIMETypePattern(): string | null {
         return this.Get('MIMETypePattern');

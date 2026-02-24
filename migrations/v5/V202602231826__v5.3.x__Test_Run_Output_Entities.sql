@@ -170,9 +170,6 @@ GO
 
 
 
-
-
-
 /* SQL generated to create new entity MJ: Test Run Output Types */
 
       INSERT INTO [${flyway:defaultSchema}].Entity (
@@ -196,7 +193,7 @@ GO
          , UserViewMaxRows
       )
       VALUES (
-         'c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94',
+         'ce3761bc-5ca6-44e1-9521-97c48f4d8bb6',
          'MJ: Test Run Output Types',
          'Test Run Output Types',
          NULL,
@@ -220,22 +217,22 @@ GO
 /* SQL generated to add new entity MJ: Test Run Output Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
                                        (ApplicationID, EntityID, Sequence) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 
 /* SQL generated to add new permission for entity MJ: Test Run Output Types for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 
 /* SQL generated to add new permission for entity MJ: Test Run Output Types for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 
 /* SQL generated to add new permission for entity MJ: Test Run Output Types for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('c8f50a7b-d4d2-4ac0-be92-8b7f6483ee94', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL generated to create new entity MJ: Test Run Outputs */
 
@@ -260,7 +257,7 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
          , UserViewMaxRows
       )
       VALUES (
-         '9081fd46-1eaf-487a-9f6c-af6679d65cd8',
+         '51bc27f7-dc57-4372-8812-3f219fa762b4',
          'MJ: Test Run Outputs',
          'Test Run Outputs',
          NULL,
@@ -284,28 +281,22 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
 /* SQL generated to add new entity MJ: Test Run Outputs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
                                        (ApplicationID, EntityID, Sequence) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '9081fd46-1eaf-487a-9f6c-af6679d65cd8', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '51bc27f7-dc57-4372-8812-3f219fa762b4', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 
 /* SQL generated to add new permission for entity MJ: Test Run Outputs for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('9081fd46-1eaf-487a-9f6c-af6679d65cd8', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 
 /* SQL generated to add new permission for entity MJ: Test Run Outputs for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('9081fd46-1eaf-487a-9f6c-af6679d65cd8', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 
 /* SQL generated to add new permission for entity MJ: Test Run Outputs for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('9081fd46-1eaf-487a-9f6c-af6679d65cd8', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TestRunOutputType */
-ALTER TABLE [${flyway:defaultSchema}].[TestRunOutputType] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TestRunOutputType */
-ALTER TABLE [${flyway:defaultSchema}].[TestRunOutputType] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TestRunOutput */
 ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
@@ -313,12 +304,18 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_CreatedAt DATETIM
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TestRunOutput */
 ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
 
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TestRunOutputType */
+ALTER TABLE [${flyway:defaultSchema}].[TestRunOutputType] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TestRunOutputType */
+ALTER TABLE [${flyway:defaultSchema}].[TestRunOutputType] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'ea56125c-5f4c-4b58-9932-f97985cf7552'  OR 
-               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = 'ID')
+         WHERE ID = '09df0f14-7259-40e3-b17a-ab54c5529bd1'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'ID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -351,8 +348,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            'ea56125c-5f4c-4b58-9932-f97985cf7552',
-            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
+            '09df0f14-7259-40e3-b17a-ab54c5529bd1',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100001,
             'ID',
             'ID',
@@ -382,8 +379,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '1c9b6404-1dad-451f-bc19-8f42d7f02dfa'  OR 
-               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = 'Name')
+         WHERE ID = '72663dd0-11b3-43bf-9896-29ba131291ff'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'TestRunID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -416,333 +413,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '1c9b6404-1dad-451f-bc19-8f42d7f02dfa',
-            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
-            100002,
-            'Name',
-            'Name',
-            'Unique name identifying this output type (e.g., Screenshot, Log, Data, Video)',
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            1,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '13321ae0-3aa2-4705-8361-47bc679e3784'  OR 
-               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = 'Description')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '13321ae0-3aa2-4705-8361-47bc679e3784',
-            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
-            100003,
-            'Description',
-            'Description',
-            'Description of what this output type represents and when it is used',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'a7c31957-eb83-4ae2-a3ba-15c96867d976'  OR 
-               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = '__mj_CreatedAt')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'a7c31957-eb83-4ae2-a3ba-15c96867d976',
-            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
-            100004,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'b13abbc2-3597-430b-b273-10253f6dbf7f'  OR 
-               (EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94' AND Name = '__mj_UpdatedAt')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'b13abbc2-3597-430b-b273-10253f6dbf7f',
-            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', -- Entity: MJ: Test Run Output Types
-            100005,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'dc362872-24fa-48c4-a74b-c236b6b76aa0'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'ID')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'dc362872-24fa-48c4-a74b-c236b6b76aa0',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '1eef9657-70fd-44d5-a9b9-8328022830d4'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'TestRunID')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '1eef9657-70fd-44d5-a9b9-8328022830d4',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '72663dd0-11b3-43bf-9896-29ba131291ff',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100002,
             'TestRunID',
             'Test Run ID',
@@ -772,8 +444,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '3ac5720d-4327-432f-9fe7-1486ebb84109'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'OutputTypeID')
+         WHERE ID = '660fe22c-f2d0-4372-a4ac-17c33b9bb829'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'OutputTypeID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -806,8 +478,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '3ac5720d-4327-432f-9fe7-1486ebb84109',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '660fe22c-f2d0-4372-a4ac-17c33b9bb829',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100003,
             'OutputTypeID',
             'Output Type ID',
@@ -821,7 +493,7 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
             0,
             1,
             0,
-            'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94',
+            'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6',
             'ID',
             0,
             0,
@@ -837,8 +509,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '88854ac8-e11e-409c-a912-5d506afb8d3b'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Sequence')
+         WHERE ID = 'f866bc1e-5d1b-48c8-8ba6-8e71b2e8d7cc'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'Sequence')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -871,8 +543,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '88854ac8-e11e-409c-a912-5d506afb8d3b',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            'f866bc1e-5d1b-48c8-8ba6-8e71b2e8d7cc',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100004,
             'Sequence',
             'Sequence',
@@ -902,8 +574,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f035c9bd-42c4-44e1-9319-15ee41ead694'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'StepNumber')
+         WHERE ID = 'f333c5aa-490f-437a-8799-27318aee6995'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'StepNumber')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -936,8 +608,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            'f035c9bd-42c4-44e1-9319-15ee41ead694',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            'f333c5aa-490f-437a-8799-27318aee6995',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100005,
             'StepNumber',
             'Step Number',
@@ -967,8 +639,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'cc5dd3f1-8b25-41f0-93c3-2db1f70fac88'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Name')
+         WHERE ID = 'f30b5229-c80d-4c84-a9dd-327a6ce5e738'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'Name')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1001,8 +673,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            'cc5dd3f1-8b25-41f0-93c3-2db1f70fac88',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            'f30b5229-c80d-4c84-a9dd-327a6ce5e738',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100006,
             'Name',
             'Name',
@@ -1032,8 +704,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '997d9cbb-c916-412d-b7d2-5b5aa3bae4ed'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Description')
+         WHERE ID = 'b07389fa-3e06-4e15-a65b-ef4be19ce648'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'Description')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1066,8 +738,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '997d9cbb-c916-412d-b7d2-5b5aa3bae4ed',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            'b07389fa-3e06-4e15-a65b-ef4be19ce648',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100007,
             'Description',
             'Description',
@@ -1097,8 +769,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f768a543-7d98-44b1-bfcc-d32f6527a5c5'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'MimeType')
+         WHERE ID = '85bb9d46-27df-4763-b832-7ee9259100a0'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'MimeType')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1131,8 +803,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            'f768a543-7d98-44b1-bfcc-d32f6527a5c5',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '85bb9d46-27df-4763-b832-7ee9259100a0',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100008,
             'MimeType',
             'Mime Type',
@@ -1162,8 +834,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '36773038-33ae-42df-90e6-05b83408ee7e'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'InlineData')
+         WHERE ID = '79a10f51-c0ff-40c1-af59-e82f6cc67d04'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'InlineData')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1196,8 +868,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '36773038-33ae-42df-90e6-05b83408ee7e',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '79a10f51-c0ff-40c1-af59-e82f6cc67d04',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100009,
             'InlineData',
             'Inline Data',
@@ -1227,8 +899,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'c0d41598-0d88-49ce-8642-da14ccade2ce'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'FileSizeBytes')
+         WHERE ID = '257b0084-ea5f-4325-9f92-60a6c0ffb947'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'FileSizeBytes')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1261,8 +933,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            'c0d41598-0d88-49ce-8642-da14ccade2ce',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '257b0084-ea5f-4325-9f92-60a6c0ffb947',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100010,
             'FileSizeBytes',
             'File Size Bytes',
@@ -1292,8 +964,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '58610d24-9956-41e5-a219-48f5b6c78dbd'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Width')
+         WHERE ID = '7d653d7b-985e-44b5-b220-9e93cc559d0d'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'Width')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1326,8 +998,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '58610d24-9956-41e5-a219-48f5b6c78dbd',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '7d653d7b-985e-44b5-b220-9e93cc559d0d',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100011,
             'Width',
             'Width',
@@ -1357,8 +1029,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '5f6c5868-6389-4da6-9a8d-406db03f7cdf'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Height')
+         WHERE ID = 'dbbcd366-b3ab-4b03-8ee1-47429c0a65df'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'Height')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1391,8 +1063,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '5f6c5868-6389-4da6-9a8d-406db03f7cdf',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            'dbbcd366-b3ab-4b03-8ee1-47429c0a65df',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100012,
             'Height',
             'Height',
@@ -1422,8 +1094,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '5ba531df-3d07-433b-bcf9-f652f43c02e5'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'DurationSeconds')
+         WHERE ID = '53fe9deb-d1a9-4130-8233-15fe3b62ded0'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'DurationSeconds')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1456,8 +1128,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '5ba531df-3d07-433b-bcf9-f652f43c02e5',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '53fe9deb-d1a9-4130-8233-15fe3b62ded0',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100013,
             'DurationSeconds',
             'Duration Seconds',
@@ -1487,8 +1159,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'da0a3956-e102-4b17-8c67-fed887e7365e'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'Metadata')
+         WHERE ID = 'aca5d96a-9c5f-4dcf-976e-1dd45c66461b'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'Metadata')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1521,8 +1193,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            'da0a3956-e102-4b17-8c67-fed887e7365e',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            'aca5d96a-9c5f-4dcf-976e-1dd45c66461b',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100014,
             'Metadata',
             'Metadata',
@@ -1552,8 +1224,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '0ce148dd-906f-45a2-9185-aecbad1ba6ac'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = '__mj_CreatedAt')
+         WHERE ID = '3129f5b4-2f39-4991-a4b4-49821f6fdaf1'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = '__mj_CreatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1586,8 +1258,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '0ce148dd-906f-45a2-9185-aecbad1ba6ac',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '3129f5b4-2f39-4991-a4b4-49821f6fdaf1',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100015,
             '__mj_CreatedAt',
             'Created At',
@@ -1617,8 +1289,8 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '8acc344e-6134-432e-8629-a2e738fa7eeb'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = '__mj_UpdatedAt')
+         WHERE ID = 'eafb19ac-10b4-432d-8f35-46e0f75294c1'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = '__mj_UpdatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1651,9 +1323,334 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
          )
          VALUES
          (
-            '8acc344e-6134-432e-8629-a2e738fa7eeb',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            'eafb19ac-10b4-432d-8f35-46e0f75294c1',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100016,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '6f060635-7133-44ce-8b30-3cd01a268806'  OR 
+               (EntityID = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6' AND Name = 'ID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '6f060635-7133-44ce-8b30-3cd01a268806',
+            'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', -- Entity: MJ: Test Run Output Types
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'e3440032-2077-44a9-ac17-051d04ea6f9d'  OR 
+               (EntityID = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6' AND Name = 'Name')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'e3440032-2077-44a9-ac17-051d04ea6f9d',
+            'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', -- Entity: MJ: Test Run Output Types
+            100002,
+            'Name',
+            'Name',
+            'Unique name identifying this output type (e.g., Screenshot, Log, Data, Video)',
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'f58c6e89-6415-41a0-b577-d7645ae801b9'  OR 
+               (EntityID = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6' AND Name = 'Description')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'f58c6e89-6415-41a0-b577-d7645ae801b9',
+            'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', -- Entity: MJ: Test Run Output Types
+            100003,
+            'Description',
+            'Description',
+            'Description of what this output type represents and when it is used',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '5cb629cb-9021-4d1e-b11c-522e61933b65'  OR 
+               (EntityID = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6' AND Name = '__mj_CreatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '5cb629cb-9021-4d1e-b11c-522e61933b65',
+            'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', -- Entity: MJ: Test Run Output Types
+            100004,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '97ac25d1-088e-4fc5-a3ff-7c7355be483e'  OR 
+               (EntityID = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6' AND Name = '__mj_UpdatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '97ac25d1-088e-4fc5-a3ff-7c7355be483e',
+            'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', -- Entity: MJ: Test Run Output Types
+            100005,
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -1683,11 +1680,11 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '1e163a6d-ffeb-4770-b276-f302d7267463'
+      WHERE ID = 'aa16d9a0-5588-4b2e-872e-caf71b527b9c'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('1e163a6d-ffeb-4770-b276-f302d7267463', '5DFD821D-E23E-43D3-8A41-60A7D36AE1BA', '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', 'TestRunID', 'One To Many', 1, 1, 'MJ: Test Run Outputs', 1);
+                              VALUES ('aa16d9a0-5588-4b2e-872e-caf71b527b9c', '5DFD821D-E23E-43D3-8A41-60A7D36AE1BA', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'TestRunID', 'One To Many', 1, 1, 'MJ: Test Run Outputs', 1);
    END
                               
 
@@ -1696,11 +1693,11 @@ ALTER TABLE [${flyway:defaultSchema}].[TestRunOutput] ADD __mj_UpdatedAt DATETIM
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '82cbbc83-623f-4061-978f-de3e315be710'
+      WHERE ID = 'a2867775-023b-4fd5-97d5-0e85afd74bdc'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('82cbbc83-623f-4061-978f-de3e315be710', 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', 'OutputTypeID', 'One To Many', 1, 1, 'MJ: Test Run Outputs', 2);
+                              VALUES ('a2867775-023b-4fd5-97d5-0e85afd74bdc', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'OutputTypeID', 'One To Many', 1, 1, 'MJ: Test Run Outputs', 2);
    END
                               
 
@@ -1982,14 +1979,14 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID ON [${flyway:defaultSchema}].[TestRunOutput] ([OutputTypeID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 1EEF9657-70FD-44D5-A9B9-8328022830D4 */
+/* SQL text to update entity field related entity name field map for entity field ID 72663DD0-11B3-43BF-9896-29BA131291FF */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='1EEF9657-70FD-44D5-A9B9-8328022830D4',
+         @EntityFieldID='72663DD0-11B3-43BF-9896-29BA131291FF',
          @RelatedEntityNameFieldMap='TestRun'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3AC5720D-4327-432F-9FE7-1486EBB84109 */
+/* SQL text to update entity field related entity name field map for entity field ID 660FE22C-F2D0-4372-A4AC-17C33B9BB829 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3AC5720D-4327-432F-9FE7-1486EBB84109',
+         @EntityFieldID='660FE22C-F2D0-4372-A4AC-17C33B9BB829',
          @RelatedEntityNameFieldMap='OutputType'
 
 /* Base View SQL for MJ: Test Run Outputs */
@@ -2323,8 +2320,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutput] TO [cdp_Integ
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '4825e62e-7b04-42e8-b62e-c986d1881a89'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'TestRun')
+         WHERE ID = '032e8231-6926-414e-bed1-093b09c7ee93'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'TestRun')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2357,8 +2354,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutput] TO [cdp_Integ
          )
          VALUES
          (
-            '4825e62e-7b04-42e8-b62e-c986d1881a89',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '032e8231-6926-414e-bed1-093b09c7ee93',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100033,
             'TestRun',
             'Test Run',
@@ -2388,8 +2385,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutput] TO [cdp_Integ
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '6dc40152-a5d9-446f-8263-2ef3abee58a2'  OR 
-               (EntityID = '9081FD46-1EAF-487A-9F6C-AF6679D65CD8' AND Name = 'OutputType')
+         WHERE ID = '44b424a4-928a-4479-881b-ca8eaa53f130'  OR 
+               (EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4' AND Name = 'OutputType')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2422,8 +2419,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutput] TO [cdp_Integ
          )
          VALUES
          (
-            '6dc40152-a5d9-446f-8263-2ef3abee58a2',
-            '9081FD46-1EAF-487A-9F6C-AF6679D65CD8', -- Entity: MJ: Test Run Outputs
+            '44b424a4-928a-4479-881b-ca8eaa53f130',
+            '51BC27F7-DC57-4372-8812-3F219FA762B4', -- Entity: MJ: Test Run Outputs
             100034,
             'OutputType',
             'Output Type',
@@ -2453,25 +2450,99 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTestRunOutput] TO [cdp_Integ
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET IsNameField = 1
-            WHERE ID = '1C9B6404-1DAD-451F-BC19-8F42D7F02DFA'
+            WHERE ID = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
             AND AutoUpdateIsNameField = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '1C9B6404-1DAD-451F-BC19-8F42D7F02DFA'
+            WHERE ID = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
             AND AutoUpdateDefaultInView = 1
          
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
-            WHERE ID = '13321AE0-3AA2-4705-8361-47BC679E3784'
+            WHERE ID = 'F58C6E89-6415-41A0-B577-D7645AE801B9'
             AND AutoUpdateDefaultInView = 1
          
 
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '1C9B6404-1DAD-451F-BC19-8F42D7F02DFA'
+               WHERE ID = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+/* Set field properties for entity */
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET IsNameField = 1
+            WHERE ID = 'F30B5229-C80D-4C84-A9DD-327A6CE5E738'
+            AND AutoUpdateIsNameField = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = 'F333C5AA-490F-437A-8799-27318AEE6995'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = 'F30B5229-C80D-4C84-A9DD-327A6CE5E738'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '85BB9D46-27DF-4763-B832-7EE9259100A0'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '3129F5B4-2F39-4991-A4B4-49821F6FDAF1'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '032E8231-6926-414E-BED1-093B09C7EE93'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = '44B424A4-928A-4479-881B-CA8EAA53F130'
+            AND AutoUpdateDefaultInView = 1
+         
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'F30B5229-C80D-4C84-A9DD-327A6CE5E738'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'B07389FA-3E06-4E15-A65B-EF4BE19CE648'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '85BB9D46-27DF-4763-B832-7EE9259100A0'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '032E8231-6926-414E-BED1-093B09C7EE93'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].EntityField
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '44B424A4-928A-4479-881B-CA8EAA53F130'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
@@ -2482,7 +2553,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'ID',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = 'EA56125C-5F4C-4B58-9932-F97985CF7552'
+   WHERE ID = '6F060635-7133-44CE-8B30-3CD01A268806'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'Output Type Details',
@@ -2490,7 +2561,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Name',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '1C9B6404-1DAD-451F-BC19-8F42D7F02DFA'
+   WHERE ID = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'Output Type Details',
@@ -2498,7 +2569,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Description',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = '13321AE0-3AA2-4705-8361-47BC679E3784'
+   WHERE ID = 'F58C6E89-6415-41A0-B577-D7645AE801B9'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'System Metadata',
@@ -2506,7 +2577,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Created At',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = 'A7C31957-EB83-4AE2-A3BA-15C96867D976'
+   WHERE ID = '5CB629CB-9021-4D1E-B11C-522E61933B65'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'System Metadata',
@@ -2514,32 +2585,204 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Updated At',
        ExtendedType = NULL,
        CodeType = NULL
-   WHERE ID = 'B13ABBC2-3597-430B-B273-10253F6DBF7F'
+   WHERE ID = '97AC25D1-088E-4FC5-A3FF-7C7355BE483E'
    AND AutoUpdateCategory = 1
 
-/* Set entity icon to fa fa-file-alt */
+/* Set entity icon to fa fa-file-code */
 
                UPDATE [${flyway:defaultSchema}].Entity
-               SET Icon = 'fa fa-file-alt', __mj_UpdatedAt = GETUTCDATE()
-               WHERE ID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94'
+               SET Icon = 'fa fa-file-code', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6'
             
 
 /* Insert FieldCategoryInfo setting for entity */
 
             INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-            VALUES ('2d134f3a-622c-47ac-8013-88f32990c54e', 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', 'FieldCategoryInfo', '{"Output Type Details":{"icon":"fa fa-tag","description":"Basic identification and descriptive information for the test run output category"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE())
+            VALUES ('e097f582-b6fb-4444-b9e1-cd7d289afe59', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', 'FieldCategoryInfo', '{"Output Type Details":{"icon":"fa fa-vial","description":"Core information defining the specific type of test output such as logs, screenshots, or video."},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE())
          
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
             INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-            VALUES ('a3003744-94b2-4144-b385-8b5e632c7a19', 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94', 'FieldCategoryIcons', '{"Output Type Details":"fa fa-tag","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+            VALUES ('7abda917-5743-4a36-a5e5-4f68808ee748', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', 'FieldCategoryIcons', '{"Output Type Details":"fa fa-vial","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
          
 
 /* Set DefaultForNewUser=0 for NEW entity (category: reference, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].ApplicationEntity
          SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
-         WHERE EntityID = 'C8F50A7B-D4D2-4AC0-BE92-8B7F6483EE94'
+         WHERE EntityID = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6'
+      
+
+/* Set categories for 18 fields */
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'System Metadata',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'ID',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '09DF0F14-7259-40E3-B17A-AB54C5529BD1'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Test Context',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Test Run',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '72663DD0-11B3-43BF-9896-29BA131291FF'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Test Context',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Test Run Name',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '032E8231-6926-414E-BED1-093B09C7EE93'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Test Context',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Sequence',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'F866BC1E-5D1B-48C8-8BA6-8E71B2E8D7CC'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Test Context',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Step Number',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'F333C5AA-490F-437A-8799-27318AEE6995'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Output Information',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Output Type',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '660FE22C-F2D0-4372-A4AC-17C33B9BB829'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Output Information',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Output Type Name',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '44B424A4-928A-4479-881B-CA8EAA53F130'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Output Information',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Name',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'F30B5229-C80D-4C84-A9DD-327A6CE5E738'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Output Information',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Description',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'B07389FA-3E06-4E15-A65B-EF4BE19CE648'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Data and Media',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'MIME Type',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '85BB9D46-27DF-4763-B832-7EE9259100A0'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Data and Media',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Inline Data',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '79A10F51-C0FF-40C1-AF59-E82F6CC67D04'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Data and Media',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'File Size (Bytes)',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '257B0084-EA5F-4325-9F92-60A6C0FFB947'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Data and Media',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Width',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '7D653D7B-985E-44B5-B220-9E93CC559D0D'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Data and Media',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Height',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'DBBCD366-B3AB-4B03-8EE1-47429C0A65DF'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Data and Media',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Duration (Seconds)',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '53FE9DEB-D1A9-4130-8233-15FE3B62DED0'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'Data and Media',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Technical Metadata',
+       ExtendedType = 'Code',
+       CodeType = 'Other'
+   WHERE ID = 'ACA5D96A-9C5F-4DCF-976E-1DD45C66461B'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'System Metadata',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Created At',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = '3129F5B4-2F39-4991-A4B4-49821F6FDAF1'
+   AND AutoUpdateCategory = 1
+UPDATE [${flyway:defaultSchema}].EntityField
+   SET Category = 'System Metadata',
+       GeneratedFormSection = 'Category',
+       DisplayName = 'Updated At',
+       ExtendedType = NULL,
+       CodeType = NULL
+   WHERE ID = 'EAFB19AC-10B4-432D-8F35-46E0F75294C1'
+   AND AutoUpdateCategory = 1
+
+/* Set entity icon to fa fa-file-image */
+
+               UPDATE [${flyway:defaultSchema}].Entity
+               SET Icon = 'fa fa-file-image', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = '51BC27F7-DC57-4372-8812-3F219FA762B4'
+            
+
+/* Insert FieldCategoryInfo setting for entity */
+
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('a2225df6-d49a-4079-8e48-029ee82bee9d', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'FieldCategoryInfo', '{"Test Context":{"icon":"fa fa-flask","description":"Information linking this output to the specific test run, step, and execution sequence"},"Output Information":{"icon":"fa fa-info-circle","description":"Basic identification and categorization of the test artifact"},"Data and Media":{"icon":"fa fa-photo-video","description":"The actual content, dimensions, and technical properties of the test output"},"System Metadata":{"icon":"fa fa-cog","description":"Internal identifiers and audit timestamps managed by the system"}}', GETUTCDATE(), GETUTCDATE())
+         
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+            INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+            VALUES ('9b139486-7c93-4fe9-9209-bb5e9f43bc21', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'FieldCategoryIcons', '{"Test Context":"fa fa-flask","Output Information":"fa fa-info-circle","Data and Media":"fa fa-photo-video","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+         
+
+/* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].ApplicationEntity
+         SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = '51BC27F7-DC57-4372-8812-3F219FA762B4'
       
 
