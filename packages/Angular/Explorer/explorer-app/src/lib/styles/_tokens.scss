@@ -209,6 +209,14 @@
   --mj-highlight-subtle: var(--mj-brand-accent-subtle);
   --mj-on-highlight: var(--mj-brand-on-accent);
 
+  /* Login Banner Gradient & Waves */
+  --mj-login-grad-start: var(--mj-color-brand-900);
+  --mj-login-grad-mid:   var(--mj-color-brand-700);
+  --mj-login-grad-end:   var(--mj-color-brand-300);
+  --mj-login-wave-1:     var(--mj-color-brand-500);
+  --mj-login-wave-2:     var(--mj-color-accent-400);
+  --mj-login-wave-3:     var(--mj-color-brand-300);
+
   /* ========================================
      TYPOGRAPHY
      ======================================== */
@@ -226,6 +234,9 @@
   --mj-text-2xl: 1.5rem;      /* 24px */
   --mj-text-3xl: 1.875rem;    /* 30px */
   --mj-text-4xl: 2.25rem;     /* 36px */
+  --mj-text-5xl: 3rem;        /* 48px */
+  --mj-text-6xl: 3.75rem;     /* 60px */
+  --mj-text-display: 5rem;    /* 80px - hero/display headings */
 
   /* Font Weights */
   --mj-font-normal: 400;
@@ -412,4 +423,12 @@
   --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
   --mj-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
   --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+
+  /* Login Banner Gradient & Waves */
+  --mj-login-grad-start: var(--mj-color-neutral-950);
+  --mj-login-grad-mid:   var(--mj-color-brand-900);
+  --mj-login-grad-end:   var(--mj-color-brand-700);
+  --mj-login-wave-1:     var(--mj-color-accent-500);
+  --mj-login-wave-2:     var(--mj-color-tertiary-400);
+  --mj-login-wave-3:     var(--mj-color-brand-400);
 }
