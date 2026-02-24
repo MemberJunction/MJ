@@ -1,5 +1,51 @@
 # @memberjunction/ng-conversations
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.3.1
+- @memberjunction/ai@5.3.1
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/ng-testing@5.3.1
+- @memberjunction/ng-artifacts@5.3.1
+- @memberjunction/ng-base-types@5.3.1
+- @memberjunction/ng-code-editor@5.3.1
+- @memberjunction/ng-container-directives@5.3.1
+- @memberjunction/ng-markdown@5.3.1
+- @memberjunction/ng-notifications@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/ng-tasks@5.3.1
+- @memberjunction/graphql-dataprovider@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- a6aea29: Fix artifact auto-open for delegated sub-agent completions, add SSE-aware request method and fire-and-forget GraphQL mutation to prevent Azure proxy timeouts, fix WebSocket reconnection catch-up check, and remove crossOrigin CORS enforcement with fallback CDN support in React runtime
+- Updated dependencies [a6aea29]
+- Updated dependencies [1692c53]
+- Updated dependencies [7af1846]
+  - @memberjunction/graphql-dataprovider@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-artifacts@5.3.0
+  - @memberjunction/ng-testing@5.3.0
+  - @memberjunction/ng-notifications@5.3.0
+  - @memberjunction/ai-engine-base@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/ng-base-types@5.3.0
+  - @memberjunction/ng-code-editor@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/ng-tasks@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/ng-container-directives@5.3.0
+  - @memberjunction/ng-markdown@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

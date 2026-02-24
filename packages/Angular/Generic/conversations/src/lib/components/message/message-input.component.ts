@@ -1530,19 +1530,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
         await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', subResult);
 
-        // Server created artifacts - emit event to trigger UI reload
-        if (subResult.payload && Object.keys(subResult.payload).length > 0) {
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: agentResponseMessage.ID,
-            name: ''
-          });
-          console.log('🎨 Server created artifact for sub-agent message:', agentResponseMessage.ID);
-          // Re-emit to trigger artifact display
-          this.messageSent.emit(agentResponseMessage);
-        }
+        // Always emit artifactCreated to trigger UI reload — the server may have created
+        // artifacts even when the result payload is empty (e.g., remote stage server).
+        // onArtifactCreated will reload from DB and discover any artifacts that exist.
+        this.artifactCreated.emit({
+          artifactId: '',
+          versionId: '',
+          versionNumber: 0,
+          conversationDetailId: agentResponseMessage.ID,
+          name: ''
+        });
+        this.messageSent.emit(agentResponseMessage);
 
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
@@ -1578,17 +1576,15 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
           await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', retryResult);
 
-          // Server created artifacts - emit event to trigger UI reload
-          if (retryResult.payload && Object.keys(retryResult.payload).length > 0) {
-            this.artifactCreated.emit({
-              artifactId: '',
-              versionId: '',
-              versionNumber: 0,
-              conversationDetailId: agentResponseMessage.ID,
-              name: ''
-            });
-            this.messageSent.emit(agentResponseMessage);
-          }
+          // Always emit artifactCreated to trigger UI reload (same as initial attempt)
+          this.artifactCreated.emit({
+            artifactId: '',
+            versionId: '',
+            versionNumber: 0,
+            conversationDetailId: agentResponseMessage.ID,
+            name: ''
+          });
+          this.messageSent.emit(agentResponseMessage);
 
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         } else {

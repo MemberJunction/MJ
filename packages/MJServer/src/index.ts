@@ -475,6 +475,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     graphqlRootPath,
     cors<cors.CorsRequest>(),
     BodyParser.json({ limit: '50mb' }),
+    // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
+    // Apollo Server's expressMiddleware requires req.body to be defined.
+    (req, _res, next) => { if (req.body === undefined) req.body = {}; next(); },
     expressMiddleware(apolloServer, {
       context: contextFunction({
                                  setupComplete$,

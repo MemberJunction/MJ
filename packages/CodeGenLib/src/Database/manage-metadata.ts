@@ -3714,7 +3714,6 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
     * Checks if a table has a soft primary key defined in the additionalSchemaInfo JSON file (configured in mj.config.cjs)
     */
    protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
-      // Check if additionalSchemaInfo is configured
       if (!configInfo.additionalSchemaInfo) {
          return false;
       }
@@ -3727,18 +3726,23 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
 
       try {
          const config = ManageMetadataBase.getSoftPKFKConfig();
-         if (!config || !config.tables) {
-            logStatus(`         [Soft PK Check] Config file found but no tables array`);
+         if (!config) {
+            logStatus(`         [Soft PK Check] Config file found but could not be parsed`);
             return false;
          }
-         const tableConfig = config.tables.find(
-            (t: { schemaName?: string; tableName?: string }) =>
-               t.schemaName?.toLowerCase() === schemaName?.toLowerCase() &&
-               t.tableName?.toLowerCase() === tableName?.toLowerCase()
+         const tables = this.extractTablesFromConfig(config);
+         if (tables.length === 0) {
+            logStatus(`         [Soft PK Check] Config file found but no tables defined`);
+            return false;
+         }
+         const tableConfig = tables.find(
+            (t) =>
+               t.SchemaName.toLowerCase() === schemaName?.toLowerCase() &&
+               t.TableName.toLowerCase() === tableName?.toLowerCase()
          );
-         const found = Boolean(tableConfig?.primaryKeys && tableConfig.primaryKeys.length > 0);
+         const found = Boolean(tableConfig?.PrimaryKey && tableConfig.PrimaryKey.length > 0);
          if (!found) {
-            logStatus(`         [Soft PK Check] No config found for ${schemaName}.${tableName} (config has ${config.tables.length} tables)`);
+            logStatus(`         [Soft PK Check] No config found for ${schemaName}.${tableName} (config has ${tables.length} tables)`);
          }
          return found;
       } catch (e) {

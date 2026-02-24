@@ -1,21 +1,35 @@
+/* ===========================================
+   Legacy Variables (with token fallbacks)
 
-// variables using theme 
+   These variables maintain backward compatibility
+   with existing styles while the codebase migrates
+   to design tokens.
+
+   DEPRECATED: Use design tokens from _tokens.scss
+   These will be removed in a future version.
+   =========================================== */
+
 :root {
-  --navy: #092340;
-  --light-blue: #AAE7FD;
-  --gray-600: #F4F4F4;
-  --gray-700: #D9D9D9;
-  --gray-800: #AAA;
-  --gray-900: #333;
-  --mj-blue: #0076B6;
-  --white-color: #FFF;
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  --border-radius: 1rem;
-  --transition-time: .3s ease;
-  /* Kendo UI Colors */
-  --kendo-color-primary: #0076B6;
-  --kendo-color-secondary: #092340;
-  --kendo-color-primary-hover: #0076B6;
-  --kendo-color-secondary-hover: #092340;
-  --kendo-color-primary-on-surface: #0076B6;
+  /* Legacy colors - map to design tokens where possible */
+  --navy: var(--mj-color-brand-900);
+  --light-blue: var(--mj-color-accent-300);
+  --gray-600: var(--mj-color-neutral-100);
+  --gray-700: var(--mj-color-neutral-200);
+  --gray-800: var(--mj-color-neutral-400);
+  --gray-900: var(--mj-color-neutral-700);
+  --mj-blue: var(--mj-color-brand-500);
+  --white-color: var(--mj-color-neutral-0);
+  --med-gray: var(--mj-color-neutral-200);
+
+  /* Legacy effects - map to design tokens */
+  --shadow: var(--mj-shadow-md);
+  --border-radius: var(--mj-radius-lg);
+  --transition-time: var(--mj-transition-base);
+
+  /* Kendo UI Colors - map to design tokens */
+  --kendo-color-primary: var(--mj-color-brand-500);
+  --kendo-color-secondary: var(--mj-color-brand-900);
+  --kendo-color-primary-hover: var(--mj-color-brand-600);
+  --kendo-color-secondary-hover: var(--mj-color-brand-800);
+  --kendo-color-primary-on-surface: var(--mj-color-brand-500);
 }

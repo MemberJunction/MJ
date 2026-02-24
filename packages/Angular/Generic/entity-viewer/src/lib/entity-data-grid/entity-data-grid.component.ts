@@ -1734,6 +1734,16 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           index
         }));
       }
+    } else if (!hasExplicitOrderBy && hasSortFromGridState) {
+      // Apply GridState sort settings to _sortState so the initial data load
+      // includes the correct ORDER BY clause. Without this, _sortState remains
+      // empty and buildOrderByClause() returns '' — causing the SQL to omit
+      // ORDER BY on the first page load.
+      this._sortState = this._gridState!.sortSettings!.map((sortSetting, index) => ({
+        field: sortSetting.field,
+        direction: sortSetting.dir,
+        index: index
+      }));
     }
   }
 
@@ -1853,6 +1863,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       this.gridApi.setGridOption('columnDefs', this.agColumnDefs);
       // Force refresh all cells to apply new highlighting
       this.gridApi.refreshCells({ force: true });
+      // Apply AG Grid quick filter to actually filter rows client-side
+      this.gridApi.setGridOption('quickFilterText', this._filterText || undefined);
     }
   }
 

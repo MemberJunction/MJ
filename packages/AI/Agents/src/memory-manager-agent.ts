@@ -396,13 +396,13 @@ export class MemoryManagerAgent extends BaseAgent {
             ID IN (
                 SELECT DISTINCT ar.ID
                 FROM __mj.AIAgentRun ar
-                INNER JOIN __mj.Conversation c ON ar.ConversationID = c.ID
-                INNER JOIN __mj.ConversationDetail cd ON cd.ConversationID = c.ID
-                INNER JOIN __mj.ConversationDetailArtifact cda ON cda.ConversationDetailID = cd.ID
-                INNER JOIN __mj.ArtifactVersion av ON av.ID = cda.ArtifactVersionID
+                INNER JOIN __mj.vwConversations c ON ar.ConversationID = c.ID
+                INNER JOIN __mj.vwConversationDetails cd ON cd.ConversationID = c.ID
+                INNER JOIN __mj.vwConversationDetailArtifacts cda ON cda.ConversationDetailID = cd.ID
+                INNER JOIN __mj.vwArtifactVersions av ON av.ID = cda.ArtifactVersionID
                 WHERE EXISTS (
                     SELECT 1
-                    FROM __mj.ArtifactUse au
+                    FROM __mj.vwArtifactUses au
                     WHERE au.ArtifactVersionID = av.ID
                     ${sinceFilter}
                     GROUP BY au.ArtifactVersionID
