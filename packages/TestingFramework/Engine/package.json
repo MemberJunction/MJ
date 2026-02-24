@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/testing-engine",
   "type": "module",
-  "version": "5.2.0",
+  "version": "5.3.1",
   "description": "MemberJunction Testing Framework Engine - Core test execution and evaluation engine supporting multiple test types",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,15 +24,15 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/ai": "5.2.0",
-    "@memberjunction/ai-agents": "5.2.0",
-    "@memberjunction/ai-core-plus": "5.2.0",
-    "@memberjunction/ai-prompts": "5.2.0",
-    "@memberjunction/aiengine": "5.2.0",
-    "@memberjunction/core": "5.2.0",
-    "@memberjunction/core-entities": "5.2.0",
-    "@memberjunction/global": "5.2.0",
-    "@memberjunction/testing-engine-base": "5.2.0",
+    "@memberjunction/ai": "5.3.1",
+    "@memberjunction/ai-agents": "5.3.1",
+    "@memberjunction/ai-core-plus": "5.3.1",
+    "@memberjunction/ai-prompts": "5.3.1",
+    "@memberjunction/aiengine": "5.3.1",
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/core-entities": "5.3.1",
+    "@memberjunction/global": "5.3.1",
+    "@memberjunction/testing-engine-base": "5.3.1",
     "debug": "^4.4.3",
     "rxjs": "^7.8.2",
     "zod": "~3.24.4"

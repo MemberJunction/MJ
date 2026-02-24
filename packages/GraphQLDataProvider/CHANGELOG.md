@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/interactive-component-types@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- a6aea29: Fix artifact auto-open for delegated sub-agent completions, add SSE-aware request method and fire-and-forget GraphQL mutation to prevent Azure proxy timeouts, fix WebSocket reconnection catch-up check, and remove crossOrigin CORS enforcement with fallback CDN support in React runtime
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/interactive-component-types@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

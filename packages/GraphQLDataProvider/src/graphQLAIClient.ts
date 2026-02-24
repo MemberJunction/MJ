@@ -33,6 +33,14 @@ import { SafeJSONParse } from "@memberjunction/global";
  */
 export class GraphQLAIClient {
     /**
+     * Timeout for fire-and-forget agent execution completion wait (15 minutes).
+     * Agent execution can take a long time, especially for complex Skip operations.
+     * This is a safety net — if no completion event arrives within this window,
+     * the client stops waiting and advises the user to refresh.
+     */
+    private static readonly FIRE_AND_FORGET_TIMEOUT_MS = 15 * 60 * 1000;
+
+    /**
      * The GraphQLDataProvider instance used to execute GraphQL requests
      * @private
      */
@@ -470,11 +478,28 @@ export class GraphQLAIClient {
      */
     private handleAgentError(e: unknown): ExecuteAgentResult {
         const error = e as Error;
-        LogError(`Error running AI agent: ${error}`);
+        const errorMessage = error?.message || String(e);
+        LogError(`Error running AI agent: ${errorMessage}`);
+
+        // Provide a meaningful error message that helps the user understand what happened.
+        // CORS/network errors from Azure proxy timeouts appear as "Failed to fetch".
+        const isFetchError = errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError');
+        const isTimeoutError = errorMessage.includes('timed out') || errorMessage.includes('timeout');
+
+        let userMessage: string;
+        if (isFetchError) {
+            userMessage = 'Lost connection to the server. The agent may still be running. Please refresh to check the latest status.';
+        } else if (isTimeoutError) {
+            userMessage = errorMessage; // Already has a helpful message from the completion timeout
+        } else {
+            userMessage = errorMessage;
+        }
+
         return {
             success: false,
-            agentRun: undefined
-        };
+            agentRun: undefined,
+            errorMessage: userMessage
+        } as ExecuteAgentResult;
     }
 
     /**
@@ -507,38 +532,79 @@ export class GraphQLAIClient {
         params: RunAIAgentFromConversationDetailParams
     ): Promise<ExecuteAgentResult> {
         let subscription: ReturnType<typeof this._dataProvider.PushStatusUpdates.prototype.subscribe> | undefined;
+        let completionTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
         try {
-            // Subscribe to progress updates if callback provided
-            if (params.onProgress) {
-                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
-                    .subscribe((message: string) => {
-                        try {
-                            const parsed = JSON.parse(message);
+            // Set up a promise that resolves when we receive the completion event via WebSocket.
+            // This allows us to use fire-and-forget mode where the HTTP mutation returns immediately,
+            // avoiding Azure Web App proxy timeouts (~230s) on long-running agent executions.
+            let resolveCompletion!: (value: ExecuteAgentResult) => void;
+            let rejectCompletion!: (reason: Error) => void;
+            const completionPromise = new Promise<ExecuteAgentResult>((resolve, reject) => {
+                resolveCompletion = resolve;
+                rejectCompletion = reject;
+            });
 
-                            // Filter for ExecutionProgress messages from RunAIAgentResolver
-                            if (parsed.resolver === 'RunAIAgentResolver' &&
-                                parsed.type === 'ExecutionProgress' &&
-                                parsed.status === 'ok' &&
-                                parsed.data?.progress) {
+            // Set up timeout for the completion wait
+            completionTimeoutId = setTimeout(() => {
+                rejectCompletion(new Error(
+                    'The agent may still be running on the server but the connection timed out after 15 minutes. ' +
+                    'Please refresh the page to check the latest status.'
+                ));
+            }, GraphQLAIClient.FIRE_AND_FORGET_TIMEOUT_MS);
 
-                                // Forward progress to callback with agentRunId in metadata
-                                const progressWithRunId = {
-                                    ...parsed.data.progress,
-                                    metadata: {
-                                        ...(parsed.data.progress.metadata || {}),
-                                        agentRunId: parsed.data.agentRunId
-                                    }
-                                };
-                                params.onProgress!(progressWithRunId);
-                            }
-                        } catch (e) {
-                            console.error('[GraphQLAIClient] Failed to parse progress message:', e);
+            // Always subscribe to PubSub updates (for both progress forwarding and completion detection)
+            subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
+                .subscribe((message: string) => {
+                    try {
+                        const parsed = JSON.parse(message);
+
+                        // Forward progress updates to callback if provided
+                        if (params.onProgress &&
+                            parsed.resolver === 'RunAIAgentResolver' &&
+                            parsed.type === 'ExecutionProgress' &&
+                            parsed.status === 'ok' &&
+                            parsed.data?.progress) {
+
+                            // Forward progress to callback with agentRunId in metadata
+                            const progressWithRunId = {
+                                ...parsed.data.progress,
+                                metadata: {
+                                    ...(parsed.data.progress.metadata || {}),
+                                    agentRunId: parsed.data.agentRunId
+                                }
+                            };
+                            params.onProgress!(progressWithRunId);
                         }
-                    });
-            }
 
-            // Build the mutation
+                        // Listen for completion event matching our conversationDetailId.
+                        // The server publishes this via PublishStreamingUpdate with type='StreamingContent'
+                        // and the inner data has type='complete'.
+                        if (parsed.resolver === 'RunAIAgentResolver' &&
+                            parsed.type === 'StreamingContent' &&
+                            parsed.status === 'ok' &&
+                            parsed.data?.type === 'complete' &&
+                            parsed.data?.conversationDetailId === params.conversationDetailId) {
+
+                            if (completionTimeoutId) clearTimeout(completionTimeoutId);
+
+                            // Parse the enriched result data included in the completion event
+                            if (parsed.data.result) {
+                                resolveCompletion(SafeJSONParse(parsed.data.result) as ExecuteAgentResult);
+                            } else {
+                                // Completion event without result data (backward compatibility)
+                                resolveCompletion({
+                                    success: parsed.data.success !== false,
+                                    agentRun: undefined
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[GraphQLAIClient] Failed to parse progress message:', e);
+                    }
+                });
+
+            // Build the fire-and-forget mutation
             const mutation = gql`
                 mutation RunAIAgentFromConversationDetail(
                     $conversationDetailId: String!,
@@ -553,7 +619,8 @@ export class GraphQLAIClient {
                     $createArtifacts: Boolean,
                     $createNotification: Boolean,
                     $sourceArtifactId: String,
-                    $sourceArtifactVersionId: String
+                    $sourceArtifactVersionId: String,
+                    $fireAndForget: Boolean
                 ) {
                     RunAIAgentFromConversationDetail(
                         conversationDetailId: $conversationDetailId,
@@ -568,7 +635,8 @@ export class GraphQLAIClient {
                         createArtifacts: $createArtifacts,
                         createNotification: $createNotification,
                         sourceArtifactId: $sourceArtifactId,
-                        sourceArtifactVersionId: $sourceArtifactVersionId
+                        sourceArtifactVersionId: $sourceArtifactVersionId,
+                        fireAndForget: $fireAndForget
                     ) {
                         success
                         errorMessage
@@ -578,11 +646,12 @@ export class GraphQLAIClient {
                 }
             `;
 
-            // Prepare variables
+            // Prepare variables with fireAndForget enabled
             const variables: Record<string, unknown> = {
                 conversationDetailId: params.conversationDetailId,
                 agentId: params.agentId,
-                sessionId: this._dataProvider.sessionId
+                sessionId: this._dataProvider.sessionId,
+                fireAndForget: true
             };
 
             // Add optional parameters
@@ -601,15 +670,28 @@ export class GraphQLAIClient {
             if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
             if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
 
-            // Execute the mutation
-            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+            // Execute the fire-and-forget mutation (returns immediately after server validates input)
+            const mutationResult = await this._dataProvider.ExecuteGQL(mutation, variables);
+            const ack = mutationResult.RunAIAgentFromConversationDetail;
 
-            // Process and return the result
-            return this.processAgentResult(result.RunAIAgentFromConversationDetail?.result);
+            // Check if the server accepted the request
+            if (!ack?.success) {
+                if (completionTimeoutId) clearTimeout(completionTimeoutId);
+                return {
+                    success: false,
+                    agentRun: undefined,
+                    errorMessage: ack?.errorMessage || 'Server rejected the agent execution request'
+                } as ExecuteAgentResult;
+            }
+
+            // Server accepted - wait for completion via WebSocket
+            return await completionPromise;
         } catch (e) {
+            if (completionTimeoutId) clearTimeout(completionTimeoutId);
             return this.handleAgentError(e);
         } finally {
-            // Always clean up subscription
+            // Always clean up subscription and timeout
+            if (completionTimeoutId) clearTimeout(completionTimeoutId);
             if (subscription) {
                 subscription.unsubscribe();
             }

@@ -433,9 +433,6 @@ export class RunAIAgentResolver extends ResolverBase {
 
             const executionTime = Date.now() - startTime;
 
-            // Publish final events
-            this.publishFinalEvents(pubSub, sessionId, userPayload, result);
-
             // Create notification if enabled and artifact was created successfully
             if (createNotification && result.success && artifactInfo && artifactInfo.artifactId && artifactInfo.versionId && artifactInfo.versionNumber) {
                 await this.createCompletionNotification(
@@ -455,6 +452,9 @@ export class RunAIAgentResolver extends ResolverBase {
             // Create sanitized payload for JSON serialization
             const sanitizedResult = this.sanitizeAgentResult(result);
             const returnResult = JSON.stringify(sanitizedResult);
+
+            // Publish final events with enriched result data for fire-and-forget clients
+            this.publishFinalEvents(pubSub, sessionId, userPayload, result, returnResult);
 
             // Log completion
             if (result.success) {
@@ -491,9 +491,17 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
-     * Publish final streaming events (partial result and completion)
+     * Publish final streaming events (partial result and completion).
+     * The completion event includes the full result JSON so clients using
+     * fire-and-forget mode can receive the result via WebSocket.
      */
-    private publishFinalEvents(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, result: ExecuteAgentResult) {
+    private publishFinalEvents(
+        pubSub: PubSubEngine,
+        sessionId: string,
+        userPayload: UserPayload,
+        result: ExecuteAgentResult,
+        resultJson?: string
+    ) {
         if (result.agentRun) {
             // Get the last step from agent run
             let lastStep = 'Completed';
@@ -519,15 +527,19 @@ export class RunAIAgentResolver extends ResolverBase {
             this.PublishStreamingUpdate(pubSub, partialMsg, userPayload);
         }
 
-        // Publish completion with conversationDetailId for client-side routing
-        const completeMsg: AgentExecutionStreamMessage = {
+        // Publish completion with conversationDetailId for client-side routing.
+        // Include result data so fire-and-forget clients can receive the full result via WebSocket.
+        const completionData: Record<string, unknown> = {
             sessionId,
             agentRunId: result.agentRun?.ID || 'unknown',
             type: 'complete',
             timestamp: new Date(),
-            conversationDetailId: result.agentRun?.ConversationDetailID
+            conversationDetailId: result.agentRun?.ConversationDetailID,
+            success: result.success,
+            errorMessage: result.agentRun?.ErrorMessage || undefined,
+            result: resultJson || undefined
         };
-        this.PublishStreamingUpdate(pubSub, completeMsg, userPayload);
+        this.PublishStreamingUpdate(pubSub, completionData, userPayload);
     }
 
     /**
@@ -742,7 +754,8 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
-        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -769,7 +782,25 @@ export class RunAIAgentResolver extends ResolverBase {
             // Convert to JSON string for the existing executeAIAgent method
             const messagesJson = JSON.stringify(messages);
 
-            // Delegate to existing implementation
+            if (fireAndForget) {
+                // Fire-and-forget mode: start execution in background, return immediately.
+                // The client will receive the result via WebSocket PubSub completion event.
+                this.executeAgentInBackground(
+                    p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                    data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
+                    conversationDetailId, createArtifacts || false, createNotification || false,
+                    sourceArtifactId, sourceArtifactVersionId
+                );
+
+                LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
+
+                return {
+                    success: true,
+                    result: JSON.stringify({ accepted: true, fireAndForget: true })
+                };
+            }
+
+            // Synchronous mode (default): wait for execution to complete
             return this.executeAIAgent(
                 p,
                 dataSource,
@@ -799,6 +830,58 @@ export class RunAIAgentResolver extends ResolverBase {
                 result: JSON.stringify({ success: false, errorMessage })
             };
         }
+    }
+
+    /**
+     * Execute agent in background (fire-and-forget).
+     * Handles errors by publishing error completion events via PubSub,
+     * so the client receives them via WebSocket even though the HTTP response
+     * has already been sent.
+     */
+    private executeAgentInBackground(
+        p: DatabaseProviderBase,
+        dataSource: unknown,
+        agentId: string,
+        userPayload: UserPayload,
+        messagesJson: string,
+        sessionId: string,
+        pubSub: PubSubEngine,
+        data?: string,
+        payload?: string,
+        lastRunId?: string,
+        autoPopulateLastRunPayload?: boolean,
+        configurationId?: string,
+        conversationDetailId?: string,
+        createArtifacts: boolean = false,
+        createNotification: boolean = false,
+        sourceArtifactId?: string,
+        sourceArtifactVersionId?: string
+    ): void {
+        // Execute in background - errors are handled within, not propagated
+        this.executeAIAgent(
+            p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+            data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
+            configurationId, conversationDetailId, createArtifacts, createNotification,
+            sourceArtifactId, sourceArtifactVersionId
+        ).catch((error: unknown) => {
+            // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
+            // so this would only fire for truly unexpected errors).
+            const errorMessage = (error instanceof Error) ? error.message : 'Unknown background execution error';
+            LogError(`🔥 Fire-and-forget background execution failed: ${errorMessage}`, undefined, error);
+
+            // Publish error completion event so the client knows the agent failed
+            const errorCompletionData: Record<string, unknown> = {
+                sessionId,
+                agentRunId: 'unknown',
+                type: 'complete',
+                timestamp: new Date(),
+                conversationDetailId,
+                success: false,
+                errorMessage,
+                result: JSON.stringify({ success: false, errorMessage })
+            };
+            this.PublishStreamingUpdate(pubSub, errorCompletionData, userPayload);
+        });
     }
 
     /**

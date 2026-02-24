@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/ai-recommendations
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes
