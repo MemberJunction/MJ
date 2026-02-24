@@ -1,5 +1,5 @@
 import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
-import { CodeGenConnection, CodeGenTransaction } from './codeGenDatabaseProvider';
+import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult } from './codeGenDatabaseProvider';
 import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity } from "@memberjunction/core-entities";
@@ -198,6 +198,160 @@ export class ManageMetadataBase {
     */
    protected boolLit(value: boolean): string {
       return this.dialect.BooleanLiteral(value);
+   }
+
+   /**
+    * Known MJ metadata column names that need quoting in SQL for PostgreSQL compatibility.
+    * PostgreSQL lowercases unquoted identifiers, so PascalCase column names must be double-quoted.
+    */
+   /**
+    * SQL keywords that should NOT be quoted even when they match PascalCase patterns.
+    */
+   private static readonly _SQL_KEYWORDS = new Set([
+      // DML/DDL keywords
+      'SELECT', 'INSERT', 'INTO', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'NOT',
+      'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'ON', 'AS', 'SET',
+      'VALUES', 'NULL', 'LIKE', 'IN', 'EXISTS', 'BETWEEN', 'CASE', 'WHEN', 'THEN',
+      'ELSE', 'END', 'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION',
+      'ALL', 'CREATE', 'ALTER', 'DROP', 'TABLE', 'INDEX', 'VIEW', 'EXEC', 'DECLARE',
+      'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'TRUE', 'FALSE', 'IS', 'ASC', 'DESC',
+      'DISTINCT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CONSTRAINT', 'DEFAULT',
+      'IF', 'OBJECT', 'TOP', 'WITH', 'OVER', 'PARTITION', 'ROW_NUMBER', 'RANK',
+      'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE', 'ROWS', 'RANGE',
+      'PRECEDING', 'FOLLOWING', 'UNBOUNDED', 'CURRENT', 'ROW', 'FETCH', 'NEXT', 'ONLY',
+      'SCHEMA', 'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'TRIGGER', 'FUNCTION', 'PROCEDURE',
+      'RETURNS', 'RETURN', 'EXECUTE', 'CALL', 'RAISE', 'NOTICE', 'EXCEPTION', 'PERFORM',
+      'GRANT', 'REVOKE', 'TO', 'USAGE', 'PRIVILEGES', 'OWNER',
+      // SQL Server types
+      'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
+      'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',
+      'BIT', 'INT', 'TEXT', 'NTEXT', 'IMAGE', 'BINARY', 'VARBINARY', 'CHAR', 'NCHAR',
+      'XML', 'GEOGRAPHY', 'GEOMETRY', 'HIERARCHYID', 'SQL_VARIANT', 'SYSNAME',
+      'NEWSEQUENTIALID', 'NEWID', 'GETUTCDATE', 'GETDATE', 'SYSDATETIMEOFFSET',
+      'OBJECT_ID', 'SCOPE_IDENTITY',
+      // Aggregate / scalar functions
+      'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
+      'LEN', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
+      'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
+      'DATEADD', 'DATEDIFF', 'DATEPART', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE',
+      'SECOND', 'NOW', 'CURRENT_TIMESTAMP',
+      // PostgreSQL specific
+      'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'UUID', 'JSONB', 'JSON', 'ARRAY', 'TIMESTAMPTZ',
+      'TIMESTAMP', 'DATE', 'TIME', 'INTERVAL', 'CITEXT', 'INET', 'MACADDR',
+      'GEN_RANDOM_UUID', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TO_NUMBER',
+      'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
+      'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',
+      'INOUT', 'OUT', 'VARIADIC', 'PARALLEL', 'SAFE', 'UNSAFE',
+      // MJ SQL constructs
+      'INFORMATION_SCHEMA', 'COLUMNS', 'TABLES', 'ROUTINES',
+   ]);
+
+   /**
+    * Quotes mixed-case identifiers in a SQL string for PostgreSQL compatibility.
+    * Uses a tokenizer to skip string literals, already-quoted identifiers, and SQL keywords.
+    * Any remaining PascalCase word gets double-quoted for PG case preservation.
+    */
+   protected qsql(sql: string): string {
+      if (!this.isPostgreSQL) {
+         return sql;
+      }
+
+      const result: string[] = [];
+      let i = 0;
+      const len = sql.length;
+
+      while (i < len) {
+         const ch = sql[i];
+
+         // Skip single-quoted string literals (including escaped quotes '')
+         if (ch === "'") {
+            let j = i + 1;
+            while (j < len) {
+               if (sql[j] === "'" && j + 1 < len && sql[j + 1] === "'") {
+                  j += 2;
+               } else if (sql[j] === "'") {
+                  j++;
+                  break;
+               } else {
+                  j++;
+               }
+            }
+            result.push(sql.substring(i, j));
+            i = j;
+            continue;
+         }
+
+         // Skip double-quoted identifiers (already quoted)
+         if (ch === '"') {
+            let j = i + 1;
+            while (j < len && sql[j] !== '"') j++;
+            if (j < len) j++;
+            result.push(sql.substring(i, j));
+            i = j;
+            continue;
+         }
+
+         // Skip square-bracketed identifiers (SQL Server style)
+         if (ch === '[') {
+            let j = i + 1;
+            while (j < len && sql[j] !== ']') j++;
+            if (j < len) j++;
+            result.push(sql.substring(i, j));
+            i = j;
+            continue;
+         }
+
+         // Skip @-prefixed parameters (@ParamName)
+         if (ch === '@') {
+            let j = i + 1;
+            while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
+            result.push(sql.substring(i, j));
+            i = j;
+            continue;
+         }
+
+         // Match a word (identifier or keyword)
+         if (/[a-zA-Z_]/.test(ch)) {
+            let j = i + 1;
+            while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
+            const word = sql.substring(i, j);
+
+            const isKeyword = ManageMetadataBase._SQL_KEYWORDS.has(word.toUpperCase());
+            const startsUpper = /^[A-Z]/.test(word);
+            const isAllLower = word === word.toLowerCase();
+            const isMJInternal = word.startsWith('__mj_');
+
+            if (!isKeyword && !isAllLower && !isMJInternal && startsUpper) {
+               result.push(this.qi(word));
+            } else {
+               result.push(word);
+            }
+            i = j;
+            continue;
+         }
+
+         // Any other character, pass through
+         result.push(ch);
+         i++;
+      }
+
+      return result.join('');
+   }
+
+   /**
+    * Executes a SQL query with automatic PascalCase identifier quoting for PostgreSQL.
+    * On SQL Server, passes the SQL through unchanged.
+    */
+   protected async runQuery(pool: CodeGenConnection, sql: string): Promise<CodeGenQueryResult> {
+      return pool.query(this.qsql(sql));
+   }
+
+   /**
+    * Executes a parameterized SQL query with automatic PascalCase identifier quoting for PostgreSQL.
+    * On SQL Server, passes the SQL through unchanged.
+    */
+   protected async runQueryWithParams(pool: CodeGenConnection, sql: string, params: Record<string, unknown>): Promise<CodeGenQueryResult> {
+      return pool.queryWithParams(this.qsql(sql), params);
    }
 
    /**
@@ -451,7 +605,7 @@ export class ManageMetadataBase {
       for (const rel of relationships) {
          try {
             // Look up the parent entity — try by Name first, then by BaseTable within the given schema
-            const parentResult = await pool.queryWithParams(`
+            const parentResult = await this.runQueryWithParams(pool, `
                   ${this.selectTop(1, 'ID, Name',
                      `FROM ${this.qs(schema, 'vwEntities')}
                   WHERE Name = @ParentName
@@ -470,7 +624,7 @@ export class ManageMetadataBase {
             const parentName = parentResult.recordset[0].Name;
 
             // Look up the child entity — same strategy
-            const childResult = await pool.queryWithParams(`
+            const childResult = await this.runQueryWithParams(pool, `
                   ${this.selectTop(1, 'ID, Name, ParentID',
                      `FROM ${this.qs(schema, 'vwEntities')}
                   WHERE Name = @ChildName
@@ -494,7 +648,7 @@ export class ManageMetadataBase {
                logStatus(`    > IS-A: "${childName}" already has ParentID set to "${parentName}", skipping`);
             } else {
                // Set ParentID on the child entity
-               await pool.queryWithParams(`UPDATE $\{this.qs(schema, \'Entity\')\} SET ParentID = @ParentID WHERE ID = @ChildID`,
+               await this.runQueryWithParams(pool, `UPDATE ${this.qs(schema, 'Entity')} SET ParentID = @ParentID WHERE ID = @ChildID`,
                { 'ParentID': parentId, 'ChildID': childId }
                );
 
@@ -542,7 +696,7 @@ export class ManageMetadataBase {
             }
 
             // Look up the entity by BaseTable + SchemaName
-            const entityResult = await pool.queryWithParams(`
+            const entityResult = await this.runQueryWithParams(pool, `
                   ${this.selectTop(1, 'ID, Name',
                      `FROM ${this.qs(schema, 'vwEntities')}
                   WHERE BaseTable = @BaseTable AND SchemaName = @SchemaName`)}
@@ -569,7 +723,7 @@ export class ManageMetadataBase {
                setClauses.push(`${this.qi(key)} = @${paramName}`);
             }
 
-            await pool.queryWithParams(`UPDATE $\{this.qs(schema, \'Entity\')\} SET ${setClauses.join(', ')} WHERE ID = @EntityID`, queryParams);
+            await this.runQueryWithParams(pool, `UPDATE ${this.qs(schema, 'Entity')} SET ${setClauses.join(', ')} WHERE ID = @EntityID`, queryParams);
 
             const attrSummary = attrs.map(([k, v]) => `${k}=${v}`).join(', ');
             logStatus(`    > Entities config: Set ${attrSummary} on "${entityName}"`);
@@ -606,7 +760,7 @@ export class ManageMetadataBase {
          const pkField = ve.PrimaryKey?.[0] || 'ID';
 
          // Check if entity already exists for this view
-         const existsResult = await pool.queryWithParams(`SELECT ID FROM $\{this.qs(schema, \'vwEntities\')\} WHERE BaseView = @ViewName AND SchemaName = @SchemaName`,
+         const existsResult = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(schema, 'vwEntities')} WHERE BaseView = @ViewName AND SchemaName = @SchemaName`,
                { 'ViewName': viewName, 'SchemaName': viewSchema }
                );
 
@@ -616,7 +770,7 @@ export class ManageMetadataBase {
          }
 
          // Verify the view actually exists in the database
-         const viewExistsResult = await pool.queryWithParams(
+         const viewExistsResult = await this.runQueryWithParams(pool, 
                this.isPostgreSQL
                   ? `SELECT 1 FROM information_schema.views WHERE table_name = @ViewName AND table_schema = @SchemaName`
                   : `SELECT 1 FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = @ViewName AND TABLE_SCHEMA = @SchemaName`,
@@ -630,7 +784,7 @@ export class ManageMetadataBase {
 
          // Create the virtual entity via the stored procedure
          try {
-            const createResult = await pool.executeStoredProcedure(`$\{this.qs(schema, \'spCreateVirtualEntity\')\}`,
+            const createResult = await pool.executeStoredProcedure(`${this.qs(schema, 'spCreateVirtualEntity')}`,
                { 'Name': entityName, 'BaseView': viewName, 'SchemaName': viewSchema, 'PrimaryKeyFieldName': pkField, 'Description': ve.Description || null }
                );
 
@@ -677,7 +831,21 @@ export class ManageMetadataBase {
     */
    public async manageMetadata(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       const md = new Metadata();
-      const excludeSchemas = configInfo.excludeSchemas ? configInfo.excludeSchemas : [];
+      // Auto-exclude PostgreSQL system schemas when running on PG.
+      // We mutate configInfo.excludeSchemas directly so that all downstream code
+      // (including createExcludeTablesAndSchemasFilter) picks up the PG exclusions.
+      if (this.isPostgreSQL) {
+         if (!configInfo.excludeSchemas) {
+            configInfo.excludeSchemas = [];
+         }
+         const pgSystemSchemas = ['information_schema', 'pg_catalog', 'pg_toast', 'pg_temp_1', 'pg_toast_temp_1'];
+         for (const s of pgSystemSchemas) {
+            if (!configInfo.excludeSchemas.includes(s)) {
+               configInfo.excludeSchemas.push(s);
+            }
+         }
+      }
+      const excludeSchemas = configInfo.excludeSchemas ? [...configInfo.excludeSchemas] : [];
 
       let bSuccess = true;
       let start = new Date();
@@ -802,8 +970,8 @@ export class ManageMetadataBase {
       // virtual entities are records defined in the entity metadata and do NOT define a distinct base table
       // but they do specify a base view. We DO NOT generate a base view for a virtual entity, we simply use it to figure
       // out the fields that should be in the entity definition and add/update/delete the entity definition to match what's in the view when this runs
-      const sql = `SELECT * FROM $\{this.qs(mj_core_schema(), \'vwEntities\')\} WHERE VirtualEntity = 1`;
-      const virtualEntitiesResult = await pool.query(sql);
+      const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE VirtualEntity = 1`;
+      const virtualEntitiesResult = await this.runQuery(pool, sql);
       const virtualEntities = virtualEntitiesResult.recordset;
       let anyUpdates: boolean = false;
       if (virtualEntities && virtualEntities.length > 0) {
@@ -854,7 +1022,7 @@ export class ManageMetadataBase {
                   SCHEMA_NAME(v.schema_id) = '${virtualEntity.SchemaName}'
                ORDER BY
                   c.column_id`;
-         const veFieldsResult = await pool.query(sql);
+         const veFieldsResult = await this.runQuery(pool, sql);
       const veFields = veFieldsResult.recordset;
          if (veFields && veFields.length > 0) {
             // we have 1+ fields, now loop through them and process each one
@@ -869,7 +1037,7 @@ export class ManageMetadataBase {
                }
 
                if (removeList.length > 0) {
-                  const sqlRemove = `DELETE FROM $\{this.qs(mj_core_schema(), \'EntityField\')\} WHERE ID IN (${removeList.map(removeId => `'${removeId}'`).join(',')})`;
+                  const sqlRemove = `DELETE FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID IN (${removeList.map(removeId => `'${removeId}'`).join(',')})`;
                   // this removes the fields that shouldn't be there anymore
                   await this.LogSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from entity ${virtualEntity.Name}`);
                   bUpdated = true;
@@ -894,7 +1062,7 @@ export class ManageMetadataBase {
 
          if (bUpdated) {
             // finally make sure we update the UpdatedAt field for the entity if we made changes to its fields
-            const sqlUpdate = `UPDATE $\{this.qs(mj_core_schema(), \'Entity\')\} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${virtualEntity.ID}'`;
+            const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${virtualEntity.ID}'`;
             await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update virtual entity updated date for ${virtualEntity.Name}`);
          }
 
@@ -928,7 +1096,7 @@ export class ManageMetadataBase {
                 field.Sequence !== fieldSequence) {
                // the field needs to be updated, so update it
                const sqlUpdate = `UPDATE
-                                    $\{this.qs(mj_core_schema(), \'EntityField\')\}
+                                    ${this.qs(mj_core_schema(), 'EntityField')}
                                   SET
                                     Sequence=${fieldSequence},
                                     Type='${veField.Type}',
@@ -947,7 +1115,7 @@ export class ManageMetadataBase {
          else {
             // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
             newEntityFieldUUID = this.createNewUUID();
-            const sqlAdd = `INSERT INTO $\{this.qs(mj_core_schema(), \'EntityField\')\} (
+            const sqlAdd = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
                                       ID, EntityID, Name, Type, AllowsNull,
                                       Length, Precision, Scale,
                                       Sequence, IsPrimaryKey, IsUnique )
@@ -1042,7 +1210,7 @@ export class ManageMetadataBase {
          const viewDefSQL = this.isPostgreSQL
             ? `SELECT pg_get_viewdef('"${entity.SchemaName}"."${entity.BaseView}"'::regclass, true) AS "ViewDef"`
             : `SELECT OBJECT_DEFINITION(OBJECT_ID('${this.qs(entity.SchemaName, entity.BaseView)}')) AS ViewDef`;
-         const viewDefResult = await pool.query(viewDefSQL);
+         const viewDefResult = await this.runQuery(pool, viewDefSQL);
          const viewDefinition = viewDefResult.recordset[0]?.ViewDef;
          if (!viewDefinition) {
             logStatus(`         Could not get view definition for ${entity.SchemaName}.${entity.BaseView} — skipping LLM decoration`);
@@ -1096,7 +1264,7 @@ export class ManageMetadataBase {
          anyUpdated = await this.applyVEFieldCategories(pool, entity, result) || anyUpdated;
 
          if (anyUpdated) {
-            const sqlUpdate = `UPDATE $\{this.qs(schema, \'Entity\')\} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${entity.ID}'`;
+            const sqlUpdate = `UPDATE ${this.qs(schema, 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${entity.ID}'`;
             await this.LogSQLAndExecute(pool, sqlUpdate, `Update entity timestamp for ${entity.Name} after LLM decoration`);
          }
 
@@ -1189,10 +1357,10 @@ export class ManageMetadataBase {
       const schema = mj_core_schema();
       const fieldsSQL = `
          SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, GeneratedFormSection, DisplayName, ExtendedType, CodeType
-         FROM $\{this.qs(schema, \'EntityField\')\}
+         FROM ${this.qs(schema, 'EntityField')}
          WHERE EntityID = '${entity.ID}'
       `;
-      const fieldsResult = await pool.query(fieldsSQL);
+      const fieldsResult = await this.runQuery(pool, fieldsSQL);
       const dbFields = fieldsResult.recordset as Array<{
          ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; 
          AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, 
@@ -1259,13 +1427,13 @@ export class ManageMetadataBase {
       const sqlStatements: string[] = [];
 
       // Clear existing default PK (field #1 fallback) before applying LLM-identified PKs
-      sqlStatements.push(`UPDATE $\{this.qs(schema, \'EntityField\')\}
+      sqlStatements.push(`UPDATE ${this.qs(schema, 'EntityField')}
                         SET IsPrimaryKey=0, IsUnique=0
                         WHERE EntityID='${entity.ID}' AND IsPrimaryKey=1 AND IsSoftPrimaryKey=0`);
 
       // Set LLM-identified PKs
       for (const pk of validPKs) {
-         sqlStatements.push(`UPDATE $\{this.qs(schema, \'EntityField\')\}
+         sqlStatements.push(`UPDATE ${this.qs(schema, 'EntityField')}
                          SET IsPrimaryKey=1, IsUnique=1, IsSoftPrimaryKey=1
                          WHERE EntityID='${entity.ID}' AND Name='${pk}'`);
          logStatus(`         ✓ Set PK for ${entity.Name}.${pk} (LLM-identified)`);
@@ -1318,7 +1486,7 @@ export class ManageMetadataBase {
             continue;
          }
 
-         sqlStatements.push(`UPDATE $\{this.qs(schema, \'EntityField\')\}
+         sqlStatements.push(`UPDATE ${this.qs(schema, 'EntityField')}
                          SET RelatedEntityID='${relatedEntity.ID}',
                              RelatedEntityFieldName='${fk.relatedFieldName}',
                              IsSoftForeignKey=1
@@ -1372,7 +1540,7 @@ export class ManageMetadataBase {
             }
          }
 
-         sqlStatements.push(`UPDATE $\{this.qs(schema, \'EntityField\')\}
+         sqlStatements.push(`UPDATE ${this.qs(schema, 'EntityField')}
                          SET ${setClauses}
                          WHERE EntityID='${entity.ID}' AND Name='${field.Name}'`);
       }
@@ -1497,8 +1665,8 @@ export class ManageMetadataBase {
 
          // Check the DATABASE for existing field record — in-memory metadata may be stale
          // (e.g. createNewEntityFieldsFromSchema may have already added this field from the view)
-         const existsResult = await pool.queryWithParams(`SELECT ID, IsVirtual, Type, Length, Precision, Scale, AllowsNull, AllowUpdateAPI
-                    FROM $\{this.qs(mj_core_schema(), \'EntityField\')\}
+         const existsResult = await this.runQueryWithParams(pool, `SELECT ID, IsVirtual, Type, Length, Precision, Scale, AllowsNull, AllowUpdateAPI
+                    FROM ${this.qs(mj_core_schema(), 'EntityField')}
                     WHERE EntityID = @EntityID AND Name = @FieldName`,
                { 'EntityID': childEntity.ID, 'FieldName': parentField.Name }
                );
@@ -1515,7 +1683,7 @@ export class ManageMetadataBase {
                !existingRow.AllowUpdateAPI;
 
             if (needsUpdate) {
-               const sqlUpdate = `UPDATE $\{this.qs(mj_core_schema(), \'EntityField\')\}
+               const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
                   SET IsVirtual=1,
                       Type='${parentField.Type}',
                       Length=${parentField.Length},
@@ -1534,7 +1702,7 @@ export class ManageMetadataBase {
             // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema
             const sequence = 100000 + parentFields.indexOf(parentField);
 
-            const sqlInsert = `INSERT INTO $\{this.qs(mj_core_schema(), \'EntityField\')\} (
+            const sqlInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
                   ID, EntityID, Name, Type, AllowsNull,
                   Length, Precision, Scale,
                   Sequence, IsVirtual, AllowUpdateAPI,
@@ -1560,14 +1728,14 @@ export class ManageMetadataBase {
       );
 
       for (const staleField of staleFields) {
-         const sqlDelete = `DELETE FROM $\{this.qs(mj_core_schema(), \'EntityField\')\} WHERE ID='${staleField.ID}'`;
+         const sqlDelete = `DELETE FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID='${staleField.ID}'`;
          await this.LogSQLAndExecute(pool, sqlDelete,
             `Remove stale IS-A parent field ${staleField.Name} from ${childEntity.Name}`);
          bUpdated = true;
       }
 
       if (bUpdated) {
-         const sqlUpdate = `UPDATE $\{this.qs(mj_core_schema(), \'Entity\')\} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${childEntity.ID}'`;
+         const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${childEntity.ID}'`;
          await this.LogSQLAndExecute(pool, sqlUpdate,
             `Update entity timestamp for ${childEntity.Name} after IS-A field sync`);
       }
@@ -1626,18 +1794,18 @@ export class ManageMetadataBase {
       try {
          // STEP 1 - search for all foreign keys in the vwEntityFields view, we use the RelatedEntityID field to determine our FKs
          const sSQL = `SELECT *
-                       FROM ${mj_core_schema()}.vwEntityFields
+                       FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
                        WHERE
                              RelatedEntityID IS NOT NULL AND
                              IsVirtual = 0 AND
-                             EntityID NOT IN (SELECT ID FROM ${mj_core_schema()}.Entity WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
+                             EntityID NOT IN (SELECT ID FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
                        ORDER BY RelatedEntityID`;
-         const entityFieldsResult = await pool.query(sSQL);
+         const entityFieldsResult = await this.runQuery(pool, sSQL);
          const entityFields = entityFieldsResult.recordset;
 
          // Get the relationship counts for each entity
-         const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${mj_core_schema()}.EntityRelationship GROUP BY EntityID`;
-         const relationshipCountsResult = await pool.query(sSQLRelationshipCount);
+         const sSQLRelationshipCount = `SELECT EntityID, COUNT(*) AS Count FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} GROUP BY EntityID`;
+         const relationshipCountsResult = await this.runQuery(pool, sSQLRelationshipCount);
          const relationshipCounts = relationshipCountsResult.recordset;
 
          const relationshipCountMap = new Map<number, number>();
@@ -1646,8 +1814,8 @@ export class ManageMetadataBase {
          }
 
          // get all relationships in one query for performance improvement
-         const sSQLRelationship = `SELECT * FROM ${mj_core_schema()}.EntityRelationship`;
-         const allRelationshipsResult = await pool.query(sSQLRelationship);
+         const sSQLRelationship = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityRelationship')}`;
+         const allRelationshipsResult = await this.runQuery(pool, sSQLRelationship);
          const allRelationships = allRelationshipsResult.recordset;
 
 
@@ -1682,7 +1850,7 @@ export class ManageMetadataBase {
       WHERE ID = '\${newEntityRelationshipUUID}'
    )
    BEGIN
-      INSERT INTO \${mj_core_schema()}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+      INSERT INTO \${this.qs(mj_core_schema(), 'EntityRelationship')} (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
                               VALUES ('\${newEntityRelationshipUUID}', '\${f.RelatedEntityID}', '\${f.EntityID}', '\${f.Name}', 'One To Many', 1, 1, '\${e.Name}', \${sequence});
    END
                               `;
@@ -1720,8 +1888,8 @@ export class ManageMetadataBase {
     */
    protected async checkAndRemoveMetadataForDeletedTables(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const sql = `SELECT * FROM ${mj_core_schema()}.vwEntitiesWithMissingBaseTables WHERE VirtualEntity=0`
-         const entitiesResult = await pool.query(sql);
+         const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntitiesWithMissingBaseTables')} WHERE VirtualEntity=0`
+         const entitiesResult = await this.runQuery(pool, sql);
          const entities = <EntityInfo[]>entitiesResult.recordset;
          if (entities && entities.length > 0) {
             for (const e of entities) {
@@ -1937,12 +2105,12 @@ export class ManageMetadataBase {
          const sqlEntities = `SELECT
                                  *
                               FROM
-                                 $\{this.qs(mj_core_schema(), \'vwEntities\')\}
+                                 ${this.qs(mj_core_schema(), 'vwEntities')}
                               WHERE
                                  VirtualEntity=0 AND
                                  DeleteType='Soft' AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
-         const entitiesResult = await pool.query(sqlEntities);
+         const entitiesResult = await this.runQuery(pool, sqlEntities);
       const entities = entitiesResult.recordset;
          let overallResult = true;
          if (entities.length > 0) {
@@ -1956,7 +2124,7 @@ export class ManageMetadataBase {
                          WHERE
                          (${entities.map((e: { SchemaName: any; BaseTable: any; }) => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')})
                          AND COLUMN_NAME='${EntityInfo.DeletedAtFieldName}'`
-            const resultResult = await pool.query(sql);
+            const resultResult = await this.runQuery(pool, sql);
       const result = resultResult.recordset;
 
             for (const e of entities) {
@@ -2016,8 +2184,8 @@ export class ManageMetadataBase {
             const tableName = table.TableName;
 
             // Look up entity ID (SELECT query - no need to log to migration file)
-            const entityLookupSQL = `SELECT ID FROM $\{this.qs(schema, \'Entity\')\} WHERE SchemaName = '${tableSchema}' AND BaseTable = '${tableName}'`;
-            const entityResult = await pool.query(entityLookupSQL);
+            const entityLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${tableSchema}' AND BaseTable = '${tableName}'`;
+            const entityResult = await this.runQuery(pool, entityLookupSQL);
 
             if (entityResult.recordset.length === 0) {
                logStatus(`         ⚠️  Entity not found for ${tableSchema}.${tableName} - skipping`);
@@ -2031,7 +2199,7 @@ export class ManageMetadataBase {
             const primaryKeys = table.PrimaryKey || [];
             if (primaryKeys.length > 0) {
                for (const pk of primaryKeys) {
-                  const sSQL = `UPDATE $\{this.qs(schema, \'EntityField\')\}
+                  const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
                                 SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()},
                                     ${this.qi('IsPrimaryKey')} = 1,
                                     ${this.qi('IsSoftPrimaryKey')} = 1
@@ -2051,8 +2219,8 @@ export class ManageMetadataBase {
                for (const fk of foreignKeys) {
                   const fkSchema = fk.SchemaName || tableSchema;
                   // Look up related entity ID (SELECT query - no need to log to migration file)
-                  const relatedLookupSQL = `SELECT ID FROM $\{this.qs(schema, \'Entity\')\} WHERE SchemaName = '${fkSchema}' AND BaseTable = '${fk.RelatedTable}'`;
-                  const relatedEntityResult = await pool.query(relatedLookupSQL);
+                  const relatedLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${fkSchema}' AND BaseTable = '${fk.RelatedTable}'`;
+                  const relatedEntityResult = await this.runQuery(pool, relatedLookupSQL);
 
                   if (relatedEntityResult.recordset.length === 0) {
                      logStatus(`         ⚠️  Related entity not found for ${fkSchema}.${fk.RelatedTable} - skipping FK ${fk.FieldName}`);
@@ -2061,7 +2229,7 @@ export class ManageMetadataBase {
 
                   const relatedEntityId = relatedEntityResult.recordset[0].ID;
 
-                  const sSQL = `UPDATE $\{this.qs(schema, \'EntityField\')\}
+                  const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
                                 SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()},
                                     ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
                                     ${this.qi('RelatedEntityFieldName')} = '${fk.RelatedField}',
@@ -2096,12 +2264,12 @@ export class ManageMetadataBase {
          const sqlEntities = `SELECT
                                  *
                               FROM
-                                 $\{this.qs(mj_core_schema(), \'vwEntities\')\}
+                                 ${this.qs(mj_core_schema(), 'vwEntities')}
                               WHERE
                                  VirtualEntity = 0 AND
                                  TrackRecordChanges = 1 AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
-         const entitiesResult = await pool.query(sqlEntities);
+         const entitiesResult = await this.runQuery(pool, sqlEntities);
       const entities = entitiesResult.recordset;
          let overallResult = true;
          if (entities.length > 0) {
@@ -2116,7 +2284,7 @@ export class ManageMetadataBase {
                                        WHERE
                                           (${entities.map((e: { SchemaName: any; BaseTable: any; }) => `(TABLE_SCHEMA='${e.SchemaName}' AND TABLE_NAME='${e.BaseTable}')`).join(' OR ')})
                                        AND COLUMN_NAME IN ('${EntityInfo.CreatedAtFieldName}','${EntityInfo.UpdatedAtFieldName}')`
-            const resultResult = await pool.query(sqlCreatedUpdated);
+            const resultResult = await this.runQuery(pool, sqlCreatedUpdated);
       const result = resultResult.recordset;
             for (const e of entities) {
                // result has both created at and updated at fields, so filter on the result for each and do what we need to based on that
@@ -2198,7 +2366,7 @@ export class ManageMetadataBase {
     */
    protected async createDefaultConstraintForSpecialDateField(pool: CodeGenConnection, entity: any, fieldName: string) {
       try {
-         const sqlAddDefaultConstraint = `ALTER TABLE $\{this.qs(entity.SchemaName, entity.BaseTable)\} ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT ${this.utcNow()} FOR [${fieldName}]`;
+         const sqlAddDefaultConstraint = `ALTER TABLE ${this.qs(entity.SchemaName, entity.BaseTable)} ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT ${this.utcNow()} FOR [${fieldName}]`;
          await this.LogSQLAndExecute(pool, sqlAddDefaultConstraint, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
       }
       catch (e) {
@@ -2294,9 +2462,9 @@ END $$`;
       if (ag.featureEnabled('EntityDescriptions')) {
          // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
-            const dataResult = await pool.query(`SELECT * FROM $\{this.qs(mj_core_schema(), \'vwEntities\')\} WHERE Name = '${e}'`);
+            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${e}'`);
             const data = dataResult.recordset;
-            const fieldsResult = await pool.query(`SELECT * FROM $\{this.qs(mj_core_schema(), \'vwEntityFields\')\} WHERE EntityID='${data[0].ID}'`);
+            const fieldsResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} WHERE EntityID='${data[0].ID}'`);
             const fields = fieldsResult.recordset;
 
             // Use new API to generate entity description
@@ -2308,7 +2476,7 @@ END $$`;
             );
 
             if (result?.entityDescription && result.entityDescription.length > 0) {
-               const sSQL = `UPDATE $\{this.qs(mj_core_schema(), \'Entity\')\} SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
+               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
                await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
             }
             else {
@@ -2331,9 +2499,9 @@ END $$`;
          const sql = `SELECT
                         ef.ID, ef.Name
                       FROM
-                        $\{this.qs(mj_core_schema(), \'vwEntityFields\')\} ef
+                        ${this.qs(mj_core_schema(), 'vwEntityFields')} ef
                       INNER JOIN
-                        $\{this.qs(mj_core_schema(), \'vwEntities\')\} e
+                        ${this.qs(mj_core_schema(), 'vwEntities')} e
                       ON
                         ef.EntityID = e.ID
                       WHERE
@@ -2341,13 +2509,13 @@ END $$`;
                         ef.Name <> \'ID\' AND
                         e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
                         `
-         const fieldsResult = await pool.query(sql)
+         const fieldsResult = await this.runQuery(pool, sql)
          const fields = fieldsResult.recordset;
          if (fields && fields.length > 0)
             for (const field of fields) {
                const sDisplayName = stripTrailingChars(convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
-                  const sSQL = `UPDATE $\{this.qs(mj_core_schema(), \'EntityField\')\} SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
+                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await this.LogSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
                }
             }
@@ -2373,7 +2541,7 @@ END $$`;
          const spName = this.qs(mj_core_schema(), 'spSetDefaultColumnWidthWhereNeeded');
          const sSQL = this.isPostgreSQL
             ? `SELECT * FROM ${mj_core_schema()}."spSetDefaultColumnWidthWhereNeeded"('${excludeSchemas.join(',')}')`
-            : `EXEC ${mj_core_schema()}.spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
+            : `EXEC ${this.qs(mj_core_schema(), 'spSetDefaultColumnWidthWhereNeeded')} @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
          await this.LogSQLAndExecute(pool, sSQL, `SQL text to set default column width where needed`, true);
          return true;
       }
@@ -2729,7 +2897,7 @@ ORDER BY "EntityID", "Sequence";
    protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection): Promise<boolean> {
       try   {
          const sSQL = this.getPendingEntityFieldsSELECTSQL();
-         const newEntityFieldsResult = await pool.query(sSQL);
+         const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
          if (newEntityFields.length > 0) {
             const transaction = await pool.beginTransaction();
@@ -2892,8 +3060,8 @@ ORDER BY "EntityID", "Sequence";
     */
    protected async loadSchemaInfoRecords(pool: CodeGenConnection): Promise<boolean> {
       try {
-         const sSQL = `SELECT * FROM $\{this.qs(mj_core_schema(), \'SchemaInfo\')\}`;
-         const result = await pool.query(sSQL);
+         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'SchemaInfo')}`;
+         const result = await this.runQuery(pool, sSQL);
          if (result?.recordset?.length > 0) {
             this.cacheSchemaInfoRecords(result.recordset);
          }
@@ -2932,16 +3100,16 @@ ORDER BY "EntityID", "Sequence";
          // for the field and sync that up with the EntityFieldValue table. If it is not a simple series of OR statements, we will not be able to parse it and we'll
          // just ignore it.
          const filter = excludeSchemas && excludeSchemas.length > 0 ? ` WHERE SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})` : '';
-         const sSQL = `SELECT * FROM $\{this.qs(mj_core_schema(), \'vwEntityFieldsWithCheckConstraints\')\}${filter}`
-         const resultResult = await pool.query(sSQL);
+         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFieldsWithCheckConstraints')}${filter}`
+         const resultResult = await this.runQuery(pool, sSQL);
          const result = resultResult.recordset;
 
-         const efvSQL = `SELECT * FROM $\{this.qs(mj_core_schema(), \'EntityFieldValue\')\}`;
-         const allEntityFieldValuesResult = await pool.query(efvSQL);
+         const efvSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')}`;
+         const allEntityFieldValuesResult = await this.runQuery(pool, efvSQL);
          const allEntityFieldValues = allEntityFieldValuesResult.recordset;
 
-         const efSQL = `SELECT * FROM $\{this.qs(mj_core_schema(), \'vwEntityFields\')\} ORDER BY EntityID, Sequence`;
-         const allEntityFieldsResult = await pool.query(efSQL);
+         const efSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} ORDER BY EntityID, Sequence`;
+         const allEntityFieldsResult = await this.runQuery(pool, efSQL);
          const allEntityFields = allEntityFieldsResult.recordset;
 
          const generationPromises = [];
@@ -2967,11 +3135,11 @@ ORDER BY "EntityID", "Sequence";
 
                      // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                      // check to see if the ValueListType is already set to "List", if not, update it
-                     const sSQLCheck: string = `SELECT ValueListType FROM $\{this.qs(mj_core_schema(), \'EntityField\')\} WHERE ID='${r.EntityFieldID}'`;
-                     const checkResultResult = await pool.query(sSQLCheck);
+                     const sSQLCheck: string = `SELECT ValueListType FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID='${r.EntityFieldID}'`;
+                     const checkResultResult = await this.runQuery(pool, sSQLCheck);
                      const checkResult = checkResultResult.recordset;
                      if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
-                        const sSQL: string = `UPDATE $\{this.qs(mj_core_schema(), \'EntityField\')\} SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
+                        const sSQL: string = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
                         await this.LogSQLAndExecute(pool, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
                      }
                   }
@@ -3120,7 +3288,7 @@ ORDER BY "EntityID", "Sequence";
             for (const ev of existingValues) {
                if (!possibleValues.find(v => v === ev.Value)) {
                   // delete the value from the database
-                  const sSQLDelete = `DELETE FROM $\{this.qs(mj_core_schema(), \'EntityFieldValue\')\} WHERE ID='${ev.ID}'`;
+                  const sSQLDelete = `DELETE FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')} WHERE ID='${ev.ID}'`;
                   await this.LogSQLAndExecute(ds, sSQLDelete, `SQL text to delete entity field value ID ${ev.ID}`);
                   numRemoved++;
                }
@@ -3134,7 +3302,7 @@ ORDER BY "EntityID", "Sequence";
                   const newId = uuidv4();
 
                   // add the value to the database with explicit ID
-                  const sSQLInsert = `INSERT INTO $\{this.qs(mj_core_schema(), \'EntityFieldValue\')\}
+                  const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityFieldValue')}
                                        (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
                                        ('${newId}', '${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
@@ -3149,7 +3317,7 @@ ORDER BY "EntityID", "Sequence";
                const ev = existingValues.find((ev: { Value: string; }) => ev.Value === v);
                if (ev && ev.Sequence !== 1 + possibleValues.indexOf(v)) {
                   // update the sequence to match the order in the possible values list, if it doesn't already match
-                  const sSQLUpdate = `UPDATE $\{this.qs(mj_core_schema(), \'EntityFieldValue\')\} SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
+                  const sSQLUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityFieldValue')} SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
                   await this.LogSQLAndExecute(ds, sSQLUpdate, `SQL text to update entity field value sequence`);
                   numUpdated++;
                }
@@ -3229,21 +3397,23 @@ ORDER BY "EntityID", "Sequence";
    protected createExcludeTablesAndSchemasFilter(fieldPrefix: string): string {
       let sExcludeTables: string = '';
       let sExcludeSchemas: string = '';
+      const schemaCol = `${fieldPrefix}${this.qi('SchemaName')}`;
+      const tableCol = `${fieldPrefix}${this.qi('TableName')}`;
       if (configInfo.excludeTables) {
          for (let i = 0; i < configInfo.excludeTables.length; ++i) {
             const t = configInfo.excludeTables[i];
             sExcludeTables += (sExcludeTables.length > 0 ? ' AND ' : '') +
-                              (t.schema.indexOf('%') > -1 ? ` NOT ( ${fieldPrefix}SchemaName LIKE '${t.schema}'` :
-                                                                ` NOT ( ${fieldPrefix}SchemaName = '${t.schema}'`);
-            sExcludeTables += (t.table.indexOf('%') > -1 ? ` AND ${fieldPrefix}TableName LIKE '${t.table}') ` :
-                                                           ` AND ${fieldPrefix}TableName = '${t.table}') `);
+                              (t.schema.indexOf('%') > -1 ? ` NOT ( ${schemaCol} LIKE '${t.schema}'` :
+                                                                ` NOT ( ${schemaCol} = '${t.schema}'`);
+            sExcludeTables += (t.table.indexOf('%') > -1 ? ` AND ${tableCol} LIKE '${t.table}') ` :
+                                                           ` AND ${tableCol} = '${t.table}') `);
          }
       }
       if (configInfo.excludeSchemas) {
          for (let i = 0; i < configInfo.excludeSchemas.length; ++i) {
             const s = configInfo.excludeSchemas[i];
             sExcludeSchemas += (sExcludeSchemas.length > 0 ? ' AND ' : '') +
-                               (s.indexOf('%') > -1 ? `${fieldPrefix}SchemaName NOT LIKE '${s}'` : `${fieldPrefix}SchemaName <> '${s}'`);
+                               (s.indexOf('%') > -1 ? `${schemaCol} NOT LIKE '${s}'` : `${schemaCol} <> '${s}'`);
          }
       }
 
@@ -3255,8 +3425,8 @@ ORDER BY "EntityID", "Sequence";
 
    protected async createNewEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       try   {
-         const sSQL = `SELECT * FROM $\{this.qs(mj_core_schema(), \'vwSQLTablesAndEntities\')\} WHERE EntityID IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
-         const newEntitiesResult = await pool.query(sSQL);
+         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')} WHERE EntityID IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
+         const newEntitiesResult = await this.runQuery(pool, sSQL);
       const newEntities = newEntitiesResult.recordset;
 
          if (newEntities && newEntities.length > 0 ) {
@@ -3563,9 +3733,9 @@ ORDER BY "EntityID", "Sequence";
                if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
                   // only do this if the configuration setting is set to add new entities to applications for schema names
                   for (const appUUID of apps) {
-                     const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
+                     const sSQLInsertApplicationEntity = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationEntity')}
                                        (ApplicationID, EntityID, Sequence) VALUES
-                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(Sequence),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ApplicationID = '${appUUID}'))`;
                      await this.LogSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                   }
                }
@@ -3585,7 +3755,7 @@ ORDER BY "EntityID", "Sequence";
                for (const p of permissions) {
                   const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
                   if (RoleID) {
-                     const sSQLInsertPermission = `INSERT INTO ${mj_core_schema()}.EntityPermission
+                     const sSQLInsertPermission = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
                                                    ('${newEntityID}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
                      await this.LogSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
@@ -3614,8 +3784,8 @@ ORDER BY "EntityID", "Sequence";
 
    protected async isSchemaNew(pool: CodeGenConnection, schemaName: string): Promise<boolean> {
       // check to see if there are any entities in the db with this schema name
-      const sSQL: string = `SELECT COUNT(*) AS Count FROM $\{this.qs(mj_core_schema(), \'Entity\')\} WHERE SchemaName = '${schemaName}'`;
-      const resultResult = await pool.query(sSQL);
+      const sSQL: string = `SELECT COUNT(*) AS Count FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName = '${schemaName}'`;
+      const resultResult = await this.runQuery(pool, sSQL);
       const result = resultResult.recordset;
       return result && result.length > 0 ? result[0].Count === 0 : true;
    }
@@ -3644,7 +3814,7 @@ ORDER BY "EntityID", "Sequence";
             .replace(/-+/g, '-')            // collapse multiple hyphens
             .replace(/^-|-$/g, '');         // trim hyphens from start/end
 
-         const sSQL = `INSERT INTO $\{this.qs(mj_core_schema(), \'Application\')\} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
+         const sSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
@@ -3657,16 +3827,16 @@ ORDER BY "EntityID", "Sequence";
    }
 
    protected async applicationExists(pool: CodeGenConnection, applicationName: string): Promise<boolean>{
-      const sSQL: string = `SELECT ID FROM $\{this.qs(mj_core_schema(), \'Application\')\} WHERE Name = '${applicationName}'`;
-      const resultResult = await pool.query(sSQL);
+      const sSQL: string = `SELECT ID FROM ${this.qs(mj_core_schema(), 'Application')} WHERE Name = '${applicationName}'`;
+      const resultResult = await this.runQuery(pool, sSQL);
       const result = resultResult.recordset;
       return result && result.length > 0 ? result[0].ID.length > 0 : false;
    }
 
    protected async getApplicationIDForSchema(pool: CodeGenConnection, schemaName: string): Promise<string[] | null>{
       // get all the apps each time from DB as we might be adding, don't use Metadata here for that reason
-      const sSQL: string = `SELECT ID, Name, SchemaAutoAddNewEntities FROM $\{this.qs(mj_core_schema(), \'vwApplications\')\}`;
-      const resultResult = await pool.query(sSQL);
+      const sSQL: string = `SELECT ID, Name, SchemaAutoAddNewEntities FROM ${this.qs(mj_core_schema(), 'vwApplications')}`;
+      const resultResult = await this.runQuery(pool, sSQL);
       const result = resultResult.recordset;
 
       if (!result || result.length === 0) {
@@ -3716,9 +3886,9 @@ ORDER BY "EntityID", "Sequence";
       if (apps && apps.length > 0) {
          if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
             for (const appUUID of apps) {
-               const sSQLInsert = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
+               const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationEntity')}
                                     (ApplicationID, EntityID, Sequence) VALUES
-                                    ('${appUUID}', '${entityId}', (SELECT COALESCE(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+                                    ('${appUUID}', '${entityId}', (SELECT COALESCE(MAX(Sequence),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ApplicationID = '${appUUID}'))`;
                await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
             }
          }
@@ -3745,7 +3915,7 @@ ORDER BY "EntityID", "Sequence";
       for (const p of permissions) {
          const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
          if (RoleID) {
-            const sSQLInsert = `INSERT INTO ${mj_core_schema()}.EntityPermission
+            const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
                                  (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
                                  ('${entityId}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
             await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
@@ -3759,7 +3929,7 @@ ORDER BY "EntityID", "Sequence";
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
       const sSQLInsert = `
-      INSERT INTO $\{this.qs(mj_core_schema(), \'Entity\')\} (
+      INSERT INTO ${this.qs(mj_core_schema(), 'Entity')} (
          ID,
          Name,
          DisplayName,
@@ -3860,14 +4030,14 @@ ORDER BY "EntityID", "Sequence";
                e.BaseTable,
                e.ParentID
             FROM
-               $\{this.qs(mj_core_schema(), \'vwEntities\')\} e
+               ${this.qs(mj_core_schema(), 'vwEntities')} e
             WHERE
                ${whereClause}
             ORDER BY
                e.Name
          `;
 
-         const entitiesResult = await pool.query(entitiesSQL);
+         const entitiesResult = await this.runQuery(pool, entitiesSQL);
          const entities = entitiesResult.recordset;
 
          if (entities.length === 0) {
@@ -3901,7 +4071,7 @@ ORDER BY "EntityID", "Sequence";
                ef.DefaultInView,
                ef.IncludeInUserSearchAPI
             FROM
-               $\{this.qs(mj_core_schema(), \'vwEntityFields\')\} ef
+               ${this.qs(mj_core_schema(), 'vwEntityFields')} ef
             WHERE
                ef.EntityID IN (${entityIds})
             ORDER BY
@@ -3909,7 +4079,7 @@ ORDER BY "EntityID", "Sequence";
                ef.Sequence
          `;
 
-         const fieldsResult = await pool.query(fieldsSQL);
+         const fieldsResult = await this.runQuery(pool, fieldsSQL);
          const allFields = fieldsResult.recordset;
 
          // Get EntitySettings for all entities (for existing category icons/info)
@@ -3919,12 +4089,12 @@ ORDER BY "EntityID", "Sequence";
                es.Name,
                es.Value
             FROM
-               $\{this.qs(mj_core_schema(), \'EntitySetting\')\} es
+               ${this.qs(mj_core_schema(), 'EntitySetting')} es
             WHERE
                es.EntityID IN (${entityIds})
                AND es.Name = 'FieldCategoryInfo'
          `;
-         const settingsResult = await pool.query(settingsSQL);
+         const settingsResult = await this.runQuery(pool, settingsSQL);
          const allSettings = settingsResult.recordset;
 
          // Group settings by entity
@@ -4149,7 +4319,7 @@ ORDER BY "EntityID", "Sequence";
 
       if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField /*don't waste SQL to set the value if IsNameField already set */) {
          sqlStatements.push(`
-            UPDATE $\{this.qs(mj_core_schema(), \'EntityField\')\}
+            UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
             SET IsNameField = 1
             WHERE ID = '${nameField.ID}'
             AND AutoUpdateIsNameField = 1
@@ -4176,7 +4346,7 @@ ORDER BY "EntityID", "Sequence";
          if (!field.DefaultInView) {
             // only set these when DefaultInView not already on, otherwise wasteful
             sqlStatements.push(`
-               UPDATE $\{this.qs(mj_core_schema(), \'EntityField\')\}
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
                SET DefaultInView = 1
                WHERE ID = '${field.ID}'
                AND AutoUpdateDefaultInView = 1
@@ -4203,7 +4373,7 @@ ORDER BY "EntityID", "Sequence";
             if (!field.IncludeInUserSearchAPI) {
                // only set this if IncludeInUserSearchAPI isn't already set
                sqlStatements.push(`
-                  UPDATE $\{this.qs(mj_core_schema(), \'EntityField\')\}
+                  UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
                   SET IncludeInUserSearchAPI = 1
                   WHERE ID = '${field.ID}'
                   AND AutoUpdateIncludeInUserSearchAPI = 1
@@ -4351,7 +4521,7 @@ ORDER BY "EntityID", "Sequence";
 
             if (setClauses.length > 0) {
                // only generate an UPDATE if we have 1+ set clause
-               sqlStatements.push(`\n-- UPDATE Entity Field Category Info ${entity.Name}.${field.Name} \nUPDATE $\{this.qs(mj_core_schema(), \'EntityField\')\}
+               sqlStatements.push(`\n-- UPDATE Entity Field Category Info ${entity.Name}.${field.Name} \nUPDATE ${this.qs(mj_core_schema(), 'EntityField')}
 SET 
    ${setClauses.join(',\n   ')}
 WHERE 
@@ -4382,15 +4552,15 @@ WHERE
    ): Promise<void> {
       if (!entityIcon || entityIcon.trim().length === 0) return;
 
-      const checkSQL = `SELECT Icon FROM $\{this.qs(mj_core_schema(), \'Entity\')\} WHERE ID = '${entityId}'`;
-      const entityCheck = await pool.query(checkSQL);
+      const checkSQL = `SELECT Icon FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE ID = '${entityId}'`;
+      const entityCheck = await this.runQuery(pool, checkSQL);
 
       if (entityCheck.recordset.length > 0) {
          const currentIcon = entityCheck.recordset[0].Icon;
          if (!currentIcon || currentIcon.trim().length === 0) {
             const escapedIcon = entityIcon.replace(/'/g, "''");
             const updateSQL = `
-               UPDATE $\{this.qs(mj_core_schema(), \'Entity\')\}
+               UPDATE ${this.qs(mj_core_schema(), 'Entity')}
                SET Icon = '${escapedIcon}', __mj_UpdatedAt = ${this.utcNow()}
                WHERE ID = '${entityId}'
             `;
@@ -4418,13 +4588,13 @@ WHERE
       const infoJSON = JSON.stringify(categoryInfo).replace(/'/g, "''");
 
       // Upsert FieldCategoryInfo (new format)
-      const checkNewSQL = `SELECT ID FROM $\{this.qs(mj_core_schema(), \'EntitySetting\')\} WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'`;
-      const existingNew = await pool.query(checkNewSQL);
+      const checkNewSQL = `SELECT ID FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'`;
+      const existingNew = await this.runQuery(pool, checkNewSQL);
 
       if (existingNew.recordset.length > 0) {
          try {
             await this.LogSQLAndExecute(pool, `
-               UPDATE $\{this.qs(mj_core_schema(), \'EntitySetting\')\}
+               UPDATE ${this.qs(mj_core_schema(), 'EntitySetting')}
                SET Value = '${infoJSON}', __mj_UpdatedAt = ${this.utcNow()}
                WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
             `, `Update FieldCategoryInfo setting for entity`, false);
@@ -4436,7 +4606,7 @@ WHERE
          const newId = uuidv4();
          try {
             await this.LogSQLAndExecute(pool, `
-               INSERT INTO $\{this.qs(mj_core_schema(), \'EntitySetting\')\} (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
                VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', ${this.utcNow()}, ${this.utcNow()})
             `, `Insert FieldCategoryInfo setting for entity`, false);
          }
@@ -4454,13 +4624,13 @@ WHERE
       }
       const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
 
-      const checkLegacySQL = `SELECT ID FROM $\{this.qs(mj_core_schema(), \'EntitySetting\')\} WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'`;
-      const existingLegacy = await pool.query(checkLegacySQL);
+      const checkLegacySQL = `SELECT ID FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'`;
+      const existingLegacy = await this.runQuery(pool, checkLegacySQL);
 
       if (existingLegacy.recordset.length > 0) {
          try {
             await this.LogSQLAndExecute(pool, `
-               UPDATE $\{this.qs(mj_core_schema(), \'EntitySetting\')\}
+               UPDATE ${this.qs(mj_core_schema(), 'EntitySetting')}
                SET Value = '${iconsJSON}', __mj_UpdatedAt = ${this.utcNow()}
                WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
             `, `Update FieldCategoryIcons setting (legacy)`, false);
@@ -4472,7 +4642,7 @@ WHERE
          const newId = uuidv4();
          try {
             await this.LogSQLAndExecute(pool, `
-               INSERT INTO $\{this.qs(mj_core_schema(), \'EntitySetting\')\} (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
                VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', ${this.utcNow()}, ${this.utcNow()})
             `, `Insert FieldCategoryIcons setting (legacy)`, false);
          }
@@ -4493,7 +4663,7 @@ WHERE
    ): Promise<void> {
       const defaultForNewUser = importance.defaultForNewUser ? 1 : 0;
       const updateSQL = `
-         UPDATE $\{this.qs(mj_core_schema(), \'ApplicationEntity\')\}
+         UPDATE ${this.qs(mj_core_schema(), 'ApplicationEntity')}
          SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = ${this.utcNow()}
          WHERE EntityID = '${entityId}'
       `;
@@ -4521,6 +4691,6 @@ WHERE
     * @returns - The result of the query execution.
     */
    private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(pool, query, description, isRecurringScript);
+      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript);
    }
 }
