@@ -372,7 +372,13 @@ $$ LANGUAGE sql STABLE;
     }
 
     generateRootFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
-        return `${alias}.root_id AS ${pgDialect.QuoteIdentifier(`${field.Name}Root${entity.FirstPrimaryKey.Name}`)}`;
+        // Strip trailing "ID" from the field name before appending "Root" + PK name
+        // e.g., ParentCategoryID → ParentCategoryRootID (not ParentCategoryIDRootID)
+        // This matches the SQL Server behavior in SQLServerCodeGenProvider
+        const rootFieldName = field.Name.endsWith('ID')
+            ? field.Name.substring(0, field.Name.length - 2) + 'Root' + entity.FirstPrimaryKey.Name
+            : field.Name + 'Root' + entity.FirstPrimaryKey.Name;
+        return `${alias}.root_id AS ${pgDialect.QuoteIdentifier(rootFieldName)}`;
     }
 
     generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {

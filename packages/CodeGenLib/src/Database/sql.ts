@@ -386,6 +386,108 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
 
  private static _batchScriptCounter: number = 0;
  public async executeSQLFile(filePath: string): Promise<boolean> {
+  if (dbType() === 'postgresql') {
+    return this.executeSQLFilePostgreSQL(filePath);
+  }
+  return this.executeSQLFileSQLServer(filePath);
+ }
+
+ /**
+  * Executes a SQL file against PostgreSQL using the psql CLI.
+  * Reads PG connection params from environment variables (same ones used by setupPostgreSQLDataSource).
+  */
+ private async executeSQLFilePostgreSQL(filePath: string): Promise<boolean> {
+  const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
+  const pgPort = process.env.PG_PORT ?? String(configInfo.dbPort ?? 5432);
+  const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
+  const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
+  const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
+
+  if (!pgUser || !pgPassword || !pgDatabase) {
+    throw new Error("PostgreSQL user, password, and database must be provided in the configuration or environment variables");
+  }
+
+  const absoluteFilePath = path.resolve(process.cwd(), filePath);
+
+  const args = [
+    '-h', pgHost,
+    '-p', pgPort,
+    '-U', pgUser,
+    '-d', pgDatabase,
+    '-v', 'ON_ERROR_STOP=1',  // Stop on first error (similar to sqlcmd -V 17)
+    '-f', absoluteFilePath
+  ];
+
+  logIf(configInfo.verboseOutput, `Executing SQL file (psql): ${filePath} as ${pgUser}@${pgHost}:${pgPort}/${pgDatabase}`);
+
+  try {
+    const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      const child = spawn('psql', args, {
+        shell: false,
+        env: { ...process.env, PGPASSWORD: pgPassword }
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      child.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      child.on('error', (error: Error) => {
+        reject(error);
+      });
+
+      child.on('close', (code: number | null) => {
+        if (code === 0) {
+          resolve({ stdout, stderr });
+        } else {
+          const error = new Error(`psql exited with code ${code}`);
+          Object.assign(error, { stdout, stderr, code });
+          reject(error);
+        }
+      });
+    });
+
+    // psql sends informational messages to stderr (NOTICE, etc.) - only warn on non-empty output
+    if (result.stdout && result.stdout.trim().length > 0) {
+      logIf(configInfo.verboseOutput, `PostgreSQL output: ${result.stdout.trim()}`);
+    }
+    if (result.stderr && result.stderr.trim().length > 0) {
+      // Filter out NOTICE messages which are informational
+      const nonNoticeLines = result.stderr.split('\n').filter(l => !l.trim().startsWith('NOTICE:') && !l.trim().startsWith('psql:') && l.trim().length > 0);
+      if (nonNoticeLines.length > 0) {
+        logWarning(`PostgreSQL stderr: ${nonNoticeLines.join('\n')}`);
+      }
+    }
+
+    return true;
+  } catch (e: unknown) {
+    let message = (e instanceof Error) ? e.message : String(e);
+
+    const errRecord = e as Record<string, unknown>;
+    if (errRecord.stdout) {
+      message += `\n PostgreSQL output: ${errRecord.stdout}`;
+    }
+    if (errRecord.stderr) {
+      message += `\n PostgreSQL error: ${errRecord.stderr}`;
+    }
+
+    // Mask password in error messages
+    const errorMessage = pgPassword ? this.maskPassword(message, pgPassword) : message;
+    logError("Error executing PostgreSQL SQL file: " + errorMessage);
+    return false;
+  }
+ }
+
+ /**
+  * Executes a SQL file against SQL Server using the sqlcmd CLI.
+  */
+ private async executeSQLFileSQLServer(filePath: string): Promise<boolean> {
   try {
     if (sqlConfig.user === undefined || sqlConfig.password === undefined || sqlConfig.database === undefined) {
       throw new Error("SQL Server user, password, and database must be provided in the configuration");
@@ -457,7 +559,7 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
       const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
         const sqlcmdCommand = isWindows ? 'sqlcmd.exe' : 'sqlcmd';
 
-        const spawnOptions: any = {
+        const spawnOptions: Record<string, unknown> = {
           shell: false  // Critical: bypass shell entirely on all platforms
         };
 
@@ -467,31 +569,29 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
           spawnOptions.windowsVerbatimArguments = true;
         }
 
-        const child = spawn(sqlcmdCommand, args, spawnOptions);
+        const child = spawn(sqlcmdCommand, args, spawnOptions as Parameters<typeof spawn>[2]);
 
         let stdout = '';
         let stderr = '';
 
-        child.stdout?.on('data', (data) => {
+        child.stdout?.on('data', (data: Buffer) => {
           stdout += data.toString();
         });
 
-        child.stderr?.on('data', (data) => {
+        child.stderr?.on('data', (data: Buffer) => {
           stderr += data.toString();
         });
 
-        child.on('error', (error) => {
+        child.on('error', (error: Error) => {
           reject(error);
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code: number | null) => {
           if (code === 0) {
             resolve({ stdout, stderr });
           } else {
-            const error: any = new Error(`sqlcmd exited with code ${code}`);
-            error.stdout = stdout;
-            error.stderr = stderr;
-            error.code = code;
+            const error = new Error(`sqlcmd exited with code ${code}`);
+            Object.assign(error, { stdout, stderr, code });
             reject(error);
           }
         });
@@ -506,25 +606,25 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
       }
 
       return true;
-    } catch (execError: any) {
+    } catch (execError: unknown) {
       // Only errors with severity >= 17 will cause sqlcmd to exit with non-zero code
       // Re-throw to be handled by outer catch block
       throw execError;
     }
   }
   catch (e) {
-    let message = (e as any).message || e;
+    let message = (e as Record<string, unknown>).message || e;
 
     // Include stdout and stderr if available from exec error
-    if ((e as any).stdout) {
-      message += `\n SQL Server message: ${(e as any).stdout}`;
+    if ((e as Record<string, unknown>).stdout) {
+      message += `\n SQL Server message: ${(e as Record<string, unknown>).stdout}`;
     }
-    if ((e as any).stderr) {
-      message += `\n SQL Server error: ${(e as any).stderr}`;
+    if ((e as Record<string, unknown>).stderr) {
+      message += `\n SQL Server error: ${(e as Record<string, unknown>).stderr}`;
     }
 
     // Mask password in error messages
-    const errorMessage = sqlConfig.password ? this.maskPassword(message, sqlConfig.password) : message;
+    const errorMessage = sqlConfig.password ? this.maskPassword(String(message), sqlConfig.password) : String(message);
     logError("Error executing batch SQL file: " + errorMessage);
     return false;
   }
