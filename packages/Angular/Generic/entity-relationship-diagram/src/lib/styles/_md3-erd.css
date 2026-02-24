@@ -1,9 +1,9 @@
 /**
- * ERD Component MD3 Design Tokens
- * Material Design 3 styling for Entity Relationship Diagram components
+ * ERD Component MJ Design Tokens
+ * MJ theming for Entity Relationship Diagram components
  *
- * This file provides common MD3-based styles used across all ERD components.
- * Import this file into component CSS files that need MD3 theming.
+ * This file provides common MJ-based styles used across all ERD components.
+ * Import this file into component CSS files that need MJ theming.
  */
 
 /* ============================================
@@ -16,23 +16,22 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  font: var(--mat-sys-label-large);
   background: transparent;
-  border: 1px solid var(--mat-sys-outline);
+  border: 1px solid var(--mj-color-neutral-400);
   border-radius: 20px;
-  color: var(--mat-sys-primary);
+  color: var(--mj-brand-primary);
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .md3-btn-outlined:hover:not(:disabled) {
-  background: var(--mat-sys-surface-container-highest);
-  border-color: var(--mat-sys-primary);
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-brand-primary);
 }
 
 .md3-btn-outlined:focus-visible {
-  outline: 2px solid var(--mat-sys-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
@@ -47,18 +46,17 @@
   align-items: center;
   gap: 8px;
   padding: 10px 24px;
-  font: var(--mat-sys-label-large);
-  background: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
   border: none;
   border-radius: 20px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: var(--mat-sys-elevation-1);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .md3-btn-filled:hover:not(:disabled) {
-  box-shadow: var(--mat-sys-elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .md3-btn-filled:active:not(:disabled) {
@@ -76,9 +74,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 24px;
-  font: var(--mat-sys-label-large);
-  background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  background: var(--mj-color-warning-50);
+  color: var(--mj-color-warning-900);
   border: none;
   border-radius: 20px;
   cursor: pointer;
@@ -86,7 +83,7 @@
 }
 
 .md3-btn-tonal:hover:not(:disabled) {
-  box-shadow: var(--mat-sys-elevation-1);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .md3-btn-tonal:disabled {
@@ -100,9 +97,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  font: var(--mat-sys-label-large);
   background: transparent;
-  color: var(--mat-sys-primary);
+  color: var(--mj-brand-primary);
   border: none;
   border-radius: 20px;
   cursor: pointer;
@@ -110,7 +106,7 @@
 }
 
 .md3-btn-text:hover:not(:disabled) {
-  background: var(--mat-sys-surface-container-highest);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .md3-btn-text:disabled {
@@ -128,7 +124,7 @@
   padding: 0;
   font-size: 18px;
   background: transparent;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -136,8 +132,8 @@
 }
 
 .md3-btn-icon:hover:not(:disabled) {
-  background: var(--mat-sys-surface-container-highest);
-  color: var(--mat-sys-on-surface);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
 }
 
 .md3-btn-icon:disabled {
@@ -151,25 +147,24 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  font: var(--mat-sys-label-medium);
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface-variant);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .md3-btn-control:hover:not(:disabled) {
-  background: var(--mat-sys-surface-container);
-  border-color: var(--mat-sys-outline);
-  color: var(--mat-sys-on-surface);
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-color-neutral-400);
+  color: var(--mj-text-primary);
 }
 
 .md3-btn-control.active {
-  background: var(--mat-sys-primary);
-  border-color: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
 }
 
 .md3-btn-control:disabled {
@@ -182,15 +177,15 @@
    ============================================ */
 
 .md3-card {
-  background: var(--mat-sys-surface-container);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
   border-radius: 12px;
-  box-shadow: var(--mat-sys-elevation-1);
+  box-shadow: var(--mj-shadow-sm);
   transition: box-shadow 0.2s ease;
 }
 
 .md3-card:hover {
-  box-shadow: var(--mat-sys-elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .md3-card-header {
@@ -198,8 +193,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  background: var(--mat-sys-surface);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-page);
+  border-bottom: 1px solid var(--mj-border-default);
   border-radius: 12px 12px 0 0;
 }
 
@@ -212,7 +207,7 @@
    ============================================ */
 
 .md3-panel {
-  background: var(--mat-sys-surface);
+  background: var(--mj-bg-page);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -224,15 +219,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: var(--mat-sys-surface-container);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
 .md3-panel-header h3 {
   margin: 0;
-  font: var(--mat-sys-title-medium);
-  color: var(--mat-sys-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .md3-panel-content {
@@ -248,10 +242,9 @@
 .md3-input {
   width: 100%;
   padding: 12px 16px;
-  font: var(--mat-sys-body-large);
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  border: 1px solid var(--mat-sys-outline);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-color-neutral-400);
   border-radius: 4px;
   transition: all 0.2s ease;
   box-sizing: border-box;
@@ -259,8 +252,8 @@
 
 .md3-input:focus {
   outline: none;
-  border-color: var(--mat-sys-primary);
-  box-shadow: 0 0 0 3px var(--mat-sys-primary-container);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px var(--mj-color-accent-300);
 }
 
 .md3-input:disabled {
@@ -269,17 +262,16 @@
 }
 
 .md3-input::placeholder {
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   opacity: 0.6;
 }
 
 .md3-select {
   width: 100%;
   padding: 12px 16px;
-  font: var(--mat-sys-body-large);
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  border: 1px solid var(--mat-sys-outline);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-color-neutral-400);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -288,8 +280,8 @@
 
 .md3-select:focus {
   outline: none;
-  border-color: var(--mat-sys-primary);
-  box-shadow: 0 0 0 3px var(--mat-sys-primary-container);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px var(--mj-color-accent-300);
 }
 
 /* ============================================
@@ -300,30 +292,29 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  font: var(--mat-sys-label-small);
   font-weight: 600;
   border-radius: 8px;
   text-transform: uppercase;
 }
 
 .md3-badge-primary {
-  background: var(--mat-sys-primary-container);
-  color: var(--mat-sys-on-primary-container);
+  background: var(--mj-color-accent-300);
+  color: var(--mj-color-brand-900);
 }
 
 .md3-badge-secondary {
-  background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  background: var(--mj-color-warning-50);
+  color: var(--mj-color-warning-900);
 }
 
 .md3-badge-tertiary {
-  background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  background: var(--mj-color-success-100);
+  color: var(--mj-color-success-800);
 }
 
 .md3-badge-error {
-  background: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
+  background: var(--mj-color-error-100);
+  color: var(--mj-color-error-700);
 }
 
 /* Small badge variant */
@@ -338,10 +329,10 @@
    ============================================ */
 
 .md3-floating-panel {
-  background: var(--mat-sys-surface-container-highest);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
   border-radius: 28px;
-  box-shadow: var(--mat-sys-elevation-3);
+  box-shadow: var(--mj-shadow-lg);
   overflow: hidden;
 }
 
@@ -350,7 +341,7 @@
    ============================================ */
 
 .md3-section {
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .md3-section-header {
@@ -358,14 +349,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  background: var(--mat-sys-surface-container-low);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
   cursor: pointer;
   user-select: none;
 }
 
 .md3-section-header:hover {
-  background: var(--mat-sys-surface-container);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .md3-section-title {
@@ -373,8 +364,7 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font: var(--mat-sys-title-small);
-  color: var(--mat-sys-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .md3-section-content {
@@ -391,17 +381,17 @@
 }
 
 .md3-scrollbar::-webkit-scrollbar-track {
-  background: var(--mat-sys-surface-container);
+  background: var(--mj-bg-surface-sunken);
   border-radius: 3px;
 }
 
 .md3-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--mat-sys-outline);
+  background: var(--mj-color-neutral-400);
   border-radius: 3px;
 }
 
 .md3-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--mat-sys-on-surface-variant);
+  background: var(--mj-text-secondary);
 }
 
 /* ============================================
@@ -414,7 +404,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--mat-sys-surface);
+  background: var(--mj-bg-page);
   opacity: 0.95;
   display: flex;
   align-items: center;
@@ -422,28 +412,8 @@
   z-index: 1000;
 }
 
-/* ============================================
-   TYPOGRAPHY HELPERS
-   ============================================ */
-
-.md3-text-display-lg { font: var(--mat-sys-display-large); }
-.md3-text-display-md { font: var(--mat-sys-display-medium); }
-.md3-text-display-sm { font: var(--mat-sys-display-small); }
-.md3-text-headline-lg { font: var(--mat-sys-headline-large); }
-.md3-text-headline-md { font: var(--mat-sys-headline-medium); }
-.md3-text-headline-sm { font: var(--mat-sys-headline-small); }
-.md3-text-title-lg { font: var(--mat-sys-title-large); }
-.md3-text-title-md { font: var(--mat-sys-title-medium); }
-.md3-text-title-sm { font: var(--mat-sys-title-small); }
-.md3-text-body-lg { font: var(--mat-sys-body-large); }
-.md3-text-body-md { font: var(--mat-sys-body-medium); }
-.md3-text-body-sm { font: var(--mat-sys-body-small); }
-.md3-text-label-lg { font: var(--mat-sys-label-large); }
-.md3-text-label-md { font: var(--mat-sys-label-medium); }
-.md3-text-label-sm { font: var(--mat-sys-label-small); }
-
 /* Color helpers */
-.md3-text-primary { color: var(--mat-sys-primary); }
-.md3-text-on-surface { color: var(--mat-sys-on-surface); }
-.md3-text-on-surface-variant { color: var(--mat-sys-on-surface-variant); }
-.md3-text-error { color: var(--mat-sys-error); }
+.md3-text-primary { color: var(--mj-brand-primary); }
+.md3-text-on-surface { color: var(--mj-text-primary); }
+.md3-text-on-surface-variant { color: var(--mj-text-secondary); }
+.md3-text-error { color: var(--mj-status-error); }

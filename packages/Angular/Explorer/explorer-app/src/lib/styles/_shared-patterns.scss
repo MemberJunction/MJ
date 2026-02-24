@@ -1,0 +1,750 @@
+/* ===========================================
+   MemberJunction Shared UI Patterns
+
+   This file contains selector lists that apply
+   shared base styles to all semantic class names
+   of the same pattern type.
+
+   Structure:
+   - Each pattern type (cards, buttons, etc.) has
+     a selector list that includes all semantic
+     class names from across the codebase
+   - Components keep their semantic class names
+   - This file provides the shared base styling
+   - Components can still add type-specific styles
+   =========================================== */
+
+/* -------------------------------------------
+   CARDS
+   All card-like containers share these base styles
+   ------------------------------------------- */
+
+/* Base card styling - applied to all card variants */
+.mj-card,
+.dashboard-card,
+.entity-card,
+.user-card,
+.role-card,
+.app-card,
+.stat-card,
+.settings-card,
+.form-card,
+.data-card,
+.action-card,
+.prompt-card,
+.agent-card,
+.model-card,
+.config-card,
+.metric-card,
+.notification-card,
+.part-type-card,
+.category-card,
+.notification-type-card,
+.data-context-card,
+.entity-info-card,
+.entity-grid-card,
+.message-card,
+.parameter-card,
+.info-card,
+.summary-card,
+.chart-card,
+.detail-card,
+.ai-run-card,
+.job-card,
+.kpi-card,
+.type-card,
+.session-card,
+.component-card,
+.artifact-modal-card,
+.overview-card,
+.engine-card,
+.collapsible-card {
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-sm);
+  overflow: hidden;
+  transition: box-shadow var(--mj-transition-base),
+              transform var(--mj-transition-base),
+              border-color var(--mj-transition-base);
+}
+
+/* Card hover effect (for clickable cards) */
+a.mj-card:hover,
+a.dashboard-card:hover,
+a.entity-card:hover,
+a.app-card:hover,
+a.action-card:hover,
+a.prompt-card:hover,
+a.agent-card:hover,
+a.model-card:hover,
+.mj-card.clickable:hover,
+.dashboard-card.clickable:hover,
+.entity-card.clickable:hover,
+.app-card.clickable:hover,
+.action-card.clickable:hover,
+.prompt-card.clickable:hover,
+.agent-card.clickable:hover,
+.model-card.clickable:hover,
+.mj-card:hover,
+.dashboard-card:hover,
+.entity-card:hover,
+.app-card:hover,
+.action-card:hover,
+.prompt-card:hover,
+.agent-card:hover,
+.model-card:hover {
+  box-shadow: var(--mj-shadow-md);
+  border-color: var(--mj-border-strong);
+}
+
+/* Card headers */
+.mj-card-header,
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--mj-space-4) var(--mj-space-5);
+  border-bottom: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-sunken);
+}
+
+/* Card bodies */
+.mj-card-body,
+.card-body {
+  padding: var(--mj-space-5);
+}
+
+/* Card footers */
+.mj-card-footer,
+.card-footer,
+.mj-card-actions:not(.mj-card .mj-card-actions) {
+  padding: var(--mj-space-3) var(--mj-space-5);
+  border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-sunken);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--mj-space-2);
+}
+
+/* -------------------------------------------
+   STAT ICONS
+   KPI card icon containers (48×48 pastel squares)
+   ------------------------------------------- */
+
+.stat-icon,
+.card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--mj-radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* -------------------------------------------
+   STAT VALUES
+   Large KPI numbers inside stat cards
+   ------------------------------------------- */
+
+.stat-value,
+.card-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* -------------------------------------------
+   STAT LABELS
+   Uppercase descriptor text under stat values
+   ------------------------------------------- */
+
+.stat-label,
+.card-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* -------------------------------------------
+   STAT CONTENT
+   Container for value + label inside stat cards
+   ------------------------------------------- */
+
+.stat-content,
+.card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* -------------------------------------------
+   BUTTONS
+   All button-like elements share these base styles
+   ------------------------------------------- */
+
+.mj-btn,
+.action-btn,
+.control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-4);
+  font-family: var(--mj-font-family);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  line-height: var(--mj-leading-tight);
+  border: 1px solid transparent;
+  border-radius: var(--mj-radius-md);
+  cursor: pointer;
+  transition: var(--mj-transition-colors);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.mj-btn:focus-visible,
+.action-btn:focus-visible,
+.control-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+.mj-btn:disabled,
+.action-btn:disabled,
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary button variant */
+.mj-btn-primary,
+.action-btn.primary,
+.control-btn.primary {
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-btn-primary:hover:not(:disabled),
+.action-btn.primary:hover:not(:disabled),
+.control-btn.primary:hover:not(:disabled) {
+  background: var(--mj-brand-primary-hover);
+  border-color: var(--mj-brand-primary-hover);
+}
+
+/* Secondary button variant */
+.mj-btn-secondary,
+.action-btn:not(.primary):not(.danger),
+.control-btn:not(.primary):not(.danger) {
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-default);
+}
+
+.mj-btn-secondary:hover:not(:disabled),
+.action-btn:not(.primary):not(.danger):hover:not(:disabled),
+.control-btn:not(.primary):not(.danger):hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-strong);
+}
+
+/* Ghost button variant */
+.mj-btn-ghost {
+  background: transparent;
+  color: var(--mj-text-primary);
+  border-color: transparent;
+}
+
+.mj-btn-ghost:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+}
+
+/* Danger button variant */
+.action-btn.danger,
+.control-btn.danger,
+.mj-btn-danger {
+  background: var(--mj-status-error);
+  color: var(--mj-brand-on-primary);
+  border-color: var(--mj-status-error);
+}
+
+.action-btn.danger:hover:not(:disabled),
+.control-btn.danger:hover:not(:disabled),
+.mj-btn-danger:hover:not(:disabled) {
+  background: var(--mj-color-error-600);
+  border-color: var(--mj-color-error-600);
+}
+
+/* Small button variant */
+.mj-btn-sm,
+.action-btn-small,
+.action-btn.small,
+.control-btn.small {
+  padding: var(--mj-space-1-5) var(--mj-space-3);
+  font-size: var(--mj-text-xs);
+}
+
+/* -------------------------------------------
+   INPUTS
+   All form input elements share these base styles
+   ------------------------------------------- */
+
+.mj-input,
+.mj-search-input,
+.search-input,
+.filter-input {
+  width: 100%;
+  padding: var(--mj-space-2-5) var(--mj-space-3);
+  font-family: var(--mj-font-family);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  transition: border-color var(--mj-transition-fast),
+              box-shadow var(--mj-transition-fast);
+}
+
+.mj-input::placeholder,
+.mj-search-input::placeholder,
+.search-input::placeholder,
+.filter-input::placeholder {
+  color: var(--mj-text-muted);
+}
+
+.mj-input:hover,
+.mj-search-input:hover,
+.search-input:hover,
+.filter-input:hover {
+  border-color: var(--mj-border-strong);
+}
+
+.mj-input:focus,
+.mj-search-input:focus,
+.search-input:focus,
+.filter-input:focus {
+  outline: none;
+  border-color: var(--mj-border-focus);
+  box-shadow: var(--mj-focus-ring);
+}
+
+.mj-input:disabled,
+.mj-search-input:disabled,
+.search-input:disabled,
+.filter-input:disabled {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-disabled);
+  cursor: not-allowed;
+}
+
+/* -------------------------------------------
+   BADGES
+   All badge/tag elements share these base styles
+   ------------------------------------------- */
+
+.mj-badge,
+.status-badge,
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  padding: var(--mj-space-1) var(--mj-space-2-5);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  line-height: var(--mj-leading-tight);
+  border-radius: var(--mj-radius-full);
+  white-space: nowrap;
+}
+
+/* Success badge variant */
+.mj-badge-success,
+.status-badge.status-active,
+.status-badge.success {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
+  border: 1px solid var(--mj-status-success-border);
+}
+
+/* Warning badge variant */
+.mj-badge-warning,
+.status-badge.status-pending,
+.status-badge.warning {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+  border: 1px solid var(--mj-status-warning-border);
+}
+
+/* Error badge variant */
+.mj-badge-error,
+.status-badge.status-error,
+.status-badge.error,
+.status-badge.status-failed {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border: 1px solid var(--mj-status-error-border);
+}
+
+/* Neutral badge variant */
+.mj-badge-neutral,
+.status-badge.status-inactive,
+.status-badge.inactive,
+.meta-item {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+}
+
+/* Info badge variant */
+.mj-badge-info,
+.status-badge.status-info,
+.status-badge.info {
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+  border: 1px solid var(--mj-status-info-border);
+}
+
+/* -------------------------------------------
+   PANELS
+   All panel containers share these base styles
+   ------------------------------------------- */
+
+.mj-panel,
+.filter-panel,
+.detail-panel {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+/* Panel headers */
+.mj-panel-header,
+.filter-panel-header,
+.detail-panel-header,
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-panel-header h3,
+.filter-panel-header h3,
+.detail-panel-header h3,
+.panel-header h3 {
+  margin: 0;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+/* Panel bodies */
+.mj-panel-body,
+.filter-panel-content,
+.detail-panel-content,
+.panel-content {
+  padding: var(--mj-space-4);
+}
+
+/* Close button in panels */
+.filter-panel-header .close-btn,
+.detail-panel-header .close-btn,
+.panel-header .close-btn,
+.detail-panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--mj-space-8);
+  height: var(--mj-space-8);
+  background: transparent;
+  border: none;
+  border-radius: var(--mj-radius-md);
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  transition: background-color var(--mj-transition-fast),
+              color var(--mj-transition-fast);
+}
+
+.filter-panel-header .close-btn:hover,
+.detail-panel-header .close-btn:hover,
+.panel-header .close-btn:hover,
+.detail-panel-close:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+/* -------------------------------------------
+   HEADERS
+   Dashboard and section headers
+   ------------------------------------------- */
+
+.dashboard-header,
+.mj-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--mj-space-4) var(--mj-space-6);
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+.dashboard-header .header-info,
+.mj-dashboard-header .header-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-1);
+}
+
+.dashboard-header .header-info h1,
+.dashboard-header .header-info h2,
+.dashboard-header .header-info h3,
+.mj-dashboard-header .header-info h1,
+.mj-dashboard-header .header-info h2,
+.mj-dashboard-header .header-info h3 {
+  margin: 0;
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.dashboard-header .header-controls,
+.mj-dashboard-header .header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+}
+
+/* -------------------------------------------
+   TABLES
+   Data tables share these base styles
+   ------------------------------------------- */
+
+.mj-table,
+.data-table,
+.entity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--mj-text-sm);
+}
+
+.mj-table th,
+.data-table th,
+.entity-table th {
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-sunken);
+  padding: var(--mj-space-3) var(--mj-space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.mj-table td,
+.data-table td,
+.entity-table td {
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border-bottom: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-primary);
+}
+
+.mj-table tbody tr:hover,
+.data-table tbody tr:hover,
+.entity-table tbody tr:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+/* -------------------------------------------
+   SEARCH BOXES
+   Search containers with icons
+   ------------------------------------------- */
+
+.mj-search-box,
+.search-container,
+.mj-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mj-search-icon,
+.search-icon {
+  position: absolute;
+  left: var(--mj-space-3);
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  pointer-events: none;
+}
+
+.mj-search-box .mj-search-input,
+.search-container .search-input,
+.mj-search .mj-search-input {
+  padding-left: var(--mj-space-10);
+}
+
+.mj-search-clear,
+.search-clear {
+  position: absolute;
+  right: var(--mj-space-3);
+  background: none;
+  border: none;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  padding: var(--mj-space-1);
+  border-radius: var(--mj-radius-full);
+  transition: color var(--mj-transition-fast),
+              background-color var(--mj-transition-fast);
+}
+
+.mj-search-clear:hover,
+.search-clear:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+/* -------------------------------------------
+   EMPTY STATES
+   Empty/placeholder content states
+   ------------------------------------------- */
+
+.mj-empty-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mj-space-16) var(--mj-space-8);
+  text-align: center;
+  color: var(--mj-text-secondary);
+}
+
+.mj-empty-state .empty-icon,
+.empty-state .empty-icon,
+.mj-empty-icon {
+  font-size: var(--mj-text-4xl);
+  margin-bottom: var(--mj-space-4);
+  opacity: 0.4;
+  color: var(--mj-text-muted);
+}
+
+.mj-empty-state h3,
+.empty-state h3 {
+  margin: 0 0 var(--mj-space-2) 0;
+  color: var(--mj-text-primary);
+  font-size: var(--mj-text-lg);
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-empty-state p,
+.empty-state p {
+  margin: 0 0 var(--mj-space-4) 0;
+  max-width: 400px;
+  line-height: var(--mj-leading-relaxed);
+}
+
+/* -------------------------------------------
+   LOADING STATES
+   Loading spinners and overlays
+   ------------------------------------------- */
+
+.mj-loading,
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--mj-space-10);
+}
+
+.mj-loading-overlay,
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--mj-bg-overlay);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: var(--mj-z-modal-backdrop);
+  backdrop-filter: blur(2px);
+}
+
+/* -------------------------------------------
+   MODAL/DIALOG OVERLAYS
+   Overlay backgrounds for modals
+   ------------------------------------------- */
+
+.detail-panel-overlay,
+.modal-overlay,
+.mj-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--mj-bg-overlay);
+  z-index: var(--mj-z-modal-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* -------------------------------------------
+   UTILITY CLASSES
+   Common utility patterns
+   ------------------------------------------- */
+
+.text-muted {
+  color: var(--mj-text-muted);
+}
+
+.text-secondary {
+  color: var(--mj-text-secondary);
+}
+
+.text-primary {
+  color: var(--mj-text-primary);
+}
+
+.text-link {
+  color: var(--mj-text-link);
+}
+
+.text-link:hover {
+  color: var(--mj-text-link-hover);
+}
+
+.bg-surface {
+  background: var(--mj-bg-surface);
+}
+
+.bg-surface-sunken {
+  background: var(--mj-bg-surface-sunken);
+}
+
+.border-default {
+  border-color: var(--mj-border-default);
+}
+
+.border-subtle {
+  border-color: var(--mj-border-subtle);
+}
+
+.shadow-sm {
+  box-shadow: var(--mj-shadow-sm);
+}
+
+.shadow-md {
+  box-shadow: var(--mj-shadow-md);
+}
+
+.shadow-lg {
+  box-shadow: var(--mj-shadow-lg);
+}

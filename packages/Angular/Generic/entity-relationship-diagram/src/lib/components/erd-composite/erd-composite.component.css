@@ -1,6 +1,6 @@
 /**
- * ERD Composite Component - MD3 Styled
- * Material Design 3 theming for the ERD composite wrapper
+ * ERD Composite Component - MJ Design Tokens
+ * MJ theming for the ERD composite wrapper
  */
 
 :host {
@@ -40,10 +40,10 @@
   right: 20px;
   width: 380px;
   max-height: calc(100% - 40px);
-  background: var(--mat-sys-surface-container-highest);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
   border-radius: 28px;
-  box-shadow: var(--mat-sys-elevation-3);
+  box-shadow: var(--mj-shadow-lg);
   z-index: 1000;
   overflow: hidden;
   transform: translateY(-50%);
@@ -92,8 +92,8 @@
   display: flex;
   align-items: center;
   padding: 8px 16px;
-  background: var(--mat-sys-surface-container);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
@@ -103,23 +103,22 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--mat-sys-surface);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-border-default);
   border-radius: 20px;
-  color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-label-large);
+  color: var(--mj-text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .back-btn:hover {
-  background: var(--mat-sys-surface-container-highest);
-  border-color: var(--mat-sys-outline);
-  color: var(--mat-sys-on-surface);
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-color-neutral-400);
+  color: var(--mj-text-primary);
 }
 
 .back-btn:focus-visible {
-  outline: 2px solid var(--mat-sys-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 

@@ -170,7 +170,8 @@ export class BaseUserMenu {
                 tooltip: 'View current application state in console'
             },
 
-            // === SYSTEM GROUP ===
+            // === SYSTEM GROUP (Theme selection) ===
+            ...this.BuildThemeMenuItems(),
             {
                 id: 'reset-layout',
                 label: 'Reset Layout',
@@ -266,6 +267,7 @@ export class BaseUserMenu {
 
     /**
      * Handle menu item click. Dispatches to specific Handle_<id> methods.
+     * Theme selection items (select-theme-*) are routed to HandleThemeSelection.
      */
     public async HandleItemClick(itemId: string): Promise<UserMenuActionResult> {
         const items = this.GetMenuItems();
@@ -273,6 +275,12 @@ export class BaseUserMenu {
 
         if (!item || !item.enabled) {
             return { success: false, closeMenu: false, message: 'Item not found or disabled' };
+        }
+
+        // Route theme selection items to the theme handler
+        if (itemId.startsWith('select-theme-')) {
+            const themeId = itemId.substring('select-theme-'.length);
+            return await this.HandleThemeSelection(themeId);
         }
 
         // Convert item id to handler method name (e.g., 'toggle-dev-mode' -> 'Handle_toggle_dev_mode')
@@ -353,6 +361,18 @@ export class BaseUserMenu {
     }
 
     /**
+     * Handle theme selection clicks.
+     * Item IDs follow the pattern 'select-theme-<themeId>'.
+     */
+    protected async HandleThemeSelection(themeId: string): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: false, // Keep menu open to see updated state
+            message: `select-theme-${themeId}` // Signal for shell to handle
+        };
+    }
+
+    /**
      * Handle "Reset Layout" click
      */
     protected async Handle_reset_layout(): Promise<UserMenuActionResult> {
@@ -380,6 +400,63 @@ export class BaseUserMenu {
         await this._context.authService.logout();
 
         return { success: true, closeMenu: true };
+    }
+
+    // ========================================
+    // THEME HELPERS
+    // ========================================
+
+    /**
+     * Build menu items for each registered theme plus a 'System' option.
+     * Each theme gets a `select-theme-<id>` item ID. The currently active
+     * theme (or 'system' preference) shows a checkmark icon.
+     */
+    protected BuildThemeMenuItems(): UserMenuItem[] {
+        const themes = this._context?.availableThemes ?? [];
+        const currentPreference = this._context?.themePreference ?? 'system';
+        const items: UserMenuItem[] = [];
+        let order = 1;
+
+        for (const theme of themes) {
+            const isActive = currentPreference === theme.Id;
+            items.push({
+                id: `select-theme-${theme.Id}`,
+                label: theme.Name,
+                icon: isActive ? 'fa-solid fa-check' : this.GetThemeIconForBaseTheme(theme.BaseTheme),
+                color: isActive ? '#4CAF50' : undefined,
+                group: 'system',
+                order: order++,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: theme.Description ?? `Switch to ${theme.Name} theme`
+            });
+        }
+
+        // Always add a 'System' option (auto-detect OS preference)
+        const isSystemActive = currentPreference === 'system';
+        items.push({
+            id: 'select-theme-system',
+            label: 'System',
+            icon: isSystemActive ? 'fa-solid fa-check' : 'fa-solid fa-desktop',
+            color: isSystemActive ? '#4CAF50' : undefined,
+            group: 'system',
+            order: order++,
+            developerOnly: false,
+            visible: true,
+            enabled: true,
+            tooltip: 'Auto-detect theme from OS preference'
+        });
+
+        return items;
+    }
+
+    /**
+     * Get an appropriate icon for a base theme type.
+     * Used for non-active theme items to hint at light vs dark.
+     */
+    protected GetThemeIconForBaseTheme(baseTheme: 'light' | 'dark'): string {
+        return baseTheme === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
     }
 
     // ========================================

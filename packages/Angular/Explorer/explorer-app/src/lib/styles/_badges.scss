@@ -1,69 +1,70 @@
 /* ===================================
    STANDARDIZED BADGE SYSTEM
+   Uses design tokens for consistent styling
    =================================== */
 
 .badge {
     display: inline-block;
-    padding: 0.25em 0.4em;
-    font-size: 75%;
-    font-weight: 700;
-    line-height: 1;
+    padding: var(--mj-space-1) var(--mj-space-2);
+    font-size: var(--mj-text-xs);
+    font-weight: var(--mj-font-bold);
+    line-height: var(--mj-leading-none);
     text-align: center;
     white-space: nowrap;
     vertical-align: baseline;
-    border-radius: 0.25rem;
-    transition: all 0.2s ease;
+    border-radius: var(--mj-radius-sm);
+    transition: all var(--mj-transition-fast);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--mj-tracking-wide);
 }
 
-/* Badge Variants */
+/* Badge Variants - using design tokens */
 .badge-primary {
-    color: var(--white-color);
-    background-color: var(--mj-blue);
-    border: 1px solid var(--mj-blue);
+    color: var(--mj-brand-on-primary);
+    background-color: var(--mj-brand-primary);
+    border: 1px solid var(--mj-brand-primary);
 }
 
 .badge-secondary {
-    color: var(--white-color);
-    background-color: var(--navy);
-    border: 1px solid var(--navy);
+    color: var(--mj-brand-on-secondary);
+    background-color: var(--mj-brand-secondary);
+    border: 1px solid var(--mj-brand-secondary);
 }
 
 .badge-success {
-    color: var(--white-color);
-    background-color: #28a745;
-    border: 1px solid #28a745;
+    color: var(--mj-brand-on-primary);
+    background-color: var(--mj-status-success);
+    border: 1px solid var(--mj-status-success);
 }
 
 .badge-danger {
-    color: var(--white-color);
-    background-color: #dc3545;
-    border: 1px solid #dc3545;
+    color: var(--mj-brand-on-primary);
+    background-color: var(--mj-status-error);
+    border: 1px solid var(--mj-status-error);
 }
 
 .badge-warning {
-    color: var(--navy);
-    background-color: #ffc107;
-    border: 1px solid #ffc107;
+    color: var(--mj-text-primary);
+    background-color: var(--mj-status-warning);
+    border: 1px solid var(--mj-status-warning);
 }
 
 .badge-info {
-    color: var(--white-color);
-    background-color: var(--light-blue);
-    border: 1px solid var(--light-blue);
+    color: var(--mj-brand-on-primary);
+    background-color: var(--mj-status-info);
+    border: 1px solid var(--mj-status-info);
 }
 
 .badge-light {
-    color: var(--navy);
-    background-color: var(--gray-600);
-    border: 1px solid var(--gray-700);
+    color: var(--mj-text-primary);
+    background-color: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-default);
 }
 
 .badge-dark {
-    color: var(--white-color);
-    background-color: var(--gray-900);
-    border: 1px solid var(--gray-900);
+    color: var(--mj-text-inverse);
+    background-color: var(--mj-color-neutral-700);
+    border: 1px solid var(--mj-color-neutral-700);
 }
 
 /* Badge Sizes */
@@ -84,35 +85,35 @@
 
 .badge-outline {
     background-color: transparent;
-    
+
     &.badge-primary {
-        color: var(--mj-blue);
-        border-color: var(--mj-blue);
+        color: var(--mj-brand-primary);
+        border-color: var(--mj-brand-primary);
     }
-    
+
     &.badge-secondary {
-        color: var(--navy);
-        border-color: var(--navy);
+        color: var(--mj-brand-secondary);
+        border-color: var(--mj-brand-secondary);
     }
-    
+
     &.badge-success {
-        color: #28a745;
-        border-color: #28a745;
+        color: var(--mj-status-success);
+        border-color: var(--mj-status-success);
     }
-    
+
     &.badge-danger {
-        color: #dc3545;
-        border-color: #dc3545;
+        color: var(--mj-status-error);
+        border-color: var(--mj-status-error);
     }
-    
+
     &.badge-warning {
-        color: #ffc107;
-        border-color: #ffc107;
+        color: var(--mj-status-warning);
+        border-color: var(--mj-status-warning);
     }
-    
+
     &.badge-info {
-        color: var(--light-blue);
-        border-color: var(--light-blue);
+        color: var(--mj-status-info);
+        border-color: var(--mj-status-info);
     }
 }
 
