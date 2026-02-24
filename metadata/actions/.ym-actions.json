@@ -1,0 +1,1030 @@
+[
+  {
+    "fields": {
+      "Name": "YM - Get Members",
+      "Description": "Retrieves member data from YourMembership with pagination support",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMMembersAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-users"
+    },
+    "primaryKey": {
+      "ID": "7AEADE80-03C3-432F-98B7-9A3153DF4D14"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "F47CB398-9A04-4B04-8C03-CF31497554E2" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "A920E997-78B6-464F-905E-FD994DEBFB0E" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to return (default 1000)",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "295600C1-7FF6-478D-A13F-DA12F0D9BBEC" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Members",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of member records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "E5754065-B3F9-40BA-9258-43229EC34A47" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "85055BAA-A212-4739-8DD4-49E850EF1C87" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Members retrieved successfully"
+          },
+          "primaryKey": { "ID": "65C9234E-BD6A-4A16-BF38-30632D88F12F" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "DF9B90C7-512C-4348-9D61-C55DA5BA1301" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Get Events",
+      "Description": "Retrieves event data from YourMembership with pagination support",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMEventsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar"
+    },
+    "primaryKey": {
+      "ID": "789A0B41-3C6C-436B-AAE5-55A458CE1C94"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "F5497E72-6E95-4C0E-8D69-1092E1B8B609" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "8BA57224-482F-4709-A30C-F6F963368E42" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to return (default 1000)",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "219F1404-AC1B-4211-983F-A4C1C62B4AB4" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Events",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of event records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "40409B08-E640-4DF6-8F82-8B93ABF73868" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "2BF239C1-1FFF-48AE-AC72-23429E3FD4E5" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Events retrieved successfully"
+          },
+          "primaryKey": { "ID": "8C0FB072-E6C0-4CB9-9EB3-BF13A7E226ED" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "9D796745-DE3F-4A9A-A175-A3931A6EFD0A" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Get Event Registrations",
+      "Description": "Retrieves event registration data from YourMembership with pagination support",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMEventRegistrationsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-clipboard-list"
+    },
+    "primaryKey": {
+      "ID": "FC58168B-319C-4F80-82BE-98A9D998BE4A"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "7757CC5B-F7B3-4DAC-B870-E9ACE6427A5C" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "548D1415-ADC2-40FF-BAAC-66174D2AC8DF" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to return (default 1000)",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "1778A41E-5629-40A1-8179-193B4C3949AF" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EventRegistrations",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of event registration records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "848E1326-946A-4FDF-9DCA-DFA4300D5095" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "BC55D3C1-E0B0-49DD-BF2E-2F35B4CF71D0" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Event registrations retrieved successfully"
+          },
+          "primaryKey": { "ID": "788394E4-E8C8-4DE4-AE01-D31A2964967E" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "27813267-E1FA-4DF8-9B07-C06CB03DAE54" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Get Donations",
+      "Description": "Retrieves donation history from YourMembership with pagination support",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMDonationsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-hand-holding-dollar"
+    },
+    "primaryKey": {
+      "ID": "9DBE5902-C760-4858-AAD6-84CE68EB01F0"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "28455DEF-753F-4D3D-BA29-E2564E340DC1" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "C22953F8-7257-4D9D-A8B9-238D25167C4A" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to return (default 1000)",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "80B7324B-8501-4C62-B91D-F3574593EDAD" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Donations",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of donation records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "0804DD34-2E23-4AE1-BFD5-11433DA1FC65" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "98CB191C-6536-4F7F-A7FD-7411E12D3E8B" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Donations retrieved successfully"
+          },
+          "primaryKey": { "ID": "103C04C9-3081-4108-B400-C9F1FEEB5DD7" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "4DA071AC-28BA-44E7-8EB1-AD3C2EE86622" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Get Orders",
+      "Description": "Retrieves store orders from YourMembership with pagination support",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMOrdersAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-cart-shopping"
+    },
+    "primaryKey": {
+      "ID": "65DACF5B-4EB0-432C-935A-2475449755F7"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "64B37606-5A7A-49F9-9E6D-C2772CBAB624" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "53558202-88AD-490F-9004-67F8814DFC3C" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to return (default 1000)",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "B443E112-9E22-459C-B2E4-89BFB790450C" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Orders",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of order records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "DD3979F9-EB18-42E5-81B5-E03361757185" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "40DDF1C8-9913-4565-8CF6-33755DF9C4FE" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Orders retrieved successfully"
+          },
+          "primaryKey": { "ID": "2C7FC419-9768-4C73-AA55-91E776D9D441" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "E2E64BCB-DD62-4E56-837C-07CF6E2ADBED" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Get Products",
+      "Description": "Retrieves product catalog from YourMembership with pagination support",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMProductsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-box"
+    },
+    "primaryKey": {
+      "ID": "1836B8D7-CBF5-4A9B-A483-FF7C5D559D80"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "4908368B-7830-45C6-A77D-63982E5CB49A" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "185813CE-A7D3-4960-9037-318CE9EA517D" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to return (default 1000)",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "7F092072-4421-4079-B27C-C801C7410AD4" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Products",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of product records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "0FDD44D8-D0EF-4EEE-8F88-98E19C00B5E5" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "9EF440FD-6DB6-45AD-B093-AEE088E00E83" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Products retrieved successfully"
+          },
+          "primaryKey": { "ID": "0EC435BA-3E5E-458E-AC6F-86B556E2D669" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "F3DD6FC2-C035-4569-A7AF-50298BBD4828" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Get Groups",
+      "Description": "Retrieves group/chapter data from YourMembership",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMGroupsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-people-group"
+    },
+    "primaryKey": {
+      "ID": "8FBC768F-28E2-486E-8655-FF37142B1B36"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "5B3E5E7A-8551-4429-A701-870BBE6428C2" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "F1E83165-C3C5-410C-BAD6-42A593693949" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to return (default 1000)",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "5C6346ED-6E7A-40A3-96AF-C7A5EC42F7EB" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Groups",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of group records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "55AAEFAE-C000-4E85-81C9-349D6C5ADB58" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "1D50DCA1-175D-48A9-A2D4-ABD112EA9B04" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Groups retrieved successfully"
+          },
+          "primaryKey": { "ID": "6243A90A-9B74-40DD-A36A-F684D5877580" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "FBE17895-7316-4057-9ACF-F21DF73A5DA7" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Get Member Types",
+      "Description": "Retrieves member type definitions from YourMembership",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMMemberTypesAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-id-badge"
+    },
+    "primaryKey": {
+      "ID": "4CD01A57-B790-47A6-A6A6-027D2B2B1E61"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "D6584C39-05B3-4573-831A-A5484EADE653" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "98533671-82FD-4B62-A9D8-2D628A482A2A" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MemberTypes",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of member type records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "AD947D14-12D1-4A17-A900-8FEA7EA9B681" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "BF21A042-1A8D-4D3A-BE55-EED78A205EE1" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Member types retrieved successfully"
+          },
+          "primaryKey": { "ID": "012E5B24-C16F-4238-A3A6-2D2137D22EFC" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "6E1AA544-B904-425A-846F-45E02FF377E8" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Get Memberships",
+      "Description": "Retrieves membership plan/level data from YourMembership",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "GetYMMembershipsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-address-card"
+    },
+    "primaryKey": {
+      "ID": "A1F61F23-5DCE-4679-9838-082B1CC83E83"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "81F58F95-E8FC-4CA4-92BF-3BF4D03423BB" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "644BC17C-B019-4036-A40B-4F1E5888A35B" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Memberships",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of membership plan records from YourMembership",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "9994F703-01DC-4930-A9FD-3D5892A1CBA2" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records retrieved",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "F46C7514-0495-4B12-94FF-D2FD3CE17EF2" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Memberships retrieved successfully"
+          },
+          "primaryKey": { "ID": "F1B9D29F-8C3F-4E78-87B9-41E2FDEAB5C0" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "YM_API_ERROR",
+            "IsSuccess": false,
+            "Description": "Error communicating with the YourMembership API"
+          },
+          "primaryKey": { "ID": "71B12761-7097-48F0-8DF0-5F1EDE22FBC5" }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "YM - Full Sync",
+      "Description": "Syncs YourMembership data into MJ database tables in the specified schema. Fetches all (or selected) endpoints and upserts records into SQL tables.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership&Parent=Membership",
+      "DriverClass": "YMSyncAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-arrows-rotate"
+    },
+    "primaryKey": {
+      "ID": "2D6B25A0-EAFB-478F-95EA-33610460FB84"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ClientID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM client/site identifier",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "EC5F1C0A-737A-411B-A58B-E42B78FEAB1A" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "30ED615E-2D19-4327-A261-378F031BC9B6" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SchemaName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "SQL schema to create/use for YM data tables",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "D518F031-4612-41BF-9CBC-A974234C238D" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Endpoints",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated list of endpoints to sync (empty = all). Options: Members, Events, EventRegistrations, Donations, Orders, Products, Groups, MemberTypes, Memberships",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "F750BD24-593D-421F-A783-4B413EE46108" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FullRefresh",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Set to true to truncate tables before syncing (default: false for incremental upsert)",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "A54A7468-3B22-4D38-8F9E-6657AB4E8124" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SyncResult",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Full sync result object with per-endpoint details",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "D6B39293-705F-4886-99E2-826BF0A7FCB4" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalRecordsSynced",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records synced across all endpoints",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "C45E25DB-593D-42EF-97FD-F6107A9C1F4D" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EndpointResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Per-endpoint sync results with record counts and timing",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "8C3F8BE2-F005-49BF-9CDB-FF26769CF204" }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "All endpoints synced successfully"
+          },
+          "primaryKey": { "ID": "8C341A56-DF04-4DAA-AD00-F48CA8C019E0" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SYNC_PARTIAL_FAILURE",
+            "IsSuccess": false,
+            "Description": "Sync completed but some endpoints had errors"
+          },
+          "primaryKey": { "ID": "45D2F731-49AA-4187-8AE6-EC28E8576850" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SYNC_ERROR",
+            "IsSuccess": false,
+            "Description": "Sync failed with an unexpected error"
+          },
+          "primaryKey": { "ID": "5AB08EB7-A7B9-4647-811F-DB256D8EA34A" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAM",
+            "IsSuccess": false,
+            "Description": "A required parameter was not provided"
+          },
+          "primaryKey": { "ID": "23D4B994-D747-479B-91AB-626313FD65D9" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT",
+            "IsSuccess": false,
+            "Description": "ContextUser is required but was not provided"
+          },
+          "primaryKey": { "ID": "9B8878FB-CB8E-47F5-AB5D-98DCD1C17EC6" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_DB_PROVIDER",
+            "IsSuccess": false,
+            "Description": "No database provider configured in the MJ runtime"
+          },
+          "primaryKey": { "ID": "10CC63B5-598A-4860-BB5D-977613F4C5FB" }
+        }
+      ]
+    }
+  }
+]

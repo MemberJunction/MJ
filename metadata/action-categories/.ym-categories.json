@@ -1,0 +1,24 @@
+[
+  {
+    "fields": {
+      "Name": "Membership",
+      "Description": "Membership management system integrations for syncing member data, events, donations, and organizational records",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps&ParentID=null",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4282C577-D834-4898-863B-64D79ACF9F2A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "YourMembership",
+      "Description": "YourMembership (YM) integration for syncing members, events, donations, orders, products, groups, and membership data via the YM API",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Membership&Parent=Business Apps",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4D9B1899-F846-4E66-806C-530066CDC8CE"
+    }
+  }
+]
