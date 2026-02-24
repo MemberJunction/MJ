@@ -3646,7 +3646,7 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
 
    protected async createNewEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       try   {
-         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')} WHERE EntityID IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
+         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')} WHERE ${this.qi('EntityID')} IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
          const newEntitiesResult = await this.runQuery(pool, sSQL);
       const newEntities = newEntitiesResult.recordset;
 
