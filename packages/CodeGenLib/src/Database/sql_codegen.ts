@@ -120,13 +120,20 @@ export class SQLCodeGenBase {
                 try {
                     const whereClause = configInfo.forceRegeneration.entityWhereClause;
                     const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+                    const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+                    const isPG = this._dbProvider.PlatformKey === 'postgresql';
+                    // Quote column names in the WHERE clause for PG compatibility
+                    // Replace unquoted column names like SchemaName with quoted "SchemaName"
+                    const quotedWhereClause = isPG
+                        ? whereClause.replace(/\b(SchemaName|Name|ID|BaseTable|IncludeInAPI|VirtualEntity)\b(?=\s*[=<>!])/g, (match: string) => qi(match))
+                        : whereClause;
                     const query = `
-                        SELECT Name 
-                        FROM ${qs(mjCoreSchema, 'Entity')} 
-                        WHERE ${whereClause}
+                        SELECT ${qi('Name')}
+                        FROM ${qs(mjCoreSchema, 'Entity')}
+                        WHERE ${quotedWhereClause}
                     `;
                     const result = await pool.query(query);
-                    this.entitiesQualifiedForForcedRegeneration = result.recordset.map((r: any) => r.Name);
+                    this.entitiesQualifiedForForcedRegeneration = result.recordset.map((r: Record<string, unknown>) => r.Name as string);
                     
                     logStatus(`Force regeneration filter enabled: ${this.entitiesQualifiedForForcedRegeneration.length} entities qualified based on entityWhereClause: ${whereClause}`);
                 } catch (error) {
@@ -1109,16 +1116,13 @@ export class SQLCodeGenBase {
      * Generates the SELECT clause additions for root fields from TVFs
      * Example: , root_ParentID.RootID AS [RootParentID]
      */
-    protected generateRootFieldSelects(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+    protected generateRootFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
         if (recursiveFKs.length === 0) return '';
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
             const alias = `rootFn_${field.Name}`;
-            // We need the entity for the provider call, but we don't have it here.
-            // The provider's generateRootFieldSelect only uses the field and alias.
-            // Pass a minimal entity context (the field's parent entity info is in field.EntityID).
-            sOutput += `,\n    ${this._dbProvider.generateRootFieldSelect(null!, field, alias)}`;
+            sOutput += `,\n    ${this._dbProvider.generateRootFieldSelect(entity, field, alias)}`;
         }
         return sOutput;
     }
@@ -1224,7 +1228,7 @@ export class SQLCodeGenBase {
 
         // Detect recursive foreign keys and generate TVF joins and root field selects
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
-        const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
+        const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(entity, recursiveFKs, classNameFirstChar) : '';
         const rootJoins = recursiveFKs.length > 0 ? this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity) : '';
 
         // IS-A parent entity JOINs — walk ParentID chain, JOIN to each parent's base table

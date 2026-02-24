@@ -173,7 +173,9 @@ BEGIN
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
 END
-GO${permissions}
+GO
+${permissions}
+GO
     `;
     }
 
@@ -281,7 +283,9 @@ ${deleteCode}
     ELSE
         SELECT ${sSelect} -- Return the PK values to indicate successful deletion
 END
-GO${permissions}
+GO
+${permissions}
+GO
     `;
     }
 

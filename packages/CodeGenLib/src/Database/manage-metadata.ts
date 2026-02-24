@@ -443,6 +443,18 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Checks if two PostgreSQL timestamp type strings refer to the same type.
+    * PG information_schema reports 'timestamp with time zone' but DDL uses 'timestamptz'.
+    */
+   protected pgTimestampTypeAliases(reportedType: string, expectedType: string): boolean {
+      const aliases: Record<string, string> = {
+         'timestamptz': 'timestamp with time zone',
+         'timestamp with time zone': 'timestamptz',
+      };
+      return reportedType === expectedType || aliases[reportedType] === expectedType;
+   }
+
+   /**
     * Generates a conditional existence check + DROP statement.
     * SQL Server: IF OBJECT_ID(...) IS NOT NULL DROP ...
     * PostgreSQL: DROP ... IF EXISTS ...
@@ -1166,13 +1178,16 @@ export class ManageMetadataBase {
          else {
             // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
             newEntityFieldUUID = this.createNewUUID();
+            const q = (n: string) => this.qi(n);
             const sqlAdd = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
-                                      ID, EntityID, Name, Type, AllowsNull,
-                                      Length, Precision, Scale,
-                                      Sequence, IsPrimaryKey, IsUnique )
+                                      ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
+                                      ${q('Length')}, ${q('Precision')}, ${q('Scale')},
+                                      ${q('Sequence')}, ${q('IsPrimaryKey')}, ${q('IsUnique')},
+                                      ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
                             VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${veField.AllowsNull ? 1 : 0},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
-                                       ${fieldSequence}, ${makePrimaryKey ? 1 : 0}, ${makePrimaryKey ? 1 : 0}
+                                       ${fieldSequence}, ${makePrimaryKey ? 1 : 0}, ${makePrimaryKey ? 1 : 0},
+                                       ${this.utcNow()}, ${this.utcNow()}
                                     )`;
             await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
             didUpdate = true;
@@ -1753,16 +1768,19 @@ export class ManageMetadataBase {
             // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema
             const sequence = 100000 + parentFields.indexOf(parentField);
 
+            const q = (n: string) => this.qi(n);
             const sqlInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
-                  ID, EntityID, Name, Type, AllowsNull,
-                  Length, Precision, Scale,
-                  Sequence, IsVirtual, AllowUpdateAPI,
-                  IsPrimaryKey, IsUnique)
+                  ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
+                  ${q('Length')}, ${q('Precision')}, ${q('Scale')},
+                  ${q('Sequence')}, ${q('IsVirtual')}, ${q('AllowUpdateAPI')},
+                  ${q('IsPrimaryKey')}, ${q('IsUnique')},
+                  ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')})
                VALUES (
                   '${newFieldID}', '${childEntity.ID}', '${parentField.Name}',
                   '${parentField.Type}', ${parentField.AllowsNull ? 1 : 0},
                   ${parentField.Length}, ${parentField.Precision}, ${parentField.Scale},
-                  ${sequence}, 1, 1, 0, 0)`;
+                  ${sequence}, 1, 1, 0, 0,
+                  ${this.utcNow()}, ${this.utcNow()})`;
             await this.LogSQLAndExecute(pool, sqlInsert,
                `Create IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
             bUpdated = true;
@@ -1887,22 +1905,22 @@ export class ManageMetadataBase {
                   const newEntityRelationshipUUID = this.createNewUUID();
                   if (this.isPostgreSQL) {
                   batchSQL += `
-/* Create Entity Relationship: \${parentEntityName} -> \${e.Name} (One To Many via \${f.Name}) */
-   INSERT INTO \${mj_core_schema()}."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence")
-   SELECT '\${newEntityRelationshipUUID}', '\${f.RelatedEntityID}', '\${f.EntityID}', '\${f.Name}', 'One To Many', true, true, '\${e.Name}', \${sequence}
-   WHERE NOT EXISTS (SELECT 1 FROM \${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE "ID" = '\${newEntityRelationshipUUID}');
+/* Create Entity Relationship: ${parentEntityName} -> ${e.Name} (One To Many via ${f.Name}) */
+   INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
+   SELECT '${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', true, true, '${e.Name}', ${sequence}, ${this.utcNow()}, ${this.utcNow()}
+   WHERE NOT EXISTS (SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE "ID" = '${newEntityRelationshipUUID}');
                               `;
                } else {
                   batchSQL += `
-/* Create Entity Relationship: \${parentEntityName} -> \${e.Name} (One To Many via \${f.Name}) */
+/* Create Entity Relationship: ${parentEntityName} -> ${e.Name} (One To Many via ${f.Name}) */
    IF NOT EXISTS (
       SELECT 1
-      FROM \${this.qs(mj_core_schema(), 'EntityRelationship')}
-      WHERE ID = '\${newEntityRelationshipUUID}'
+      FROM ${this.qs(mj_core_schema(), 'EntityRelationship')}
+      WHERE ID = '${newEntityRelationshipUUID}'
    )
    BEGIN
-      INSERT INTO \${this.qs(mj_core_schema(), 'EntityRelationship')} (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('\${newEntityRelationshipUUID}', '\${f.RelatedEntityID}', '\${f.EntityID}', '\${f.Name}', 'One To Many', 1, 1, '\${e.Name}', \${sequence});
+      INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence, __mj_CreatedAt, __mj_UpdatedAt)
+                              VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence}, ${this.utcNow()}, ${this.utcNow()});
    END
                               `;
                }
@@ -2378,7 +2396,10 @@ export class ManageMetadataBase {
          }
          else {
             // field does exist, let's first check the data type/nullability
-            if ( currentFieldData.DATA_TYPE.trim().toLowerCase() !== this.timestampType.toLowerCase() ||
+            const dataTypeMatches = this.isPostgreSQL
+               ? this.pgTimestampTypeAliases(currentFieldData.DATA_TYPE.trim().toLowerCase(), this.timestampType.toLowerCase())
+               : currentFieldData.DATA_TYPE.trim().toLowerCase() === this.timestampType.toLowerCase();
+            if ( !dataTypeMatches ||
                 (currentFieldData.IS_NULLABLE.trim().toLowerCase() !== 'no' && !allowNull) ||
                 (currentFieldData.IS_NULLABLE.trim().toLowerCase() === 'no' && allowNull)) {
                // the column is the wrong type, or has wrong nullability attribute, so let's update it, first removing the default constraint, then
@@ -2836,9 +2857,12 @@ ORDER BY "EntityID", "Sequence";
                break;
       }
       const parsedDefaultValue = this.parseDefaultValue(n.DefaultValue);
-      const quotedDefaultValue = parsedDefaultValue?.trim().length === 0 ? 'NULL' : 
-                                    (parsedDefaultValue?.trim().toLowerCase() === 'null' ? 'NULL' : `'${parsedDefaultValue}'`);
-      // in the above we are setting quotedDefaultValue to NULL if the parsed default value is an empty string or the string 'NULL' (case insensitive)
+      // Escape single quotes inside the default value so they don't break the SQL string literal
+      const escapedParsedDefault = parsedDefaultValue?.replace(/'/g, "''");
+      // quotedDefaultValue is NULL when parsedDefaultValue is null/undefined, empty, or the literal string 'NULL' (case insensitive)
+      const quotedDefaultValue = (parsedDefaultValue == null || parsedDefaultValue.trim().length === 0)
+                                    ? 'NULL'
+                                    : (parsedDefaultValue.trim().toLowerCase() === 'null' ? 'NULL' : `'${escapedParsedDefault}'`);
 
       return `
       ${this.isPostgreSQL ? '' : `IF NOT EXISTS (
@@ -2849,30 +2873,32 @@ ORDER BY "EntityID", "Sequence";
       BEGIN`}
          INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')}
          (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
+            ${this.qi('ID')},
+            ${this.qi('EntityID')},
+            ${this.qi('Sequence')},
+            ${this.qi('Name')},
+            ${this.qi('DisplayName')},
+            ${this.qi('Description')},
+            ${this.qi('Type')},
+            ${this.qi('Length')},
+            ${this.qi('Precision')},
+            ${this.qi('Scale')},
+            ${this.qi('AllowsNull')},
+            ${this.qi('DefaultValue')},
+            ${this.qi('AutoIncrement')},
+            ${this.qi('AllowUpdateAPI')},
+            ${this.qi('IsVirtual')},
+            ${this.qi('RelatedEntityID')},
+            ${this.qi('RelatedEntityFieldName')},
+            ${this.qi('IsNameField')},
+            ${this.qi('IncludeInUserSearchAPI')},
+            ${this.qi('IncludeRelatedEntityNameFieldInBaseView')},
+            ${this.qi('DefaultInView')},
+            ${this.qi('IsPrimaryKey')},
+            ${this.qi('IsUnique')},
+            ${this.qi('RelatedEntityDisplayType')},
+            ${this.qi('__mj_CreatedAt')},
+            ${this.qi('__mj_UpdatedAt')}
          )
          VALUES
          (
@@ -2899,7 +2925,9 @@ ORDER BY "EntityID", "Sequence";
             ${bDefaultInView ? 1 : 0},
             ${n.IsPrimaryKey},
             ${n.IsUnique},
-            '${n.RelationshipDefaultDisplayType}'
+            '${n.RelationshipDefaultDisplayType}',
+            ${this.utcNow()},
+            ${this.utcNow()}
          )
       ${this.isPostgreSQL
          ? `ON CONFLICT DO NOTHING`
@@ -3031,7 +3059,7 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
    public async updateEntityFieldRelatedEntityNameFieldMap(pool: CodeGenConnection, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
       try   {
          const sSQL = this.isPostgreSQL
-            ? `SELECT * FROM ${mj_core_schema()}."spUpdateEntityFieldRelatedEntityNameFieldMap"('${entityFieldID}', '${relatedEntityNameFieldMap}')`
+            ? `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${this.qi('RelatedEntityNameFieldMap')} = '${relatedEntityNameFieldMap}' WHERE ${this.qi('ID')} = '${entityFieldID}'`
             : `EXEC ${this.qs(mj_core_schema(), 'spUpdateEntityFieldRelatedEntityNameFieldMap')}
          @EntityFieldID='${entityFieldID}',
          @RelatedEntityNameFieldMap='${relatedEntityNameFieldMap}'`;
@@ -3385,9 +3413,9 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
 
                   // add the value to the database with explicit ID
                   const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityFieldValue')}
-                                       (ID, EntityFieldID, Sequence, Value, Code)
+                                       (${this.qi('ID')}, ${this.qi('EntityFieldID')}, ${this.qi('Sequence')}, ${this.qi('Value')}, ${this.qi('Code')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
                                     VALUES
-                                       ('${newId}', '${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
+                                       ('${newId}', '${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}', ${this.utcNow()}, ${this.utcNow()})`;
                   await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert entity field value with ID ${newId}`);
                   numAdded++;
                }
@@ -3816,8 +3844,8 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
                   // only do this if the configuration setting is set to add new entities to applications for schema names
                   for (const appUUID of apps) {
                      const sSQLInsertApplicationEntity = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationEntity')}
-                                       (ApplicationID, EntityID, Sequence) VALUES
-                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(Sequence),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ApplicationID = '${appUUID}'))`;
+                                       (${this.qi('ApplicationID')}, ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
+                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
                      await this.LogSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                   }
                }
@@ -3838,8 +3866,8 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
                   const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
                   if (RoleID) {
                      const sSQLInsertPermission = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('${newEntityID}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
+                                                   (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
+                                                   ('${newEntityID}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0}, ${this.utcNow()}, ${this.utcNow()})`;
                      await this.LogSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
                   }
                   else
@@ -3969,8 +3997,8 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
             for (const appUUID of apps) {
                const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationEntity')}
-                                    (ApplicationID, EntityID, Sequence) VALUES
-                                    ('${appUUID}', '${entityId}', (SELECT COALESCE(MAX(Sequence),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ApplicationID = '${appUUID}'))`;
+                                    (${this.qi('ApplicationID')}, ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
+                                    ('${appUUID}', '${entityId}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
                await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
             }
          }
@@ -3998,8 +4026,8 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
          if (RoleID) {
             const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                                 (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                 ('${entityId}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
+                                 (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
+                                 ('${entityId}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0}, ${this.utcNow()}, ${this.utcNow()})`;
             await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
          } else {
             LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
@@ -4010,26 +4038,29 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
+      const q = (name: string) => this.qi(name);
       const sSQLInsert = `
       INSERT INTO ${this.qs(mj_core_schema(), 'Entity')} (
-         ID,
-         Name,
-         DisplayName,
-         Description,
-         NameSuffix,
-         BaseTable,
-         BaseView,
-         SchemaName,
-         IncludeInAPI,
-         AllowUserSearchAPI
-         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', TrackRecordChanges'}
-         ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', AuditRecordAccess'}
-         ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', AuditViewRuns'}
-         ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', AllowAllRowsAPI'}
-         ${newEntityDefaults.AllowCreateAPI === undefined ? '' : ', AllowCreateAPI'}
-         ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', AllowUpdateAPI'}
-         ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', AllowDeleteAPI'}
-         ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', UserViewMaxRows'}
+         ${q('ID')},
+         ${q('Name')},
+         ${q('DisplayName')},
+         ${q('Description')},
+         ${q('NameSuffix')},
+         ${q('BaseTable')},
+         ${q('BaseView')},
+         ${q('SchemaName')},
+         ${q('IncludeInAPI')},
+         ${q('AllowUserSearchAPI')}
+         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + q('TrackRecordChanges')}
+         ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + q('AuditRecordAccess')}
+         ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + q('AuditViewRuns')}
+         ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + q('AllowAllRowsAPI')}
+         ${newEntityDefaults.AllowCreateAPI === undefined ? '' : ', ' + q('AllowCreateAPI')}
+         ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + q('AllowUpdateAPI')}
+         ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + q('AllowDeleteAPI')}
+         ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + q('UserViewMaxRows')}
+         , ${q('__mj_CreatedAt')}
+         , ${q('__mj_UpdatedAt')}
       )
       VALUES (
          '${newEntityUUID}',
@@ -4050,6 +4081,8 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowUpdateAPI ? '1' : '0')}
          ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowDeleteAPI ? '1' : '0')}
          ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + (newEntityDefaults.UserViewMaxRows)}
+         , ${this.utcNow()}
+         , ${this.utcNow()}
       )
    `;
 

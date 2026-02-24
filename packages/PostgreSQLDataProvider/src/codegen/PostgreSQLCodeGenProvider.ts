@@ -53,11 +53,11 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         const viewName = this.getBaseViewName(entity);
         const alias = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const whereClause = this.buildSoftDeleteWhereClause(entity, alias);
-        const permissions = this.generateViewPermissions(entity);
 
         const selectParts = this.buildBaseViewSelectParts(context, alias);
         const fromParts = this.buildBaseViewFromParts(context, entity, alias);
 
+        // Permissions are handled separately by sql_codegen.ts via generateViewPermissions()
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -72,7 +72,6 @@ SELECT
 FROM
     ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} AS ${alias}${fromParts}
 ${whereClause};
-${permissions}
 `;
     }
 
@@ -88,7 +87,7 @@ ${permissions}
         const insertValues = this.generateInsertFieldString(entity, entity.Fields, 'p_', false);
         const firstKey = entity.FirstPrimaryKey;
 
-        const { preInsert, returningClause, selectClause } = this.buildCreateInsertStrategy(
+        const strategy = this.buildCreateInsertStrategy(
             entity, firstKey, insertColumns, insertValues
         );
 
@@ -102,18 +101,18 @@ CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
 DECLARE
     v_new_id ${firstKey.SQLFullType};
 BEGIN
-    ${preInsert}INSERT INTO ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+    ${strategy.preInsert}INSERT INTO ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
         (
-            ${insertColumns}
+            ${strategy.finalColumns}
         )
     VALUES
         (
-            ${insertValues}
+            ${strategy.finalValues}
         )
-    ${returningClause};
+    ${strategy.returningClause};
 
     RETURN QUERY
-    ${selectClause};
+    ${strategy.selectClause};
 END;
 $$ LANGUAGE plpgsql;
 ${permissions}
@@ -456,6 +455,7 @@ END $$;
 
     generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
         const parts: string[] = [];
+        let foundDefault = false;
         for (const ef of entityFields) {
             if (!this.shouldIncludeFieldInParams(ef, isUpdate)) continue;
 
@@ -465,7 +465,12 @@ END $$;
 
             if (!isUpdate && ef.IsPrimaryKey && !ef.AutoIncrement) {
                 defaultVal = ' DEFAULT NULL';
+                foundDefault = true;
             } else if (!isUpdate && ef.HasDefaultValue && !ef.AllowsNull) {
+                defaultVal = ' DEFAULT NULL';
+                foundDefault = true;
+            } else if (!isUpdate && foundDefault) {
+                // PG requires all params after the first DEFAULT to also have DEFAULTs
                 defaultVal = ' DEFAULT NULL';
             }
 
@@ -544,14 +549,16 @@ END $$;
         let trimmedValue = defaultValue.trim();
         const lowerValue = trimmedValue.toLowerCase();
 
-        // Map SQL Server functions to PostgreSQL equivalents
+        // Map SQL Server and PostgreSQL functions to canonical PostgreSQL equivalents
         const functionMap: Record<string, string> = {
             'newid()': 'gen_random_uuid()',
             'newsequentialid()': 'gen_random_uuid()',
+            'gen_random_uuid()': 'gen_random_uuid()',
             'getdate()': "NOW() AT TIME ZONE 'UTC'",
             'getutcdate()': "NOW() AT TIME ZONE 'UTC'",
             'sysdatetime()': "NOW() AT TIME ZONE 'UTC'",
             'sysdatetimeoffset()': "NOW() AT TIME ZONE 'UTC'",
+            'now()': 'NOW()',
             'current_timestamp': 'CURRENT_TIMESTAMP',
             'user_name()': 'CURRENT_USER',
             'suser_name()': 'SESSION_USER',
@@ -661,11 +668,13 @@ END $$;
 
     /** Assembles the SELECT parts for a base view */
     private buildBaseViewSelectParts(context: BaseViewGenerationContext, alias: string): string {
-        const parts: string[] = [`${alias}.*`];
-        if (context.parentFieldsSelect) parts.push(context.parentFieldsSelect);
-        if (context.relatedFieldsSelect) parts.push(context.relatedFieldsSelect);
-        if (context.rootFieldsSelect) parts.push(context.rootFieldsSelect);
-        return parts.join(',\n    ');
+        // parentFieldsSelect and rootFieldsSelect have leading commas (e.g. ",\n    Field AS Alias").
+        // relatedFieldsSelect does NOT have a leading comma for the first field (starts with "\n    Field...").
+        let select = `${alias}.*`;
+        if (context.parentFieldsSelect) select += context.parentFieldsSelect;
+        if (context.relatedFieldsSelect) select += `,${context.relatedFieldsSelect}`;
+        if (context.rootFieldsSelect) select += context.rootFieldsSelect;
+        return select;
     }
 
     /** Assembles the FROM/JOIN parts for a base view */
@@ -730,25 +739,31 @@ END $$;
     private buildCreateInsertStrategy(
         entity: EntityInfo,
         firstKey: EntityFieldInfo,
-        _insertColumns: string,
-        _insertValues: string
-    ): { preInsert: string; returningClause: string; selectClause: string } {
+        insertColumns: string,
+        insertValues: string
+    ): { preInsert: string; returningClause: string; selectClause: string; finalColumns: string; finalValues: string } {
         const viewName = this.getBaseViewName(entity);
+        const pkCol = pgDialect.QuoteIdentifier(firstKey.Name);
 
         if (firstKey.AutoIncrement) {
             return {
                 preInsert: '',
-                returningClause: `RETURNING ${pgDialect.QuoteIdentifier(firstKey.Name)} INTO v_new_id`,
-                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pgDialect.QuoteIdentifier(firstKey.Name)} = v_new_id`,
+                returningClause: `RETURNING ${pkCol} INTO v_new_id`,
+                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pkCol} = v_new_id`,
+                finalColumns: insertColumns,
+                finalValues: insertValues,
             };
         }
 
-        if (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' && entity.PrimaryKeys.length === 1) {
+        if ((firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' || firstKey.Type.toLowerCase().trim() === 'uuid') && entity.PrimaryKeys.length === 1) {
             const paramName = `p_${this.toSnakeCase(firstKey.CodeName)}`;
             return {
                 preInsert: `v_new_id := COALESCE(${paramName}, gen_random_uuid());\n    `,
-                returningClause: `RETURNING ${pgDialect.QuoteIdentifier(firstKey.Name)} INTO v_new_id`,
-                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pgDialect.QuoteIdentifier(firstKey.Name)} = v_new_id`,
+                returningClause: '',
+                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pkCol} = v_new_id`,
+                // Include the PK column in the INSERT so caller-provided IDs are respected
+                finalColumns: `${pkCol},\n            ${insertColumns}`,
+                finalValues: `v_new_id,\n            ${insertValues}`,
             };
         }
 
@@ -761,6 +776,8 @@ END $$;
             preInsert: '',
             returningClause: '',
             selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${selectWhere}`,
+            finalColumns: insertColumns,
+            finalValues: insertValues,
         };
     }
 
