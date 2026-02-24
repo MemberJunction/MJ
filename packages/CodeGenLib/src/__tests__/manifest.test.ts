@@ -175,13 +175,16 @@ describe('Manifest Generator Types', () => {
             filterBaseClasses?: string[];
             excludePatterns?: string[];
             excludePackages?: string[];
+            syncDependencies?: boolean;
         } = {
             outputPath: './manifest.ts',
             verbose: true,
-            excludePackages: ['@memberjunction']
+            excludePackages: ['@memberjunction'],
+            syncDependencies: true
         };
         expect(options.outputPath).toBe('./manifest.ts');
         expect(options.excludePackages).toContain('@memberjunction');
+        expect(options.syncDependencies).toBe(true);
     });
 
     it('should have GenerateManifestResult shape', () => {
@@ -192,6 +195,7 @@ describe('Manifest Generator Types', () => {
             classes: unknown[];
             packages: string[];
             totalDepsWalked: number;
+            AddedDependencies: Record<string, string>;
             errors: string[];
         } = {
             success: true,
@@ -200,10 +204,12 @@ describe('Manifest Generator Types', () => {
             classes: [],
             packages: ['@memberjunction/core'],
             totalDepsWalked: 15,
+            AddedDependencies: {},
             errors: []
         };
         expect(result.success).toBe(true);
         expect(result.packages).toHaveLength(1);
+        expect(result.AddedDependencies).toEqual({});
     });
 });
 
@@ -236,5 +242,118 @@ describe('isPackageExcluded (logic test)', () => {
     it('should not match partial package names incorrectly', () => {
         expect(isPackageExcluded('lodash-es', ['lodash'])).toBe(true); // starts with lodash
         expect(isPackageExcluded('my-lodash', ['lodash'])).toBe(false); // doesn't start with lodash
+    });
+});
+
+describe('Dependency reconciliation (logic tests)', () => {
+    // Re-implement the core logic functions to test them since they're private
+
+    function findMissingDependencies(
+        manifestPackages: string[],
+        currentDeps: Record<string, string>,
+        depTreeVersions: Record<string, string>
+    ): Record<string, string> {
+        const missing: Record<string, string> = {};
+        for (const pkg of manifestPackages) {
+            if (currentDeps[pkg]) continue;
+            const version = depTreeVersions[pkg];
+            if (version) {
+                missing[pkg] = version;
+            }
+        }
+        return missing;
+    }
+
+    function sortObjectKeys(obj: Record<string, string>): Record<string, string> {
+        const sorted: Record<string, string> = {};
+        for (const key of Object.keys(obj).sort()) {
+            sorted[key] = obj[key];
+        }
+        return sorted;
+    }
+
+    describe('findMissingDependencies', () => {
+        it('should detect packages missing from dependencies', () => {
+            const manifest = ['@memberjunction/ai-openai', '@memberjunction/ai-anthropic', '@memberjunction/core'];
+            const currentDeps = { '@memberjunction/core': '5.2.0' };
+            const versions = {
+                '@memberjunction/ai-openai': '5.2.0',
+                '@memberjunction/ai-anthropic': '5.2.0',
+                '@memberjunction/core': '5.2.0'
+            };
+            const missing = findMissingDependencies(manifest, currentDeps, versions);
+            expect(missing).toEqual({
+                '@memberjunction/ai-openai': '5.2.0',
+                '@memberjunction/ai-anthropic': '5.2.0'
+            });
+        });
+
+        it('should return empty when all packages are already declared', () => {
+            const manifest = ['@memberjunction/core', '@memberjunction/global'];
+            const currentDeps = {
+                '@memberjunction/core': '5.2.0',
+                '@memberjunction/global': '5.2.0'
+            };
+            const versions = {
+                '@memberjunction/core': '5.2.0',
+                '@memberjunction/global': '5.2.0'
+            };
+            const missing = findMissingDependencies(manifest, currentDeps, versions);
+            expect(Object.keys(missing)).toHaveLength(0);
+        });
+
+        it('should skip packages whose version cannot be resolved', () => {
+            const manifest = ['@memberjunction/core', 'unknown-pkg'];
+            const currentDeps = {};
+            const versions = { '@memberjunction/core': '5.2.0' };
+            const missing = findMissingDependencies(manifest, currentDeps, versions);
+            expect(missing).toEqual({ '@memberjunction/core': '5.2.0' });
+            expect(missing['unknown-pkg']).toBeUndefined();
+        });
+
+        it('should handle empty manifest packages', () => {
+            const missing = findMissingDependencies([], { '@memberjunction/core': '5.2.0' }, {});
+            expect(Object.keys(missing)).toHaveLength(0);
+        });
+
+        it('should handle empty current dependencies', () => {
+            const manifest = ['@memberjunction/core'];
+            const versions = { '@memberjunction/core': '5.2.0' };
+            const missing = findMissingDependencies(manifest, {}, versions);
+            expect(missing).toEqual({ '@memberjunction/core': '5.2.0' });
+        });
+    });
+
+    describe('sortObjectKeys', () => {
+        it('should sort keys alphabetically', () => {
+            const input = { 'zebra': '1.0', 'alpha': '2.0', 'middle': '3.0' };
+            const sorted = sortObjectKeys(input);
+            expect(Object.keys(sorted)).toEqual(['alpha', 'middle', 'zebra']);
+        });
+
+        it('should sort scoped package names correctly', () => {
+            const input = {
+                '@memberjunction/core': '5.2.0',
+                '@memberjunction/ai-openai': '5.2.0',
+                '@memberjunction/actions': '5.2.0'
+            };
+            const sorted = sortObjectKeys(input);
+            expect(Object.keys(sorted)).toEqual([
+                '@memberjunction/actions',
+                '@memberjunction/ai-openai',
+                '@memberjunction/core'
+            ]);
+        });
+
+        it('should handle empty object', () => {
+            expect(Object.keys(sortObjectKeys({}))).toHaveLength(0);
+        });
+
+        it('should preserve values', () => {
+            const input = { 'b': '2.0', 'a': '1.0' };
+            const sorted = sortObjectKeys(input);
+            expect(sorted['a']).toBe('1.0');
+            expect(sorted['b']).toBe('2.0');
+        });
     });
 });

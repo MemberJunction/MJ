@@ -79,6 +79,24 @@ export interface GenerateManifestOptions {
      * @example ['@memberjunction'] — skips all @memberjunction/* packages
      */
     excludePackages?: string[];
+
+    /**
+     * When true (the default), compares manifest-imported packages against the
+     * app's `package.json` dependencies and automatically adds any that are
+     * missing. This prevents `MODULE_NOT_FOUND` errors after npm publish, since
+     * transitive packages discovered during the dependency walk may not be
+     * declared as direct dependencies.
+     *
+     * Set to false (or use `--no-sync-deps` in CLI) when generating supplemental
+     * manifests that exclude framework packages — those dependencies are already
+     * covered by the pre-built bootstrap manifest.
+     *
+     * Note: This modifies `package.json` only. You must run `npm install` at the
+     * repo root afterwards to update the lockfile.
+     *
+     * @default true
+     */
+    syncDependencies?: boolean;
 }
 
 /**
@@ -97,6 +115,12 @@ export interface GenerateManifestResult {
     packages: string[];
     /** Total packages in the dependency tree */
     totalDepsWalked: number;
+    /**
+     * Dependencies that were added to the app's package.json by the
+     * syncDependencies step. Keys are package names, values are version strings.
+     * Empty when syncDependencies is disabled or no packages were missing.
+     */
+    AddedDependencies: Record<string, string>;
     /** Any errors encountered */
     errors: string[];
 }
@@ -706,6 +730,125 @@ function buildImportSpecifiers(
 }
 
 // ============================================================================
+// Dependency Reconciliation
+// ============================================================================
+
+/**
+ * Result of comparing manifest-imported packages against declared dependencies.
+ */
+interface DependencyReconciliationResult {
+    /** Packages that were added to package.json */
+    Added: Record<string, string>;
+    /** Whether package.json was modified */
+    Changed: boolean;
+}
+
+/**
+ * Compares the set of packages imported by the manifest against the app's
+ * declared `dependencies` in package.json. Any manifest-imported package that
+ * is not already a direct dependency is added using the version from its
+ * resolved package.json on disk.
+ *
+ * This prevents `MODULE_NOT_FOUND` errors when packages are published to npm,
+ * since transitive dependencies may not be resolvable without explicit
+ * declaration.
+ */
+function reconcileDependencies(
+    manifestPackages: string[],
+    appDir: string,
+    depTree: Map<string, string>,
+    log: (msg: string) => void
+): DependencyReconciliationResult {
+    const pkgPath = path.join(appDir, 'package.json');
+    const pkgText = fs.readFileSync(pkgPath, 'utf-8');
+    const pkg = JSON.parse(pkgText);
+    const currentDeps: Record<string, string> = pkg.dependencies || {};
+
+    const missing = findMissingDependencies(manifestPackages, currentDeps, depTree);
+
+    if (Object.keys(missing).length === 0) {
+        log('All manifest-imported packages are already declared as dependencies.');
+        return { Added: {}, Changed: false };
+    }
+
+    const updatedDeps = sortObjectKeys({ ...currentDeps, ...missing });
+    pkg.dependencies = updatedDeps;
+
+    const updatedText = JSON.stringify(pkg, null, 2) + '\n';
+
+    // Only write if content actually changed (defensive — should always differ here)
+    if (updatedText !== pkgText) {
+        fs.writeFileSync(pkgPath, updatedText, 'utf-8');
+        logAddedDependencies(missing, log);
+        return { Added: missing, Changed: true };
+    }
+
+    return { Added: {}, Changed: false };
+}
+
+/**
+ * Identifies manifest-imported packages that are not declared as direct
+ * dependencies, resolving their versions from the installed package on disk.
+ */
+function findMissingDependencies(
+    manifestPackages: string[],
+    currentDeps: Record<string, string>,
+    depTree: Map<string, string>
+): Record<string, string> {
+    const missing: Record<string, string> = {};
+
+    for (const pkg of manifestPackages) {
+        if (currentDeps[pkg]) continue; // Already declared
+
+        const resolvedDir = depTree.get(pkg);
+        if (!resolvedDir) continue; // Can't resolve — skip
+
+        const resolvedPkg = readPackageJson(resolvedDir);
+        if (!resolvedPkg) continue;
+
+        // Read the actual version from the resolved package's package.json
+        const resolvedPkgPath = path.join(resolvedDir, 'package.json');
+        try {
+            const resolvedPkgJson = JSON.parse(fs.readFileSync(resolvedPkgPath, 'utf-8'));
+            const version = resolvedPkgJson.version;
+            if (version) {
+                missing[pkg] = version;
+            }
+        } catch {
+            // Skip packages whose version can't be determined
+        }
+    }
+
+    return missing;
+}
+
+/**
+ * Logs the list of added dependencies with a reminder to run npm install.
+ */
+function logAddedDependencies(
+    added: Record<string, string>,
+    log: (msg: string) => void
+): void {
+    const count = Object.keys(added).length;
+    log(`Added ${count} missing ${count === 1 ? 'dependency' : 'dependencies'} to package.json:`);
+    for (const [name, version] of Object.entries(added)) {
+        log(`  + ${name}@${version}`);
+    }
+    log('Remember to run `npm install` at the repo root to update the lockfile.');
+}
+
+/**
+ * Returns a new object with keys sorted alphabetically.
+ */
+function sortObjectKeys(obj: Record<string, string>): Record<string, string> {
+    const sorted: Record<string, string> = {};
+    for (const key of Object.keys(obj).sort()) {
+        sorted[key] = obj[key];
+    }
+    return sorted;
+}
+
+// ============================================================================
 // Main Entry Point
 // ============================================================================
 
@@ -741,7 +884,8 @@ export async function generateClassRegistrationsManifest(
         verbose = true,
         filterBaseClasses,
         excludePatterns = [],
-        excludePackages = []
+        excludePackages = [],
+        syncDependencies = true
     } = options;
 
     const errors: string[] = [];
@@ -758,7 +902,7 @@ export async function generateClassRegistrationsManifest(
     const appPkg = readPackageJson(absoluteAppDir);
     if (!appPkg) {
         errors.push(`No package.json found in ${absoluteAppDir}`);
-        return { success: false, outputPath, ManifestChanged: false, classes: [], packages: [], totalDepsWalked: 0, errors };
+        return { success: false, outputPath, ManifestChanged: false, classes: [], packages: [], totalDepsWalked: 0, AddedDependencies: {}, errors };
     }
 
     log(`Building manifest for: ${appPkg.name}`);
@@ -825,10 +969,22 @@ export async function generateClassRegistrationsManifest(
         }
     } catch (err) {
         errors.push(`Error writing manifest: ${err}`);
-        return { success: false, outputPath: absoluteOutputPath, ManifestChanged: false, classes: allClasses, packages: [], totalDepsWalked: depTree.size, errors };
+        return { success: false, outputPath: absoluteOutputPath, ManifestChanged: false, classes: allClasses, packages: [], totalDepsWalked: depTree.size, AddedDependencies: {}, errors };
     }
 
     const uniquePackages = Array.from(new Set(verifiedClasses.map(c => c.packageName))).sort();
+
+    // Reconcile manifest-imported packages against declared dependencies
+    let addedDependencies: Record<string, string> = {};
+    if (syncDependencies && uniquePackages.length > 0) {
+        log('Checking for missing package.json dependencies...');
+        try {
+            const reconciliation = reconcileDependencies(uniquePackages, absoluteAppDir, depTree, log);
+            addedDependencies = reconciliation.Added;
+        } catch (err) {
+            errors.push(`Error reconciling dependencies: ${err}`);
+        }
+    }
 
     return {
         success: errors.length === 0,
@@ -837,6 +993,7 @@ export async function generateClassRegistrationsManifest(
         classes: verifiedClasses,
         packages: uniquePackages,
         totalDepsWalked: depTree.size,
+        AddedDependencies: addedDependencies,
         errors
     };
 }
