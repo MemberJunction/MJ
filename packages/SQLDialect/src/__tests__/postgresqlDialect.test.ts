@@ -60,7 +60,7 @@ describe('PostgreSQLDialect', () => {
 
     describe('CurrentTimestampUTC', () => {
         it('should return NOW() AT TIME ZONE UTC', () => {
-            expect(dialect.CurrentTimestampUTC()).toBe("NOW() AT TIME ZONE 'UTC'");
+            expect(dialect.CurrentTimestampUTC()).toBe("(NOW() AT TIME ZONE 'UTC')");
         });
     });
 

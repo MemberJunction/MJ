@@ -80,7 +80,7 @@ describe('Cross-Dialect Comparison Tests', () => {
     describe('Date/Time Functions', () => {
         it('should map GETUTCDATE to NOW() AT TIME ZONE UTC for current UTC timestamp', () => {
             expect(ss.CurrentTimestampUTC()).toBe('GETUTCDATE()');
-            expect(pg.CurrentTimestampUTC()).toBe("NOW() AT TIME ZONE 'UTC'");
+            expect(pg.CurrentTimestampUTC()).toBe("(NOW() AT TIME ZONE 'UTC')");
         });
 
         it('should produce platform-specific UUID generation expressions', () => {
