@@ -3,7 +3,6 @@ import { BaseEntity } from '@memberjunction/core';
 // CAELEB FIX THIS import { MJTestRunOutputTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Run Output Types') // Tell MemberJunction about this class
 @Component({
