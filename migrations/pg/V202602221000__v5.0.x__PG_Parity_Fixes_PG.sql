@@ -691,20 +691,53 @@ $$;
 
 -- 6a. spUpdateExistingEntitiesFromSchema
 --     SQL Server version: syncs Entity descriptions from extended properties
---     PG equivalent: would use pg_description for table/schema comments
+--     PG equivalent: uses pg_description / obj_description() via vwSQLTablesAndEntities
 CREATE OR REPLACE FUNCTION __mj."spUpdateExistingEntitiesFromSchema"(
-    p_ExcludedSchemaNames TEXT DEFAULT NULL
+    p_ExcludedSchemaNames TEXT DEFAULT ''
 )
 RETURNS TABLE (
-    "ID" UUID
+    "ID" UUID,
+    "Name" VARCHAR(500),
+    "CurrentDescription" TEXT,
+    "NewDescription" TEXT,
+    "EntityDescription" TEXT,
+    "SchemaName" TEXT
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    RAISE NOTICE 'spUpdateExistingEntitiesFromSchema: stub — full pg_catalog implementation '
-                 'needed when CodeGen supports PostgreSQL. SQL Server version uses sys.tables '
-                 'and sys.extended_properties; PG equivalent should use information_schema.tables '
-                 'and pg_description.';
-    RETURN;
+    -- Create a temp table to hold the filtered rows
+    CREATE TEMP TABLE _filtered ON COMMIT DROP AS
+    SELECT
+        e."ID",
+        e."Name",
+        e."Description" AS "CurrentDescription",
+        CASE WHEN e."AutoUpdateDescription" = true
+             THEN CAST(s."EntityDescription" AS TEXT)
+             ELSE e."Description"
+        END AS "NewDescription",
+        CAST(s."EntityDescription" AS TEXT) AS "EntityDescription",
+        CAST(s."SchemaName" AS TEXT) AS "SchemaName"
+    FROM __mj."Entity" e
+    INNER JOIN __mj."vwSQLTablesAndEntities" s ON e."ID" = s."EntityID"
+    WHERE e."VirtualEntity" = false
+      AND (p_ExcludedSchemaNames = '' OR s."SchemaName" NOT IN (
+          SELECT TRIM(unnest(string_to_array(p_ExcludedSchemaNames, ',')))
+      ))
+      AND COALESCE(
+          CASE WHEN e."AutoUpdateDescription" = true
+               THEN CAST(s."EntityDescription" AS TEXT)
+               ELSE e."Description"
+          END, ''
+      ) <> COALESCE(e."Description", '');
+
+    -- Perform the update
+    UPDATE __mj."Entity" e2
+    SET "Description" = f."NewDescription"
+    FROM _filtered f
+    WHERE e2."ID" = f."ID";
+
+    -- Return the modified rows
+    RETURN QUERY SELECT f."ID", f."Name", f."CurrentDescription", f."NewDescription", f."EntityDescription", f."SchemaName" FROM _filtered f;
 END;
 $$;
 
@@ -804,3 +837,93 @@ CREATE TRIGGER "trgUpdateErrorLog"
 --   - spRecompileAllViews (PG has no recompilation concept)
 --   - CAREFUL_MoveDatesToNewSpecialFields... (historical one-time utility)
 -- =====================================================================
+
+-- =====================================================================
+-- Fix: vwSQLColumnsAndEntityFields AllowsNull uses view attnotnull
+-- instead of base table attnotnull.
+-- In PostgreSQL, view columns always have attnotnull = false regardless
+-- of the underlying table constraint. Use COALESCE(bt_a.attnotnull, a.attnotnull)
+-- so non-virtual fields get the correct nullability from the base table.
+-- =====================================================================
+CREATE OR REPLACE VIEW __mj."vwSQLColumnsAndEntityFields" AS
+SELECT
+    e."EntityID",
+    e."EntityName"                             AS "Entity",
+    e."SchemaName",
+    e."TableName",
+    ef."ID"                                    AS "EntityFieldID",
+    ef."Sequence"                              AS "EntityFieldSequence",
+    ef."Name"                                  AS "EntityFieldName",
+    a.attnum                                   AS "Sequence",
+    bt_a.attnum                                AS "BaseTableSequence",
+    a.attname                                  AS "FieldName",
+    COALESCE(base_t.typname, t.typname)        AS "Type",
+    CASE WHEN t.typtype = 'd' THEN t.typname ELSE NULL END
+                                               AS "UserDefinedType",
+    CASE
+        WHEN t.typname IN ('varchar', 'bpchar', 'char')
+            THEN CASE WHEN a.atttypmod = -1 THEN -1 ELSE a.atttypmod - 4 END
+        WHEN t.typname = 'text' THEN -1
+        ELSE a.attlen::integer
+    END                                        AS "Length",
+    CASE
+        WHEN t.typname = 'numeric' AND a.atttypmod != -1
+            THEN ((a.atttypmod - 4) >> 16) & 65535
+        ELSE 0
+    END                                        AS "Precision",
+    CASE
+        WHEN t.typname = 'numeric' AND a.atttypmod != -1
+            THEN (a.atttypmod - 4) & 65535
+        ELSE 0
+    END                                        AS "Scale",
+    NOT COALESCE(bt_a.attnotnull, a.attnotnull) AS "AllowsNull",
+    CASE WHEN COALESCE(bt_a.attidentity, '') IN ('a','d') THEN 1 ELSE 0 END
+                                               AS "AutoIncrement",
+    a.attnum                                   AS column_id,
+    CASE WHEN bt_a.attnum IS NULL THEN 1 ELSE 0 END
+                                               AS "IsVirtual",
+    src_cls.oid                                AS object_id,
+    NULL::text                                 AS "DefaultConstraintName",
+    pg_get_expr(ad.adbin, ad.adrelid)          AS "DefaultValue",
+    NULL::text                                 AS "ComputedColumnDefinition",
+    COALESCE(
+        col_description(src_cls.oid, a.attnum),
+        col_description(bt_cls.oid, bt_a.attnum)
+    )                                          AS "Description",
+    col_description(src_cls.oid, a.attnum)     AS "ViewColumnDescription",
+    CASE
+        WHEN bt_a.attnum IS NOT NULL
+            THEN col_description(bt_cls.oid, bt_a.attnum)
+        ELSE NULL
+    END                                        AS "TableColumnDescription"
+FROM
+    __mj."vwSQLTablesAndEntities" e
+INNER JOIN
+    pg_catalog.pg_class src_cls
+        ON src_cls.oid = COALESCE(e.view_object_id, e.object_id)
+INNER JOIN
+    pg_catalog.pg_attribute a
+        ON a.attrelid = src_cls.oid
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+INNER JOIN
+    pg_catalog.pg_type t ON a.atttypid = t.oid
+LEFT JOIN
+    pg_catalog.pg_type base_t
+        ON t.typbasetype = base_t.oid AND t.typtype = 'd'
+INNER JOIN
+    pg_catalog.pg_class bt_cls ON bt_cls.oid = e.object_id
+LEFT JOIN
+    pg_catalog.pg_attribute bt_a
+        ON bt_a.attrelid = bt_cls.oid
+        AND bt_a.attname = a.attname
+        AND bt_a.attnum > 0
+        AND NOT bt_a.attisdropped
+LEFT JOIN
+    pg_catalog.pg_attrdef ad
+        ON ad.adrelid = bt_cls.oid
+        AND ad.adnum = bt_a.attnum
+LEFT JOIN
+    __mj."EntityField" ef
+        ON e."EntityID" = ef."EntityID"
+        AND a.attname = ef."Name"::text;

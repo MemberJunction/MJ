@@ -2091,6 +2091,14 @@ export class ManageMetadataBase {
       }
       logStatus(`      Created new entity fields from schema in ${(new Date().getTime() - step2StartTime.getTime()) / 1000} seconds`);
 
+      // PostgreSQL view columns always report attnotnull=false, so virtual fields
+      // (FK join columns like "Location", "Class") incorrectly get AllowsNull=true.
+      // Fix: derive virtual field AllowsNull from the FK column that drives the JOIN.
+      // The virtual field name = FK field name minus trailing "ID" (e.g. ClassID → Class).
+      if (this.isPostgreSQL) {
+         await this.fixPgVirtualFieldNullability(pool);
+      }
+
       // AN: 14-June-2025 - we are now running this AFTER we create new entity fields from schema
       // which results in the same pattern of behavior as migrations where we first create new fields
       // with VERY HIGH sequence numbers (e.g. 100,000 above what they will be approx) and then
@@ -3454,6 +3462,14 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");
 
+      // PostgreSQL ANY (ARRAY[...]) pattern:
+      // CHECK ((("FieldName")::text = ANY ((ARRAY['Val1'::character varying, 'Val2'::character varying])::text[])))
+      // Also handles simpler forms: ("FieldName" = ANY (ARRAY['Val1', 'Val2']))
+      const pgArrayValues = this.parsePgArrayConstraint(processedConstraint);
+      if (pgArrayValues) {
+         return pgArrayValues;
+      }
+
       // Build a regex fragment that matches the field name in any quoting style:
       // [FieldName] (SQL Server) or "FieldName" (PostgreSQL) or bare FieldName
       const quotedField = `(?:\\[${fieldName}\\]|"${fieldName}"|${fieldName})`;
@@ -3502,6 +3518,100 @@ const newEntityFieldsResult = await this.runQuery(pool, sSQL);
 
          return possibleValues;
       }
+   }
+
+   /**
+    * PostgreSQL-only: fixes AllowsNull for virtual (FK-join) fields.
+    *
+    * PG view columns always have attnotnull=false, so virtual fields created from
+    * FK JOINs (e.g. "Location" from LocationID) incorrectly get AllowsNull=true.
+    * The correct value should mirror the FK column's AllowsNull, because CodeGen
+    * generates INNER JOIN when the FK is NOT NULL and LEFT OUTER JOIN when nullable.
+    *
+    * Matching logic: the virtual field name = FK field name minus trailing "ID"
+    * (or matches the FK field's RelatedEntityNameFieldMap).  We also match via
+    * the _Virtual suffix convention for collision avoidance.
+    */
+   protected async fixPgVirtualFieldNullability(pool: CodeGenConnection): Promise<void> {
+      const schema = mj_core_schema();
+      // Use pool.query() directly to bypass qsql() — this SQL is already properly quoted
+      // and qsql() would incorrectly quote SQL functions like LENGTH, LOWER, LEFT
+      const selectSql = `
+         SELECT vf."ID"
+         FROM ${this.qs(schema, 'EntityField')} vf
+         INNER JOIN ${this.qs(schema, 'EntityField')} fk
+            ON vf."EntityID" = fk."EntityID"
+         WHERE vf."IsVirtual" = true
+           AND fk."IsVirtual" = false
+           AND fk."RelatedEntityID" IS NOT NULL
+           AND (
+              (LENGTH(fk."Name") > 2
+               AND LOWER(vf."Name") = LOWER(LEFT(fk."Name", LENGTH(fk."Name") - 2)))
+              OR
+              (LENGTH(fk."Name") > 2
+               AND LOWER(vf."Name") = LOWER(LEFT(fk."Name", LENGTH(fk."Name") - 2) || '_Virtual'))
+              OR
+              (fk."RelatedEntityNameFieldMap" IS NOT NULL
+               AND fk."RelatedEntityNameFieldMap" != ''
+               AND LOWER(vf."Name") = LOWER(fk."RelatedEntityNameFieldMap"))
+           )
+           AND vf."AllowsNull" != fk."AllowsNull"`;
+      const selectResult = await pool.query(selectSql);
+      const rowCount = selectResult?.recordset?.length ?? 0;
+
+      if (rowCount > 0) {
+         const updateSql = `
+            UPDATE ${this.qs(schema, 'EntityField')} vf
+            SET "AllowsNull" = fk."AllowsNull"
+            FROM ${this.qs(schema, 'EntityField')} fk
+            WHERE vf."IsVirtual" = true
+              AND fk."IsVirtual" = false
+              AND vf."EntityID" = fk."EntityID"
+              AND fk."RelatedEntityID" IS NOT NULL
+              AND (
+                 (LENGTH(fk."Name") > 2
+                  AND LOWER(vf."Name") = LOWER(LEFT(fk."Name", LENGTH(fk."Name") - 2)))
+                 OR
+                 (LENGTH(fk."Name") > 2
+                  AND LOWER(vf."Name") = LOWER(LEFT(fk."Name", LENGTH(fk."Name") - 2) || '_Virtual'))
+                 OR
+                 (fk."RelatedEntityNameFieldMap" IS NOT NULL
+                  AND fk."RelatedEntityNameFieldMap" != ''
+                  AND LOWER(vf."Name") = LOWER(fk."RelatedEntityNameFieldMap"))
+              )
+              AND vf."AllowsNull" != fk."AllowsNull"`;
+         await pool.query(updateSql);
+         logStatus(`      Fixed AllowsNull for ${rowCount} virtual FK-join field(s) on PostgreSQL`);
+      }
+   }
+
+   /**
+    * Parses PostgreSQL ANY (ARRAY[...]) CHECK constraint syntax.
+    * PG's pg_get_constraintdef() returns constraints like:
+    *   CHECK ((("Status")::text = ANY ((ARRAY['Confirmed'::character varying, 'Cancelled'::character varying])::text[])))
+    * This method extracts the string values from the ARRAY literal.
+    */
+   private parsePgArrayConstraint(constraintDefinition: string): string[] | null {
+      // Match the ARRAY[...] portion, handling optional type casts
+      const arrayMatch = constraintDefinition.match(/\bARRAY\s*\[([^\]]+)\]/i);
+      if (!arrayMatch) {
+         return null;
+      }
+
+      // Extract individual values from the array content
+      // Each element looks like: 'Value'::character varying  or just  'Value'
+      const arrayContent = arrayMatch[1];
+      const valueRegex = /'([^']+)'(?:::[^,\]]*)?/g;
+      const possibleValues: string[] = [];
+      let match;
+
+      while ((match = valueRegex.exec(arrayContent)) !== null) {
+         if (match[1]) {
+            possibleValues.push(match[1]);
+         }
+      }
+
+      return possibleValues.length > 0 ? possibleValues : null;
    }
 
 
