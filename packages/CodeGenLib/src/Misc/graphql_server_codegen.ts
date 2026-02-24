@@ -232,6 +232,8 @@ export class ${serverGraphQLTypeName} {`;
       case 'nchar':
       case 'nvarchar':
       case 'uniqueidentifier': //treat this as a string
+      case 'uuid': // PostgreSQL UUID type
+      case 'bytea': // PostgreSQL binary data, treat as string
         return '';
       case 'datetime':
       case 'datetime2':
@@ -239,8 +241,13 @@ export class ${serverGraphQLTypeName} {`;
       case 'datetimeoffset':
       case 'date':
       case 'time':
+      case 'timestamptz': // PostgreSQL timestamp with time zone
+      case 'timestamp with time zone': // PostgreSQL full type name
+      case 'timestamp without time zone': // PostgreSQL full type name
         return '';
       case 'bit':
+      case 'bool': // PostgreSQL boolean type (internal name)
+      case 'boolean': // PostgreSQL boolean type (full name)
         return '() => Boolean';
       case 'decimal':
       case 'numeric':
@@ -248,6 +255,8 @@ export class ${serverGraphQLTypeName} {`;
       case 'real':
       case 'money':
       case 'smallmoney':
+      case 'float4': // PostgreSQL single precision
+      case 'float8': // PostgreSQL double precision
         fieldInfo.IsFloat = true; // used by calling functions to determine if we need to import Float
         return '() => Float';
       case 'timestamp':

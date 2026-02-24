@@ -26,7 +26,8 @@ export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' 
         case 'timestamp without time zone': // PostgreSQL full type name
             return 'Date';
         case 'bit':
-        case 'boolean': // PostgreSQL boolean type
+        case 'bool': // PostgreSQL boolean type (internal name)
+        case 'boolean': // PostgreSQL boolean type (full name)
             return 'boolean';
         default:
             return 'number';      
