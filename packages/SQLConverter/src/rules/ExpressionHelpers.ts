@@ -5,13 +5,100 @@
  * convert_top_to_limit, etc.
  */
 
-/** Convert [schema].[name] bracket identifiers to schema."name" double-quote format */
+/**
+ * Split SQL into segments of code, string literals, and comments.
+ * String literals (single-quoted, with '' escaping) and comments (-- and block)
+ * are returned as separate segments so transformations can skip them.
+ */
+function segmentSQL(sql: string): Array<{ text: string; type: 'code' | 'string' | 'comment' }> {
+  const segments: Array<{ text: string; type: 'code' | 'string' | 'comment' }> = [];
+  let current = '';
+  let inString = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    if (inBlockComment) {
+      current += sql[i];
+      if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') {
+        current += '/';
+        i++;
+        segments.push({ text: current, type: 'comment' });
+        current = '';
+        inBlockComment = false;
+      }
+      continue;
+    }
+
+    if (inString) {
+      current += sql[i];
+      if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
+        current += "'";
+        i++;
+      } else if (sql[i] === "'") {
+        segments.push({ text: current, type: 'string' });
+        current = '';
+        inString = false;
+      }
+      continue;
+    }
+
+    if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
+      segments.push({ text: current, type: 'code' });
+      const lineEnd = sql.indexOf('\n', i);
+      if (lineEnd === -1) {
+        segments.push({ text: sql.slice(i), type: 'comment' });
+        current = '';
+        i = sql.length - 1;
+      } else {
+        segments.push({ text: sql.slice(i, lineEnd), type: 'comment' });
+        current = '\n';
+        i = lineEnd;
+      }
+      continue;
+    }
+
+    if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
+      segments.push({ text: current, type: 'code' });
+      current = '/*';
+      i++;
+      inBlockComment = true;
+      continue;
+    }
+
+    if (sql[i] === "'") {
+      segments.push({ text: current, type: 'code' });
+      current = "'";
+      inString = true;
+      continue;
+    }
+
+    current += sql[i];
+  }
+  if (current) segments.push({ text: current, type: inString ? 'string' : inBlockComment ? 'comment' : 'code' });
+  return segments;
+}
+
+/**
+ * Apply a transformation function only to SQL code segments,
+ * preserving string literals and comments unchanged.
+ */
+function transformCodeOnly(sql: string, transform: (code: string) => string): string {
+  return segmentSQL(sql).map(seg => {
+    if (seg.type !== 'code') return seg.text;
+    return transform(seg.text);
+  }).join('');
+}
+
+/** Convert [schema].[name] bracket identifiers to schema."name" double-quote format.
+ *  Skips content inside SQL string literals and comments. */
 export function convertIdentifiers(sql: string): string {
-  // Replace [Schema].[Name] with Schema."Name" (any schema, not just __mj)
-  sql = sql.replace(/\[(\w+)\]\.\[([^\]]+)\]/g, '$1."$2"');
-  // Replace remaining [Name] with "Name"
-  sql = sql.replace(/\[([^\]]+)\]/g, '"$1"');
-  return sql;
+  return transformCodeOnly(sql, (code) => {
+    // Replace [Schema].[Name] with Schema."Name" (any schema, not just __mj)
+    code = code.replace(/\[(\w+)\]\.\[([^\]]+)\]/g, '$1."$2"');
+    // Replace remaining [Name] with "Name"
+    code = code.replace(/\[([^\]]+)\]/g, '"$1"');
+    return code;
+  });
 }
 
 /**
@@ -217,26 +304,46 @@ export function convertStuff(sql: string): string {
 /**
  * Convert T-SQL string concatenation with + to PostgreSQL || operator.
  * Must not affect numeric + operations.
+ * Uses SQL segmentation to avoid corrupting string literal content
+ * (e.g. TypeScript code stored in database text columns).
  */
 export function convertStringConcat(sql: string): string {
-  // Adjacent string literals: 'a' + 'b' → 'a' || 'b'
-  sql = sql.replace(/'\s*\+\s*'/g, "' || '");
-  // String + non-numeric expression: 'text' + expr (but not 'text' + 5)
-  sql = sql.replace(/'\s*\+\s*(?![\d\s]*[+\-*/])/g, "' || ");
-  // After closing paren: ) + 'text'
-  sql = sql.replace(/\)\s*\+\s*'/g, ") || '");
-  // Before CAST: 'text' + CAST
-  sql = sql.replace(/'\s*\+\s*CAST/gi, "' || CAST");
-  // Function result + string: COALESCE/REPLACE/etc.() + 'text'
-  sql = sql.replace(
-    /\b(COALESCE|REPLACE|CASE|CAST|TRIM|UPPER|LOWER|SUBSTRING|LEFT|RIGHT|LTRIM|RTRIM)\s*\([^)]*\)\s*\+\s*'/gi,
-    (m) => m.replace(/\+\s*'/, "|| '")
-  );
-  // After closing paren + column ref: ) + colname.
-  sql = sql.replace(/\)\s*\+\s*(\w+\.)/g, ') || $1');
-  // After quoted identifier + string literal: "Col" + 'text'
-  sql = sql.replace(/"(\w+)"\s*\+\s*N?'/g, (m) => m.replace('+', '||'));
-  return sql;
+  const segments = segmentSQL(sql);
+
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i].type !== 'code') continue;
+
+    const code = segments[i].text;
+    const prevIsString = i > 0 && segments[i - 1].type === 'string';
+    const nextIsString = i + 1 < segments.length && segments[i + 1].type === 'string';
+
+    let newCode = code;
+
+    if (prevIsString && nextIsString) {
+      // Between two string literals: 'a' + 'b' → replace all + with ||
+      newCode = newCode.replace(/\+/g, '||');
+    } else if (prevIsString) {
+      // After a string literal: 'text' + expr
+      // Replace leading + (but not when followed by pure numeric arithmetic)
+      newCode = newCode.replace(/^(\s*)\+(\s*)(?![\d\s]*[+\-*/])/, '$1||$2');
+      // 'text' + CAST → 'text' || CAST
+      newCode = newCode.replace(/^(\s*)\+(\s*CAST\b)/i, '$1||$2');
+    } else if (nextIsString) {
+      // Before a string literal: expr + 'text'
+      // Replace trailing + when preceded by ) or a quoted identifier
+      newCode = newCode.replace(/(\))\s*\+(\s*)$/, '$1 ||$2');
+      newCode = newCode.replace(/("(?:\w+)")\s*\+(\s*)$/, '$1 ||$2');
+    }
+
+    // Within code segments (no adjacent strings): ) + colname.
+    if (!prevIsString && !nextIsString) {
+      newCode = newCode.replace(/\)\s*\+\s*(\w+\.)/g, ') || $1');
+    }
+
+    segments[i].text = newCode;
+  }
+
+  return segments.map(s => s.text).join('');
 }
 
 /**
@@ -502,85 +609,12 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
  * Used by InsertRule to quote column names in INSERT/UPDATE/DELETE statements.
  */
 export function quotePascalCaseIdentifiers(sql: string): string {
-  // segmentType: 'code' | 'string' | 'comment'
-  const segments: Array<{ text: string; type: 'code' | 'string' | 'comment' }> = [];
-  let current = '';
-  let inString = false;
-  let inBlockComment = false;
-
-  for (let i = 0; i < sql.length; i++) {
-    // Block comment handling
-    if (inBlockComment) {
-      current += sql[i];
-      if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') {
-        current += '/';
-        i++;
-        segments.push({ text: current, type: 'comment' });
-        current = '';
-        inBlockComment = false;
-      }
-      continue;
-    }
-
-    // String literal handling
-    if (inString) {
-      current += sql[i];
-      if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
-        current += "'";
-        i++;
-      } else if (sql[i] === "'") {
-        segments.push({ text: current, type: 'string' });
-        current = '';
-        inString = false;
-      }
-      continue;
-    }
-
-    // Check for start of single-line comment (--)
-    if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
-      segments.push({ text: current, type: 'code' });
-      // Consume everything from -- to end of line (or end of string)
-      const lineEnd = sql.indexOf('\n', i);
-      if (lineEnd === -1) {
-        segments.push({ text: sql.slice(i), type: 'comment' });
-        current = '';
-        i = sql.length - 1;
-      } else {
-        segments.push({ text: sql.slice(i, lineEnd), type: 'comment' });
-        current = '\n';
-        i = lineEnd;
-      }
-      continue;
-    }
-
-    // Check for start of block comment
-    if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
-      segments.push({ text: current, type: 'code' });
-      current = '/*';
-      i++;
-      inBlockComment = true;
-      continue;
-    }
-
-    // Check for start of string
-    if (sql[i] === "'") {
-      segments.push({ text: current, type: 'code' });
-      current = "'";
-      inString = true;
-      continue;
-    }
-
-    current += sql[i];
-  }
-  if (current) segments.push({ text: current, type: inString ? 'string' : inBlockComment ? 'comment' : 'code' });
-
-  return segments.map(seg => {
-    if (seg.type !== 'code') return seg.text; // String literals and comments — don't touch
-    return seg.text.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string) => {
+  return transformCodeOnly(sql, (code) => {
+    return code.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string) => {
       if (PASCAL_QUOTE_KEYWORDS.has(word.toUpperCase())) return match;
       return `"${word}"`;
     });
-  }).join('');
+  });
 }
 
 /** Common function replacements */
