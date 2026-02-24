@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/scheduled-actions
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/core-actions@5.3.1
+- @memberjunction/actions@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/core-entities-server@5.3.1
+- @memberjunction/global@5.3.1
+- @memberjunction/sqlserver-dataprovider@5.3.1
+
 ## 5.3.0
 
 ### Patch Changes

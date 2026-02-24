@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-generic-dialog",
-  "version": "5.3.0",
+  "version": "5.3.1",
   "description": "MemberJunction: Angular component for a generic dialog",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

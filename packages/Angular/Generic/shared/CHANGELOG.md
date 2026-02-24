@@ -1,5 +1,12 @@
 # @memberjunction/ng-shared-generic
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+
 ## 5.3.0
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @memberjunction/react-test-harness
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/aiengine@5.3.1
+- @memberjunction/ai-vectors-memory@5.3.1
+- @memberjunction/interactive-component-types@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+- @memberjunction/react-runtime@5.3.1
+
 ## 5.3.0
 
 ### Patch Changes

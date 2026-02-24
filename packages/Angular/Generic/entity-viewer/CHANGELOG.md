@@ -1,5 +1,18 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-export-service@5.3.1
+- @memberjunction/ng-filter-builder@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/ng-timeline@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/export-engine@5.3.1
+- @memberjunction/global@5.3.1
+
 ## 5.3.0
 
 ### Patch Changes
