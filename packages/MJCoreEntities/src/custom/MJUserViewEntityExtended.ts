@@ -92,8 +92,30 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 return s.field + (desc ? ' DESC' : '');
             }).join(', ')
         }
-        else
-            return ''
+
+        // Fall back to GridState.sortSettings when SortState is empty.
+        // Sort may be stored only in GridState if the view was configured via the
+        // grid UI before SortState sync was added.
+        return this.buildOrderByFromGridState();
+    }
+
+    /**
+     * Attempts to build an ORDER BY clause from GridState.sortSettings.
+     * Returns an empty string if GridState has no sort settings.
+     */
+    private buildOrderByFromGridState(): string {
+        if (!this.GridState) return '';
+        try {
+            const gridState = JSON.parse(this.GridState) as ViewGridState;
+            if (gridState.sortSettings && gridState.sortSettings.length > 0) {
+                return gridState.sortSettings
+                    .map(s => s.field + (s.dir === 'desc' ? ' DESC' : ''))
+                    .join(', ');
+            }
+        } catch {
+            // Invalid GridState JSON — ignore
+        }
+        return '';
     }
 
     /**
