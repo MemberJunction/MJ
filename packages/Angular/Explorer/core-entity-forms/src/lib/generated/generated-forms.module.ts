@@ -261,8 +261,6 @@ import { MJTemplateFormComponent } from "./Entities/MJTemplate/mjtemplate.form.c
 import { MJTestRubricFormComponent } from "./Entities/MJTestRubric/mjtestrubric.form.component";
 import { MJTestRunFeedbackFormComponent } from "./Entities/MJTestRunFeedback/mjtestrunfeedback.form.component";
 import { MJTestRunFormComponent } from "./Entities/MJTestRun/mjtestrun.form.component";
-import { TestRunOutputFormComponent } from "./Entities/TestRunOutput/testrunoutput.form.component";
-import { TestRunOutputTypeFormComponent } from "./Entities/TestRunOutputType/testrunoutputtype.form.component";
 import { MJTestSuiteRunFormComponent } from "./Entities/MJTestSuiteRun/mjtestsuiterun.form.component";
 import { MJTestSuiteTestFormComponent } from "./Entities/MJTestSuiteTest/mjtestsuitetest.form.component";
 import { MJTestSuiteFormComponent } from "./Entities/MJTestSuite/mjtestsuite.form.component";
@@ -747,8 +745,6 @@ declarations: [
     MJTestRubricFormComponent,
     MJTestRunFeedbackFormComponent,
     MJTestRunFormComponent,
-    TestRunOutputFormComponent,
-    TestRunOutputTypeFormComponent,
     MJTestSuiteRunFormComponent,
     MJTestSuiteTestFormComponent,
     MJTestSuiteFormComponent,
