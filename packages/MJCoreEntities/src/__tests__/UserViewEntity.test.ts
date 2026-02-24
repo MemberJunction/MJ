@@ -566,6 +566,65 @@ describe('MJUserViewEntityExtended', () => {
             view.SortState = JSON.stringify([{ field: 'Name', direction: 99 }]);
             expect(view.OrderByClause).toBe('Name');
         });
+
+        // GridState.sortSettings fallback tests
+        it('should fall back to GridState.sortSettings when SortState is empty', () => {
+            view.SortState = null;
+            view.GridState = JSON.stringify({
+                sortSettings: [{ field: 'Name', dir: 'asc' }],
+                columnSettings: []
+            });
+            expect(view.OrderByClause).toBe('Name');
+        });
+
+        it('should fall back to GridState.sortSettings desc when SortState is empty', () => {
+            view.SortState = null;
+            view.GridState = JSON.stringify({
+                sortSettings: [{ field: 'CreatedAt', dir: 'desc' }],
+                columnSettings: []
+            });
+            expect(view.OrderByClause).toBe('CreatedAt DESC');
+        });
+
+        it('should handle multiple sort fields from GridState.sortSettings', () => {
+            view.SortState = null;
+            view.GridState = JSON.stringify({
+                sortSettings: [
+                    { field: 'Name', dir: 'asc' },
+                    { field: 'CreatedAt', dir: 'desc' }
+                ],
+                columnSettings: []
+            });
+            expect(view.OrderByClause).toBe('Name, CreatedAt DESC');
+        });
+
+        it('should prefer SortState over GridState.sortSettings', () => {
+            view.SortState = JSON.stringify([{ field: 'Name', dir: 'asc' }]);
+            view.GridState = JSON.stringify({
+                sortSettings: [{ field: 'CreatedAt', dir: 'desc' }],
+                columnSettings: []
+            });
+            // SortState takes priority
+            expect(view.OrderByClause).toBe('Name');
+        });
+
+        it('should return empty string when GridState has no sortSettings', () => {
+            view.SortState = null;
+            view.GridState = JSON.stringify({ columnSettings: [] });
+            expect(view.OrderByClause).toBe('');
+        });
+
+        it('should return empty string when GridState is invalid JSON', () => {
+            view.SortState = null;
+            view.GridState = 'not valid json';
+            expect(view.OrderByClause).toBe('');
+        });
+
+        it('should return empty string when GridState is null and SortState is null', () => {
+            view.SortState = null;
+            view.GridState = null;
+            expect(view.OrderByClause).toBe('');
+        });
     });
 
     // ----------------------------------------------------------------
