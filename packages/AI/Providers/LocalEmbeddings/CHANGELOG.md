@@ -1,5 +1,12 @@
 # @memberjunction/ai-local-embeddings
 
+## 5.3.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.3.0
+- @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

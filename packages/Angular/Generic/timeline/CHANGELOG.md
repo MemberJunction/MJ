@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 5.3.0
+
+### Patch Changes
+
+- @memberjunction/core@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

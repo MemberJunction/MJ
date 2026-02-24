@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [a6aea29]
+- Updated dependencies [1692c53]
+  - @memberjunction/graphql-dataprovider@5.3.0
+  - @memberjunction/ng-entity-viewer@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-shared@5.3.0
+  - @memberjunction/ng-testing@5.3.0
+  - @memberjunction/ng-actions@5.3.0
+  - @memberjunction/ng-ai-test-harness@5.3.0
+  - @memberjunction/ng-notifications@5.3.0
+  - @memberjunction/ng-base-forms@5.3.0
+  - @memberjunction/ai-engine-base@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/ng-base-application@5.3.0
+  - @memberjunction/ng-action-gallery@5.3.0
+  - @memberjunction/ng-agents@5.3.0
+  - @memberjunction/ng-code-editor@5.3.0
+  - @memberjunction/ng-flow-editor@5.3.0
+  - @memberjunction/ng-join-grid@5.3.0
+  - @memberjunction/ng-list-management@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/templates-base-types@5.3.0
+  - @memberjunction/ng-link-directives@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/ng-deep-diff@5.3.0
+  - @memberjunction/ng-entity-relationship-diagram@5.3.0
+  - @memberjunction/ng-tabstrip@5.3.0
+  - @memberjunction/ng-timeline@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

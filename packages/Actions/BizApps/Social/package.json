@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions-bizapps-social",
   "type": "module",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "Social Media Actions for MemberJunction - Twitter, LinkedIn, Facebook, Instagram, TikTok, YouTube, HootSuite, Buffer",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,11 +26,11 @@
   "author": "MemberJunction.com",
   "license": "SEE LICENSE IN LICENSE.md",
   "dependencies": {
-    "@memberjunction/core": "5.2.0",
-    "@memberjunction/global": "5.2.0",
-    "@memberjunction/actions-base": "5.2.0",
-    "@memberjunction/actions": "5.2.0",
-    "@memberjunction/core-entities": "5.2.0",
+    "@memberjunction/core": "5.3.0",
+    "@memberjunction/global": "5.3.0",
+    "@memberjunction/actions-base": "5.3.0",
+    "@memberjunction/actions": "5.3.0",
+    "@memberjunction/core-entities": "5.3.0",
     "axios": "^1.13.4",
     "form-data": "^4.0.5"
   },

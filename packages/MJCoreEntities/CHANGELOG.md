@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core-entities
 
+## 5.3.0
+
+### Patch Changes
+
+- 1692c53: Viewing System fixes for sorting and filtering. Memory manager SQL fix.
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/interactive-component-types@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

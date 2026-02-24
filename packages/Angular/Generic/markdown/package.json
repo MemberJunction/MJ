@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-markdown",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "MemberJunction: Lightweight Angular markdown component with Prism.js highlighting, Mermaid diagrams, and extensible features",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
