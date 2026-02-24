@@ -15,7 +15,7 @@
  * which version is installed.
  */
 
-import { chromium, Browser, BrowserContext, Page, Route } from 'playwright';
+import type { Browser, BrowserContext, Page, Route } from 'playwright';
 import { BaseBrowserAdapter } from './BaseBrowserAdapter.js';
 import {
     BrowserAction,
@@ -45,6 +45,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
         this.config = config;
 
+        const { chromium } = await import('playwright');
         this.browser = await chromium.launch({
             headless: config.Headless,
             slowMo: config.SlowMo,
