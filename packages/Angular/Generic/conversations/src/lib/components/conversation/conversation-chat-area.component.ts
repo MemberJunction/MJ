@@ -972,8 +972,25 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       }, this.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        // Update messages with reloaded data
-        this.messages = result.Results;
+        // Merge DB results with existing client-side messages rather than replacing entirely.
+        // This prevents dropping messages added client-side (e.g., by handleSubAgentInvocation)
+        // that haven't appeared in the DB query results yet due to timing.
+        const merged = new Map<string, MJConversationDetailEntity>();
+
+        // Add all DB messages (fresh data)
+        for (const msg of result.Results) {
+          merged.set(msg.ID, msg);
+        }
+
+        // Preserve client-side messages not yet in DB
+        for (const msg of this.messages) {
+          if (!merged.has(msg.ID)) {
+            merged.set(msg.ID, msg);
+          }
+        }
+
+        this.messages = Array.from(merged.values())
+          .sort((a, b) => (a.__mj_CreatedAt?.getTime() || 0) - (b.__mj_CreatedAt?.getTime() || 0));
 
         // Find newly discovered messages (delegated agents)
         const newMessages = result.Results.filter(m => !existingMessageIds.has(m.ID));
@@ -1013,6 +1030,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     try {
       LogStatusEx({message: `🎉 Handling completion for message ${message.ID}`, verboseOnly: true});
 
+      // Snapshot artifact IDs before reload to detect newly created artifacts
+      const artifactIdsBefore = this.collectAllArtifactIds();
+
       // Reload message from database to get final content and status
       await message.Load(message.ID);
 
@@ -1042,15 +1062,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         .filter(m => m.Status === 'In-Progress')
         .map(m => m.ID)];
 
-      // Auto-open artifact panel if this message has artifacts and no artifact is currently shown
-      if (this.artifactsByDetailId.has(message.ID) && !this.showArtifactPanel) {
-        const artifactList = this.artifactsByDetailId.get(message.ID);
-        if (artifactList && artifactList.length > 0) {
-          // Show the LAST (most recent) artifact
-          this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
-          this.showArtifactPanel = true;
-          await this.loadArtifactPermissions(this.selectedArtifactId);
-        }
+      // Auto-open artifact panel if NEW artifacts were discovered (not just the triggering message).
+      // When Sage delegates to a sub-agent (e.g., Skip), the artifact is on the sub-agent's
+      // message, not Sage's. Checking only the triggering message would miss delegated artifacts.
+      if (!this.showArtifactPanel) {
+        await this.autoOpenNewArtifact(artifactIdsBefore);
       }
 
       // Remove task from ActiveTasksService (clears spinner in conversation list)
@@ -1089,19 +1105,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID, true);  // forceRefresh = true
     }
 
+    // Snapshot artifact IDs before reload to detect newly created artifacts
+    const artifactIdsBefore = this.collectAllArtifactIds();
+
     // Reload artifact mapping for this message to pick up newly created artifacts
     await this.reloadArtifactsForMessage(event.message.ID);
 
-    // Auto-open artifact panel if this message has artifacts and no artifact is currently shown
-    if (this.artifactsByDetailId.has(event.message.ID) && !this.showArtifactPanel) {
-      const artifactList = this.artifactsByDetailId.get(event.message.ID);
-      if (artifactList && artifactList.length > 0) {
-        // Show the LAST (most recent) artifact - uses display data, no lazy load needed
-        this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
-        this.showArtifactPanel = true;
-        // Load permissions for the new artifact
-        await this.loadArtifactPermissions(this.selectedArtifactId);
-      }
+    // Auto-open artifact panel if NEW artifacts were discovered
+    if (!this.showArtifactPanel) {
+      await this.autoOpenNewArtifact(artifactIdsBefore);
     }
 
     // Force change detection to update the UI
@@ -1149,9 +1161,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Reload artifacts for a specific message ID
-   * Called after an artifact is created to update the UI immediately
-   * Invalidates and refreshes the conversation cache
+   * Reload artifacts for a conversation, triggered by a specific message ID.
+   * Processes ALL messages in the conversation (not just the trigger message)
+   * so that artifacts from delegated sub-agent messages are also picked up.
+   * Called after an artifact is created to update the UI immediately.
+   * Invalidates and refreshes the conversation cache.
    */
   private async reloadArtifactsForMessage(conversationDetailId: string): Promise<void> {
     LogStatusEx({message: `🔄 Reloading artifacts for message ${conversationDetailId}`, verboseOnly: true});
@@ -1187,53 +1201,67 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       const conversationData = result.Results as ConversationDetailComplete[];
       this.conversationDataCache.set(detail.ConversationID, conversationData);
 
-      // Find the specific conversation detail we're reloading and update its artifacts
+      // Process ALL messages in the conversation to pick up artifacts from
+      // delegated sub-agent messages (e.g., when Sage delegates to Skip,
+      // the artifact is on Skip's message, not Sage's)
       for (const row of conversationData) {
-        if (row.ID === conversationDetailId) {
-          const parsed = parseConversationDetailComplete(row);
-
-          // Clear existing artifacts for this detail and rebuild
-          this.artifactsByDetailId.delete(conversationDetailId);
-          this.systemArtifactsByDetailId.delete(conversationDetailId);
-
-          if (parsed.artifacts.length > 0) {
-            const artifactList: LazyArtifactInfo[] = [];
-            const systemArtifactList: LazyArtifactInfo[] = [];
-
-            for (const artifactData of parsed.artifacts) {
-              const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-
-              // Separate system-only artifacts from user-visible artifacts
-              if (artifactData.Visibility === 'System Only') {
-                systemArtifactList.push(lazyInfo);
-              } else {
-                artifactList.push(lazyInfo);
-              }
-
-              LogStatusEx({message: `✅ Loaded artifact ${artifactData.ArtifactID} v${artifactData.VersionNumber} for message ${conversationDetailId}`, verboseOnly: true});
-            }
-
-            // Add to appropriate maps
-            if (artifactList.length > 0) {
-              this.artifactsByDetailId.set(conversationDetailId, artifactList);
-            }
-            if (systemArtifactList.length > 0) {
-              this.systemArtifactsByDetailId.set(conversationDetailId, systemArtifactList);
-            }
-          }
-
-          // Create new Map reference to trigger Angular change detection
-          this.artifactsByDetailId = new Map(this.artifactsByDetailId);
-
-          // Update artifact count
-          this.artifactCount = this.calculateUniqueArtifactCount();
-          this.updateArtifactCountDisplay();
-
-          break; // Found and updated the target message
-        }
+        this.updateArtifactsForRow(row);
       }
+
+      // Create new Map reference to trigger Angular change detection
+      this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+      this._combinedArtifactsMap = null; // Clear cache so effectiveArtifactsMap rebuilds
+
+      // Update artifact count
+      this.artifactCount = this.calculateUniqueArtifactCount();
+      this.updateArtifactCountDisplay();
     } catch (error) {
       console.error('Failed to reload artifacts for message:', error);
+    }
+  }
+
+  /**
+   * Update artifact maps for a single conversation detail row.
+   * Clears existing entries for the row and rebuilds from parsed data.
+   */
+  private updateArtifactsForRow(row: ConversationDetailComplete): void {
+    const rowId = row.ID;
+    if (!rowId) {
+      return;
+    }
+
+    const parsed = parseConversationDetailComplete(row);
+
+    // Clear existing artifacts for this detail and rebuild
+    this.artifactsByDetailId.delete(rowId);
+    this.systemArtifactsByDetailId.delete(rowId);
+
+    if (parsed.artifacts.length === 0) {
+      return;
+    }
+
+    const artifactList: LazyArtifactInfo[] = [];
+    const systemArtifactList: LazyArtifactInfo[] = [];
+
+    for (const artifactData of parsed.artifacts) {
+      const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
+
+      // Separate system-only artifacts from user-visible artifacts
+      if (artifactData.Visibility === 'System Only') {
+        systemArtifactList.push(lazyInfo);
+      } else {
+        artifactList.push(lazyInfo);
+      }
+
+      LogStatusEx({message: `✅ Loaded artifact ${artifactData.ArtifactID} v${artifactData.VersionNumber} for message ${rowId}`, verboseOnly: true});
+    }
+
+    // Add to appropriate maps
+    if (artifactList.length > 0) {
+      this.artifactsByDetailId.set(rowId, artifactList);
+    }
+    if (systemArtifactList.length > 0) {
+      this.systemArtifactsByDetailId.set(rowId, systemArtifactList);
     }
   }
 
@@ -1277,6 +1305,41 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       }
     }
     return uniqueArtifactIds.size;
+  }
+
+  /**
+   * Collect all currently known artifact IDs across all messages.
+   * Used as a "before" snapshot to detect newly created artifacts after a reload.
+   */
+  private collectAllArtifactIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const artifactList of this.artifactsByDetailId.values()) {
+      for (const info of artifactList) {
+        ids.add(info.artifactId);
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Auto-open the artifact panel for the most recent NEW artifact.
+   * Compares current artifacts against a pre-reload snapshot to find
+   * only artifacts that were just discovered (avoiding re-opening for old artifacts).
+   * Searches artifactsByDetailId directly rather than iterating this.messages,
+   * because reloadMessagesForActiveConversation can temporarily remove messages
+   * from this.messages during concurrent operations.
+   */
+  private async autoOpenNewArtifact(artifactIdsBefore: Set<string>): Promise<void> {
+    for (const [detailId, artifactList] of this.artifactsByDetailId) {
+      const newArtifact = artifactList.find(a => !artifactIdsBefore.has(a.artifactId));
+      if (newArtifact) {
+        this.selectedArtifactId = newArtifact.artifactId;
+        this.showArtifactPanel = true;
+        await this.loadArtifactPermissions(newArtifact.artifactId);
+        LogStatusEx({message: `🎨 Auto-opening new artifact ${newArtifact.artifactId} from detail ${detailId}`, verboseOnly: true});
+        return;
+      }
+    }
   }
 
   /**
@@ -1600,30 +1663,31 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   async onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
-    // Reload artifacts to get full entities
-    await this.reloadArtifactsForMessage(data.conversationDetailId);
+    // Snapshot artifact IDs before reload to detect newly created artifacts
+    const artifactIdsBefore = this.collectAllArtifactIds();
 
-    const artifactList = this.artifactsByDetailId.get(data.conversationDetailId);
+    // Reload artifacts to get full entities (processes ALL messages in the conversation)
+    await this.reloadArtifactsForMessage(data.conversationDetailId);
 
     // Auto-open artifact panel if no artifact currently shown
     if (!this.showArtifactPanel) {
-      if (artifactList && artifactList.length > 0) {
-        // Show the LAST (most recent) artifact - use actual ID from map, not empty event data
-        this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
-        this.showArtifactPanel = true;
-        // Load permissions for the new artifact
-        await this.loadArtifactPermissions(this.selectedArtifactId);
-      }
-    } else if (this.selectedArtifactId && artifactList && artifactList.length > 0) {
+      // Use robust auto-open that checks ALL messages for new artifacts.
+      // When a sub-agent (e.g., Skip) creates an artifact on a different ConversationDetail
+      // than the one specified in the event, checking only data.conversationDetailId would miss it.
+      await this.autoOpenNewArtifact(artifactIdsBefore);
+    } else if (this.selectedArtifactId) {
       // Panel is already open - check if new artifact is a new version of currently displayed artifact
-      const currentArtifact = artifactList.find(a => a.artifactId === this.selectedArtifactId);
-      if (currentArtifact) {
-        // New version of the same artifact - refresh to show latest version
-        const latestVersion = artifactList[artifactList.length - 1];
-        this.artifactViewerRefresh$.next({
-          artifactId: latestVersion.artifactId,
-          versionNumber: latestVersion.versionNumber
-        });
+      const artifactList = this.artifactsByDetailId.get(data.conversationDetailId);
+      if (artifactList && artifactList.length > 0) {
+        const currentArtifact = artifactList.find(a => a.artifactId === this.selectedArtifactId);
+        if (currentArtifact) {
+          // New version of the same artifact - refresh to show latest version
+          const latestVersion = artifactList[artifactList.length - 1];
+          this.artifactViewerRefresh$.next({
+            artifactId: latestVersion.artifactId,
+            versionNumber: latestVersion.versionNumber
+          });
+        }
       }
     }
 
