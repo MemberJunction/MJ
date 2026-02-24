@@ -39,6 +39,7 @@
     "@memberjunction/actions-bizapps-formbuilders": "5.2.0",
     "@memberjunction/actions-bizapps-lms": "5.2.0",
     "@memberjunction/actions-bizapps-social": "5.2.0",
+    "@memberjunction/actions-bizapps-yourmembership": "5.2.0",
     "@memberjunction/ai-agent-manager": "5.2.0",
     "@memberjunction/ai-agents": "5.2.0",
     "@memberjunction/ai-core-plus": "5.2.0",
