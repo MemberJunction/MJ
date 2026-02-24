@@ -77,8 +77,12 @@ export class PostgreSQLCodeGenConnection implements CodeGenConnection {
     }
 
     async query(sql: string): Promise<CodeGenQueryResult> {
-        const result = await this._pool.query(sql);
-        return { recordset: result.rows };
+        try {
+            const result = await this._pool.query(sql);
+            return { recordset: result.rows };
+        } catch (e) {
+            throw e;
+        }
     }
 
     async queryWithParams(sql: string, params: Record<string, unknown>): Promise<CodeGenQueryResult> {

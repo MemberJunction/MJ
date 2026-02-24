@@ -322,11 +322,14 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
   */
  private async identifyFailedViewRefreshes(ds: CodeGenConnection, entities: EntityInfo[]): Promise<EntityInfo[]> {
    const failedEntities: EntityInfo[] = [];
+   const isPG = dbType() === 'postgresql';
    
    for (const entity of entities) {
      try {
        // Try to query the view to see if it's valid
-       const testQuery = `SELECT TOP 1 * FROM [${entity.SchemaName}].[${entity.BaseView}]`;
+       const testQuery = isPG
+         ? `SELECT * FROM "${entity.SchemaName}"."${entity.BaseView}" LIMIT 1`
+         : `SELECT TOP 1 * FROM [${entity.SchemaName}].[${entity.BaseView}]`;
        await ds.query(testQuery);
      } catch (e) {
        // If the query fails, the view is invalid and needs to be regenerated

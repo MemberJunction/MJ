@@ -39,7 +39,7 @@ BEGIN
     END IF;
     FOR p_i IN 1..LENGTH("p_InputString") LOOP
         p_c := SUBSTRING("p_InputString" FROM p_i FOR 1);
-        IF p_c ~ '"A-Za-z0-9"' THEN
+        IF p_c ~ '[A-Za-z0-9]' THEN
             p_Result := p_Result || p_c;
         END IF;
     END LOOP;

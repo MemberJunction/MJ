@@ -119,7 +119,7 @@ export class RunCodeGenBase {
     // Test connection
     const client = await pool.connect();
     client.release();
-
+    
     // Configure the PostgreSQL data provider
     const pgConfig = new PostgreSQLProviderConfigData(
       { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgUser, Password: pgPassword },

@@ -12,14 +12,21 @@ export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' 
         case 'nchar':
         case 'nvarchar':
         case 'uniqueidentifier': //treat this as a string
+        case 'uuid': // PostgreSQL UUID type
+        case 'bytea': // PostgreSQL binary data, treat as string (base64)
             return 'string';
         case 'datetime':
         case 'datetime2':
         case 'datetimeoffset':
         case 'date':
         case 'time':
+        case 'timestamp': // PostgreSQL timestamp
+        case 'timestamptz': // PostgreSQL timestamp with time zone
+        case 'timestamp with time zone': // PostgreSQL full type name
+        case 'timestamp without time zone': // PostgreSQL full type name
             return 'Date';
         case 'bit':
+        case 'boolean': // PostgreSQL boolean type
             return 'boolean';
         default:
             return 'number';      

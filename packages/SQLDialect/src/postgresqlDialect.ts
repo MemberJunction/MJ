@@ -178,7 +178,7 @@ export class PostgreSQLDialect extends SQLDialect {
     }
 
     CurrentTimestampUTC(): string {
-        return "NOW() AT TIME ZONE 'UTC'";
+        return "(NOW() AT TIME ZONE 'UTC')";
     }
 
     NewUUID(): string {

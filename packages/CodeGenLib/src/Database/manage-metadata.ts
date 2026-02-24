@@ -222,6 +222,16 @@ export class ManageMetadataBase {
       'SCHEMA', 'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'TRIGGER', 'FUNCTION', 'PROCEDURE',
       'RETURNS', 'RETURN', 'EXECUTE', 'CALL', 'RAISE', 'NOTICE', 'EXCEPTION', 'PERFORM',
       'GRANT', 'REVOKE', 'TO', 'USAGE', 'PRIVILEGES', 'OWNER',
+      // DDL sub-keywords (ALTER TABLE, PL/pgSQL blocks, constraints)
+      'ADD', 'COLUMN', 'DO', 'RENAME', 'COMMENT', 'UNIQUE', 'CHECK',
+      'CONFLICT', 'NOTHING', 'EXCLUDED', 'ZONE', 'AT', 'FOR', 'EACH', 'OF',
+      'BEFORE', 'AFTER', 'INSTEAD', 'USING', 'ANY', 'SOME',
+      'ENABLE', 'DISABLE', 'GENERATED', 'ALWAYS', 'IDENTITY',
+      'SECURITY', 'DEFINER', 'INVOKER', 'FORCE', 'COPY',
+      'TEMPORARY', 'TEMP', 'RECURSIVE', 'MATERIALIZED', 'CONCURRENTLY',
+      // PL/pgSQL control flow
+      'NEW', 'OLD', 'FOUND', 'LOOP', 'WHILE', 'EXIT', 'CONTINUE',
+      'ELSIF', 'ELSEIF', 'STRICT',
       // SQL Server types
       'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
       'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',
@@ -242,6 +252,10 @@ export class ManageMetadataBase {
       'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
       'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',
       'INOUT', 'OUT', 'VARIADIC', 'PARALLEL', 'SAFE', 'UNSAFE',
+      // information_schema column names (lowercase in PG, must not be quoted)
+      'TABLE_SCHEMA', 'TABLE_NAME', 'TABLE_CATALOG', 'COLUMN_NAME', 'DATA_TYPE',
+      'IS_NULLABLE', 'COLUMN_DEFAULT', 'CHARACTER_MAXIMUM_LENGTH', 'NUMERIC_PRECISION',
+      'NUMERIC_SCALE', 'ORDINAL_POSITION', 'COLUMN_COMMENT',
       // MJ SQL constructs
       'INFORMATION_SCHEMA', 'COLUMNS', 'TABLES', 'ROUTINES',
    ]);
@@ -278,6 +292,41 @@ export class ManageMetadataBase {
             }
             result.push(sql.substring(i, j));
             i = j;
+            continue;
+         }
+
+                  // Skip dollar-quoted strings (PL/pgSQL: $$ ... $$, $tag$ ... $tag$)
+         if (ch === '$') {
+            // Try to match a dollar-quote tag: $$ or $identifier$
+            let tagEnd = i + 1;
+            if (tagEnd < len && sql[tagEnd] === '$') {
+               // Simple $$ tag
+               tagEnd = i + 2;
+            } else {
+               // Look for $identifier$ pattern
+               while (tagEnd < len && /[a-zA-Z0-9_]/.test(sql[tagEnd])) tagEnd++;
+               if (tagEnd < len && sql[tagEnd] === '$') {
+                  tagEnd++;
+               } else {
+                  // Not a dollar-quote, just a $ character
+                  result.push(ch);
+                  i++;
+                  continue;
+               }
+            }
+            const tag = sql.substring(i, tagEnd);
+            // Find the closing tag
+            const closePos = sql.indexOf(tag, tagEnd);
+            if (closePos !== -1) {
+               // Skip entire dollar-quoted block (including closing tag)
+               const blockEnd = closePos + tag.length;
+               result.push(sql.substring(i, blockEnd));
+               i = blockEnd;
+            } else {
+               // No closing tag found, pass through rest of string as-is
+               result.push(sql.substring(i));
+               i = len;
+            }
             continue;
          }
 
@@ -849,6 +898,8 @@ export class ManageMetadataBase {
 
       let bSuccess = true;
       let start = new Date();
+      
+      // Very early FK check - before any operations
 
       // Load SchemaInfo records early so that EntityNamePrefix/Suffix rules from the
       // database are available when createNewEntities() names new entities.
@@ -1888,7 +1939,9 @@ export class ManageMetadataBase {
     */
    protected async checkAndRemoveMetadataForDeletedTables(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntitiesWithMissingBaseTables')} WHERE VirtualEntity=0`
+         const sql = this.isPostgreSQL
+            ? `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntitiesWithMissingBaseTables')}`
+            : `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntitiesWithMissingBaseTables')} WHERE VirtualEntity=0`
          const entitiesResult = await this.runQuery(pool, sql);
          const entities = <EntityInfo[]>entitiesResult.recordset;
          if (entities && entities.length > 0) {
@@ -2333,7 +2386,7 @@ export class ManageMetadataBase {
                await this.dropExistingDefaultConstraint(pool, entity, fieldName);
 
                const sql = this.isPostgreSQL
-                  ? `ALTER TABLE ${this.qs(entity.SchemaName, entity.BaseTable)} ALTER COLUMN "${fieldName}" TYPE ${this.timestampType}, ALTER COLUMN "${fieldName}" ${allowNull ? 'DROP NOT NULL' : 'SET NOT NULL'}`
+                  ? `ALTER TABLE ${this.qs(entity.SchemaName, entity.BaseTable)} ALTER COLUMN "${fieldName}" type ${this.timestampType}, ALTER COLUMN "${fieldName}" ${allowNull ? 'DROP NOT NULL' : 'SET NOT NULL'}`
                   : `ALTER TABLE ${this.qs(entity.SchemaName, entity.BaseTable)} ALTER COLUMN ${fieldName} ${this.timestampType} ${allowNull ? 'NULL' : 'NOT NULL'}`;
                await this.LogSQLAndExecute(pool, sql, `SQL text to update special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
 
@@ -2366,7 +2419,9 @@ export class ManageMetadataBase {
     */
    protected async createDefaultConstraintForSpecialDateField(pool: CodeGenConnection, entity: any, fieldName: string) {
       try {
-         const sqlAddDefaultConstraint = `ALTER TABLE ${this.qs(entity.SchemaName, entity.BaseTable)} ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT ${this.utcNow()} FOR [${fieldName}]`;
+         const sqlAddDefaultConstraint = this.isPostgreSQL
+            ? `ALTER TABLE ${this.qs(entity.SchemaName, entity.BaseTable)} ALTER COLUMN "${fieldName}" SET DEFAULT ${this.utcNow()}`
+            : `ALTER TABLE ${this.qs(entity.SchemaName, entity.BaseTable)} ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT ${this.utcNow()} FOR [${fieldName}]`;
          await this.LogSQLAndExecute(pool, sqlAddDefaultConstraint, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
       }
       catch (e) {
@@ -2684,7 +2739,7 @@ uk_cache AS (
    SELECT "TableName", "ColumnName", "SchemaName"
    FROM ${this.qs(schema, 'vwTableUniqueKeys')}
 ),
-MaxSequences AS (
+max_sequences AS (
    SELECT
       "EntityID",
       COALESCE(MAX("Sequence"), 0) AS "MaxSequence"
@@ -2693,7 +2748,7 @@ MaxSequences AS (
    GROUP BY
       "EntityID"
 ),
-NumberedRows AS (
+numbered_rows AS (
    SELECT
       sf."EntityID",
       COALESCE(ms."MaxSequence", 0) + 100000 + sf."Sequence" AS "Sequence",
@@ -2729,7 +2784,7 @@ NumberedRows AS (
    FROM
       ${this.qs(schema, 'vwSQLColumnsAndEntityFields')} sf
    LEFT OUTER JOIN
-      MaxSequences ms ON sf."EntityID" = ms."EntityID"
+      max_sequences ms ON sf."EntityID" = ms."EntityID"
    LEFT OUTER JOIN
       ${this.qs(schema, 'Entity')} e ON sf."EntityID" = e."ID"
    LEFT OUTER JOIN
@@ -2744,7 +2799,7 @@ NumberedRows AS (
       "EntityFieldID" IS NULL\n${this.createExcludeTablesAndSchemasFilter('sf.')}
 )
 SELECT *
-FROM NumberedRows
+FROM numbered_rows
 WHERE rn = 1
 ORDER BY "EntityID", "Sequence";
 `;
@@ -2897,7 +2952,31 @@ ORDER BY "EntityID", "Sequence";
    protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection): Promise<boolean> {
       try   {
          const sSQL = this.getPendingEntityFieldsSELECTSQL();
-         const newEntityFieldsResult = await this.runQuery(pool, sSQL);
+         if (this.isPostgreSQL) {
+            const transformed = this.qsql(sSQL);
+            if (sSQL !== transformed) {
+               // Find first difference
+               let diffPos = 0;
+               while (diffPos < sSQL.length && diffPos < transformed.length && sSQL[diffPos] === transformed[diffPos]) diffPos++;
+               console.log('[DBG-FIELDS] SQL was transformed by qsql at pos ' + diffPos);
+               console.log('[DBG-FIELDS] BEFORE: ' + JSON.stringify(sSQL.substring(Math.max(0, diffPos - 40), diffPos + 60)));
+               console.log('[DBG-FIELDS] AFTER:  ' + JSON.stringify(transformed.substring(Math.max(0, diffPos - 40), diffPos + 60)));
+            } else {
+               console.log('[DBG-FIELDS] SQL was NOT transformed (identical)');
+            }
+         }
+         
+         // Pre-check: verify vwForeignKeys has the "column" column
+         if (this.isPostgreSQL) {
+            try {
+               const fkCheck = await pool.query('SELECT "column" FROM __mj."vwForeignKeys" LIMIT 1');
+               console.log('[DBG-FIELDS] vwForeignKeys pre-check OK, got ' + fkCheck.recordset.length + ' rows');
+            } catch (fkErr: unknown) {
+               const fkErrMsg = fkErr instanceof Error ? (fkErr as Error).message : String(fkErr);
+               console.log('[DBG-FIELDS] vwForeignKeys pre-check FAILED: ' + fkErrMsg);
+            }
+         }
+const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
          if (newEntityFields.length > 0) {
             const transaction = await pool.beginTransaction();
@@ -2917,6 +2996,7 @@ ORDER BY "EntityID", "Sequence";
                      catch (e) {
                         // this is here so we can catch the error for debug. We want the transaction to die
                         logError(`Error inserting new entity field. SQL: \n${sSQLInsert}`);
+                        if (this.isPostgreSQL) { console.log("[DBG-INSERT-ERR] " + n.EntityName + "." + n.FieldName + " err:" + e); }
                         throw e;
                      }
                   }
@@ -3099,7 +3179,9 @@ ORDER BY "EntityID", "Sequence";
          // evaluate it to see if it is a simple series of OR statements or not, if it is a simple series of OR statements, we can parse the possible values
          // for the field and sync that up with the EntityFieldValue table. If it is not a simple series of OR statements, we will not be able to parse it and we'll
          // just ignore it.
-         const filter = excludeSchemas && excludeSchemas.length > 0 ? ` WHERE SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})` : '';
+         const filter = !this.isPostgreSQL && excludeSchemas && excludeSchemas.length > 0 
+            ? ` WHERE SchemaName NOT IN (${excludeSchemas.map(s => "'" + s + "'").join(',')})`
+            : '';
          const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFieldsWithCheckConstraints')}${filter}`
          const resultResult = await this.runQuery(pool, sSQL);
          const result = resultResult.recordset;
