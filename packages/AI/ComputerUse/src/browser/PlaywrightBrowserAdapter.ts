@@ -45,7 +45,16 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
         this.config = config;
 
-        const { chromium } = await import('playwright');
+        let chromium: Awaited<typeof import('playwright')>['chromium'];
+        try {
+            ({ chromium } = await import('playwright'));
+        } catch {
+            throw new Error(
+                'Playwright is required for browser automation but is not installed. ' +
+                'Install it with: npm install playwright'
+            );
+        }
+
         this.browser = await chromium.launch({
             headless: config.Headless,
             slowMo: config.SlowMo,
