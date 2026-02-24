@@ -1728,6 +1728,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onFilterTextChanged(filterText: string): void {
     this.stateService.setSmartFilterPrompt(filterText);
+    this.filterInput$.next(filterText);
   }
 
   // ========================================
