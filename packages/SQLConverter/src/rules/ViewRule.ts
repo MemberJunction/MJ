@@ -112,11 +112,12 @@ export class ViewRule implements IConversionRule {
     // OUTER APPLY → LEFT JOIN LATERAL
     result = result.replace(/\bOUTER\s+APPLY\b/gi, 'LEFT JOIN LATERAL');
 
-    // Wrap LATERAL function calls: func(args) AS alias → (SELECT * FROM func(args)) AS alias
-    result = result.replace(
-      /(LATERAL)\s+(__mj\."?\w+"?\s*\([^)]*\))\s+(AS\s+"?\w+"?)/gi,
-      '$1 (SELECT * FROM $2) $3'
+    // Wrap LATERAL function calls: func(args) AS alias -> (SELECT * FROM func(args)) AS alias
+    const lateralFuncPattern = new RegExp(
+      `(LATERAL)\\s+(${schema}\\.\"?\\w+\"?\\s*\\([^)]*\\))\\s+(AS\\s+\"?\\w+\"?)`,
+      'gi',
     );
+    result = result.replace(lateralFuncPattern, '$1 (SELECT * FROM $2) $3');
 
     // Add ON TRUE for LEFT JOIN LATERAL that lacks ON clause
     result = this.addLateralOnTrue(result);

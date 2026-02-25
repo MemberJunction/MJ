@@ -4,6 +4,7 @@
  * convert_charindex, convert_stuff, convert_string_concat, convert_iif,
  * convert_top_to_limit, etc.
  */
+import { resolveInlineType } from './TypeResolver.js';
 
 /**
  * Split SQL into segments of code, string literals, and comments.
@@ -543,23 +544,12 @@ export function convertConvertFunction(sql: string): string {
   return sql;
 }
 
-/** Map a T-SQL type name to PostgreSQL for inline CAST/CONVERT usage */
+/**
+ * Map a T-SQL type name to PostgreSQL for inline CAST/CONVERT usage.
+ * Delegates to the centralized TypeResolver for consistent mapping.
+ */
 function mapInlineType(tsqlType: string): string {
-  const upper = tsqlType.toUpperCase().trim();
-  if (upper === 'UNIQUEIDENTIFIER') return 'UUID';
-  if (upper === 'BIT') return 'BOOLEAN';
-  if (/^NVARCHAR\s*\(\s*MAX\s*\)$/i.test(upper)) return 'TEXT';
-  if (/^NVARCHAR\s*\(\s*(\d+)\s*\)$/i.test(upper)) return upper.replace(/^NVARCHAR/i, 'VARCHAR');
-  if (upper === 'NVARCHAR') return 'TEXT';
-  if (/^VARCHAR\s*\(\s*MAX\s*\)$/i.test(upper)) return 'TEXT';
-  if (/^DATETIMEOFFSET/i.test(upper)) return 'TIMESTAMPTZ';
-  if (/^DATETIME/i.test(upper)) return 'TIMESTAMPTZ';
-  if (/^FLOAT/i.test(upper)) return 'DOUBLE PRECISION';
-  if (upper === 'INT') return 'INTEGER';
-  if (upper === 'TINYINT') return 'SMALLINT';
-  if (upper === 'IMAGE') return 'BYTEA';
-  if (upper === 'MONEY') return 'NUMERIC(19,4)';
-  return tsqlType;
+  return resolveInlineType(tsqlType);
 }
 
 /** Remove N' prefix from string literals, but only when preceded by non-alphanumeric */

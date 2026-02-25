@@ -1,17 +1,18 @@
 /**
- * BatchConverter — the main orchestrator for the rule-based conversion pipeline.
+ * BatchConverter -- the main orchestrator for the rule-based conversion pipeline.
  *
- * This is the entry point for converting an entire SQL Server file to PostgreSQL.
- * It replaces the ConversionPipeline's sqlglot-based approach with a rule-based
- * approach ported from the Python conversion script.
+ * Converts SQL files between dialects using a pluggable, rule-based approach.
+ * Header generation is delegated to DialectHeaderBuilder implementations so
+ * each target dialect can provide its own setup preamble.
  *
- * Pipeline: preprocess → split → sub-split → classify → convert → group → postprocess
+ * Pipeline: preprocess -> split -> sub-split -> classify -> convert -> group -> postprocess
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { classifyBatch } from './StatementClassifier.js';
 import { subSplitCompoundBatch } from './SubSplitter.js';
 import { postProcess } from './PostProcessor.js';
+import { getHeaderBuilder } from './DialectHeaderBuilder.js';
 import type {
   IConversionRule, ConversionContext, ConversionStats,
   OutputGroups, StatementType,
@@ -29,33 +30,6 @@ const TRIGGER_TYPES = new Set<StatementType>(['CREATE_TRIGGER']);
 const DATA_TYPES = new Set<StatementType>(['INSERT', 'UPDATE', 'DELETE']);
 const GRANT_TYPES = new Set<StatementType>(['GRANT', 'REVOKE']);
 const COMMENT_TYPES = new Set<StatementType>(['EXTENDED_PROPERTY']);
-
-/** Build PostgreSQL file header with the given schema name */
-function buildPgHeader(schema: string): string {
-  return `-- ============================================================================
--- MemberJunction v5.0 PostgreSQL Baseline
--- Deterministically converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS ${schema};
-SET search_path TO ${schema}, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER → BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only int→bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
-`;
-}
 
 /** Configuration for the batch converter */
 export interface BatchConverterConfig {
@@ -174,7 +148,10 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   const outputParts: string[] = [];
 
   if (includeHeader) {
-    outputParts.push(buildPgHeader(schema));
+    const headerBuilder = getHeaderBuilder(targetDialect);
+    if (headerBuilder) {
+      outputParts.push(headerBuilder.BuildHeader(schema));
+    }
   }
 
   outputParts.push('\n-- ===================== DDL: Tables, PKs, Indexes =====================\n');

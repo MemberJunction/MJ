@@ -539,9 +539,9 @@ describe('convertConvertFunction', () => {
       .toBe('CAST(col AS INTEGER)');
   });
 
-  it('preserves unrecognized types as-is', () => {
+  it('maps DECIMAL to NUMERIC (PostgreSQL equivalent)', () => {
     expect(convertConvertFunction('CONVERT(DECIMAL, col)'))
-      .toBe('CAST(col AS DECIMAL)');
+      .toBe('CAST(col AS NUMERIC)');
   });
 });
 

@@ -13,6 +13,7 @@
   },
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/sql-dialect": "*",
     "@memberjunction/sqlglot-ts": "5.0.0"
   },
   "devDependencies": {

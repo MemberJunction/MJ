@@ -35,8 +35,18 @@ export { GrantRule } from './GrantRule.js';
 export { ExtendedPropertyRule } from './ExtendedPropertyRule.js';
 export { ConditionalDDLRule } from './ConditionalDDLRule.js';
 
-// Rule registry
+// Rule registry (central + T-SQL -> Postgres convenience)
+export { RuleRegistry } from './RuleRegistry.js';
+export type { DialectCombination } from './RuleRegistry.js';
 export { getTSQLToPostgresRules, getRulesForDialects } from './TSQLToPostgresRules.js';
+
+// Dialect header builders
+export { PostgreSQLHeaderBuilder, getHeaderBuilder, registerHeaderBuilder } from './DialectHeaderBuilder.js';
+export type { DialectHeaderBuilder } from './DialectHeaderBuilder.js';
+
+// Centralized type resolution
+export { resolveType, resolveInlineType, parseTypeString } from './TypeResolver.js';
+export type { ParsedType } from './TypeResolver.js';
 
 // Post-processor
 export { postProcess } from './PostProcessor.js';

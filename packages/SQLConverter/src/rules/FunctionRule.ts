@@ -4,6 +4,7 @@ import {
   convertStringConcat, convertTopToLimit, convertIIF,
   removeNPrefix, convertCommonFunctions,
 } from './ExpressionHelpers.js';
+import { resolveType } from './TypeResolver.js';
 
 export class FunctionRule implements IConversionRule {
   Name = 'FunctionRule';
@@ -160,26 +161,12 @@ export class FunctionRule implements IConversionRule {
     return sql;
   }
 
+  /**
+   * Map a T-SQL type to its PostgreSQL equivalent.
+   * Delegates to the centralized TypeResolver.
+   */
   private mapType(typeStr: string): string {
-    const t = typeStr.trim();
-    const tu = t.toUpperCase();
-    if (tu === 'UNIQUEIDENTIFIER') return 'UUID';
-    if (tu === 'BIT') return 'BOOLEAN';
-    if (/^(DATETIME|DATETIME2|DATETIMEOFFSET|SMALLDATETIME)$/i.test(tu)) return 'TIMESTAMPTZ';
-    if (/^NVARCHAR\s*\(\s*MAX\s*\)$/i.test(tu) || /^VARCHAR\s*\(\s*MAX\s*\)$/i.test(tu)) return 'TEXT';
-    const varchar = tu.match(/^N?VARCHAR\s*\(\s*(\d+)\s*\)$/);
-    if (varchar) return `VARCHAR(${varchar[1]})`;
-    if (tu === 'NVARCHAR' || tu === 'VARCHAR') return 'TEXT';
-    if (tu === 'TINYINT') return 'SMALLINT';
-    if (tu === 'INT' || tu === 'INTEGER') return 'INTEGER';
-    if (tu === 'BIGINT') return 'BIGINT';
-    if (tu === 'SMALLINT') return 'SMALLINT';
-    if (/^FLOAT/i.test(tu) || tu === 'REAL') return 'DOUBLE PRECISION';
-    if (/^DECIMAL\s*\(/i.test(tu)) return tu.replace(/^DECIMAL/i, 'NUMERIC');
-    if (tu === 'MONEY') return 'NUMERIC(19,4)';
-    if (tu === 'IMAGE' || /^VARBINARY/i.test(tu)) return 'BYTEA';
-    if (tu === 'XML') return 'XML';
-    return t;
+    return resolveType(typeStr);
   }
 }
 

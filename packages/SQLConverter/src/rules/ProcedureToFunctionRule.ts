@@ -12,6 +12,7 @@ import {
   convertIIF, convertConvertFunction, removeNPrefix, removeCollate,
   convertCommonFunctions, convertStuff,
 } from './ExpressionHelpers.js';
+import { resolveType } from './TypeResolver.js';
 
 export class ProcedureToFunctionRule implements IConversionRule {
   Name = 'ProcedureToFunctionRule';
@@ -135,46 +136,14 @@ export class ProcedureToFunctionRule implements IConversionRule {
   // Type mapping
   // ---------------------------------------------------------------------------
 
+  /**
+   * Map a T-SQL type to its PostgreSQL equivalent.
+   * Delegates to the centralized TypeResolver, with local COLLATE stripping.
+   */
   private mapType(typeStr: string): string {
-    let t = typeStr.trim();
-    let tu = t.toUpperCase();
-
-    // Remove COLLATE clause
-    tu = tu.replace(/\s+COLLATE\s+\S+/gi, '');
-    t = t.replace(/\s+COLLATE\s+\S+/gi, '');
-
-    if (tu === 'UNIQUEIDENTIFIER') return 'UUID';
-    if (tu === 'BIT') return 'BOOLEAN';
-    if (['DATETIME', 'DATETIME2', 'SMALLDATETIME', 'DATETIMEOFFSET'].includes(tu)) return 'TIMESTAMPTZ';
-    if (/^DATETIME2\s*\(\s*\d+\s*\)/.test(tu)) return 'TIMESTAMPTZ';
-    if (/^DATETIMEOFFSET\s*\(\s*\d+\s*\)/.test(tu)) return 'TIMESTAMPTZ';
-    if (['NVARCHAR(MAX)', 'VARCHAR(MAX)', 'NTEXT', 'TEXT'].includes(tu)) return 'TEXT';
-
-    let m = tu.match(/^N?VARCHAR\s*\(\s*(\d+)\s*\)/);
-    if (m) return `VARCHAR(${m[1]})`;
-
-    if (tu === 'NVARCHAR' || tu === 'VARCHAR') return 'TEXT';
-
-    m = tu.match(/^N?CHAR\s*\(\s*(\d+)\s*\)/);
-    if (m) return `CHAR(${m[1]})`;
-
-    if (tu === 'TINYINT') return 'SMALLINT';
-    if (tu === 'INT' || tu === 'INTEGER') return 'INTEGER';
-    if (tu === 'BIGINT') return 'BIGINT';
-    if (tu === 'SMALLINT') return 'SMALLINT';
-    if (tu === 'FLOAT' || tu === 'REAL') return 'DOUBLE PRECISION';
-    if (/^FLOAT\s*\(\s*\d+\s*\)/.test(tu)) return 'DOUBLE PRECISION';
-    if (/^DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)/.test(tu)) return tu.replace('DECIMAL', 'NUMERIC');
-    if (/^NUMERIC\s*\(\s*\d+\s*,\s*\d+\s*\)/.test(tu)) return tu;
-    if (tu === 'MONEY') return 'NUMERIC(19,4)';
-    if (tu === 'SMALLMONEY') return 'NUMERIC(10,4)';
-    if (tu === 'IMAGE' || tu === 'VARBINARY(MAX)') return 'BYTEA';
-    if (/^VARBINARY\s*\(\s*\d+\s*\)/.test(tu)) return 'BYTEA';
-    if (tu === 'XML') return 'XML';
-    if (tu === 'SQL_VARIANT') return 'TEXT';
-    if (tu === 'HIERARCHYID') return 'TEXT';
-
-    return t; // Return as-is if unknown
+    // Strip COLLATE clause before resolving
+    const cleaned = typeStr.trim().replace(/\s+COLLATE\s+\S+/gi, '');
+    return resolveType(cleaned);
   }
 
   // ---------------------------------------------------------------------------

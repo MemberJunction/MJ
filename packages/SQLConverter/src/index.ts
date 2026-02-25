@@ -21,6 +21,10 @@ export {
   subSplitCompoundBatch,
   getTSQLToPostgresRules,
   getRulesForDialects,
+  RuleRegistry,
+  PostgreSQLHeaderBuilder,
+  getHeaderBuilder,
+  registerHeaderBuilder,
   convertFile,
   printReport,
   postProcess,
@@ -49,6 +53,9 @@ export {
   CreateIndexRule,
   GrantRule,
   ExtendedPropertyRule,
+  resolveType,
+  resolveInlineType,
+  parseTypeString,
 } from './rules/index.js';
 export type {
   IConversionRule,
@@ -58,4 +65,7 @@ export type {
   StatementType,
   BatchConverterConfig,
   BatchConverterResult,
+  DialectCombination,
+  DialectHeaderBuilder,
+  ParsedType,
 } from './rules/index.js';
