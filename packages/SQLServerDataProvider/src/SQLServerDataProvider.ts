@@ -2141,7 +2141,6 @@ export class SQLServerDataProvider
     }
 
     // Execute in chunks of MAX_BATCH_SIZE
-    let recordsetOffset = 0;
     for (let chunkStart = 0; chunkStart < allSQL.length; chunkStart += SQLServerDataProvider.MAX_BATCH_SIZE) {
       const chunkEnd = Math.min(chunkStart + SQLServerDataProvider.MAX_BATCH_SIZE, allSQL.length);
       const chunkSQL = allSQL.slice(chunkStart, chunkEnd);
@@ -2185,8 +2184,6 @@ export class SQLServerDataProvider
         );
         results.set(index, viewResult);
       }
-
-      recordsetOffset += chunkSQL.length;
     }
   }
 
