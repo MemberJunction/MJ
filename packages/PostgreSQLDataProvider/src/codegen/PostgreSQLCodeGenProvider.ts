@@ -6,8 +6,14 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    configInfo,
+    logError,
+    logWarning,
+    logIf,
 } from '@memberjunction/codegen-lib';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { spawn } from 'child_process';
+import path from 'path';
 
 const pgDialect = new PostgreSQLDialect();
 
@@ -622,6 +628,305 @@ END $$;
         };
     }
 
+    // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
+
+    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[]): string {
+        const qualifiedName = pgDialect.QuoteSchema(schema, routineName);
+        const paramList = params.join(', ');
+        return `SELECT * FROM ${qualifiedName}(${paramList})`;
+    }
+
+    // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
+
+    conditionalInsertSQL(checkQuery: string, insertSQL: string): string {
+        return `DO $$ BEGIN\n   IF NOT EXISTS (${checkQuery}) THEN\n      ${insertSQL};\n   END IF;\nEND $$`;
+    }
+
+    wrapInsertWithConflictGuard(_conflictCheckSQL: string): { prefix: string; suffix: string } {
+        return { prefix: '', suffix: 'ON CONFLICT DO NOTHING' };
+    }
+
+    // ─── METADATA MANAGEMENT: DDL OPERATIONS ─────────────────────────
+
+    addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string {
+        const table = pgDialect.QuoteSchema(schema, tableName);
+        const col = pgDialect.QuoteIdentifier(columnName);
+        const nullClause = nullable ? 'NULL' : 'NOT NULL';
+        const defaultClause = defaultExpression ? ` DEFAULT ${defaultExpression}` : '';
+        return `ALTER TABLE ${table} ADD COLUMN ${col} ${dataType} ${nullClause}${defaultClause}`;
+    }
+
+    alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string {
+        const table = pgDialect.QuoteSchema(schema, tableName);
+        const col = pgDialect.QuoteIdentifier(columnName);
+        const nullAction = nullable ? 'DROP NOT NULL' : 'SET NOT NULL';
+        return `ALTER TABLE ${table} ALTER COLUMN ${col} TYPE ${dataType}, ALTER COLUMN ${col} ${nullAction}`;
+    }
+
+    addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string {
+        const table = pgDialect.QuoteSchema(schema, tableName);
+        const col = pgDialect.QuoteIdentifier(columnName);
+        return `ALTER TABLE ${table} ALTER COLUMN ${col} SET DEFAULT ${defaultExpression}`;
+    }
+
+    dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string {
+        const table = pgDialect.QuoteSchema(schema, tableName);
+        const col = pgDialect.QuoteIdentifier(columnName);
+        return `
+DO $$
+DECLARE
+   v_constraint_name TEXT;
+BEGIN
+   SELECT con.conname INTO v_constraint_name
+   FROM pg_catalog.pg_constraint con
+   JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+   JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+   JOIN pg_catalog.pg_attribute att ON att.attrelid = rel.oid AND att.attnum = ANY(con.conkey)
+   WHERE nsp.nspname = '${schema}'
+     AND rel.relname = '${tableName}'
+     AND att.attname = '${columnName}'
+     AND con.contype = 'c';
+
+   IF v_constraint_name IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', '${schema}', '${tableName}', v_constraint_name);
+   END IF;
+
+   -- Also drop any column default
+   ALTER TABLE ${table} ALTER COLUMN ${col} DROP DEFAULT;
+END $$`;
+    }
+
+    dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string {
+        // PostgreSQL uses FUNCTION for both procedures and functions in DROP statements
+        const typeStr = objectType === 'PROCEDURE' ? 'FUNCTION' : objectType;
+        const qualifiedName = pgDialect.QuoteSchema(schema, name);
+        const cascade = (objectType === 'PROCEDURE' || objectType === 'FUNCTION') ? ' CASCADE' : '';
+        return `DROP ${typeStr} IF EXISTS ${qualifiedName}${cascade}`;
+    }
+
+    // ─── METADATA MANAGEMENT: VIEW INTROSPECTION ─────────────────────
+
+    getViewExistsSQL(): string {
+        return `SELECT 1 FROM information_schema.views WHERE table_name = @ViewName AND table_schema = @SchemaName`;
+    }
+
+    getViewColumnsSQL(schema: string, viewName: string): string {
+        return `SELECT
+    column_name AS "FieldName",
+    data_type AS "Type",
+    COALESCE(character_maximum_length, 0) AS "Length",
+    COALESCE(numeric_precision, 0) AS "Precision",
+    COALESCE(numeric_scale, 0) AS "Scale",
+    CASE WHEN is_nullable = 'YES' THEN 1 ELSE 0 END AS "AllowsNull"
+FROM information_schema.columns
+WHERE table_schema = '${schema}'
+  AND table_name = '${viewName}'
+ORDER BY ordinal_position`;
+    }
+
+    // ─── METADATA MANAGEMENT: TYPE SYSTEM ────────────────────────────
+
+    get TimestampType(): string {
+        return 'TIMESTAMPTZ';
+    }
+
+    compareDataTypes(reported: string, expected: string): boolean {
+        if (reported === expected) return true;
+        const aliases: Record<string, string> = {
+            'timestamptz': 'timestamp with time zone',
+            'timestamp with time zone': 'timestamptz',
+        };
+        return aliases[reported] === expected;
+    }
+
+    // ─── METADATA MANAGEMENT: PLATFORM CONFIGURATION ─────────────────
+
+    getSystemSchemasToExclude(): string[] {
+        return ['information_schema', 'pg_catalog', 'pg_toast', 'pg_temp_1', 'pg_toast_temp_1'];
+    }
+
+    get NeedsViewRefresh(): boolean {
+        return false;
+    }
+
+    generateViewRefreshSQL(_schema: string, _viewName: string): string {
+        return '';
+    }
+
+    generateViewTestQuerySQL(schema: string, viewName: string): string {
+        return `SELECT * FROM ${pgDialect.QuoteSchema(schema, viewName)} LIMIT 1`;
+    }
+
+    get NeedsVirtualFieldNullabilityFix(): boolean {
+        return true;
+    }
+
+    // ─── METADATA MANAGEMENT: SQL QUOTING ────────────────────────────
+
+    /**
+     * SQL keywords that should NOT be quoted even when they match PascalCase patterns.
+     */
+    private static readonly _SQL_KEYWORDS = new Set([
+        // DML/DDL keywords
+        'SELECT', 'INSERT', 'INTO', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'NOT',
+        'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'ON', 'AS', 'SET',
+        'VALUES', 'NULL', 'LIKE', 'IN', 'EXISTS', 'BETWEEN', 'CASE', 'WHEN', 'THEN',
+        'ELSE', 'END', 'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION',
+        'ALL', 'CREATE', 'ALTER', 'DROP', 'TABLE', 'INDEX', 'VIEW', 'EXEC', 'DECLARE',
+        'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'TRUE', 'FALSE', 'IS', 'ASC', 'DESC',
+        'DISTINCT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CONSTRAINT', 'DEFAULT',
+        'IF', 'OBJECT', 'TOP', 'WITH', 'OVER', 'PARTITION', 'ROW_NUMBER', 'RANK',
+        'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE', 'ROWS', 'RANGE',
+        'PRECEDING', 'FOLLOWING', 'UNBOUNDED', 'CURRENT', 'ROW', 'FETCH', 'NEXT', 'ONLY',
+        'SCHEMA', 'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'TRIGGER', 'FUNCTION', 'PROCEDURE',
+        'RETURNS', 'RETURN', 'EXECUTE', 'CALL', 'RAISE', 'NOTICE', 'EXCEPTION', 'PERFORM',
+        'GRANT', 'REVOKE', 'TO', 'USAGE', 'PRIVILEGES', 'OWNER',
+        // DDL sub-keywords
+        'ADD', 'COLUMN', 'DO', 'RENAME', 'COMMENT', 'UNIQUE', 'CHECK',
+        'CONFLICT', 'NOTHING', 'EXCLUDED', 'ZONE', 'AT', 'FOR', 'EACH', 'OF',
+        'BEFORE', 'AFTER', 'INSTEAD', 'USING', 'ANY', 'SOME',
+        'ENABLE', 'DISABLE', 'GENERATED', 'ALWAYS', 'IDENTITY',
+        'SECURITY', 'DEFINER', 'INVOKER', 'FORCE', 'COPY',
+        'TEMPORARY', 'TEMP', 'RECURSIVE', 'MATERIALIZED', 'CONCURRENTLY',
+        // PL/pgSQL control flow
+        'NEW', 'OLD', 'FOUND', 'LOOP', 'WHILE', 'EXIT', 'CONTINUE',
+        'ELSIF', 'ELSEIF', 'STRICT',
+        // SQL Server types
+        'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
+        'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',
+        'BIT', 'INT', 'TEXT', 'NTEXT', 'IMAGE', 'BINARY', 'VARBINARY', 'CHAR', 'NCHAR',
+        'XML', 'GEOGRAPHY', 'GEOMETRY', 'HIERARCHYID', 'SQL_VARIANT', 'SYSNAME',
+        'NEWSEQUENTIALID', 'NEWID', 'GETUTCDATE', 'GETDATE', 'SYSDATETIMEOFFSET',
+        'OBJECT_ID', 'SCOPE_IDENTITY',
+        // Aggregate / scalar functions
+        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
+        'LEN', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
+        'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
+        'DATEADD', 'DATEDIFF', 'DATEPART', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE',
+        'SECOND', 'NOW', 'CURRENT_TIMESTAMP',
+        // PostgreSQL specific
+        'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'UUID', 'JSONB', 'JSON', 'ARRAY', 'TIMESTAMPTZ',
+        'TIMESTAMP', 'DATE', 'TIME', 'INTERVAL', 'CITEXT', 'INET', 'MACADDR',
+        'GEN_RANDOM_UUID', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TO_NUMBER',
+        'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
+        'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',
+        'INOUT', 'OUT', 'VARIADIC', 'PARALLEL', 'SAFE', 'UNSAFE',
+        // information_schema column names
+        'TABLE_SCHEMA', 'TABLE_NAME', 'TABLE_CATALOG', 'COLUMN_NAME', 'DATA_TYPE',
+        'IS_NULLABLE', 'COLUMN_DEFAULT', 'CHARACTER_MAXIMUM_LENGTH', 'NUMERIC_PRECISION',
+        'NUMERIC_SCALE', 'ORDINAL_POSITION', 'COLUMN_COMMENT',
+        // MJ SQL constructs
+        'INFORMATION_SCHEMA', 'COLUMNS', 'TABLES', 'ROUTINES',
+    ]);
+
+    /**
+     * Quotes mixed-case identifiers in a SQL string for PostgreSQL compatibility.
+     * Uses a tokenizer approach to skip string literals, already-quoted identifiers,
+     * dollar-quoted blocks, and SQL keywords. Any remaining PascalCase word gets
+     * double-quoted to preserve case.
+     */
+    quoteSQLForExecution(sql: string): string {
+        const result: string[] = [];
+        let i = 0;
+        const len = sql.length;
+
+        while (i < len) {
+            const ch = sql[i];
+
+            if (ch === "'") {
+                i = this.skipSingleQuotedString(sql, i, len, result);
+                continue;
+            }
+            if (ch === '$') {
+                i = this.skipDollarQuotedBlock(sql, i, len, result);
+                continue;
+            }
+            if (ch === '"') {
+                i = this.skipDoubleQuotedIdentifier(sql, i, len, result);
+                continue;
+            }
+            if (ch === '[') {
+                i = this.skipBracketedIdentifier(sql, i, len, result);
+                continue;
+            }
+            if (ch === '@') {
+                i = this.skipAtParameter(sql, i, len, result);
+                continue;
+            }
+            if (/[a-zA-Z_]/.test(ch)) {
+                i = this.processWord(sql, i, len, result);
+                continue;
+            }
+
+            result.push(ch);
+            i++;
+        }
+
+        return result.join('');
+    }
+
+    // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
+
+    parseColumnDefaultValue(sqlDefaultValue: string): string | null {
+        if (sqlDefaultValue === null || sqlDefaultValue === undefined) {
+            return null;
+        }
+
+        let sResult = sqlDefaultValue;
+
+        // Strip type casts like '2024-01-01'::timestamp, 'value'::character varying
+        const castMatch = sResult.match(/^'(.*)'::.*$/);
+        if (castMatch) {
+            sResult = castMatch[1];
+        }
+
+        // Strip nextval('...') for auto-increment sequences - treated as no default
+        if (sResult.match(/^nextval\(/i)) {
+            return null;
+        }
+
+        return sResult;
+    }
+
+    // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
+
+    getPendingEntityFieldsSQL(mjCoreSchema: string): string {
+        const qs = pgDialect.QuoteSchema.bind(pgDialect);
+        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs);
+    }
+
+    getCheckConstraintsSchemaFilter(_excludeSchemas: string[]): string {
+        // PostgreSQL view already handles schema filtering
+        return '';
+    }
+
+    getEntitiesWithMissingBaseTablesFilter(): string {
+        // PostgreSQL query doesn't need this filter
+        return '';
+    }
+
+    getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string {
+        const qs = pgDialect.QuoteSchema.bind(pgDialect);
+        return this.buildFixVirtualFieldNullabilityUpdateSQL(mjCoreSchema, qs);
+    }
+
+    // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
+
+    async executeSQLFileViaShell(filePath: string): Promise<boolean> {
+        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
+        const pgPort = process.env.PG_PORT ?? String(configInfo.dbPort ?? 5432);
+        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
+        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
+        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
+
+        if (!pgUser || !pgPassword || !pgDatabase) {
+            throw new Error('PostgreSQL user, password, and database must be provided in the configuration or environment variables');
+        }
+
+        const absoluteFilePath = path.resolve(process.cwd(), filePath);
+        return this.executePsqlCommand(absoluteFilePath, pgHost, pgPort, pgUser, pgDatabase, pgPassword);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // PRIVATE HELPERS
     // ═══════════════════════════════════════════════════════════════════════
@@ -941,5 +1246,328 @@ END $$;
     WHERE schemaname = '${schema}'
       AND tablename = '${tableName}'
       AND indexname = '${indexName}'`;
+    }
+
+    // ─── TOKENIZER HELPERS (for quoteSQLForExecution) ────────────────
+
+    /** Skips a single-quoted string literal, handling escaped quotes ('') */
+    private skipSingleQuotedString(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len) {
+            if (sql[j] === "'" && j + 1 < len && sql[j + 1] === "'") {
+                j += 2;
+            } else if (sql[j] === "'") {
+                j++;
+                break;
+            } else {
+                j++;
+            }
+        }
+        result.push(sql.substring(start, j));
+        return j;
+    }
+
+    /** Skips a dollar-quoted block ($$ ... $$ or $tag$ ... $tag$) */
+    private skipDollarQuotedBlock(sql: string, start: number, len: number, result: string[]): number {
+        let tagEnd = start + 1;
+        if (tagEnd < len && sql[tagEnd] === '$') {
+            // Simple $$ tag
+            tagEnd = start + 2;
+        } else {
+            // Look for $identifier$ pattern
+            while (tagEnd < len && /[a-zA-Z0-9_]/.test(sql[tagEnd])) tagEnd++;
+            if (tagEnd < len && sql[tagEnd] === '$') {
+                tagEnd++;
+            } else {
+                // Not a dollar-quote, just a $ character
+                result.push(sql[start]);
+                return start + 1;
+            }
+        }
+        const tag = sql.substring(start, tagEnd);
+        const closePos = sql.indexOf(tag, tagEnd);
+        if (closePos !== -1) {
+            const blockEnd = closePos + tag.length;
+            result.push(sql.substring(start, blockEnd));
+            return blockEnd;
+        }
+        // No closing tag found, pass through rest of string
+        result.push(sql.substring(start));
+        return len;
+    }
+
+    /** Skips an already double-quoted identifier */
+    private skipDoubleQuotedIdentifier(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len && sql[j] !== '"') j++;
+        if (j < len) j++;
+        result.push(sql.substring(start, j));
+        return j;
+    }
+
+    /** Skips a square-bracketed identifier (SQL Server style) */
+    private skipBracketedIdentifier(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len && sql[j] !== ']') j++;
+        if (j < len) j++;
+        result.push(sql.substring(start, j));
+        return j;
+    }
+
+    /** Skips an @-prefixed parameter */
+    private skipAtParameter(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
+        result.push(sql.substring(start, j));
+        return j;
+    }
+
+    /** Processes a word token - quotes it if it's a PascalCase identifier, not a keyword */
+    private processWord(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
+        const word = sql.substring(start, j);
+
+        const isKeyword = PostgreSQLCodeGenProvider._SQL_KEYWORDS.has(word.toUpperCase());
+        const startsUpper = /^[A-Z]/.test(word);
+        const isAllLower = word === word.toLowerCase();
+        const isMJInternal = word.startsWith('__mj_');
+
+        if (!isKeyword && !isAllLower && !isMJInternal && startsUpper) {
+            result.push(pgDialect.QuoteIdentifier(word));
+        } else {
+            result.push(word);
+        }
+        return j;
+    }
+
+    // ─── COMPLEX SQL GENERATION HELPERS ──────────────────────────────
+
+    /**
+     * Builds the full pending entity fields query for PostgreSQL.
+     * Uses CTEs for FK, PK, and UK caches, then joins against entity metadata
+     * to find fields that exist in the database but not in MJ metadata.
+     */
+    private buildPendingEntityFieldsQuery(
+        schema: string,
+        qs: (schema: string, name: string) => string
+    ): string {
+        return `
+WITH fk_cache AS (
+   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema"
+   FROM ${qs(schema, 'vwForeignKeys')}
+),
+pk_cache AS (
+   SELECT "TableName", "ColumnName", "SchemaName"
+   FROM ${qs(schema, 'vwTablePrimaryKeys')}
+),
+uk_cache AS (
+   SELECT "TableName", "ColumnName", "SchemaName"
+   FROM ${qs(schema, 'vwTableUniqueKeys')}
+),
+max_sequences AS (
+   SELECT
+      "EntityID",
+      COALESCE(MAX("Sequence"), 0) AS "MaxSequence"
+   FROM
+      ${qs(schema, 'EntityField')}
+   GROUP BY
+      "EntityID"
+),
+numbered_rows AS (
+   SELECT
+      sf."EntityID",
+      COALESCE(ms."MaxSequence", 0) + 100000 + sf."Sequence" AS "Sequence",
+      sf."FieldName",
+      sf."Description",
+      sf."Type",
+      sf."Length",
+      sf."Precision",
+      sf."Scale",
+      sf."AllowsNull",
+      sf."DefaultValue",
+      sf."AutoIncrement",
+      ${this.buildAllowUpdateAPICase()},
+      sf."IsVirtual",
+      e."RelationshipDefaultDisplayType",
+      e."Name" AS "EntityName",
+      re."ID" AS "RelatedEntityID",
+      fk."referenced_column" AS "RelatedEntityFieldName",
+      CASE WHEN sf."FieldName" = 'Name' THEN 1 ELSE 0 END AS "IsNameField",
+      CASE WHEN pk."ColumnName" IS NOT NULL THEN 1 ELSE 0 END AS "IsPrimaryKey",
+      CASE
+            WHEN pk."ColumnName" IS NOT NULL THEN 1
+            WHEN uk."ColumnName" IS NOT NULL THEN 1
+            ELSE 0
+      END AS "IsUnique",
+      ROW_NUMBER() OVER (PARTITION BY sf."EntityID", sf."FieldName" ORDER BY (SELECT NULL)) AS rn
+   FROM
+      ${qs(schema, 'vwSQLColumnsAndEntityFields')} sf
+   LEFT OUTER JOIN
+      max_sequences ms ON sf."EntityID" = ms."EntityID"
+   LEFT OUTER JOIN
+      ${qs(schema, 'Entity')} e ON sf."EntityID" = e."ID"
+   LEFT OUTER JOIN
+      fk_cache fk ON sf."FieldName" = fk."column" AND e."BaseTable" = fk."table" AND e."SchemaName" = fk."schema_name"
+   LEFT OUTER JOIN
+      ${qs(schema, 'Entity')} re ON re."BaseTable" = fk."referenced_table" AND re."SchemaName" = fk."referenced_schema"
+   LEFT OUTER JOIN
+      pk_cache pk ON e."BaseTable" = pk."TableName" AND sf."FieldName" = pk."ColumnName" AND e."SchemaName" = pk."SchemaName"
+   LEFT OUTER JOIN
+      uk_cache uk ON e."BaseTable" = uk."TableName" AND sf."FieldName" = uk."ColumnName" AND e."SchemaName" = uk."SchemaName"
+   WHERE
+      "EntityFieldID" IS NULL
+)
+SELECT *
+FROM numbered_rows
+WHERE rn = 1
+ORDER BY "EntityID", "Sequence";
+`;
+    }
+
+    /**
+     * Builds the CASE expression for AllowUpdateAPI in the pending entity fields query.
+     */
+    private buildAllowUpdateAPICase(): string {
+        return `CASE WHEN sf."IsVirtual" = true THEN 0
+           WHEN sf."FieldName" = '${EntityInfo.CreatedAtFieldName}' THEN 0
+           WHEN sf."FieldName" = '${EntityInfo.UpdatedAtFieldName}' THEN 0
+           WHEN sf."FieldName" = '${EntityInfo.DeletedAtFieldName}' THEN 0
+           WHEN pk."ColumnName" IS NOT NULL THEN 0
+           ELSE 1
+      END AS "AllowUpdateAPI"`;
+    }
+
+    /**
+     * Builds the UPDATE SQL to fix virtual field nullability.
+     * Updates AllowsNull for virtual fields based on the FK column's nullability.
+     */
+    private buildFixVirtualFieldNullabilityUpdateSQL(
+        mjCoreSchema: string,
+        qs: (schema: string, name: string) => string
+    ): string {
+        return `
+UPDATE ${qs(mjCoreSchema, 'EntityField')} vf
+SET "AllowsNull" = fk."AllowsNull"
+FROM ${qs(mjCoreSchema, 'EntityField')} fk
+WHERE vf."IsVirtual" = true
+  AND fk."IsVirtual" = false
+  AND vf."EntityID" = fk."EntityID"
+  AND fk."RelatedEntityID" IS NOT NULL
+  AND (
+     (LENGTH(fk."Name") > 2
+      AND LOWER(vf."Name") = LOWER(LEFT(fk."Name", LENGTH(fk."Name") - 2)))
+     OR
+     (LENGTH(fk."Name") > 2
+      AND LOWER(vf."Name") = LOWER(LEFT(fk."Name", LENGTH(fk."Name") - 2) || '_Virtual'))
+     OR
+     (fk."RelatedEntityNameFieldMap" IS NOT NULL
+      AND fk."RelatedEntityNameFieldMap" != ''
+      AND LOWER(vf."Name") = LOWER(fk."RelatedEntityNameFieldMap"))
+  )
+  AND vf."AllowsNull" != fk."AllowsNull"`;
+    }
+
+    // ─── SHELL EXECUTION HELPERS ─────────────────────────────────────
+
+    /**
+     * Executes a SQL file using the psql CLI.
+     */
+    private async executePsqlCommand(
+        absoluteFilePath: string,
+        pgHost: string,
+        pgPort: string,
+        pgUser: string,
+        pgDatabase: string,
+        pgPassword: string
+    ): Promise<boolean> {
+        const args = [
+            '-h', pgHost,
+            '-p', pgPort,
+            '-U', pgUser,
+            '-d', pgDatabase,
+            '-v', 'ON_ERROR_STOP=1',
+            '-f', absoluteFilePath,
+        ];
+
+        logIf(configInfo.verboseOutput, `Executing SQL file (psql): ${absoluteFilePath} as ${pgUser}@${pgHost}:${pgPort}/${pgDatabase}`);
+
+        try {
+            const result = await this.spawnPsql(args, pgPassword);
+            this.logPsqlOutput(result.stdout, result.stderr);
+            return true;
+        } catch (e: unknown) {
+            this.logPsqlError(e, pgPassword);
+            return false;
+        }
+    }
+
+    /**
+     * Spawns a psql child process and returns its output.
+     */
+    private spawnPsql(args: string[], pgPassword: string): Promise<{ stdout: string; stderr: string }> {
+        return new Promise((resolve, reject) => {
+            const child = spawn('psql', args, {
+                shell: false,
+                env: { ...process.env, PGPASSWORD: pgPassword },
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            child.stdout?.on('data', (data: Buffer) => {
+                stdout += data.toString();
+            });
+            child.stderr?.on('data', (data: Buffer) => {
+                stderr += data.toString();
+            });
+            child.on('error', (error: Error) => {
+                reject(error);
+            });
+            child.on('close', (code: number | null) => {
+                if (code === 0) {
+                    resolve({ stdout, stderr });
+                } else {
+                    const error = new Error(`psql exited with code ${code}`);
+                    Object.assign(error, { stdout, stderr, code });
+                    reject(error);
+                }
+            });
+        });
+    }
+
+    /**
+     * Logs psql stdout/stderr output, filtering out informational NOTICE messages.
+     */
+    private logPsqlOutput(stdout: string, stderr: string): void {
+        if (stdout && stdout.trim().length > 0) {
+            logIf(configInfo.verboseOutput, `PostgreSQL output: ${stdout.trim()}`);
+        }
+        if (stderr && stderr.trim().length > 0) {
+            const nonNoticeLines = stderr.split('\n').filter(
+                (l: string) => !l.trim().startsWith('NOTICE:') && !l.trim().startsWith('psql:') && l.trim().length > 0
+            );
+            if (nonNoticeLines.length > 0) {
+                logWarning(`PostgreSQL stderr: ${nonNoticeLines.join('\n')}`);
+            }
+        }
+    }
+
+    /**
+     * Logs psql execution errors with password masking.
+     */
+    private logPsqlError(e: unknown, pgPassword: string): void {
+        let message = (e instanceof Error) ? e.message : String(e);
+
+        const errRecord = e as Record<string, unknown>;
+        if (errRecord.stdout) {
+            message += `\n PostgreSQL output: ${errRecord.stdout}`;
+        }
+        if (errRecord.stderr) {
+            message += `\n PostgreSQL error: ${errRecord.stderr}`;
+        }
+
+        const errorMessage = pgPassword ? message.replace(pgPassword, 'XXXXX') : message;
+        logError('Error executing PostgreSQL SQL file: ' + errorMessage);
     }
 }

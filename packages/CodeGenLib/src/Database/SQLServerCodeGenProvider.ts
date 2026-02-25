@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, CodeNameFromString } from '@memberjunction/core';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -7,7 +7,13 @@ import {
     FullTextSearchResult,
 } from './codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { sortBySequenceAndCreatedAt } from '../Misc/util';
+import { logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
+import { configInfo } from '../Config/config';
+import { sqlConfig } from '../Config/db-connection';
+import { logError, logMessage, logWarning } from '../Misc/status_logging';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync, spawn } from 'child_process';
 
 const ssDialect = new SQLServerDialect();
 
@@ -931,7 +937,477 @@ GO
     getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string {
         return `SELECT 1
     FROM sys.indexes
-    WHERE name = '${indexName}' 
+    WHERE name = '${indexName}'
     AND object_id = OBJECT_ID('[${schema}].[${tableName}]')`;
+    }
+
+    // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
+
+    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[]): string {
+        const qualifiedName = `[${schema}].[${routineName}]`;
+        if (!params || params.length === 0) {
+            return `EXEC ${qualifiedName}`;
+        }
+        const paramParts = params.map((val, i) => {
+            if (paramNames && paramNames[i]) {
+                return `@${paramNames[i]}=${val}`;
+            }
+            return val;
+        });
+        return `EXEC ${qualifiedName} ${paramParts.join(', ')}`;
+    }
+
+    // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
+
+    conditionalInsertSQL(checkQuery: string, insertSQL: string): string {
+        return `IF NOT EXISTS (\n      ${checkQuery}\n   )\n   BEGIN\n      ${insertSQL}\n   END`;
+    }
+
+    wrapInsertWithConflictGuard(conflictCheckSQL: string): { prefix: string; suffix: string } {
+        return {
+            prefix: `IF NOT EXISTS (${conflictCheckSQL}) BEGIN`,
+            suffix: `END`
+        };
+    }
+
+    // ─── METADATA MANAGEMENT: DDL OPERATIONS ─────────────────────────
+
+    addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string {
+        const nullClause = nullable ? 'NULL' : 'NOT NULL';
+        const defaultClause = defaultExpression ? ` DEFAULT ${defaultExpression}` : '';
+        return `ALTER TABLE [${schema}].[${tableName}] ADD ${columnName} ${dataType} ${nullClause}${defaultClause}`;
+    }
+
+    alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string {
+        const nullClause = nullable ? 'NULL' : 'NOT NULL';
+        return `ALTER TABLE [${schema}].[${tableName}] ALTER COLUMN ${columnName} ${dataType} ${nullClause}`;
+    }
+
+    addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string {
+        const constraintName = `DF_${schema}_${CodeNameFromString(tableName)}_${columnName}`;
+        return `ALTER TABLE [${schema}].[${tableName}] ADD CONSTRAINT ${constraintName} DEFAULT ${defaultExpression} FOR [${columnName}]`;
+    }
+
+    dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string {
+        return `DECLARE @constraintName NVARCHAR(255);
+
+SELECT @constraintName = d.name
+FROM sys.tables t
+JOIN sys.schemas s ON t.schema_id = s.schema_id
+JOIN sys.columns c ON t.object_id = c.object_id
+JOIN sys.default_constraints d ON c.default_object_id = d.object_id
+WHERE s.name = '${schema}'
+AND t.name = '${tableName}'
+AND c.name = '${columnName}';
+
+IF @constraintName IS NOT NULL
+BEGIN
+    EXEC('ALTER TABLE [${schema}].[${tableName}] DROP CONSTRAINT ' + @constraintName);
+END`;
+    }
+
+    dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string {
+        const typeCode = objectType === 'PROCEDURE' ? 'P' : objectType === 'VIEW' ? 'V' : 'FN';
+        return `IF OBJECT_ID('[${schema}].[${name}]', '${typeCode}') IS NOT NULL\n    DROP ${objectType} [${schema}].[${name}]`;
+    }
+
+    // ─── METADATA MANAGEMENT: VIEW INTROSPECTION ─────────────────────
+
+    getViewExistsSQL(): string {
+        return `SELECT 1 FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = @ViewName AND TABLE_SCHEMA = @SchemaName`;
+    }
+
+    getViewColumnsSQL(schema: string, viewName: string): string {
+        return `SELECT
+    c.name AS FieldName,
+    t.name AS Type,
+    c.max_length AS Length,
+    c.precision AS Precision,
+    c.scale AS Scale,
+    c.is_nullable AS AllowsNull
+FROM
+    sys.columns c
+INNER JOIN
+    sys.types t ON c.user_type_id = t.user_type_id
+INNER JOIN
+    sys.views v ON c.object_id = v.object_id
+INNER JOIN
+    sys.schemas s ON v.schema_id = s.schema_id
+WHERE
+    s.name = '${schema}'
+    AND v.name = '${viewName}'
+ORDER BY
+    c.column_id`;
+    }
+
+    // ─── METADATA MANAGEMENT: TYPE SYSTEM ────────────────────────────
+
+    get TimestampType(): string {
+        return 'DATETIMEOFFSET';
+    }
+
+    compareDataTypes(reported: string, expected: string): boolean {
+        return reported.trim().toLowerCase() === expected.trim().toLowerCase();
+    }
+
+    // ─── METADATA MANAGEMENT: PLATFORM CONFIGURATION ─────────────────
+
+    getSystemSchemasToExclude(): string[] {
+        return [];
+    }
+
+    get NeedsViewRefresh(): boolean {
+        return true;
+    }
+
+    generateViewRefreshSQL(schema: string, viewName: string): string {
+        return `EXEC sp_refreshview '${schema}.${viewName}';`;
+    }
+
+    generateViewTestQuerySQL(schema: string, viewName: string): string {
+        return `SELECT TOP 1 * FROM [${schema}].[${viewName}]`;
+    }
+
+    get NeedsVirtualFieldNullabilityFix(): boolean {
+        return false;
+    }
+
+    // ─── METADATA MANAGEMENT: SQL QUOTING ────────────────────────────
+
+    quoteSQLForExecution(sql: string): string {
+        return sql;
+    }
+
+    // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
+
+    parseColumnDefaultValue(sqlDefaultValue: string): string | null {
+        if (sqlDefaultValue === null || sqlDefaultValue === undefined) {
+            return null;
+        }
+        let result = this.stripWrappingParentheses(sqlDefaultValue);
+        result = this.stripNPrefixQuotes(result);
+        result = this.stripSingleQuotes(result);
+        return result;
+    }
+
+    /**
+     * Strips wrapping parentheses from a SQL Server default value.
+     * Example: `(getdate())` becomes `getdate()`, `((1))` becomes `(1)`.
+     */
+    private stripWrappingParentheses(value: string): string {
+        if (value.startsWith('(') && value.endsWith(')')) {
+            return value.substring(1, value.length - 1);
+        }
+        return value;
+    }
+
+    /**
+     * Strips the N'' prefix from a SQL Server Unicode string literal.
+     * Example: `N'SomeValue'` becomes `SomeValue`.
+     */
+    private stripNPrefixQuotes(value: string): string {
+        if (value.toUpperCase().startsWith("N'") && value.endsWith("'")) {
+            return value.substring(2, value.length - 1);
+        }
+        return value;
+    }
+
+    /**
+     * Strips surrounding single quotes from a value.
+     * Example: `'SomeValue'` becomes `SomeValue`.
+     */
+    private stripSingleQuotes(value: string): string {
+        if (value.startsWith("'") && value.endsWith("'")) {
+            return value.substring(1, value.length - 1);
+        }
+        return value;
+    }
+
+    // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
+
+    getPendingEntityFieldsSQL(mjCoreSchema: string): string {
+        return this.buildPendingFieldsTempTables(mjCoreSchema) +
+            this.buildPendingFieldsMainQuery(mjCoreSchema) +
+            this.buildPendingFieldsCleanup();
+    }
+
+    /**
+     * Builds the temp table materialization statements for the pending entity fields query.
+     * Materializes system DMV views into temp tables for optimal SQL Server query plan statistics.
+     */
+    private buildPendingFieldsTempTables(schema: string): string {
+        return `
+-- Materialize system DMV views into temp tables so SQL Server gets real statistics
+-- instead of expanding nested view-on-view joins with bad cardinality estimates
+-- Drop first in case a prior run on this connection left them behind
+IF OBJECT_ID('tempdb..#__mj__CodeGen__vwForeignKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwForeignKeys;
+IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTablePrimaryKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTablePrimaryKeys;
+IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTableUniqueKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
+
+SELECT [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
+INTO #__mj__CodeGen__vwForeignKeys
+FROM [${schema}].[vwForeignKeys];
+
+SELECT TableName, ColumnName, SchemaName
+INTO #__mj__CodeGen__vwTablePrimaryKeys
+FROM [${schema}].[vwTablePrimaryKeys];
+
+SELECT TableName, ColumnName, SchemaName
+INTO #__mj__CodeGen__vwTableUniqueKeys
+FROM [${schema}].[vwTableUniqueKeys];
+`;
+    }
+
+    /**
+     * Builds the main CTE query for finding pending entity fields.
+     * Uses MaxSequences CTE to calculate proper field ordering and NumberedRows
+     * CTE to deduplicate results.
+     */
+    private buildPendingFieldsMainQuery(schema: string): string {
+        return `WITH MaxSequences AS (
+   SELECT
+      EntityID,
+      ISNULL(MAX(Sequence), 0) AS MaxSequence
+   FROM
+      [${schema}].[EntityField]
+   GROUP BY
+      EntityID
+),
+NumberedRows AS (
+   SELECT
+      sf.EntityID,
+      ISNULL(ms.MaxSequence, 0) + 100000 + sf.Sequence AS Sequence,
+      sf.FieldName,
+      sf.Description,
+      sf.Type,
+      sf.Length,
+      sf.Precision,
+      sf.Scale,
+      sf.AllowsNull,
+      sf.DefaultValue,
+      sf.AutoIncrement,
+      IIF(sf.IsVirtual = 1, 0, IIF(sf.FieldName = '${EntityInfo.CreatedAtFieldName}' OR
+                                   sf.FieldName = '${EntityInfo.UpdatedAtFieldName}' OR
+                                   sf.FieldName = '${EntityInfo.DeletedAtFieldName}' OR
+                                   pk.ColumnName IS NOT NULL, 0, 1)) AllowUpdateAPI,
+      sf.IsVirtual,
+      e.RelationshipDefaultDisplayType,
+      e.Name EntityName,
+      re.ID RelatedEntityID,
+      fk.referenced_column RelatedEntityFieldName,
+      IIF(sf.FieldName = 'Name', 1, 0) IsNameField,
+      IsPrimaryKey = CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END,
+      IsUnique = CASE
+            WHEN pk.ColumnName IS NOT NULL THEN 1
+            WHEN uk.ColumnName IS NOT NULL THEN 1
+            ELSE 0
+         END,
+      ROW_NUMBER() OVER (PARTITION BY sf.EntityID, sf.FieldName ORDER BY (SELECT NULL)) AS rn
+   FROM
+      [${schema}].[vwSQLColumnsAndEntityFields] sf
+   LEFT OUTER JOIN
+      MaxSequences ms ON sf.EntityID = ms.EntityID
+   LEFT OUTER JOIN
+      [${schema}].[Entity] e ON sf.EntityID = e.ID
+   LEFT OUTER JOIN
+      #__mj__CodeGen__vwForeignKeys fk
+      ON sf.FieldName = fk.[column] AND e.BaseTable = fk.[table] AND e.SchemaName = fk.[schema_name]
+   LEFT OUTER JOIN
+      [${schema}].[Entity] re ON re.BaseTable = fk.referenced_table AND re.SchemaName = fk.[referenced_schema]
+   LEFT OUTER JOIN
+      #__mj__CodeGen__vwTablePrimaryKeys pk
+      ON e.BaseTable = pk.TableName AND sf.FieldName = pk.ColumnName AND e.SchemaName = pk.SchemaName
+   LEFT OUTER JOIN
+      #__mj__CodeGen__vwTableUniqueKeys uk
+      ON e.BaseTable = uk.TableName AND sf.FieldName = uk.ColumnName AND e.SchemaName = uk.SchemaName
+   WHERE
+      EntityFieldID IS NULL
+   )
+   SELECT *
+   FROM NumberedRows
+   WHERE rn = 1
+   ORDER BY EntityID, Sequence;
+`;
+    }
+
+    /**
+     * Builds the cleanup statements to drop temp tables after the pending fields query.
+     */
+    private buildPendingFieldsCleanup(): string {
+        return `
+DROP TABLE #__mj__CodeGen__vwForeignKeys;
+DROP TABLE #__mj__CodeGen__vwTablePrimaryKeys;
+DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
+`;
+    }
+
+    getCheckConstraintsSchemaFilter(excludeSchemas: string[]): string {
+        if (!excludeSchemas || excludeSchemas.length === 0) {
+            return '';
+        }
+        const quotedSchemas = excludeSchemas.map(s => `'${s}'`).join(',');
+        return ` WHERE SchemaName NOT IN (${quotedSchemas})`;
+    }
+
+    getEntitiesWithMissingBaseTablesFilter(): string {
+        return ` WHERE VirtualEntity=0`;
+    }
+
+    getFixVirtualFieldNullabilitySQL(_mjCoreSchema: string): string {
+        return '';
+    }
+
+    // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
+
+    async executeSQLFileViaShell(filePath: string): Promise<boolean> {
+        try {
+            this.validateSqlConfig();
+            const serverSpec = this.buildServerSpec();
+            const absoluteFilePath = this.resolveAndShortPathConvert(filePath);
+            const args = this.buildSqlcmdArgs(serverSpec, absoluteFilePath);
+            return await this.spawnSqlcmd(args, filePath);
+        } catch (e) {
+            this.logSqlcmdError(e);
+            return false;
+        }
+    }
+
+    /**
+     * Validates that required SQL Server connection configuration is present.
+     */
+    private validateSqlConfig(): void {
+        if (sqlConfig.user === undefined || sqlConfig.password === undefined || sqlConfig.database === undefined) {
+            throw new Error('SQL Server user, password, and database must be provided in the configuration');
+        }
+    }
+
+    /**
+     * Builds the server specification string for sqlcmd (server[,port][\instance]).
+     */
+    private buildServerSpec(): string {
+        let serverSpec = sqlConfig.server;
+        if (sqlConfig.port) {
+            serverSpec += `,${sqlConfig.port}`;
+        }
+        if (sqlConfig.options?.instanceName) {
+            serverSpec += `\\${sqlConfig.options.instanceName}`;
+        }
+        return serverSpec;
+    }
+
+    /**
+     * Resolves the file path to absolute and converts to 8.3 short path on Windows if needed.
+     */
+    private resolveAndShortPathConvert(filePath: string): string {
+        const cwd = path.resolve(process.cwd());
+        let absoluteFilePath = path.resolve(cwd, filePath);
+
+        const isWindows = process.platform === 'win32';
+        if (isWindows && absoluteFilePath.includes(' ')) {
+            absoluteFilePath = this.tryConvertToShortPath(absoluteFilePath);
+        }
+        return absoluteFilePath;
+    }
+
+    /**
+     * Attempts to convert a Windows path to 8.3 short format to avoid quoting issues.
+     */
+    private tryConvertToShortPath(absoluteFilePath: string): string {
+        try {
+            const result = execSync(`for %I in ("${absoluteFilePath}") do @echo %~sI`, {
+                encoding: 'utf8',
+                shell: 'cmd.exe'
+            }).trim();
+            if (result && !result.includes('ERROR') && !result.includes('%~sI')) {
+                logIf(configInfo.verboseOutput, `Converted path to short format: ${result}`);
+                return result;
+            }
+        } catch (e) {
+            logIf(configInfo.verboseOutput, `Could not convert to short path, using original: ${e}`);
+        }
+        return absoluteFilePath;
+    }
+
+    /**
+     * Builds the argument array for the sqlcmd CLI tool.
+     */
+    private buildSqlcmdArgs(serverSpec: string, absoluteFilePath: string): string[] {
+        const args = [
+            '-S', serverSpec,
+            '-U', sqlConfig.user!,
+            '-P', sqlConfig.password!,
+            '-d', sqlConfig.database!,
+            '-I',       // Enable QUOTED_IDENTIFIER
+            '-V', '17', // Only fail on severity >= 17
+            '-i', absoluteFilePath
+        ];
+        if (sqlConfig.options?.trustServerCertificate) {
+            args.push('-C');
+        }
+        return args;
+    }
+
+    /**
+     * Spawns the sqlcmd process and waits for completion.
+     */
+    private async spawnSqlcmd(args: string[], filePath: string): Promise<boolean> {
+        logIf(
+            configInfo.verboseOutput,
+            `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`
+        );
+        const isWindows = process.platform === 'win32';
+        const sqlcmdCommand = isWindows ? 'sqlcmd.exe' : 'sqlcmd';
+
+        const spawnOptions: Record<string, unknown> = { shell: false };
+        if (isWindows) {
+            spawnOptions['windowsVerbatimArguments'] = true;
+        }
+
+        const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+            const child = spawn(sqlcmdCommand, args, spawnOptions as Parameters<typeof spawn>[2]);
+            let stdout = '';
+            let stderr = '';
+
+            child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
+            child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
+            child.on('error', (error: Error) => { reject(error); });
+            child.on('close', (code: number | null) => {
+                if (code === 0) {
+                    resolve({ stdout, stderr });
+                } else {
+                    const error = new Error(`sqlcmd exited with code ${code}`);
+                    Object.assign(error, { stdout, stderr, code });
+                    reject(error);
+                }
+            });
+        });
+
+        if (result.stdout && result.stdout.trim().length > 0) {
+            logWarning(`SQL Server message: ${result.stdout.trim()}`);
+        }
+        if (result.stderr && result.stderr.trim().length > 0) {
+            logWarning(`SQL Server stderr: ${result.stderr.trim()}`);
+        }
+        return true;
+    }
+
+    /**
+     * Logs a sqlcmd execution error, masking the password in the output.
+     */
+    private logSqlcmdError(e: unknown): void {
+        const errRecord = e as Record<string, unknown>;
+        let message = (e instanceof Error) ? e.message : String(e);
+
+        if (errRecord['stdout']) {
+            message += `\n SQL Server message: ${errRecord['stdout']}`;
+        }
+        if (errRecord['stderr']) {
+            message += `\n SQL Server error: ${errRecord['stderr']}`;
+        }
+
+        const errorMessage = sqlConfig.password
+            ? message.replace(sqlConfig.password, 'XXXXX')
+            : message;
+        logError('Error executing batch SQL file: ' + errorMessage);
     }
 }

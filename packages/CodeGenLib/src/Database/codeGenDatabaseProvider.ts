@@ -443,4 +443,222 @@ export abstract class CodeGenDatabaseProvider {
     get BatchSeparator(): string {
         return this.Dialect.BatchSeparator();
     }
+
+    // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
+
+    /**
+     * Generates SQL to invoke a stored procedure or function.
+     * SQL Server: `EXEC [schema].[spName] @Param1='val1', @Param2='val2'`
+     * PostgreSQL: `SELECT * FROM schema."spName"('val1', 'val2')`
+     *
+     * @param schema The schema containing the routine.
+     * @param routineName The routine name (e.g., `spUpdateExistingEntitiesFromSchema`).
+     * @param params Ordered array of parameter values as pre-formatted SQL strings.
+     *              For SQL Server these become `@ParamName='value'` pairs;
+     *              for PostgreSQL they become positional arguments.
+     * @param paramNames Optional parameter names for SQL Server's `@Name=value` syntax.
+     *                   Ignored on PostgreSQL.
+     */
+    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[]): string;
+
+    // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
+
+    /**
+     * Generates a conditional INSERT statement (insert only if not exists).
+     * SQL Server: `IF NOT EXISTS (checkQuery) BEGIN insertSQL END`
+     * PostgreSQL: `DO $$ BEGIN IF NOT EXISTS (checkQuery) THEN insertSQL; END IF; END $$`
+     *
+     * @param checkQuery The SELECT query to check for existence.
+     * @param insertSQL The INSERT statement to execute if the check returns no rows.
+     */
+    abstract conditionalInsertSQL(checkQuery: string, insertSQL: string): string;
+
+    /**
+     * Wraps an INSERT statement with a conditional existence check at the statement level.
+     * SQL Server: Adds `IF NOT EXISTS (...) BEGIN` prefix and `END` suffix.
+     * PostgreSQL: Adds `ON CONFLICT DO NOTHING` suffix (no prefix needed).
+     *
+     * @param conflictCheckSQL The SQL Server existence check query. Ignored on PostgreSQL.
+     * @returns An object with `prefix` and `suffix` strings to wrap around the INSERT.
+     */
+    abstract wrapInsertWithConflictGuard(conflictCheckSQL: string): { prefix: string; suffix: string };
+
+    // ─── METADATA MANAGEMENT: DDL OPERATIONS ─────────────────────────
+
+    /**
+     * Generates ALTER TABLE ... ADD COLUMN SQL.
+     * SQL Server: `ALTER TABLE [schema].[table] ADD colName TYPE [NOT] NULL [DEFAULT expr]`
+     * PostgreSQL: `ALTER TABLE schema."table" ADD COLUMN "colName" TYPE [NOT] NULL [DEFAULT expr]`
+     */
+    abstract addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string;
+
+    /**
+     * Generates ALTER TABLE ... ALTER COLUMN to change type and nullability.
+     * SQL Server: `ALTER TABLE ... ALTER COLUMN col TYPE NULL|NOT NULL`
+     * PostgreSQL: `ALTER TABLE ... ALTER COLUMN "col" TYPE type, ALTER COLUMN "col" SET|DROP NOT NULL`
+     */
+    abstract alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string;
+
+    /**
+     * Generates SQL to add a default constraint/value to a column.
+     * SQL Server: `ALTER TABLE ... ADD CONSTRAINT DF_name DEFAULT expr FOR [col]`
+     * PostgreSQL: `ALTER TABLE ... ALTER COLUMN "col" SET DEFAULT expr`
+     */
+    abstract addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string;
+
+    /**
+     * Generates SQL to drop an existing default constraint from a column.
+     * SQL Server: Dynamic lookup of constraint name from sys catalog + DROP.
+     * PostgreSQL: Dynamic lookup from pg_catalog + ALTER COLUMN DROP DEFAULT.
+     */
+    abstract dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string;
+
+    /**
+     * Generates a DROP statement for a database object (view/procedure/function).
+     * SQL Server: `IF OBJECT_ID('...', 'P') IS NOT NULL DROP PROCEDURE ...`
+     * PostgreSQL: `DROP FUNCTION IF EXISTS ... CASCADE`
+     *
+     * Note: This differs from `generateDropGuard()` which is used for CREATE OR REPLACE
+     * patterns. This method is used for cleanup operations.
+     */
+    abstract dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string;
+
+    // ─── METADATA MANAGEMENT: VIEW INTROSPECTION ─────────────────────
+
+    /**
+     * Returns SQL to check if a view exists.
+     * The query uses `@ViewName` and `@SchemaName` as named parameters.
+     * Returns 1 row if the view exists.
+     */
+    abstract getViewExistsSQL(): string;
+
+    /**
+     * Returns SQL to get column metadata for a view or table.
+     * Result columns: FieldName, Type, Length, Precision, Scale, AllowsNull.
+     */
+    abstract getViewColumnsSQL(schema: string, viewName: string): string;
+
+    // ─── METADATA MANAGEMENT: TYPE SYSTEM ────────────────────────────
+
+    /**
+     * Returns the native timestamp-with-timezone type name for this platform.
+     * SQL Server: `DATETIMEOFFSET`
+     * PostgreSQL: `TIMESTAMPTZ`
+     */
+    abstract get TimestampType(): string;
+
+    /**
+     * Compares two data type names, accounting for platform-specific aliases.
+     * For example, PostgreSQL reports `timestamp with time zone` in information_schema
+     * but DDL uses `timestamptz`.
+     *
+     * @param reported The type name as reported by the database catalog.
+     * @param expected The expected type name (from DDL or configuration).
+     * @returns True if the types are equivalent.
+     */
+    abstract compareDataTypes(reported: string, expected: string): boolean;
+
+    // ─── METADATA MANAGEMENT: PLATFORM CONFIGURATION ─────────────────
+
+    /**
+     * Returns an array of system schema names that should be excluded from
+     * metadata synchronization. Empty array if the platform has no system
+     * schemas that need excluding.
+     * SQL Server: `[]` (no system schemas need excluding)
+     * PostgreSQL: `['information_schema', 'pg_catalog', 'pg_toast', ...]`
+     */
+    abstract getSystemSchemasToExclude(): string[];
+
+    /**
+     * Whether this platform needs explicit view refresh after schema changes.
+     * SQL Server: `true` (uses `sp_refreshview`)
+     * PostgreSQL: `false` (views resolve at query time)
+     */
+    abstract get NeedsViewRefresh(): boolean;
+
+    /**
+     * Generates SQL to refresh/recompile a view.
+     * SQL Server: `EXEC sp_refreshview 'schema.viewName';`
+     * PostgreSQL: returns empty string (no-op).
+     */
+    abstract generateViewRefreshSQL(schema: string, viewName: string): string;
+
+    /**
+     * Generates a simple test query to validate a view is functional.
+     * SQL Server: `SELECT TOP 1 * FROM [schema].[viewName]`
+     * PostgreSQL: `SELECT * FROM "schema"."viewName" LIMIT 1`
+     */
+    abstract generateViewTestQuerySQL(schema: string, viewName: string): string;
+
+    /**
+     * Whether this platform needs a post-sync fix for virtual field nullability.
+     * SQL Server: `false`
+     * PostgreSQL: `true` (PG view columns always report attnotnull=false)
+     */
+    abstract get NeedsVirtualFieldNullabilityFix(): boolean;
+
+    // ─── METADATA MANAGEMENT: SQL QUOTING ────────────────────────────
+
+    /**
+     * Quotes mixed-case identifiers in a raw SQL string for execution.
+     * SQL Server: returns the SQL unchanged (case-insensitive identifiers).
+     * PostgreSQL: double-quotes PascalCase identifiers to preserve case.
+     */
+    abstract quoteSQLForExecution(sql: string): string;
+
+    // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
+
+    /**
+     * Parses a raw default-value string from the database catalog into a clean value.
+     * SQL Server: strips wrapping parens and N'' prefix, e.g. `(getdate())` → `getdate()`
+     * PostgreSQL: strips `::type` casts, recognizes `nextval()` as auto-increment (returns null).
+     *
+     * @returns The cleaned default value, or `null` if the column has no meaningful default.
+     */
+    abstract parseColumnDefaultValue(sqlDefaultValue: string): string | null;
+
+    // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
+
+    /**
+     * Generates the SQL to retrieve pending entity fields that exist in the database
+     * but not yet in the MJ metadata. This is a large, platform-specific query.
+     *
+     * @param mjCoreSchema The MJ core schema name (e.g., `__mj`).
+     */
+    abstract getPendingEntityFieldsSQL(mjCoreSchema: string): string;
+
+    /**
+     * Returns an additional WHERE clause fragment for the check-constraints query.
+     * SQL Server: ` WHERE SchemaName NOT IN (...)` when excludeSchemas is provided.
+     * PostgreSQL: empty string (the PG view already handles schema filtering).
+     */
+    abstract getCheckConstraintsSchemaFilter(excludeSchemas: string[]): string;
+
+    /**
+     * Returns an additional WHERE clause fragment for the missing-base-tables query.
+     * SQL Server: ` WHERE VirtualEntity=0`
+     * PostgreSQL: empty string (PG query doesn't need this filter).
+     */
+    abstract getEntitiesWithMissingBaseTablesFilter(): string;
+
+    /**
+     * Generates SQL to fix virtual field nullability after metadata sync.
+     * PostgreSQL: Updates AllowsNull for virtual fields based on the FK column's nullability.
+     * SQL Server: returns empty string (no fix needed).
+     *
+     * @param mjCoreSchema The MJ core schema name.
+     */
+    abstract getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string;
+
+    // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
+
+    /**
+     * Executes a SQL file using the platform's native CLI tool (sqlcmd/psql).
+     * The implementation is responsible for reading connection configuration
+     * from the environment or config objects.
+     *
+     * @param filePath Path to the SQL file to execute.
+     * @returns True if execution succeeded, false otherwise.
+     */
+    abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;
 }
