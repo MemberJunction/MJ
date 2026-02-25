@@ -26,16 +26,24 @@ const ssDialect = new SQLServerDialect();
  * hardcoded in SQLCodeGenBase, enabling the orchestrator to be database-agnostic.
  */
 export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
+    /** @inheritdoc */
     get Dialect(): SQLDialect {
         return ssDialect;
     }
 
+    /** @inheritdoc */
     get PlatformKey(): DatabasePlatform {
         return 'sqlserver';
     }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
+    /**
+     * Generates SQL Server-style conditional DROP guards using the `IF OBJECT_ID(...) IS NOT NULL`
+     * pattern. Maps each object type to its SQL Server type code: `'V'` for views, `'P'` for
+     * procedures, `'IF'` for inline table-valued functions, and `'TR'` for triggers.
+     * Each guard is terminated with a `GO` batch separator.
+     */
     generateDropGuard(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'TRIGGER', schema: string, name: string): string {
         switch (objectType) {
             case 'VIEW':
@@ -53,6 +61,13 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
 
     // ─── BASE VIEWS ──────────────────────────────────────────────────────
 
+    /**
+     * Generates a SQL Server `CREATE VIEW` statement for an entity's base view. The view
+     * selects all columns from the base table plus any related, parent, and root ID fields
+     * supplied by the orchestrator context. For entities with soft-delete enabled, appends
+     * a `WHERE ... IS NULL` clause filtering out soft-deleted rows. Includes the conditional
+     * DROP guard and a descriptive comment header.
+     */
     generateBaseView(context: BaseViewGenerationContext): string {
         const entity = context.entity;
         const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
@@ -83,6 +98,20 @@ ${whereClause}GO`;
 
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
 
+    /**
+     * Generates the `spCreate` stored procedure for a SQL Server entity. Handles three
+     * primary key strategies:
+     *
+     * 1. **Auto-increment**: Uses `SCOPE_IDENTITY()` to retrieve the generated key.
+     * 2. **UNIQUEIDENTIFIER with default** (e.g., `NEWSEQUENTIALID()`): Uses an `OUTPUT`
+     *    clause into a table variable with a two-branch `IF @PK IS NOT NULL` pattern so
+     *    callers can optionally supply their own GUID or let the database default apply.
+     * 3. **UNIQUEIDENTIFIER without default**: Falls back to `ISNULL(@PK, NEWID())`.
+     * 4. **Composite / other PKs**: Constructs a multi-column WHERE clause for retrieval.
+     *
+     * The procedure always returns the newly created record via the entity's base view.
+     * Includes GRANT EXECUTE permissions for authorized roles.
+     */
     generateCRUDCreate(entity: EntityInfo): string {
         const spName = this.getCRUDRoutineName(entity, 'Create');
         const firstKey = entity.FirstPrimaryKey;
@@ -185,6 +214,14 @@ GO
     `;
     }
 
+    /**
+     * Generates the `spUpdate` stored procedure for a SQL Server entity. Performs a standard
+     * `UPDATE ... SET ... WHERE PK = @PK` and uses `@@ROWCOUNT` to detect whether the row
+     * was found: if no rows were updated (e.g., stale PK or concurrent delete), returns an
+     * empty result set with the base view's column structure (`SELECT TOP 0 ... WHERE 1=0`);
+     * otherwise returns the updated record from the base view. Also generates the
+     * `__mj_UpdatedAt` timestamp trigger if the entity has that column.
+     */
     generateCRUDUpdate(entity: EntityInfo): string {
         const spName = this.getCRUDRoutineName(entity, 'Update');
         const efParamString = this.generateCRUDParamString(entity.Fields, true);
@@ -234,6 +271,13 @@ ${updatedAtTrigger}
         `;
     }
 
+    /**
+     * Generates the `spDelete` stored procedure for a SQL Server entity. Supports both
+     * hard delete (`DELETE FROM`) and soft delete (`UPDATE ... SET __mj_DeletedAt = GETUTCDATE()`
+     * with a guard against re-deleting already soft-deleted rows). Prepends any cascade
+     * delete/update SQL for related entities. Uses `@@ROWCOUNT` to determine success:
+     * returns the PK values on success or NULL PK values if no row was affected.
+     */
     generateCRUDDelete(entity: EntityInfo, cascadeSQL: string): string {
         const spName = this.getCRUDRoutineName(entity, 'Delete');
         const permissions = this.generateCRUDPermissions(entity, spName, 'Delete');
@@ -297,6 +341,13 @@ GO
 
     // ─── TRIGGERS ────────────────────────────────────────────────────────
 
+    /**
+     * Generates a SQL Server `AFTER UPDATE` trigger that automatically sets the
+     * `__mj_UpdatedAt` column to `GETUTCDATE()` on every update. The trigger joins
+     * the base table to the `INSERTED` pseudo-table on all primary key columns to
+     * target only the affected rows. Returns an empty string if the entity does not
+     * have an `__mj_UpdatedAt` field.
+     */
     generateTimestampTrigger(entity: EntityInfo): string {
         const updatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.toLowerCase().trim());
         if (!updatedAtField) return '';
@@ -329,6 +380,12 @@ GO`;
 
     // ─── INDEXES ─────────────────────────────────────────────────────────
 
+    /**
+     * Generates conditional `CREATE INDEX` statements for all foreign key columns on an entity.
+     * Each index uses the naming convention `IDX_AUTO_MJ_FKEY_{Table}_{Column}`, truncated
+     * to 128 characters (SQL Server's identifier length limit). Wraps each statement in an
+     * `IF NOT EXISTS` check against `sys.indexes` to avoid duplicate index creation.
+     */
     generateForeignKeyIndexes(entity: EntityInfo): string[] {
         const indexes: string[] = [];
         for (const f of entity.Fields) {
@@ -351,6 +408,19 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
 
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
+    /**
+     * Generates SQL Server full-text search infrastructure for an entity, conditionally
+     * producing up to three components based on entity metadata flags:
+     *
+     * 1. **Full-text catalog** (`FullTextCatalogGenerated`): `CREATE FULLTEXT CATALOG` if
+     *    one doesn't already exist, defaulting to `MJ_FullTextCatalog`.
+     * 2. **Full-text index** (`FullTextIndexGenerated`): Drops any existing FT index on the
+     *    table, then creates a new one covering the specified search fields with English language.
+     * 3. **Search function** (`FullTextSearchFunctionGenerated`): An inline table-valued
+     *    function that wraps `CONTAINS()` to return matching primary key values.
+     *
+     * @returns The generated SQL and the resolved function name for permission grants.
+     */
     generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult {
         let sql = '';
         const catalogName = entity.FullTextCatalog && entity.FullTextCatalog.length > 0
@@ -421,6 +491,15 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
 
     // ─── RECURSIVE FUNCTIONS (ROOT ID) ───────────────────────────────────
 
+    /**
+     * Generates a SQL Server inline table-valued function that resolves the root ancestor ID
+     * for a self-referencing foreign key hierarchy. Uses a recursive CTE starting from the
+     * given record (or its parent if provided), walking up the parent chain until it finds
+     * a record with a NULL parent pointer. Enforces a maximum recursion depth of 100 to
+     * prevent infinite loops from circular references. The function is named
+     * `fn{BaseTable}{FieldName}_GetRootID` and returns a single-column result (`RootID`),
+     * designed to be consumed via `OUTER APPLY` in the entity's base view.
+     */
     generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
@@ -483,6 +562,7 @@ GO
 `;
     }
 
+    /** @inheritdoc */
     generateRootFieldSelect(_entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
         const rootFieldName = field.Name.endsWith('ID')
             ? field.Name.substring(0, field.Name.length - 2) + 'RootID'
@@ -490,6 +570,11 @@ GO
         return `${alias}.RootID AS [${rootFieldName}]`;
     }
 
+    /**
+     * Generates a SQL Server `OUTER APPLY` clause to join the root ID inline table-valued
+     * function into the entity's base view. The function is invoked with the record's primary
+     * key and the self-referencing FK value as arguments.
+     */
     generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
         const classNameFirstChar = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const schemaName = entity.SchemaName;
@@ -500,6 +585,7 @@ GO
 
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
 
+    /** @inheritdoc */
     generateViewPermissions(entity: EntityInfo): string {
         let sOutput = '';
         for (const ep of entity.Permissions) {
@@ -510,6 +596,11 @@ GO
         return (sOutput === '' ? '' : '\n') + sOutput;
     }
 
+    /**
+     * Generates `GRANT EXECUTE` SQL for a CRUD stored procedure, granting permission only
+     * to roles whose `EntityPermission` record allows the specified CRUD operation type.
+     * Produces a single comma-separated `GRANT EXECUTE ON ... TO [role1], [role2]` statement.
+     */
     generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string {
         let sOutput = '';
         for (const ep of entity.Permissions) {
@@ -527,6 +618,7 @@ GO
         return sOutput;
     }
 
+    /** @inheritdoc */
     generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string {
         let sOutput = '';
         for (const ep of entity.Permissions) {
@@ -539,6 +631,7 @@ GO
 
     // ─── CASCADE DELETES ─────────────────────────────────────────────────
 
+    /** @inheritdoc */
     generateSingleCascadeOperation(context: CascadeDeleteContext): string {
         const { parentEntity, relatedEntity, fkField, operation } = context;
 
@@ -681,6 +774,7 @@ GO
 
     // ─── TIMESTAMP COLUMNS ───────────────────────────────────────────────
 
+    /** @inheritdoc */
     generateTimestampColumns(schema: string, tableName: string): string {
         return `ALTER TABLE [${schema}].[${tableName}] ADD
     [${EntityInfo.CreatedAtFieldName}] DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
@@ -689,6 +783,13 @@ GO
 
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
 
+    /**
+     * Builds the SQL Server parameter declaration list for a CRUD stored procedure.
+     * Produces `@ParamName TYPE` entries separated by commas. Filters fields based on
+     * update/create context: includes primary keys only on updates (or non-auto-increment
+     * creates), excludes virtual and special date fields, and adds `= NULL` default values
+     * for optional primary keys on create and for non-nullable fields with database defaults.
+     */
     generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
         let sOutput = '';
         let isFirst = true;
@@ -715,6 +816,20 @@ GO
         return sOutput;
     }
 
+    /**
+     * Generates either the column-name list or the value-expression list for an INSERT
+     * statement, depending on the `prefix` parameter:
+     *
+     * - **Empty prefix** (`''`): Produces bracketed column names (e.g., `[Name], [Email]`).
+     * - **`'@'` prefix**: Produces parameter references with smart default handling:
+     *   - Special date fields emit `GETUTCDATE()` for created/updated-at, `NULL` for deleted-at.
+     *   - UNIQUEIDENTIFIER fields with defaults use a `CASE` expression that detects the
+     *     empty GUID sentinel (`00000000-...`) and falls back to the database default.
+     *   - Other non-nullable fields with defaults are wrapped in `ISNULL(@Param, default)`.
+     *
+     * Skips auto-increment, virtual, and non-updatable fields. Optionally excludes the
+     * primary key column (used by the two-branch GUID insert pattern in `generateCRUDCreate`).
+     */
     generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
         const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement;
         let sOutput = '';
@@ -762,6 +877,7 @@ GO
         return sOutput;
     }
 
+    /** @inheritdoc */
     generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
         let sOutput = '';
         let isFirst = true;
@@ -783,6 +899,7 @@ GO
 
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
 
+    /** @inheritdoc */
     getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string {
         switch (type) {
             case 'Create':
@@ -796,6 +913,7 @@ GO
 
     // ─── SQL HEADERS ─────────────────────────────────────────────────────
 
+    /** @inheritdoc */
     generateSQLFileHeader(entity: EntityInfo, itemName: string): string {
         return `-----------------------------------------------------------------
 -- SQL Code Generation
@@ -808,6 +926,7 @@ GO
 `;
     }
 
+    /** @inheritdoc */
     generateAllEntitiesSQLFileHeader(): string {
         return `-----------------------------------------------------------------
 -- SQL Code Generation for Entities
@@ -824,6 +943,14 @@ GO
 
     // ─── UTILITY ─────────────────────────────────────────────────────────
 
+    /**
+     * Formats a raw default value string for embedding in generated SQL. Recognizes common
+     * SQL Server functions (`NEWID()`, `NEWSEQUENTIALID()`, `GETDATE()`, `GETUTCDATE()`,
+     * `SYSDATETIME()`, `SYSDATETIMEOFFSET()`, `CURRENT_TIMESTAMP`, `USER_NAME()`,
+     * `SUSER_NAME()`, `SYSTEM_USER`) and strips wrapping parentheses from them. For literal
+     * values, strips surrounding single quotes and re-applies them only if `needsQuotes`
+     * is true. Returns `'NULL'` for empty or whitespace-only inputs.
+     */
     formatDefaultValue(defaultValue: string, needsQuotes: boolean): string {
         if (!defaultValue || defaultValue.trim().length === 0) {
             return 'NULL';
@@ -859,6 +986,18 @@ GO
         return cleanValue;
     }
 
+    /**
+     * Builds the four SQL fragments needed to work with an entity's primary key columns
+     * in cursor-based cascade operations:
+     *
+     * - `varDeclarations`: `@{prefix}{PK} TYPE` variable declarations for `DECLARE`.
+     * - `selectFields`: Bracketed column names for the cursor `SELECT`.
+     * - `fetchInto`: `@{prefix}{PK}` variable references for `FETCH INTO`.
+     * - `routineParams`: Named parameter assignments (`@PK = @{prefix}{PK}`) for `EXEC`.
+     *
+     * Supports composite primary keys by iterating all PK fields. The optional `prefix`
+     * defaults to `'Related'` to avoid variable name collisions in nested cursor blocks.
+     */
     buildPrimaryKeyComponents(entity: EntityInfo, prefix?: string): {
         varDeclarations: string;
         selectFields: string;
@@ -891,10 +1030,16 @@ GO
 
     // ─── DATABASE INTROSPECTION ──────────────────────────────────────────
 
+    /** @inheritdoc */
     getViewDefinitionSQL(schema: string, viewName: string): string {
         return `SELECT OBJECT_DEFINITION(OBJECT_ID('[${schema}].[${viewName}]')) AS ViewDefinition`;
     }
 
+    /**
+     * Returns a SQL query that retrieves the primary key index name for a table by joining
+     * `sys.indexes`, `sys.objects`, and `sys.key_constraints` and filtering on constraint
+     * type `'PK'`. The result column is named `IndexName` as expected by the orchestrator.
+     */
     getPrimaryKeyIndexNameSQL(schema: string, tableName: string): string {
         return `SELECT
         i.name AS IndexName
@@ -911,6 +1056,13 @@ GO
         kc.type = 'PK'`;
     }
 
+    /**
+     * Returns a SQL query that checks whether a column participates in a composite (multi-column)
+     * unique constraint. Queries `sys.indexes`, `sys.index_columns`, and `sys.columns` to find
+     * non-primary-key unique indexes that include the specified column AND have more than one
+     * column. Returns rows if the column is part of such a constraint; the orchestrator checks
+     * `recordset.length > 0`.
+     */
     getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string {
         return `SELECT i.index_id
             FROM sys.indexes i
@@ -934,6 +1086,7 @@ GO
                      AND ic2.index_id = i.index_id) > 1`;
     }
 
+    /** @inheritdoc */
     getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string {
         return `SELECT 1
     FROM sys.indexes
@@ -943,6 +1096,11 @@ GO
 
     // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
 
+    /**
+     * Builds a SQL Server `EXEC` statement for invoking a stored procedure. When `paramNames`
+     * are provided, generates named parameter syntax (`@ParamName=value`); otherwise uses
+     * positional parameter values. Returns just `EXEC [schema].[routine]` if no params.
+     */
     callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[]): string {
         const qualifiedName = `[${schema}].[${routineName}]`;
         if (!params || params.length === 0) {
@@ -959,10 +1117,12 @@ GO
 
     // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
 
+    /** @inheritdoc */
     conditionalInsertSQL(checkQuery: string, insertSQL: string): string {
         return `IF NOT EXISTS (\n      ${checkQuery}\n   )\n   BEGIN\n      ${insertSQL}\n   END`;
     }
 
+    /** @inheritdoc */
     wrapInsertWithConflictGuard(conflictCheckSQL: string): { prefix: string; suffix: string } {
         return {
             prefix: `IF NOT EXISTS (${conflictCheckSQL}) BEGIN`,
@@ -972,22 +1132,33 @@ GO
 
     // ─── METADATA MANAGEMENT: DDL OPERATIONS ─────────────────────────
 
+    /** @inheritdoc */
     addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string {
         const nullClause = nullable ? 'NULL' : 'NOT NULL';
         const defaultClause = defaultExpression ? ` DEFAULT ${defaultExpression}` : '';
         return `ALTER TABLE [${schema}].[${tableName}] ADD ${columnName} ${dataType} ${nullClause}${defaultClause}`;
     }
 
+    /** @inheritdoc */
     alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string {
         const nullClause = nullable ? 'NULL' : 'NOT NULL';
         return `ALTER TABLE [${schema}].[${tableName}] ALTER COLUMN ${columnName} ${dataType} ${nullClause}`;
     }
 
+    /** @inheritdoc */
     addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string {
         const constraintName = `DF_${schema}_${CodeNameFromString(tableName)}_${columnName}`;
         return `ALTER TABLE [${schema}].[${tableName}] ADD CONSTRAINT ${constraintName} DEFAULT ${defaultExpression} FOR [${columnName}]`;
     }
 
+    /**
+     * Generates SQL to dynamically find and drop the default constraint on a column.
+     * Unlike PostgreSQL's simple `ALTER COLUMN DROP DEFAULT`, SQL Server requires looking
+     * up the constraint name from `sys.default_constraints` joined through `sys.tables`,
+     * `sys.schemas`, and `sys.columns`, then executing a dynamic `ALTER TABLE DROP CONSTRAINT`
+     * via `EXEC()`. The generated SQL is safe to run even if no default constraint exists
+     * (guarded by `IF @constraintName IS NOT NULL`).
+     */
     dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string {
         return `DECLARE @constraintName NVARCHAR(255);
 
@@ -1006,6 +1177,7 @@ BEGIN
 END`;
     }
 
+    /** @inheritdoc */
     dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string {
         const typeCode = objectType === 'PROCEDURE' ? 'P' : objectType === 'VIEW' ? 'V' : 'FN';
         return `IF OBJECT_ID('[${schema}].[${name}]', '${typeCode}') IS NOT NULL\n    DROP ${objectType} [${schema}].[${name}]`;
@@ -1013,10 +1185,17 @@ END`;
 
     // ─── METADATA MANAGEMENT: VIEW INTROSPECTION ─────────────────────
 
+    /** @inheritdoc */
     getViewExistsSQL(): string {
         return `SELECT 1 FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = @ViewName AND TABLE_SCHEMA = @SchemaName`;
     }
 
+    /**
+     * Returns a SQL query that retrieves column metadata for a view by joining `sys.columns`,
+     * `sys.types`, `sys.views`, and `sys.schemas`. Returns columns named `FieldName`, `Type`,
+     * `Length`, `Precision`, `Scale`, and `AllowsNull`, ordered by `column_id` to preserve
+     * the original column definition order.
+     */
     getViewColumnsSQL(schema: string, viewName: string): string {
         return `SELECT
     c.name AS FieldName,
@@ -1042,44 +1221,63 @@ ORDER BY
 
     // ─── METADATA MANAGEMENT: TYPE SYSTEM ────────────────────────────
 
+    /** @inheritdoc */
     get TimestampType(): string {
         return 'DATETIMEOFFSET';
     }
 
+    /** @inheritdoc */
     compareDataTypes(reported: string, expected: string): boolean {
         return reported.trim().toLowerCase() === expected.trim().toLowerCase();
     }
 
     // ─── METADATA MANAGEMENT: PLATFORM CONFIGURATION ─────────────────
 
+    /** @inheritdoc */
     getSystemSchemasToExclude(): string[] {
         return [];
     }
 
+    /** @inheritdoc */
     get NeedsViewRefresh(): boolean {
         return true;
     }
 
+    /** @inheritdoc */
     generateViewRefreshSQL(schema: string, viewName: string): string {
         return `EXEC sp_refreshview '${schema}.${viewName}';`;
     }
 
+    /** @inheritdoc */
     generateViewTestQuerySQL(schema: string, viewName: string): string {
         return `SELECT TOP 1 * FROM [${schema}].[${viewName}]`;
     }
 
+    /** @inheritdoc */
     get NeedsVirtualFieldNullabilityFix(): boolean {
         return false;
     }
 
     // ─── METADATA MANAGEMENT: SQL QUOTING ────────────────────────────
 
+    /** @inheritdoc */
     quoteSQLForExecution(sql: string): string {
         return sql;
     }
 
     // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
 
+    /**
+     * Parses a raw SQL Server column default value from the system catalog into a clean form.
+     * SQL Server wraps defaults in parentheses (e.g., `(getdate())`, `((1))`, `(N'foo')`),
+     * so this method applies three successive stripping passes:
+     *
+     * 1. Strips one layer of wrapping parentheses.
+     * 2. Strips the `N'...'` Unicode string prefix.
+     * 3. Strips surrounding single quotes from plain string literals.
+     *
+     * Returns `null` if the input is null or undefined.
+     */
     parseColumnDefaultValue(sqlDefaultValue: string): string | null {
         if (sqlDefaultValue === null || sqlDefaultValue === undefined) {
             return null;
@@ -1125,6 +1323,18 @@ ORDER BY
 
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
+    /**
+     * Generates the full SQL query to retrieve entity fields that exist in the database schema
+     * but are not yet registered in MJ metadata. The query is assembled from three parts:
+     *
+     * 1. **Temp table materialization**: Copies `vwForeignKeys`, `vwTablePrimaryKeys`, and
+     *    `vwTableUniqueKeys` into temp tables so SQL Server can build real statistics instead
+     *    of expanding nested view-on-view joins with bad cardinality estimates.
+     * 2. **Main CTE query**: Uses `MaxSequences` CTE to calculate proper field ordering and
+     *    `NumberedRows` CTE to deduplicate results, joining against the temp tables for FK,
+     *    PK, and unique key detection.
+     * 3. **Cleanup**: Drops the temp tables.
+     */
     getPendingEntityFieldsSQL(mjCoreSchema: string): string {
         return this.buildPendingFieldsTempTables(mjCoreSchema) +
             this.buildPendingFieldsMainQuery(mjCoreSchema) +
@@ -1241,6 +1451,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 `;
     }
 
+    /** @inheritdoc */
     getCheckConstraintsSchemaFilter(excludeSchemas: string[]): string {
         if (!excludeSchemas || excludeSchemas.length === 0) {
             return '';
@@ -1249,16 +1460,26 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
         return ` WHERE SchemaName NOT IN (${quotedSchemas})`;
     }
 
+    /** @inheritdoc */
     getEntitiesWithMissingBaseTablesFilter(): string {
         return ` WHERE VirtualEntity=0`;
     }
 
+    /** @inheritdoc */
     getFixVirtualFieldNullabilitySQL(_mjCoreSchema: string): string {
         return '';
     }
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
+    /**
+     * Executes a SQL file against SQL Server using the `sqlcmd` command-line utility. Reads
+     * connection details (server, port, instance, user, password, database) from the shared
+     * `sqlConfig` object. On Windows, converts file paths containing spaces to 8.3 short
+     * format to avoid quoting issues with `sqlcmd`. Spawns the process with `QUOTED_IDENTIFIER`
+     * enabled (`-I`) and severity threshold 17 (`-V 17`). Optionally adds `-C` for
+     * `trustServerCertificate`. Returns `true` on successful execution, `false` on failure.
+     */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
         try {
             this.validateSqlConfig();

@@ -24,16 +24,23 @@ const pgDialect = new PostgreSQLDialect();
  */
 @RegisterClass(CodeGenDatabaseProvider, 'PostgreSQLCodeGenProvider')
 export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
+    /** @inheritdoc */
     get Dialect(): SQLDialect {
         return pgDialect;
     }
 
+    /** @inheritdoc */
     get PlatformKey(): DatabasePlatform {
         return 'postgresql';
     }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
+    /**
+     * Generates a PostgreSQL `DROP ... IF EXISTS ... CASCADE` statement as a guard before
+     * creating or replacing a database object. For triggers, PostgreSQL relies on
+     * `CREATE OR REPLACE` on the trigger function, so a comment is emitted instead.
+     */
     generateDropGuard(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'TRIGGER', schema: string, name: string): string {
         // PostgreSQL uses CREATE OR REPLACE for views and functions, so we mostly
         // just need DROP IF EXISTS for procedures and triggers
@@ -54,6 +61,11 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 
     // ─── BASE VIEWS ──────────────────────────────────────────────────────
 
+    /**
+     * Generates a PostgreSQL `CREATE OR REPLACE VIEW` statement for an entity's base view.
+     * Includes all base table columns, parent/related field joins, and root field lateral
+     * joins. Applies a soft-delete `WHERE` filter when the entity uses soft deletes.
+     */
     generateBaseView(context: BaseViewGenerationContext): string {
         const { entity } = context;
         const viewName = this.getBaseViewName(entity);
@@ -83,6 +95,14 @@ ${whereClause};
 
     // ─── CRUD CREATE ─────────────────────────────────────────────────────
 
+    /**
+     * Generates a PostgreSQL `CREATE OR REPLACE FUNCTION` for inserting a new record.
+     * The function accepts typed parameters for each writable field, performs an `INSERT`
+     * into the base table, and returns the newly created row from the base view via
+     * `RETURN QUERY SELECT`. Handles auto-increment PKs (using `RETURNING ... INTO`),
+     * UUID PKs (with `COALESCE` to gen_random_uuid()), and composite PKs. Also emits
+     * `GRANT EXECUTE` permissions for authorized roles.
+     */
     generateCRUDCreate(entity: EntityInfo): string {
         const fnName = this.getCRUDRoutineName(entity, CRUDType.Create);
         const viewName = this.getBaseViewName(entity);
@@ -127,6 +147,14 @@ ${permissions}
 
     // ─── CRUD UPDATE ─────────────────────────────────────────────────────
 
+    /**
+     * Generates a PostgreSQL `CREATE OR REPLACE FUNCTION` for updating an existing record.
+     * The function accepts typed parameters for all updatable fields plus primary key(s),
+     * performs an `UPDATE ... SET ... WHERE PK = param`, checks `ROW_COUNT` to detect
+     * missing rows, and returns the updated record from the base view via `RETURN QUERY
+     * SELECT`. Also generates the `__mj_UpdatedAt` timestamp trigger for the entity
+     * and emits `GRANT EXECUTE` permissions.
+     */
     generateCRUDUpdate(entity: EntityInfo): string {
         const fnName = this.getCRUDRoutineName(entity, CRUDType.Update);
         const viewName = this.getBaseViewName(entity);
@@ -175,6 +203,14 @@ ${trigger}
 
     // ─── CRUD DELETE ─────────────────────────────────────────────────────
 
+    /**
+     * Generates a PostgreSQL `CREATE OR REPLACE FUNCTION` for deleting a record.
+     * Supports both hard deletes (`DELETE FROM`) and soft deletes (`UPDATE ... SET
+     * __mj_DeletedAt`). Prepends any cascade SQL for dependent records, uses
+     * `#variable_conflict use_column` to avoid PL/pgSQL naming conflicts, and returns
+     * the affected primary key(s) or NULLs if no row was found. Emits `GRANT EXECUTE`
+     * permissions for authorized roles.
+     */
     generateCRUDDelete(entity: EntityInfo, cascadeSQL: string): string {
         const fnName = this.getCRUDRoutineName(entity, CRUDType.Delete);
         const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Delete);
@@ -206,6 +242,13 @@ ${permissions}
 
     // ─── TIMESTAMP TRIGGER ───────────────────────────────────────────────
 
+    /**
+     * Generates a PL/pgSQL trigger function and a `BEFORE UPDATE` trigger that
+     * automatically sets the `__mj_UpdatedAt` column to the current UTC time on every
+     * row update. Uses `CREATE OR REPLACE FUNCTION` for the trigger function and
+     * `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER` for idempotent trigger creation.
+     * Returns an empty string if the entity has no `__mj_UpdatedAt` field.
+     */
     generateTimestampTrigger(entity: EntityInfo): string {
         const updatedAtField = entity.Fields.find(
             (f: EntityFieldInfo) => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.toLowerCase().trim()
@@ -238,6 +281,12 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
 
     // ─── INDEXES ─────────────────────────────────────────────────────────
 
+    /**
+     * Generates `CREATE INDEX IF NOT EXISTS` statements for each foreign key column
+     * on the entity's base table. Index names follow the `idx_auto_mj_fkey_<table>_<column>`
+     * convention and are truncated to 63 characters (PostgreSQL's maximum identifier length).
+     * Skips primary key columns and virtual fields.
+     */
     generateForeignKeyIndexes(entity: EntityInfo): string[] {
         const indexes: string[] = [];
         for (const field of entity.Fields) {
@@ -256,6 +305,18 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
 
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
+    /**
+     * Generates a complete PostgreSQL full-text search infrastructure for an entity.
+     * This includes:
+     * 1. A `tsvector` column (`__mj_fts_vector`) added via conditional `ALTER TABLE`
+     * 2. A PL/pgSQL trigger function that concatenates search fields into a `tsvector`
+     * 3. A `BEFORE INSERT OR UPDATE` trigger to keep the vector column in sync
+     * 4. A GIN index on the `tsvector` column for fast lookups
+     * 5. A SQL `STABLE` search function that joins the base view with a `plainto_tsquery` match
+     * 6. A backfill `UPDATE` to populate existing rows where the vector is NULL
+     *
+     * @returns A {@link FullTextSearchResult} with the generated SQL and the search function name.
+     */
     generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], _primaryKeyIndexName: string): FullTextSearchResult {
         const ftsColName = '__mj_fts_vector';
         const trigName = `trg_fts_${this.toSnakeCase(entity.BaseTable)}`;
@@ -327,6 +388,13 @@ WHERE ${ftsColName} IS NULL;
 
     // ─── RECURSIVE ROOT ID FUNCTIONS ─────────────────────────────────────
 
+    /**
+     * Generates a PostgreSQL SQL `STABLE` function that walks a self-referencing hierarchy
+     * (e.g., ParentCategoryID) using a recursive CTE to find the root ancestor record.
+     * The CTE starts from `COALESCE(p_parent_id, p_record_id)` as the anchor and follows
+     * the parent FK upward, capped at 100 levels to prevent infinite loops. Returns the
+     * root record's primary key value.
+     */
     generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
@@ -377,6 +445,7 @@ $$ LANGUAGE sql STABLE;
 `;
     }
 
+    /** @inheritdoc */
     generateRootFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
         // Strip trailing "ID" from the field name before appending "Root" + PK name
         // e.g., ParentCategoryID → ParentCategoryRootID (not ParentCategoryIDRootID)
@@ -387,6 +456,11 @@ $$ LANGUAGE sql STABLE;
         return `${alias}.root_id AS ${pgDialect.QuoteIdentifier(rootFieldName)}`;
     }
 
+    /**
+     * Generates a `LEFT JOIN LATERAL` clause that invokes the root ID function for a
+     * self-referencing field. PostgreSQL uses `LATERAL` joins (rather than SQL Server's
+     * `OUTER APPLY`) to call scalar functions inline within a view definition.
+     */
     generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
         const fnName = `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_root_id`;
         const tableAlias = entity.BaseTableCodeName.charAt(0).toLowerCase();
@@ -397,6 +471,7 @@ $$ LANGUAGE sql STABLE;
 
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
 
+    /** @inheritdoc */
     generateViewPermissions(entity: EntityInfo): string {
         const viewName = this.getBaseViewName(entity);
         const roles = this.collectPermissionRoles(entity.Permissions);
@@ -406,6 +481,11 @@ $$ LANGUAGE sql STABLE;
         ).join('\n');
     }
 
+    /**
+     * Generates `GRANT EXECUTE ON FUNCTION` statements for the given CRUD function,
+     * granting access to each role that has the corresponding permission (Create, Update,
+     * or Delete) on the entity.
+     */
     generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string {
         const roles: string[] = [];
         for (const ep of entity.Permissions) {
@@ -424,6 +504,7 @@ $$ LANGUAGE sql STABLE;
         ).join('\n');
     }
 
+    /** @inheritdoc */
     generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string {
         const roles = this.collectPermissionRoles(entity.Permissions);
         if (roles.length === 0) return '';
@@ -434,6 +515,7 @@ $$ LANGUAGE sql STABLE;
 
     // ─── CASCADE DELETES ─────────────────────────────────────────────────
 
+    /** @inheritdoc */
     generateSingleCascadeOperation(context: CascadeDeleteContext): string {
         const { parentEntity, relatedEntity, fkField, operation } = context;
 
@@ -446,6 +528,11 @@ $$ LANGUAGE sql STABLE;
 
     // ─── TIMESTAMP COLUMNS ───────────────────────────────────────────────
 
+    /**
+     * Generates a PL/pgSQL `DO $$` block that conditionally adds `__mj_CreatedAt` and
+     * `__mj_UpdatedAt` columns to a table using `TIMESTAMPTZ` type with a UTC default.
+     * Uses `information_schema` checks to skip columns that already exist.
+     */
     generateTimestampColumns(schema: string, tableName: string): string {
         return `
 -- Add timestamp columns to ${tableName}
@@ -465,6 +552,13 @@ END $$;
 
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
 
+    /**
+     * Builds the parameter declaration list for a PostgreSQL CRUD function signature.
+     * Each parameter is prefixed with `p_` and uses the PostgreSQL-mapped type. For
+     * CREATE functions, parameters with default values or primary keys get `DEFAULT NULL`
+     * to allow optional arguments, and PostgreSQL's requirement that all subsequent
+     * parameters also have defaults once the first default appears is respected.
+     */
     generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
         const parts: string[] = [];
         let foundDefault = false;
@@ -491,6 +585,13 @@ END $$;
         return parts.join(',\n    ');
     }
 
+    /**
+     * Builds either the column name list or the value expression list for an INSERT
+     * statement, depending on whether {@link prefix} is empty (column names) or set
+     * (parameter values with `p_` prefix). Handles special date fields
+     * (`__mj_CreatedAt`, `__mj_UpdatedAt`) by substituting `NOW() AT TIME ZONE 'UTC'`
+     * and applies default-value COALESCE wrappers for fields with non-null defaults.
+     */
     generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
         const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement;
         const parts: string[] = [];
@@ -511,6 +612,7 @@ END $$;
         return parts.join(',\n            ');
     }
 
+    /** @inheritdoc */
     generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
         const parts: string[] = [];
         for (const ef of entityFields) {
@@ -522,6 +624,7 @@ END $$;
 
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
 
+    /** @inheritdoc */
     getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string {
         const snakeTable = this.toSnakeCase(entity.BaseTableCodeName);
         switch (type) {
@@ -536,6 +639,7 @@ END $$;
 
     // ─── SQL HEADERS ─────────────────────────────────────────────────────
 
+    /** @inheritdoc */
     generateSQLFileHeader(entity: EntityInfo, itemName: string): string {
         return `-- ============================================================
 -- PostgreSQL Generated SQL for Entity: ${entity.Name}
@@ -545,6 +649,7 @@ END $$;
 `;
     }
 
+    /** @inheritdoc */
     generateAllEntitiesSQLFileHeader(): string {
         return `-- ============================================================
 -- PostgreSQL Generated SQL for All Entities
@@ -555,6 +660,13 @@ END $$;
 
     // ─── UTILITY ─────────────────────────────────────────────────────────
 
+    /**
+     * Maps a SQL default value expression to its PostgreSQL equivalent. Translates
+     * SQL Server built-in functions (e.g., `NEWID()` to `gen_random_uuid()`,
+     * `GETUTCDATE()` to `NOW() AT TIME ZONE 'UTC'`), strips outer parentheses and
+     * surrounding single quotes, and re-applies quoting based on the {@link needsQuotes}
+     * flag. Returns `'NULL'` for empty or whitespace-only input.
+     */
     formatDefaultValue(defaultValue: string, needsQuotes: boolean): string {
         if (!defaultValue || defaultValue.trim().length === 0) return 'NULL';
 
@@ -598,6 +710,12 @@ END $$;
         return cleanValue;
     }
 
+    /**
+     * Builds a set of PL/pgSQL components for working with an entity's primary key(s)
+     * in cascade operations: variable declarations, SELECT field list, FETCH INTO
+     * variable list, and named routine parameter assignments. Used by cascade delete
+     * and update-to-NULL generators to construct cursor-based loops.
+     */
     buildPrimaryKeyComponents(entity: EntityInfo, prefix?: string): {
         varDeclarations: string;
         selectFields: string;
@@ -630,6 +748,7 @@ END $$;
 
     // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
 
+    /** @inheritdoc */
     callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[]): string {
         const qualifiedName = pgDialect.QuoteSchema(schema, routineName);
         const paramList = params.join(', ');
@@ -638,16 +757,19 @@ END $$;
 
     // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
 
+    /** @inheritdoc */
     conditionalInsertSQL(checkQuery: string, insertSQL: string): string {
         return `DO $$ BEGIN\n   IF NOT EXISTS (${checkQuery}) THEN\n      ${insertSQL};\n   END IF;\nEND $$`;
     }
 
+    /** @inheritdoc */
     wrapInsertWithConflictGuard(_conflictCheckSQL: string): { prefix: string; suffix: string } {
         return { prefix: '', suffix: 'ON CONFLICT DO NOTHING' };
     }
 
     // ─── METADATA MANAGEMENT: DDL OPERATIONS ─────────────────────────
 
+    /** @inheritdoc */
     addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string {
         const table = pgDialect.QuoteSchema(schema, tableName);
         const col = pgDialect.QuoteIdentifier(columnName);
@@ -656,6 +778,7 @@ END $$;
         return `ALTER TABLE ${table} ADD COLUMN ${col} ${dataType} ${nullClause}${defaultClause}`;
     }
 
+    /** @inheritdoc */
     alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string {
         const table = pgDialect.QuoteSchema(schema, tableName);
         const col = pgDialect.QuoteIdentifier(columnName);
@@ -663,12 +786,19 @@ END $$;
         return `ALTER TABLE ${table} ALTER COLUMN ${col} TYPE ${dataType}, ALTER COLUMN ${col} ${nullAction}`;
     }
 
+    /** @inheritdoc */
     addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string {
         const table = pgDialect.QuoteSchema(schema, tableName);
         const col = pgDialect.QuoteIdentifier(columnName);
         return `ALTER TABLE ${table} ALTER COLUMN ${col} SET DEFAULT ${defaultExpression}`;
     }
 
+    /**
+     * Generates a PL/pgSQL `DO $$` block that drops both a named CHECK constraint (if one
+     * exists on the column, found via `pg_catalog.pg_constraint`) and the column's default
+     * value. Uses dynamic SQL (`EXECUTE format(...)`) to drop the constraint by name,
+     * then unconditionally runs `ALTER COLUMN ... DROP DEFAULT`.
+     */
     dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string {
         const table = pgDialect.QuoteSchema(schema, tableName);
         const col = pgDialect.QuoteIdentifier(columnName);
@@ -696,6 +826,7 @@ BEGIN
 END $$`;
     }
 
+    /** @inheritdoc */
     dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string {
         // PostgreSQL uses FUNCTION for both procedures and functions in DROP statements
         const typeStr = objectType === 'PROCEDURE' ? 'FUNCTION' : objectType;
@@ -706,10 +837,12 @@ END $$`;
 
     // ─── METADATA MANAGEMENT: VIEW INTROSPECTION ─────────────────────
 
+    /** @inheritdoc */
     getViewExistsSQL(): string {
         return `SELECT 1 FROM information_schema.views WHERE table_name = @ViewName AND table_schema = @SchemaName`;
     }
 
+    /** @inheritdoc */
     getViewColumnsSQL(schema: string, viewName: string): string {
         return `SELECT
     column_name AS "FieldName",
@@ -726,10 +859,16 @@ ORDER BY ordinal_position`;
 
     // ─── METADATA MANAGEMENT: TYPE SYSTEM ────────────────────────────
 
+    /** @inheritdoc */
     get TimestampType(): string {
         return 'TIMESTAMPTZ';
     }
 
+    /**
+     * Compares two PostgreSQL data type strings for equivalence, accounting for common
+     * aliases. For example, `'timestamptz'` and `'timestamp with time zone'` are
+     * considered equal. Returns `true` if the types match directly or via alias lookup.
+     */
     compareDataTypes(reported: string, expected: string): boolean {
         if (reported === expected) return true;
         const aliases: Record<string, string> = {
@@ -741,22 +880,35 @@ ORDER BY ordinal_position`;
 
     // ─── METADATA MANAGEMENT: PLATFORM CONFIGURATION ─────────────────
 
+    /** @inheritdoc */
     getSystemSchemasToExclude(): string[] {
         return ['information_schema', 'pg_catalog', 'pg_toast', 'pg_temp_1', 'pg_toast_temp_1'];
     }
 
+    /**
+     * PostgreSQL does not require view refresh after creation. Unlike SQL Server's
+     * `sp_refreshview`, PostgreSQL views automatically reflect column changes, so
+     * this always returns `false`.
+     */
     get NeedsViewRefresh(): boolean {
         return false;
     }
 
+    /** @inheritdoc */
     generateViewRefreshSQL(_schema: string, _viewName: string): string {
         return '';
     }
 
+    /** @inheritdoc */
     generateViewTestQuerySQL(schema: string, viewName: string): string {
         return `SELECT * FROM ${pgDialect.QuoteSchema(schema, viewName)} LIMIT 1`;
     }
 
+    /**
+     * PostgreSQL requires a nullability fix for virtual (computed) fields in views.
+     * View columns derived from expressions may report incorrect nullability in
+     * `information_schema.columns`, so CodeGen must correct these after view creation.
+     */
     get NeedsVirtualFieldNullabilityFix(): boolean {
         return true;
     }
@@ -867,6 +1019,12 @@ ORDER BY ordinal_position`;
 
     // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
 
+    /**
+     * Parses a PostgreSQL column default value by stripping PG-specific type cast syntax
+     * (e.g., `'2024-01-01'::timestamp` becomes `'2024-01-01'`). Returns `null` for
+     * auto-increment sequences (`nextval(...)`) and for null/undefined input, indicating
+     * no meaningful default.
+     */
     parseColumnDefaultValue(sqlDefaultValue: string): string | null {
         if (sqlDefaultValue === null || sqlDefaultValue === undefined) {
             return null;
@@ -890,21 +1048,25 @@ ORDER BY ordinal_position`;
 
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
+    /** @inheritdoc */
     getPendingEntityFieldsSQL(mjCoreSchema: string): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
         return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs);
     }
 
+    /** @inheritdoc */
     getCheckConstraintsSchemaFilter(_excludeSchemas: string[]): string {
         // PostgreSQL view already handles schema filtering
         return '';
     }
 
+    /** @inheritdoc */
     getEntitiesWithMissingBaseTablesFilter(): string {
         // PostgreSQL query doesn't need this filter
         return '';
     }
 
+    /** @inheritdoc */
     getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
         return this.buildFixVirtualFieldNullabilityUpdateSQL(mjCoreSchema, qs);
@@ -912,6 +1074,12 @@ ORDER BY ordinal_position`;
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
+    /**
+     * Executes a SQL file against the PostgreSQL database using the `psql` CLI tool.
+     * Reads connection parameters from environment variables (`PG_HOST`, `PG_PORT`,
+     * `PG_DATABASE`, `PG_USERNAME`, `PG_PASSWORD`) with fallback to `configInfo` values.
+     * Resolves the file path to an absolute path before passing it to psql.
+     */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
         const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
         const pgPort = process.env.PG_PORT ?? String(configInfo.dbPort ?? 5432);
@@ -1199,10 +1367,16 @@ ORDER BY ordinal_position`;
 
     // ─── DATABASE INTROSPECTION ──────────────────────────────────────────
 
+    /** @inheritdoc */
     getViewDefinitionSQL(schema: string, viewName: string): string {
         return `SELECT pg_get_viewdef('"${schema}"."${viewName}"'::regclass, true) AS "ViewDefinition"`;
     }
 
+    /**
+     * Generates a query against `pg_index`, `pg_class`, and `pg_namespace` to retrieve
+     * the index name for a table's primary key constraint. Used by CodeGen to reference
+     * the PK index in full-text search and other operations.
+     */
     getPrimaryKeyIndexNameSQL(schema: string, tableName: string): string {
         return `SELECT
         i.relname AS "IndexName"
@@ -1220,6 +1394,12 @@ ORDER BY ordinal_position`;
         AND n.nspname = '${schema}'`;
     }
 
+    /**
+     * Generates a query against `pg_index`, `pg_class`, `pg_namespace`, and `pg_attribute`
+     * to check whether a column participates in a multi-column unique constraint. Returns
+     * rows only when the unique index contains more than one column and includes the
+     * specified column.
+     */
     getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string {
         return `SELECT ix.indexrelid AS index_id
     FROM pg_index ix
@@ -1240,6 +1420,7 @@ ORDER BY ordinal_position`;
       AND array_length(ix.indkey, 1) > 1`;
     }
 
+    /** @inheritdoc */
     getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string {
         return `SELECT 1
     FROM pg_indexes

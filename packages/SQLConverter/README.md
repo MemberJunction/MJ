@@ -511,9 +511,101 @@ Global cleanup pass applied to the complete output. Key transformations:
 19. **Backslash line fix** -- Fix lines starting with `\` in INSERT string literals
 20. **Excessive blank lines** -- Collapse 4+ blank lines to 3
 
+## Extensibility Architecture
+
+The converter is built on three extensible subsystems that enable support for new source/target dialect combinations beyond T-SQL → PostgreSQL.
+
+### RuleRegistry
+
+Central registry for SQL conversion rules. Supports multiple source→target dialect combinations with case-insensitive dialect lookup and automatic priority sorting.
+
+```typescript
+import { RuleRegistry } from '@memberjunction/sql-converter';
+
+// Register rules for a dialect pair
+RuleRegistry.RegisterAll(myRules);
+
+// Retrieve sorted rules for a dialect pair
+const rules = RuleRegistry.GetRules('tsql', 'postgres');
+
+// Check available combinations
+const combos = RuleRegistry.GetRegisteredCombinations();
+// [{ Source: 'tsql', Target: 'postgres' }]
+
+// Check if rules exist for a combination
+RuleRegistry.HasRules('tsql', 'mysql'); // false
+```
+
+| Method | Description |
+|--------|-------------|
+| `Register(rule)` | Register a single rule for its declared `SourceDialect`/`TargetDialect` |
+| `RegisterAll(rules)` | Register multiple rules at once |
+| `GetRules(source, target)` | Get sorted rules (by priority ascending) for a dialect pair |
+| `GetRegisteredCombinations()` | List all registered `{Source, Target}` pairs |
+| `HasRules(source, target)` | Check if rules exist for a combination |
+| `Clear()` | Clear all rules (for testing) |
+
+Rules self-register via `SourceDialect` and `TargetDialect` properties on `IConversionRule`. The registry uses case-insensitive matching and returns rules sorted by `Priority` (ascending).
+
+### TypeResolver
+
+Centralized SQL type resolution that delegates to `@memberjunction/sql-dialect`'s `DataTypeMap` with MJ-specific overrides. All type mapping in the converter goes through this module so knowledge lives in one place.
+
+```typescript
+import { resolveType, parseTypeString } from '@memberjunction/sql-converter';
+
+// Parse a SQL type string into components
+const parsed = parseTypeString('NVARCHAR(255)');
+// { BaseName: 'NVARCHAR', Length: 255 }
+
+// Resolve a T-SQL type to PostgreSQL
+resolveType('UNIQUEIDENTIFIER');    // 'UUID'
+resolveType('NVARCHAR(MAX)');       // 'TEXT'
+resolveType('DECIMAL(18,2)');       // 'NUMERIC(18,2)'
+resolveType('DATETIME');            // 'TIMESTAMPTZ' (MJ override)
+
+// Resolve for inline CAST/CONVERT expressions
+resolveInlineType('DATETIME2(7)');  // 'TIMESTAMPTZ'
+```
+
+**MJ-specific overrides** (applied before the dialect TypeMap):
+- `DATETIME`, `DATETIME2`, `SMALLDATETIME` → `TIMESTAMPTZ` (MJ stores everything with timezone)
+- `NTEXT` → `TEXT`
+- `SQL_VARIANT`, `HIERARCHYID` → `TEXT`
+
+To add support for a new target dialect, add a new branch in the internal `getTypeMap()` function that constructs the dialect's TypeMap.
+
+### DialectHeaderBuilder
+
+Pluggable interface for generating dialect-specific output file headers. Each target dialect can register a header builder that produces the preamble needed for the converted SQL file.
+
+```typescript
+import { registerHeaderBuilder, getHeaderBuilder, DialectHeaderBuilder } from '@memberjunction/sql-converter';
+
+// Built-in: PostgreSQL header builder (auto-registered)
+const pgBuilder = getHeaderBuilder('postgres');
+const header = pgBuilder?.BuildHeader('__mj');
+// Generates: CREATE EXTENSION, CREATE SCHEMA, SET search_path, implicit int->bool cast
+
+// Register a custom builder for a new dialect
+class MySQLHeaderBuilder implements DialectHeaderBuilder {
+  readonly TargetDialect = 'mysql';
+  BuildHeader(schema: string): string {
+    return `SET NAMES utf8mb4;\nCREATE SCHEMA IF NOT EXISTS \`${schema}\`;\nUSE \`${schema}\`;\n`;
+  }
+}
+registerHeaderBuilder(new MySQLHeaderBuilder());
+```
+
+The built-in `PostgreSQLHeaderBuilder` generates:
+- `CREATE EXTENSION` for pgcrypto and uuid-ossp
+- Schema creation and `SET search_path`
+- `SET standard_conforming_strings = on`
+- Implicit `INTEGER → BOOLEAN` cast upgrade (for SQL Server BIT compatibility)
+
 ## Extending the Pipeline
 
-### Adding a New Rule
+### Adding a New Rule (Existing Dialect Pair)
 
 1. Create a new file in `src/rules/`:
 
@@ -522,6 +614,8 @@ import type { IConversionRule, ConversionContext, StatementType } from './types.
 
 export class MyNewRule implements IConversionRule {
   Name = 'MyNewRule';
+  SourceDialect = 'tsql';
+  TargetDialect = 'postgres';
   AppliesTo: StatementType[] = ['SOME_TYPE'];
   Priority = 65;  // Between existing rules
   BypassSqlglot = true;
@@ -548,9 +642,20 @@ export function getTSQLToPostgresRules(): IConversionRule[] {
 
 3. Add tests in `src/__tests__/MyNewRule.test.ts`
 
+### Adding Rules for a New Dialect Direction
+
+To support a new conversion direction (e.g., T-SQL → MySQL):
+
+1. **Create rules** implementing `IConversionRule` with `SourceDialect = 'tsql'` and `TargetDialect = 'mysql'`
+2. **Register rules** with `RuleRegistry.RegisterAll(myMySQLRules)`
+3. **Add a TypeMap** branch in `TypeResolver.getTypeMap()` for the new target dialect
+4. **Register a DialectHeaderBuilder** for the new target via `registerHeaderBuilder()`
+5. **Create a convenience function** like `getTSQLToMySQLRules()` for easy consumption
+
 ### Adding New Type Mappings
 
 Update type mappings in:
+- `TypeResolver` -- centralized type resolution (preferred for new dialects)
 - `CreateTableRule` -- for CREATE TABLE column types
 - `ExpressionHelpers.convertCastTypes()` -- for CAST expressions
 - `ExpressionHelpers.convertConvertFunction()` -- for CONVERT() function
