@@ -14,9 +14,9 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@memberjunction/codegen-lib": "5.2.0",
-    "@memberjunction/core": "5.2.0",
-    "@memberjunction/global": "5.2.0",
+    "@memberjunction/codegen-lib": "5.3.1",
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/global": "5.3.1",
     "@memberjunction/sql-dialect": "5.3.1",
     "pg": "^8.13.3"
   },
