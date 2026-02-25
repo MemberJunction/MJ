@@ -566,6 +566,47 @@ export class ExplorerStateService {
     this.updateState({ showAllEntities: !this.state$.value.showAllEntities });
   }
 
+  // ========================================
+  // Concept D: Application Groups + Quick Access
+  // ========================================
+
+  /**
+   * Toggle the quick access (right) panel open/closed
+   */
+  toggleQuickAccessPanel(): void {
+    this.updateState({ quickAccessPanelOpen: !this.state$.value.quickAccessPanelOpen });
+  }
+
+  /**
+   * Toggle a quick access section's expanded state
+   */
+  toggleQuickAccessSection(sectionId: string): void {
+    const sections = { ...this.state$.value.quickAccessSections };
+    sections[sectionId] = sections[sectionId] === false; // default to expanded (true)
+    this.updateState({ quickAccessSections: sections });
+  }
+
+  /**
+   * Toggle an application group's expanded/collapsed state
+   */
+  toggleAppGroupExpanded(appId: string): void {
+    const expanded = [...this.state$.value.expandedAppGroups];
+    const index = expanded.indexOf(appId);
+    if (index >= 0) {
+      expanded.splice(index, 1);
+    } else {
+      expanded.push(appId);
+    }
+    this.updateState({ expandedAppGroups: expanded });
+  }
+
+  /**
+   * Set the home view mode (all vs favorites)
+   */
+  setHomeViewMode(mode: 'all' | 'favorites'): void {
+    this.updateState({ homeViewMode: mode });
+  }
+
   /**
    * Track entity access - called when user navigates to an entity
    */
