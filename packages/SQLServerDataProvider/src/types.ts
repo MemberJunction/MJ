@@ -9,7 +9,7 @@
 
 import { AggregateResult, EntityInfo, ProviderConfigDataBase, RunViewParams, UserInfo } from '@memberjunction/core';
 // Aliased to match the renamed export; the main SQLServerDataProvider file still uses the old name (pre-existing)
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import sql from 'mssql';
 
 /**
@@ -30,7 +30,7 @@ export interface RunViewSQLSpec {
   /** The resolved EntityInfo for this view */
   entity: EntityInfo;
   /** The resolved view entity (may be null for dynamic views) */
-  viewEntity: UserViewEntityExtended | null;
+  viewEntity: MJUserViewEntityExtended | null;
   /** Original params for post-processing context */
   params: RunViewParams;
   /** Timestamp when SQL building started */
